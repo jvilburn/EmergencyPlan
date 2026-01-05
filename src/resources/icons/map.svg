@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <!-- Street map icon - shows intersecting roads -->
+  <rect x="2" y="2" width="20" height="20" rx="2" fill="#e8e8e8"/>
+  <!-- Main roads -->
+  <rect x="10" y="2" width="4" height="20" fill="#ffffff"/>
+  <rect x="2" y="10" width="20" height="4" fill="#ffffff"/>
+  <!-- Road center lines -->
+  <line x1="12" y1="2" x2="12" y2="10" stroke="#999" stroke-width="0.5" stroke-dasharray="2,2"/>
+  <line x1="12" y1="14" x2="12" y2="22" stroke="#999" stroke-width="0.5" stroke-dasharray="2,2"/>
+  <line x1="2" y1="12" x2="10" y2="12" stroke="#999" stroke-width="0.5" stroke-dasharray="2,2"/>
+  <line x1="14" y1="12" x2="22" y2="12" stroke="#999" stroke-width="0.5" stroke-dasharray="2,2"/>
+</svg>

@@ -1,0 +1,81 @@
+{
+    // =========================================================================
+    // C/C++ Configuration - Disable IntelliSense errors (they get stale)
+    // =========================================================================
+    "C_Cpp.errorSquiggles": "disabled",
+    "C_Cpp.default.cppStandard": "c++17",
+    "C_Cpp.default.intelliSenseMode": "windows-msvc-x64",
+    "C_Cpp.autocompleteAddParentheses": true,
+    "C_Cpp.formatting.vcStyle.indentBraces": false,
+
+    // =========================================================================
+    // Editor Settings for C++
+    // =========================================================================
+    "[cpp]": {
+        "editor.defaultFormatter": "ms-vscode.cpptools",
+        "editor.formatOnSave": false,
+        "editor.tabSize": 4,
+        "editor.insertSpaces": true
+    },
+    "[c]": {
+        "editor.defaultFormatter": "ms-vscode.cpptools",
+        "editor.tabSize": 4,
+        "editor.insertSpaces": true
+    },
+
+    // =========================================================================
+    // File Associations
+    // =========================================================================
+    "files.associations": {
+        "*.qss": "css",
+        "*.qrc": "xml",
+        "*.ui": "xml",
+        "*.h": "cpp",
+        "*.hpp": "cpp",
+        "*.cpp": "cpp",
+        "*.qml": "qml"
+    },
+
+    // =========================================================================
+    // Exclude Build Artifacts from Search
+    // =========================================================================
+    "files.exclude": {
+        "**/build": true,
+        "**/build-*": true,
+        "**/.cache": true,
+        "**/CMakeFiles": true
+    },
+    "search.exclude": {
+        "**/build": true,
+        "**/build-*": true,
+        "**/CMakeFiles": true
+    },
+
+    // =========================================================================
+    // Terminal Configuration
+    // =========================================================================
+    "terminal.integrated.profiles.windows": {
+        "Git Bash": {
+            "path": "C:\\Program Files\\Git\\bin\\bash.exe",
+            "args": ["-l", "-i"]
+        },
+        "PowerShell": {
+            "source": "PowerShell"
+        },
+        "Command Prompt": {
+            "path": "C:\\Windows\\System32\\cmd.exe"
+        }
+    },
+    "terminal.integrated.defaultProfile.windows": "PowerShell",
+
+    // Add Qt and build/bin to PATH for all terminal types
+    "terminal.integrated.env.windows": {
+        "PATH": "C:\\Qt\\6.10.1\\msvc2022_64\\bin;${workspaceFolder}\\build\\bin;${env:PATH}"
+    },
+    "terminal.integrated.env.osx": {
+        "PATH": "${workspaceFolder}/build/bin:/opt/homebrew/opt/qt@6/bin:${env:PATH}"
+    },
+    "terminal.integrated.env.linux": {
+        "PATH": "${workspaceFolder}/build/bin:${env:PATH}"
+    }
+}

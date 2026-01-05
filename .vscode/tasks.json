@@ -1,0 +1,120 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build Debug",
+            "type": "process",
+            "windows": {
+                "command": "${workspaceFolder}/build.bat",
+                "args": ["debug"]
+            },
+            "osx": {
+                "command": "${workspaceFolder}/build.sh",
+                "args": ["debug"]
+            },
+            "linux": {
+                "command": "${workspaceFolder}/build.sh",
+                "args": ["debug"]
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": "$msCompile",
+            "detail": "Configure and build in Debug mode"
+        },
+        {
+            "label": "Build Release",
+            "type": "process",
+            "windows": {
+                "command": "${workspaceFolder}/build.bat",
+                "args": ["release"]
+            },
+            "osx": {
+                "command": "${workspaceFolder}/build.sh",
+                "args": ["release"]
+            },
+            "linux": {
+                "command": "${workspaceFolder}/build.sh",
+                "args": ["release"]
+            },
+            "group": "build",
+            "problemMatcher": "$msCompile",
+            "detail": "Configure and build in Release mode"
+        },
+        {
+            "label": "Run Tests",
+            "type": "shell",
+            "command": "ctest",
+            "args": [
+                "--test-dir", "${workspaceFolder}/build",
+                "--output-on-failure",
+                "-C", "Debug"
+            ],
+            "group": "test",
+            "problemMatcher": [],
+            "detail": "Run all tests with CTest"
+        },
+        {
+            "label": "Run Application",
+            "type": "shell",
+            "command": "${workspaceFolder}/build/bin/EmergencyPlan.exe",
+            "windows": {
+                "command": "${workspaceFolder}/build/bin/EmergencyPlan.exe"
+            },
+            "osx": {
+                "command": "open",
+                "args": ["${workspaceFolder}/build/bin/EmergencyPlan.app"]
+            },
+            "group": "none",
+            "problemMatcher": [],
+            "detail": "Run the application",
+            "dependsOn": "Build Debug"
+        },
+        {
+            "label": "Clean",
+            "type": "shell",
+            "windows": {
+                "command": "cmd",
+                "args": ["/c", "if exist build rmdir /s /q build"]
+            },
+            "osx": {
+                "command": "rm",
+                "args": ["-rf", "build"]
+            },
+            "linux": {
+                "command": "rm",
+                "args": ["-rf", "build"]
+            },
+            "group": "build",
+            "problemMatcher": [],
+            "detail": "Remove build directory"
+        },
+        {
+            "label": "Open Qt Designer",
+            "type": "shell",
+            "windows": {
+                "command": "C:/Qt/6.10.1/msvc2022_64/bin/designer.exe"
+            },
+            "osx": {
+                "command": "open -a Designer"
+            },
+            "group": "none",
+            "problemMatcher": [],
+            "detail": "Open Qt Designer for UI editing"
+        },
+        {
+            "label": "Open Qt Assistant",
+            "type": "shell",
+            "windows": {
+                "command": "C:/Qt/6.10.1/msvc2022_64/bin/assistant.exe"
+            },
+            "osx": {
+                "command": "open -a Assistant"
+            },
+            "group": "none",
+            "problemMatcher": [],
+            "detail": "Open Qt documentation"
+        }
+    ]
+}

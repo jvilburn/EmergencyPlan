@@ -1,0 +1,221 @@
+#include "UnmappedPanel.h"
+#include "MarkerRenderer.h"
+#include "Filter.h"
+#include "FamilyListModel.h"
+#include "DocumentManager.h"
+
+#include <QPainter>
+#include <QMouseEvent>
+#include <QFontMetrics>
+
+UnmappedPanel::UnmappedPanel(DocumentManager* docManager, QWidget* parent)
+    : QWidget(parent)
+    , m_docManager(docManager)
+    , m_filter(new Filter(this))
+    , m_model(nullptr)
+{
+    // Set up filter for unmapped families only
+    m_filter->setMappedFilter(MappedFilter::Unmapped);
+
+    // Create model with unmapped filter
+    m_model = new FamilyListModel(docManager, m_filter, this);
+
+    // Rebuild layout when model changes
+    connect(m_model, &QAbstractItemModel::modelReset,
+            this, &UnmappedPanel::onModelChanged);
+
+    recalculateLayout();
+}
+
+bool UnmappedPanel::hasUnmappedFamilies() const
+{
+    return m_model->rowCount() > 0;
+}
+
+void UnmappedPanel::setSelectedFamilyId(const QString& id)
+{
+    if (m_selectedId != id)
+    {
+        m_selectedId = id;
+        update();
+    }
+}
+
+void UnmappedPanel::onModelChanged()
+{
+    recalculateLayout();
+    updateGeometry();
+    update();
+}
+
+void UnmappedPanel::recalculateLayout()
+{
+    m_layout.clear();
+
+    int count = m_model->rowCount();
+    if (count == 0)
+    {
+        return;
+    }
+
+    // Get available height (parent's height or our max height)
+    int availableHeight = parentWidget() ? parentWidget()->height() : 600;
+
+    // Calculate how many rows fit in available height (no header for bottom panel)
+    int contentHeight = availableHeight - HEADER_HEIGHT - V_PADDING * 2;
+    int rowsPerColumn = qMax(1, contentHeight / ROW_HEIGHT);
+
+    // Calculate number of columns needed
+    int numColumns = qMax(MIN_COLUMNS, (count + rowsPerColumn - 1) / rowsPerColumn);
+
+    // Recalculate rows per column to distribute evenly
+    rowsPerColumn = (count + numColumns - 1) / numColumns;
+
+    // Store for sizeHint
+    m_numColumns = numColumns;
+    m_rowsPerColumn = rowsPerColumn;
+
+    QFontMetrics fm(font());
+
+    for (int i = 0; i < count; ++i)
+    {
+        int col = i / rowsPerColumn;
+        int row = i % rowsPerColumn;
+
+        MarkerLayout item;
+        item.familyId = m_model->idAt(i);
+        item.name = m_model->data(m_model->index(i, 0), FamilyListModel::DisplayNameRole).toString();
+
+        // Position: columns from left to right for natural reading order
+        double x = H_PADDING + col * COLUMN_WIDTH + MARKER_SIZE / 2.0;
+        double y = HEADER_HEIGHT + V_PADDING + row * ROW_HEIGHT + ROW_HEIGHT / 2.0;
+
+        item.markerPos = QPointF(x, y);
+
+        // Label rect starts after marker
+        int labelX = static_cast<int>(x + MARKER_SIZE / 2.0 + 4);
+        int labelY = static_cast<int>(y - fm.height() / 2.0);
+        int labelWidth = COLUMN_WIDTH - MARKER_SIZE - 8;
+        item.labelRect = QRectF(labelX, labelY, labelWidth, fm.height());
+
+        m_layout.append(item);
+    }
+}
+
+QSize UnmappedPanel::sizeHint() const
+{
+    if (m_layout.isEmpty())
+    {
+        return QSize(0, 0);
+    }
+
+    int width = m_numColumns * COLUMN_WIDTH + H_PADDING * 2;
+    int height = HEADER_HEIGHT + V_PADDING * 2 + m_rowsPerColumn * ROW_HEIGHT;
+
+    return QSize(width, height);
+}
+
+QSize UnmappedPanel::minimumSizeHint() const
+{
+    return QSize(MIN_COLUMNS * COLUMN_WIDTH + H_PADDING * 2, HEADER_HEIGHT + ROW_HEIGHT);
+}
+
+void UnmappedPanel::paintEvent(QPaintEvent* /*event*/)
+{
+    if (m_layout.isEmpty())
+    {
+        return;
+    }
+
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+
+    // Draw semi-transparent background
+    painter.fillRect(rect(), QColor(255, 255, 255, 230));
+
+    // Draw border on top edge
+    painter.setPen(QPen(QColor(200, 200, 200), 1));
+    painter.drawLine(0, 0, width(), 0);
+
+    // Draw header
+    QFont headerFont = font();
+    headerFont.setBold(true);
+    painter.setFont(headerFont);
+    painter.setPen(QColor(100, 100, 100));
+    painter.drawText(H_PADDING, 0, width() - H_PADDING * 2, HEADER_HEIGHT,
+                     Qt::AlignLeft | Qt::AlignVCenter, tr("Unknown Location"));
+
+    // Draw separator line below header
+    painter.setPen(QPen(QColor(220, 220, 220), 1));
+    painter.drawLine(H_PADDING, HEADER_HEIGHT, width() - H_PADDING, HEADER_HEIGHT);
+
+    // Draw markers and labels
+    QFont labelFont = font();
+    labelFont.setPointSize(labelFont.pointSize() - 1);
+    painter.setFont(labelFont);
+
+    for (const MarkerLayout& item : m_layout)
+    {
+        // Draw marker at half size
+        MarkerRenderer::State state;
+        state.isSelected = (item.familyId == m_selectedId);
+        state.scale = 0.5;
+
+        MarkerRenderer::draw(painter, item.markerPos, QVariantMap(), state);
+
+        // Draw label (elided if too long)
+        painter.setPen(state.isSelected ? QColor("#1976D2") : QColor(60, 60, 60));
+        QFontMetrics fm(labelFont);
+        QString elidedName = fm.elidedText(item.name, Qt::ElideRight,
+                                            static_cast<int>(item.labelRect.width()));
+        painter.drawText(item.labelRect, Qt::AlignLeft | Qt::AlignVCenter, elidedName);
+    }
+}
+
+void UnmappedPanel::mousePressEvent(QMouseEvent* event)
+{
+    // Accept all mouse presses to prevent propagation to parent
+    event->accept();
+
+    if (event->button() == Qt::LeftButton)
+    {
+        QString hitId = markerAtPoint(event->pos());
+        if (!hitId.isEmpty())
+        {
+            m_selectedId = hitId;
+            emit familyClicked(hitId);
+            update();
+        }
+    }
+}
+
+void UnmappedPanel::mouseReleaseEvent(QMouseEvent* event)
+{
+    // Accept to prevent propagation to parent
+    event->accept();
+}
+
+QString UnmappedPanel::markerAtPoint(const QPoint& pos) const
+{
+    // Check in reverse order (topmost last)
+    for (int i = m_layout.size() - 1; i >= 0; --i)
+    {
+        const MarkerLayout& item = m_layout[i];
+
+        MarkerRenderer::State state;
+        state.scale = 0.5;
+
+        if (MarkerRenderer::hitTest(item.markerPos, pos, QVariantMap(), state))
+        {
+            return item.familyId;
+        }
+
+        // Also check label rect for easier clicking
+        if (item.labelRect.contains(pos))
+        {
+            return item.familyId;
+        }
+    }
+
+    return QString();
+}

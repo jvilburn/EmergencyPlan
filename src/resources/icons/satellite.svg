@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <!-- Satellite view icon - shows aerial terrain -->
+  <rect x="2" y="2" width="20" height="20" rx="2" fill="#3d6b35"/>
+  <!-- Terrain patches to suggest aerial view -->
+  <ellipse cx="7" cy="7" rx="3" ry="2.5" fill="#4a7d42"/>
+  <ellipse cx="16" cy="13" rx="4" ry="3" fill="#527f49"/>
+  <ellipse cx="6" cy="15" rx="2.5" ry="2" fill="#4a7d42"/>
+  <ellipse cx="17" cy="6" rx="2.5" ry="1.5" fill="#5a8f52"/>
+  <!-- Water body -->
+  <path d="M11 17 Q14 15 18 16 Q20 17 20 20 L12 20 Z" fill="#4a8bad"/>
+</svg>
