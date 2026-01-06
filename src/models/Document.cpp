@@ -326,6 +326,16 @@ void Document::setRsGroups(const QHash<QString, MinisteringGroup>& groups)
     m_rsGroups = groups;
 }
 
+void Document::setWardDirectoryPdfDate(std::optional<QDate> date)
+{
+    m_wardDirectoryPdfDate = date;
+}
+
+void Document::setMinisteringPdfDate(std::optional<QDate> date)
+{
+    m_ministeringPdfDate = date;
+}
+
 // ============================================================================
 // Lookup helpers
 // ============================================================================
@@ -487,6 +497,16 @@ QJsonObject Document::toJson() const
     serializeHashToJson(json, "rsDistricts", m_rsDistricts);
     serializeHashToJson(json, "rsGroups", m_rsGroups);
 
+    // Import dates
+    if (m_wardDirectoryPdfDate.has_value())
+    {
+        json["wardDirectoryPdfDate"] = m_wardDirectoryPdfDate->toString(Qt::ISODate);
+    }
+    if (m_ministeringPdfDate.has_value())
+    {
+        json["ministeringPdfDate"] = m_ministeringPdfDate->toString(Qt::ISODate);
+    }
+
     return json;
 }
 
@@ -512,6 +532,26 @@ Document Document::fromJson(const QJsonObject& json)
     deserializeJsonToHash(json, "rsDistricts", document.m_rsDistricts);
     deserializeJsonToHash(json, "rsGroups", document.m_rsGroups);
 
+    // Import dates
+    if (json.contains("wardDirectoryPdfDate"))
+    {
+        QDate date = QDate::fromString(
+            json["wardDirectoryPdfDate"].toString(), Qt::ISODate);
+        if (date.isValid())
+        {
+            document.m_wardDirectoryPdfDate = date;
+        }
+    }
+    if (json.contains("ministeringPdfDate"))
+    {
+        QDate date = QDate::fromString(
+            json["ministeringPdfDate"].toString(), Qt::ISODate);
+        if (date.isValid())
+        {
+            document.m_ministeringPdfDate = date;
+        }
+    }
+
     // Build lookup cache
     document.rebuildPersonToFamilyMap();
 
@@ -529,5 +569,7 @@ bool Document::operator==(const Document& other) const
         && m_eqDistricts == other.m_eqDistricts
         && m_eqGroups == other.m_eqGroups
         && m_rsDistricts == other.m_rsDistricts
-        && m_rsGroups == other.m_rsGroups;
+        && m_rsGroups == other.m_rsGroups
+        && m_wardDirectoryPdfDate == other.m_wardDirectoryPdfDate
+        && m_ministeringPdfDate == other.m_ministeringPdfDate;
 }
