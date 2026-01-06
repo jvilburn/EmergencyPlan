@@ -105,7 +105,7 @@ int importWardDirectory(const QString& pdfPath, const QString& filter, QTextStre
     out << "Importing ward directory (service): " << pdfPath << "\n\n";
     out.flush();
 
-    WardDirectoryImportResult result = service.importFromPdf(pdfPath);
+    WardDirectoryImportResult result = service.importFromPdf(pdfPath, QHash<QString, Family>());
 
     if (!result.success)
     {

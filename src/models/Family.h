@@ -23,6 +23,14 @@ public:
                          const Address& address = Address(),
                          const QList<Person>& members = QList<Person>());
 
+    // Factory method for creating families with a specific ID (used for ID preservation)
+    static Family createWithId(
+        const QString& id,
+        std::optional<double> latitude = std::nullopt,
+        std::optional<double> longitude = std::nullopt,
+        const Address& address = Address(),
+        const QList<Person>& members = QList<Person>());
+
     // Getters
     const QString& id() const { return m_id; }
     std::optional<double> latitude() const { return m_latitude; }

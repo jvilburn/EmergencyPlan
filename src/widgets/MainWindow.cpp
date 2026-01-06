@@ -299,9 +299,11 @@ void MainWindow::onImportPdf()
 
     statusBar()->showMessage(tr("Importing from PDF..."));
 
-    // Parse PDF
+    // Parse PDF with ID preservation
     WardDirectoryImportService importService;
-    WardDirectoryImportResult result = importService.importFromPdf(filePath);
+    WardDirectoryImportResult result = importService.importFromPdf(
+        filePath,
+        m_documentManager->document().families());
 
     if (!result.success)
     {

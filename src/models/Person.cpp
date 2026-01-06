@@ -22,6 +22,34 @@ Person Person::create(const Name& name,
     return person;
 }
 
+Person Person::createWithId(
+    const QString& id,
+    const Name& name,
+    std::optional<Gender> gender,
+    const Birthday& birthday,
+    const Phone& phone,
+    const Phone& altPhone,
+    const QString& email,
+    const QStringList& callings,
+    bool isParent,
+    const QString& wardUnitNumber,
+    const QString& stakeUnitNumber)
+{
+    Person person;
+    person.m_id = id;
+    person.m_name = name;
+    person.m_gender = gender;
+    person.m_birthday = birthday;
+    person.m_phone = phone;
+    person.m_altPhone = altPhone;
+    person.m_email = email;
+    person.m_callings = callings;
+    person.m_isParent = isParent;
+    person.m_wardUnitNumber = wardUnitNumber;
+    person.m_stakeUnitNumber = stakeUnitNumber;
+    return person;
+}
+
 Phone Person::displayPhone() const
 {
     if (!m_phone.isEmpty())

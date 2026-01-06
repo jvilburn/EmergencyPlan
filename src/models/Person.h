@@ -31,6 +31,20 @@ public:
                          const Birthday& birthday = Birthday(),
                          const QStringList& callings = QStringList());
 
+    // Factory method for creating persons with a specific ID (used for ID preservation)
+    static Person createWithId(
+        const QString& id,
+        const Name& name,
+        std::optional<Gender> gender = std::nullopt,
+        const Birthday& birthday = Birthday(),
+        const Phone& phone = Phone(),
+        const Phone& altPhone = Phone(),
+        const QString& email = QString(),
+        const QStringList& callings = QStringList(),
+        bool isParent = false,
+        const QString& wardUnitNumber = QString(),
+        const QString& stakeUnitNumber = QString());
+
     // Getters
     const QString& id() const { return m_id; }
     const Name& name() const { return m_name; }
