@@ -326,8 +326,10 @@ void MainWindow::onImportPdf()
 
     m_documentManager->executeCommand(std::make_unique<ImportWardDirectoryCommand>(
         result.families,
+        result.removedFamilyIds,
         result.wardUnitNumber,
         result.wardName,
+        result.pdfDate,
         description));
 
     // Update UI

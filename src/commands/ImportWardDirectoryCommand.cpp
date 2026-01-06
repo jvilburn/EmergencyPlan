@@ -3,12 +3,16 @@
 
 ImportWardDirectoryCommand::ImportWardDirectoryCommand(
     const QHash<QString, Family>& mergedFamilies,
+    const QSet<QString>& removedFamilyIds,
     const QString& wardUnitNumber,
     const QString& wardName,
+    std::optional<QDate> pdfDate,
     const QString& description)
     : m_newFamilies(mergedFamilies)
+    , m_removedFamilyIds(removedFamilyIds)
     , m_wardUnitNumber(wardUnitNumber)
     , m_wardName(wardName)
+    , m_pdfDate(pdfDate)
     , m_description(description)
 {
 }
@@ -18,8 +22,25 @@ void ImportWardDirectoryCommand::execute(Document& document)
     // Save previous families for undo
     m_previousFamilies = document.families();
 
+    // Save removed families for undo
+    for (const QString& familyId : m_removedFamilyIds)
+    {
+        auto it = m_previousFamilies.find(familyId);
+        if (it != m_previousFamilies.end())
+        {
+            m_removedFamilies.insert(familyId, *it);
+        }
+    }
+
     // Set new families
     document.setFamilies(m_newFamilies);
+
+    // Update ward directory PDF date
+    if (m_pdfDate.has_value())
+    {
+        m_previousWardDirectoryPdfDate = document.wardDirectoryPdfDate();
+        document.setWardDirectoryPdfDate(m_pdfDate);
+    }
 
     // Handle ward creation/update
     if (!m_wardUnitNumber.isEmpty())
@@ -53,6 +74,12 @@ void ImportWardDirectoryCommand::undo(Document& document)
 {
     // Restore previous families
     document.setFamilies(m_previousFamilies);
+
+    // Restore ward directory PDF date
+    if (m_pdfDate.has_value())
+    {
+        document.setWardDirectoryPdfDate(m_previousWardDirectoryPdfDate);
+    }
 
     // Handle ward removal/restoration
     if (!m_wardUnitNumber.isEmpty())
