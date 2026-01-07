@@ -303,7 +303,8 @@ void MainWindow::onImportPdf()
     WardDirectoryImportService importService;
     WardDirectoryImportResult result = importService.importFromPdf(
         filePath,
-        m_documentManager->document().families());
+        m_documentManager->document().families(),
+        m_documentManager->document().ministeringPdfDate());
 
     if (!result.success)
     {
