@@ -35,6 +35,15 @@ void ImportWardDirectoryCommand::execute(Document& document)
     // Set new families
     document.setFamilies(m_newFamilies);
 
+    // Cleanup references to removed families
+    for (const QString& familyId : m_removedFamilyIds)
+    {
+        if (m_removedFamilies.contains(familyId))
+        {
+            cleanupRemovedFamily(document, familyId, m_removedFamilies[familyId]);
+        }
+    }
+
     // Update ward directory PDF date
     if (m_pdfDate.has_value())
     {
@@ -104,4 +113,166 @@ QString ImportWardDirectoryCommand::description() const
         return m_description;
     }
     return QObject::tr("Import %1 families").arg(m_newFamilies.size());
+}
+
+void ImportWardDirectoryCommand::cleanupRemovedFamily(
+    Document& document,
+    const QString& familyId,
+    const Family& family)
+{
+    // Remove persons from teams
+    for (const Person& member : family.members())
+    {
+        for (const auto& [teamId, team] : document.teams().asKeyValueRange())
+        {
+            if (team.memberIds().contains(member.id()))
+            {
+                document.removeMemberFromTeam(teamId, member.id());
+            }
+        }
+    }
+
+    // Remove from tags (both family and person)
+    for (const auto& [tagId, tag] : document.tags().asKeyValueRange())
+    {
+        if (tag.entityIds().contains(familyId))
+        {
+            document.removeFamilyFromTag(tagId, familyId);
+        }
+        for (const Person& member : family.members())
+        {
+            if (tag.entityIds().contains(member.id()))
+            {
+                document.removePersonFromTag(tagId, member.id());
+            }
+        }
+    }
+
+    // Remove from resource types
+    for (const auto& [rtId, rt] : document.resourceTypes().asKeyValueRange())
+    {
+        if (rt.familyIds().contains(familyId))
+        {
+            document.removeFamilyFromResourceType(rtId, familyId);
+        }
+        for (const Person& member : family.members())
+        {
+            if (rt.personIds().contains(member.id()))
+            {
+                document.removePersonFromResourceType(rtId, member.id());
+            }
+        }
+    }
+
+    // Remove from EQ ministering groups
+    for (const QString& groupId : document.eqGroups().keys())
+    {
+        MinisteringGroup group = document.eqGroups()[groupId];
+        bool modified = false;
+
+        QSet<QString> ministerIds = group.ministerIds();
+        QSet<QString> familyIds = group.familyIds();
+        QSet<QString> ministeredPersonIds = group.ministeredPersonIds();
+
+        if (familyIds.remove(familyId))
+        {
+            modified = true;
+        }
+
+        for (const Person& member : family.members())
+        {
+            if (ministerIds.remove(member.id()))
+            {
+                modified = true;
+            }
+            if (ministeredPersonIds.remove(member.id()))
+            {
+                modified = true;
+            }
+            if (group.presidencyMemberId() == member.id())
+            {
+                group.setPresidencyMemberId(std::nullopt);
+                modified = true;
+            }
+        }
+
+        if (modified)
+        {
+            group.setMinisterIds(ministerIds);
+            group.setFamilyIds(familyIds);
+            group.setMinisteredPersonIds(ministeredPersonIds);
+            document.updateEqGroup(group);
+        }
+    }
+
+    // Remove from RS ministering groups (same logic)
+    for (const QString& groupId : document.rsGroups().keys())
+    {
+        MinisteringGroup group = document.rsGroups()[groupId];
+        bool modified = false;
+
+        QSet<QString> ministerIds = group.ministerIds();
+        QSet<QString> familyIds = group.familyIds();
+        QSet<QString> ministeredPersonIds = group.ministeredPersonIds();
+
+        if (familyIds.remove(familyId))
+        {
+            modified = true;
+        }
+
+        for (const Person& member : family.members())
+        {
+            if (ministerIds.remove(member.id()))
+            {
+                modified = true;
+            }
+            if (ministeredPersonIds.remove(member.id()))
+            {
+                modified = true;
+            }
+            if (group.presidencyMemberId() == member.id())
+            {
+                group.setPresidencyMemberId(std::nullopt);
+                modified = true;
+            }
+        }
+
+        if (modified)
+        {
+            group.setMinisterIds(ministerIds);
+            group.setFamilyIds(familyIds);
+            group.setMinisteredPersonIds(ministeredPersonIds);
+            document.updateRsGroup(group);
+        }
+    }
+
+    // Remove from EQ district presidencies
+    for (const QString& districtId : document.eqDistricts().keys())
+    {
+        MinisteringDistrict district = document.eqDistricts()[districtId];
+        for (const Person& member : family.members())
+        {
+            if (district.presidencyMemberId() == member.id())
+            {
+                district.setPresidencyMemberId(std::nullopt);
+                document.updateEqDistrict(district);
+                break;
+            }
+        }
+    }
+
+    // Remove from RS district presidencies
+    for (const QString& districtId : document.rsDistricts().keys())
+    {
+        MinisteringDistrict district = document.rsDistricts()[districtId];
+        for (const Person& member : family.members())
+        {
+            if (district.presidencyMemberId() == member.id())
+            {
+                district.setPresidencyMemberId(std::nullopt);
+                document.updateRsDistrict(district);
+                break;
+            }
+        }
+    }
 }

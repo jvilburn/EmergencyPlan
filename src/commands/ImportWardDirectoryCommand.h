@@ -41,4 +41,6 @@ private:
     // For undo - track what was removed and previous date
     QHash<QString, Family> m_removedFamilies;
     std::optional<QDate> m_previousWardDirectoryPdfDate;
+
+    void cleanupRemovedFamily(Document& document, const QString& familyId, const Family& family);
 };
