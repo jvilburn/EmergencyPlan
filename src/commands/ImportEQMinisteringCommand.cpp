@@ -5,11 +5,13 @@ ImportEQMinisteringCommand::ImportEQMinisteringCommand(
     const QHash<QString, MinisteringDistrict>& districts,
     const QHash<QString, MinisteringGroup>& groups,
     const QHash<QString, Family>& families,
+    std::optional<QDate> pdfDate,
     const QString& description)
     : m_newDistricts(districts)
     , m_newGroups(groups)
     , m_newFamilies(families)
     , m_description(description)
+    , m_pdfDate(pdfDate)
 {
 }
 
@@ -19,6 +21,7 @@ void ImportEQMinisteringCommand::execute(Document& document)
     m_previousDistricts = document.eqDistricts();
     m_previousGroups = document.eqGroups();
     m_previousFamilies = document.families();
+    m_previousMinisteringPdfDate = document.ministeringPdfDate();
 
     // Apply new ministering data
     document.setEqDistricts(m_newDistricts);
@@ -26,6 +29,12 @@ void ImportEQMinisteringCommand::execute(Document& document)
 
     // Set all families (merged: existing + updated + new)
     document.setFamilies(m_newFamilies);
+
+    // Update ministering PDF date
+    if (m_pdfDate.has_value())
+    {
+        document.setMinisteringPdfDate(m_pdfDate);
+    }
 }
 
 void ImportEQMinisteringCommand::undo(Document& document)
@@ -34,6 +43,9 @@ void ImportEQMinisteringCommand::undo(Document& document)
     document.setEqDistricts(m_previousDistricts);
     document.setEqGroups(m_previousGroups);
     document.setFamilies(m_previousFamilies);
+
+    // Restore previous ministering PDF date
+    document.setMinisteringPdfDate(m_previousMinisteringPdfDate);
 }
 
 QString ImportEQMinisteringCommand::description() const

@@ -401,6 +401,7 @@ void MainWindow::onImportMinisteringPdf()
             result.districts,
             result.groups,
             result.families,
+            result.pdfDate,
             description));
     }
     else
@@ -409,6 +410,7 @@ void MainWindow::onImportMinisteringPdf()
             result.districts,
             result.groups,
             result.families,
+            result.pdfDate,
             description));
     }
 
