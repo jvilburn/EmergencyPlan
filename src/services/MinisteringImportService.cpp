@@ -65,6 +65,12 @@ MinisteringImportResult MinisteringImportService::importFromPdf(
     result.stakeName = parseResult.stakeName;
     result.stakeUnitNumber = parseResult.stakeUnitNumber;
 
+    // Pass through PDF date
+    if (parseResult.documentDate.isValid())
+    {
+        result.pdfDate = parseResult.documentDate;
+    }
+
     // Step 1: Internal dedup - merge minister families into ministered families
     // This handles the case where the same family appears as both minister and ministered
     mergeFamilies(parseResult.ministeredFamilies,

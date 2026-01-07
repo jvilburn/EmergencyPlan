@@ -4,9 +4,11 @@
 #include "MinisteringDistrict.h"
 #include "MinisteringGroup.h"
 
+#include <QDate>
 #include <QObject>
 #include <QString>
 #include <QHash>
+#include <optional>
 
 /// Result of ministering import operation
 struct MinisteringImportResult
@@ -23,6 +25,7 @@ struct MinisteringImportResult
     QString wardUnitNumber;
     QString stakeName;
     QString stakeUnitNumber;
+    std::optional<QDate> pdfDate;  // From PDF footer (documentDate)
 };
 
 /// Service for importing ministering data from PDF files.
