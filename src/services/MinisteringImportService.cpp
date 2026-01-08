@@ -45,8 +45,10 @@ MinisteringImportService::~MinisteringImportService()
 
 MinisteringImportResult MinisteringImportService::importFromPdf(
     const QString& pdfPath,
-    const QHash<QString, Family>& existingFamilies)
+    const QHash<QString, Family>& existingFamilies,
+    std::optional<QDate> wardDirectoryDate)
 {
+    Q_UNUSED(wardDirectoryDate)  // Will be used in future tasks
     MinisteringImportResult result;
     result.success = false;
 

@@ -39,11 +39,12 @@ public:
     ~MinisteringImportService();
 
     /// Import ministering assignments from a PDF file (auto-detects EQ or RS).
-    /// Matches parsed families to existing ones by surname.
-    /// Updates member names from PDF (authoritative format).
+    /// If wardDirectoryDate is provided and is newer than the PDF date,
+    /// family data from the PDF is treated as stale (only fills empty fields).
     MinisteringImportResult importFromPdf(
         const QString& pdfPath,
-        const QHash<QString, Family>& existingFamilies);
+        const QHash<QString, Family>& existingFamilies,
+        std::optional<QDate> wardDirectoryDate = std::nullopt);
 
 private:
     /// Merge source families into target, remapping IDs in groups and districts.
