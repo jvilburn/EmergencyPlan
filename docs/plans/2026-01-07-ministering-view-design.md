@@ -1,8 +1,10 @@
-# Ministering Assignments View - Design
+# Ministering Assignments View - Design (Preparation Mode)
 
 ## Overview
 
-A read-only view for reviewing imported ministering assignments with geographic visualization. The view helps identify coverage gaps by showing which families are assigned to which companionships or districts on a map.
+A read-only view for reviewing imported ministering assignments with geographic visualization. The view helps identify coverage gaps by showing which families (EQ) or sisters (RS) are assigned to which companionships or districts on a map.
+
+**Mode**: This design is for **Preparation Mode**. Response Mode has a separate ministering view for welfare check tracking - see [Response Mode Design](2026-01-07-response-mode-design.md).
 
 **Purpose**: Review and audit ministering coverage geographically. Not for editing - all data comes from PDF import.
 
@@ -15,22 +17,26 @@ A read-only view for reviewing imported ministering assignments with geographic 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
 | EQ/RS handling | Toggle within single view | Less UI surface, easy to compare coverage |
+| EQ ministered unit | Families | EQ ministers to families |
+| RS ministered unit | Individual sisters | RS ministers to sisters; show sister names, highlight their family on map |
 | List structure | Hierarchy only (District > Companionships) | Matches data model, simpler than switchable |
 | Map coloring | Implicit from selection | No separate toggle needed |
 | Default coloring | None until selection | Neutral starting point |
 | Multi-select | Same level only | Can't mix districts and companionships |
 | Map architecture | Single shared MapWidget | Zoom/pan consistency across views |
-| Unassigned families | Separate section in list | Indistinct on map until selected |
+| Unassigned | Separate section in list | EQ: unassigned families. RS: unassigned sisters. |
 
 ---
 
 ## Sidebar Structure
 
+### EQ View
+
 ```
 [EQ] [RS]                         <- Segmented control toggle
 
 ─────────────────────────────────
-Unassigned (3)                    <- Clickable, highlights unassigned
+Unassigned (3)                    <- Clickable, highlights unassigned families
 
 District North (12 families)      <- Collapsible, multi-selectable
   ■ John Smith, Mary Jones (4)    <- Swatch + names + family count
@@ -43,12 +49,43 @@ District South (8 families)
 ─────────────────────────────────
 ```
 
+### RS View
+
+```
+[EQ] [RS]                         <- Segmented control toggle
+
+─────────────────────────────────
+Unassigned (5)                    <- Clickable, highlights unassigned sisters
+
+District Relief (15 sisters)      <- Collapsible, multi-selectable
+  ■ Sarah White, Lisa Green (4)   <- Swatch + names + sister count
+    • Jane Anderson
+    • Mary Baker
+    • Sue Clark
+    • Ann Davis
+  ■ Beth Hall, Kim Young (6)
+
+District Charity (12 sisters)
+  ■ Pat Jones, Amy Lee (4)
+─────────────────────────────────
+```
+
+### EQ vs RS Display Differences
+
+| Aspect | EQ View | RS View |
+|--------|---------|---------|
+| Ministered to | Families | Individual sisters |
+| Count shown | Family count | Sister count |
+| List items | Family names | Sister names |
+| Map highlighting | Family markers | Sister's family markers |
+| Unassigned | Families without ministers | Sisters without ministers |
+
 ### Companionship Display
 
 Each companionship row shows:
 - Color swatch (matches map marker color when selected)
 - Minister names (comma-separated)
-- Assigned family count in parentheses
+- Assigned count in parentheses (families for EQ, sisters for RS)
 
 ### What's NOT Shown
 
@@ -115,10 +152,16 @@ public:
 
     /// Set of family IDs to show (empty = show all)
     virtual QSet<QString> visibleFamilyIds() const = 0;
+
+    /// Optional status icon overlay (empty = no icon)
+    /// Response Mode uses this for welfare status icons
+    virtual QString familyStatusIcon(const QString& familyId) const { return {}; }
 };
 ```
 
 Each sidebar view implements this interface. When the user switches tabs, MainWindow calls `mapWidget->setHighlightProvider(newView)` and the map re-renders.
+
+**Note:** Response Mode welfare check views use `familyStatusIcon()` to overlay status indicators (checkmark, flag, question mark) on map pins. Preparation Mode views return empty strings (no icons).
 
 ---
 
@@ -255,24 +298,19 @@ Document (read-only)
     MapWidget renders markers with colors/opacity
 ```
 
-### Computing Unassigned Families
+### Computing Unassigned (EQ: Families, RS: Sisters)
 
 ```cpp
+// EQ: Returns unassigned family IDs
 QSet<QString> MinisteringView::unassignedFamilyIds() const
 {
     const auto& families = m_documentManager->document().families();
-    const auto& groups = m_isEQ
-        ? m_documentManager->document().eqGroups()
-        : m_documentManager->document().rsGroups();
+    const auto& groups = m_documentManager->document().eqGroups();
 
     QSet<QString> assignedIds;
     for (const auto& group : groups)
     {
-        if (m_isEQ)
-        {
-            assignedIds.unite(group.familyIds());
-        }
-        // RS ministers to persons, not families - handle differently
+        assignedIds.unite(group.familyIds());
     }
 
     QSet<QString> allIds;
@@ -283,7 +321,43 @@ QSet<QString> MinisteringView::unassignedFamilyIds() const
 
     return allIds - assignedIds;
 }
+
+// RS: Returns unassigned sister (person) IDs
+QSet<QString> MinisteringView::unassignedSisterIds() const
+{
+    const auto& families = m_documentManager->document().families();
+    const auto& groups = m_documentManager->document().rsGroups();
+
+    QSet<QString> assignedPersonIds;
+    for (const auto& group : groups)
+    {
+        assignedPersonIds.unite(group.ministeredPersonIds());
+    }
+
+    // Collect all adult female person IDs
+    QSet<QString> allSisterIds;
+    for (const auto& family : families)
+    {
+        for (const auto& member : family.members())
+        {
+            if (member.gender() == Gender::Female && member.isParent())
+            {
+                allSisterIds.insert(member.id());
+            }
+        }
+    }
+
+    return allSisterIds - assignedPersonIds;
+}
+
+// Helper: Get family ID for a person (for map highlighting)
+QString MinisteringView::familyIdForPerson(const QString& personId) const
+{
+    return m_documentManager->document().familyIdForPerson(personId);
+}
 ```
+
+When RS view highlights a companionship, it finds each ministered sister's family and highlights that family's map marker.
 
 ---
 
@@ -293,9 +367,12 @@ Items explicitly out of scope but noted for future:
 
 - **Editing**: Add/edit/delete districts, companionships, assignments
 - **Interview tracking**: Show interview dates, highlight overdue
-- **RS person markers**: RS ministers to individuals, may need person-level markers
 - **Visit history**: Show recent ministering visits per family
 - **Print/export**: Generate ministering assignment sheets
+
+## Related Designs
+
+- **[Response Mode Design](2026-01-07-response-mode-design.md)**: Welfare check ministering view shows the same hierarchy but with contact status tracking, progress bars, and minister phone numbers for quick calling. RS sisters show their family's welfare status.
 
 ---
 
