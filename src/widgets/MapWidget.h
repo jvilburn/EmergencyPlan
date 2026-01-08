@@ -22,6 +22,7 @@ class MapViewModel;
 class TileService;
 class QPushButton;
 class UnmappedPanel;
+class MapHighlightProvider;
 
 /// Pure C++ slippy map widget using TileService for tile rendering.
 /// Replaces the QML-based implementation with QPainter rendering.
@@ -54,6 +55,10 @@ public:
 
     /// Set the map center location
     void setCenter(double lat, double lng);
+
+    /// Set the highlight provider for marker coloring/opacity
+    /// When set, the provider is queried instead of using m_highlightedIds/m_visibleIds
+    void setHighlightProvider(MapHighlightProvider* provider);
 
 signals:
     /// Emitted when a family marker is clicked
@@ -139,6 +144,7 @@ private:
     QString m_selectedFamilyId;
     QVariantMap m_highlightedIds;  // familyId -> color string
     QSet<QString> m_visibleIds;    // Empty = all visible, otherwise only these are emphasized
+    MapHighlightProvider* m_highlightProvider = nullptr;  // When set, overrides m_highlightedIds/m_visibleIds
 
     // UI controls
     QPushButton* m_zoomInButton;

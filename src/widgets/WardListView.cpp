@@ -70,7 +70,7 @@ void WardListView::setup(DocumentManager* documentManager)
             this, &WardListView::onModelReset);
 
     // Emit initial visible families
-    emit visibleFamiliesChanged(visibleFamilyIds());
+    emit visibleFamiliesChanged(visibleFamilyIdsList());
 }
 
 QString WardListView::selectedFamilyId() const
@@ -104,13 +104,35 @@ void WardListView::setSelectedFamilyId(const QString& id)
     }
 }
 
-QStringList WardListView::visibleFamilyIds() const
+QStringList WardListView::visibleFamilyIdsList() const
 {
     if (!m_model)
     {
         return {};
     }
     return m_model->familyIds();
+}
+
+// MapHighlightProvider interface implementation
+
+QColor WardListView::familyColor(const QString& /*familyId*/) const
+{
+    // WardListView doesn't highlight - it only filters visibility
+    return QColor();  // Invalid color means no highlighting
+}
+
+qreal WardListView::familyOpacity(const QString& familyId) const
+{
+    // Visible families are fully opaque, filtered-out would be dimmed
+    // But since visibleFamilyIds() returns only visible ones, this is always 1.0
+    Q_UNUSED(familyId);
+    return 1.0;
+}
+
+QSet<QString> WardListView::visibleFamilyIds() const
+{
+    QStringList list = visibleFamilyIdsList();
+    return QSet<QString>(list.begin(), list.end());
 }
 
 void WardListView::onSelectionChanged()
@@ -146,7 +168,7 @@ void WardListView::onModelReset()
     // Clear all action widgets - they were deleted by the model reset
     m_actionWidgets.clear();
 
-    emit visibleFamiliesChanged(visibleFamilyIds());
+    emit visibleFamiliesChanged(visibleFamilyIdsList());
 }
 
 void WardListView::onItemExpanded(const QModelIndex& index)

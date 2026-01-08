@@ -1,5 +1,7 @@
 #pragma once
 
+#include "MapHighlightProvider.h"
+
 #include <QWidget>
 #include <QModelIndex>
 #include <QHash>
@@ -18,7 +20,11 @@ class SearchField;
 ///     - Address
 ///     - Phone
 ///     - Actions (Edit/Delete buttons)
-class WardListView : public QWidget
+///
+/// Implements MapHighlightProvider for the shared map:
+///   - No highlighting (returns invalid colors)
+///   - Opacity based on filter visibility
+class WardListView : public QWidget, public MapHighlightProvider
 {
     Q_OBJECT
 
@@ -35,10 +41,15 @@ public:
     void setSelectedFamilyId(const QString& id);
 
     /// Get the list of currently visible (filtered) family IDs.
-    QStringList visibleFamilyIds() const;
+    QStringList visibleFamilyIdsList() const;
 
     /// Access the filter for external configuration (e.g., from filter dialogs).
     Filter* filter() const { return m_filter; }
+
+    // MapHighlightProvider interface
+    QColor familyColor(const QString& familyId) const override;
+    qreal familyOpacity(const QString& familyId) const override;
+    QSet<QString> visibleFamilyIds() const override;
 
 signals:
     /// Emitted when a family is selected (for map centering).

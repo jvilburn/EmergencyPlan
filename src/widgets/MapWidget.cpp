@@ -1,4 +1,5 @@
 #include "MapWidget.h"
+#include "MapHighlightProvider.h"
 #include "SlippyMapMath.h"
 #include "MarkerRenderer.h"
 #include "UnmappedPanel.h"
@@ -391,11 +392,79 @@ void MapWidget::drawTiles(QPainter& painter)
 void MapWidget::drawMarkers(QPainter& painter)
 {
     const QVariantList& families = m_viewModel->families();
-    bool hasHighlighting = !m_highlightedIds.isEmpty();
-    bool hasFiltering = !m_visibleIds.isEmpty();
 
     // Use fractional zoom for smooth marker positioning during animation
     double clampedZoom = qBound(static_cast<double>(MIN_ZOOM), m_zoom, static_cast<double>(MAX_ZOOM));
+
+    // If we have a highlight provider, use it for all coloring/opacity decisions
+    if (m_highlightProvider)
+    {
+        QSet<QString> visibleIds = m_highlightProvider->visibleFamilyIds();
+        bool hasVisibleFilter = !visibleIds.isEmpty();
+
+        // Collect markers with their draw order (low opacity first, high opacity on top)
+        struct MarkerInfo
+        {
+            QPointF pos;
+            QVariantMap data;
+            MarkerRenderer::State state;
+            qreal sortOpacity;
+        };
+        QVector<MarkerInfo> markers;
+
+        for (const QVariant& var : families)
+        {
+            QVariantMap hh = var.toMap();
+            QString id = hh["id"].toString();
+
+            // Skip if not in visible set (when filtering is active)
+            if (hasVisibleFilter && !visibleIds.contains(id))
+            {
+                continue;
+            }
+
+            double lat = hh["latitude"].toDouble();
+            double lng = hh["longitude"].toDouble();
+            QPointF pos = SlippyMapMath::latLngToPixel(lat, lng, clampedZoom,
+                                                        m_centerLat, m_centerLng,
+                                                        width(), height());
+
+            if (!MarkerRenderer::isVisible(pos, width(), height()))
+            {
+                continue;
+            }
+
+            QColor color = m_highlightProvider->familyColor(id);
+            qreal opacity = m_highlightProvider->familyOpacity(id);
+            QString statusIcon = m_highlightProvider->familyStatusIcon(id);
+
+            MarkerRenderer::State state;
+            state.isSelected = (id == m_selectedFamilyId);
+            state.isHighlighted = color.isValid();
+            state.highlightColor = color.isValid() ? color : QColor("#4CAF50");
+            state.opacity = opacity;
+            state.statusIcon = statusIcon;
+
+            markers.append({pos, hh, state, opacity});
+        }
+
+        // Sort by opacity so highlighted (opacity=1.0) markers draw on top
+        std::sort(markers.begin(), markers.end(),
+                  [](const MarkerInfo& a, const MarkerInfo& b)
+                  {
+                      return a.sortOpacity < b.sortOpacity;
+                  });
+
+        for (const MarkerInfo& m : markers)
+        {
+            MarkerRenderer::draw(painter, m.pos, m.data, m.state);
+        }
+        return;
+    }
+
+    // Legacy path: use m_highlightedIds and m_visibleIds directly
+    bool hasHighlighting = !m_highlightedIds.isEmpty();
+    bool hasFiltering = !m_visibleIds.isEmpty();
 
     // Draw non-highlighted markers first (dimmed if highlighting or filtering active)
     for (const QVariant& var : families)
@@ -856,6 +925,12 @@ void MapWidget::setCenter(double lat, double lng)
 void MapWidget::setVisibleFamilyIds(const QStringList& ids)
 {
     m_visibleIds = QSet<QString>(ids.begin(), ids.end());
+    update();
+}
+
+void MapWidget::setHighlightProvider(MapHighlightProvider* provider)
+{
+    m_highlightProvider = provider;
     update();
 }
 

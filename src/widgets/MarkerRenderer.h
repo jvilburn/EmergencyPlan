@@ -17,6 +17,7 @@ namespace MarkerRenderer
         QColor highlightColor = QColor("#4CAF50");
         double opacity = 1.0;
         double scale = 1.0;  // 0.5 for half-size markers
+        QString statusIcon;  // For Response Mode welfare status overlay (e.g., "✓", "⚑", "?")
     };
 
     /// Draw a family marker at the given position.

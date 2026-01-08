@@ -212,6 +212,7 @@ set(VIEWMODEL_HEADERS
 set(WIDGET_SOURCES
     src/widgets/MainWindow.cpp
     src/widgets/MapWidget.cpp
+    src/widgets/MinisteringView.cpp
     src/widgets/SlippyMapMath.cpp
     src/widgets/MarkerRenderer.cpp
     src/widgets/UnmappedPanel.cpp
@@ -242,7 +243,9 @@ set(WIDGET_SOURCES
 
 set(WIDGET_HEADERS
     src/widgets/MainWindow.h
+    src/widgets/MapHighlightProvider.h
     src/widgets/MapWidget.h
+    src/widgets/MinisteringView.h
     src/widgets/SlippyMapMath.h
     src/widgets/MarkerRenderer.h
     src/widgets/UnmappedPanel.h

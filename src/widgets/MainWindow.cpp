@@ -1,6 +1,8 @@
 #include "MainWindow.h"
 #include "WardListView.h"
+#include "MinisteringView.h"
 #include "MapWidget.h"
+#include "MapHighlightProvider.h"
 #include "DocumentManager.h"
 #include "ImportWardDirectoryCommand.h"
 #include "ImportEQMinisteringCommand.h"
@@ -20,6 +22,7 @@
 #include <QCloseEvent>
 #include <QLabel>
 #include <QProgressBar>
+#include <QTabWidget>
 #include <QStandardPaths>
 #include <QFile>
 #include <QDir>
@@ -50,21 +53,32 @@ void MainWindow::setupUi()
     m_splitter = new QSplitter(Qt::Horizontal, this);
     setCentralWidget(m_splitter);
 
-    // Ward list on the left
-    m_wardListView = new WardListView(m_splitter);
+    // Sidebar tabs on the left
+    m_sidebarTabs = new QTabWidget(m_splitter);
+    m_sidebarTabs->setMinimumWidth(250);
+    m_sidebarTabs->setMaximumWidth(400);
+
+    // Ward list tab
+    m_wardListView = new WardListView();
     m_wardListView->setup(m_documentManager);
-    m_wardListView->setMinimumWidth(250);
-    m_wardListView->setMaximumWidth(400);
+    m_sidebarTabs->addTab(m_wardListView, tr("Families"));
+
+    // Ministering tab
+    m_ministeringView = new MinisteringView(m_documentManager);
+    m_sidebarTabs->addTab(m_ministeringView, tr("Ministering"));
 
     // Map in the center
     m_mapWidget = new MapWidget(m_documentManager, m_splitter);
     m_mapWidget->setMinimumWidth(400);
 
-    m_splitter->addWidget(m_wardListView);
+    m_splitter->addWidget(m_sidebarTabs);
     m_splitter->addWidget(m_mapWidget);
     m_splitter->setSizes({300, 1100});
-    m_splitter->setStretchFactor(0, 0);  // List doesn't stretch
+    m_splitter->setStretchFactor(0, 0);  // Tabs don't stretch
     m_splitter->setStretchFactor(1, 1);  // Map stretches
+
+    // Set initial highlight provider (WardListView)
+    m_mapWidget->setHighlightProvider(m_wardListView);
 
     // Status bar
     statusBar()->showMessage(tr("Ready"));
@@ -132,6 +146,10 @@ void MainWindow::setupConnections()
     connect(m_documentManager, &DocumentManager::canRedoChanged,
             this, &MainWindow::updateUndoRedoActions);
 
+    // Sidebar tab changes
+    connect(m_sidebarTabs, &QTabWidget::currentChanged,
+            this, &MainWindow::onSidebarTabChanged);
+
     // Map <-> WardListView selection sync
     connect(m_wardListView, &WardListView::familySelected,
             m_mapWidget, &MapWidget::centerOnFamily);
@@ -139,6 +157,10 @@ void MainWindow::setupConnections()
             m_wardListView, &WardListView::setSelectedFamilyId);
     connect(m_wardListView, &WardListView::visibleFamiliesChanged,
             m_mapWidget, &MapWidget::setVisibleFamilyIds);
+
+    // MinisteringView highlight changes
+    connect(m_ministeringView, &MinisteringView::highlightChanged,
+            m_mapWidget, QOverload<>::of(&QWidget::update));
 
     // Geocoding progress
     connect(m_documentManager, &DocumentManager::geocodingProgressChanged,
@@ -598,5 +620,19 @@ void MainWindow::onLocationReady(double latitude, double longitude)
 
     // Clean up the GeoLocation object
     sender()->deleteLater();
+}
+
+void MainWindow::onSidebarTabChanged(int index)
+{
+    QWidget* currentTab = m_sidebarTabs->widget(index);
+
+    if (auto* provider = dynamic_cast<MapHighlightProvider*>(currentTab))
+    {
+        m_mapWidget->setHighlightProvider(provider);
+    }
+    else
+    {
+        m_mapWidget->setHighlightProvider(nullptr);
+    }
 }
 

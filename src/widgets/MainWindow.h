@@ -5,9 +5,11 @@
 
 class QLabel;
 class QProgressBar;
+class QTabWidget;
 class DocumentManager;
 class MapWidget;
 class WardListView;
+class MinisteringView;
 class GeoLocation;
 
 class MainWindow : public QMainWindow
@@ -41,6 +43,9 @@ private slots:
     // GeoLocation
     void onLocationReady(double latitude, double longitude);
 
+    // Sidebar tabs
+    void onSidebarTabChanged(int index);
+
 private:
     void setupUi();
     void setupMenus();
@@ -58,7 +63,9 @@ private:
 
     // Widgets
     QSplitter* m_splitter;
+    QTabWidget* m_sidebarTabs;
     WardListView* m_wardListView;
+    MinisteringView* m_ministeringView;
     MapWidget* m_mapWidget;
 
     // Actions
