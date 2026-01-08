@@ -140,6 +140,14 @@ public:
     void setRsGroups(const QHash<QString, MinisteringGroup>& groups);
 
     // ========================================================================
+    // Cascading cleanup
+    // ========================================================================
+
+    /// Remove a person from all references (teams, tags, resources, ministering).
+    /// Does NOT remove the person from their family - caller must handle that.
+    void cleanupPersonReferences(const QString& personId);
+
+    // ========================================================================
     // Lookup helpers
     // ========================================================================
     std::optional<Family> findFamilyById(const QString& id) const;

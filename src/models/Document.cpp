@@ -337,6 +337,90 @@ void Document::setMinisteringPdfDate(std::optional<QDate> date)
 }
 
 // ============================================================================
+// Cascading cleanup
+// ============================================================================
+
+void Document::cleanupPersonReferences(const QString& personId)
+{
+    // Remove from teams (both as member and leader)
+    for (auto it = m_teams.begin(); it != m_teams.end(); ++it)
+    {
+        if (it->memberIds().contains(personId))
+        {
+            it->removeMember(personId);
+        }
+        if (it->leaderId() == personId)
+        {
+            it->setLeaderId(QString());
+        }
+    }
+
+    // Remove from person-level tags
+    for (auto it = m_tags.begin(); it != m_tags.end(); ++it)
+    {
+        if (it->isPersonLevel() && it->entityIds().contains(personId))
+        {
+            it->removeEntity(personId);
+        }
+    }
+
+    // Remove from resource types
+    for (auto it = m_resourceTypes.begin(); it != m_resourceTypes.end(); ++it)
+    {
+        if (it->personIds().contains(personId))
+        {
+            it->removePerson(personId);
+        }
+    }
+
+    // Remove from EQ groups (ministers only - families are not person IDs)
+    for (auto it = m_eqGroups.begin(); it != m_eqGroups.end(); ++it)
+    {
+        if (it->ministerIds().contains(personId))
+        {
+            it->removeMinister(personId);
+        }
+        if (it->presidencyMemberId() == personId)
+        {
+            it->setPresidencyMemberId(std::nullopt);
+        }
+    }
+
+    // Remove from RS groups (both ministers and ministered persons)
+    for (auto it = m_rsGroups.begin(); it != m_rsGroups.end(); ++it)
+    {
+        if (it->ministerIds().contains(personId))
+        {
+            it->removeMinister(personId);
+        }
+        if (it->ministeredPersonIds().contains(personId))
+        {
+            it->removeMinisteredPerson(personId);
+        }
+        if (it->presidencyMemberId() == personId)
+        {
+            it->setPresidencyMemberId(std::nullopt);
+        }
+    }
+
+    // Clear presidency member ID in districts if matches
+    for (auto it = m_eqDistricts.begin(); it != m_eqDistricts.end(); ++it)
+    {
+        if (it->presidencyMemberId() == personId)
+        {
+            it->setPresidencyMemberId(std::nullopt);
+        }
+    }
+    for (auto it = m_rsDistricts.begin(); it != m_rsDistricts.end(); ++it)
+    {
+        if (it->presidencyMemberId() == personId)
+        {
+            it->setPresidencyMemberId(std::nullopt);
+        }
+    }
+}
+
+// ============================================================================
 // Lookup helpers
 // ============================================================================
 
