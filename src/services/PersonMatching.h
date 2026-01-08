@@ -15,6 +15,21 @@ namespace PersonMatching
         int score = 0;  // Higher = more confident match
     };
 
+    /// Score for a person match
+    struct PersonMatchScore
+    {
+        QString personId;
+        int score = 0;
+    };
+
+    /// Score how well two persons match.
+    /// Scoring: firstName exact +100, firstName partial +50, birth month+day match +50, both isParent +20
+    int scorePersonMatch(const Person& source, const Person& target);
+
+    /// Find the best matching person in a family using scored matching.
+    /// Returns the person ID and score. Score of 0 means no match.
+    PersonMatchScore findBestPersonMatch(const Person& source, const Family& family);
+
     /// Find the best matching family from a list of candidates.
     /// Multi-factor scoring: address +100, phone +50, member +20 each.
     /// Returns nullopt if no match meets minimum threshold (40 points).

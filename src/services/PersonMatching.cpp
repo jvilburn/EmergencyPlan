@@ -51,4 +51,61 @@ std::optional<Person> findPersonInFamilies(
     return std::nullopt;
 }
 
+int scorePersonMatch(const Person& source, const Person& target)
+{
+    int score = 0;
+
+    QString sourceFirst = source.givenNames().split(' ').first().toLower();
+    QString targetFirst = target.givenNames().split(' ').first().toLower();
+
+    // First name matching
+    if (sourceFirst == targetFirst)
+    {
+        score += 100;
+    }
+    else if (sourceFirst.startsWith(targetFirst) || targetFirst.startsWith(sourceFirst))
+    {
+        // Partial match (Mike/Michael, Bob/Robert won't match this way, but Tom/Thomas might)
+        score += 50;
+    }
+    else
+    {
+        // No first name match at all - probably not the same person
+        return 0;
+    }
+
+    // Birth month+day matching (not year - year is often missing for adults)
+    if (source.birthday().hasDate() && target.birthday().hasDate()
+        && source.birthday().month() == target.birthday().month()
+        && source.birthday().day() == target.birthday().day())
+    {
+        score += 50;
+    }
+
+    // Both are parents
+    if (source.isParent() && target.isParent())
+    {
+        score += 20;
+    }
+
+    return score;
+}
+
+PersonMatchScore findBestPersonMatch(const Person& source, const Family& family)
+{
+    PersonMatchScore best;
+
+    for (const Person& member : family.members())
+    {
+        int score = scorePersonMatch(source, member);
+        if (score > best.score)
+        {
+            best.personId = member.id();
+            best.score = score;
+        }
+    }
+
+    return best;
+}
+
 }  // namespace PersonMatching
