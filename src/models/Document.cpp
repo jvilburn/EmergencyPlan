@@ -418,6 +418,9 @@ void Document::cleanupPersonReferences(const QString& personId)
             it->setPresidencyMemberId(std::nullopt);
         }
     }
+
+    // Clear person-to-family cache entry
+    m_personToFamily.remove(personId);
 }
 
 // ============================================================================
