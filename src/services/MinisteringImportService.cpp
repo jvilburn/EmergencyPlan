@@ -48,7 +48,6 @@ MinisteringImportResult MinisteringImportService::importFromPdf(
     const QHash<QString, Family>& existingFamilies,
     std::optional<QDate> wardDirectoryDate)
 {
-    Q_UNUSED(wardDirectoryDate)  // Will be used in future tasks
     MinisteringImportResult result;
     result.success = false;
 
@@ -73,19 +72,25 @@ MinisteringImportResult MinisteringImportService::importFromPdf(
         result.pdfDate = parseResult.documentDate;
     }
 
+    // Determine if ministering data is authoritative for family changes
+    bool isAuthoritative = isMinisteringAuthoritative(result.pdfDate, wardDirectoryDate);
+
     // Step 1: Internal dedup - merge minister families into ministered families
     // This handles the case where the same family appears as both minister and ministered
+    // Internal merge is always authoritative within the same PDF
     mergeFamilies(parseResult.ministeredFamilies,
                   parseResult.ministerFamilies,
                   parseResult.districts,
-                  parseResult.groups);
+                  parseResult.groups,
+                  true);
 
-    // Step 2: Merge with document families
+    // Step 2: Merge with document families - respect date authority
     result.families = existingFamilies;
     mergeFamilies(result.families,
                   parseResult.ministeredFamilies,
                   parseResult.districts,
-                  parseResult.groups);
+                  parseResult.groups,
+                  isAuthoritative);
 
     // Copy final districts and groups to result
     result.districts = parseResult.districts;
@@ -103,7 +108,8 @@ void MinisteringImportService::mergeFamilies(
     QHash<QString, Family>& targetFamilies,
     const QHash<QString, Family>& sourceFamilies,
     QHash<QString, MinisteringDistrict>& districts,
-    QHash<QString, MinisteringGroup>& groups)
+    QHash<QString, MinisteringGroup>& groups,
+    bool isAuthoritative)
 {
     QHash<QString, QString> familyIdMapping;
     QHash<QString, QString> personIdMapping;
@@ -119,7 +125,7 @@ void MinisteringImportService::mergeFamilies(
             familyIdMapping.insert(sourceFamily.id(), match->id());
 
             std::optional<Family> updated = mergeFamilyMembers(
-                sourceFamily, *match, personIdMapping);
+                sourceFamily, *match, personIdMapping, isAuthoritative);
 
             if (updated.has_value())
             {
@@ -127,15 +133,24 @@ void MinisteringImportService::mergeFamilies(
                 targetFamilies[match->id()] = *updated;
             }
         }
-        else
+        else if (isAuthoritative)
         {
-            // No match - add as new family (IDs remain unchanged)
+            // No match and authoritative - add as new family
             familyIdMapping.insert(sourceFamily.id(), sourceFamily.id());
             for (const Person& member : sourceFamily.members())
             {
                 personIdMapping.insert(member.id(), member.id());
             }
             targetFamilies.insert(sourceFamily.id(), sourceFamily);
+        }
+        else
+        {
+            // No match and not authoritative - just map IDs (don't add family)
+            familyIdMapping.insert(sourceFamily.id(), sourceFamily.id());
+            for (const Person& member : sourceFamily.members())
+            {
+                personIdMapping.insert(member.id(), member.id());
+            }
         }
     }
 
@@ -276,11 +291,12 @@ std::optional<Person> MinisteringImportService::findMatchingPerson(
 std::optional<Family> MinisteringImportService::mergeFamilyMembers(
     const Family& sourceFamily,
     Family targetFamily,
-    QHash<QString, QString>& personIdMapping)
+    QHash<QString, QString>& personIdMapping,
+    bool isAuthoritative)
 {
     bool anyChanges = false;
 
-    // Copy address if target doesn't have one
+    // Copy address if target doesn't have one (always allowed - filling empty field)
     if (targetFamily.address().isEmpty() && !sourceFamily.address().isEmpty())
     {
         targetFamily.setAddress(sourceFamily.address());
@@ -298,15 +314,16 @@ std::optional<Family> MinisteringImportService::mergeFamilyMembers(
             // Found matching member - map IDs
             personIdMapping.insert(sourceMember.id(), existingMember->id());
 
-            // Check if we need to update this member
-            bool needsNameUpdate = sourceMember.surname() != existingMember->surname()
-                || sourceMember.givenNames() != existingMember->givenNames();
-            // isParent = true wins over false
+            // Only update names if authoritative
+            bool needsNameUpdate = isAuthoritative
+                && (sourceMember.surname() != existingMember->surname()
+                    || sourceMember.givenNames() != existingMember->givenNames());
+            // isParent = true wins over false (always allowed - filling empty/false field)
             bool needsIsParentUpdate = sourceMember.isParent() && !existingMember->isParent();
-            // Copy gender if source has it and target doesn't
+            // Copy gender if source has it and target doesn't (always allowed - filling empty field)
             bool needsGenderUpdate = sourceMember.gender().has_value()
                 && !existingMember->gender().has_value();
-            // Copy birthday if source has date and target doesn't
+            // Copy birthday if source has date and target doesn't (always allowed - filling empty field)
             bool needsBirthdayUpdate = sourceMember.birthday().hasDate()
                 && !existingMember->birthday().hasDate();
 
@@ -342,12 +359,17 @@ std::optional<Family> MinisteringImportService::mergeFamilyMembers(
                 }
             }
         }
-        else
+        else if (isAuthoritative)
         {
-            // No match - add as new member (keep source ID)
+            // No match and authoritative - add as new member
             personIdMapping.insert(sourceMember.id(), sourceMember.id());
             updatedMembers.append(sourceMember);
             anyChanges = true;
+        }
+        else
+        {
+            // No match and not authoritative - just map ID, don't add member
+            personIdMapping.insert(sourceMember.id(), sourceMember.id());
         }
     }
 
