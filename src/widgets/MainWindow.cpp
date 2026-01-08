@@ -299,9 +299,12 @@ void MainWindow::onImportPdf()
 
     statusBar()->showMessage(tr("Importing from PDF..."));
 
-    // Parse PDF
+    // Parse PDF with ID preservation
     WardDirectoryImportService importService;
-    WardDirectoryImportResult result = importService.importFromPdf(filePath);
+    WardDirectoryImportResult result = importService.importFromPdf(
+        filePath,
+        m_documentManager->document().families(),
+        m_documentManager->document().ministeringPdfDate());
 
     if (!result.success)
     {
@@ -324,8 +327,10 @@ void MainWindow::onImportPdf()
 
     m_documentManager->executeCommand(std::make_unique<ImportWardDirectoryCommand>(
         result.families,
+        result.removedFamilyIds,
         result.wardUnitNumber,
         result.wardName,
+        result.pdfDate,
         description));
 
     // Update UI
@@ -366,7 +371,9 @@ void MainWindow::onImportMinisteringPdf()
 
     MinisteringImportService importService;
     MinisteringImportResult result = importService.importFromPdf(
-        filePath, m_documentManager->document().families());
+        filePath,
+        m_documentManager->document().families(),
+        m_documentManager->document().wardDirectoryPdfDate());
 
     if (!result.success)
     {
@@ -397,6 +404,7 @@ void MainWindow::onImportMinisteringPdf()
             result.districts,
             result.groups,
             result.families,
+            result.pdfDate,
             description));
     }
     else
@@ -405,6 +413,7 @@ void MainWindow::onImportMinisteringPdf()
             result.districts,
             result.groups,
             result.families,
+            result.pdfDate,
             description));
     }
 

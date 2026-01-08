@@ -5,6 +5,7 @@
 #include <QList>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QDate>
 
 #include "DocumentMetadata.h"
 #include "Family.h"
@@ -54,6 +55,14 @@ public:
     const QHash<QString, MinisteringGroup>& eqGroups() const { return m_eqGroups; }
     const QHash<QString, MinisteringDistrict>& rsDistricts() const { return m_rsDistricts; }
     const QHash<QString, MinisteringGroup>& rsGroups() const { return m_rsGroups; }
+
+    // ========================================================================
+    // Import date tracking
+    // ========================================================================
+    std::optional<QDate> wardDirectoryPdfDate() const { return m_wardDirectoryPdfDate; }
+    std::optional<QDate> ministeringPdfDate() const { return m_ministeringPdfDate; }
+    void setWardDirectoryPdfDate(std::optional<QDate> date);
+    void setMinisteringPdfDate(std::optional<QDate> date);
 
     // ========================================================================
     // Mutating operations - families
@@ -131,6 +140,14 @@ public:
     void setRsGroups(const QHash<QString, MinisteringGroup>& groups);
 
     // ========================================================================
+    // Cascading cleanup
+    // ========================================================================
+
+    /// Remove a person from all references (teams, tags, resources, ministering).
+    /// Does NOT remove the person from their family - caller must handle that.
+    void cleanupPersonReferences(const QString& personId);
+
+    // ========================================================================
     // Lookup helpers
     // ========================================================================
     std::optional<Family> findFamilyById(const QString& id) const;
@@ -179,4 +196,8 @@ private:
     QHash<QString, MinisteringGroup> m_eqGroups;
     QHash<QString, MinisteringDistrict> m_rsDistricts;
     QHash<QString, MinisteringGroup> m_rsGroups;
+
+    // Import dates (for conflict resolution)
+    std::optional<QDate> m_wardDirectoryPdfDate;
+    std::optional<QDate> m_ministeringPdfDate;
 };

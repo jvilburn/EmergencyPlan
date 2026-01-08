@@ -14,6 +14,22 @@ Family Family::create(std::optional<double> latitude,
     return family;
 }
 
+Family Family::createWithId(
+    const QString& id,
+    std::optional<double> latitude,
+    std::optional<double> longitude,
+    const Address& address,
+    const QList<Person>& members)
+{
+    Family family;
+    family.m_id = id;
+    family.m_latitude = latitude;
+    family.m_longitude = longitude;
+    family.m_address = address;
+    family.m_members = members;
+    return family;
+}
+
 QString Family::surname() const
 {
     if (m_members.isEmpty())

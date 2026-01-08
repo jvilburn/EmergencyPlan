@@ -5,7 +5,9 @@
 #include "MinisteringDistrict.h"
 #include "MinisteringGroup.h"
 
+#include <QDate>
 #include <QHash>
+#include <optional>
 
 /// Command that handles RS ministering PDF import: sets districts, groups, and families.
 /// This allows the entire import to be undone as a single operation.
@@ -16,7 +18,8 @@ public:
         const QHash<QString, MinisteringDistrict>& districts,
         const QHash<QString, MinisteringGroup>& groups,
         const QHash<QString, Family>& families,
-        const QString& description);
+        std::optional<QDate> pdfDate = std::nullopt,
+        const QString& description = QString());
 
     void execute(Document& document) override;
     void undo(Document& document) override;
@@ -28,8 +31,11 @@ private:
     QHash<QString, Family> m_newFamilies;
     QString m_description;
 
+    std::optional<QDate> m_pdfDate;
+
     // For undo
     QHash<QString, MinisteringDistrict> m_previousDistricts;
     QHash<QString, MinisteringGroup> m_previousGroups;
     QHash<QString, Family> m_previousFamilies;
+    std::optional<QDate> m_previousMinisteringPdfDate;
 };

@@ -4,9 +4,11 @@
 #include "MinisteringDistrict.h"
 #include "MinisteringGroup.h"
 
+#include <QDate>
 #include <QObject>
 #include <QString>
 #include <QHash>
+#include <optional>
 
 /// Result of ministering import operation
 struct MinisteringImportResult
@@ -23,6 +25,7 @@ struct MinisteringImportResult
     QString wardUnitNumber;
     QString stakeName;
     QString stakeUnitNumber;
+    std::optional<QDate> pdfDate;  // From PDF footer (documentDate)
 };
 
 /// Service for importing ministering data from PDF files.
@@ -36,23 +39,26 @@ public:
     ~MinisteringImportService();
 
     /// Import ministering assignments from a PDF file (auto-detects EQ or RS).
-    /// Matches parsed families to existing ones by surname.
-    /// Updates member names from PDF (authoritative format).
+    /// If wardDirectoryDate is provided and is newer than the PDF date,
+    /// family data from the PDF is treated as stale (only fills empty fields).
     MinisteringImportResult importFromPdf(
         const QString& pdfPath,
-        const QHash<QString, Family>& existingFamilies);
+        const QHash<QString, Family>& existingFamilies,
+        std::optional<QDate> wardDirectoryDate = std::nullopt);
 
 private:
     /// Merge source families into target, remapping IDs in groups and districts.
     /// - Matches families by surname, displayName, address, phone
     /// - Matches persons by firstName, isParent
     /// - isParent=true wins over isParent=false when merging
-    /// - Unmatched source families are inserted into target
+    /// - When isAuthoritative: unmatched families are added, names can be updated
+    /// - When not authoritative: only fills empty fields, no new families added
     void mergeFamilies(
         QHash<QString, Family>& targetFamilies,
         const QHash<QString, Family>& sourceFamilies,
         QHash<QString, MinisteringDistrict>& districts,
-        QHash<QString, MinisteringGroup>& groups);
+        QHash<QString, MinisteringGroup>& groups,
+        bool isAuthoritative);
 
     /// Find existing family by surname, display name, address, and phone.
     /// Matches by surname first, then narrows by display name if multiple,
@@ -68,8 +74,19 @@ private:
 
     /// Merge PDF family members into existing family.
     /// Builds personIdMapping. Returns updated family if any changes made.
+    /// When isAuthoritative: can update names and add new members.
+    /// When not authoritative: only fills empty fields.
     std::optional<Family> mergeFamilyMembers(
         const Family& sourceFamily,
         Family targetFamily,
-        QHash<QString, QString>& personIdMapping);
+        QHash<QString, QString>& personIdMapping,
+        bool isAuthoritative);
+
+    /// Determine if ministering PDF is authoritative for family data.
+    /// Returns true if:
+    /// - wardDirectoryDate is not set (first import), OR
+    /// - PDF date is set AND is >= wardDirectoryDate
+    bool isMinisteringAuthoritative(
+        std::optional<QDate> pdfDate,
+        std::optional<QDate> wardDirectoryDate) const;
 };

@@ -7,15 +7,20 @@
 #include <QString>
 #include <QList>
 #include <QHash>
+#include <QSet>
+#include <QDate>
+#include <optional>
 
 /// Result of ward directory import operation
 struct WardDirectoryImportResult
 {
     bool success = false;
     QHash<QString, Family> families;
+    QSet<QString> removedFamilyIds;  // Families in existing but not in PDF
     QStringList errors;
     QString wardName;
     QString wardUnitNumber;
+    std::optional<QDate> pdfDate;  // File modification date as proxy
 };
 
 /// Service for importing ward directory data from PDF files
@@ -27,6 +32,23 @@ public:
     explicit WardDirectoryImportService(QObject* parent = nullptr);
     ~WardDirectoryImportService();
 
-    /// Import families from a PDF file
-    WardDirectoryImportResult importFromPdf(const QString& pdfPath);
+    /// Import families from a PDF file.
+    /// Preserves IDs for families/persons that match existing data.
+    WardDirectoryImportResult importFromPdf(
+        const QString& pdfPath,
+        const QHash<QString, Family>& existingFamilies,
+        std::optional<QDate> ministeringPdfDate = std::nullopt);
+
+private:
+    std::optional<Family> findMatchingFamily(
+        const Family& pdfFamily,
+        const QHash<QString, Family>& families);
+
+    std::optional<Person> findMatchingPerson(
+        const Person& person,
+        const Family& family);
+
+    Family preserveIds(
+        const Family& parsedFamily,
+        const Family& existingFamily);
 };

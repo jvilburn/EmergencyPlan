@@ -326,6 +326,103 @@ void Document::setRsGroups(const QHash<QString, MinisteringGroup>& groups)
     m_rsGroups = groups;
 }
 
+void Document::setWardDirectoryPdfDate(std::optional<QDate> date)
+{
+    m_wardDirectoryPdfDate = date;
+}
+
+void Document::setMinisteringPdfDate(std::optional<QDate> date)
+{
+    m_ministeringPdfDate = date;
+}
+
+// ============================================================================
+// Cascading cleanup
+// ============================================================================
+
+void Document::cleanupPersonReferences(const QString& personId)
+{
+    // Remove from teams (both as member and leader)
+    for (auto it = m_teams.begin(); it != m_teams.end(); ++it)
+    {
+        if (it->memberIds().contains(personId))
+        {
+            it->removeMember(personId);
+        }
+        if (it->leaderId() == personId)
+        {
+            it->setLeaderId(QString());
+        }
+    }
+
+    // Remove from person-level tags
+    for (auto it = m_tags.begin(); it != m_tags.end(); ++it)
+    {
+        if (it->isPersonLevel() && it->entityIds().contains(personId))
+        {
+            it->removeEntity(personId);
+        }
+    }
+
+    // Remove from resource types
+    for (auto it = m_resourceTypes.begin(); it != m_resourceTypes.end(); ++it)
+    {
+        if (it->personIds().contains(personId))
+        {
+            it->removePerson(personId);
+        }
+    }
+
+    // Remove from EQ groups (ministers only - families are not person IDs)
+    for (auto it = m_eqGroups.begin(); it != m_eqGroups.end(); ++it)
+    {
+        if (it->ministerIds().contains(personId))
+        {
+            it->removeMinister(personId);
+        }
+        if (it->presidencyMemberId() == personId)
+        {
+            it->setPresidencyMemberId(std::nullopt);
+        }
+    }
+
+    // Remove from RS groups (both ministers and ministered persons)
+    for (auto it = m_rsGroups.begin(); it != m_rsGroups.end(); ++it)
+    {
+        if (it->ministerIds().contains(personId))
+        {
+            it->removeMinister(personId);
+        }
+        if (it->ministeredPersonIds().contains(personId))
+        {
+            it->removeMinisteredPerson(personId);
+        }
+        if (it->presidencyMemberId() == personId)
+        {
+            it->setPresidencyMemberId(std::nullopt);
+        }
+    }
+
+    // Clear presidency member ID in districts if matches
+    for (auto it = m_eqDistricts.begin(); it != m_eqDistricts.end(); ++it)
+    {
+        if (it->presidencyMemberId() == personId)
+        {
+            it->setPresidencyMemberId(std::nullopt);
+        }
+    }
+    for (auto it = m_rsDistricts.begin(); it != m_rsDistricts.end(); ++it)
+    {
+        if (it->presidencyMemberId() == personId)
+        {
+            it->setPresidencyMemberId(std::nullopt);
+        }
+    }
+
+    // Clear person-to-family cache entry
+    m_personToFamily.remove(personId);
+}
+
 // ============================================================================
 // Lookup helpers
 // ============================================================================
@@ -487,6 +584,16 @@ QJsonObject Document::toJson() const
     serializeHashToJson(json, "rsDistricts", m_rsDistricts);
     serializeHashToJson(json, "rsGroups", m_rsGroups);
 
+    // Import dates
+    if (m_wardDirectoryPdfDate.has_value())
+    {
+        json["wardDirectoryPdfDate"] = m_wardDirectoryPdfDate->toString(Qt::ISODate);
+    }
+    if (m_ministeringPdfDate.has_value())
+    {
+        json["ministeringPdfDate"] = m_ministeringPdfDate->toString(Qt::ISODate);
+    }
+
     return json;
 }
 
@@ -512,6 +619,26 @@ Document Document::fromJson(const QJsonObject& json)
     deserializeJsonToHash(json, "rsDistricts", document.m_rsDistricts);
     deserializeJsonToHash(json, "rsGroups", document.m_rsGroups);
 
+    // Import dates
+    if (json.contains("wardDirectoryPdfDate"))
+    {
+        QDate date = QDate::fromString(
+            json["wardDirectoryPdfDate"].toString(), Qt::ISODate);
+        if (date.isValid())
+        {
+            document.m_wardDirectoryPdfDate = date;
+        }
+    }
+    if (json.contains("ministeringPdfDate"))
+    {
+        QDate date = QDate::fromString(
+            json["ministeringPdfDate"].toString(), Qt::ISODate);
+        if (date.isValid())
+        {
+            document.m_ministeringPdfDate = date;
+        }
+    }
+
     // Build lookup cache
     document.rebuildPersonToFamilyMap();
 
@@ -529,5 +656,7 @@ bool Document::operator==(const Document& other) const
         && m_eqDistricts == other.m_eqDistricts
         && m_eqGroups == other.m_eqGroups
         && m_rsDistricts == other.m_rsDistricts
-        && m_rsGroups == other.m_rsGroups;
+        && m_rsGroups == other.m_rsGroups
+        && m_wardDirectoryPdfDate == other.m_wardDirectoryPdfDate
+        && m_ministeringPdfDate == other.m_ministeringPdfDate;
 }
