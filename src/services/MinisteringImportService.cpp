@@ -1,5 +1,6 @@
 #include "MinisteringImportService.h"
 #include "MinisteringPdfParser.h"
+#include "PersonMatching.h"
 
 namespace
 {
@@ -178,74 +179,25 @@ std::optional<Family> MinisteringImportService::findMatchingFamily(
     const Family& pdfFamily,
     const QHash<QString, Family>& families)
 {
-    // Collect all surname matches
-    QList<Family> surnameMatches;
-    for (const Family& family : families)
+    // Try member-based matching first (by surname)
+    PersonMatching::FamilyMemberMatchResult match =
+        PersonMatching::findFamilyByMembers(pdfFamily, families);
+
+    if (!match.familyId.isEmpty())
     {
-        if (family.surname().compare(pdfFamily.surname(), Qt::CaseInsensitive) == 0)
-        {
-            surnameMatches.append(family);
-        }
+        return families.value(match.familyId);
     }
 
-    if (surnameMatches.isEmpty())
+    // Fallback: try replacement detection (for surname changes)
+    PersonMatching::FamilyReplacementResult replacement =
+        PersonMatching::findReplacedFamily(pdfFamily, families);
+
+    if (!replacement.replacedFamilyId.isEmpty())
     {
-        return std::nullopt;
+        return families.value(replacement.replacedFamilyId);
     }
 
-    if (surnameMatches.size() == 1)
-    {
-        return surnameMatches.first();
-    }
-
-    // Multiple surname matches - try display name
-    QList<Family> displayNameMatches;
-    for (const Family& candidate : surnameMatches)
-    {
-        if (candidate.displayName().compare(pdfFamily.displayName(), Qt::CaseInsensitive) == 0)
-        {
-            displayNameMatches.append(candidate);
-        }
-    }
-
-    if (displayNameMatches.size() == 1)
-    {
-        return displayNameMatches.first();
-    }
-
-    // If we have display name matches, use those; otherwise fall back to surname matches
-    QList<Family>& candidates = displayNameMatches.isEmpty() ? surnameMatches : displayNameMatches;
-
-    // Still multiple - disambiguate by address
-    if (!pdfFamily.address().isEmpty())
-    {
-        for (const Family& candidate : candidates)
-        {
-            if (candidate.address() == pdfFamily.address())
-            {
-                return candidate;
-            }
-        }
-    }
-
-    // Try phone disambiguation
-    Phone pdfPhone = pdfFamily.displayPhone();
-    if (!pdfPhone.isEmpty())
-    {
-        for (const Family& candidate : candidates)
-        {
-            for (const Phone& candidatePhone : candidate.allPhoneNumbers())
-            {
-                if (pdfPhone == candidatePhone)
-                {
-                    return candidate;
-                }
-            }
-        }
-    }
-
-    // Can't disambiguate further - return first match
-    return candidates.first();
+    return std::nullopt;
 }
 
 std::optional<Person> MinisteringImportService::findMatchingPerson(
