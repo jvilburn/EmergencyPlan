@@ -181,4 +181,53 @@ FamilyMemberMatchResult findFamilyByMembers(
     return bestResult;
 }
 
+FamilyReplacementResult findReplacedFamily(
+    const Family& sourceFamily,
+    const QHash<QString, Family>& targetFamilies)
+{
+    FamilyReplacementResult bestResult;
+    bestResult.totalSourceMembers = sourceFamily.members().size();
+
+    // For each source member, find which target family they might be in
+    QHash<QString, int> familyMatchCounts;  // familyId -> count of matched members
+    QHash<QString, QHash<QString, QString>> familyPersonMappings;  // familyId -> (source -> target)
+
+    for (const Person& sourceMember : sourceFamily.members())
+    {
+        // Search ALL families (not filtered by surname)
+        for (const Family& targetFamily : targetFamilies)
+        {
+            PersonMatchScore match = findBestPersonMatch(sourceMember, targetFamily);
+            if (match.score >= 10)  // Minimum threshold
+            {
+                familyMatchCounts[targetFamily.id()]++;
+                familyPersonMappings[targetFamily.id()].insert(sourceMember.id(), match.personId);
+            }
+        }
+    }
+
+    // Find family with most matches
+    for (auto it = familyMatchCounts.begin(); it != familyMatchCounts.end(); ++it)
+    {
+        if (it.value() > bestResult.matchedMembers)
+        {
+            bestResult.replacedFamilyId = it.key();
+            bestResult.matchedMembers = it.value();
+            bestResult.personIdMapping = familyPersonMappings[it.key()];
+        }
+    }
+
+    // Check majority rule (at least half)
+    if (bestResult.matchedMembers > 0
+        && bestResult.matchedMembers >= (bestResult.totalSourceMembers + 1) / 2)
+    {
+        return bestResult;
+    }
+
+    // No majority match - truly new family
+    bestResult.replacedFamilyId.clear();
+    bestResult.personIdMapping.clear();
+    return bestResult;
+}
+
 }  // namespace PersonMatching

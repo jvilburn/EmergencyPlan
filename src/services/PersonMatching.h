@@ -32,6 +32,15 @@ namespace PersonMatching
         QHash<QString, QString> personIdMapping;  // source person ID -> target person ID
     };
 
+    /// Result of searching for family members across all families
+    struct FamilyReplacementResult
+    {
+        QString replacedFamilyId;   // The family being replaced (empty if truly new)
+        int matchedMembers = 0;     // How many source members found in that family
+        int totalSourceMembers = 0;
+        QHash<QString, QString> personIdMapping;  // source person ID -> existing person ID
+    };
+
     /// Score how well two persons match.
     /// Disqualifiers: no first name match, gender mismatch (if both have gender).
     /// Scoring: firstName exact +10, firstName partial +5, birth month+day +7,
@@ -61,6 +70,13 @@ namespace PersonMatching
     /// Filters by surname first, then checks if majority of source members match.
     /// Returns empty familyId if no match with majority.
     FamilyMemberMatchResult findFamilyByMembers(
+        const Family& sourceFamily,
+        const QHash<QString, Family>& targetFamilies);
+
+    /// Search all families for members of the source family (ignoring surname).
+    /// Used as fallback when surname-based matching fails.
+    /// Returns the family that contains at least half of source members, if any.
+    FamilyReplacementResult findReplacedFamily(
         const Family& sourceFamily,
         const QHash<QString, Family>& targetFamilies);
 }
