@@ -23,7 +23,9 @@ namespace PersonMatching
     };
 
     /// Score how well two persons match.
-    /// Scoring: firstName exact +100, firstName partial +50, birth month+day match +50, both isParent +20
+    /// Disqualifiers: no first name match, gender mismatch (if both have gender).
+    /// Scoring: firstName exact +10, firstName partial +5, birth month+day +7,
+    /// both isParent +2, phone match +5, email match +5.
     int scorePersonMatch(const Person& source, const Person& target);
 
     /// Find the best matching person in a family using scored matching.

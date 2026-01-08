@@ -58,19 +58,26 @@ int scorePersonMatch(const Person& source, const Person& target)
     QString sourceFirst = source.givenNames().split(' ').first().toLower();
     QString targetFirst = target.givenNames().split(' ').first().toLower();
 
-    // First name matching
+    // First name matching - disqualify if no match at all
     if (sourceFirst == targetFirst)
     {
-        score += 100;
+        score += 10;
     }
     else if (sourceFirst.startsWith(targetFirst) || targetFirst.startsWith(sourceFirst))
     {
         // Partial match (Mike/Michael, Bob/Robert won't match this way, but Tom/Thomas might)
-        score += 50;
+        score += 5;
     }
     else
     {
-        // No first name match at all - probably not the same person
+        // No first name match at all - disqualify
+        return 0;
+    }
+
+    // Gender mismatch - disqualify if both have gender and they differ
+    if (source.gender().has_value() && target.gender().has_value()
+        && source.gender().value() != target.gender().value())
+    {
         return 0;
     }
 
@@ -79,13 +86,26 @@ int scorePersonMatch(const Person& source, const Person& target)
         && source.birthday().month() == target.birthday().month()
         && source.birthday().day() == target.birthday().day())
     {
-        score += 50;
+        score += 7;
     }
 
     // Both are parents
     if (source.isParent() && target.isParent())
     {
-        score += 20;
+        score += 2;
+    }
+
+    // Phone match
+    if (!source.phone().isEmpty() && source.phone().matches(target.phone()))
+    {
+        score += 5;
+    }
+
+    // Email match
+    if (!source.email().isEmpty() && !target.email().isEmpty()
+        && source.email().compare(target.email(), Qt::CaseInsensitive) == 0)
+    {
+        score += 5;
     }
 
     return score;
@@ -93,12 +113,13 @@ int scorePersonMatch(const Person& source, const Person& target)
 
 PersonMatchScore findBestPersonMatch(const Person& source, const Family& family)
 {
+    constexpr int minimumScore = 10;
     PersonMatchScore best;
 
     for (const Person& member : family.members())
     {
         int score = scorePersonMatch(source, member);
-        if (score > best.score)
+        if (score >= minimumScore && score > best.score)
         {
             best.personId = member.id();
             best.score = score;
