@@ -129,4 +129,56 @@ PersonMatchScore findBestPersonMatch(const Person& source, const Family& family)
     return best;
 }
 
+FamilyMemberMatchResult findFamilyByMembers(
+    const Family& sourceFamily,
+    const QHash<QString, Family>& targetFamilies)
+{
+    FamilyMemberMatchResult bestResult;
+    bestResult.totalSourceMembers = sourceFamily.members().size();
+
+    QString sourceSurname = sourceFamily.surname().toLower();
+
+    // Filter by surname first
+    for (const Family& targetFamily : targetFamilies)
+    {
+        if (targetFamily.surname().toLower() != sourceSurname)
+        {
+            continue;
+        }
+
+        // Count matching members using scored matching
+        FamilyMemberMatchResult current;
+        current.familyId = targetFamily.id();
+        current.totalSourceMembers = sourceFamily.members().size();
+
+        for (const Person& sourceMember : sourceFamily.members())
+        {
+            PersonMatchScore match = findBestPersonMatch(sourceMember, targetFamily);
+            if (match.score >= 10)  // Uses the minimum threshold
+            {
+                current.matchedMembers++;
+                current.personIdMapping.insert(sourceMember.id(), match.personId);
+            }
+        }
+
+        // Keep best match
+        if (current.matchedMembers > bestResult.matchedMembers)
+        {
+            bestResult = current;
+        }
+    }
+
+    // Check majority rule: more than half must match
+    if (bestResult.matchedMembers > 0
+        && bestResult.matchedMembers > bestResult.totalSourceMembers / 2)
+    {
+        return bestResult;
+    }
+
+    // No majority match
+    bestResult.familyId.clear();
+    bestResult.personIdMapping.clear();
+    return bestResult;
+}
+
 }  // namespace PersonMatching

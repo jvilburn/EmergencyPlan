@@ -2,8 +2,9 @@
 
 #include "Family.h"
 
-#include <QString>
+#include <QHash>
 #include <QList>
+#include <QString>
 #include <optional>
 
 namespace PersonMatching
@@ -20,6 +21,15 @@ namespace PersonMatching
     {
         QString personId;
         int score = 0;
+    };
+
+    /// Result of family matching with member-based scoring
+    struct FamilyMemberMatchResult
+    {
+        QString familyId;           // Empty if no match
+        int matchedMembers = 0;     // How many members matched
+        int totalSourceMembers = 0; // How many members in source family
+        QHash<QString, QString> personIdMapping;  // source person ID -> target person ID
     };
 
     /// Score how well two persons match.
@@ -46,4 +56,11 @@ namespace PersonMatching
     std::optional<Person> findPersonInFamilies(
         const QString& personName,
         const QList<Family>& families);
+
+    /// Find a matching family using member-based matching.
+    /// Filters by surname first, then checks if majority of source members match.
+    /// Returns empty familyId if no match with majority.
+    FamilyMemberMatchResult findFamilyByMembers(
+        const Family& sourceFamily,
+        const QHash<QString, Family>& targetFamilies);
 }
