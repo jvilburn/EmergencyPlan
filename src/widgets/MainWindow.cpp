@@ -371,7 +371,9 @@ void MainWindow::onImportMinisteringPdf()
 
     MinisteringImportService importService;
     MinisteringImportResult result = importService.importFromPdf(
-        filePath, m_documentManager->document().families());
+        filePath,
+        m_documentManager->document().families(),
+        m_documentManager->document().wardDirectoryPdfDate());
 
     if (!result.success)
     {
