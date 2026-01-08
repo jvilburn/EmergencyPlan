@@ -76,4 +76,12 @@ private:
         const Family& sourceFamily,
         Family targetFamily,
         QHash<QString, QString>& personIdMapping);
+
+    /// Determine if ministering PDF is authoritative for family data.
+    /// Returns true if:
+    /// - wardDirectoryDate is not set (first import), OR
+    /// - PDF date is set AND is >= wardDirectoryDate
+    bool isMinisteringAuthoritative(
+        std::optional<QDate> pdfDate,
+        std::optional<QDate> wardDirectoryDate) const;
 };

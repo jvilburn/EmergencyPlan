@@ -359,3 +359,27 @@ std::optional<Family> MinisteringImportService::mergeFamilyMembers(
 
     return std::nullopt;
 }
+
+// ============================================================================
+// Private Methods - Date Comparison
+// ============================================================================
+
+bool MinisteringImportService::isMinisteringAuthoritative(
+    std::optional<QDate> pdfDate,
+    std::optional<QDate> wardDirectoryDate) const
+{
+    // No ward directory date means first import - ministering is authoritative
+    if (!wardDirectoryDate.has_value())
+    {
+        return true;
+    }
+
+    // If PDF date is missing, we can't compare - assume not authoritative
+    if (!pdfDate.has_value())
+    {
+        return false;
+    }
+
+    // Ministering is authoritative if same date or newer
+    return *pdfDate >= *wardDirectoryDate;
+}
