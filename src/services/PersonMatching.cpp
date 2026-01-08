@@ -168,9 +168,9 @@ FamilyMemberMatchResult findFamilyByMembers(
         }
     }
 
-    // Check majority rule: more than half must match
+    // Check majority rule: at least half must match
     if (bestResult.matchedMembers > 0
-        && bestResult.matchedMembers > bestResult.totalSourceMembers / 2)
+        && bestResult.matchedMembers >= (bestResult.totalSourceMembers + 1) / 2)
     {
         return bestResult;
     }
