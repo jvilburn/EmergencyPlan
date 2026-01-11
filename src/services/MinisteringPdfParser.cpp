@@ -796,11 +796,43 @@ namespace
             }
         }
 
-        // Set format from column detection (authoritative source)
-        result.isRSFormat = cols.isRSFormat;
+        // Detect format when we first see a family header
+        // This is authoritative - RS has "Last, First" headers, EQ has surname only
+        if (cols.familyX.has_value() && !result.detectedFormat.has_value())
+        {
+            result.detectedFormat = cols.isRSFormat;
+
+            // If we just detected RS format, backfill earlier groups and ministers
+            if (cols.isRSFormat)
+            {
+                // Convert earlier groups from EQ to RS
+                for (auto& group : result.groups)
+                {
+                    group.setIsRSGroup(true);
+                }
+
+                // Fix minister genders from Male to Female
+                for (auto& family : result.ministerFamilies)
+                {
+                    QList<Person> members = family.members();
+                    for (Person& member : members)
+                    {
+                        if (member.gender() == Gender::Male)
+                        {
+                            member.setGender(Gender::Female);
+                        }
+                    }
+                    family.setMembers(members);
+                }
+            }
+        }
+
+        // Use detected format if known, otherwise use column detection for this companionship
+        bool effectiveRSFormat = result.detectedFormat.value_or(cols.isRSFormat);
+        result.isRSFormat = effectiveRSFormat;
 
         // Parse ministers into Family objects (with minister as member)
-        Gender ministerGender = cols.isRSFormat ? Gender::Female : Gender::Male;
+        Gender ministerGender = effectiveRSFormat ? Gender::Female : Gender::Male;
         QList<Person> ministers = parseMinistersFromFields(ministerFields, result.ministerFamilies, ministerGender);
 
         // Merge wrapped bold family headers before parsing

@@ -4,6 +4,7 @@
 #include <QStringList>
 #include <QHash>
 #include <QDate>
+#include <optional>
 
 #include "Person.h"
 #include "Family.h"
@@ -16,7 +17,8 @@ namespace MinisteringPdfParser
     struct ParseResult
     {
         bool success = false;
-        bool isRSFormat = false;  // Auto-detected: true for RS, false for EQ
+        bool isRSFormat = false;             // Final format: true for RS, false for EQ
+        std::optional<bool> detectedFormat;  // Set when first family header detected
 
         QHash<QString, MinisteringDistrict> districts;
         QHash<QString, MinisteringGroup> groups;

@@ -40,6 +40,7 @@ public:
     void setMinisteredPersonIds(const QSet<QString>& ids) { m_ministeredPersonIds = ids; }
     void setInterviewedDate(std::optional<QDate> date) { m_interviewedDate = date; }
     void setPresidencyMemberId(std::optional<QString> id) { m_presidencyMemberId = id; }
+    void setIsRSGroup(bool isRS) { m_isRSFormat = isRS; }
     void addMinister(const QString& personId) { m_ministerIds.insert(personId); }
     void removeMinister(const QString& personId) { m_ministerIds.remove(personId); }
     void addFamily(const QString& familyId) { m_familyIds.insert(familyId); }
