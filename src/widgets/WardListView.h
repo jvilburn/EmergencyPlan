@@ -8,8 +8,10 @@
 
 class ActionButtonsWidget;
 class DocumentManager;
+class FamilyEditPanel;
 class FamilyTreeModel;
 class Filter;
+class QSplitter;
 class QTreeView;
 class SearchField;
 
@@ -46,6 +48,13 @@ public:
     /// Access the filter for external configuration (e.g., from filter dialogs).
     Filter* filter() const { return m_filter; }
 
+    /// Returns true if an edit panel is currently open.
+    bool isEditing() const;
+
+    /// Close the edit panel if open (prompts for unsaved changes).
+    /// Returns false if user cancelled.
+    bool closeEditPanel();
+
     // MapHighlightProvider interface
     QColor familyColor(const QString& familyId) const override;
     qreal familyOpacity(const QString& familyId) const override;
@@ -70,11 +79,16 @@ private slots:
     void onModelReset();
     void onItemExpanded(const QModelIndex& index);
     void onItemCollapsed(const QModelIndex& index);
+    void onEditFamily(const QString& familyId);
+    void onSaveFamily();
+    void onCancelEdit();
+    void onCloseEditPanel();
 
 private:
     void setupUi();
     void attachActionButtons(const QModelIndex& familyIndex);
     void detachActionButtons(const QString& familyId);
+    void updateEditHighlight();
 
     SearchField* m_searchField = nullptr;
     QTreeView* m_treeView = nullptr;
@@ -84,4 +98,9 @@ private:
 
     // Track action button widgets per family
     QHash<QString, ActionButtonsWidget*> m_actionWidgets;
+
+    // Edit panel integration
+    QSplitter* m_splitter = nullptr;
+    FamilyEditPanel* m_editPanel = nullptr;
+    QString m_editingFamilyId;
 };
