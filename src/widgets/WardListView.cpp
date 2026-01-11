@@ -2,11 +2,15 @@
 #include "ActionButtonsWidget.h"
 #include "DocumentManager.h"
 #include "Family.h"
+#include "FamilyCommands.h"
+#include "FamilyEditPanel.h"
 #include "FamilyTreeModel.h"
 #include "Filter.h"
 #include "SearchField.h"
 
 #include <QHeaderView>
+#include <QMessageBox>
+#include <QSplitter>
 #include <QTreeView>
 #include <QVBoxLayout>
 
@@ -18,17 +22,22 @@ WardListView::WardListView(QWidget* parent)
 
 void WardListView::setupUi()
 {
-    QVBoxLayout* layout = new QVBoxLayout(this);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(4);
+    // Create splitter for list and edit panel
+    m_splitter = new QSplitter(Qt::Horizontal, this);
+
+    // Container for list content
+    QWidget* listContainer = new QWidget(m_splitter);
+    QVBoxLayout* listLayout = new QVBoxLayout(listContainer);
+    listLayout->setContentsMargins(0, 0, 0, 0);
+    listLayout->setSpacing(4);
 
     // Search field
-    m_searchField = new SearchField(this);
+    m_searchField = new SearchField(listContainer);
     m_searchField->setPlaceholderText(tr("Search families..."));
-    layout->addWidget(m_searchField);
+    listLayout->addWidget(m_searchField);
 
     // Tree view
-    m_treeView = new QTreeView(this);
+    m_treeView = new QTreeView(listContainer);
     m_treeView->setHeaderHidden(true);
     m_treeView->setRootIsDecorated(true);
     m_treeView->setAnimated(true);
@@ -37,7 +46,14 @@ void WardListView::setupUi()
     m_treeView->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_treeView->header()->setStretchLastSection(true);
     m_treeView->header()->setSectionResizeMode(QHeaderView::Stretch);
-    layout->addWidget(m_treeView);
+    listLayout->addWidget(m_treeView, 1);
+
+    m_splitter->addWidget(listContainer);
+
+    // Main layout
+    QVBoxLayout* mainLayout = new QVBoxLayout(this);
+    mainLayout->setContentsMargins(0, 0, 0, 0);
+    mainLayout->addWidget(m_splitter);
 
     connect(m_searchField, &SearchField::searchTextChanged,
             this, &WardListView::onSearchTextChanged);
@@ -68,6 +84,23 @@ void WardListView::setup(DocumentManager* documentManager)
     // Connect model reset to handle expanded state
     connect(m_model, &QAbstractItemModel::modelReset,
             this, &WardListView::onModelReset);
+
+    // Create edit panel (hidden by default)
+    m_editPanel = new FamilyEditPanel(documentManager, m_splitter);
+    m_editPanel->hide();
+    m_splitter->addWidget(m_editPanel);
+
+    // Connect edit panel signals
+    connect(m_editPanel, &FamilyEditPanel::saveRequested,
+            this, &WardListView::onSaveFamily);
+    connect(m_editPanel, &FamilyEditPanel::cancelRequested,
+            this, &WardListView::onCancelEdit);
+    connect(m_editPanel, &FamilyEditPanel::closeRequested,
+            this, &WardListView::onCloseEditPanel);
+
+    // Connect edit family request
+    connect(this, &WardListView::editFamilyRequested,
+            this, &WardListView::onEditFamily);
 
     // Emit initial visible families
     emit visibleFamiliesChanged(visibleFamilyIdsList());
@@ -257,4 +290,114 @@ void WardListView::detachActionButtons(const QString& familyId)
     }
 
     m_actionWidgets.remove(familyId);
+}
+
+void WardListView::onEditFamily(const QString& familyId)
+{
+    // Close existing panel if editing different family
+    if (isEditing() && m_editingFamilyId != familyId)
+    {
+        if (!closeEditPanel())
+        {
+            return;  // User cancelled
+        }
+    }
+
+    // Get family from document
+    const Document& doc = m_documentManager->document();
+    if (!doc.families().contains(familyId))
+    {
+        return;
+    }
+
+    const Family& family = doc.families().value(familyId);
+    m_editingFamilyId = familyId;
+    m_editPanel->setFamily(family);
+    m_editPanel->show();
+
+    // Set splitter sizes (list:panel = 1:1)
+    m_splitter->setSizes({m_splitter->width() / 2, m_splitter->width() / 2});
+}
+
+void WardListView::onSaveFamily()
+{
+    if (!isEditing())
+    {
+        return;
+    }
+
+    const Document& doc = m_documentManager->document();
+    if (!doc.families().contains(m_editingFamilyId))
+    {
+        // Family was deleted externally
+        m_editingFamilyId.clear();
+        m_editPanel->hide();
+        return;
+    }
+
+    Family oldFamily = doc.families().value(m_editingFamilyId);
+    Family newFamily = m_editPanel->family();
+
+    m_documentManager->executeCommand(
+        std::make_unique<UpdateFamilyCommand>(oldFamily, newFamily));
+
+    m_editingFamilyId.clear();
+    m_editPanel->hide();
+}
+
+void WardListView::onCancelEdit()
+{
+    m_editingFamilyId.clear();
+    m_editPanel->hide();
+}
+
+void WardListView::onCloseEditPanel()
+{
+    closeEditPanel();
+}
+
+bool WardListView::isEditing() const
+{
+    return !m_editingFamilyId.isEmpty() && m_editPanel->isVisible();
+}
+
+bool WardListView::closeEditPanel()
+{
+    if (!isEditing())
+    {
+        return true;
+    }
+
+    if (m_editPanel->isDirty())
+    {
+        const Family& original = m_documentManager->document().families().value(m_editingFamilyId);
+        QString familyName = original.surname();
+        if (familyName.isEmpty())
+        {
+            familyName = tr("this family");
+        }
+
+        QMessageBox::StandardButton result = QMessageBox::question(
+            this,
+            tr("Unsaved Changes"),
+            tr("Save changes to %1?").arg(familyName),
+            QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
+            QMessageBox::Save
+        );
+
+        if (result == QMessageBox::Save)
+        {
+            onSaveFamily();
+            return true;
+        }
+        else if (result == QMessageBox::Cancel)
+        {
+            return false;
+        }
+        // Discard - fall through
+    }
+
+    m_editingFamilyId.clear();
+    m_editPanel->hide();
+    return true;
 }
