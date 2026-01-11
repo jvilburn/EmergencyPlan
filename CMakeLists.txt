@@ -212,6 +212,7 @@ set(VIEWMODEL_HEADERS
 set(WIDGET_SOURCES
     src/widgets/ActionButtonsWidget.cpp
     src/widgets/CallingsEditor.cpp
+    src/widgets/FamilyEditPanel.cpp
     src/widgets/MainWindow.cpp
     src/widgets/MemberAccordion.cpp
     src/widgets/MemberEditor.cpp
@@ -247,6 +248,7 @@ set(WIDGET_SOURCES
 set(WIDGET_HEADERS
     src/widgets/ActionButtonsWidget.h
     src/widgets/CallingsEditor.h
+    src/widgets/FamilyEditPanel.h
     src/widgets/MainWindow.h
     src/widgets/MemberAccordion.h
     src/widgets/MemberEditor.h
