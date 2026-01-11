@@ -28,7 +28,6 @@ private slots:
 
 private:
     void addCallingRow(const QString& text = QString());
-    void rebuildLayout();
 
     QVBoxLayout* m_layout;
     QList<QLineEdit*> m_callingEdits;

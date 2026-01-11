@@ -21,10 +21,14 @@ CallingsEditor::CallingsEditor(QWidget* parent)
 
 void CallingsEditor::setCallings(const QStringList& callings)
 {
-    // Clear existing
+    // Clear existing rows by finding parent widgets
     for (QLineEdit* edit : m_callingEdits)
     {
-        edit->deleteLater();
+        QWidget* row = edit->parentWidget();
+        if (row && row != this)
+        {
+            row->deleteLater();  // This will also delete the child QLineEdit
+        }
     }
     m_callingEdits.clear();
 
