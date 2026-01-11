@@ -1,4 +1,5 @@
 #include "FamilyEditPanel.h"
+#include "AppStyles.h"
 #include "MemberAccordion.h"
 #include "DocumentManager.h"
 #include "GeocodingService.h"
@@ -24,6 +25,14 @@ void FamilyEditPanel::setupUi()
 {
     setFrameShape(QFrame::StyledPanel);
     setMinimumWidth(300);
+
+    // Apply edit highlight styling
+    setStyleSheet(QString(
+        "FamilyEditPanel { "
+        "  background-color: %1; "
+        "  border-left: 3px solid %2; "
+        "}"
+    ).arg(AppStyles::EditHighlight::BackgroundColor, AppStyles::EditHighlight::BorderColor));
 
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(12, 8, 12, 12);

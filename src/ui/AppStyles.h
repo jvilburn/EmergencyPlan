@@ -80,4 +80,11 @@ inline QString globalStylesheet()
     return beveledButton();
 }
 
+/// Edit highlight colors - used for FamilyEditPanel and corresponding tree row
+namespace EditHighlight
+{
+    inline const QString BackgroundColor = "#e3f2fd";  // Light blue
+    inline const QString BorderColor = "#90caf9";
+}
+
 }  // namespace AppStyles

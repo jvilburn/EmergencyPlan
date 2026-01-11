@@ -88,6 +88,7 @@ private:
     void setupUi();
     void attachActionButtons(const QModelIndex& familyIndex);
     void detachActionButtons(const QString& familyId);
+    void updateEditHighlight();
 
     SearchField* m_searchField = nullptr;
     QTreeView* m_treeView = nullptr;

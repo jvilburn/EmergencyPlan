@@ -315,6 +315,9 @@ void WardListView::onEditFamily(const QString& familyId)
     m_editPanel->setFamily(family);
     m_editPanel->show();
 
+    // Highlight the edited family row in the tree
+    updateEditHighlight();
+
     // Set splitter sizes (list:panel = 1:1)
     m_splitter->setSizes({m_splitter->width() / 2, m_splitter->width() / 2});
 }
@@ -400,4 +403,17 @@ bool WardListView::closeEditPanel()
     m_editingFamilyId.clear();
     m_editPanel->hide();
     return true;
+}
+
+void WardListView::updateEditHighlight()
+{
+    if (!m_editingFamilyId.isEmpty())
+    {
+        QModelIndex index = m_model->indexForFamilyId(m_editingFamilyId);
+        if (index.isValid())
+        {
+            m_treeView->setCurrentIndex(index);
+            m_treeView->scrollTo(index);
+        }
+    }
 }
