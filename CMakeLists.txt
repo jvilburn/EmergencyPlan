@@ -213,6 +213,7 @@ set(WIDGET_SOURCES
     src/widgets/ActionButtonsWidget.cpp
     src/widgets/CallingsEditor.cpp
     src/widgets/MainWindow.cpp
+    src/widgets/MemberEditor.cpp
     src/widgets/MapWidget.cpp
     src/widgets/MarkerRenderer.cpp
     src/widgets/MinisteringView.cpp
@@ -246,6 +247,7 @@ set(WIDGET_HEADERS
     src/widgets/ActionButtonsWidget.h
     src/widgets/CallingsEditor.h
     src/widgets/MainWindow.h
+    src/widgets/MemberEditor.h
     src/widgets/MapHighlightProvider.h
     src/widgets/MapWidget.h
     src/widgets/MarkerRenderer.h
