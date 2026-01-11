@@ -210,17 +210,18 @@ set(VIEWMODEL_HEADERS
 )
 
 set(WIDGET_SOURCES
+    src/widgets/ActionButtonsWidget.cpp
+    src/widgets/CallingsEditor.cpp
     src/widgets/MainWindow.cpp
     src/widgets/MapWidget.cpp
+    src/widgets/MarkerRenderer.cpp
     src/widgets/MinisteringView.cpp
     src/widgets/SlippyMapMath.cpp
-    src/widgets/MarkerRenderer.cpp
     src/widgets/UnmappedPanel.cpp
-    src/widgets/WardListView.cpp
     src/widgets/WardListDialog.cpp
-    src/widgets/ActionButtonsWidget.cpp
-    src/widgets/shared/SearchField.cpp
+    src/widgets/WardListView.cpp
     src/widgets/shared/FilterableListWidget.cpp
+    src/widgets/shared/SearchField.cpp
     # src/widgets/Sidebar.cpp
     # src/widgets/MinisteringSidebar.cpp
     # src/widgets/EmergencyView.cpp
@@ -242,18 +243,19 @@ set(WIDGET_SOURCES
 )
 
 set(WIDGET_HEADERS
+    src/widgets/ActionButtonsWidget.h
+    src/widgets/CallingsEditor.h
     src/widgets/MainWindow.h
     src/widgets/MapHighlightProvider.h
     src/widgets/MapWidget.h
+    src/widgets/MarkerRenderer.h
     src/widgets/MinisteringView.h
     src/widgets/SlippyMapMath.h
-    src/widgets/MarkerRenderer.h
     src/widgets/UnmappedPanel.h
-    src/widgets/WardListView.h
     src/widgets/WardListDialog.h
-    src/widgets/ActionButtonsWidget.h
-    src/widgets/shared/SearchField.h
+    src/widgets/WardListView.h
     src/widgets/shared/FilterableListWidget.h
+    src/widgets/shared/SearchField.h
     # src/widgets/Sidebar.h
     # src/widgets/MinisteringSidebar.h
     # src/widgets/EmergencyView.h
