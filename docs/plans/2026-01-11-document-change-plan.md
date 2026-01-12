@@ -728,6 +728,7 @@ Add private methods:
 ```cpp
     void rebuild();
     void updateFamilyRow(const QString& familyId);
+    void refreshExpandedDetails();  // For secondary scope changes
 ```
 
 **Step 2: Update cpp**
@@ -747,24 +748,41 @@ Add new handler:
 ```cpp
 void FamilyTreeModel::onDocumentChanged(const DocumentChange& change)
 {
-    // Only care about Family scope
-    if (change.scope != ChangeScope::Full && change.scope != ChangeScope::Family)
-    {
-        return;
-    }
-
-    // Full reload needed
-    if (change.scope == ChangeScope::Full
-        || change.action == ChangeAction::BatchModified
-        || change.action == ChangeAction::Added
-        || change.action == ChangeAction::Removed)
+    // Primary scope: Family
+    if (change.scope == ChangeScope::Full)
     {
         rebuild();
         return;
     }
 
-    // Surgical update for Updated action - preserve expanded state
-    updateFamilyRow(change.entityId);
+    if (change.scope == ChangeScope::Family)
+    {
+        if (change.action == ChangeAction::BatchModified
+            || change.action == ChangeAction::Added
+            || change.action == ChangeAction::Removed)
+        {
+            rebuild();
+            return;
+        }
+
+        // Surgical update for Updated action - preserve expanded state
+        updateFamilyRow(change.entityId);
+        return;
+    }
+
+    // Secondary scopes: Team, Tag, ResourceType
+    // These may affect expanded person details or filter results
+    if (change.scope == ChangeScope::Team
+        || change.scope == ChangeScope::Tag
+        || change.scope == ChangeScope::ResourceType)
+    {
+        // For now, refresh any expanded items that show derived data
+        // Future optimization: check if expanded persons are affected
+        refreshExpandedDetails();
+        return;
+    }
+
+    // Other scopes (Metadata, Ministering, etc.) - ignore
 }
 
 void FamilyTreeModel::updateFamilyRow(const QString& familyId)
@@ -878,14 +896,41 @@ Add include and update handler:
 
 void FamilyListModel::onDocumentChanged(const DocumentChange& change)
 {
-    // Only care about Family scope
-    if (change.scope != ChangeScope::Full && change.scope != ChangeScope::Family)
+    // Primary scope: Family
+    if (change.scope == ChangeScope::Full)
     {
+        rebuild();
         return;
     }
 
-    // For now, always rebuild (optimize later if needed)
-    rebuild();
+    if (change.scope == ChangeScope::Family)
+    {
+        if (change.action == ChangeAction::BatchModified
+            || change.action == ChangeAction::Added
+            || change.action == ChangeAction::Removed)
+        {
+            rebuild();
+            return;
+        }
+
+        // Updated - surgical update to just that row
+        updateFamilyRow(change.entityId);
+        return;
+    }
+
+    // Secondary scopes: Tag, ResourceType (affect filter results)
+    if (change.scope == ChangeScope::Tag
+        || change.scope == ChangeScope::ResourceType)
+    {
+        // If currently filtering by tags/resources, reapply filter
+        if (hasActiveTagOrResourceFilter())
+        {
+            rebuild();
+        }
+        return;
+    }
+
+    // Other scopes - ignore
 }
 ```
 
@@ -900,7 +945,7 @@ Expected: FamilyListModel compiles
 
 ```bash
 git add src/listmodels/FamilyListModel.h src/listmodels/FamilyListModel.cpp
-git commit -m "feat(FamilyListModel): handle DocumentChange (full rebuild for now)"
+git commit -m "feat(FamilyListModel): handle DocumentChange with secondary scopes"
 ```
 
 ---
@@ -927,13 +972,41 @@ Add include and change slot signature:
 
 void PersonListModel::onDocumentChanged(const DocumentChange& change)
 {
-    // Only care about Family scope (persons are in families)
-    if (change.scope != ChangeScope::Full && change.scope != ChangeScope::Family)
+    // Primary scope: Family (persons are in families)
+    if (change.scope == ChangeScope::Full)
     {
+        rebuild();
         return;
     }
 
-    rebuild();
+    if (change.scope == ChangeScope::Family)
+    {
+        if (change.action == ChangeAction::BatchModified
+            || change.action == ChangeAction::Added
+            || change.action == ChangeAction::Removed)
+        {
+            rebuild();
+            return;
+        }
+
+        // Updated - surgical update for persons in that family
+        updatePersonsInFamily(change.entityId);
+        return;
+    }
+
+    // Secondary scopes: Tag, ResourceType (affect filter results)
+    if (change.scope == ChangeScope::Tag
+        || change.scope == ChangeScope::ResourceType)
+    {
+        // If currently filtering by tags/resources, reapply filter
+        if (hasActiveTagOrResourceFilter())
+        {
+            rebuild();
+        }
+        return;
+    }
+
+    // Other scopes - ignore
 }
 ```
 
