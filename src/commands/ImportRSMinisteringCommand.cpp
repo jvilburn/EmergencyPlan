@@ -52,3 +52,9 @@ QString ImportRSMinisteringCommand::description() const
 {
     return m_description;
 }
+
+DocumentChange ImportRSMinisteringCommand::documentChange() const
+{
+    // RS ministering import touches districts, groups, and families - use full
+    return DocumentChange::full();
+}

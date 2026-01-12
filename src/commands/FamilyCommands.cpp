@@ -25,6 +25,11 @@ QString AddFamilyCommand::description() const
     return QObject::tr("Add Family \"%1\"").arg(m_family.displayName());
 }
 
+DocumentChange AddFamilyCommand::documentChange() const
+{
+    return DocumentChange::family().added(m_family.id());
+}
+
 // ============================================================================
 // UpdateFamilyCommand
 // ============================================================================
@@ -48,6 +53,11 @@ void UpdateFamilyCommand::undo(Document& document)
 QString UpdateFamilyCommand::description() const
 {
     return QObject::tr("Update Family \"%1\"").arg(m_oldFamily.displayName());
+}
+
+DocumentChange UpdateFamilyCommand::documentChange() const
+{
+    return DocumentChange::family().updated(m_newFamily.id());
 }
 
 QString UpdateFamilyCommand::familyWithChangedAddress() const
@@ -83,6 +93,11 @@ QString DeleteFamilyCommand::description() const
     return QObject::tr("Delete Family \"%1\"").arg(m_family.displayName());
 }
 
+DocumentChange DeleteFamilyCommand::documentChange() const
+{
+    return DocumentChange::family().removed(m_family.id());
+}
+
 // ============================================================================
 // SetFamiliesCommand
 // ============================================================================
@@ -112,4 +127,9 @@ QString SetFamiliesCommand::description() const
         return m_description;
     }
     return QObject::tr("Set %1 Families").arg(m_newFamilies.size());
+}
+
+DocumentChange SetFamiliesCommand::documentChange() const
+{
+    return DocumentChange::family().batchModified();
 }

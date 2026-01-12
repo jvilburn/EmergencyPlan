@@ -15,9 +15,16 @@ PersonListModel::PersonListModel(DocumentManager* documentManager,
     , m_filter(filter)
 {
     connect(m_documentManager, &DocumentManager::documentChanged,
-            this, &PersonListModel::rebuild);
+            this, &PersonListModel::onDocumentChanged);
     connect(m_filter, &Filter::changed,
-            this, &PersonListModel::rebuild);
+            this, [this]() { rebuild(); });
+    rebuild();
+}
+
+void PersonListModel::onDocumentChanged(const DocumentChange& change)
+{
+    Q_UNUSED(change)
+    // TODO: implement surgical updates for Family scope changes
     rebuild();
 }
 

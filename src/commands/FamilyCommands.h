@@ -11,6 +11,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     Family m_family;
@@ -24,6 +25,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
     QString familyWithChangedAddress() const override;
 
 private:
@@ -39,6 +41,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     Family m_family;
@@ -53,6 +56,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     QHash<QString, Family> m_newFamilies;

@@ -16,6 +16,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     ResourceCategory m_category;
@@ -29,6 +30,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     ResourceCategory m_oldCategory;
@@ -43,6 +45,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     ResourceCategory m_category;
@@ -60,6 +63,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     ResourceType m_resourceType;
@@ -73,6 +77,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     ResourceType m_oldType;
@@ -87,6 +92,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     ResourceType m_resourceType;
@@ -104,6 +110,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     QString m_resourceTypeId;
@@ -118,6 +125,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     QString m_resourceTypeId;
@@ -132,6 +140,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     QString m_resourceTypeId;
@@ -146,6 +155,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     QString m_resourceTypeId;

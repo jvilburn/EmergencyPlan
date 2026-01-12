@@ -3,6 +3,7 @@
 #include <QObject>
 #include <vector>
 #include "Command.h"
+#include "DocumentChange.h"
 
 class Document;
 
@@ -19,9 +20,9 @@ public:
     // Execute a command and add to history
     void execute(CommandPtr command, Document& document);
 
-    // Undo/Redo operations
-    void undo(Document& document);
-    void redo(Document& document);
+    // Undo/Redo operations - return DocumentChange describing what changed
+    DocumentChange undo(Document& document);
+    DocumentChange redo(Document& document);
 
     // State queries
     bool canUndo() const { return !m_undoStack.empty(); }

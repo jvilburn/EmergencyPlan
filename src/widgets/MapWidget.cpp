@@ -6,6 +6,7 @@
 #include "AppStyles.h"
 #include "MapViewModel.h"
 #include "DocumentManager.h"
+#include "DocumentChange.h"
 #include "TileService.h"
 #include "Family.h"
 #include "Document.h"
@@ -54,7 +55,7 @@ MapWidget::MapWidget(DocumentManager* docManager, QWidget* parent)
 
     // Update button positions when document changes (affects unmapped panel)
     connect(m_docManager, &DocumentManager::documentChanged,
-            this, &MapWidget::updateButtonPositions);
+            this, [this](const DocumentChange&) { updateButtonPositions(); });
 }
 
 MapWidget::~MapWidget()

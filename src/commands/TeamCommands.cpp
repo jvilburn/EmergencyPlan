@@ -25,6 +25,11 @@ QString AddTeamCommand::description() const
     return QObject::tr("Add Team \"%1\"").arg(m_team.name());
 }
 
+DocumentChange AddTeamCommand::documentChange() const
+{
+    return DocumentChange::team().added(m_team.id());
+}
+
 // ============================================================================
 // UpdateTeamCommand
 // ============================================================================
@@ -50,6 +55,11 @@ QString UpdateTeamCommand::description() const
     return QObject::tr("Update Team \"%1\"").arg(m_oldTeam.name());
 }
 
+DocumentChange UpdateTeamCommand::documentChange() const
+{
+    return DocumentChange::team().updated(m_newTeam.id());
+}
+
 // ============================================================================
 // DeleteTeamCommand
 // ============================================================================
@@ -72,6 +82,11 @@ void DeleteTeamCommand::undo(Document& document)
 QString DeleteTeamCommand::description() const
 {
     return QObject::tr("Delete Team \"%1\"").arg(m_team.name());
+}
+
+DocumentChange DeleteTeamCommand::documentChange() const
+{
+    return DocumentChange::team().removed(m_team.id());
 }
 
 // ============================================================================
@@ -99,6 +114,11 @@ QString AddTeamMemberCommand::description() const
     return QObject::tr("Add Member to Team");
 }
 
+DocumentChange AddTeamMemberCommand::documentChange() const
+{
+    return DocumentChange::team().updated(m_teamId);
+}
+
 // ============================================================================
 // RemoveTeamMemberCommand
 // ============================================================================
@@ -122,4 +142,9 @@ void RemoveTeamMemberCommand::undo(Document& document)
 QString RemoveTeamMemberCommand::description() const
 {
     return QObject::tr("Remove Member from Team");
+}
+
+DocumentChange RemoveTeamMemberCommand::documentChange() const
+{
+    return DocumentChange::team().updated(m_teamId);
 }

@@ -25,6 +25,11 @@ QString AddEqDistrictCommand::description() const
     return QObject::tr("Add EQ District \"%1\"").arg(m_district.name());
 }
 
+DocumentChange AddEqDistrictCommand::documentChange() const
+{
+    return DocumentChange::eqDistrict().added(m_district.id());
+}
+
 UpdateEqDistrictCommand::UpdateEqDistrictCommand(const MinisteringDistrict& oldDistrict,
                                                   const MinisteringDistrict& newDistrict)
     : m_oldDistrict(oldDistrict)
@@ -47,6 +52,11 @@ QString UpdateEqDistrictCommand::description() const
     return QObject::tr("Update EQ District \"%1\"").arg(m_oldDistrict.name());
 }
 
+DocumentChange UpdateEqDistrictCommand::documentChange() const
+{
+    return DocumentChange::eqDistrict().updated(m_newDistrict.id());
+}
+
 DeleteEqDistrictCommand::DeleteEqDistrictCommand(const MinisteringDistrict& district)
     : m_district(district)
 {
@@ -65,6 +75,11 @@ void DeleteEqDistrictCommand::undo(Document& document)
 QString DeleteEqDistrictCommand::description() const
 {
     return QObject::tr("Delete EQ District \"%1\"").arg(m_district.name());
+}
+
+DocumentChange DeleteEqDistrictCommand::documentChange() const
+{
+    return DocumentChange::eqDistrict().removed(m_district.id());
 }
 
 // ============================================================================
@@ -91,6 +106,11 @@ QString AddEqGroupCommand::description() const
     return QObject::tr("Add EQ Ministering Group");
 }
 
+DocumentChange AddEqGroupCommand::documentChange() const
+{
+    return DocumentChange::eqGroup().added(m_group.id());
+}
+
 UpdateEqGroupCommand::UpdateEqGroupCommand(const MinisteringGroup& oldGroup,
                                             const MinisteringGroup& newGroup)
     : m_oldGroup(oldGroup)
@@ -113,6 +133,11 @@ QString UpdateEqGroupCommand::description() const
     return QObject::tr("Update EQ Ministering Group");
 }
 
+DocumentChange UpdateEqGroupCommand::documentChange() const
+{
+    return DocumentChange::eqGroup().updated(m_newGroup.id());
+}
+
 DeleteEqGroupCommand::DeleteEqGroupCommand(const MinisteringGroup& group)
     : m_group(group)
 {
@@ -131,6 +156,11 @@ void DeleteEqGroupCommand::undo(Document& document)
 QString DeleteEqGroupCommand::description() const
 {
     return QObject::tr("Delete EQ Ministering Group");
+}
+
+DocumentChange DeleteEqGroupCommand::documentChange() const
+{
+    return DocumentChange::eqGroup().removed(m_group.id());
 }
 
 // ============================================================================
@@ -157,6 +187,11 @@ QString AddRsDistrictCommand::description() const
     return QObject::tr("Add RS District \"%1\"").arg(m_district.name());
 }
 
+DocumentChange AddRsDistrictCommand::documentChange() const
+{
+    return DocumentChange::rsDistrict().added(m_district.id());
+}
+
 UpdateRsDistrictCommand::UpdateRsDistrictCommand(const MinisteringDistrict& oldDistrict,
                                                   const MinisteringDistrict& newDistrict)
     : m_oldDistrict(oldDistrict)
@@ -179,6 +214,11 @@ QString UpdateRsDistrictCommand::description() const
     return QObject::tr("Update RS District \"%1\"").arg(m_oldDistrict.name());
 }
 
+DocumentChange UpdateRsDistrictCommand::documentChange() const
+{
+    return DocumentChange::rsDistrict().updated(m_newDistrict.id());
+}
+
 DeleteRsDistrictCommand::DeleteRsDistrictCommand(const MinisteringDistrict& district)
     : m_district(district)
 {
@@ -197,6 +237,11 @@ void DeleteRsDistrictCommand::undo(Document& document)
 QString DeleteRsDistrictCommand::description() const
 {
     return QObject::tr("Delete RS District \"%1\"").arg(m_district.name());
+}
+
+DocumentChange DeleteRsDistrictCommand::documentChange() const
+{
+    return DocumentChange::rsDistrict().removed(m_district.id());
 }
 
 // ============================================================================
@@ -223,6 +268,11 @@ QString AddRsGroupCommand::description() const
     return QObject::tr("Add RS Ministering Group");
 }
 
+DocumentChange AddRsGroupCommand::documentChange() const
+{
+    return DocumentChange::rsGroup().added(m_group.id());
+}
+
 UpdateRsGroupCommand::UpdateRsGroupCommand(const MinisteringGroup& oldGroup,
                                             const MinisteringGroup& newGroup)
     : m_oldGroup(oldGroup)
@@ -245,6 +295,11 @@ QString UpdateRsGroupCommand::description() const
     return QObject::tr("Update RS Ministering Group");
 }
 
+DocumentChange UpdateRsGroupCommand::documentChange() const
+{
+    return DocumentChange::rsGroup().updated(m_newGroup.id());
+}
+
 DeleteRsGroupCommand::DeleteRsGroupCommand(const MinisteringGroup& group)
     : m_group(group)
 {
@@ -263,4 +318,9 @@ void DeleteRsGroupCommand::undo(Document& document)
 QString DeleteRsGroupCommand::description() const
 {
     return QObject::tr("Delete RS Ministering Group");
+}
+
+DocumentChange DeleteRsGroupCommand::documentChange() const
+{
+    return DocumentChange::rsGroup().removed(m_group.id());
 }

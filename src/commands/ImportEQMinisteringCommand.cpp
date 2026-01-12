@@ -52,3 +52,9 @@ QString ImportEQMinisteringCommand::description() const
 {
     return m_description;
 }
+
+DocumentChange ImportEQMinisteringCommand::documentChange() const
+{
+    // EQ ministering import touches districts, groups, and families - use full
+    return DocumentChange::full();
+}
