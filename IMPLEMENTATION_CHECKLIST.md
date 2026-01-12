@@ -338,7 +338,7 @@ This checklist tracks the implementation progress for converting the Emergency P
   - [x] District and group creation
   - [x] Minister matching by name
   - [x] Family creation for unmatched families
-  - [ ] RS ministering PDF import (future)
+  - [x] RS ministering PDF import (unified parser auto-detects format)
   - [ ] Integration tests
 
 ### PDF Report Service

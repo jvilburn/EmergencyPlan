@@ -68,7 +68,7 @@ void FamilyEditPanel::setupUi()
     m_addressEdit = new QTextEdit(this);
     m_addressEdit->setMaximumHeight(80);
     m_addressEdit->setPlaceholderText(tr("Enter address (one line per row)"));
-    connect(m_addressEdit, &QTextEdit::textChanged, this, &FamilyEditPanel::dataChanged);
+    connect(m_addressEdit, &QTextEdit::textChanged, this, &FamilyEditPanel::onAddressChanged);
     contentLayout->addWidget(m_addressEdit);
 
     // Location section
@@ -84,12 +84,12 @@ void FamilyEditPanel::setupUi()
     coordLayout->addWidget(new QLabel(tr("Lat:"), this));
     m_latEdit = new QLineEdit(this);
     m_latEdit->setPlaceholderText(tr("Latitude"));
-    connect(m_latEdit, &QLineEdit::textChanged, this, &FamilyEditPanel::dataChanged);
+    connect(m_latEdit, &QLineEdit::textChanged, this, &FamilyEditPanel::onLatChanged);
     coordLayout->addWidget(m_latEdit);
     coordLayout->addWidget(new QLabel(tr("Lon:"), this));
     m_lonEdit = new QLineEdit(this);
     m_lonEdit->setPlaceholderText(tr("Longitude"));
-    connect(m_lonEdit, &QLineEdit::textChanged, this, &FamilyEditPanel::dataChanged);
+    connect(m_lonEdit, &QLineEdit::textChanged, this, &FamilyEditPanel::onLonChanged);
     coordLayout->addWidget(m_lonEdit);
     contentLayout->addLayout(coordLayout);
 
@@ -101,7 +101,7 @@ void FamilyEditPanel::setupUi()
 
     // Members section
     m_memberAccordion = new MemberAccordion(this);
-    connect(m_memberAccordion, &MemberAccordion::membersChanged, this, &FamilyEditPanel::dataChanged);
+    connect(m_memberAccordion, &MemberAccordion::membersChanged, this, &FamilyEditPanel::onMembersChanged);
     contentLayout->addWidget(m_memberAccordion);
 
     contentLayout->addStretch();
@@ -125,9 +125,12 @@ void FamilyEditPanel::setFamily(const Family& family)
 {
     m_familyId = family.id();
     m_originalFamily = family;
+    m_editedFamily = family;
 
     // Block signals during population
-    const QSignalBlocker blocker(this);
+    const QSignalBlocker addressBlocker(m_addressEdit);
+    const QSignalBlocker latBlocker(m_latEdit);
+    const QSignalBlocker lonBlocker(m_lonEdit);
 
     // Address
     m_addressEdit->setPlainText(family.address().multiLine());
@@ -159,47 +162,12 @@ void FamilyEditPanel::setFamily(const Family& family)
 
 Family FamilyEditPanel::family() const
 {
-    // Build address from text
-    Address address;
-    QStringList lines = m_addressEdit->toPlainText().split('\n', Qt::SkipEmptyParts);
-    for (const QString& line : lines)
-    {
-        QString trimmed = line.trimmed();
-        if (!trimmed.isEmpty())
-        {
-            address.addLine(trimmed);
-        }
-    }
-
-    // Parse coordinates
-    std::optional<double> lat;
-    std::optional<double> lon;
-    bool latOk = false, lonOk = false;
-    double latVal = m_latEdit->text().trimmed().toDouble(&latOk);
-    double lonVal = m_lonEdit->text().trimmed().toDouble(&lonOk);
-    if (latOk)
-    {
-        lat = latVal;
-    }
-    if (lonOk)
-    {
-        lon = lonVal;
-    }
-
-    Family f = Family::createWithId(
-        m_familyId,
-        lat,
-        lon,
-        address,
-        m_memberAccordion->members()
-    );
-
-    return f;
+    return m_editedFamily;
 }
 
 bool FamilyEditPanel::isDirty() const
 {
-    return family() != m_originalFamily;
+    return m_editedFamily != m_originalFamily;
 }
 
 void FamilyEditPanel::onLookUpCoordinates()
@@ -250,4 +218,56 @@ void FamilyEditPanel::updateTitle()
         surname = tr("Family");
     }
     m_titleLabel->setText(tr("Edit: %1").arg(surname));
+}
+
+void FamilyEditPanel::onAddressChanged()
+{
+    Address address;
+    QStringList lines = m_addressEdit->toPlainText().split('\n', Qt::SkipEmptyParts);
+    for (const QString& line : lines)
+    {
+        QString trimmed = line.trimmed();
+        if (!trimmed.isEmpty())
+        {
+            address.addLine(trimmed);
+        }
+    }
+    m_editedFamily.setAddress(address);
+    emit dataChanged();
+}
+
+void FamilyEditPanel::onLatChanged()
+{
+    bool ok = false;
+    double val = m_latEdit->text().trimmed().toDouble(&ok);
+    if (ok)
+    {
+        m_editedFamily.setLatitude(val);
+    }
+    else
+    {
+        m_editedFamily.setLatitude(std::nullopt);
+    }
+    emit dataChanged();
+}
+
+void FamilyEditPanel::onLonChanged()
+{
+    bool ok = false;
+    double val = m_lonEdit->text().trimmed().toDouble(&ok);
+    if (ok)
+    {
+        m_editedFamily.setLongitude(val);
+    }
+    else
+    {
+        m_editedFamily.setLongitude(std::nullopt);
+    }
+    emit dataChanged();
+}
+
+void FamilyEditPanel::onMembersChanged()
+{
+    m_editedFamily.setMembers(m_memberAccordion->members());
+    emit dataChanged();
 }

@@ -32,6 +32,8 @@ MinisteringView::MinisteringView(DocumentManager* docManager, QWidget* parent)
 
 void MinisteringView::setupUi()
 {
+    setMinimumWidth(250);
+
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(8, 8, 8, 8);
     layout->setSpacing(8);

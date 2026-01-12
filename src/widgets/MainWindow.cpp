@@ -1,9 +1,11 @@
 #include "MainWindow.h"
 #include "WardListView.h"
 #include "MinisteringView.h"
+#include "FamilyEditPanel.h"
 #include "MapWidget.h"
 #include "MapHighlightProvider.h"
 #include "DocumentManager.h"
+#include "FamilyCommands.h"
 #include "ImportWardDirectoryCommand.h"
 #include "ImportEQMinisteringCommand.h"
 #include "ImportRSMinisteringCommand.h"
@@ -55,8 +57,6 @@ void MainWindow::setupUi()
 
     // Sidebar tabs on the left
     m_sidebarTabs = new QTabWidget(m_splitter);
-    m_sidebarTabs->setMinimumWidth(250);
-    m_sidebarTabs->setMaximumWidth(400);
 
     // Ward list tab
     m_wardListView = new WardListView();
@@ -67,15 +67,20 @@ void MainWindow::setupUi()
     m_ministeringView = new MinisteringView(m_documentManager);
     m_sidebarTabs->addTab(m_ministeringView, tr("Ministering"));
 
+    // Edit panel (initially hidden)
+    m_editPanel = new FamilyEditPanel(m_documentManager, m_splitter);
+    m_editPanel->hide();
+
     // Map in the center
     m_mapWidget = new MapWidget(m_documentManager, m_splitter);
-    m_mapWidget->setMinimumWidth(400);
 
     m_splitter->addWidget(m_sidebarTabs);
+    m_splitter->addWidget(m_editPanel);
     m_splitter->addWidget(m_mapWidget);
-    m_splitter->setSizes({300, 1100});
+    m_splitter->setSizes({300, 0, 1100});
     m_splitter->setStretchFactor(0, 0);  // Tabs don't stretch
-    m_splitter->setStretchFactor(1, 1);  // Map stretches
+    m_splitter->setStretchFactor(1, 0);  // Edit panel doesn't stretch
+    m_splitter->setStretchFactor(2, 1);  // Map stretches
 
     // Set initial highlight provider (WardListView)
     m_mapWidget->setHighlightProvider(m_wardListView);
@@ -161,6 +166,18 @@ void MainWindow::setupConnections()
     // MinisteringView highlight changes
     connect(m_ministeringView, &MinisteringView::highlightChanged,
             m_mapWidget, QOverload<>::of(&QWidget::update));
+
+    // Family editing
+    connect(m_wardListView, &WardListView::editFamilyRequested,
+            this, &MainWindow::onEditFamilyRequested);
+    connect(m_wardListView, &WardListView::deleteFamilyRequested,
+            this, &MainWindow::onDeleteFamilyRequested);
+    connect(m_editPanel, &FamilyEditPanel::saveRequested,
+            this, &MainWindow::onSaveFamily);
+    connect(m_editPanel, &FamilyEditPanel::cancelRequested,
+            this, &MainWindow::onCancelEdit);
+    connect(m_editPanel, &FamilyEditPanel::closeRequested,
+            this, &MainWindow::onCloseEditPanel);
 
     // Geocoding progress
     connect(m_documentManager, &DocumentManager::geocodingProgressChanged,
@@ -635,5 +652,198 @@ void MainWindow::onSidebarTabChanged(int index)
     {
         m_mapWidget->setHighlightProvider(nullptr);
     }
+}
+
+// ============================================================================
+// Family Editing
+// ============================================================================
+
+void MainWindow::onEditFamilyRequested(const QString& familyId)
+{
+    // If editing a different family, check for unsaved changes
+    if (m_editPanel->isVisible() && m_editPanel->familyId() != familyId)
+    {
+        if (m_editPanel->isDirty())
+        {
+            QMessageBox::StandardButton result = QMessageBox::question(
+                this,
+                tr("Unsaved Changes"),
+                tr("Save changes to %1?").arg(m_editPanel->family().displayName()),
+                QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
+
+            if (result == QMessageBox::Save)
+            {
+                onSaveFamily();
+            }
+            else if (result == QMessageBox::Cancel)
+            {
+                return;
+            }
+        }
+    }
+
+    openEditPanel(familyId);
+}
+
+void MainWindow::onDeleteFamilyRequested(const QString& familyId)
+{
+    const auto& families = m_documentManager->document().families();
+    auto it = families.find(familyId);
+    if (it == families.end())
+    {
+        return;
+    }
+
+    const Family& family = it.value();
+    QMessageBox::StandardButton result = QMessageBox::question(
+        this,
+        tr("Delete Family"),
+        tr("Delete %1?").arg(family.displayName()),
+        QMessageBox::Yes | QMessageBox::No);
+
+    if (result == QMessageBox::Yes)
+    {
+        // Close edit panel if editing this family
+        if (m_editPanel->isVisible() && m_editPanel->familyId() == familyId)
+        {
+            closeEditPanelInternal();
+        }
+
+        // TODO: Implement DeleteFamilyCommand
+        statusBar()->showMessage(tr("Delete not yet implemented"), 3000);
+    }
+}
+
+void MainWindow::onSaveFamily()
+{
+    if (!m_editPanel->isVisible())
+    {
+        return;
+    }
+
+    Family editedFamily = m_editPanel->family();
+    QString familyId = m_editPanel->familyId();
+
+    // Get original family for command
+    const auto& families = m_documentManager->document().families();
+    auto it = families.find(familyId);
+    if (it == families.end())
+    {
+        return;
+    }
+
+    Family originalFamily = it.value();
+
+    // Execute update command
+    m_documentManager->executeCommand(std::make_unique<UpdateFamilyCommand>(
+        originalFamily,
+        editedFamily));
+
+    closeEditPanelInternal();
+}
+
+void MainWindow::onCancelEdit()
+{
+    if (!m_editPanel->isVisible())
+    {
+        return;
+    }
+
+    if (m_editPanel->isDirty())
+    {
+        QMessageBox::StandardButton result = QMessageBox::question(
+            this,
+            tr("Discard Changes"),
+            tr("Discard changes to %1?").arg(m_editPanel->family().displayName()),
+            QMessageBox::Yes | QMessageBox::No);
+
+        if (result != QMessageBox::Yes)
+        {
+            return;
+        }
+    }
+
+    closeEditPanelInternal();
+}
+
+void MainWindow::onCloseEditPanel()
+{
+    if (!m_editPanel->isVisible())
+    {
+        return;
+    }
+
+    if (m_editPanel->isDirty())
+    {
+        QMessageBox::StandardButton result = QMessageBox::question(
+            this,
+            tr("Unsaved Changes"),
+            tr("Save changes to %1?").arg(m_editPanel->family().displayName()),
+            QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
+
+        if (result == QMessageBox::Save)
+        {
+            onSaveFamily();
+            return;
+        }
+        else if (result == QMessageBox::Cancel)
+        {
+            return;
+        }
+    }
+
+    closeEditPanelInternal();
+}
+
+void MainWindow::openEditPanel(const QString& familyId)
+{
+    const auto& families = m_documentManager->document().families();
+    auto it = families.find(familyId);
+    if (it == families.end())
+    {
+        return;
+    }
+
+    m_editPanel->setFamily(it.value());
+
+    if (!m_editPanel->isVisible())
+    {
+        // Get current sizes and edit panel preferred width
+        QList<int> sizes = m_splitter->sizes();
+        int editWidth = m_editPanel->sizeHint().width();
+        if (editWidth < 300)
+        {
+            editWidth = 300;  // Minimum reasonable width
+        }
+
+        // Expand: take space from the map
+        sizes[1] = editWidth;
+        sizes[2] = sizes[2] - editWidth;
+        if (sizes[2] < 400)
+        {
+            sizes[2] = 400;  // Keep minimum map width
+        }
+
+        m_editPanel->show();
+        m_splitter->setSizes(sizes);
+    }
+}
+
+void MainWindow::closeEditPanelInternal()
+{
+    if (!m_editPanel->isVisible())
+    {
+        return;
+    }
+
+    // Get current sizes before hiding
+    QList<int> sizes = m_splitter->sizes();
+    int editWidth = sizes[1];
+
+    // Hide panel and give space back to map
+    m_editPanel->hide();
+    sizes[1] = 0;
+    sizes[2] = sizes[2] + editWidth;
+    m_splitter->setSizes(sizes);
 }
 

@@ -34,6 +34,10 @@ signals:
 private slots:
     void onLookUpCoordinates();
     void onGeocodingComplete(const GeocodingResult& result);
+    void onAddressChanged();
+    void onLatChanged();
+    void onLonChanged();
+    void onMembersChanged();
 
 private:
     void setupUi();
@@ -42,6 +46,7 @@ private:
     DocumentManager* m_docManager;
     QString m_familyId;
     Family m_originalFamily;
+    Family m_editedFamily;
 
     QLabel* m_titleLabel;
     QPushButton* m_closeButton;

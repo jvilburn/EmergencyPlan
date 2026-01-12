@@ -9,6 +9,7 @@ class QLabel;
 class QProgressBar;
 class QTabWidget;
 class DocumentManager;
+class FamilyEditPanel;
 class MapWidget;
 class WardListView;
 class MinisteringView;
@@ -48,12 +49,21 @@ private slots:
     // Sidebar tabs
     void onSidebarTabChanged(int index);
 
+    // Family editing
+    void onEditFamilyRequested(const QString& familyId);
+    void onDeleteFamilyRequested(const QString& familyId);
+    void onSaveFamily();
+    void onCancelEdit();
+    void onCloseEditPanel();
+
 private:
     void setupUi();
     void setupMenus();
     void setupConnections();
     void initializeDefaultLocation();
     bool maybeSave();
+    void openEditPanel(const QString& familyId);
+    void closeEditPanelInternal();
 
     // Settings helpers
     static QString settingsFilePath();
@@ -68,6 +78,7 @@ private:
     QTabWidget* m_sidebarTabs;
     WardListView* m_wardListView;
     MinisteringView* m_ministeringView;
+    FamilyEditPanel* m_editPanel;
     MapWidget* m_mapWidget;
 
     // Actions

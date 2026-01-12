@@ -27,6 +27,7 @@ MapWidget::MapWidget(DocumentManager* docManager, QWidget* parent)
     , m_docManager(docManager)
     , m_viewModel(new MapViewModel(docManager, this))
 {
+    setMinimumWidth(400);
     setMouseTracking(true);
     setFocusPolicy(Qt::StrongFocus);
 
