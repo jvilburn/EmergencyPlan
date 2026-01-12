@@ -1232,7 +1232,7 @@ Expected: All tests pass
 3. Wait for geocoding to complete (or manually trigger it)
 4. Verify the expanded family stays expanded
 
-**Step 4: Final commit**
+**Step 4: Commit**
 
 ```bash
 git add -A
@@ -1245,4 +1245,230 @@ git commit -m "feat: complete DocumentChange implementation
 - Other views updated to filter by scope
 
 Fixes: expanded state lost when geocoding completes"
+```
+
+---
+
+### Task 18: Refactor geocoding to use address cache
+
+**Files:**
+- Modify: `src/services/BackgroundGeocodingService.h`
+- Modify: `src/services/BackgroundGeocodingService.cpp`
+- Modify: `src/services/DocumentManager.cpp`
+
+**Step 1: Add geocode cache to BackgroundGeocodingService**
+
+In header, add:
+```cpp
+#include "DocumentChange.h"
+#include <QHash>
+#include <QPointF>
+
+// In private section:
+QHash<QString, QPointF> m_geocodeCache;  // address → {lat, lng}
+
+// Add slot:
+void onDocumentChanged(const DocumentChange& change);
+```
+
+**Step 2: Implement cache-based geocoding**
+
+In cpp:
+```cpp
+void BackgroundGeocodingService::onDocumentChanged(const DocumentChange& change)
+{
+    if (change.scope == ChangeScope::Full)
+    {
+        // Seed cache from families with existing coords
+        for (const auto& family : m_documentManager->document().families())
+        {
+            if (!family.address().isEmpty() && family.isMapped())
+            {
+                m_geocodeCache[family.address()] =
+                    QPointF(family.latitude(), family.longitude());
+            }
+        }
+
+        // Queue unmapped families (check cache first)
+        for (const auto& family : m_documentManager->document().families())
+        {
+            if (!family.address().isEmpty() && !family.isMapped())
+            {
+                checkAndQueueFamily(family);
+            }
+        }
+        return;
+    }
+
+    if (change.scope == ChangeScope::Family
+        && change.action == ChangeAction::Updated)
+    {
+        auto family = m_documentManager->document().findFamilyById(change.entityId);
+        if (family && !family->address().isEmpty())
+        {
+            checkAndQueueFamily(*family);
+        }
+    }
+}
+
+void BackgroundGeocodingService::checkAndQueueFamily(const Family& family)
+{
+    QString address = family.address();
+
+    if (m_geocodeCache.contains(address))
+    {
+        QPointF cached = m_geocodeCache[address];
+        // Apply if different from current
+        if (family.latitude() != cached.x() || family.longitude() != cached.y())
+        {
+            emit familyGeocoded(family.id(), cached.x(), cached.y());
+        }
+        return;
+    }
+
+    // Not in cache - queue for API
+    queueFamily(family);
+}
+```
+
+**Step 3: Update API completion to populate cache**
+
+```cpp
+void BackgroundGeocodingService::onApiComplete(const QString& familyId,
+                                                const QString& address,
+                                                double lat, double lng)
+{
+    // Add to cache
+    m_geocodeCache[address] = QPointF(lat, lng);
+
+    // Emit result
+    emit familyGeocoded(familyId, lat, lng);
+}
+```
+
+**Step 4: Connect to documentChanged signal**
+
+In DocumentManager or where BackgroundGeocodingService is created:
+```cpp
+connect(m_documentManager, &DocumentManager::documentChanged,
+        m_geocodingService, &BackgroundGeocodingService::onDocumentChanged);
+```
+
+**Step 5: Run build**
+
+Run: `build.bat`
+Expected: Compiles
+
+**Step 6: Commit**
+
+```bash
+git add src/services/BackgroundGeocodingService.h src/services/BackgroundGeocodingService.cpp
+git commit -m "feat(geocoding): use address→coords cache instead of familyWithChangedAddress
+
+- Cache seeded from existing family coords on document load
+- Cache populated when API returns results
+- Duplicate addresses share cached coords (no extra API calls)
+- Undo/redo uses cache for instant coord restoration"
+```
+
+---
+
+### Task 19: Remove familyWithChangedAddress from Command
+
+**Files:**
+- Modify: `src/commands/Command.h`
+- Modify: `src/commands/FamilyCommands.h`
+- Modify: `src/commands/FamilyCommands.cpp`
+- Modify: `src/services/DocumentManager.cpp`
+
+**Step 1: Remove from Command.h**
+
+Delete:
+```cpp
+    // Returns ID of family whose address was changed by this command.
+    // Empty string if no address changed. Used to trigger background geocoding.
+    virtual QString familyWithChangedAddress() const { return {}; }
+```
+
+**Step 2: Remove override from FamilyCommands.h**
+
+Delete from UpdateFamilyCommand:
+```cpp
+    QString familyWithChangedAddress() const override;
+```
+
+**Step 3: Remove implementation from FamilyCommands.cpp**
+
+Delete:
+```cpp
+QString UpdateFamilyCommand::familyWithChangedAddress() const
+{
+    if (m_oldFamily.address() != m_newFamily.address())
+    {
+        return m_newFamily.id();
+    }
+    return {};
+}
+```
+
+**Step 4: Remove usage from DocumentManager.cpp**
+
+In `executeCommand()`, remove:
+```cpp
+    // Check before moving - trigger geocoding if address changed
+    QString familyId = command->familyWithChangedAddress();
+```
+
+And remove:
+```cpp
+    if (!familyId.isEmpty())
+    {
+        queueFamilyForGeocoding(familyId);
+    }
+```
+
+**Step 5: Run build**
+
+Run: `build.bat`
+Expected: BUILD SUCCESS
+
+**Step 6: Update CLAUDE.md**
+
+Remove the technical debt note about familyWithChangedAddress since it's now fixed.
+
+**Step 7: Commit**
+
+```bash
+git add src/commands/Command.h src/commands/FamilyCommands.h src/commands/FamilyCommands.cpp src/services/DocumentManager.cpp CLAUDE.md
+git commit -m "refactor: remove familyWithChangedAddress() from Command
+
+Technical debt resolved - geocoding now uses DocumentChange + address cache"
+```
+
+---
+
+### Task 20: Final verification
+
+**Step 1: Test geocoding flow**
+
+1. Open document with unmapped families
+2. Verify geocoding starts automatically
+3. Edit a family's address
+4. Verify new address gets geocoded
+5. Undo the edit
+6. Verify old address coords restored from cache (no API call)
+
+**Step 2: Test cache sharing**
+
+1. Import ward directory with duplicate addresses
+2. Verify only one API call per unique address
+3. All families at same address get coords
+
+**Step 3: Final commit**
+
+```bash
+git add -A
+git commit -m "feat: complete geocoding refactor with address cache
+
+Removes technical debt (familyWithChangedAddress) and adds address→coords cache"
 ```

@@ -285,8 +285,50 @@ Views may occasionally refresh more than strictly necessary, but:
 | `onStakeLookupComplete()` | `metadata().updated(unitNumber)` |
 | `onFamilyGeocoded()` | `family().updated(id)` |
 
+## Geocoding Refactor
+
+The `familyWithChangedAddress()` method on Command is removed. Instead, BackgroundGeocodingService:
+
+1. **Observes DocumentChange** - listens for `family().updated()` and `full()` changes
+2. **Maintains address→coords cache** - `QHash<QString, QPointF>`
+3. **Seeds cache on document load** - families with existing coords populate cache
+4. **Uses cache for instant resolution** - duplicate addresses share cached coords
+
+```cpp
+void BackgroundGeocodingService::onDocumentChanged(const DocumentChange& change)
+{
+    if (change.scope == ChangeScope::Full)
+    {
+        // Seed cache from families with existing coords
+        for (const auto& family : m_document->families())
+        {
+            if (!family.address().isEmpty() && family.isMapped())
+            {
+                m_geocodeCache[family.address()] = {family.latitude(), family.longitude()};
+            }
+        }
+        // Queue unmapped families...
+        return;
+    }
+
+    if (change.scope == ChangeScope::Family && change.action == ChangeAction::Updated)
+    {
+        auto family = m_document->findFamilyById(change.entityId);
+        if (family && !family->address().isEmpty())
+        {
+            // Check cache: hit → apply immediately, miss → queue API
+            checkAndQueueFamily(*family);
+        }
+    }
+}
+```
+
+**Benefits:**
+- Removes Command-specific geocoding hook
+- Undo/redo uses cache (no API call)
+- Duplicate addresses share cached coords
+- Geocoding is self-contained observer
+
 ## Future Work
 
-- Remove `Command::familyWithChangedAddress()` - see CLAUDE.md technical debt section
-- Geocoding should observe `family().updated()` changes and check if address differs
 - Consider surgical updates for other views (FamilyListModel, PersonListModel) if performance becomes an issue
