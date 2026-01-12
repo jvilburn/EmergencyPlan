@@ -115,6 +115,12 @@ QString ImportWardDirectoryCommand::description() const
     return QObject::tr("Import %1 families").arg(m_newFamilies.size());
 }
 
+DocumentChange ImportWardDirectoryCommand::documentChange() const
+{
+    // Ward directory import touches families + metadata, use full
+    return DocumentChange::full();
+}
+
 void ImportWardDirectoryCommand::cleanupRemovedFamily(
     Document& document,
     const QString& familyId,

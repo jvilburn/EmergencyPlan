@@ -13,9 +13,16 @@ FamilyListModel::FamilyListModel(DocumentManager* documentManager,
     , m_filter(filter)
 {
     connect(m_documentManager, &DocumentManager::documentChanged,
-            this, &FamilyListModel::rebuild);
+            this, &FamilyListModel::onDocumentChanged);
     connect(m_filter, &Filter::changed,
-            this, &FamilyListModel::rebuild);
+            this, [this]() { rebuild(); });
+    rebuild();
+}
+
+void FamilyListModel::onDocumentChanged(const DocumentChange& change)
+{
+    Q_UNUSED(change)
+    // TODO: implement surgical updates for Family scope changes
     rebuild();
 }
 

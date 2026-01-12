@@ -4,6 +4,7 @@
 #include <QString>
 #include <QSet>
 #include "Document.h"
+#include "DocumentChange.h"
 #include "CommandHistory.h"
 
 class UnitLookupService;
@@ -53,7 +54,7 @@ public:
     bool isGeocoding() const;
 
 signals:
-    void documentChanged();
+    void documentChanged(const DocumentChange& change);
     void dirtyChanged();
     void canUndoChanged();
     void canRedoChanged();

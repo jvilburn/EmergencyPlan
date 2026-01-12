@@ -17,7 +17,7 @@ FamilyTreeModel::FamilyTreeModel(DocumentManager* documentManager,
     , m_filter(filter)
 {
     connect(m_documentManager, &DocumentManager::documentChanged,
-            this, &FamilyTreeModel::rebuild);
+            this, &FamilyTreeModel::onDocumentChanged);
     connect(m_filter, &Filter::changed,
             this, &FamilyTreeModel::rebuild);
     rebuild();
@@ -32,6 +32,326 @@ void FamilyTreeModel::clearNodes()
 {
     qDeleteAll(m_familyNodes);
     m_familyNodes.clear();
+}
+
+void FamilyTreeModel::onDocumentChanged(const DocumentChange& change)
+{
+    // Only care about Family scope
+    if (change.scope != ChangeScope::Full && change.scope != ChangeScope::Family)
+    {
+        return;
+    }
+
+    // Full reload needed
+    if (change.scope == ChangeScope::Full
+        || change.action == ChangeAction::BatchModified)
+    {
+        rebuild();
+        return;
+    }
+
+    // Surgical updates - preserve expanded state
+    switch (change.action)
+    {
+        case ChangeAction::Updated:
+            updateFamilyRow(change.entityId);
+            break;
+        case ChangeAction::Added:
+            insertFamilyRow(change.entityId);
+            break;
+        case ChangeAction::Removed:
+            removeFamilyRow(change.entityId);
+            break;
+        default:
+            rebuild();
+            break;
+    }
+}
+
+void FamilyTreeModel::updateFamilyRow(const QString& familyId)
+{
+    // Find the row index for this family
+    int row = m_familyIds.indexOf(familyId);
+    if (row < 0)
+    {
+        // Family not currently shown (might be filtered out or new)
+        // Check if family exists and passes filter
+        auto family = m_documentManager->document().findFamilyById(familyId);
+        if (family.has_value() && m_filter->passes(m_documentManager->document(), *family))
+        {
+            // Family should now be visible - insert it
+            insertFamilyRow(familyId);
+        }
+        return;
+    }
+
+    // Check if family still passes filter
+    auto family = m_documentManager->document().findFamilyById(familyId);
+    if (!family.has_value() || !m_filter->passes(m_documentManager->document(), *family))
+    {
+        // Family no longer passes filter - remove it
+        removeFamilyRow(familyId);
+        return;
+    }
+
+    // Rebuild just this family's subtree
+    TreeNode* oldNode = m_familyNodes.at(row);
+
+    // Remove old children
+    if (!oldNode->children.isEmpty())
+    {
+        QModelIndex familyIndex = index(row, 0);
+        beginRemoveRows(familyIndex, 0, oldNode->children.size() - 1);
+        qDeleteAll(oldNode->children);
+        oldNode->children.clear();
+        endRemoveRows();
+    }
+
+    // Update the family node display text
+    oldNode->displayText = family->displayName();
+
+    // Rebuild children for this family
+    const QList<Person>& members = family->members();
+    QModelIndex familyIndex = index(row, 0);
+
+    // We need to add all children at once
+    QList<TreeNode*> newChildren;
+
+    // Build member nodes
+    for (int memberIdx = 0; memberIdx < members.size(); ++memberIdx)
+    {
+        const Person& person = members.at(memberIdx);
+
+        TreeNode* memberNode = new TreeNode();
+        memberNode->type = RowType::Member;
+        memberNode->familyIndex = row;
+        memberNode->memberIndex = memberIdx;
+        memberNode->parent = oldNode;
+
+        QString displayName = person.givenNames();
+        if (!person.surname().isEmpty() && person.surname() != family->surname())
+        {
+            displayName = person.displayName();
+        }
+        memberNode->displayText = displayName;
+
+        // Add member detail nodes
+        Phone phone = person.displayPhone();
+        if (!phone.isEmpty())
+        {
+            TreeNode* detailNode = new TreeNode();
+            detailNode->type = RowType::MemberDetail;
+            detailNode->familyIndex = row;
+            detailNode->memberIndex = memberIdx;
+            detailNode->detailType = DetailType::Phone;
+            detailNode->displayText = tr("Phone: %1").arg(QString(phone));
+            detailNode->parent = memberNode;
+            memberNode->children.append(detailNode);
+        }
+
+        if (!person.altPhone().isEmpty())
+        {
+            TreeNode* detailNode = new TreeNode();
+            detailNode->type = RowType::MemberDetail;
+            detailNode->familyIndex = row;
+            detailNode->memberIndex = memberIdx;
+            detailNode->detailType = DetailType::AltPhone;
+            detailNode->displayText = tr("Alt: %1").arg(QString(person.altPhone()));
+            detailNode->parent = memberNode;
+            memberNode->children.append(detailNode);
+        }
+
+        if (!person.email().isEmpty())
+        {
+            TreeNode* detailNode = new TreeNode();
+            detailNode->type = RowType::MemberDetail;
+            detailNode->familyIndex = row;
+            detailNode->memberIndex = memberIdx;
+            detailNode->detailType = DetailType::Email;
+            detailNode->displayText = tr("Email: %1").arg(person.email());
+            detailNode->parent = memberNode;
+            memberNode->children.append(detailNode);
+        }
+
+        if (!person.callings().isEmpty())
+        {
+            TreeNode* detailNode = new TreeNode();
+            detailNode->type = RowType::MemberDetail;
+            detailNode->familyIndex = row;
+            detailNode->memberIndex = memberIdx;
+            detailNode->detailType = DetailType::Callings;
+            detailNode->displayText = tr("Callings: %1").arg(person.callings().join(", "));
+            detailNode->parent = memberNode;
+            memberNode->children.append(detailNode);
+        }
+
+        QString birthDisplay = person.birthDateDisplay();
+        if (!birthDisplay.isEmpty())
+        {
+            QString ageStr = person.ageDisplay();
+            if (!ageStr.isEmpty())
+            {
+                birthDisplay += " " + ageStr;
+            }
+
+            TreeNode* detailNode = new TreeNode();
+            detailNode->type = RowType::MemberDetail;
+            detailNode->familyIndex = row;
+            detailNode->memberIndex = memberIdx;
+            detailNode->detailType = DetailType::Age;
+            detailNode->displayText = birthDisplay;
+            detailNode->parent = memberNode;
+            memberNode->children.append(detailNode);
+        }
+
+        if (memberNode->children.isEmpty())
+        {
+            TreeNode* detailNode = new TreeNode();
+            detailNode->type = RowType::MemberDetail;
+            detailNode->familyIndex = row;
+            detailNode->memberIndex = memberIdx;
+            detailNode->detailType = DetailType::Phone;
+            detailNode->displayText = tr("No contact info");
+            detailNode->parent = memberNode;
+            memberNode->children.append(detailNode);
+        }
+
+        newChildren.append(memberNode);
+    }
+
+    // Add address node
+    TreeNode* addressNode = new TreeNode();
+    addressNode->type = RowType::Address;
+    addressNode->familyIndex = row;
+    addressNode->parent = oldNode;
+    QString addressText = family->address().multiLine();
+    addressNode->displayText = addressText.isEmpty() ? tr("No address") : addressText;
+    newChildren.append(addressNode);
+
+    // Add phone node
+    TreeNode* phoneNode = new TreeNode();
+    phoneNode->type = RowType::Phone;
+    phoneNode->familyIndex = row;
+    phoneNode->parent = oldNode;
+    Phone familyPhone = family->displayPhone();
+    phoneNode->displayText = familyPhone.isEmpty() ? tr("No phone") : QString(familyPhone);
+    newChildren.append(phoneNode);
+
+    // Add actions node
+    TreeNode* actionsNode = new TreeNode();
+    actionsNode->type = RowType::Actions;
+    actionsNode->familyIndex = row;
+    actionsNode->parent = oldNode;
+    newChildren.append(actionsNode);
+
+    // Insert all children
+    if (!newChildren.isEmpty())
+    {
+        beginInsertRows(familyIndex, 0, newChildren.size() - 1);
+        oldNode->children = newChildren;
+        endInsertRows();
+    }
+
+    // Emit dataChanged for the family row itself
+    emit dataChanged(familyIndex, familyIndex);
+}
+
+void FamilyTreeModel::insertFamilyRow(const QString& familyId)
+{
+    // Check if family exists and passes filter
+    auto family = m_documentManager->document().findFamilyById(familyId);
+    if (!family.has_value() || !m_filter->passes(m_documentManager->document(), *family))
+    {
+        return;
+    }
+
+    // Already exists?
+    if (m_familyIds.contains(familyId))
+    {
+        updateFamilyRow(familyId);
+        return;
+    }
+
+    // Find insertion point (sorted by display name)
+    QString newName = family->displayName().toLower();
+    int insertRow = 0;
+    for (int i = 0; i < m_familyIds.size(); ++i)
+    {
+        auto existingFamily = m_documentManager->document().findFamilyById(m_familyIds.at(i));
+        if (existingFamily.has_value()
+            && existingFamily->displayName().toLower() > newName)
+        {
+            break;
+        }
+        insertRow = i + 1;
+    }
+
+    // Insert into the model
+    beginInsertRows(QModelIndex(), insertRow, insertRow);
+    m_familyIds.insert(insertRow, familyId);
+
+    // Build the family node
+    TreeNode* familyNode = new TreeNode();
+    familyNode->type = RowType::Family;
+    familyNode->familyIndex = insertRow;
+    familyNode->displayText = family->displayName();
+    m_familyNodes.insert(insertRow, familyNode);
+
+    // Update familyIndex for all nodes after this one
+    for (int i = insertRow + 1; i < m_familyNodes.size(); ++i)
+    {
+        m_familyNodes.at(i)->familyIndex = i;
+        // Also update all children
+        for (TreeNode* child : m_familyNodes.at(i)->children)
+        {
+            child->familyIndex = i;
+            for (TreeNode* grandchild : child->children)
+            {
+                grandchild->familyIndex = i;
+            }
+        }
+    }
+
+    endInsertRows();
+
+    // Now build the children for this family
+    updateFamilyRow(familyId);
+
+    emit familyListChanged();
+}
+
+void FamilyTreeModel::removeFamilyRow(const QString& familyId)
+{
+    int row = m_familyIds.indexOf(familyId);
+    if (row < 0)
+    {
+        return;
+    }
+
+    beginRemoveRows(QModelIndex(), row, row);
+
+    // Delete the node
+    delete m_familyNodes.at(row);
+    m_familyNodes.removeAt(row);
+    m_familyIds.removeAt(row);
+
+    // Update familyIndex for all nodes after this one
+    for (int i = row; i < m_familyNodes.size(); ++i)
+    {
+        m_familyNodes.at(i)->familyIndex = i;
+        for (TreeNode* child : m_familyNodes.at(i)->children)
+        {
+            child->familyIndex = i;
+            for (TreeNode* grandchild : child->children)
+            {
+                grandchild->familyIndex = i;
+            }
+        }
+    }
+
+    endRemoveRows();
+
+    emit familyListChanged();
 }
 
 void FamilyTreeModel::rebuild()

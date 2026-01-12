@@ -17,8 +17,10 @@ MapViewModel::MapViewModel(DocumentManager* docManager, QObject* parent)
     updateFamilies();
 }
 
-void MapViewModel::onDocumentChanged()
+void MapViewModel::onDocumentChanged(const DocumentChange& change)
 {
+    Q_UNUSED(change)
+    // TODO: optimize for Family scope changes
     updateFamilies();
 }
 

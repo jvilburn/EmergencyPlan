@@ -24,6 +24,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     QHash<QString, MinisteringDistrict> m_newDistricts;

@@ -3,6 +3,8 @@
 #include <QMainWindow>
 #include <QSplitter>
 
+#include "DocumentChange.h"
+
 class QLabel;
 class QProgressBar;
 class QTabWidget;
@@ -32,7 +34,7 @@ private slots:
     void onImportMinisteringPdf();
     void onUndo();
     void onRedo();
-    void onDocumentChanged();
+    void onDocumentChanged(const DocumentChange& change);
     void updateWindowTitle();
     void updateUndoRedoActions();
 

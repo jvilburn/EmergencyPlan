@@ -25,6 +25,11 @@ QString AddTagCommand::description() const
     return QObject::tr("Add Tag \"%1\"").arg(m_tag.name());
 }
 
+DocumentChange AddTagCommand::documentChange() const
+{
+    return DocumentChange::tag().added(m_tag.id());
+}
+
 // ============================================================================
 // UpdateTagCommand
 // ============================================================================
@@ -50,6 +55,11 @@ QString UpdateTagCommand::description() const
     return QObject::tr("Update Tag \"%1\"").arg(m_oldTag.name());
 }
 
+DocumentChange UpdateTagCommand::documentChange() const
+{
+    return DocumentChange::tag().updated(m_newTag.id());
+}
+
 // ============================================================================
 // DeleteTagCommand
 // ============================================================================
@@ -72,6 +82,11 @@ void DeleteTagCommand::undo(Document& document)
 QString DeleteTagCommand::description() const
 {
     return QObject::tr("Delete Tag \"%1\"").arg(m_tag.name());
+}
+
+DocumentChange DeleteTagCommand::documentChange() const
+{
+    return DocumentChange::tag().removed(m_tag.id());
 }
 
 // ============================================================================
@@ -99,6 +114,11 @@ QString AssignTagToPersonCommand::description() const
     return QObject::tr("Assign Tag to Person");
 }
 
+DocumentChange AssignTagToPersonCommand::documentChange() const
+{
+    return DocumentChange::tag().updated(m_tagId);
+}
+
 // ============================================================================
 // AssignTagToFamilyCommand
 // ============================================================================
@@ -122,6 +142,11 @@ void AssignTagToFamilyCommand::undo(Document& document)
 QString AssignTagToFamilyCommand::description() const
 {
     return QObject::tr("Assign Tag to Family");
+}
+
+DocumentChange AssignTagToFamilyCommand::documentChange() const
+{
+    return DocumentChange::tag().updated(m_tagId);
 }
 
 // ============================================================================
@@ -149,6 +174,11 @@ QString UnassignTagFromPersonCommand::description() const
     return QObject::tr("Remove Tag from Person");
 }
 
+DocumentChange UnassignTagFromPersonCommand::documentChange() const
+{
+    return DocumentChange::tag().updated(m_tagId);
+}
+
 // ============================================================================
 // UnassignTagFromFamilyCommand
 // ============================================================================
@@ -172,4 +202,9 @@ void UnassignTagFromFamilyCommand::undo(Document& document)
 QString UnassignTagFromFamilyCommand::description() const
 {
     return QObject::tr("Remove Tag from Family");
+}
+
+DocumentChange UnassignTagFromFamilyCommand::documentChange() const
+{
+    return DocumentChange::tag().updated(m_tagId);
 }

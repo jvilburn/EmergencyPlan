@@ -16,6 +16,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     MinisteringDistrict m_district;
@@ -30,6 +31,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     MinisteringDistrict m_oldDistrict;
@@ -44,6 +46,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     MinisteringDistrict m_district;
@@ -61,6 +64,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     MinisteringGroup m_group;
@@ -75,6 +79,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     MinisteringGroup m_oldGroup;
@@ -89,6 +94,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     MinisteringGroup m_group;
@@ -106,6 +112,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     MinisteringDistrict m_district;
@@ -120,6 +127,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     MinisteringDistrict m_oldDistrict;
@@ -134,6 +142,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     MinisteringDistrict m_district;
@@ -151,6 +160,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     MinisteringGroup m_group;
@@ -165,6 +175,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     MinisteringGroup m_oldGroup;
@@ -179,6 +190,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     MinisteringGroup m_group;

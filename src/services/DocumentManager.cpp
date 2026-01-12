@@ -35,9 +35,10 @@ void DocumentManager::executeCommand(CommandPtr command)
 {
     // Check before moving - trigger geocoding if address changed
     QString familyId = command->familyWithChangedAddress();
+    DocumentChange change = command->documentChange();
 
     m_commandHistory.execute(std::move(command), m_document);
-    emit documentChanged();
+    emit documentChanged(change);
     checkForIncompleteWards();
 
     if (!familyId.isEmpty())
@@ -52,8 +53,8 @@ void DocumentManager::undo()
     {
         return;
     }
-    m_commandHistory.undo(m_document);
-    emit documentChanged();
+    DocumentChange change = m_commandHistory.undo(m_document);
+    emit documentChanged(change);
 }
 
 void DocumentManager::redo()
@@ -62,8 +63,8 @@ void DocumentManager::redo()
     {
         return;
     }
-    m_commandHistory.redo(m_document);
-    emit documentChanged();
+    DocumentChange change = m_commandHistory.redo(m_document);
+    emit documentChanged(change);
 }
 
 void DocumentManager::newDocument()
@@ -128,7 +129,7 @@ bool DocumentManager::saveDocumentAs(const QString& filePath, QString* errorMess
 void DocumentManager::setDocument(const Document& document)
 {
     m_document = document;
-    emit documentChanged();
+    emit documentChanged(DocumentChange::full());
 }
 
 void DocumentManager::setFilePath(const QString& filePath)
@@ -193,7 +194,7 @@ void DocumentManager::onWardLookupComplete(const QString& wardUnitNumber, const 
         }
 
         m_document.metadata().updateWard(updated);
-        emit documentChanged();
+        emit documentChanged(DocumentChange::metadata().updated(wardUnitNumber));
 
         // Trigger stake lookup if we got stake unit number and don't already have it
         QString stakeUnit = wardInfo.stakeUnitNumber();
@@ -216,7 +217,7 @@ void DocumentManager::onStakeLookupComplete(const QString& stakeUnitNumber, cons
 
     // Add or update stake
     m_document.metadata().updateStake(stakeInfo);
-    emit documentChanged();
+    emit documentChanged(DocumentChange::metadata().updated(stakeUnitNumber));
 }
 
 void DocumentManager::onLookupFailed(const QString& unitNumber, const QString& error)
@@ -271,7 +272,7 @@ void DocumentManager::onFamilyGeocoded(const QString& id, double latitude, doubl
         Family updated = *existing;
         updated.setLocation(latitude, longitude);
         m_document.updateFamily(updated);
-        emit documentChanged();
+        emit documentChanged(DocumentChange::family().updated(id));
     }
 }
 

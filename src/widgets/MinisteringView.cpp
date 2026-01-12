@@ -231,8 +231,10 @@ void MinisteringView::onTreeItemClicked(QTreeWidgetItem* item, int /*column*/)
     emit highlightChanged();
 }
 
-void MinisteringView::onDocumentChanged()
+void MinisteringView::onDocumentChanged(const DocumentChange& change)
 {
+    Q_UNUSED(change)
+    // TODO: optimize for EqDistrict/EqGroup/RsDistrict/RsGroup scope changes
     regenerateColors();
     rebuildTree();
     updateUnassignedLabel();

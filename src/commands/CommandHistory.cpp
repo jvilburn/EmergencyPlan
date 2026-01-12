@@ -24,11 +24,11 @@ void CommandHistory::execute(CommandPtr command, Document& document)
     emitStateChanges(couldUndo, couldRedo, wasDirty);
 }
 
-void CommandHistory::undo(Document& document)
+DocumentChange CommandHistory::undo(Document& document)
 {
     if (!canUndo())
     {
-        return;
+        return DocumentChange::full();
     }
 
     bool couldUndo = canUndo();
@@ -39,6 +39,9 @@ void CommandHistory::undo(Document& document)
     CommandPtr command = std::move(m_undoStack.back());
     m_undoStack.pop_back();
 
+    // Get DocumentChange before undoing
+    DocumentChange change = command->documentChange();
+
     // Undo the command
     command->undo(document);
 
@@ -46,13 +49,15 @@ void CommandHistory::undo(Document& document)
     m_redoStack.push_back(std::move(command));
 
     emitStateChanges(couldUndo, couldRedo, wasDirty);
+
+    return change;
 }
 
-void CommandHistory::redo(Document& document)
+DocumentChange CommandHistory::redo(Document& document)
 {
     if (!canRedo())
     {
-        return;
+        return DocumentChange::full();
     }
 
     bool couldUndo = canUndo();
@@ -63,6 +68,9 @@ void CommandHistory::redo(Document& document)
     CommandPtr command = std::move(m_redoStack.back());
     m_redoStack.pop_back();
 
+    // Get DocumentChange before executing
+    DocumentChange change = command->documentChange();
+
     // Re-execute the command
     command->execute(document);
 
@@ -70,6 +78,8 @@ void CommandHistory::redo(Document& document)
     m_undoStack.push_back(std::move(command));
 
     emitStateChanges(couldUndo, couldRedo, wasDirty);
+
+    return change;
 }
 
 QString CommandHistory::undoDescription() const

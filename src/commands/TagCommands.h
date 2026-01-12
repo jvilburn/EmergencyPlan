@@ -11,6 +11,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     Tag m_tag;
@@ -24,6 +25,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     Tag m_oldTag;
@@ -38,6 +40,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     Tag m_tag;
@@ -51,6 +54,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     QString m_tagId;
@@ -65,6 +69,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     QString m_tagId;
@@ -79,6 +84,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     QString m_tagId;
@@ -93,6 +99,7 @@ public:
     void execute(Document& document) override;
     void undo(Document& document) override;
     QString description() const override;
+    DocumentChange documentChange() const override;
 
 private:
     QString m_tagId;

@@ -4,6 +4,8 @@
 #include <QList>
 #include <QString>
 
+#include "DocumentChange.h"
+
 class DocumentManager;
 class Filter;
 
@@ -46,9 +48,11 @@ public:
     QStringList familyIds() const;
 
 private slots:
-    void rebuild();
+    void onDocumentChanged(const DocumentChange& change);
 
 private:
+    void rebuild();
+
     QList<QString> m_familyIds;
     DocumentManager* m_documentManager;
     Filter* m_filter;

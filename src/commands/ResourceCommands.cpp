@@ -25,6 +25,11 @@ QString AddCategoryCommand::description() const
     return QObject::tr("Add Category \"%1\"").arg(m_category.name());
 }
 
+DocumentChange AddCategoryCommand::documentChange() const
+{
+    return DocumentChange::resourceCategory().added(m_category.id());
+}
+
 // ============================================================================
 // UpdateCategoryCommand
 // ============================================================================
@@ -51,6 +56,11 @@ QString UpdateCategoryCommand::description() const
     return QObject::tr("Update Category \"%1\"").arg(m_oldCategory.name());
 }
 
+DocumentChange UpdateCategoryCommand::documentChange() const
+{
+    return DocumentChange::resourceCategory().updated(m_newCategory.id());
+}
+
 // ============================================================================
 // DeleteCategoryCommand
 // ============================================================================
@@ -75,6 +85,11 @@ QString DeleteCategoryCommand::description() const
     return QObject::tr("Delete Category \"%1\"").arg(m_category.name());
 }
 
+DocumentChange DeleteCategoryCommand::documentChange() const
+{
+    return DocumentChange::resourceCategory().removed(m_category.id());
+}
+
 // ============================================================================
 // AddResourceTypeCommand
 // ============================================================================
@@ -97,6 +112,11 @@ void AddResourceTypeCommand::undo(Document& document)
 QString AddResourceTypeCommand::description() const
 {
     return QObject::tr("Add Resource \"%1\"").arg(m_resourceType.name());
+}
+
+DocumentChange AddResourceTypeCommand::documentChange() const
+{
+    return DocumentChange::resourceType().added(m_resourceType.id());
 }
 
 // ============================================================================
@@ -125,6 +145,11 @@ QString UpdateResourceTypeCommand::description() const
     return QObject::tr("Update Resource \"%1\"").arg(m_oldType.name());
 }
 
+DocumentChange UpdateResourceTypeCommand::documentChange() const
+{
+    return DocumentChange::resourceType().updated(m_newType.id());
+}
+
 // ============================================================================
 // DeleteResourceTypeCommand
 // ============================================================================
@@ -147,6 +172,11 @@ void DeleteResourceTypeCommand::undo(Document& document)
 QString DeleteResourceTypeCommand::description() const
 {
     return QObject::tr("Delete Resource \"%1\"").arg(m_resourceType.name());
+}
+
+DocumentChange DeleteResourceTypeCommand::documentChange() const
+{
+    return DocumentChange::resourceType().removed(m_resourceType.id());
 }
 
 // ============================================================================
@@ -175,6 +205,11 @@ QString AssignResourceToPersonCommand::description() const
     return QObject::tr("Assign Resource to Person");
 }
 
+DocumentChange AssignResourceToPersonCommand::documentChange() const
+{
+    return DocumentChange::resourceType().updated(m_resourceTypeId);
+}
+
 // ============================================================================
 // AssignResourceToFamilyCommand
 // ============================================================================
@@ -199,6 +234,11 @@ void AssignResourceToFamilyCommand::undo(Document& document)
 QString AssignResourceToFamilyCommand::description() const
 {
     return QObject::tr("Assign Resource to Family");
+}
+
+DocumentChange AssignResourceToFamilyCommand::documentChange() const
+{
+    return DocumentChange::resourceType().updated(m_resourceTypeId);
 }
 
 // ============================================================================
@@ -227,6 +267,11 @@ QString UnassignResourceFromPersonCommand::description() const
     return QObject::tr("Remove Resource from Person");
 }
 
+DocumentChange UnassignResourceFromPersonCommand::documentChange() const
+{
+    return DocumentChange::resourceType().updated(m_resourceTypeId);
+}
+
 // ============================================================================
 // UnassignResourceFromFamilyCommand
 // ============================================================================
@@ -251,4 +296,9 @@ void UnassignResourceFromFamilyCommand::undo(Document& document)
 QString UnassignResourceFromFamilyCommand::description() const
 {
     return QObject::tr("Remove Resource from Family");
+}
+
+DocumentChange UnassignResourceFromFamilyCommand::documentChange() const
+{
+    return DocumentChange::resourceType().updated(m_resourceTypeId);
 }

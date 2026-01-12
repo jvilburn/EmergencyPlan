@@ -466,8 +466,9 @@ void MainWindow::onRedo()
     m_documentManager->redo();
 }
 
-void MainWindow::onDocumentChanged()
+void MainWindow::onDocumentChanged(const DocumentChange& change)
 {
+    Q_UNUSED(change)
     int count = m_documentManager->document().families().size();
     statusBar()->showMessage(tr("%1 families").arg(count));
 }

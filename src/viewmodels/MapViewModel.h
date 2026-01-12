@@ -5,6 +5,8 @@
 #include <QVariantList>
 #include <QVariantMap>
 
+#include "DocumentChange.h"
+
 class DocumentManager;
 
 /// ViewModel for the map, bridging DocumentManager and QML MapView.
@@ -73,7 +75,7 @@ signals:
     void fitBounds(double minLat, double minLng, double maxLat, double maxLng);
 
 private slots:
-    void onDocumentChanged();
+    void onDocumentChanged(const DocumentChange& change);
 
 private:
     void updateFamilies();

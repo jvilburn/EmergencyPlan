@@ -1,6 +1,7 @@
 #pragma once
 
 #include "MapHighlightProvider.h"
+#include "DocumentChange.h"
 
 #include <QWidget>
 #include <QHash>
@@ -41,7 +42,7 @@ private slots:
     void onOrgToggled(int id);
     void onUnassignedClicked();
     void onTreeItemClicked(QTreeWidgetItem* item, int column);
-    void onDocumentChanged();
+    void onDocumentChanged(const DocumentChange& change);
 
 private:
     void setupUi();

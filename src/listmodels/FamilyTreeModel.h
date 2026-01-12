@@ -4,6 +4,8 @@
 #include <QList>
 #include <QString>
 
+#include "DocumentChange.h"
+
 class DocumentManager;
 class Filter;
 
@@ -81,9 +83,15 @@ signals:
     void familyListChanged();
 
 private slots:
+    void onDocumentChanged(const DocumentChange& change);
     void rebuild();
 
 private:
+    // Surgical update methods
+    void updateFamilyRow(const QString& familyId);
+    void insertFamilyRow(const QString& familyId);
+    void removeFamilyRow(const QString& familyId);
+
     /// Internal tree node structure
     struct TreeNode
     {
