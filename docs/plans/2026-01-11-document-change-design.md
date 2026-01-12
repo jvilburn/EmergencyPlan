@@ -27,6 +27,7 @@ Add metadata to `documentChanged` signal describing what changed. Views can then
 | Header location | `src/models/DocumentChange.h` | Pure data type, no dependencies |
 | Factory pattern | Fluent builder | 15 methods instead of 44, readable call sites |
 | Entity data | ID only | Views fetch entity from DocumentManager if needed |
+| Bidirectional relationships | Views decide | Commands return what they directly modified; views handle secondary scopes based on their state |
 
 ## DocumentChange Structure
 
@@ -203,17 +204,74 @@ void FamilyTreeModel::onDocumentChanged(const DocumentChange& change)
 }
 ```
 
+## Handling Bidirectional Relationships
+
+Some entities have bidirectional relationships. For example:
+- **Team ↔ Person**: Team stores `memberIds`; Person view shows "teams this person is on"
+- **Tag ↔ Person**: Tags can be assigned to persons; views may filter by tag
+
+**Principle:** Commands return what they directly modified. Views decide how to handle secondary scopes.
+
+### Example: AddTeamMemberCommand
+
+The command modifies Team data, so it returns:
+```cpp
+DocumentChange documentChange() const override {
+    return DocumentChange::team().updated(m_teamId);
+}
+```
+
+Views handle this based on their state:
+
+**FamilyTreeModel (with expanded person showing team membership):**
+```cpp
+void FamilyTreeModel::onDocumentChanged(const DocumentChange& change)
+{
+    // Primary scope
+    if (change.scope == ChangeScope::Full || change.scope == ChangeScope::Family) {
+        // ... handle as before
+        return;
+    }
+
+    // Secondary scope: Team changes may affect expanded persons
+    if (change.scope == ChangeScope::Team) {
+        // Option A: Refresh all expanded person details (simple, slightly wasteful)
+        refreshExpandedPersonDetails();
+        // Option B: Check if any expanded person is on this team (more precise)
+        return;
+    }
+}
+```
+
+**WardListView (filtering by team):**
+```cpp
+void WardListView::onDocumentChanged(const DocumentChange& change)
+{
+    if (change.scope == ChangeScope::Team && isFilteringByTeams()) {
+        // Team membership changed - reapply filter
+        applyCurrentFilter();
+    }
+}
+```
+
+### Design Trade-off
+
+Views may occasionally refresh more than strictly necessary, but:
+- Commands stay simple (no view knowledge)
+- No complex change-expansion system
+- Views control their own refresh logic based on current state
+
 ## Views Requiring Update
 
-| File | Current Handler | Scope of Interest | Notes |
-|------|-----------------|-------------------|-------|
-| FamilyTreeModel | `rebuild()` | Family | Surgical updates to preserve expanded state |
-| FamilyListModel | `rebuild()` | Family | Can optimize later |
-| PersonListModel | `rebuild()` | Family | Persons are in families |
-| MapWidget | `updateButtonPositions()` | Family | Coordinates for markers |
-| MapViewModel | `onDocumentChanged()` | Family | |
-| MinisteringView | `onDocumentChanged()` | EqDistrict, EqGroup, RsDistrict, RsGroup | |
-| MainWindow | `onDocumentChanged()` | Full (status bar) | Simple count update |
+| File | Current Handler | Primary Scope | Secondary Scopes | Notes |
+|------|-----------------|---------------|------------------|-------|
+| FamilyTreeModel | `rebuild()` | Family | Team, Tag, ResourceType | Surgical updates; secondary scopes affect expanded details |
+| FamilyListModel | `rebuild()` | Family | Tag, ResourceType | Secondary scopes affect filter results |
+| PersonListModel | `rebuild()` | Family | Tag, ResourceType | Secondary scopes affect filter results |
+| MapWidget | `updateButtonPositions()` | Family | | Coordinates for markers |
+| MapViewModel | `onDocumentChanged()` | Family | | |
+| MinisteringView | `onDocumentChanged()` | EqDistrict, EqGroup, RsDistrict, RsGroup | | |
+| MainWindow | `onDocumentChanged()` | Full (status bar) | | Simple count update |
 
 ## Emit Sites in DocumentManager
 
