@@ -1,11 +1,16 @@
 #include "BackgroundGeocodingService.h"
+#include "DocumentManager.h"
 
-BackgroundGeocodingService::BackgroundGeocodingService(QObject* parent)
-    : QObject(parent)
+BackgroundGeocodingService::BackgroundGeocodingService(DocumentManager* documentManager)
+    : QObject(documentManager)
+    , m_documentManager(documentManager)
     , m_geocodingService(new GeocodingService(this))
 {
     connect(m_geocodingService, &GeocodingService::geocodingComplete,
             this, &BackgroundGeocodingService::onGeocodingComplete);
+
+    connect(m_documentManager, &DocumentManager::documentChanged,
+            this, &BackgroundGeocodingService::onDocumentChanged);
 }
 
 BackgroundGeocodingService::~BackgroundGeocodingService() = default;
@@ -66,6 +71,10 @@ void BackgroundGeocodingService::onGeocodingComplete(const GeocodingResult& resu
 
     if (result.success && result.latitude.has_value() && result.longitude.has_value())
     {
+        // Add to cache for future lookups
+        m_geocodeCache.insert(result.address,
+            QPointF(*result.latitude, *result.longitude));
+
         emit familyGeocoded(familyId, *result.latitude, *result.longitude);
     }
 
@@ -78,5 +87,117 @@ void BackgroundGeocodingService::onGeocodingComplete(const GeocodingResult& resu
         // Reset counters for next batch
         m_completed = 0;
         m_total = 0;
+    }
+}
+
+void BackgroundGeocodingService::onDocumentChanged(const DocumentChange& change)
+{
+    // Full document change or batch family change - process all families
+    if (change.scope == ChangeScope::Full
+        || (change.scope == ChangeScope::Family
+            && change.action == ChangeAction::BatchModified))
+    {
+        processAllFamilies();
+        return;
+    }
+
+    // Single family change - check that family
+    if (change.scope == ChangeScope::Family)
+    {
+        auto family = m_documentManager->document().findFamilyById(change.entityId);
+        if (family.has_value())
+        {
+            checkFamily(*family);
+        }
+    }
+}
+
+void BackgroundGeocodingService::checkFamily(const Family& family)
+{
+    QString address = family.address().full();
+    QString lastAddress = m_familyAddresses.value(family.id());
+
+    bool addressChanged = (address != lastAddress);
+
+    // Update address tracking
+    if (!address.isEmpty())
+    {
+        m_familyAddresses.insert(family.id(), address);
+    }
+    else
+    {
+        m_familyAddresses.remove(family.id());
+    }
+
+    if (address.isEmpty())
+    {
+        return;
+    }
+
+    if (addressChanged)
+    {
+        // Address changed - existing coords are stale, need fresh geocoding
+        if (m_geocodeCache.contains(address))
+        {
+            QPointF cached = m_geocodeCache.value(address);
+            emit familyGeocoded(family.id(), cached.x(), cached.y());
+        }
+        else
+        {
+            queueFamily(family);
+        }
+        return;
+    }
+
+    // Address unchanged
+    if (family.isMapped())
+    {
+        // Has coords for current address - trust them (user correction or already geocoded)
+        return;
+    }
+
+    // Unmapped - apply cache if available, otherwise queue
+    if (m_geocodeCache.contains(address))
+    {
+        QPointF cached = m_geocodeCache.value(address);
+        emit familyGeocoded(family.id(), cached.x(), cached.y());
+    }
+    else
+    {
+        queueFamily(family);
+    }
+}
+
+void BackgroundGeocodingService::processAllFamilies()
+{
+    m_geocodeCache.clear();
+    m_familyAddresses.clear();
+    const auto& families = m_documentManager->document().families();
+
+    // First pass: seed caches from document state.
+    // - Address tracking: so we can detect changes later
+    // - Coord cache: so families at same address can share coords
+    for (const auto& family : families)
+    {
+        QString address = family.address().full();
+
+        if (!address.isEmpty())
+        {
+            m_familyAddresses.insert(family.id(), address);
+
+            if (family.isMapped())
+            {
+                m_geocodeCache.insert(address,
+                    QPointF(family.latitude().value(), family.longitude().value()));
+            }
+        }
+    }
+
+    // Second pass: check each family against the now-seeded cache.
+    // Since addresses are already tracked, checkFamily will see addressChanged=false,
+    // trusting mapped families and only geocoding unmapped ones.
+    for (const auto& family : families)
+    {
+        checkFamily(family);
     }
 }

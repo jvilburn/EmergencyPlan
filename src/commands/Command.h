@@ -23,10 +23,6 @@ public:
 
     // Returns what changed in the document, used to emit targeted documentChanged signals
     virtual DocumentChange documentChange() const = 0;
-
-    // Returns ID of family whose address was changed by this command.
-    // Empty string if no address changed. Used to trigger background geocoding.
-    virtual QString familyWithChangedAddress() const { return {}; }
 };
 
 using CommandPtr = std::unique_ptr<Command>;

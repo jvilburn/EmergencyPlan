@@ -33,18 +33,11 @@ DocumentManager::DocumentManager(QObject* parent)
 
 void DocumentManager::executeCommand(CommandPtr command)
 {
-    // Check before moving - trigger geocoding if address changed
-    QString familyId = command->familyWithChangedAddress();
     DocumentChange change = command->documentChange();
 
     m_commandHistory.execute(std::move(command), m_document);
     emit documentChanged(change);
     checkForIncompleteWards();
-
-    if (!familyId.isEmpty())
-    {
-        queueFamilyForGeocoding(familyId);
-    }
 }
 
 void DocumentManager::undo()
@@ -247,15 +240,6 @@ void DocumentManager::startBatchGeocoding()
 void DocumentManager::stopGeocoding()
 {
     m_geocodingService->stop();
-}
-
-void DocumentManager::queueFamilyForGeocoding(const QString& familyId)
-{
-    auto family = m_document.findFamilyById(familyId);
-    if (family.has_value() && !family->address().isEmpty())
-    {
-        m_geocodingService->queueFamily(*family);
-    }
 }
 
 bool DocumentManager::isGeocoding() const

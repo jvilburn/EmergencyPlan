@@ -50,7 +50,6 @@ public:
     // Geocoding
     void startBatchGeocoding();
     void stopGeocoding();
-    void queueFamilyForGeocoding(const QString& familyId);
     bool isGeocoding() const;
 
 signals:

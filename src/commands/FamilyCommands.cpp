@@ -60,15 +60,6 @@ DocumentChange UpdateFamilyCommand::documentChange() const
     return DocumentChange::family().updated(m_newFamily.id());
 }
 
-QString UpdateFamilyCommand::familyWithChangedAddress() const
-{
-    if (m_oldFamily.address() != m_newFamily.address())
-    {
-        return m_newFamily.id();
-    }
-    return {};
-}
-
 // ============================================================================
 // DeleteFamilyCommand
 // ============================================================================

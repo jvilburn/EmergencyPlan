@@ -2,29 +2,33 @@
 
 #include "GeocodingService.h"
 #include "Family.h"
+#include "DocumentChange.h"
 
 #include <QObject>
 #include <QHash>
+#include <QPointF>
 
-/// Background geocoding service with queue-based processing.
+class DocumentManager;
+
+/// Background geocoding service with reactive document change handling.
 ///
 /// Features:
-/// - Queue families for geocoding at any time
-/// - Handles concurrent additions (add while running)
+/// - Listens to documentChanged signal and automatically geocodes as needed
+/// - Tracks per-family addresses to detect address changes
+/// - Maintains address→coords cache for efficiency and undo/redo support
 /// - Progress reporting via signals
 /// - Can be stopped/cancelled
 ///
-/// Usage:
-///   service->queueFamily(family);
-///
-/// The caller decides what needs geocoding - this service
-/// just processes whatever it's given.
+/// Behavior:
+/// - Address changed → re-geocode (stale coords ignored)
+/// - Address unchanged + mapped → trust existing coords (user corrections)
+/// - Address unchanged + unmapped → use cache or queue API
 class BackgroundGeocodingService : public QObject
 {
     Q_OBJECT
 
 public:
-    explicit BackgroundGeocodingService(QObject* parent = nullptr);
+    explicit BackgroundGeocodingService(DocumentManager* documentManager);
     ~BackgroundGeocodingService() override;
 
     /// Queue a family for geocoding.
@@ -50,18 +54,36 @@ signals:
     /// Emitted when all queued families have been processed.
     void finished();
 
+public slots:
+    /// Handle document changes - seeds cache or queues families as needed.
+    void onDocumentChanged(const DocumentChange& change);
+
 private slots:
     void onGeocodingComplete(const GeocodingResult& result);
 
 private:
+    DocumentManager* m_documentManager;
     GeocodingService* m_geocodingService;
 
-    /// Map from address to family ID (for matching results)
+    /// Cache: address string → coordinates.
+    /// Seeded from document on load, populated by API responses.
+    QHash<QString, QPointF> m_geocodeCache;
+
+    /// Tracks each family's last known address for change detection.
+    QHash<QString, QString> m_familyAddresses;
+
+    /// Map from address to family ID (for matching API results)
     QHash<QString, QString> m_addressToFamilyId;
 
-    /// Tracks families by ID to handle duplicates
+    /// Tracks families by ID to handle duplicates in queue
     QSet<QString> m_queuedIds;
 
     int m_completed = 0;
     int m_total = 0;
+
+    /// Process all families on document load or batch change.
+    void processAllFamilies();
+
+    /// Check a single family against cache, queue or apply coords as needed.
+    void checkFamily(const Family& family);
 };

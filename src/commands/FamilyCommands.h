@@ -26,7 +26,6 @@ public:
     void undo(Document& document) override;
     QString description() const override;
     DocumentChange documentChange() const override;
-    QString familyWithChangedAddress() const override;
 
 private:
     Family m_oldFamily;

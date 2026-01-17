@@ -76,14 +76,6 @@ Stored as separate `birthYear`, `birthMonth`, `birthDay` optionals because:
 - Allows importing/updating ministering assignments directly from the current view
 - "Reset Proposed" button to copy current assignments to proposed (for starting fresh edits)
 
-## High Priority Technical Debt
-
-### Command::familyWithChangedAddress() - BAD DESIGN
-The `familyWithChangedAddress()` virtual method on Command is a code smell. It's a special-case hook that only exists for geocoding, violating separation of concerns. When we implement `DocumentChange` (see docs/plans), this should be refactored so that:
-- Commands return a `DocumentChange` describing what changed
-- Geocoding logic observes family changes and checks if address field differs
-- No command-specific hooks for individual side effects
-
 ## Architecture References
 - [CONVERSION_PLAN.md](CONVERSION_PLAN.md) - Full conversion plan from Flutter
 - [ARCHITECTURE.md](ARCHITECTURE.md) - Application architecture
