@@ -148,6 +148,7 @@ set(COMMAND_SOURCES
     src/commands/ResourceCommands.cpp
     src/commands/SkillCommands.cpp
     src/commands/EquipmentCommands.cpp
+    src/commands/SpecialNeedCommands.cpp
     # src/commands/ImportCommands.cpp
 )
 
@@ -164,6 +165,7 @@ set(COMMAND_HEADERS
     src/commands/ResourceCommands.h
     src/commands/SkillCommands.h
     src/commands/EquipmentCommands.h
+    src/commands/SpecialNeedCommands.h
     # src/commands/ImportCommands.h
 )
 
