@@ -21,37 +21,38 @@ The current model uses generic "resources" with a `ResourceLevel` enum to distin
 
 Capabilities that individuals have. Tracked per-person.
 
-**Categories (fixed):**
+**Categories (user-configurable with defaults):**
 - **Medical** - EMT, Nurse, Doctor, CPR certified, First Aid
 - **Communication** - HAM radio license, CERT trained
 - **Repair** - Electrical, Plumbing, Carpentry, Mechanical, Welding
 
 **Model:**
 ```cpp
-// Fixed enum - not user-configurable
-enum class SkillCategory
+class SkillCategory
 {
-    Medical,
-    Communication,
-    Repair
+    QString m_id;
+    QString m_name;
+    int m_sortOrder;
 };
 
 class Skill
 {
     QString m_id;
     QString m_name;                  // User-configurable (e.g., "EMT", "HAM License")
-    SkillCategory m_category;
+    QString m_categoryId;            // References SkillCategory
     QSet<QString> m_personIds;       // Who has this skill
 };
 ```
 
-**Storage:** `Document::m_skills` as `QHash<QString, Skill>`
+**Storage:**
+- `Document::m_skillCategories` as `QHash<QString, SkillCategory>`
+- `Document::m_skills` as `QHash<QString, Skill>`
 
 #### 2. Equipment (Family-Level)
 
 Physical items that households own. Tracked per-family.
 
-**Categories (fixed):**
+**Categories (user-configurable with defaults):**
 - **Power** - Generator, solar panels, battery bank
 - **Tools** - Chainsaw, power tools, ladder
 - **Transportation** - Trailer, 4x4 vehicle, truck with towing
@@ -61,27 +62,25 @@ Physical items that households own. Tracked per-family.
 
 **Model:**
 ```cpp
-// Fixed enum - not user-configurable
-enum class EquipmentCategory
+class EquipmentCategory
 {
-    Power,
-    Tools,
-    Transportation,
-    Shelter,
-    Water,
-    Supplies
+    QString m_id;
+    QString m_name;
+    int m_sortOrder;
 };
 
 class Equipment
 {
     QString m_id;
     QString m_name;                  // User-configurable (e.g., "Generator", "Chainsaw")
-    EquipmentCategory m_category;
+    QString m_categoryId;            // References EquipmentCategory
     QSet<QString> m_familyIds;       // Who has this equipment
 };
 ```
 
-**Storage:** `Document::m_equipment` as `QHash<QString, Equipment>`
+**Storage:**
+- `Document::m_equipmentCategories` as `QHash<QString, EquipmentCategory>`
+- `Document::m_equipment` as `QHash<QString, Equipment>`
 
 #### 3. Special Needs (Person or Family Level)
 
@@ -125,11 +124,20 @@ struct SpecialNeed
 **After:**
 ```json
 {
+  "skillCategories": [
+    { "id": "...", "name": "Medical", "sortOrder": 0 },
+    { "id": "...", "name": "Communication", "sortOrder": 1 },
+    { "id": "...", "name": "Repair", "sortOrder": 2 }
+  ],
   "skills": [
-    { "id": "...", "name": "EMT", "category": "Medical", "personIds": ["p1", "p2"] }
+    { "id": "...", "name": "EMT", "categoryId": "...", "personIds": ["p1", "p2"] }
+  ],
+  "equipmentCategories": [
+    { "id": "...", "name": "Power", "sortOrder": 0 },
+    { "id": "...", "name": "Tools", "sortOrder": 1 }
   ],
   "equipment": [
-    { "id": "...", "name": "Generator", "category": "Power", "familyIds": ["f1"] }
+    { "id": "...", "name": "Generator", "categoryId": "...", "familyIds": ["f1"] }
   ],
   "specialNeeds": [
     { "familyId": "f2", "note": "Grandma wheelchair-bound, needs accessible transport" }
@@ -146,12 +154,22 @@ Existing documents with `resourceCategories`/`resourceTypes` will need migration
 
 ## Commands
 
+### Skill Category Commands
+- `AddSkillCategoryCommand(SkillCategory)`
+- `UpdateSkillCategoryCommand(oldCategory, newCategory)`
+- `DeleteSkillCategoryCommand(SkillCategory)`
+
 ### Skill Commands
 - `AddSkillCommand(Skill)`
 - `UpdateSkillCommand(oldSkill, newSkill)`
 - `DeleteSkillCommand(Skill)`
 - `AssignSkillToPersonCommand(skillId, personId)`
 - `UnassignSkillFromPersonCommand(skillId, personId)`
+
+### Equipment Category Commands
+- `AddEquipmentCategoryCommand(EquipmentCategory)`
+- `UpdateEquipmentCategoryCommand(oldCategory, newCategory)`
+- `DeleteEquipmentCategoryCommand(EquipmentCategory)`
 
 ### Equipment Commands
 - `AddEquipmentCommand(Equipment)`
@@ -175,12 +193,32 @@ Existing documents with `resourceCategories`/`resourceTypes` will need migration
 ## DocumentChange Scopes
 
 Add new scopes:
+- `ChangeScope::SkillCategory`
 - `ChangeScope::Skill`
+- `ChangeScope::EquipmentCategory`
 - `ChangeScope::Equipment`
 - `ChangeScope::SpecialNeed`
+
+## Default Categories
+
+New documents are initialized with default categories:
+
+**Skill Categories:**
+1. Medical (sortOrder: 0)
+2. Communication (sortOrder: 1)
+3. Repair (sortOrder: 2)
+
+**Equipment Categories:**
+1. Power (sortOrder: 0)
+2. Tools (sortOrder: 1)
+3. Transportation (sortOrder: 2)
+4. Shelter (sortOrder: 3)
+5. Water (sortOrder: 4)
+6. Supplies (sortOrder: 5)
+
+Users can add, edit, or delete these categories as needed.
 
 ## Not In Scope
 
 - Map marker decorations (can be added later based on skills/equipment)
-- Default skill/equipment lists (users create their own)
 - Import from external sources
