@@ -97,6 +97,7 @@ set(MODEL_SOURCES
     src/models/MinisteringDistrict.cpp
     src/models/ResourceCategory.cpp
     src/models/ResourceType.cpp
+    src/models/SkillCategory.cpp
     src/models/DocumentChange.cpp
 )
 
@@ -123,6 +124,7 @@ set(MODEL_HEADERS
     src/models/MinisteringDistrict.h
     src/models/ResourceCategory.h
     src/models/ResourceType.h
+    src/models/SkillCategory.h
     src/models/DocumentChange.h
 )
 
