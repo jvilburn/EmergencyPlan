@@ -142,7 +142,9 @@ public:
     // ========================================================================
     // Mutating operations - special needs
     // ========================================================================
+    std::optional<SpecialNeed> findSpecialNeed(std::optional<QString> personId, std::optional<QString> familyId) const;
     void setSpecialNeed(std::optional<QString> personId, std::optional<QString> familyId, const QString& note);
+    void setSpecialNeed(const SpecialNeed& need);
     void clearSpecialNeed(std::optional<QString> personId, std::optional<QString> familyId);
 
     // ========================================================================

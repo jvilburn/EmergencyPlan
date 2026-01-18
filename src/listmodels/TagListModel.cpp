@@ -1,6 +1,6 @@
 #include "TagListModel.h"
 #include "DocumentManager.h"
-#include "ResourceLevel.h"
+#include "Tag.h"
 
 TagListModel::TagListModel(QObject* parent)
     : QAbstractListModel(parent)
@@ -55,7 +55,7 @@ QVariant TagListModel::data(const QModelIndex& index, int role) const
             return tag.color();
 
         case LevelRole:
-            return resourceLevelToString(tag.level());
+            return tagLevelToString(tag.level());
 
         case EntityCountRole:
             return static_cast<int>(tag.entityIds().size());

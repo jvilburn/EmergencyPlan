@@ -320,6 +320,18 @@ void Document::removeFamilyFromEquipment(const QString& equipmentId, const QStri
 // Special needs operations
 // ============================================================================
 
+std::optional<SpecialNeed> Document::findSpecialNeed(std::optional<QString> personId, std::optional<QString> familyId) const
+{
+    for (const SpecialNeed& need : m_specialNeeds)
+    {
+        if (need.matchesEntity(personId, familyId))
+        {
+            return need;
+        }
+    }
+    return std::nullopt;
+}
+
 void Document::setSpecialNeed(std::optional<QString> personId, std::optional<QString> familyId, const QString& note)
 {
     // Remove any existing special need for this entity
@@ -330,6 +342,15 @@ void Document::setSpecialNeed(std::optional<QString> personId, std::optional<QSt
     need.personId = personId;
     need.familyId = familyId;
     need.note = note;
+    m_specialNeeds.append(need);
+}
+
+void Document::setSpecialNeed(const SpecialNeed& need)
+{
+    // Remove any existing special need for this entity
+    clearSpecialNeed(need.personId, need.familyId);
+
+    // Add the new special need
     m_specialNeeds.append(need);
 }
 

@@ -4,8 +4,6 @@
 #include "Person.h"
 #include "Tag.h"
 #include "Team.h"
-#include "ResourceCategory.h"
-#include "ResourceType.h"
 
 Filter::Filter(QObject* parent)
     : QObject(parent)
@@ -252,43 +250,19 @@ bool Filter::hasPersonLevelTag(const Document& document, const QString& personId
     return false;
 }
 
-bool Filter::hasFamilyLevelResource(const Document& document, const QString& familyId) const
+bool Filter::hasFamilyLevelResource(const Document& /*document*/, const QString& /*familyId*/) const
 {
-    for (const QString& resourceTypeId : m_resourceTypeIds)
-    {
-        std::optional<ResourceType> rtOpt = document.findResourceTypeById(resourceTypeId);
-        if (!rtOpt)
-        {
-            continue;
-        }
-
-        std::optional<ResourceCategory> catOpt = document.findCategoryById(rtOpt->categoryId());
-        if (catOpt && catOpt->level() == ResourceLevel::Family
-            && rtOpt->hasFamily(familyId))
-        {
-            return true;
-        }
-    }
+    // TODO: Implement filtering by Equipment (the new family-level resource type)
+    // For now, old resourceTypeIds don't match anything
+    Q_UNUSED(m_resourceTypeIds);
     return false;
 }
 
-bool Filter::hasPersonLevelResource(const Document& document, const QString& personId) const
+bool Filter::hasPersonLevelResource(const Document& /*document*/, const QString& /*personId*/) const
 {
-    for (const QString& resourceTypeId : m_resourceTypeIds)
-    {
-        std::optional<ResourceType> rtOpt = document.findResourceTypeById(resourceTypeId);
-        if (!rtOpt)
-        {
-            continue;
-        }
-
-        std::optional<ResourceCategory> catOpt = document.findCategoryById(rtOpt->categoryId());
-        if (catOpt && catOpt->level() == ResourceLevel::Person
-            && rtOpt->hasPerson(personId))
-        {
-            return true;
-        }
-    }
+    // TODO: Implement filtering by Skills/SpecialNeeds (the new person-level resource types)
+    // For now, old resourceTypeIds don't match anything
+    Q_UNUSED(m_resourceTypeIds);
     return false;
 }
 
