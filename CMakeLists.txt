@@ -146,6 +146,8 @@ set(COMMAND_SOURCES
     src/commands/MinisteringCommands.cpp
     src/commands/TagCommands.cpp
     src/commands/ResourceCommands.cpp
+    src/commands/SkillCommands.cpp
+    src/commands/EquipmentCommands.cpp
     # src/commands/ImportCommands.cpp
 )
 
@@ -160,6 +162,8 @@ set(COMMAND_HEADERS
     src/commands/MinisteringCommands.h
     src/commands/TagCommands.h
     src/commands/ResourceCommands.h
+    src/commands/SkillCommands.h
+    src/commands/EquipmentCommands.h
     # src/commands/ImportCommands.h
 )
 
