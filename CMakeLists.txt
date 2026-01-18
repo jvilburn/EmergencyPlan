@@ -98,6 +98,10 @@ set(MODEL_SOURCES
     src/models/ResourceCategory.cpp
     src/models/ResourceType.cpp
     src/models/SkillCategory.cpp
+    src/models/Skill.cpp
+    src/models/SpecialNeed.cpp
+    src/models/EquipmentCategory.cpp
+    src/models/Equipment.cpp
     src/models/DocumentChange.cpp
 )
 
@@ -125,6 +129,10 @@ set(MODEL_HEADERS
     src/models/ResourceCategory.h
     src/models/ResourceType.h
     src/models/SkillCategory.h
+    src/models/Skill.h
+    src/models/SpecialNeed.h
+    src/models/EquipmentCategory.h
+    src/models/Equipment.h
     src/models/DocumentChange.h
 )
 
