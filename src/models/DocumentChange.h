@@ -8,8 +8,11 @@ enum class ChangeScope
     Family,
     Team,
     Tag,
-    ResourceCategory,
-    ResourceType,
+    SkillCategory,
+    Skill,
+    EquipmentCategory,
+    Equipment,
+    SpecialNeed,
     EqDistrict,
     EqGroup,
     RsDistrict,
@@ -50,8 +53,11 @@ struct DocumentChange
     static ScopeBuilder family();
     static ScopeBuilder team();
     static ScopeBuilder tag();
-    static ScopeBuilder resourceCategory();
-    static ScopeBuilder resourceType();
+    static ScopeBuilder skillCategory();
+    static ScopeBuilder skill();
+    static ScopeBuilder equipmentCategory();
+    static ScopeBuilder equipment();
+    static ScopeBuilder specialNeed();
     static ScopeBuilder eqDistrict();
     static ScopeBuilder eqGroup();
     static ScopeBuilder rsDistrict();
