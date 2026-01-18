@@ -95,8 +95,11 @@ set(MODEL_SOURCES
     src/models/Document.cpp
     src/models/MinisteringGroup.cpp
     src/models/MinisteringDistrict.cpp
-    src/models/ResourceCategory.cpp
-    src/models/ResourceType.cpp
+    src/models/SkillCategory.cpp
+    src/models/Skill.cpp
+    src/models/SpecialNeed.cpp
+    src/models/EquipmentCategory.cpp
+    src/models/Equipment.cpp
     src/models/DocumentChange.cpp
 )
 
@@ -109,8 +112,6 @@ set(MODEL_HEADERS
     src/models/Birthday.h
     src/models/Calling.h
     src/models/ViewMode.h
-    src/models/MarkerDecorationType.h
-    src/models/ResourceLevel.h
     src/models/Person.h
     src/models/Family.h
     src/models/Team.h
@@ -121,8 +122,11 @@ set(MODEL_HEADERS
     src/models/Document.h
     src/models/MinisteringGroup.h
     src/models/MinisteringDistrict.h
-    src/models/ResourceCategory.h
-    src/models/ResourceType.h
+    src/models/SkillCategory.h
+    src/models/Skill.h
+    src/models/SpecialNeed.h
+    src/models/EquipmentCategory.h
+    src/models/Equipment.h
     src/models/DocumentChange.h
 )
 
@@ -135,7 +139,9 @@ set(COMMAND_SOURCES
     src/commands/TeamCommands.cpp
     src/commands/MinisteringCommands.cpp
     src/commands/TagCommands.cpp
-    src/commands/ResourceCommands.cpp
+    src/commands/SkillCommands.cpp
+    src/commands/EquipmentCommands.cpp
+    src/commands/SpecialNeedCommands.cpp
     # src/commands/ImportCommands.cpp
 )
 
@@ -149,7 +155,9 @@ set(COMMAND_HEADERS
     src/commands/TeamCommands.h
     src/commands/MinisteringCommands.h
     src/commands/TagCommands.h
-    src/commands/ResourceCommands.h
+    src/commands/SkillCommands.h
+    src/commands/EquipmentCommands.h
+    src/commands/SpecialNeedCommands.h
     # src/commands/ImportCommands.h
 )
 

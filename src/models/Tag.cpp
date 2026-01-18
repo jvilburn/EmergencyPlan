@@ -1,6 +1,6 @@
 #include "Tag.h"
 
-Tag Tag::create(const QString& name, ResourceLevel level, const QString& color)
+Tag Tag::create(const QString& name, TagLevel level, const QString& color)
 {
     Tag tag;
     tag.m_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
@@ -15,7 +15,7 @@ QJsonObject Tag::toJson() const
     QJsonObject json;
     json["id"] = m_id;
     json["name"] = m_name;
-    json["level"] = resourceLevelToString(m_level);
+    json["level"] = tagLevelToString(m_level);
 
     if (!m_color.isEmpty())
     {
@@ -41,7 +41,7 @@ Tag Tag::fromJson(const QJsonObject& json)
     tag.m_id = json["id"].toString();
     tag.m_name = json["name"].toString();
     tag.m_color = json["color"].toString();
-    tag.m_level = resourceLevelFromJson(json["level"]);
+    tag.m_level = tagLevelFromJson(json["level"]);
 
     if (json.contains("entityIds"))
     {

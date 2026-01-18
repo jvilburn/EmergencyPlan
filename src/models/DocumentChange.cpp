@@ -44,14 +44,29 @@ ScopeBuilder DocumentChange::tag()
     return ScopeBuilder{ChangeScope::Tag};
 }
 
-ScopeBuilder DocumentChange::resourceCategory()
+ScopeBuilder DocumentChange::skillCategory()
 {
-    return ScopeBuilder{ChangeScope::ResourceCategory};
+    return ScopeBuilder{ChangeScope::SkillCategory};
 }
 
-ScopeBuilder DocumentChange::resourceType()
+ScopeBuilder DocumentChange::skill()
 {
-    return ScopeBuilder{ChangeScope::ResourceType};
+    return ScopeBuilder{ChangeScope::Skill};
+}
+
+ScopeBuilder DocumentChange::equipmentCategory()
+{
+    return ScopeBuilder{ChangeScope::EquipmentCategory};
+}
+
+ScopeBuilder DocumentChange::equipment()
+{
+    return ScopeBuilder{ChangeScope::Equipment};
+}
+
+ScopeBuilder DocumentChange::specialNeed()
+{
+    return ScopeBuilder{ChangeScope::SpecialNeed};
 }
 
 ScopeBuilder DocumentChange::eqDistrict()

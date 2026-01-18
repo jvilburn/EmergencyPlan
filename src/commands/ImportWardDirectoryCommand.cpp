@@ -1,5 +1,7 @@
 #include "ImportWardDirectoryCommand.h"
 #include "Document.h"
+#include "Skill.h"
+#include "Equipment.h"
 
 ImportWardDirectoryCommand::ImportWardDirectoryCommand(
     const QHash<QString, Family>& mergedFamilies,
@@ -154,20 +156,34 @@ void ImportWardDirectoryCommand::cleanupRemovedFamily(
         }
     }
 
-    // Remove from resource types
-    for (const auto& [rtId, rt] : document.resourceTypes().asKeyValueRange())
+    // Remove from skills (person-level)
+    for (const QString& skillId : document.skills().keys())
     {
-        if (rt.familyIds().contains(familyId))
-        {
-            document.removeFamilyFromResourceType(rtId, familyId);
-        }
+        const Skill& skill = document.skills()[skillId];
         for (const Person& member : family.members())
         {
-            if (rt.personIds().contains(member.id()))
+            if (skill.personIds().contains(member.id()))
             {
-                document.removePersonFromResourceType(rtId, member.id());
+                document.removePersonFromSkill(skillId, member.id());
             }
         }
+    }
+
+    // Remove from equipment (family-level)
+    for (const QString& equipmentId : document.equipment().keys())
+    {
+        const Equipment& equip = document.equipment()[equipmentId];
+        if (equip.familyIds().contains(familyId))
+        {
+            document.removeFamilyFromEquipment(equipmentId, familyId);
+        }
+    }
+
+    // Remove special needs for family and members
+    document.clearSpecialNeed(std::nullopt, familyId);
+    for (const Person& member : family.members())
+    {
+        document.clearSpecialNeed(member.id(), std::nullopt);
     }
 
     // Remove from EQ ministering groups

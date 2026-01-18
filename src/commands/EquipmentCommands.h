@@ -1,17 +1,17 @@
 #pragma once
 
 #include "Command.h"
-#include "ResourceCategory.h"
-#include "ResourceType.h"
+#include "EquipmentCategory.h"
+#include "Equipment.h"
 
 // ============================================================================
 // Category Commands
 // ============================================================================
 
-class AddCategoryCommand : public Command
+class AddEquipmentCategoryCommand : public Command
 {
 public:
-    explicit AddCategoryCommand(const ResourceCategory& category);
+    explicit AddEquipmentCategoryCommand(const EquipmentCategory& category);
 
     void execute(Document& document) override;
     void undo(Document& document) override;
@@ -19,13 +19,14 @@ public:
     DocumentChange documentChange() const override;
 
 private:
-    ResourceCategory m_category;
+    EquipmentCategory m_category;
 };
 
-class UpdateCategoryCommand : public Command
+class UpdateEquipmentCategoryCommand : public Command
 {
 public:
-    UpdateCategoryCommand(const ResourceCategory& oldCategory, const ResourceCategory& newCategory);
+    UpdateEquipmentCategoryCommand(const EquipmentCategory& oldCategory,
+                                   const EquipmentCategory& newCategory);
 
     void execute(Document& document) override;
     void undo(Document& document) override;
@@ -33,14 +34,14 @@ public:
     DocumentChange documentChange() const override;
 
 private:
-    ResourceCategory m_oldCategory;
-    ResourceCategory m_newCategory;
+    EquipmentCategory m_oldCategory;
+    EquipmentCategory m_newCategory;
 };
 
-class DeleteCategoryCommand : public Command
+class DeleteEquipmentCategoryCommand : public Command
 {
 public:
-    explicit DeleteCategoryCommand(const ResourceCategory& category);
+    explicit DeleteEquipmentCategoryCommand(const EquipmentCategory& category);
 
     void execute(Document& document) override;
     void undo(Document& document) override;
@@ -48,17 +49,17 @@ public:
     DocumentChange documentChange() const override;
 
 private:
-    ResourceCategory m_category;
+    EquipmentCategory m_category;
 };
 
 // ============================================================================
-// ResourceType Commands
+// Equipment Commands
 // ============================================================================
 
-class AddResourceTypeCommand : public Command
+class AddEquipmentCommand : public Command
 {
 public:
-    explicit AddResourceTypeCommand(const ResourceType& resourceType);
+    explicit AddEquipmentCommand(const Equipment& equipment);
 
     void execute(Document& document) override;
     void undo(Document& document) override;
@@ -66,13 +67,13 @@ public:
     DocumentChange documentChange() const override;
 
 private:
-    ResourceType m_resourceType;
+    Equipment m_equipment;
 };
 
-class UpdateResourceTypeCommand : public Command
+class UpdateEquipmentCommand : public Command
 {
 public:
-    UpdateResourceTypeCommand(const ResourceType& oldType, const ResourceType& newType);
+    UpdateEquipmentCommand(const Equipment& oldEquipment, const Equipment& newEquipment);
 
     void execute(Document& document) override;
     void undo(Document& document) override;
@@ -80,14 +81,14 @@ public:
     DocumentChange documentChange() const override;
 
 private:
-    ResourceType m_oldType;
-    ResourceType m_newType;
+    Equipment m_oldEquipment;
+    Equipment m_newEquipment;
 };
 
-class DeleteResourceTypeCommand : public Command
+class DeleteEquipmentCommand : public Command
 {
 public:
-    explicit DeleteResourceTypeCommand(const ResourceType& resourceType);
+    explicit DeleteEquipmentCommand(const Equipment& equipment);
 
     void execute(Document& document) override;
     void undo(Document& document) override;
@@ -95,17 +96,17 @@ public:
     DocumentChange documentChange() const override;
 
 private:
-    ResourceType m_resourceType;
+    Equipment m_equipment;
 };
 
 // ============================================================================
 // Assignment Commands
 // ============================================================================
 
-class AssignResourceToPersonCommand : public Command
+class AssignEquipmentToFamilyCommand : public Command
 {
 public:
-    AssignResourceToPersonCommand(const QString& resourceTypeId, const QString& personId);
+    AssignEquipmentToFamilyCommand(const QString& equipmentId, const QString& familyId);
 
     void execute(Document& document) override;
     void undo(Document& document) override;
@@ -113,29 +114,14 @@ public:
     DocumentChange documentChange() const override;
 
 private:
-    QString m_resourceTypeId;
-    QString m_personId;
-};
-
-class AssignResourceToFamilyCommand : public Command
-{
-public:
-    AssignResourceToFamilyCommand(const QString& resourceTypeId, const QString& familyId);
-
-    void execute(Document& document) override;
-    void undo(Document& document) override;
-    QString description() const override;
-    DocumentChange documentChange() const override;
-
-private:
-    QString m_resourceTypeId;
+    QString m_equipmentId;
     QString m_familyId;
 };
 
-class UnassignResourceFromPersonCommand : public Command
+class UnassignEquipmentFromFamilyCommand : public Command
 {
 public:
-    UnassignResourceFromPersonCommand(const QString& resourceTypeId, const QString& personId);
+    UnassignEquipmentFromFamilyCommand(const QString& equipmentId, const QString& familyId);
 
     void execute(Document& document) override;
     void undo(Document& document) override;
@@ -143,21 +129,6 @@ public:
     DocumentChange documentChange() const override;
 
 private:
-    QString m_resourceTypeId;
-    QString m_personId;
-};
-
-class UnassignResourceFromFamilyCommand : public Command
-{
-public:
-    UnassignResourceFromFamilyCommand(const QString& resourceTypeId, const QString& familyId);
-
-    void execute(Document& document) override;
-    void undo(Document& document) override;
-    QString description() const override;
-    DocumentChange documentChange() const override;
-
-private:
-    QString m_resourceTypeId;
+    QString m_equipmentId;
     QString m_familyId;
 };

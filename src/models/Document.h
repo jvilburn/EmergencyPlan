@@ -11,8 +11,11 @@
 #include "Family.h"
 #include "Team.h"
 #include "Tag.h"
-#include "ResourceCategory.h"
-#include "ResourceType.h"
+#include "SkillCategory.h"
+#include "Skill.h"
+#include "EquipmentCategory.h"
+#include "Equipment.h"
+#include "SpecialNeed.h"
 #include "MinisteringDistrict.h"
 #include "MinisteringGroup.h"
 
@@ -23,6 +26,9 @@ public:
 
     // Factory method for creating empty documents
     static Document empty();
+
+    // Initialize default categories for a new document
+    void initializeDefaultCategories();
 
     // ========================================================================
     // Metadata (wards/stakes)
@@ -43,10 +49,13 @@ public:
     const QHash<QString, Tag>& tags() const { return m_tags; }
 
     // ========================================================================
-    // Resource collection getters
+    // Emergency inventory getters
     // ========================================================================
-    const QHash<QString, ResourceCategory>& categories() const { return m_categories; }
-    const QHash<QString, ResourceType>& resourceTypes() const { return m_resourceTypes; }
+    const QHash<QString, SkillCategory>& skillCategories() const { return m_skillCategories; }
+    const QHash<QString, Skill>& skills() const { return m_skills; }
+    const QHash<QString, EquipmentCategory>& equipmentCategories() const { return m_equipmentCategories; }
+    const QHash<QString, Equipment>& equipment() const { return m_equipment; }
+    const QList<SpecialNeed>& specialNeeds() const { return m_specialNeeds; }
 
     // ========================================================================
     // Ministering getters
@@ -99,20 +108,44 @@ public:
     void removeFamilyFromTag(const QString& tagId, const QString& familyId);
 
     // ========================================================================
-    // Mutating operations - resource collections
+    // Mutating operations - skill categories
     // ========================================================================
-    void addCategory(const ResourceCategory& category);
-    void updateCategory(const ResourceCategory& category);
-    void removeCategory(const QString& id);
+    void addSkillCategory(const SkillCategory& category);
+    void updateSkillCategory(const SkillCategory& category);
+    void removeSkillCategory(const QString& id);
 
-    void addResourceType(const ResourceType& resourceType);
-    void updateResourceType(const ResourceType& resourceType);
-    void removeResourceType(const QString& id);
+    // ========================================================================
+    // Mutating operations - skills
+    // ========================================================================
+    void addSkill(const Skill& skill);
+    void updateSkill(const Skill& skill);
+    void removeSkill(const QString& id);
+    void addPersonToSkill(const QString& skillId, const QString& personId);
+    void removePersonFromSkill(const QString& skillId, const QString& personId);
 
-    void addPersonToResourceType(const QString& resourceTypeId, const QString& personId);
-    void removePersonFromResourceType(const QString& resourceTypeId, const QString& personId);
-    void addFamilyToResourceType(const QString& resourceTypeId, const QString& familyId);
-    void removeFamilyFromResourceType(const QString& resourceTypeId, const QString& familyId);
+    // ========================================================================
+    // Mutating operations - equipment categories
+    // ========================================================================
+    void addEquipmentCategory(const EquipmentCategory& category);
+    void updateEquipmentCategory(const EquipmentCategory& category);
+    void removeEquipmentCategory(const QString& id);
+
+    // ========================================================================
+    // Mutating operations - equipment
+    // ========================================================================
+    void addEquipment(const Equipment& item);
+    void updateEquipment(const Equipment& item);
+    void removeEquipment(const QString& id);
+    void addFamilyToEquipment(const QString& equipmentId, const QString& familyId);
+    void removeFamilyFromEquipment(const QString& equipmentId, const QString& familyId);
+
+    // ========================================================================
+    // Mutating operations - special needs
+    // ========================================================================
+    std::optional<SpecialNeed> findSpecialNeed(std::optional<QString> personId, std::optional<QString> familyId) const;
+    void setSpecialNeed(std::optional<QString> personId, std::optional<QString> familyId, const QString& note);
+    void setSpecialNeed(const SpecialNeed& need);
+    void clearSpecialNeed(std::optional<QString> personId, std::optional<QString> familyId);
 
     // ========================================================================
     // Mutating operations - ministering
@@ -155,8 +188,8 @@ public:
     QString familyIdForPerson(const QString& personId) const;
     std::optional<Team> findTeamById(const QString& id) const;
     std::optional<Tag> findTagById(const QString& id) const;
-    std::optional<ResourceCategory> findCategoryById(const QString& id) const;
-    std::optional<ResourceType> findResourceTypeById(const QString& id) const;
+    std::optional<Skill> findSkillById(const QString& id) const;
+    std::optional<Equipment> findEquipmentById(const QString& id) const;
 
     /// Returns the maximum known age across all persons, or nullopt if no ages are known.
     /// Used by UI to determine available age filter options.
@@ -187,9 +220,12 @@ private:
     // Cached max known age (computed in rebuildPersonToFamilyMap)
     std::optional<int> m_maxKnownAge;
 
-    // Resource collections
-    QHash<QString, ResourceCategory> m_categories;
-    QHash<QString, ResourceType> m_resourceTypes;
+    // Emergency inventory
+    QHash<QString, SkillCategory> m_skillCategories;
+    QHash<QString, Skill> m_skills;
+    QHash<QString, EquipmentCategory> m_equipmentCategories;
+    QHash<QString, Equipment> m_equipment;
+    QList<SpecialNeed> m_specialNeeds;
 
     // Ministering
     QHash<QString, MinisteringDistrict> m_eqDistricts;
