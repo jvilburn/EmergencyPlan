@@ -5,6 +5,38 @@ Document Document::empty()
     return Document();
 }
 
+void Document::initializeDefaultCategories()
+{
+    // Default skill categories
+    auto medical = SkillCategory::create(QObject::tr("Medical"), 0);
+    m_skillCategories.insert(medical.id(), medical);
+
+    auto communication = SkillCategory::create(QObject::tr("Communication"), 1);
+    m_skillCategories.insert(communication.id(), communication);
+
+    auto repair = SkillCategory::create(QObject::tr("Repair"), 2);
+    m_skillCategories.insert(repair.id(), repair);
+
+    // Default equipment categories
+    auto power = EquipmentCategory::create(QObject::tr("Power"), 0);
+    m_equipmentCategories.insert(power.id(), power);
+
+    auto tools = EquipmentCategory::create(QObject::tr("Tools"), 1);
+    m_equipmentCategories.insert(tools.id(), tools);
+
+    auto transportation = EquipmentCategory::create(QObject::tr("Transportation"), 2);
+    m_equipmentCategories.insert(transportation.id(), transportation);
+
+    auto shelter = EquipmentCategory::create(QObject::tr("Shelter"), 3);
+    m_equipmentCategories.insert(shelter.id(), shelter);
+
+    auto water = EquipmentCategory::create(QObject::tr("Water"), 4);
+    m_equipmentCategories.insert(water.id(), water);
+
+    auto supplies = EquipmentCategory::create(QObject::tr("Supplies"), 5);
+    m_equipmentCategories.insert(supplies.id(), supplies);
+}
+
 // ============================================================================
 // Family queries that need access to m_families
 // ============================================================================

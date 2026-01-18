@@ -27,6 +27,9 @@ public:
     // Factory method for creating empty documents
     static Document empty();
 
+    // Initialize default categories for a new document
+    void initializeDefaultCategories();
+
     // ========================================================================
     // Metadata (wards/stakes)
     // ========================================================================
