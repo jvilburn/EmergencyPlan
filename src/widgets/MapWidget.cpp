@@ -841,10 +841,13 @@ void MapWidget::ensureVisible(const QSet<QString>& familyIds)
 
     // Calculate zoom needed to fit the highlighted bounds (never zoom in past current)
     LatLngBounds targetBounds{minLat, maxLat, minLng, maxLng};
-    QMarginsF contentPadding = MarkerRenderer::boundingBox(QVariantMap(), MarkerRenderer::State());
+    QMarginsF markerPadding = MarkerRenderer::boundingBox(QVariantMap(), MarkerRenderer::State());
+    QMarginsF safeArea = calculateSafeAreaPadding();
 
-    double availableWidth = width() - contentPadding.left() - contentPadding.right();
-    double availableHeight = height() - contentPadding.top() - contentPadding.bottom();
+    double availableWidth = width() - safeArea.left() - safeArea.right()
+                            - markerPadding.left() - markerPadding.right();
+    double availableHeight = height() - safeArea.top() - safeArea.bottom()
+                             - markerPadding.top() - markerPadding.bottom();
 
     double latSpan = maxLat - minLat;
     double lngSpan = maxLng - minLng;
@@ -871,6 +874,13 @@ void MapWidget::ensureVisible(const QSet<QString>& familyIds)
     // Clear bounds tracking since we're manually positioning
     m_bounds = std::nullopt;
 
+    // Combine safe area and marker padding for animateTo
+    QMarginsF contentPadding(
+        safeArea.left() + markerPadding.left(),
+        safeArea.top() + markerPadding.top(),
+        safeArea.right() + markerPadding.right(),
+        safeArea.bottom() + markerPadding.bottom()
+    );
     animateTo(targetLat, targetLng, targetZoom, targetBounds, contentPadding);
 }
 
