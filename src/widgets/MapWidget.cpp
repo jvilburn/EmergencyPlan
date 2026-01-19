@@ -474,79 +474,7 @@ void MapWidget::drawMarkers(QPainter& painter)
         return;
     }
 
-    // Legacy path: use m_highlightedIds and m_visibleIds directly
-    bool hasHighlighting = !m_highlightedIds.isEmpty();
-    bool hasFiltering = !m_visibleIds.isEmpty();
-
-    // Draw non-highlighted markers first (dimmed if highlighting or filtering active)
-    for (const QVariant& var : families)
-    {
-        QVariantMap hh = var.toMap();
-        QString id = hh["id"].toString();
-
-        if (m_highlightedIds.contains(id))
-        {
-            continue;  // Draw highlighted markers later, on top
-        }
-
-        double lat = hh["latitude"].toDouble();
-        double lng = hh["longitude"].toDouble();
-        QPointF pos = SlippyMapMath::latLngToPixel(lat, lng, clampedZoom,
-                                                    m_centerLat, m_centerLng,
-                                                    width(), height());
-
-        if (!MarkerRenderer::isVisible(pos, width(), height()))
-        {
-            continue;
-        }
-
-        // Determine opacity based on highlighting and filtering
-        bool isFilteredOut = hasFiltering && !m_visibleIds.contains(id);
-        double opacity = 1.0;
-        if (isFilteredOut)
-        {
-            opacity = 0.25;
-        }
-        else if (hasHighlighting)
-        {
-            opacity = 0.4;
-        }
-
-        MarkerRenderer::State state;
-        state.isHighlighted = false;
-        state.opacity = opacity;
-
-        MarkerRenderer::draw(painter, pos, hh, state);
-    }
-
-    // Draw highlighted markers on top
-    for (const QVariant& var : families)
-    {
-        QVariantMap hh = var.toMap();
-        QString id = hh["id"].toString();
-
-        if (!m_highlightedIds.contains(id))
-        {
-            continue;
-        }
-
-        double lat = hh["latitude"].toDouble();
-        double lng = hh["longitude"].toDouble();
-        QPointF pos = SlippyMapMath::latLngToPixel(lat, lng, clampedZoom,
-                                                    m_centerLat, m_centerLng,
-                                                    width(), height());
-
-        if (!MarkerRenderer::isVisible(pos, width(), height()))
-        {
-            continue;
-        }
-
-        MarkerRenderer::State state;
-        state.isHighlighted = true;
-        state.opacity = 1.0;
-
-        MarkerRenderer::draw(painter, pos, hh, state);
-    }
+    Q_ASSERT_X(false, "MapWidget::drawMarkers", "No highlight provider set");
 }
 
 void MapWidget::drawControls(QPainter& /*painter*/)
@@ -929,17 +857,27 @@ void MapWidget::fitAllFamilies()
     double lngRange = m_bounds->maxLng - m_bounds->minLng;
     double targetZoom = MIN_ZOOM;
 
-    if (width() > 0 && height() > 0)
+    // Get marker bounds and safe area for content padding
+    MarkerRenderer::State markerState;
+    QMarginsF markerPadding = MarkerRenderer::boundingBox(QVariantMap(), markerState);
+    QMarginsF safeArea = calculateSafeAreaPadding();
+
+    double availableWidth = width() - safeArea.left() - safeArea.right()
+                            - markerPadding.left() - markerPadding.right();
+    double availableHeight = height() - safeArea.top() - safeArea.bottom()
+                             - markerPadding.top() - markerPadding.bottom();
+
+    if (availableWidth > 0 && availableHeight > 0)
     {
         for (int z = MAX_ZOOM; z >= MIN_ZOOM; --z)
         {
             double degreesPerPixelLng = SlippyMapMath::lngDegreesPerPixel(z);
             double degreesPerPixelLat = SlippyMapMath::latDegreesPerPixel(z, targetLat);
 
-            double widgetLngRange = width() * degreesPerPixelLng;
-            double widgetLatRange = height() * degreesPerPixelLat;
+            double visibleLngRange = availableWidth * degreesPerPixelLng;
+            double visibleLatRange = availableHeight * degreesPerPixelLat;
 
-            if (widgetLngRange >= lngRange && widgetLatRange >= latRange)
+            if (visibleLngRange >= lngRange && visibleLatRange >= latRange)
             {
                 targetZoom = static_cast<double>(z);
                 break;
@@ -947,38 +885,23 @@ void MapWidget::fitAllFamilies()
         }
     }
 
-    // Get marker bounds for content padding so markers are fully visible
-    MarkerRenderer::State markerState;
-    QMarginsF contentPadding = MarkerRenderer::boundingBox(QVariantMap(), markerState);
+    // Combine safe area and marker padding for animateTo
+    QMarginsF contentPadding(
+        safeArea.left() + markerPadding.left(),
+        safeArea.top() + markerPadding.top(),
+        safeArea.right() + markerPadding.right(),
+        safeArea.bottom() + markerPadding.bottom()
+    );
 
     // Animate to target, passing family bounds so mid-zoom fits all markers
     animateTo(targetLat, targetLng, targetZoom, m_bounds, contentPadding);
 }
 
-void MapWidget::setHighlightedFamilies(const QVariantMap& ids)
-{
-    m_highlightedIds = ids;
-    m_viewModel->setHighlighting(ids);
-    update();
-}
-
-void MapWidget::clearHighlighting()
-{
-    m_highlightedIds.clear();
-    m_viewModel->clearHighlighting();
-    update();
-}
 
 void MapWidget::setCenter(double lat, double lng)
 {
     m_centerLat = lat;
     m_centerLng = lng;
-    update();
-}
-
-void MapWidget::setVisibleFamilyIds(const QStringList& ids)
-{
-    m_visibleIds = QSet<QString>(ids.begin(), ids.end());
     update();
 }
 
