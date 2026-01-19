@@ -1066,11 +1066,14 @@ void MapWidget::animateTo(double lat, double lng, double zoom,
     double latSpan = combinedMaxLat - combinedMinLat;
     double lngSpan = combinedMaxLng - combinedMinLng;
 
-    // Available screen space after content padding (for target marker visibility)
-    // Add extra buffer (marker icon width) so targets aren't right at the edge
-    constexpr double MARKER_BUFFER = 20.0;
-    double availableWidth = width() - contentPadding.left() - contentPadding.right() - 2 * MARKER_BUFFER;
-    double availableHeight = height() - contentPadding.top() - contentPadding.bottom() - 2 * MARKER_BUFFER;
+    // Calculate safe area that avoids UI overlays (buttons, panels)
+    QMarginsF safeArea = calculateSafeAreaPadding();
+
+    // Available screen space = widget size minus UI overlays minus marker padding
+    double availableWidth = width() - safeArea.left() - safeArea.right()
+                            - contentPadding.left() - contentPadding.right();
+    double availableHeight = height() - safeArea.top() - safeArea.bottom()
+                             - contentPadding.top() - contentPadding.bottom();
 
     // Find exact fractional zoom level that fits this combined span
     // For longitude: at zoom z, degrees per pixel = 360 / (2^z * 256)
