@@ -37,9 +37,6 @@ public:
     /// Access the map viewmodel
     MapViewModel* viewModel() const { return m_viewModel; }
 
-    /// Center the map on a specific family
-    void centerOnFamily(const QString& familyId);
-
     /// Fit map to show all families
     void fitAllFamilies();
 
@@ -60,9 +57,16 @@ public:
     /// When set, the provider is queried instead of using m_highlightedIds/m_visibleIds
     void setHighlightProvider(MapHighlightProvider* provider);
 
+public slots:
+    /// Trigger repaint of both map and unmapped panel when highlights change
+    void updateHighlights();
+
 signals:
     /// Emitted when a family marker is clicked
     void familyClicked(const QString& familyId);
+
+    /// Emitted after highlight processing completes
+    void highlightChanged();
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -90,7 +94,6 @@ private:
                    QMarginsF contentPadding = QMarginsF());
     void stopAnimation();
     double easeOutCubic(double t);
-    double easeInOutCubic(double t);
     LatLngBounds viewportBounds(double centerLat, double centerLng, double zoom) const;
 
     // Rendering
@@ -104,6 +107,10 @@ private:
 
     // Bounds fitting
     void updateZoomForBounds();
+    void ensureVisible(const QSet<QString>& familyIds);
+
+    // Calculate padding for UI overlays (buttons, panels, attribution)
+    QMarginsF calculateSafeAreaPadding() const;
 
     // Core state
     DocumentManager* m_docManager;
@@ -121,14 +128,11 @@ private:
     double m_animStartLat = 0.0;
     double m_animStartLng = 0.0;
     double m_animStartZoom = 0.0;
-    double m_animMidLat = 0.0;      // Center at mid-zoom (phase transition point)
-    double m_animMidLng = 0.0;
-    double m_animMidZoom = 0.0;     // Zoom level showing both start and target at opposite edges
+    double m_animMidZoom = 0.0;     // Zoom level showing both start and target
     double m_animTargetLat = 0.0;
     double m_animTargetLng = 0.0;
     double m_animTargetZoom = 0.0;
     double m_animProgress = 0.0;    // 0.0 to 1.0
-    bool m_animTwoPhase = false;    // True if zooming out then in
     LatLngBounds m_animStartBounds; // Viewport bounds at start
     LatLngBounds m_animTargetBounds; // Viewport bounds at target
     static constexpr int ANIM_DURATION_MS = 400;
@@ -140,8 +144,7 @@ private:
     QPoint m_dragStartPos;
     bool m_wasDragging = false;  // To distinguish click from drag
 
-    // Selection/highlighting
-    QString m_selectedFamilyId;
+    // Highlighting (legacy path - use m_highlightProvider when available)
     QVariantMap m_highlightedIds;  // familyId -> color string
     QSet<QString> m_visibleIds;    // Empty = all visible, otherwise only these are emphasized
     MapHighlightProvider* m_highlightProvider = nullptr;  // When set, overrides m_highlightedIds/m_visibleIds
