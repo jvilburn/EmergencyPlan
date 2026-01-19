@@ -13,6 +13,7 @@ class FamilyEditPanel;
 class MapWidget;
 class WardListView;
 class MinisteringView;
+class EmergencyView;
 class GeoLocation;
 
 class MainWindow : public QMainWindow
@@ -78,6 +79,7 @@ private:
     QTabWidget* m_sidebarTabs;
     WardListView* m_wardListView;
     MinisteringView* m_ministeringView;
+    EmergencyView* m_emergencyView;
     FamilyEditPanel* m_editPanel;
     MapWidget* m_mapWidget;
 

@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 #include "WardListView.h"
 #include "MinisteringView.h"
+#include "EmergencyView.h"
 #include "FamilyEditPanel.h"
 #include "MapWidget.h"
 #include "MapHighlightProvider.h"
@@ -66,6 +67,10 @@ void MainWindow::setupUi()
     // Ministering tab
     m_ministeringView = new MinisteringView(m_documentManager);
     m_sidebarTabs->addTab(m_ministeringView, tr("Ministering"));
+
+    // Emergency tab
+    m_emergencyView = new EmergencyView(m_documentManager);
+    m_sidebarTabs->addTab(m_emergencyView, tr("Emergency"));
 
     // Edit panel (initially hidden)
     m_editPanel = new FamilyEditPanel(m_documentManager, m_splitter);
@@ -156,16 +161,18 @@ void MainWindow::setupConnections()
             this, &MainWindow::onSidebarTabChanged);
 
     // Map <-> WardListView selection sync
-    connect(m_wardListView, &WardListView::familySelected,
-            m_mapWidget, &MapWidget::centerOnFamily);
     connect(m_mapWidget, &MapWidget::familyClicked,
             m_wardListView, &WardListView::setSelectedFamilyId);
-    connect(m_wardListView, &WardListView::visibleFamiliesChanged,
-            m_mapWidget, &MapWidget::setVisibleFamilyIds);
 
-    // MinisteringView highlight changes
+    // Highlight and visibility changes from sidebar views
+    connect(m_wardListView, &WardListView::highlightChanged,
+            m_mapWidget, &MapWidget::updateHighlights);
+    connect(m_wardListView, &WardListView::visibleFamiliesChanged,
+            m_mapWidget, &MapWidget::updateHighlights);
     connect(m_ministeringView, &MinisteringView::highlightChanged,
-            m_mapWidget, QOverload<>::of(&QWidget::update));
+            m_mapWidget, &MapWidget::updateHighlights);
+    connect(m_emergencyView, &EmergencyView::highlightChanged,
+            m_mapWidget, &MapWidget::updateHighlights);
 
     // Family editing
     connect(m_wardListView, &WardListView::editFamilyRequested,

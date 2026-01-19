@@ -235,9 +235,12 @@ set(WIDGET_SOURCES
     src/widgets/WardListView.cpp
     src/widgets/shared/FilterableListWidget.cpp
     src/widgets/shared/SearchField.cpp
+    src/widgets/EmergencyView.cpp
+    src/widgets/SkillsSubView.cpp
+    src/widgets/EquipmentSubView.cpp
+    src/widgets/NeedsSubView.cpp
     # src/widgets/Sidebar.cpp
     # src/widgets/MinisteringSidebar.cpp
-    # src/widgets/EmergencyView.cpp
     # src/widgets/ResourceView.cpp
     # src/widgets/TagsView.cpp
     # src/widgets/TeamsView.cpp
@@ -272,9 +275,12 @@ set(WIDGET_HEADERS
     src/widgets/WardListView.h
     src/widgets/shared/FilterableListWidget.h
     src/widgets/shared/SearchField.h
+    src/widgets/EmergencyView.h
+    src/widgets/SkillsSubView.h
+    src/widgets/EquipmentSubView.h
+    src/widgets/NeedsSubView.h
     # src/widgets/Sidebar.h
     # src/widgets/MinisteringSidebar.h
-    # src/widgets/EmergencyView.h
     # src/widgets/ResourceView.h
     # src/widgets/TagsView.h
     # src/widgets/TeamsView.h
