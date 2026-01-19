@@ -19,7 +19,7 @@ EquipmentSubView::EquipmentSubView(DocumentManager* documentManager, QWidget* pa
     , m_documentManager(documentManager)
     , m_tree(nullptr)
 {
-    auto* layout = new QVBoxLayout(this);
+    QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(4, 4, 4, 4);
 
     m_tree = new QTreeWidget();
@@ -106,7 +106,7 @@ void EquipmentSubView::rebuildTree()
         }
 
         // Create category item
-        auto* categoryItem = new QTreeWidgetItem();
+        QTreeWidgetItem* categoryItem = new QTreeWidgetItem();
         categoryItem->setText(0, QString("%1 (%2)").arg(category.name()).arg(totalFamilies));
         categoryItem->setData(0, IdRole, category.id());
         categoryItem->setData(0, TypeRole, static_cast<int>(ItemType::Category));
@@ -122,7 +122,7 @@ void EquipmentSubView::rebuildTree()
         // Add equipment under this category
         for (const Equipment& equip : categoryEquipment)
         {
-            auto* equipItem = new QTreeWidgetItem(categoryItem);
+            QTreeWidgetItem* equipItem = new QTreeWidgetItem(categoryItem);
             equipItem->setText(0, QString("%1 (%2)").arg(equip.name()).arg(equip.familyIds().size()));
             equipItem->setData(0, IdRole, equip.id());
             equipItem->setData(0, TypeRole, static_cast<int>(ItemType::Equipment));
@@ -154,7 +154,7 @@ void EquipmentSubView::rebuildTree()
             // Add family items
             for (const auto& [familyId, displayName] : families)
             {
-                auto* familyItem = new QTreeWidgetItem(equipItem);
+                QTreeWidgetItem* familyItem = new QTreeWidgetItem(equipItem);
                 familyItem->setText(0, displayName);
                 familyItem->setData(0, IdRole, familyId);
                 familyItem->setData(0, TypeRole, static_cast<int>(ItemType::Family));
@@ -226,8 +226,12 @@ void EquipmentSubView::onContextMenu(const QPoint& pos)
         case ItemType::Category:
             {
                 const Document& doc = m_documentManager->document();
-                auto categoryOpt = doc.equipmentCategories().value(id);
-                QString categoryName = categoryOpt.name();
+                if (!doc.equipmentCategories().contains(id))
+                {
+                    break;
+                }
+                const EquipmentCategory& category = doc.equipmentCategories().value(id);
+                QString categoryName = category.name();
 
                 menu.addAction(tr("Rename..."), this, [this, item]()
                 {
@@ -408,17 +412,21 @@ void EquipmentSubView::showRenameDialog(QTreeWidgetItem* item)
 
     if (type == ItemType::Category)
     {
-        auto categoryOpt = doc.equipmentCategories().value(id);
+        if (!doc.equipmentCategories().contains(id))
+        {
+            return;
+        }
+        const EquipmentCategory& category = doc.equipmentCategories().value(id);
         bool ok;
         QString name = QInputDialog::getText(this, tr("Rename Category"),
                                               tr("Category name:"),
-                                              QLineEdit::Normal, categoryOpt.name(), &ok);
-        if (ok && !name.isEmpty() && name != categoryOpt.name())
+                                              QLineEdit::Normal, category.name(), &ok);
+        if (ok && !name.isEmpty() && name != category.name())
         {
-            EquipmentCategory updated = categoryOpt;
+            EquipmentCategory updated = category;
             updated.setName(name);
             m_documentManager->executeCommand(
-                std::make_unique<UpdateEquipmentCategoryCommand>(categoryOpt, updated));
+                std::make_unique<UpdateEquipmentCategoryCommand>(category, updated));
         }
     }
     else if (type == ItemType::Equipment)
@@ -486,7 +494,11 @@ void EquipmentSubView::deleteItem(QTreeWidgetItem* item)
 
     if (type == ItemType::Category)
     {
-        auto categoryOpt = doc.equipmentCategories().value(id);
+        if (!doc.equipmentCategories().contains(id))
+        {
+            return;
+        }
+        const EquipmentCategory& category = doc.equipmentCategories().value(id);
 
         // Count equipment in this category
         int equipCount = 0;
@@ -499,8 +511,8 @@ void EquipmentSubView::deleteItem(QTreeWidgetItem* item)
         }
 
         QString message = equipCount > 0
-            ? tr("Delete category \"%1\" and its %2 equipment item(s)?").arg(categoryOpt.name()).arg(equipCount)
-            : tr("Delete category \"%1\"?").arg(categoryOpt.name());
+            ? tr("Delete category \"%1\" and its %2 equipment item(s)?").arg(category.name()).arg(equipCount)
+            : tr("Delete category \"%1\"?").arg(category.name());
 
         if (QMessageBox::question(this, tr("Delete Category"), message) == QMessageBox::Yes)
         {
@@ -516,7 +528,7 @@ void EquipmentSubView::deleteItem(QTreeWidgetItem* item)
 
             // Then delete the category
             m_documentManager->executeCommand(
-                std::make_unique<DeleteEquipmentCategoryCommand>(categoryOpt));
+                std::make_unique<DeleteEquipmentCategoryCommand>(category));
         }
     }
     else if (type == ItemType::Equipment)

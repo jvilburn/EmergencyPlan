@@ -21,7 +21,7 @@ SkillsSubView::SkillsSubView(DocumentManager* documentManager, QWidget* parent)
     , m_documentManager(documentManager)
     , m_tree(nullptr)
 {
-    auto* layout = new QVBoxLayout(this);
+    QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(4, 4, 4, 4);
 
     m_tree = new QTreeWidget();
@@ -110,7 +110,7 @@ void SkillsSubView::rebuildTree()
         }
 
         // Create category item
-        auto* categoryItem = new QTreeWidgetItem();
+        QTreeWidgetItem* categoryItem = new QTreeWidgetItem();
         categoryItem->setText(0, QString("%1 (%2)").arg(category.name()).arg(totalPersons));
         categoryItem->setData(0, IdRole, category.id());
         categoryItem->setData(0, TypeRole, static_cast<int>(ItemType::Category));
@@ -126,7 +126,7 @@ void SkillsSubView::rebuildTree()
         // Add skills under this category
         for (const Skill& skill : categorySkills)
         {
-            auto* skillItem = new QTreeWidgetItem(categoryItem);
+            QTreeWidgetItem* skillItem = new QTreeWidgetItem(categoryItem);
             skillItem->setText(0, QString("%1 (%2)").arg(skill.name()).arg(skill.personIds().size()));
             skillItem->setData(0, IdRole, skill.id());
             skillItem->setData(0, TypeRole, static_cast<int>(ItemType::Skill));
@@ -158,7 +158,7 @@ void SkillsSubView::rebuildTree()
             // Add person items
             for (const auto& [personId, displayName] : persons)
             {
-                auto* personItem = new QTreeWidgetItem(skillItem);
+                QTreeWidgetItem* personItem = new QTreeWidgetItem(skillItem);
                 personItem->setText(0, displayName);
                 personItem->setData(0, IdRole, personId);
                 personItem->setData(0, TypeRole, static_cast<int>(ItemType::Person));
@@ -247,8 +247,12 @@ void SkillsSubView::onContextMenu(const QPoint& pos)
         case ItemType::Category:
             {
                 const Document& doc = m_documentManager->document();
-                auto categoryOpt = doc.skillCategories().value(id);
-                QString categoryName = categoryOpt.name();
+                if (!doc.skillCategories().contains(id))
+                {
+                    break;
+                }
+                const SkillCategory& category = doc.skillCategories().value(id);
+                QString categoryName = category.name();
 
                 menu.addAction(tr("Rename..."), this, [this, item]()
                 {
@@ -438,17 +442,21 @@ void SkillsSubView::showRenameDialog(QTreeWidgetItem* item)
 
     if (type == ItemType::Category)
     {
-        auto categoryOpt = doc.skillCategories().value(id);
+        if (!doc.skillCategories().contains(id))
+        {
+            return;
+        }
+        const SkillCategory& category = doc.skillCategories().value(id);
         bool ok;
         QString name = QInputDialog::getText(this, tr("Rename Category"),
                                               tr("Category name:"),
-                                              QLineEdit::Normal, categoryOpt.name(), &ok);
-        if (ok && !name.isEmpty() && name != categoryOpt.name())
+                                              QLineEdit::Normal, category.name(), &ok);
+        if (ok && !name.isEmpty() && name != category.name())
         {
-            SkillCategory updated = categoryOpt;
+            SkillCategory updated = category;
             updated.setName(name);
             m_documentManager->executeCommand(
-                std::make_unique<UpdateSkillCategoryCommand>(categoryOpt, updated));
+                std::make_unique<UpdateSkillCategoryCommand>(category, updated));
         }
     }
     else if (type == ItemType::Skill)
@@ -516,7 +524,11 @@ void SkillsSubView::deleteItem(QTreeWidgetItem* item)
 
     if (type == ItemType::Category)
     {
-        auto categoryOpt = doc.skillCategories().value(id);
+        if (!doc.skillCategories().contains(id))
+        {
+            return;
+        }
+        const SkillCategory& category = doc.skillCategories().value(id);
 
         // Count skills in this category
         int skillCount = 0;
@@ -529,8 +541,8 @@ void SkillsSubView::deleteItem(QTreeWidgetItem* item)
         }
 
         QString message = skillCount > 0
-            ? tr("Delete category \"%1\" and its %2 skill(s)?").arg(categoryOpt.name()).arg(skillCount)
-            : tr("Delete category \"%1\"?").arg(categoryOpt.name());
+            ? tr("Delete category \"%1\" and its %2 skill(s)?").arg(category.name()).arg(skillCount)
+            : tr("Delete category \"%1\"?").arg(category.name());
 
         if (QMessageBox::question(this, tr("Delete Category"), message) == QMessageBox::Yes)
         {
@@ -546,7 +558,7 @@ void SkillsSubView::deleteItem(QTreeWidgetItem* item)
 
             // Then delete the category
             m_documentManager->executeCommand(
-                std::make_unique<DeleteSkillCategoryCommand>(categoryOpt));
+                std::make_unique<DeleteSkillCategoryCommand>(category));
         }
     }
     else if (type == ItemType::Skill)

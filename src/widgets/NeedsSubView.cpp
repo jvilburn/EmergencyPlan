@@ -26,7 +26,7 @@ NeedsSubView::NeedsSubView(DocumentManager* documentManager, QWidget* parent)
     , m_documentManager(documentManager)
     , m_tree(nullptr)
 {
-    auto* layout = new QVBoxLayout(this);
+    QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(4, 4, 4, 4);
 
     m_tree = new QTreeWidget();
@@ -122,7 +122,7 @@ void NeedsSubView::rebuildTree()
     // Build tree items
     for (const auto& [displayName, need] : sortedNeeds)
     {
-        auto* item = new QTreeWidgetItem();
+        QTreeWidgetItem* item = new QTreeWidgetItem();
 
         QString text = displayName;
         if (!need.note.isEmpty())
@@ -305,28 +305,28 @@ void NeedsSubView::showAddNeedDialog()
     dialog.setWindowTitle(tr("Add Special Need"));
     dialog.setMinimumWidth(400);
 
-    auto* formLayout = new QFormLayout(&dialog);
+    QFormLayout* formLayout = new QFormLayout(&dialog);
 
     // Type combo (Person or Family)
-    auto* typeCombo = new QComboBox();
+    QComboBox* typeCombo = new QComboBox();
     typeCombo->addItem(tr("Person"));
     typeCombo->addItem(tr("Family"));
     formLayout->addRow(tr("Type:"), typeCombo);
 
     // Selection button and label
-    auto* selectionLayout = new QHBoxLayout();
-    auto* selectionLabel = new QLabel(tr("(none selected)"));
-    auto* selectButton = new QPushButton(tr("Select..."));
+    QHBoxLayout* selectionLayout = new QHBoxLayout();
+    QLabel* selectionLabel = new QLabel(tr("(none selected)"));
+    QPushButton* selectButton = new QPushButton(tr("Select..."));
     selectionLayout->addWidget(selectionLabel, 1);
     selectionLayout->addWidget(selectButton);
     formLayout->addRow(tr("Entity:"), selectionLayout);
 
     // Note field
-    auto* noteEdit = new QLineEdit();
+    QLineEdit* noteEdit = new QLineEdit();
     formLayout->addRow(tr("Note:"), noteEdit);
 
     // Dialog buttons
-    auto* buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    QDialogButtonBox* buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
     formLayout->addRow(buttonBox);
 
     // Track selected ID
