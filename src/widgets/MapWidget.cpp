@@ -439,22 +439,28 @@ void MapWidget::drawMarkers(QPainter& painter)
             QColor color = m_highlightProvider->familyColor(id);
             qreal opacity = m_highlightProvider->familyOpacity(id);
             QString statusIcon = m_highlightProvider->familyStatusIcon(id);
+            bool isContactPoint = m_highlightProvider->isContactPoint(id);
 
             MarkerRenderer::State state;
             state.isSelected = (id == m_selectedFamilyId);
             state.isHighlighted = color.isValid();
-            state.highlightColor = color.isValid() ? color : QColor("#4CAF50");
+            state.showPip = isContactPoint;
             state.opacity = opacity;
             state.statusIcon = statusIcon;
 
             markers.append({pos, hh, state, opacity});
         }
 
-        // Sort by opacity so highlighted (opacity=1.0) markers draw on top
+        // Sort by opacity, then by pip (so pip markers draw on top)
         std::sort(markers.begin(), markers.end(),
                   [](const MarkerInfo& a, const MarkerInfo& b)
                   {
-                      return a.sortOpacity < b.sortOpacity;
+                      if (a.sortOpacity != b.sortOpacity)
+                      {
+                          return a.sortOpacity < b.sortOpacity;
+                      }
+                      // Pip markers draw last (on top)
+                      return !a.state.showPip && b.state.showPip;
                   });
 
         for (const MarkerInfo& m : markers)
@@ -532,12 +538,9 @@ void MapWidget::drawMarkers(QPainter& painter)
             continue;
         }
 
-        QString colorStr = m_highlightedIds[id].toString();
-
         MarkerRenderer::State state;
         state.isSelected = (id == m_selectedFamilyId);
         state.isHighlighted = true;
-        state.highlightColor = QColor(colorStr.isEmpty() ? "#4CAF50" : colorStr);
         state.opacity = 1.0;
 
         MarkerRenderer::draw(painter, pos, hh, state);

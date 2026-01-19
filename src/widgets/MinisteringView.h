@@ -30,6 +30,7 @@ public:
     QColor familyColor(const QString& familyId) const override;
     qreal familyOpacity(const QString& familyId) const override;
     QSet<QString> visibleFamilyIds() const override;
+    bool isContactPoint(const QString& familyId) const override;
 
 signals:
     /// Emitted when highlighting changes (for map update)
@@ -51,8 +52,11 @@ private:
     void updateUnassignedLabel();
     void clearSelection();
 
-    // Get family IDs for the current selection
+    // Get family IDs for the current selection (ministered families)
     QSet<QString> selectedFamilyIds() const;
+
+    // Get family IDs for ministers in the current selection (contact points)
+    QSet<QString> ministerFamilyIds() const;
 
     // For RS: Get family IDs containing the given person IDs
     QSet<QString> familyIdsForPersons(const QSet<QString>& personIds) const;

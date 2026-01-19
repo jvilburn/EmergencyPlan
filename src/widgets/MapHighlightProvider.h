@@ -27,4 +27,12 @@ public:
         Q_UNUSED(familyId);
         return {};
     }
+
+    /// Whether this family should show a contact point pip indicator
+    /// Used to distinguish ministers from families being ministered to
+    virtual bool isContactPoint(const QString& familyId) const
+    {
+        Q_UNUSED(familyId);
+        return false;
+    }
 };
