@@ -329,10 +329,57 @@ void SkillsSubView::onContextMenu(const QPoint& pos)
     }
 }
 
-void SkillsSubView::onDocumentChanged()
+void SkillsSubView::onDocumentChanged(const DocumentChange& change)
 {
-    rebuildTree();
-    emit highlightChanged();
+    switch (change.scope)
+    {
+    case ChangeScope::Full:
+    case ChangeScope::SkillCategory:
+    case ChangeScope::Skill:
+    case ChangeScope::Family:  // Person names are in Family
+        validateSelections();
+        rebuildTree();
+        emit highlightChanged();
+        break;
+    default:
+        break;
+    }
+}
+
+void SkillsSubView::validateSelections()
+{
+    const Document& doc = m_documentManager->document();
+
+    // Clear category selection if it no longer exists
+    if (!m_selectedCategoryId.isEmpty()
+        && !doc.skillCategories().contains(m_selectedCategoryId))
+    {
+        m_selectedCategoryId.clear();
+    }
+
+    // Clear skill selection if it no longer exists
+    if (!m_selectedSkillId.isEmpty() && !doc.findSkillById(m_selectedSkillId))
+    {
+        m_selectedSkillId.clear();
+    }
+
+    // Clear person selection if they no longer exist or are no longer in the skill
+    if (!m_selectedPersonId.isEmpty())
+    {
+        bool valid = false;
+        if (!m_selectedSkillId.isEmpty())
+        {
+            auto skillOpt = doc.findSkillById(m_selectedSkillId);
+            if (skillOpt && skillOpt->personIds().contains(m_selectedPersonId))
+            {
+                valid = true;
+            }
+        }
+        if (!valid)
+        {
+            m_selectedPersonId.clear();
+        }
+    }
 }
 
 HighlightInfo SkillsSubView::highlightInfo() const
@@ -494,25 +541,18 @@ void SkillsSubView::showSelectPeopleDialog(const QString& skillId)
     // Show dialog to select persons
     QStringList selectedIds = WardListDialog::selectPersons(m_documentManager, currentIds, this);
 
-    // Determine additions and removals
-    QSet<QString> currentSet = skillOpt->personIds();
-    QSet<QString> selectedSet(selectedIds.begin(), selectedIds.end());
-
-    QSet<QString> toAdd = selectedSet - currentSet;
-    QSet<QString> toRemove = currentSet - selectedSet;
-
-    // Execute commands for changes
-    for (const QString& personId : toAdd)
+    // Check if selection changed
+    QSet<QString> newSet(selectedIds.begin(), selectedIds.end());
+    if (newSet == skillOpt->personIds())
     {
-        m_documentManager->executeCommand(
-            std::make_unique<AssignSkillToPersonCommand>(skillId, personId));
+        return;  // No change
     }
 
-    for (const QString& personId : toRemove)
-    {
-        m_documentManager->executeCommand(
-            std::make_unique<UnassignSkillFromPersonCommand>(skillId, personId));
-    }
+    // Update skill with new person IDs (single undo operation)
+    Skill updated = *skillOpt;
+    updated.setPersonIds(newSet);
+    m_documentManager->executeCommand(
+        std::make_unique<UpdateSkillCommand>(*skillOpt, updated));
 }
 
 void SkillsSubView::deleteItem(QTreeWidgetItem* item)

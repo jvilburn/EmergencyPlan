@@ -265,7 +265,7 @@ set(WIDGET_HEADERS
     src/widgets/MainWindow.h
     src/widgets/MemberAccordion.h
     src/widgets/MemberEditor.h
-    src/widgets/MapHighlightProvider.h
+    src/widgets/FamilyMarkerProvider.h
     src/widgets/MapWidget.h
     src/widgets/MarkerRenderer.h
     src/widgets/MinisteringView.h

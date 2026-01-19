@@ -1,12 +1,11 @@
 #pragma once
 
-#include "MapHighlightProvider.h"
+#include "FamilyMarkerProvider.h"
 #include "DocumentChange.h"
 
 #include <QWidget>
 #include <QHash>
 #include <QSet>
-#include <QColor>
 
 class DocumentManager;
 class QButtonGroup;
@@ -16,21 +15,19 @@ class QTreeWidgetItem;
 
 /// Sidebar view for reviewing ministering assignments with geographic visualization.
 /// Shows EQ or RS ministering districts and companionships in a tree structure.
-/// Implements MapHighlightProvider for the shared map:
+/// Implements FamilyMarkerProvider for the shared map:
 ///   - Colors families by selected companionship/district
 ///   - Dims unselected families
-class MinisteringView : public QWidget, public MapHighlightProvider
+class MinisteringView : public QWidget, public FamilyMarkerProvider
 {
     Q_OBJECT
 
 public:
     explicit MinisteringView(DocumentManager* docManager, QWidget* parent = nullptr);
 
-    // MapHighlightProvider interface
-    QColor familyColor(const QString& familyId) const override;
-    qreal familyOpacity(const QString& familyId) const override;
+    // FamilyMarkerProvider interface
+    HighlightInfo highlightInfo() const override;
     QSet<QString> visibleFamilyIds() const override;
-    bool isContactPoint(const QString& familyId) const override;
 
 signals:
     /// Emitted when highlighting changes (for map update)

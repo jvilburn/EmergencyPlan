@@ -311,10 +311,57 @@ void EquipmentSubView::onContextMenu(const QPoint& pos)
     }
 }
 
-void EquipmentSubView::onDocumentChanged()
+void EquipmentSubView::onDocumentChanged(const DocumentChange& change)
 {
-    rebuildTree();
-    emit highlightChanged();
+    switch (change.scope)
+    {
+    case ChangeScope::Full:
+    case ChangeScope::EquipmentCategory:
+    case ChangeScope::Equipment:
+    case ChangeScope::Family:  // Family names
+        validateSelections();
+        rebuildTree();
+        emit highlightChanged();
+        break;
+    default:
+        break;
+    }
+}
+
+void EquipmentSubView::validateSelections()
+{
+    const Document& doc = m_documentManager->document();
+
+    // Clear category selection if it no longer exists
+    if (!m_selectedCategoryId.isEmpty()
+        && !doc.equipmentCategories().contains(m_selectedCategoryId))
+    {
+        m_selectedCategoryId.clear();
+    }
+
+    // Clear equipment selection if it no longer exists
+    if (!m_selectedEquipmentId.isEmpty() && !doc.findEquipmentById(m_selectedEquipmentId))
+    {
+        m_selectedEquipmentId.clear();
+    }
+
+    // Clear family selection if they no longer exist or are no longer in the equipment
+    if (!m_selectedFamilyId.isEmpty())
+    {
+        bool valid = false;
+        if (!m_selectedEquipmentId.isEmpty())
+        {
+            auto equipOpt = doc.findEquipmentById(m_selectedEquipmentId);
+            if (equipOpt && equipOpt->familyIds().contains(m_selectedFamilyId))
+            {
+                valid = true;
+            }
+        }
+        if (!valid)
+        {
+            m_selectedFamilyId.clear();
+        }
+    }
 }
 
 HighlightInfo EquipmentSubView::highlightInfo() const
@@ -464,25 +511,18 @@ void EquipmentSubView::showSelectFamiliesDialog(const QString& equipmentId)
     // Show dialog to select families
     QStringList selectedIds = WardListDialog::selectFamilies(m_documentManager, currentIds, this);
 
-    // Determine additions and removals
-    QSet<QString> currentSet = equipOpt->familyIds();
-    QSet<QString> selectedSet(selectedIds.begin(), selectedIds.end());
-
-    QSet<QString> toAdd = selectedSet - currentSet;
-    QSet<QString> toRemove = currentSet - selectedSet;
-
-    // Execute commands for changes
-    for (const QString& familyId : toAdd)
+    // Check if selection changed
+    QSet<QString> newSet(selectedIds.begin(), selectedIds.end());
+    if (newSet == equipOpt->familyIds())
     {
-        m_documentManager->executeCommand(
-            std::make_unique<AssignEquipmentToFamilyCommand>(equipmentId, familyId));
+        return;  // No change
     }
 
-    for (const QString& familyId : toRemove)
-    {
-        m_documentManager->executeCommand(
-            std::make_unique<UnassignEquipmentFromFamilyCommand>(equipmentId, familyId));
-    }
+    // Update equipment with new family IDs (single undo operation)
+    Equipment updated = *equipOpt;
+    updated.setFamilyIds(newSet);
+    m_documentManager->executeCommand(
+        std::make_unique<UpdateEquipmentCommand>(*equipOpt, updated));
 }
 
 void EquipmentSubView::deleteItem(QTreeWidgetItem* item)

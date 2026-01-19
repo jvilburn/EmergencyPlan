@@ -24,6 +24,26 @@ bool Address::isEmpty() const
     return m_lines.isEmpty();
 }
 
+bool Address::noStreetAddress() const
+{
+    if (m_lines.isEmpty())
+    {
+        return true;
+    }
+
+    // A street address typically starts with a house number.
+    // Check if any line begins with digits (e.g., "123 Main St").
+    for (const QString& line : m_lines)
+    {
+        if (!line.isEmpty() && line[0].isDigit())
+        {
+            return false;  // Has a street address
+        }
+    }
+
+    return true;  // No line starts with a number - no street address
+}
+
 int Address::size() const
 {
     return m_lines.size();

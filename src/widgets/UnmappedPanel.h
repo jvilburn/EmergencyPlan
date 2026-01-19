@@ -7,6 +7,7 @@
 class DocumentManager;
 class FamilyListModel;
 class Filter;
+class FamilyMarkerProvider;
 
 /// Panel showing unmapped families with half-size markers.
 /// Displays in a flow layout: 2 columns, expands up, then adds columns.
@@ -20,19 +21,23 @@ public:
     /// Returns true if there are unmapped families to show
     bool hasUnmappedFamilies() const;
 
-    /// Get the currently selected family ID (empty if none)
-    QString selectedFamilyId() const { return m_selectedId; }
-
-    /// Set the selected family
-    void setSelectedFamilyId(const QString& id);
+    /// Set the marker provider (owned by caller)
+    void setMarkerProvider(FamilyMarkerProvider* provider);
 
     /// Calculate the preferred size for the panel
     QSize sizeHint() const override;
     QSize minimumSizeHint() const override;
 
+    /// Set expanded/collapsed state
+    void setExpanded(bool expanded);
+    bool isExpanded() const { return m_isExpanded; }
+
 signals:
     /// Emitted when a family marker is clicked
     void familyClicked(const QString& familyId);
+
+    /// Emitted when the header is clicked (for expand/collapse toggle)
+    void headerClicked();
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -57,8 +62,9 @@ private:
     DocumentManager* m_docManager;
     Filter* m_filter;
     FamilyListModel* m_model;
+    FamilyMarkerProvider* m_markerProvider = nullptr;
+    bool m_isExpanded = true;
 
-    QString m_selectedId;
     QList<MarkerLayout> m_layout;
     int m_numColumns = 0;
     int m_rowsPerColumn = 0;

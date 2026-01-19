@@ -80,3 +80,25 @@ Stored as separate `birthYear`, `birthMonth`, `birthDay` optionals because:
 - [CONVERSION_PLAN.md](CONVERSION_PLAN.md) - Full conversion plan from Flutter
 - [ARCHITECTURE.md](ARCHITECTURE.md) - Application architecture
 - [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) - Detailed task checklist
+
+## Current Work (2026-01-19)
+
+### Completed
+- **MapHighlightProvider Refactoring** - Done. Interface uses semantic `HighlightInfo` struct, all existing views (WardListView, MinisteringView, WardListDialog) migrated, legacy code removed.
+- **Map Animation UI Padding** - Done. All tasks implemented and committed.
+- **Emergency Tab Implementation** - Done. EmergencyView with Skills, Equipment, Needs sub-tabs. MapHighlightProvider integration working.
+
+### Pending Discussion: NeedsSubView Dialog UX
+
+The current `showAddNeedDialog()` and `showEditNeedDialog()` have a UX issue worth revisiting:
+
+**Problem:** "Add Special Need" dialog allows selecting someone who already has a need, silently overwriting their existing note. The dialog title implies adding something new.
+
+**Proposed solution:** Merge into a single "Special Need" dialog:
+- Dialog title: "Special Need" (not "Add" or "Edit")
+- When opened from empty space: user selects person/family, note pre-fills if they already have one
+- When opened on existing item: person/family is locked (read-only), note pre-fills
+- Both flows use `SetSpecialNeedCommand` (idempotent)
+- Each special need is for ONE person OR ONE family - no "transferring"
+
+This reframes the operation as "set special need" rather than "add/edit/delete", which better matches the underlying command semantics.

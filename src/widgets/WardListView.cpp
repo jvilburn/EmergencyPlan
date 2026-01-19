@@ -115,20 +115,21 @@ QStringList WardListView::visibleFamilyIdsList() const
     return m_model->familyIds();
 }
 
-// MapHighlightProvider interface implementation
+// FamilyMarkerProvider interface implementation
 
-QColor WardListView::familyColor(const QString& /*familyId*/) const
+HighlightInfo WardListView::highlightInfo() const
 {
-    // WardListView doesn't highlight - it only filters visibility
-    return QColor();  // Invalid color means no highlighting
-}
+    HighlightInfo info;
 
-qreal WardListView::familyOpacity(const QString& familyId) const
-{
-    // Visible families are fully opaque, filtered-out would be dimmed
-    // But since visibleFamilyIds() returns only visible ones, this is always 1.0
-    Q_UNUSED(familyId);
-    return 1.0;
+    // Highlight selected family (if any)
+    QString selected = selectedFamilyId();
+    if (!selected.isEmpty())
+    {
+        info.highlightedFamilyIds.insert(selected);
+    }
+
+    // WardListView has no contact point concept
+    return info;
 }
 
 QSet<QString> WardListView::visibleFamilyIds() const
@@ -142,7 +143,7 @@ void WardListView::onSelectionChanged()
     QString id = selectedFamilyId();
     if (!id.isEmpty())
     {
-        emit familySelected(id);
+        emit highlightChanged();
 
         // Expand the selected family if it's a family row
         QModelIndex current = m_treeView->currentIndex();

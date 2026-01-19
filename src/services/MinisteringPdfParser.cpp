@@ -939,8 +939,7 @@ MinisteringPdfParser::ParseResult MinisteringPdfParser::parse(const QString& pdf
         // Check if markers were found (contentStart=0 means no header, contentEnd=size means no footer)
         if (contentStart == 0 || contentEnd == pageFields.size())
         {
-            result.errors.append(QString("Page %1: Unrecognized PDF format - missing header or footer markers")
-                .arg(pageNum + 1));
+            result.errors.append("Not a Ministering PDF");
             return result;
         }
 

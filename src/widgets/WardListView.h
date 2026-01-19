@@ -1,6 +1,6 @@
 #pragma once
 
-#include "MapHighlightProvider.h"
+#include "FamilyMarkerProvider.h"
 
 #include <QWidget>
 #include <QModelIndex>
@@ -21,10 +21,10 @@ class SearchField;
 ///     - Phone
 ///     - Actions (Edit/Delete buttons)
 ///
-/// Implements MapHighlightProvider for the shared map:
+/// Implements FamilyMarkerProvider for the shared map:
 ///   - No highlighting (returns invalid colors)
 ///   - Opacity based on filter visibility
-class WardListView : public QWidget, public MapHighlightProvider
+class WardListView : public QWidget, public FamilyMarkerProvider
 {
     Q_OBJECT
 
@@ -46,14 +46,13 @@ public:
     /// Access the filter for external configuration (e.g., from filter dialogs).
     Filter* filter() const { return m_filter; }
 
-    // MapHighlightProvider interface
-    QColor familyColor(const QString& familyId) const override;
-    qreal familyOpacity(const QString& familyId) const override;
+    // FamilyMarkerProvider interface
+    HighlightInfo highlightInfo() const override;
     QSet<QString> visibleFamilyIds() const override;
 
 signals:
-    /// Emitted when a family is selected (for map centering).
-    void familySelected(const QString& id);
+    /// Emitted when highlighting changes (for map update).
+    void highlightChanged();
 
     /// Emitted when the visible families change (for map marker emphasis).
     void visibleFamiliesChanged(const QStringList& ids);

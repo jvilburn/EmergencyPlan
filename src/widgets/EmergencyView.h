@@ -1,7 +1,7 @@
 #pragma once
 
 #include <QWidget>
-#include "MapHighlightProvider.h"
+#include "FamilyMarkerProvider.h"
 
 class QTabWidget;
 class DocumentManager;
@@ -12,14 +12,14 @@ class NeedsSubView;
 /// EmergencyView displays emergency preparedness data organized into three sub-tabs:
 /// Skills, Equipment, and Needs. Each sub-tab shows a 3-level tree hierarchy
 /// (Category -> Item -> Person/Family) and integrates with the map for highlighting.
-class EmergencyView : public QWidget, public MapHighlightProvider
+class EmergencyView : public QWidget, public FamilyMarkerProvider
 {
     Q_OBJECT
 
 public:
     explicit EmergencyView(DocumentManager* documentManager, QWidget* parent = nullptr);
 
-    // MapHighlightProvider interface
+    // FamilyMarkerProvider interface
     HighlightInfo highlightInfo() const override;
     QSet<QString> visibleFamilyIds() const override;
 
@@ -36,5 +36,5 @@ private:
     EquipmentSubView* m_equipmentView;
     NeedsSubView* m_needsView;
 
-    MapHighlightProvider* currentSubProvider() const;
+    FamilyMarkerProvider* currentSubProvider() const;
 };

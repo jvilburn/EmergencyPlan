@@ -1,7 +1,39 @@
 {
+  "hooks": {
+    "PreCompact": [
+      {
+        "matcher": "auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo COMPACTION BLOCKED - start new session && exit 2"
+          }
+        ]
+      }
+    ]
+  },
+  "env": {
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "100"
+  },
   "permissions": {
     "allow": [
-      "Bash(cmd //c build.bat)"
+      "Bash(cmd //c build.bat)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(cmd.exe /c build.bat)",
+      "Bash(cmd.exe /c \"build.bat && echo BUILD SUCCEEDED\")",
+      "Bash(build.bat)",
+      "Bash(cmd.exe /c \"build.bat 2>&1\")",
+      "Bash(powershell -Command \"& { cmd /c build.bat 2>&1 }\")",
+      "Bash(cmd.exe /c \"call build.bat\")",
+      "Bash(ls:*)",
+      "Bash(cmd /c build.bat)",
+      "Bash(git worktree:*)",
+      "Bash(./build.bat)",
+      "Skill(superpowers:writing-plans)",
+      "Skill(superpowers:writing-plans:*)",
+      "Skill(superpowers:subagent-driven-development)",
+      "Skill(superpowers:subagent-driven-development:*)"
     ]
   }
 }

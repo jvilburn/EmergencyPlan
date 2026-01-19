@@ -1,6 +1,7 @@
 #pragma once
 
-#include "MapHighlightProvider.h"
+#include "FamilyMarkerProvider.h"
+#include "DocumentChange.h"
 
 #include <QWidget>
 
@@ -13,15 +14,15 @@ class QTreeWidgetItem;
 ///
 /// Each item displays: "DisplayName - note" where DisplayName is the person or family name.
 ///
-/// Implements MapHighlightProvider to highlight families of selected persons or directly selected families.
-class NeedsSubView : public QWidget, public MapHighlightProvider
+/// Implements FamilyMarkerProvider to highlight families of selected persons or directly selected families.
+class NeedsSubView : public QWidget, public FamilyMarkerProvider
 {
     Q_OBJECT
 
 public:
     explicit NeedsSubView(DocumentManager* documentManager, QWidget* parent = nullptr);
 
-    // MapHighlightProvider interface
+    // FamilyMarkerProvider interface
     HighlightInfo highlightInfo() const override;
     QSet<QString> visibleFamilyIds() const override;
 
@@ -29,12 +30,13 @@ signals:
     void highlightChanged();
 
 private slots:
-    void onDocumentChanged();
+    void onDocumentChanged(const DocumentChange& change);
     void onTreeItemClicked(QTreeWidgetItem* item, int column);
     void onContextMenu(const QPoint& pos);
 
 private:
     void rebuildTree();
+    void validateSelections();
     void showAddNeedDialog();
     void showEditNeedDialog(const QString& personId, const QString& familyId);
     void deleteNeed(const QString& personId, const QString& familyId);

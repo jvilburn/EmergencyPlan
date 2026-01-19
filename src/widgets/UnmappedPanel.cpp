@@ -1,4 +1,5 @@
 #include "UnmappedPanel.h"
+#include "FamilyMarkerProvider.h"
 #include "MarkerRenderer.h"
 #include "Filter.h"
 #include "FamilyListModel.h"
@@ -32,11 +33,18 @@ bool UnmappedPanel::hasUnmappedFamilies() const
     return m_model->rowCount() > 0;
 }
 
-void UnmappedPanel::setSelectedFamilyId(const QString& id)
+void UnmappedPanel::setMarkerProvider(FamilyMarkerProvider* provider)
 {
-    if (m_selectedId != id)
+    m_markerProvider = provider;
+    update();
+}
+
+void UnmappedPanel::setExpanded(bool expanded)
+{
+    if (m_isExpanded != expanded)
     {
-        m_selectedId = id;
+        m_isExpanded = expanded;
+        updateGeometry();
         update();
     }
 }
@@ -110,6 +118,12 @@ QSize UnmappedPanel::sizeHint() const
     }
 
     int width = m_numColumns * COLUMN_WIDTH + H_PADDING * 2;
+
+    if (!m_isExpanded)
+    {
+        return QSize(width, HEADER_HEIGHT);
+    }
+
     int height = HEADER_HEIGHT + V_PADDING * 2 + m_rowsPerColumn * ROW_HEIGHT;
 
     return QSize(width, height);
@@ -137,17 +151,39 @@ void UnmappedPanel::paintEvent(QPaintEvent* /*event*/)
     painter.setPen(QPen(QColor(200, 200, 200), 1));
     painter.drawLine(0, 0, width(), 0);
 
-    // Draw header
+    // Draw header with expand/collapse icon and count
     QFont headerFont = font();
     headerFont.setBold(true);
     painter.setFont(headerFont);
     painter.setPen(QColor(100, 100, 100));
-    painter.drawText(H_PADDING, 0, width() - H_PADDING * 2, HEADER_HEIGHT,
-                     Qt::AlignLeft | Qt::AlignVCenter, tr("Unknown Location"));
+
+    // Expand/collapse icon
+    QString icon = m_isExpanded ? QStringLiteral("\u25BE") : QStringLiteral("\u25B8");
+    int iconWidth = 16;
+    painter.drawText(H_PADDING, 0, iconWidth, HEADER_HEIGHT,
+                     Qt::AlignLeft | Qt::AlignVCenter, icon);
+
+    // Header text with count
+    QString headerText = tr("Unknown Location (%1)").arg(m_model->rowCount());
+    painter.drawText(H_PADDING + iconWidth, 0, width() - H_PADDING * 2 - iconWidth, HEADER_HEIGHT,
+                     Qt::AlignLeft | Qt::AlignVCenter, headerText);
+
+    // If collapsed, stop here
+    if (!m_isExpanded)
+    {
+        return;
+    }
 
     // Draw separator line below header
     painter.setPen(QPen(QColor(220, 220, 220), 1));
     painter.drawLine(H_PADDING, HEADER_HEIGHT, width() - H_PADDING, HEADER_HEIGHT);
+
+    // Get highlight info from provider
+    HighlightInfo highlight;
+    if (m_markerProvider)
+    {
+        highlight = m_markerProvider->highlightInfo();
+    }
 
     // Draw markers and labels
     QFont labelFont = font();
@@ -156,15 +192,16 @@ void UnmappedPanel::paintEvent(QPaintEvent* /*event*/)
 
     for (const MarkerLayout& item : m_layout)
     {
-        // Draw marker at half size
+        // Draw marker at half size with highlight state
         MarkerRenderer::State state;
-        state.isSelected = (item.familyId == m_selectedId);
         state.scale = 0.5;
+        state.isHighlighted = highlight.allHighlightedIds().contains(item.familyId);
+        state.showPip = highlight.contactPointFamilyIds.contains(item.familyId);
 
         MarkerRenderer::draw(painter, item.markerPos, QVariantMap(), state);
 
         // Draw label (elided if too long)
-        painter.setPen(state.isSelected ? QColor("#1976D2") : QColor(60, 60, 60));
+        painter.setPen(QColor(60, 60, 60));
         QFontMetrics fm(labelFont);
         QString elidedName = fm.elidedText(item.name, Qt::ElideRight,
                                             static_cast<int>(item.labelRect.width()));
@@ -179,12 +216,17 @@ void UnmappedPanel::mousePressEvent(QMouseEvent* event)
 
     if (event->button() == Qt::LeftButton)
     {
-        QString hitId = markerAtPoint(event->pos());
-        if (!hitId.isEmpty())
+        // Check if click is in header area
+        if (event->pos().y() < HEADER_HEIGHT)
         {
-            m_selectedId = hitId;
-            emit familyClicked(hitId);
-            update();
+            emit headerClicked();
+            return;
+        }
+
+        // If expanded, handle marker clicks
+        if (m_isExpanded)
+        {
+            emit familyClicked(markerAtPoint(event->pos()));
         }
     }
 }

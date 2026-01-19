@@ -4,7 +4,7 @@
 #include "EmergencyView.h"
 #include "FamilyEditPanel.h"
 #include "MapWidget.h"
-#include "MapHighlightProvider.h"
+#include "FamilyMarkerProvider.h"
 #include "DocumentManager.h"
 #include "FamilyCommands.h"
 #include "ImportWardDirectoryCommand.h"
@@ -88,7 +88,7 @@ void MainWindow::setupUi()
     m_splitter->setStretchFactor(2, 1);  // Map stretches
 
     // Set initial highlight provider (WardListView)
-    m_mapWidget->setHighlightProvider(m_wardListView);
+    m_mapWidget->setMarkerProvider(m_wardListView);
 
     // Status bar
     statusBar()->showMessage(tr("Ready"));
@@ -651,13 +651,13 @@ void MainWindow::onSidebarTabChanged(int index)
 {
     QWidget* currentTab = m_sidebarTabs->widget(index);
 
-    if (auto* provider = dynamic_cast<MapHighlightProvider*>(currentTab))
+    if (auto* provider = dynamic_cast<FamilyMarkerProvider*>(currentTab))
     {
-        m_mapWidget->setHighlightProvider(provider);
+        m_mapWidget->setMarkerProvider(provider);
     }
     else
     {
-        m_mapWidget->setHighlightProvider(nullptr);
+        m_mapWidget->setMarkerProvider(nullptr);
     }
 }
 

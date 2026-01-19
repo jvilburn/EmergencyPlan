@@ -23,6 +23,12 @@ void BackgroundGeocodingService::queueFamily(const Family& family)
         return;
     }
 
+    // Skip addresses without a street (e.g., only "Utah" or "Provo, UT")
+    if (family.address().noStreetAddress())
+    {
+        return;
+    }
+
     QString address = family.address().full();
     if (address.trimmed().isEmpty())
     {

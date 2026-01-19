@@ -23,6 +23,9 @@ public:
     /// Returns true if address has no lines.
     bool isEmpty() const;
 
+    /// Returns true if address has no street (only city/state/zip - not useful for geocoding).
+    bool noStreetAddress() const;
+
     /// Returns number of lines.
     int size() const;
 

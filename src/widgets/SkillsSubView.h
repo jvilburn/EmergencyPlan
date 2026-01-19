@@ -1,6 +1,7 @@
 #pragma once
 
-#include "MapHighlightProvider.h"
+#include "FamilyMarkerProvider.h"
+#include "DocumentChange.h"
 
 #include <QWidget>
 
@@ -13,15 +14,15 @@ class QTreeWidgetItem;
 /// - Skill (under category) - shows "SkillName (N)" where N is persons with that skill
 /// - Person (under skill) - shows person's displayName
 ///
-/// Implements MapHighlightProvider to highlight families of selected persons/skills/categories.
-class SkillsSubView : public QWidget, public MapHighlightProvider
+/// Implements FamilyMarkerProvider to highlight families of selected persons/skills/categories.
+class SkillsSubView : public QWidget, public FamilyMarkerProvider
 {
     Q_OBJECT
 
 public:
     explicit SkillsSubView(DocumentManager* documentManager, QWidget* parent = nullptr);
 
-    // MapHighlightProvider interface
+    // FamilyMarkerProvider interface
     HighlightInfo highlightInfo() const override;
     QSet<QString> visibleFamilyIds() const override;
 
@@ -29,13 +30,14 @@ signals:
     void highlightChanged();
 
 private slots:
-    void onDocumentChanged();
+    void onDocumentChanged(const DocumentChange& change);
     void onTreeItemClicked(QTreeWidgetItem* item, int column);
     void onTreeItemDoubleClicked(QTreeWidgetItem* item, int column);
     void onContextMenu(const QPoint& pos);
 
 private:
     void rebuildTree();
+    void validateSelections();
     void showAddCategoryDialog();
     void showAddSkillDialog(const QString& categoryId);
     void showRenameDialog(QTreeWidgetItem* item);

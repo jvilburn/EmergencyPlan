@@ -585,143 +585,33 @@ QSet<QString> MinisteringView::unassignedSisterIds() const
     return allSisterIds - assignedPersonIds;
 }
 
-// MapHighlightProvider interface implementation
+// FamilyMarkerProvider interface implementation
 
-QColor MinisteringView::familyColor(const QString& familyId) const
+HighlightInfo MinisteringView::highlightInfo() const
 {
-    const Document& doc = m_documentManager->document();
-    const auto& groups = m_isEQ ? doc.eqGroups() : doc.rsGroups();
-    const auto& districts = m_isEQ ? doc.eqDistricts() : doc.rsDistricts();
+    HighlightInfo info;
 
-    // No selection - no colors
+    // No selection - no highlighting
     if (m_selectedDistrictIds.isEmpty()
         && m_selectedCompanionshipIds.isEmpty()
         && !m_unassignedSelected)
     {
-        return QColor();  // Invalid = default marker color
+        return info;
     }
 
-    // Check if this family is selected (ministered) or is a minister
-    QSet<QString> selected = selectedFamilyIds();
-    QSet<QString> ministers = ministerFamilyIds();
-    bool isHighlighted = selected.contains(familyId) || ministers.contains(familyId);
-    if (!isHighlighted)
-    {
-        return QColor();  // Not highlighted = no color
-    }
+    // Ministered families get highlighted
+    info.highlightedFamilyIds = selectedFamilyIds();
 
-    // Find which companionship/district this family belongs to and return its color
-    if (!m_selectedCompanionshipIds.isEmpty())
-    {
-        for (const QString& groupId : m_selectedCompanionshipIds)
-        {
-            if (!groups.contains(groupId))
-            {
-                continue;
-            }
-            const MinisteringGroup& group = groups[groupId];
+    // Ministers get highlighted AND pip
+    info.contactPointFamilyIds = ministerFamilyIds();
 
-            // Check if minister
-            QSet<QString> ministerFamilies = familyIdsForPersons(group.ministerIds());
-            if (ministerFamilies.contains(familyId) && m_colorMap.contains(groupId))
-            {
-                return m_colorMap[groupId];
-            }
-
-            // Check if ministered
-            bool inGroup = false;
-            if (m_isEQ)
-            {
-                inGroup = group.familyIds().contains(familyId);
-            }
-            else
-            {
-                inGroup = familyIdsForPersons(group.ministeredPersonIds()).contains(familyId);
-            }
-            if (inGroup && m_colorMap.contains(groupId))
-            {
-                return m_colorMap[groupId];
-            }
-        }
-    }
-    else if (!m_selectedDistrictIds.isEmpty())
-    {
-        // Check all groups in districts for minister or ministered
-        for (const QString& districtId : m_selectedDistrictIds)
-        {
-            if (!districts.contains(districtId))
-            {
-                continue;
-            }
-            const MinisteringDistrict& district = districts[districtId];
-            for (const QString& groupId : district.groupIds())
-            {
-                if (!groups.contains(groupId))
-                {
-                    continue;
-                }
-                const MinisteringGroup& group = groups[groupId];
-
-                // Check if minister in this group
-                QSet<QString> ministerFamilies = familyIdsForPersons(group.ministerIds());
-                if (ministerFamilies.contains(familyId) && m_colorMap.contains(districtId))
-                {
-                    return m_colorMap[districtId];
-                }
-
-                // Check if ministered in this group
-                bool inGroup = false;
-                if (m_isEQ)
-                {
-                    inGroup = group.familyIds().contains(familyId);
-                }
-                else
-                {
-                    inGroup = familyIdsForPersons(group.ministeredPersonIds()).contains(familyId);
-                }
-                if (inGroup && m_colorMap.contains(districtId))
-                {
-                    return m_colorMap[districtId];
-                }
-            }
-        }
-    }
-    else if (m_unassignedSelected)
-    {
-        return QColor("#FF9800");  // Orange for unassigned
-    }
-
-    return QColor();
-}
-
-qreal MinisteringView::familyOpacity(const QString& familyId) const
-{
-    // No selection - all visible at full opacity
-    if (m_selectedDistrictIds.isEmpty()
-        && m_selectedCompanionshipIds.isEmpty()
-        && !m_unassignedSelected)
-    {
-        return 1.0;
-    }
-
-    // If something is selected, highlighted families (ministers + ministered) are full opacity
-    QSet<QString> selected = selectedFamilyIds();
-    QSet<QString> ministers = ministerFamilyIds();
-    bool isHighlighted = selected.contains(familyId) || ministers.contains(familyId);
-    return isHighlighted ? 1.0 : 0.3;
+    return info;
 }
 
 QSet<QString> MinisteringView::visibleFamilyIds() const
 {
     // MinisteringView shows all families - visibility is controlled by opacity
     return {};  // Empty = show all
-}
-
-bool MinisteringView::isContactPoint(const QString& familyId) const
-{
-    // Ministers are contact points
-    QSet<QString> ministers = ministerFamilyIds();
-    return ministers.contains(familyId);
 }
 
 // Event filter for unassigned label click

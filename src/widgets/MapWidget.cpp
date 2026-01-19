@@ -1,5 +1,5 @@
 #include "MapWidget.h"
-#include "MapHighlightProvider.h"
+#include "FamilyMarkerProvider.h"
 #include "SlippyMapMath.h"
 #include "MarkerRenderer.h"
 #include "UnmappedPanel.h"
@@ -132,6 +132,14 @@ void MapWidget::setupUi()
             this, &MapWidget::familyClicked);
     connect(this, &MapWidget::highlightChanged,
             m_unmappedPanel, QOverload<>::of(&QWidget::update));
+    connect(m_unmappedPanel, &UnmappedPanel::headerClicked,
+            this, &MapWidget::onUnmappedPanelHeaderClicked);
+
+    // Geocoding state for unmapped panel visibility
+    connect(m_docManager, &DocumentManager::geocodingProgressChanged,
+            this, &MapWidget::onGeocodingStarted);
+    connect(m_docManager, &DocumentManager::geocodingFinished,
+            this, &MapWidget::onGeocodingFinished);
 
     updateButtonPositions();
 }
@@ -162,6 +170,71 @@ void MapWidget::updateButtonPositions()
     {
         m_unmappedPanel->setVisible(false);
     }
+}
+
+void MapWidget::updateUnmappedPanelVisibility()
+{
+    if (!m_unmappedPanel->hasUnmappedFamilies())
+    {
+        return;  // Nothing to show/hide
+    }
+
+    bool shouldExpand = m_isGeocoding || hasUnmappedSelection();
+
+    if (shouldExpand)
+    {
+        // Auto-expand clears manual override
+        m_unmappedPanelManualOverride = false;
+        m_unmappedPanel->setExpanded(true);
+    }
+    else if (!m_unmappedPanelManualOverride)
+    {
+        // Auto-collapse only if no manual override
+        m_unmappedPanel->setExpanded(false);
+    }
+
+    updateButtonPositions();
+}
+
+bool MapWidget::hasUnmappedSelection() const
+{
+    if (!m_markerProvider)
+    {
+        return false;
+    }
+
+    QSet<QString> highlighted = m_markerProvider->highlightInfo().allHighlightedIds();
+    const Document& doc = m_docManager->document();
+
+    for (const QString& id : highlighted)
+    {
+        std::optional<Family> family = doc.findFamilyById(id);
+        if (family && !family->isMapped())
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void MapWidget::onGeocodingStarted()
+{
+    m_isGeocoding = true;
+    updateUnmappedPanelVisibility();
+}
+
+void MapWidget::onGeocodingFinished()
+{
+    m_isGeocoding = false;
+    updateUnmappedPanelVisibility();
+}
+
+void MapWidget::onUnmappedPanelHeaderClicked()
+{
+    m_unmappedPanelManualOverride = true;
+    m_unmappedPanel->setExpanded(!m_unmappedPanel->isExpanded());
+    updateButtonPositions();
 }
 
 void MapWidget::updateLayerButtonIcon()
@@ -397,13 +470,13 @@ void MapWidget::drawMarkers(QPainter& painter)
     double clampedZoom = qBound(static_cast<double>(MIN_ZOOM), m_zoom, static_cast<double>(MAX_ZOOM));
 
     // If we have a highlight provider, use it for all highlighting decisions
-    if (m_highlightProvider)
+    if (m_markerProvider)
     {
-        QSet<QString> visibleIds = m_highlightProvider->visibleFamilyIds();
+        QSet<QString> visibleIds = m_markerProvider->visibleFamilyIds();
         bool hasVisibleFilter = !visibleIds.isEmpty();
 
         // Get highlight info once (semantic data from provider)
-        HighlightInfo info = m_highlightProvider->highlightInfo();
+        HighlightInfo info = m_markerProvider->highlightInfo();
         QSet<QString> allHighlighted = info.allHighlightedIds();
         bool hasHighlighting = info.hasHighlighting();
 
@@ -441,7 +514,7 @@ void MapWidget::drawMarkers(QPainter& painter)
 
             bool isHighlighted = allHighlighted.contains(id);
             bool isContactPoint = info.contactPointFamilyIds.contains(id);
-            QString statusIcon = m_highlightProvider->familyStatusIcon(id);
+            QString statusIcon = m_markerProvider->familyStatusIcon(id);
 
             // Opacity: dim non-highlighted when highlighting is active
             qreal opacity = (hasHighlighting && !isHighlighted) ? 0.3 : 1.0;
@@ -905,19 +978,20 @@ void MapWidget::setCenter(double lat, double lng)
     update();
 }
 
-void MapWidget::setHighlightProvider(MapHighlightProvider* provider)
+void MapWidget::setMarkerProvider(FamilyMarkerProvider* provider)
 {
-    m_highlightProvider = provider;
-    m_unmappedPanel->setHighlightProvider(provider);
+    m_markerProvider = provider;
+    m_unmappedPanel->setMarkerProvider(provider);
     update();
 }
 
 void MapWidget::updateHighlights()
 {
-    if (m_highlightProvider)
+    if (m_markerProvider)
     {
-        ensureVisible(m_highlightProvider->highlightInfo().allHighlightedIds());
+        ensureVisible(m_markerProvider->highlightInfo().allHighlightedIds());
     }
+    updateUnmappedPanelVisibility();
     update();
     emit highlightChanged();
 }
@@ -950,9 +1024,9 @@ QMarginsF MapWidget::calculateSafeAreaPadding() const
     // Top: small margin (buttons are on left, layer button on right - top-center is clear)
     double top = 20;
 
-    // Right: unmapped panel width if visible, else layer button area
+    // Right: unmapped panel width if visible and expanded, else layer button area
     // Note: panel grows upward first, so only its width affects right margin
-    double right = m_unmappedPanel->isVisible()
+    double right = (m_unmappedPanel->isVisible() && m_unmappedPanel->isExpanded())
         ? (width() - m_unmappedPanel->x() + 10)
         : (m_layerButton->width() + 20);
 

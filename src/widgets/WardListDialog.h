@@ -1,5 +1,7 @@
 #pragma once
 
+#include "FamilyMarkerProvider.h"
+
 #include <QDialog>
 #include <QStringList>
 
@@ -16,7 +18,7 @@ class QAbstractListModel;
 /// Modal dialog for selecting families or persons from the ward list.
 /// Features a split view with list on left and map on right.
 /// Owns its own Filter and model instances.
-class WardListDialog : public QDialog
+class WardListDialog : public QDialog, public FamilyMarkerProvider
 {
     Q_OBJECT
 
@@ -51,6 +53,10 @@ public:
     /// Access the filter for external configuration.
     Filter* filter() const { return m_filter; }
 
+    // FamilyMarkerProvider interface
+    HighlightInfo highlightInfo() const override;
+    QSet<QString> visibleFamilyIds() const override;
+
     // Static convenience methods for common use cases
 
     /// Show dialog to select a single family. Returns empty string if cancelled.
@@ -74,14 +80,12 @@ public:
                                      QWidget* parent = nullptr);
 
 private slots:
-    void onListSelectionChanged(const QStringList& ids);
     void onMapFamilyClicked(const QString& id);
     void onSearchTextChanged(const QString& text);
     void onModelReset();
 
 private:
     void setupUi();
-    void centerMapOnFamily(const QString& familyId);
     QString familyIdForCurrentSelection() const;
 
     Mode m_mode;

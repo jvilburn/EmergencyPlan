@@ -12,7 +12,6 @@ namespace MarkerRenderer
     /// State affecting marker appearance
     struct State
     {
-        bool isSelected = false;
         bool isHighlighted = false;
         bool showPip = false;  // Contact point indicator (small dot)
         double opacity = 1.0;

@@ -1,6 +1,7 @@
 #pragma once
 
-#include "MapHighlightProvider.h"
+#include "FamilyMarkerProvider.h"
+#include "DocumentChange.h"
 
 #include <QWidget>
 
@@ -13,15 +14,15 @@ class QTreeWidgetItem;
 /// - Equipment (under category) - shows "EquipmentName (N)" where N is families with that equipment
 /// - Family (under equipment) - shows family's displayName
 ///
-/// Implements MapHighlightProvider to highlight families with selected equipment/categories.
-class EquipmentSubView : public QWidget, public MapHighlightProvider
+/// Implements FamilyMarkerProvider to highlight families with selected equipment/categories.
+class EquipmentSubView : public QWidget, public FamilyMarkerProvider
 {
     Q_OBJECT
 
 public:
     explicit EquipmentSubView(DocumentManager* documentManager, QWidget* parent = nullptr);
 
-    // MapHighlightProvider interface
+    // FamilyMarkerProvider interface
     HighlightInfo highlightInfo() const override;
     QSet<QString> visibleFamilyIds() const override;
 
@@ -29,12 +30,13 @@ signals:
     void highlightChanged();
 
 private slots:
-    void onDocumentChanged();
+    void onDocumentChanged(const DocumentChange& change);
     void onTreeItemClicked(QTreeWidgetItem* item, int column);
     void onContextMenu(const QPoint& pos);
 
 private:
     void rebuildTree();
+    void validateSelections();
     void showAddCategoryDialog();
     void showAddEquipmentDialog(const QString& categoryId);
     void showRenameDialog(QTreeWidgetItem* item);

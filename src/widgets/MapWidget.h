@@ -22,7 +22,7 @@ class MapViewModel;
 class TileService;
 class QPushButton;
 class UnmappedPanel;
-class MapHighlightProvider;
+class FamilyMarkerProvider;
 
 /// Pure C++ slippy map widget using TileService for tile rendering.
 /// Replaces the QML-based implementation with QPainter rendering.
@@ -40,22 +40,11 @@ public:
     /// Fit map to show all families
     void fitAllFamilies();
 
-    /// Set which families are highlighted (from team/ministering selection)
-    void setHighlightedFamilies(const QVariantMap& ids);
-
-    /// Set which families are visible (from list filtering).
-    /// Markers not in this set are de-emphasized. Empty set means all visible.
-    void setVisibleFamilyIds(const QStringList& ids);
-
-    /// Clear all highlighting
-    void clearHighlighting();
-
     /// Set the map center location
     void setCenter(double lat, double lng);
 
-    /// Set the highlight provider for marker coloring/opacity
-    /// When set, the provider is queried instead of using m_highlightedIds/m_visibleIds
-    void setHighlightProvider(MapHighlightProvider* provider);
+    /// Set the marker provider for marker rendering
+    void setMarkerProvider(FamilyMarkerProvider* provider);
 
 public slots:
     /// Trigger repaint of both map and unmapped panel when highlights change
@@ -82,6 +71,9 @@ private slots:
     void onZoomOut();
     void onToggleLayer();
     void onAnimationTick();
+    void onGeocodingStarted();
+    void onGeocodingFinished();
+    void onUnmappedPanelHeaderClicked();
 
 private:
     void setupUi();
@@ -104,6 +96,10 @@ private:
 
     // Hit testing
     QString markerAtPoint(const QPoint& pos) const;
+
+    // Unmapped panel visibility
+    void updateUnmappedPanelVisibility();
+    bool hasUnmappedSelection() const;
 
     // Bounds fitting
     void updateZoomForBounds();
@@ -144,10 +140,12 @@ private:
     QPoint m_dragStartPos;
     bool m_wasDragging = false;  // To distinguish click from drag
 
-    // Highlighting (legacy path - use m_highlightProvider when available)
-    QVariantMap m_highlightedIds;  // familyId -> color string
-    QSet<QString> m_visibleIds;    // Empty = all visible, otherwise only these are emphasized
-    MapHighlightProvider* m_highlightProvider = nullptr;  // When set, overrides m_highlightedIds/m_visibleIds
+    // Marker state
+    FamilyMarkerProvider* m_markerProvider = nullptr;  // Provides marker state
+
+    // Unmapped panel state
+    bool m_isGeocoding = false;
+    bool m_unmappedPanelManualOverride = false;
 
     // UI controls
     QPushButton* m_zoomInButton;

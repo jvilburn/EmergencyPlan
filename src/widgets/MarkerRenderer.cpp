@@ -80,28 +80,16 @@ void draw(QPainter& painter, const QPointF& pos,
         painter.setPen(QPen(QColor("#1A3366"), ringWidth));  // Dark blue
         painter.drawEllipse(pos, ringRadius, ringRadius);
 
-        // Draw marker circle
-        QColor fillColor = state.isSelected ? QColor("#1976D2") : QColor("#F57C00");
-        painter.setBrush(fillColor);
+        // Draw marker circle (orange, no border - ring provides the edge)
+        painter.setBrush(QColor("#F57C00"));
         painter.setPen(Qt::NoPen);
         painter.drawEllipse(pos, radius, radius);
     }
     else
     {
-        // Draw shadow (if selected)
-        if (state.isSelected)
-        {
-            painter.setBrush(QColor(0, 0, 0, 64));
-            painter.setPen(Qt::NoPen);
-            painter.drawEllipse(pos, radius + 2.0 * state.scale, radius + 2.0 * state.scale);
-        }
-
-        // Draw marker circle
-        QColor fillColor = state.isSelected ? QColor("#1976D2") : QColor("#F57C00");
-        QColor borderColor = state.isSelected ? QColor("#0D47A1") : Qt::white;
-
-        painter.setBrush(fillColor);
-        painter.setPen(QPen(borderColor, (state.isSelected ? 3.0 : 1.5) * penWidth));
+        // Draw marker circle (orange with white border)
+        painter.setBrush(QColor("#F57C00"));
+        painter.setPen(QPen(Qt::white, 1.5 * penWidth));
         painter.drawEllipse(pos, radius, radius);
     }
 

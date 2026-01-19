@@ -87,9 +87,12 @@ void WardListDialog::setupUi()
         QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     mainLayout->addWidget(m_buttonBox);
 
+    // Set this dialog as the highlight provider for the map
+    m_mapWidget->setMarkerProvider(this);
+
     // Connections
     connect(m_listWidget, &FilterableListWidget::selectionChanged,
-            this, &WardListDialog::onListSelectionChanged);
+            m_mapWidget, &MapWidget::updateHighlights);
     connect(m_listWidget, &FilterableListWidget::searchTextChanged,
             this, &WardListDialog::onSearchTextChanged);
     connect(m_mapWidget, &MapWidget::familyClicked,
@@ -118,33 +121,11 @@ void WardListDialog::setSelectionMode(SelectionMode mode)
 void WardListDialog::setPreselectedIds(const QStringList& ids)
 {
     m_listWidget->setSelectedIds(ids);
-
-    // Center map on first selection
-    if (!ids.isEmpty())
-    {
-        QString familyId = familyIdForCurrentSelection();
-        if (!familyId.isEmpty())
-        {
-            centerMapOnFamily(familyId);
-        }
-    }
 }
 
 QStringList WardListDialog::selectedIds() const
 {
     return m_listWidget->selectedIds();
-}
-
-void WardListDialog::onListSelectionChanged(const QStringList& ids)
-{
-    if (!ids.isEmpty())
-    {
-        QString familyId = familyIdForCurrentSelection();
-        if (!familyId.isEmpty())
-        {
-            centerMapOnFamily(familyId);
-        }
-    }
 }
 
 void WardListDialog::onMapFamilyClicked(const QString& familyId)
@@ -177,14 +158,6 @@ void WardListDialog::onModelReset()
     // Could update map highlighting here if needed
 }
 
-void WardListDialog::centerMapOnFamily(const QString& familyId)
-{
-    if (!familyId.isEmpty())
-    {
-        m_mapWidget->centerOnFamily(familyId);
-    }
-}
-
 QString WardListDialog::familyIdForCurrentSelection() const
 {
     QStringList ids = m_listWidget->selectedIds();
@@ -202,6 +175,23 @@ QString WardListDialog::familyIdForCurrentSelection() const
         // Look up family for selected person
         return m_documentManager->document().familyIdForPerson(ids.first());
     }
+}
+
+HighlightInfo WardListDialog::highlightInfo() const
+{
+    HighlightInfo info;
+    QString familyId = familyIdForCurrentSelection();
+    if (!familyId.isEmpty())
+    {
+        info.highlightedFamilyIds.insert(familyId);
+    }
+    return info;
+}
+
+QSet<QString> WardListDialog::visibleFamilyIds() const
+{
+    // Show all families in the dialog
+    return {};
 }
 
 // Static convenience methods

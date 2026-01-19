@@ -535,6 +535,13 @@ WardDirectoryPdfParser::ParseResult WardDirectoryPdfParser::parse(const QString&
                 currentFields.append(field);
             }
         }
+
+        // Validate first page has ward directory header (font size 13 with "Ward - UnitNumber" format)
+        if (pageNum == 0 && result.wardName.isEmpty())
+        {
+            result.errors.append("Not a Ward Directory");
+            return result;
+        }
     }
 
     // Don't forget the last family

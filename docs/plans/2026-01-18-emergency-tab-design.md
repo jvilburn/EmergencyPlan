@@ -60,21 +60,75 @@ Medical (5)
 
 ## Interaction Model
 
+### Terminology
+
+Each sub-tab uses context-specific terms:
+- **Skills tab**: Category contains Skills (e.g., "Medical" category → "CPR Certified" skill)
+- **Equipment tab**: Category contains Equipment (e.g., "Power" category → "Generator" equipment)
+- **Needs tab**: No categories; flat list of Special Needs
+
+### Single-Click Behavior
+- **On Category** → Selects; highlights all assigned people/families in that category on map
+- **On Skill/Equipment/Need** → Selects; highlights assigned people/families on map
+- **On Assigned person/family** → Selects; highlights just that person/family on map
+
+Expand/collapse is exclusively via the arrow or double-click (standard tree behavior).
+
 ### Double-Click Behavior
-- **On Skill/Equipment item** → Opens WardListDialog with current assignments pre-selected
 - **On Category** → Expands/collapses (default tree behavior)
-- **On Assigned person/family** → No special action
+- **On Skill/Equipment/Need** → Expands/collapses (default tree behavior)
+- **On Assigned person/family** → Expands/collapses to show contact details (address, phone, email)
 
 ### Right-Click Context Menu
 
-On Skill/Equipment/SpecialNeed item:
-- **Select People...** / **Select Families...** → Opens WardListDialog picker
-- **Rename...** → Opens rename dialog
-- **Delete** → Confirms and deletes item
-
 On Category:
 - **Rename...** → Opens rename dialog
-- **Delete** → Confirms and deletes category (and all items)
+- **Add [Category] Skill/Equipment...** → Dynamic label (e.g., "Add Medical Skill...", "Add Shelter Equipment...")
+- **Delete** → Confirms and deletes category (and all contained skills/equipment)
+
+On Skill/Equipment/Need:
+- **Select People...** / **Select Families...** → Opens WardListDialog picker
+- **Rename...** → Opens rename dialog
+- **Delete** → Confirms and deletes
+
+On Assigned person/family:
+- Contact info section (disabled/non-clickable): address, phone, email
+- ─────────── (separator)
+- **Remove** → Removes this person/family from the skill/equipment/need
+
+On empty area (Skills/Equipment tabs):
+- **Add Category...** → Opens dialog to create new category
+
+On empty area (Needs tab):
+- **Add Special Need...** → Opens dialog to create new special need
+
+### Menu Bar: Emergency Menu
+
+Dedicated "Emergency" menu in the menu bar. Menu is always visible; items are disabled when not on Emergency tab.
+
+```
+Emergency
+├── Add Category...
+├── Add Skill/Equipment/Need...
+├── ─────────
+├── Select People...
+├── Select Families...
+├── ─────────
+├── Rename...
+└── Delete
+```
+
+Labels are dynamic based on active sub-tab (e.g., "Add Medical Skill..." when Medical category selected).
+
+| Action | Enabled When |
+|--------|--------------|
+| Add Category... | Emergency tab active (Skills/Equipment sub-tabs) |
+| Add Skill/Equipment/Need... | Category or Skill/Equipment/Need selected |
+| Add Special Need... | Emergency tab active (Needs sub-tab) |
+| Select People... | Skill/Equipment/Need selected |
+| Select Families... | Skill/Equipment/Need selected |
+| Rename... | Category or Skill/Equipment/Need selected |
+| Delete | Category, Skill/Equipment/Need, or Assigned person selected |
 
 ### Map Highlighting
 
@@ -108,8 +162,8 @@ When a skill, equipment, or special need item is selected:
 1. User double-clicks or right-clicks item
 2. WardListDialog opens with current assignments checked
 3. On OK, diff changes and execute commands:
-   - `AssignPersonToSkillCommand` / `UnassignPersonFromSkillCommand`
-   - `AssignFamilyToEquipmentCommand` / `UnassignFamilyFromEquipmentCommand`
+   - `AssignPersonToSkillCommand` / `RemovePersonFromSkillCommand`
+   - `AssignFamilyToEquipmentCommand` / `RemoveFamilyFromEquipmentCommand`
    - Similar for special needs
 
 ### DocumentChange Integration

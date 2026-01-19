@@ -82,6 +82,22 @@ public:
 
 ---
 
+## Map Click Interaction
+
+MapWidget emits `familyClicked(QString familyId)` on any click:
+- **Non-empty ID**: Clicked on a family marker
+- **Empty string**: Clicked on empty map
+
+Views receiving this signal should:
+1. Update their selection state accordingly
+2. Empty string typically means "deselect" / "clear selection"
+3. Their `highlightInfo()` will reflect the new selection
+4. Map repaints automatically
+
+**Note:** `centerOnFamily()` only centers the map - it does not affect selection or highlighting. That's the view's responsibility.
+
+---
+
 ## Sidebar Correlation
 
 The tree views also show a pip indicator next to contact point names, matching the map. This helps users correlate sidebar selection with map markers.

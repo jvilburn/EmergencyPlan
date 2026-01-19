@@ -37,7 +37,7 @@ This checklist tracks the implementation progress for converting the Emergency P
 - [x] Gender.h (enum class + string conversion)
 - [x] ViewMode.h (EQ/RS/Emergency/Tags)
 - [x] MarkerDecorationType.h (None/Med/Rec/Com/Spec)
-- [x] ResourceLevel.h (Person/Family)
+- [x] TagLevel.h (Person/Family) - inside Tag.h
 
 ### Core Models
 - [x] Person.h/cpp
@@ -70,13 +70,28 @@ This checklist tracks the implementation progress for converting the Emergency P
   - [x] toJson() / fromJson()
   - [ ] Unit tests
 
-- [x] ResourceCategory.h/cpp
-  - [x] Properties (id, name, level, sortOrder, markerDecorationType)
+- [x] SkillCategory.h/cpp
+  - [x] Properties (id, name, sortOrder)
   - [x] toJson() / fromJson()
   - [ ] Unit tests
 
-- [x] ResourceType.h/cpp
-  - [x] Properties (id, name, categoryId, isCustom, personIds, familyIds)
+- [x] Skill.h/cpp
+  - [x] Properties (id, name, categoryId, personIds)
+  - [x] toJson() / fromJson()
+  - [ ] Unit tests
+
+- [x] EquipmentCategory.h/cpp
+  - [x] Properties (id, name, sortOrder)
+  - [x] toJson() / fromJson()
+  - [ ] Unit tests
+
+- [x] Equipment.h/cpp
+  - [x] Properties (id, name, categoryId, familyIds)
+  - [x] toJson() / fromJson()
+  - [ ] Unit tests
+
+- [x] SpecialNeed.h/cpp
+  - [x] Properties (personId, familyId, note) - no ID, struct not class
   - [x] toJson() / fromJson()
   - [ ] Unit tests
 
@@ -140,8 +155,12 @@ This checklist tracks the implementation progress for converting the Emergency P
   - [ ] Tree structure support
   - [ ] Unit tests
 
-- [ ] ResourceTreeModel.h/cpp
-  - [ ] Category > Type hierarchy
+- [ ] SkillTreeModel.h/cpp
+  - [ ] Category > Skill hierarchy
+  - [ ] Unit tests
+
+- [ ] EquipmentTreeModel.h/cpp
+  - [ ] Category > Equipment hierarchy
   - [ ] Unit tests
 
 ---
@@ -192,14 +211,31 @@ This checklist tracks the implementation progress for converting the Emergency P
 - [x] UnassignTagCommand
 - [ ] Unit tests for all
 
-### Resource Commands
-- [x] CreateResourceTypeCommand
-- [x] UpdateResourceTypeCommand
-- [x] DeleteResourceTypeCommand
-- [x] AssignResourceToPersonCommand
-- [x] AssignResourceToFamilyCommand
-- [x] UnassignResourceCommand
-- [x] UpdateCategoryCommand
+### Skill Commands
+- [x] CreateSkillCategoryCommand
+- [x] UpdateSkillCategoryCommand
+- [x] DeleteSkillCategoryCommand
+- [x] CreateSkillCommand
+- [x] UpdateSkillCommand
+- [x] DeleteSkillCommand
+- [x] AssignPersonToSkillCommand
+- [x] UnassignPersonFromSkillCommand
+- [ ] Unit tests for all
+
+### Equipment Commands
+- [x] CreateEquipmentCategoryCommand
+- [x] UpdateEquipmentCategoryCommand
+- [x] DeleteEquipmentCategoryCommand
+- [x] CreateEquipmentCommand
+- [x] UpdateEquipmentCommand
+- [x] DeleteEquipmentCommand
+- [x] AssignFamilyToEquipmentCommand
+- [x] UnassignFamilyFromEquipmentCommand
+- [ ] Unit tests for all
+
+### Special Need Commands
+- [x] SetSpecialNeedCommand (for person or family)
+- [x] ClearSpecialNeedCommand
 - [ ] Unit tests for all
 
 ### Import Commands
@@ -248,13 +284,11 @@ This checklist tracks the implementation progress for converting the Emergency P
   - [ ] calculateMinisteringStats()
   - [ ] Unit tests
 
-### Resource Service
-- [ ] ResourceService.h/cpp
-  - [ ] loadDefaultConfig()
-  - [ ] parseConfigFile()
-  - [ ] getResourcesForPerson()
-  - [ ] getResourcesForFamily()
-  - [ ] Unit tests
+### Emergency Inventory Service
+- [x] Default categories initialized in Document::initializeDefaultCategories()
+  - [x] SkillCategory defaults (Medical, Communication, Repair)
+  - [x] EquipmentCategory defaults (Power, Tools, Transportation, Shelter, Water, Supplies)
+- [ ] Unit tests
 
 ### Search Service
 - [ ] SearchService.h/cpp
@@ -345,9 +379,8 @@ This checklist tracks the implementation progress for converting the Emergency P
 - [ ] PdfReportService.h/cpp
   - [ ] QPdfWriter / QPainter setup
   - [ ] Header/footer rendering
-  - [ ] Emergency resource report
+  - [ ] Emergency inventory report (skills + equipment + special needs)
   - [ ] Tag report
-  - [ ] Skills/equipment report
   - [ ] Integration tests
 
 ---
@@ -406,10 +439,17 @@ This checklist tracks the implementation progress for converting the Emergency P
   - [ ] Assignment management
   - [ ] Tests
 
-### Resource ViewModel
-- [ ] ResourceViewModel.h/cpp
-  - [ ] Category/type selection
-  - [ ] Resource discovery
+### Emergency Inventory ViewModel
+- [ ] SkillViewModel.h/cpp
+  - [ ] Category/skill selection
+  - [ ] Person assignment
+  - [ ] Tests
+- [ ] EquipmentViewModel.h/cpp
+  - [ ] Category/equipment selection
+  - [ ] Family assignment
+  - [ ] Tests
+- [ ] SpecialNeedViewModel.h/cpp
+  - [ ] View/edit special needs
   - [ ] Tests
 
 ### Highlight Orchestrator
@@ -581,11 +621,21 @@ This checklist tracks the implementation progress for converting the Emergency P
   - [ ] Search/filter for assignment
   - [ ] OK/Cancel
 
-### Resource Dialog
-- [ ] ResourceDialog.h/cpp
-  - [ ] Resource name
+### Skill Dialog
+- [ ] SkillDialog.h/cpp
+  - [ ] Skill name
   - [ ] Category selection
-  - [ ] Custom flag
+  - [ ] OK/Cancel
+
+### Equipment Dialog
+- [ ] EquipmentDialog.h/cpp
+  - [ ] Equipment name
+  - [ ] Category selection
+  - [ ] OK/Cancel
+
+### Special Need Dialog
+- [ ] SpecialNeedDialog.h/cpp
+  - [ ] Note text field
   - [ ] OK/Cancel
 
 ---
@@ -620,13 +670,20 @@ This checklist tracks the implementation progress for converting the Emergency P
   - [ ] Color picker
   - [ ] Member drag/drop (optional)
 
-### Resource View
-- [ ] ResourceView.h/cpp
-  - [ ] Category tree
-  - [ ] Resource type list
-  - [ ] Assignment counts
-  - [ ] Discovery features
-  - [ ] Add custom type
+### Emergency Inventory View
+- [ ] SkillsView.h/cpp
+  - [ ] Skill category tree
+  - [ ] Skill list per category
+  - [ ] Person assignment counts
+  - [ ] Add/edit/delete skills and categories
+- [ ] EquipmentView.h/cpp
+  - [ ] Equipment category tree
+  - [ ] Equipment list per category
+  - [ ] Family assignment counts
+  - [ ] Add/edit/delete equipment and categories
+- [ ] SpecialNeedsView.h/cpp
+  - [ ] List of persons/families with special needs
+  - [ ] Add/edit/clear special needs
 
 ### Tags View
 - [ ] TagsView.h/cpp
@@ -655,10 +712,8 @@ This checklist tracks the implementation progress for converting the Emergency P
 - [ ] Conflict resolution UI
 
 ### PDF Reports
-- [ ] Emergency resource report
+- [ ] Emergency inventory report (skills + equipment + special needs)
 - [ ] Tag-based report
-- [ ] Skills report
-- [ ] Equipment report
 - [ ] Report preview (optional)
 
 ---
@@ -804,6 +859,10 @@ This checklist tracks the implementation progress for converting the Emergency P
 - Add notes for any blockers or issues
 - Update progress percentages weekly
 - Prioritize based on dependencies (earlier phases must complete first)
+
+## Design Discussions Needed
+
+- **Map icon interactions by tab context**: Need to define what happens on click/double-click/right-click on a family map icon depending on which tab is currently open (Families, Ministering, Emergency). Behavior should be context-appropriate.
 
 ---
 

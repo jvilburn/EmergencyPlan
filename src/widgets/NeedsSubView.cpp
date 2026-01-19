@@ -264,10 +264,45 @@ void NeedsSubView::onContextMenu(const QPoint& pos)
     }
 }
 
-void NeedsSubView::onDocumentChanged()
+void NeedsSubView::onDocumentChanged(const DocumentChange& change)
 {
-    rebuildTree();
-    emit highlightChanged();
+    switch (change.scope)
+    {
+    case ChangeScope::Full:
+    case ChangeScope::SpecialNeed:
+    case ChangeScope::Family:  // Person/family names
+        validateSelections();
+        rebuildTree();
+        emit highlightChanged();
+        break;
+    default:
+        break;
+    }
+}
+
+void NeedsSubView::validateSelections()
+{
+    const Document& doc = m_documentManager->document();
+
+    // Clear person selection if their special need no longer exists
+    if (!m_selectedPersonId.isEmpty())
+    {
+        auto needOpt = doc.findSpecialNeed(m_selectedPersonId, std::nullopt);
+        if (!needOpt)
+        {
+            m_selectedPersonId.clear();
+        }
+    }
+
+    // Clear family selection if their special need no longer exists
+    if (!m_selectedFamilyId.isEmpty())
+    {
+        auto needOpt = doc.findSpecialNeed(std::nullopt, m_selectedFamilyId);
+        if (!needOpt)
+        {
+            m_selectedFamilyId.clear();
+        }
+    }
 }
 
 HighlightInfo NeedsSubView::highlightInfo() const

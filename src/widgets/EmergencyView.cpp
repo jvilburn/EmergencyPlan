@@ -49,15 +49,15 @@ EmergencyView::EmergencyView(DocumentManager* documentManager, QWidget* parent)
     m_subTabs->setCurrentIndex(1);
 }
 
-MapHighlightProvider* EmergencyView::currentSubProvider() const
+FamilyMarkerProvider* EmergencyView::currentSubProvider() const
 {
     QWidget* current = m_subTabs->currentWidget();
-    return dynamic_cast<MapHighlightProvider*>(current);
+    return dynamic_cast<FamilyMarkerProvider*>(current);
 }
 
 HighlightInfo EmergencyView::highlightInfo() const
 {
-    MapHighlightProvider* provider = currentSubProvider();
+    FamilyMarkerProvider* provider = currentSubProvider();
     if (provider)
     {
         return provider->highlightInfo();
@@ -67,7 +67,7 @@ HighlightInfo EmergencyView::highlightInfo() const
 
 QSet<QString> EmergencyView::visibleFamilyIds() const
 {
-    MapHighlightProvider* provider = currentSubProvider();
+    FamilyMarkerProvider* provider = currentSubProvider();
     if (provider)
     {
         return provider->visibleFamilyIds();
