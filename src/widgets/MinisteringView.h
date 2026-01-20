@@ -79,5 +79,14 @@ private:
     // Constants for tree item data roles
     static constexpr int IdRole = Qt::UserRole;
     static constexpr int TypeRole = Qt::UserRole + 1;
-    enum class ItemType { District, Companionship };
+    static constexpr int SecondaryIdRole = Qt::UserRole + 2;  // For contact: person/family ID
+    enum class ItemType {
+        District,
+        Companionship,
+        SectionHeader,     // "Ministers", "Families", "Sisters"
+        Minister,          // Individual minister person
+        MinisteredFamily,  // EQ: family being ministered to
+        MinisteredSister,  // RS: sister being ministered to
+        ContactDetail      // Phone, email, address line
+    };
 };
