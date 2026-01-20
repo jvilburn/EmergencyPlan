@@ -281,7 +281,7 @@ void MinisteringView::populateContactInfo(QTreeWidgetItem* item)
         // Phone
         if (!person->phone().isEmpty())
         {
-            auto* phoneItem = new QTreeWidgetItem(item);
+            QTreeWidgetItem* phoneItem = new QTreeWidgetItem(item);
             phoneItem->setText(0, QString::fromUtf8("\xf0\x9f\x93\x9e ") + person->phone());
             phoneItem->setData(0, TypeRole, static_cast<int>(ItemType::ContactDetail));
             phoneItem->setFlags(phoneItem->flags() & ~Qt::ItemIsSelectable);
@@ -290,7 +290,7 @@ void MinisteringView::populateContactInfo(QTreeWidgetItem* item)
         // Alt phone
         if (!person->altPhone().isEmpty())
         {
-            auto* altPhoneItem = new QTreeWidgetItem(item);
+            QTreeWidgetItem* altPhoneItem = new QTreeWidgetItem(item);
             altPhoneItem->setText(0, QString::fromUtf8("\xf0\x9f\x93\x9e ") + person->altPhone() + tr(" (alt)"));
             altPhoneItem->setData(0, TypeRole, static_cast<int>(ItemType::ContactDetail));
             altPhoneItem->setFlags(altPhoneItem->flags() & ~Qt::ItemIsSelectable);
@@ -299,7 +299,7 @@ void MinisteringView::populateContactInfo(QTreeWidgetItem* item)
         // Email
         if (!person->email().isEmpty())
         {
-            auto* emailItem = new QTreeWidgetItem(item);
+            QTreeWidgetItem* emailItem = new QTreeWidgetItem(item);
             emailItem->setText(0, QString::fromUtf8("\xf0\x9f\x93\xa7 ") + person->email());
             emailItem->setData(0, TypeRole, static_cast<int>(ItemType::ContactDetail));
             emailItem->setFlags(emailItem->flags() & ~Qt::ItemIsSelectable);
@@ -315,7 +315,7 @@ void MinisteringView::populateContactInfo(QTreeWidgetItem* item)
                 const Family& family = families[familyId];
                 if (!family.address().isEmpty())
                 {
-                    auto* addrItem = new QTreeWidgetItem(item);
+                    QTreeWidgetItem* addrItem = new QTreeWidgetItem(item);
                     addrItem->setText(0, QString::fromUtf8("\xf0\x9f\x93\x8d ") + family.address().full());
                     addrItem->setData(0, TypeRole, static_cast<int>(ItemType::ContactDetail));
                     addrItem->setFlags(addrItem->flags() & ~Qt::ItemIsSelectable);
@@ -339,7 +339,7 @@ void MinisteringView::populateContactInfo(QTreeWidgetItem* item)
         {
             if (member.isParent() && !member.phone().isEmpty())
             {
-                auto* phoneItem = new QTreeWidgetItem(item);
+                QTreeWidgetItem* phoneItem = new QTreeWidgetItem(item);
                 phoneItem->setText(0, QString::fromUtf8("\xf0\x9f\x93\x9e ") + member.phone());
                 phoneItem->setData(0, TypeRole, static_cast<int>(ItemType::ContactDetail));
                 phoneItem->setFlags(phoneItem->flags() & ~Qt::ItemIsSelectable);
@@ -350,7 +350,7 @@ void MinisteringView::populateContactInfo(QTreeWidgetItem* item)
         // Address
         if (!family.address().isEmpty())
         {
-            auto* addrItem = new QTreeWidgetItem(item);
+            QTreeWidgetItem* addrItem = new QTreeWidgetItem(item);
             addrItem->setText(0, QString::fromUtf8("\xf0\x9f\x93\x8d ") + family.address().full());
             addrItem->setData(0, TypeRole, static_cast<int>(ItemType::ContactDetail));
             addrItem->setFlags(addrItem->flags() & ~Qt::ItemIsSelectable);
@@ -363,7 +363,7 @@ void MinisteringView::addMinistersSection(QTreeWidgetItem* companionshipItem, co
     const Document& doc = m_documentManager->document();
 
     // Create "Ministers" section header
-    auto* ministersHeader = new QTreeWidgetItem(companionshipItem);
+    QTreeWidgetItem* ministersHeader = new QTreeWidgetItem(companionshipItem);
     ministersHeader->setText(0, tr("Ministers"));
     ministersHeader->setData(0, TypeRole, static_cast<int>(ItemType::SectionHeader));
     ministersHeader->setFlags(ministersHeader->flags() & ~Qt::ItemIsSelectable);
@@ -383,7 +383,7 @@ void MinisteringView::addMinistersSection(QTreeWidgetItem* companionshipItem, co
             continue;
         }
 
-        auto* ministerItem = new QTreeWidgetItem(ministersHeader);
+        QTreeWidgetItem* ministerItem = new QTreeWidgetItem(ministersHeader);
         ministerItem->setText(0, person->displayName());
         ministerItem->setData(0, IdRole, ministerId);
         ministerItem->setData(0, TypeRole, static_cast<int>(ItemType::Minister));
