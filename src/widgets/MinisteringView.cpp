@@ -182,8 +182,25 @@ void MinisteringView::onUnassignedClicked()
 
 void MinisteringView::onTreeItemClicked(QTreeWidgetItem* item, int /*column*/)
 {
-    QString itemId = item->data(0, IdRole).toString();
     ItemType type = static_cast<ItemType>(item->data(0, TypeRole).toInt());
+
+    // Section headers and contact details are not interactive for selection
+    if (type == ItemType::SectionHeader || type == ItemType::ContactDetail)
+    {
+        return;
+    }
+
+    // Ministers, ministered families/sisters just expand/collapse - no map selection change
+    if (type == ItemType::Minister
+        || type == ItemType::MinisteredFamily
+        || type == ItemType::MinisteredSister)
+    {
+        // Toggle expansion
+        item->setExpanded(!item->isExpanded());
+        return;
+    }
+
+    QString itemId = item->data(0, IdRole).toString();
 
     if (type == ItemType::District)
     {
