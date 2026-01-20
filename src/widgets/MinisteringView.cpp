@@ -393,6 +393,63 @@ void MinisteringView::addMinistersSection(QTreeWidgetItem* companionshipItem, co
     ministersHeader->setExpanded(true);
 }
 
+void MinisteringView::addMinisteredSection(QTreeWidgetItem* companionshipItem, const MinisteringGroup& group)
+{
+    const Document& doc = m_documentManager->document();
+
+    // Create section header - "Families" for EQ, "Sisters" for RS
+    QTreeWidgetItem* ministeredHeader = new QTreeWidgetItem(companionshipItem);
+    ministeredHeader->setText(0, m_isEQ ? tr("Families") : tr("Sisters"));
+    ministeredHeader->setData(0, TypeRole, static_cast<int>(ItemType::SectionHeader));
+    ministeredHeader->setFlags(ministeredHeader->flags() & ~Qt::ItemIsSelectable);
+
+    // Style header italic
+    QFont headerFont = ministeredHeader->font(0);
+    headerFont.setItalic(true);
+    ministeredHeader->setFont(0, headerFont);
+    ministeredHeader->setForeground(0, QColor(100, 100, 100));
+
+    if (m_isEQ)
+    {
+        // EQ: Add families
+        const auto& families = doc.families();
+        for (const QString& familyId : group.familyIds())
+        {
+            if (!families.contains(familyId))
+            {
+                continue;
+            }
+
+            const Family& family = families[familyId];
+            QTreeWidgetItem* familyItem = new QTreeWidgetItem(ministeredHeader);
+            familyItem->setText(0, family.displayName());
+            familyItem->setData(0, IdRole, familyId);
+            familyItem->setData(0, TypeRole, static_cast<int>(ItemType::MinisteredFamily));
+            familyItem->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
+        }
+    }
+    else
+    {
+        // RS: Add sisters
+        for (const QString& personId : group.ministeredPersonIds())
+        {
+            std::optional<Person> person = doc.findPersonById(personId);
+            if (!person)
+            {
+                continue;
+            }
+
+            QTreeWidgetItem* sisterItem = new QTreeWidgetItem(ministeredHeader);
+            sisterItem->setText(0, person->displayName());
+            sisterItem->setData(0, IdRole, personId);
+            sisterItem->setData(0, TypeRole, static_cast<int>(ItemType::MinisteredSister));
+            sisterItem->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
+        }
+    }
+
+    ministeredHeader->setExpanded(true);
+}
+
 void MinisteringView::rebuildTree()
 {
     m_tree->clear();
