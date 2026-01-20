@@ -358,6 +358,41 @@ void MinisteringView::populateContactInfo(QTreeWidgetItem* item)
     }
 }
 
+void MinisteringView::addMinistersSection(QTreeWidgetItem* companionshipItem, const MinisteringGroup& group)
+{
+    const Document& doc = m_documentManager->document();
+
+    // Create "Ministers" section header
+    auto* ministersHeader = new QTreeWidgetItem(companionshipItem);
+    ministersHeader->setText(0, tr("Ministers"));
+    ministersHeader->setData(0, TypeRole, static_cast<int>(ItemType::SectionHeader));
+    ministersHeader->setFlags(ministersHeader->flags() & ~Qt::ItemIsSelectable);
+
+    // Style header italic
+    QFont headerFont = ministersHeader->font(0);
+    headerFont.setItalic(true);
+    ministersHeader->setFont(0, headerFont);
+    ministersHeader->setForeground(0, QColor(100, 100, 100));
+
+    // Add individual ministers
+    for (const QString& ministerId : group.ministerIds())
+    {
+        std::optional<Person> person = doc.findPersonById(ministerId);
+        if (!person)
+        {
+            continue;
+        }
+
+        auto* ministerItem = new QTreeWidgetItem(ministersHeader);
+        ministerItem->setText(0, person->displayName());
+        ministerItem->setData(0, IdRole, ministerId);
+        ministerItem->setData(0, TypeRole, static_cast<int>(ItemType::Minister));
+        ministerItem->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
+    }
+
+    ministersHeader->setExpanded(true);
+}
+
 void MinisteringView::rebuildTree()
 {
     m_tree->clear();
