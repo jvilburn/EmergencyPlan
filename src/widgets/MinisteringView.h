@@ -8,6 +8,7 @@
 #include <QSet>
 
 class DocumentManager;
+class MinisteringGroup;
 class QButtonGroup;
 class QLabel;
 class QTreeWidget;
@@ -41,6 +42,7 @@ private slots:
     void onUnassignedClicked();
     void onTreeItemClicked(QTreeWidgetItem* item, int column);
     void onDocumentChanged(const DocumentChange& change);
+    void onTreeItemExpanded(QTreeWidgetItem* item);
 
 private:
     void setupUi();
@@ -48,6 +50,9 @@ private:
     void regenerateColors();
     void updateUnassignedLabel();
     void clearSelection();
+    void populateContactInfo(QTreeWidgetItem* item);
+    void addMinistersSection(QTreeWidgetItem* companionshipItem, const MinisteringGroup& group);
+    void addMinisteredSection(QTreeWidgetItem* companionshipItem, const MinisteringGroup& group);
 
     // Get family IDs for the current selection (ministered families)
     QSet<QString> selectedFamilyIds() const;
