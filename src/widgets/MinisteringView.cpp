@@ -264,8 +264,98 @@ void MinisteringView::onTreeItemExpanded(QTreeWidgetItem* item)
 
 void MinisteringView::populateContactInfo(QTreeWidgetItem* item)
 {
-    // TODO: implement in next task
-    Q_UNUSED(item)
+    ItemType type = static_cast<ItemType>(item->data(0, TypeRole).toInt());
+    QString id = item->data(0, IdRole).toString();
+
+    const Document& doc = m_documentManager->document();
+
+    if (type == ItemType::Minister || type == ItemType::MinisteredSister)
+    {
+        // Person contact info
+        std::optional<Person> person = doc.findPersonById(id);
+        if (!person)
+        {
+            return;
+        }
+
+        // Phone
+        if (!person->phone().isEmpty())
+        {
+            auto* phoneItem = new QTreeWidgetItem(item);
+            phoneItem->setText(0, QString::fromUtf8("\xf0\x9f\x93\x9e ") + person->phone());
+            phoneItem->setData(0, TypeRole, static_cast<int>(ItemType::ContactDetail));
+            phoneItem->setFlags(phoneItem->flags() & ~Qt::ItemIsSelectable);
+        }
+
+        // Alt phone
+        if (!person->altPhone().isEmpty())
+        {
+            auto* altPhoneItem = new QTreeWidgetItem(item);
+            altPhoneItem->setText(0, QString::fromUtf8("\xf0\x9f\x93\x9e ") + person->altPhone() + tr(" (alt)"));
+            altPhoneItem->setData(0, TypeRole, static_cast<int>(ItemType::ContactDetail));
+            altPhoneItem->setFlags(altPhoneItem->flags() & ~Qt::ItemIsSelectable);
+        }
+
+        // Email
+        if (!person->email().isEmpty())
+        {
+            auto* emailItem = new QTreeWidgetItem(item);
+            emailItem->setText(0, QString::fromUtf8("\xf0\x9f\x93\xa7 ") + person->email());
+            emailItem->setData(0, TypeRole, static_cast<int>(ItemType::ContactDetail));
+            emailItem->setFlags(emailItem->flags() & ~Qt::ItemIsSelectable);
+        }
+
+        // Address (from family)
+        QString familyId = doc.familyIdForPerson(id);
+        if (!familyId.isEmpty())
+        {
+            const auto& families = doc.families();
+            if (families.contains(familyId))
+            {
+                const Family& family = families[familyId];
+                if (!family.address().isEmpty())
+                {
+                    auto* addrItem = new QTreeWidgetItem(item);
+                    addrItem->setText(0, QString::fromUtf8("\xf0\x9f\x93\x8d ") + family.address().full());
+                    addrItem->setData(0, TypeRole, static_cast<int>(ItemType::ContactDetail));
+                    addrItem->setFlags(addrItem->flags() & ~Qt::ItemIsSelectable);
+                }
+            }
+        }
+    }
+    else if (type == ItemType::MinisteredFamily)
+    {
+        // Family contact info
+        const auto& families = doc.families();
+        if (!families.contains(id))
+        {
+            return;
+        }
+
+        const Family& family = families[id];
+
+        // Find head of household for phone
+        for (const Person& member : family.members())
+        {
+            if (member.isParent() && !member.phone().isEmpty())
+            {
+                auto* phoneItem = new QTreeWidgetItem(item);
+                phoneItem->setText(0, QString::fromUtf8("\xf0\x9f\x93\x9e ") + member.phone());
+                phoneItem->setData(0, TypeRole, static_cast<int>(ItemType::ContactDetail));
+                phoneItem->setFlags(phoneItem->flags() & ~Qt::ItemIsSelectable);
+                break;  // Only show first parent's phone
+            }
+        }
+
+        // Address
+        if (!family.address().isEmpty())
+        {
+            auto* addrItem = new QTreeWidgetItem(item);
+            addrItem->setText(0, QString::fromUtf8("\xf0\x9f\x93\x8d ") + family.address().full());
+            addrItem->setData(0, TypeRole, static_cast<int>(ItemType::ContactDetail));
+            addrItem->setFlags(addrItem->flags() & ~Qt::ItemIsSelectable);
+        }
+    }
 }
 
 void MinisteringView::rebuildTree()
