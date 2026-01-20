@@ -123,6 +123,8 @@ void MinisteringView::setupUi()
             this, &MinisteringView::onOrgToggled);
     connect(m_tree, &QTreeWidget::itemClicked,
             this, &MinisteringView::onTreeItemClicked);
+    connect(m_tree, &QTreeWidget::itemExpanded,
+            this, &MinisteringView::onTreeItemExpanded);
 }
 
 void MinisteringView::onOrgToggled(int id)
@@ -241,6 +243,29 @@ void MinisteringView::onDocumentChanged(const DocumentChange& change)
     rebuildTree();
     updateUnassignedLabel();
     emit highlightChanged();
+}
+
+void MinisteringView::onTreeItemExpanded(QTreeWidgetItem* item)
+{
+    ItemType type = static_cast<ItemType>(item->data(0, TypeRole).toInt());
+
+    // Only populate contact info for person/family items
+    if (type == ItemType::Minister
+        || type == ItemType::MinisteredFamily
+        || type == ItemType::MinisteredSister)
+    {
+        // Only populate if not already done (check for placeholder or empty)
+        if (item->childCount() == 0)
+        {
+            populateContactInfo(item);
+        }
+    }
+}
+
+void MinisteringView::populateContactInfo(QTreeWidgetItem* item)
+{
+    // TODO: implement in next task
+    Q_UNUSED(item)
 }
 
 void MinisteringView::rebuildTree()
