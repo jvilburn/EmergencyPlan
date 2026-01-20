@@ -543,6 +543,10 @@ void MinisteringView::rebuildTree()
                 font.setBold(true);
                 companionshipItem->setFont(0, font);
             }
+
+            // Add ministers and ministered sections
+            addMinistersSection(companionshipItem, group);
+            addMinisteredSection(companionshipItem, group);
         }
 
         m_tree->addTopLevelItem(districtItem);
