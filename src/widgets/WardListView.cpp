@@ -71,6 +71,14 @@ void WardListView::setup(DocumentManager* documentManager)
     connect(m_model, &QAbstractItemModel::modelReset,
             this, &WardListView::onModelReset);
 
+    // Connect rowsRemoved to clean up action widgets when children are rebuilt
+    connect(m_model, &QAbstractItemModel::rowsRemoved,
+            this, &WardListView::onRowsRemoved);
+
+    // Connect rowsInserted to re-attach action widgets for expanded families
+    connect(m_model, &QAbstractItemModel::rowsInserted,
+            this, &WardListView::onRowsInserted);
+
     // Emit initial visible families
     emit visibleFamiliesChanged(visibleFamilyIdsList());
 }
@@ -172,6 +180,40 @@ void WardListView::onModelReset()
     m_actionWidgets.clear();
 
     emit visibleFamiliesChanged(visibleFamilyIdsList());
+}
+
+void WardListView::onRowsRemoved(const QModelIndex& parent, int first, int last)
+{
+    Q_UNUSED(first)
+    Q_UNUSED(last)
+
+    // When a family's children are removed (during surgical update),
+    // the action widget is deleted by Qt. Clean up our tracking.
+    if (parent.isValid())
+    {
+        FamilyTreeModel::RowType type = m_model->rowTypeAt(parent);
+        if (type == FamilyTreeModel::RowType::Family)
+        {
+            QString familyId = m_model->familyIdAt(parent);
+            m_actionWidgets.remove(familyId);
+        }
+    }
+}
+
+void WardListView::onRowsInserted(const QModelIndex& parent, int first, int last)
+{
+    Q_UNUSED(first)
+    Q_UNUSED(last)
+
+    // When children are inserted under an expanded family, re-attach action buttons
+    if (parent.isValid())
+    {
+        FamilyTreeModel::RowType type = m_model->rowTypeAt(parent);
+        if (type == FamilyTreeModel::RowType::Family && m_treeView->isExpanded(parent))
+        {
+            attachActionButtons(parent);
+        }
+    }
 }
 
 void WardListView::onItemExpanded(const QModelIndex& index)

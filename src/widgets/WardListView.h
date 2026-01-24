@@ -67,6 +67,8 @@ private slots:
     void onSelectionChanged();
     void onSearchTextChanged(const QString& text);
     void onModelReset();
+    void onRowsRemoved(const QModelIndex& parent, int first, int last);
+    void onRowsInserted(const QModelIndex& parent, int first, int last);
     void onItemExpanded(const QModelIndex& index);
     void onItemCollapsed(const QModelIndex& index);
 
