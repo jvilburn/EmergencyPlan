@@ -88,7 +88,6 @@ Stored as separate `birthYear`, `birthMonth`, `birthDay` optionals because:
 
 | Task | Status | Plan Doc |
 |------|--------|----------|
-| Ministering expandable groups | ready | [impl](docs/plans/2026-01-20-ministering-expandable-groups-impl.md) |
 | NeedsSubView dialog UX | blocked:discussion | - |
 
 **Status:** `ready`, `in-progress`, `blocked:<reason>`, `done` (then remove row + archive plan)
@@ -101,6 +100,7 @@ Stored as separate `birthYear`, `birthMonth`, `birthDay` optionals because:
 - **MapHighlightProvider Refactoring** - Done. Interface uses semantic `HighlightInfo` struct, all existing views (WardListView, MinisteringView, WardListDialog) migrated, legacy code removed.
 - **Map Animation UI Padding** - Done. All tasks implemented and committed.
 - **Emergency Tab Implementation** - Done. EmergencyView with Skills, Equipment, Needs sub-tabs. MapHighlightProvider integration working.
+- **Ministering Expandable Groups** - Done. Companionships expand to show Ministers/Families/Sisters sections with lazy-loaded contact info (phone, email, address).
 
 ### Pending Discussion: NeedsSubView Dialog UX
 

@@ -9,8 +9,8 @@
 
 class DocumentManager;
 class MinisteringGroup;
-class QButtonGroup;
 class QLabel;
+class QTabBar;
 class QTreeWidget;
 class QTreeWidgetItem;
 
@@ -70,7 +70,7 @@ private:
     DocumentManager* m_documentManager;
 
     // UI
-    QButtonGroup* m_orgToggle = nullptr;
+    QTabBar* m_orgTabs = nullptr;
     QLabel* m_unassignedLabel = nullptr;
     QTreeWidget* m_tree = nullptr;
 

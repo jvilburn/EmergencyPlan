@@ -6,11 +6,11 @@
 #include "Family.h"
 #include "Person.h"
 
+#include <utility>
+
 #include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QButtonGroup>
-#include <QPushButton>
 #include <QLabel>
+#include <QTabBar>
 #include <QTreeWidget>
 #include <QHeaderView>
 #include <QEvent>
@@ -38,45 +38,11 @@ void MinisteringView::setupUi()
     layout->setContentsMargins(8, 8, 8, 8);
     layout->setSpacing(8);
 
-    // EQ/RS toggle
-    auto* toggleLayout = new QHBoxLayout();
-    toggleLayout->setSpacing(0);
-
-    auto* eqButton = new QPushButton(tr("EQ"));
-    auto* rsButton = new QPushButton(tr("RS"));
-
-    eqButton->setCheckable(true);
-    rsButton->setCheckable(true);
-    eqButton->setChecked(true);
-
-    QString toggleStyle = R"(
-        QPushButton {
-            background: #e0e0e0;
-            border: 1px solid #c0c0c0;
-            padding: 6px 16px;
-            font-weight: bold;
-        }
-        QPushButton:first-child { border-radius: 4px 0 0 4px; }
-        QPushButton:last-child { border-radius: 0 4px 4px 0; border-left: none; }
-        QPushButton:checked {
-            background: #1976D2;
-            color: white;
-            border-color: #1565C0;
-        }
-    )";
-    eqButton->setStyleSheet(toggleStyle + "QPushButton { border-radius: 4px 0 0 4px; }");
-    rsButton->setStyleSheet(toggleStyle + "QPushButton { border-radius: 0 4px 4px 0; border-left: none; }");
-
-    m_orgToggle = new QButtonGroup(this);
-    m_orgToggle->addButton(eqButton, 0);
-    m_orgToggle->addButton(rsButton, 1);
-    m_orgToggle->setExclusive(true);
-
-    toggleLayout->addWidget(eqButton);
-    toggleLayout->addWidget(rsButton);
-    toggleLayout->addStretch();
-
-    layout->addLayout(toggleLayout);
+    // EQ/RS tabs
+    m_orgTabs = new QTabBar();
+    m_orgTabs->addTab(tr("Elders Quorum"));
+    m_orgTabs->addTab(tr("Relief Society"));
+    layout->addWidget(m_orgTabs);
 
     // Unassigned section
     m_unassignedLabel = new QLabel(tr("Unassigned (0)"));
@@ -119,7 +85,7 @@ void MinisteringView::setupUi()
     layout->addWidget(m_tree, 1);
 
     // Connections
-    connect(m_orgToggle, &QButtonGroup::idClicked,
+    connect(m_orgTabs, &QTabBar::currentChanged,
             this, &MinisteringView::onOrgToggled);
     connect(m_tree, &QTreeWidget::itemClicked,
             this, &MinisteringView::onTreeItemClicked);
@@ -266,12 +232,24 @@ void MinisteringView::onTreeItemExpanded(QTreeWidgetItem* item)
 {
     ItemType type = static_cast<ItemType>(item->data(0, TypeRole).toInt());
 
-    // Only populate contact info for person/family items
-    if (type == ItemType::Minister
-        || type == ItemType::MinisteredFamily
-        || type == ItemType::MinisteredSister)
+    if (type == ItemType::Companionship)
     {
-        // Only populate if not already done (check for placeholder or empty)
+        // Expand section headers (Ministers, Families/Sisters) when companionship is expanded
+        for (int i = 0; i < item->childCount(); ++i)
+        {
+            QTreeWidgetItem* child = item->child(i);
+            ItemType childType = static_cast<ItemType>(child->data(0, TypeRole).toInt());
+            if (childType == ItemType::SectionHeader)
+            {
+                child->setExpanded(true);
+            }
+        }
+    }
+    else if (type == ItemType::Minister
+             || type == ItemType::MinisteredFamily
+             || type == ItemType::MinisteredSister)
+    {
+        // Only populate contact info if not already done
         if (item->childCount() == 0)
         {
             populateContactInfo(item);
@@ -406,8 +384,6 @@ void MinisteringView::addMinistersSection(QTreeWidgetItem* companionshipItem, co
         ministerItem->setData(0, TypeRole, static_cast<int>(ItemType::Minister));
         ministerItem->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
     }
-
-    ministersHeader->setExpanded(true);
 }
 
 void MinisteringView::addMinisteredSection(QTreeWidgetItem* companionshipItem, const MinisteringGroup& group)
@@ -463,8 +439,6 @@ void MinisteringView::addMinisteredSection(QTreeWidgetItem* companionshipItem, c
             sisterItem->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
         }
     }
-
-    ministeredHeader->setExpanded(true);
 }
 
 void MinisteringView::rebuildTree()
@@ -514,7 +488,8 @@ void MinisteringView::rebuildTree()
             districtItem->setFont(0, font);
         }
 
-        // Add companionships under this district
+        // Collect and sort companionships alphabetically by minister names
+        QList<std::pair<QString, QString>> sortedGroups;  // (display text, group ID)
         for (const QString& groupId : district.groupIds())
         {
             if (!groups.contains(groupId))
@@ -539,6 +514,20 @@ void MinisteringView::rebuildTree()
             QString companionshipText = QString("%1 (%2)")
                 .arg(ministerNames.join(", "))
                 .arg(count);
+
+            sortedGroups.append({companionshipText, groupId});
+        }
+
+        std::sort(sortedGroups.begin(), sortedGroups.end(),
+                  [](const auto& a, const auto& b)
+                  {
+                      return a.first.toLower() < b.first.toLower();
+                  });
+
+        // Add companionships under this district
+        for (const auto& [companionshipText, groupId] : sortedGroups)
+        {
+            const MinisteringGroup& group = groups[groupId];
 
             auto* companionshipItem = new QTreeWidgetItem(districtItem);
             companionshipItem->setText(0, companionshipText);
