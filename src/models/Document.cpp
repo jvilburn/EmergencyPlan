@@ -2,7 +2,9 @@
 
 Document Document::empty()
 {
-    return Document();
+    Document doc;
+    doc.initializeDefaultCategories();
+    return doc;
 }
 
 void Document::initializeDefaultCategories()

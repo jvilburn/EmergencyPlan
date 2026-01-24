@@ -15,10 +15,6 @@ ActionButtonsWidget::ActionButtonsWidget(const QString& familyId, QWidget* paren
     m_editButton = new QPushButton(tr("Edit"), this);
     m_deleteButton = new QPushButton(tr("Delete"), this);
 
-    // Prevent buttons from being shrunk
-    m_editButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    m_deleteButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-
     // Style delete button to indicate destructive action
     m_deleteButton->setStyleSheet("color: #c0392b;");
 

@@ -3,7 +3,6 @@
 #include "SlippyMapMath.h"
 #include "MarkerRenderer.h"
 #include "UnmappedPanel.h"
-#include "AppStyles.h"
 #include "MapViewModel.h"
 #include "DocumentManager.h"
 #include "DocumentChange.h"
@@ -27,6 +26,7 @@ MapWidget::MapWidget(DocumentManager* docManager, QWidget* parent)
     , m_docManager(docManager)
     , m_viewModel(new MapViewModel(docManager, this))
 {
+    setObjectName("mapWidget");
     setMinimumWidth(400);
     setMouseTracking(true);
     setFocusPolicy(Qt::StrongFocus);
@@ -65,18 +65,12 @@ MapWidget::~MapWidget()
 
 void MapWidget::setupUi()
 {
-    QString beveledStyle = AppStyles::beveledButtonCompact();
-
-    // Zoom button style override - center the symbol with adjusted padding
-    QString zoomStyle = beveledStyle
-        + "QPushButton { color: #303030; padding: 0 0 2px 0; }";
-
     // Zoom in button
     m_zoomInButton = new QPushButton("+", this);
+    m_zoomInButton->setObjectName("mapZoomButton");
     m_zoomInButton->setFixedSize(32, 32);
     m_zoomInButton->setFont(QFont("Arial", 20, QFont::Black));
     m_zoomInButton->setCursor(Qt::PointingHandCursor);
-    m_zoomInButton->setStyleSheet(zoomStyle);
     QGraphicsDropShadowEffect* zoomInShadow = new QGraphicsDropShadowEffect(m_zoomInButton);
     zoomInShadow->setBlurRadius(6);
     zoomInShadow->setOffset(0, 1);
@@ -86,10 +80,10 @@ void MapWidget::setupUi()
 
     // Zoom out button - use Unicode minus sign (wider than hyphen)
     m_zoomOutButton = new QPushButton(QChar(0x2212), this);
+    m_zoomOutButton->setObjectName("mapZoomButton");
     m_zoomOutButton->setFixedSize(32, 32);
     m_zoomOutButton->setFont(QFont("Arial", 20, QFont::Black));
     m_zoomOutButton->setCursor(Qt::PointingHandCursor);
-    m_zoomOutButton->setStyleSheet(zoomStyle);
     QGraphicsDropShadowEffect* zoomOutShadow = new QGraphicsDropShadowEffect(m_zoomOutButton);
     zoomOutShadow->setBlurRadius(6);
     zoomOutShadow->setOffset(0, 1);
@@ -103,7 +97,6 @@ void MapWidget::setupUi()
     m_recenterButton->setIcon(QIcon(":/icons/recenter.svg"));
     m_recenterButton->setIconSize(QSize(20, 20));
     m_recenterButton->setCursor(Qt::PointingHandCursor);
-    m_recenterButton->setStyleSheet(beveledStyle);
     m_recenterButton->setToolTip(tr("Fit all families"));
     QGraphicsDropShadowEffect* recenterShadow = new QGraphicsDropShadowEffect(m_recenterButton);
     recenterShadow->setBlurRadius(6);
@@ -116,7 +109,6 @@ void MapWidget::setupUi()
     m_layerButton = new QPushButton(this);
     m_layerButton->setFixedSize(66, 66);
     m_layerButton->setCursor(Qt::PointingHandCursor);
-    m_layerButton->setStyleSheet(beveledStyle);
     // Add shadow for visibility against the map
     QGraphicsDropShadowEffect* layerShadow = new QGraphicsDropShadowEffect(m_layerButton);
     layerShadow->setBlurRadius(8);

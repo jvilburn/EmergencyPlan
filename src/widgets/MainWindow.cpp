@@ -125,8 +125,9 @@ void MainWindow::setupMenus()
 
     fileMenu->addSeparator();
 
-    m_importPdfAction = fileMenu->addAction(tr("Import &Ward Directory PDF..."), this, &MainWindow::onImportPdf);
-    m_importMinisteringPdfAction = fileMenu->addAction(tr("Import &Ministering PDF..."), this, &MainWindow::onImportMinisteringPdf);
+    QMenu* importMenu = fileMenu->addMenu(tr("&Import"));
+    m_importPdfAction = importMenu->addAction(tr("&Ward Directory PDF..."), this, &MainWindow::onImportPdf);
+    m_importMinisteringPdfAction = importMenu->addAction(tr("&Ministering PDF..."), this, &MainWindow::onImportMinisteringPdf);
 
     fileMenu->addSeparator();
 

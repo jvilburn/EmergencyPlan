@@ -12,6 +12,7 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QIcon>
 #include <QMessageBox>
 
 FamilyEditPanel::FamilyEditPanel(DocumentManager* docManager, QWidget* parent)
@@ -46,7 +47,9 @@ void FamilyEditPanel::setupUi()
     m_titleLabel->setFont(titleFont);
     titleLayout->addWidget(m_titleLabel);
     titleLayout->addStretch();
-    m_closeButton = new QPushButton(tr("X"), this);
+    m_closeButton = new QPushButton(this);
+    m_closeButton->setIcon(QIcon(":/icons/win7/close.png"));
+    m_closeButton->setIconSize(QSize(17, 17));
     m_closeButton->setFixedSize(24, 24);
     m_closeButton->setToolTip(tr("Close"));
     connect(m_closeButton, &QPushButton::clicked, this, &FamilyEditPanel::closeRequested);

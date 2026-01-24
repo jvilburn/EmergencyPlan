@@ -415,6 +415,39 @@ qt_add_resources(EmergencyPlan "icons"
         src/resources/icons/map.svg
         src/resources/icons/satellite.svg
         src/resources/icons/recenter.svg
+        # Windows 7 Aero theme icons
+        src/resources/icons/win7/checkbox-check.png
+        src/resources/icons/win7/checkbox-check-disabled.png
+        src/resources/icons/win7/radio-dot.png
+        src/resources/icons/win7/radio-dot-disabled.png
+        src/resources/icons/win7/arrow-up.svg
+        src/resources/icons/win7/arrow-down.svg
+        src/resources/icons/win7/arrow-left.svg
+        src/resources/icons/win7/arrow-right.svg
+        src/resources/icons/win7/dropdown-arrow.png
+        src/resources/icons/win7/dropdown-arrow-disabled.png
+        src/resources/icons/win7/spinbox-up.svg
+        src/resources/icons/win7/spinbox-down.svg
+        src/resources/icons/win7/right-arrow-small.png
+        src/resources/icons/win7/down-right-arrow-small.png
+        src/resources/icons/win7/sort-arrow-up.png
+        src/resources/icons/win7/sort-arrow-down.png
+        src/resources/icons/win7/close.png
+        src/resources/icons/win7/tooltip-bg.png
+        src/resources/icons/win7/scrollbar-grip-v.png
+        src/resources/icons/win7/scrollbar-grip-h.png
+        src/resources/icons/win7/slider-thumb.png
+        src/resources/icons/win7/slider-thumb-hover.png
+        src/resources/icons/win7/slider-thumb-pressed.png
+        src/resources/icons/win7/slider-thumb-disabled.png
+        src/resources/icons/win7/button-focus.png
+)
+
+qt_add_resources(EmergencyPlan "styles"
+    PREFIX "/"
+    BASE "src/resources"
+    FILES
+        src/resources/styles/windows7.qss
 )
 
 # ============================================================================
