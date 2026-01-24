@@ -13,6 +13,7 @@ CallingsEditor::CallingsEditor(QWidget* parent)
 
     m_addButton = new QPushButton(tr("+ Add Calling"), this);
     m_addButton->setFlat(true);
+    m_addButton->setMinimumHeight(24);
     connect(m_addButton, &QPushButton::clicked, this, &CallingsEditor::onAddCalling);
 
     m_layout->addWidget(m_addButton);

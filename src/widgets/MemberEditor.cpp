@@ -29,14 +29,13 @@ void MemberEditor::setupUi()
     mainLayout->setContentsMargins(8, 8, 8, 8);
     mainLayout->setSpacing(12);
 
-    // Name section
-    QHBoxLayout* nameLayout = new QHBoxLayout();
-    nameLayout->addWidget(new QLabel(tr("Surname:"), this));
+    // Name section (form layout for narrow panel)
+    QFormLayout* nameLayout = new QFormLayout();
+    nameLayout->setFieldGrowthPolicy(QFormLayout::ExpandingFieldsGrow);
     m_surnameEdit = new QLineEdit(this);
-    nameLayout->addWidget(m_surnameEdit, 1);
-    nameLayout->addWidget(new QLabel(tr("Given:"), this));
+    nameLayout->addRow(tr("Surname:"), m_surnameEdit);
     m_givenNamesEdit = new QLineEdit(this);
-    nameLayout->addWidget(m_givenNamesEdit, 1);
+    nameLayout->addRow(tr("Given:"), m_givenNamesEdit);
     mainLayout->addLayout(nameLayout);
 
     // Parent/Gender row
@@ -53,15 +52,20 @@ void MemberEditor::setupUi()
     parentGenderLayout->addStretch();
     mainLayout->addLayout(parentGenderLayout);
 
-    // Birthday section
-    QHBoxLayout* birthdayLayout = new QHBoxLayout();
-    birthdayLayout->addWidget(new QLabel(tr("Birthday:"), this));
-    birthdayLayout->addWidget(new QLabel(tr("Day:"), this));
+    // Birthday section (compact layout for narrow panel)
+    QFormLayout* birthdayLayout = new QFormLayout();
+    birthdayLayout->setFieldGrowthPolicy(QFormLayout::ExpandingFieldsGrow);
+
+    // Day/Month row
+    QWidget* dayMonthWidget = new QWidget(this);
+    QHBoxLayout* dayMonthLayout = new QHBoxLayout(dayMonthWidget);
+    dayMonthLayout->setContentsMargins(0, 0, 0, 0);
+    dayMonthLayout->setSpacing(8);
     m_daySpinner = new QSpinBox(this);
     m_daySpinner->setRange(0, 31);
     m_daySpinner->setSpecialValueText(tr("-"));
-    birthdayLayout->addWidget(m_daySpinner);
-    birthdayLayout->addWidget(new QLabel(tr("Month:"), this));
+    dayMonthLayout->addWidget(m_daySpinner);
+    dayMonthLayout->addWidget(new QLabel(tr("Month:"), this));
     m_monthCombo = new QComboBox(this);
     m_monthCombo->addItem(tr("-"), 0);
     m_monthCombo->addItem(tr("Jan"), 1);
@@ -76,13 +80,15 @@ void MemberEditor::setupUi()
     m_monthCombo->addItem(tr("Oct"), 10);
     m_monthCombo->addItem(tr("Nov"), 11);
     m_monthCombo->addItem(tr("Dec"), 12);
-    birthdayLayout->addWidget(m_monthCombo);
-    birthdayLayout->addWidget(new QLabel(tr("Year:"), this));
+    dayMonthLayout->addWidget(m_monthCombo);
+    dayMonthLayout->addStretch();
+    birthdayLayout->addRow(tr("Day:"), dayMonthWidget);
+
+    // Year row
     m_yearEdit = new QLineEdit(this);
-    m_yearEdit->setMaximumWidth(60);
-    m_yearEdit->setPlaceholderText(tr("(blank=adult)"));
-    birthdayLayout->addWidget(m_yearEdit);
-    birthdayLayout->addStretch();
+    m_yearEdit->setPlaceholderText(tr("blank = adult"));
+    birthdayLayout->addRow(tr("Year:"), m_yearEdit);
+
     mainLayout->addLayout(birthdayLayout);
 
     // Contact section
