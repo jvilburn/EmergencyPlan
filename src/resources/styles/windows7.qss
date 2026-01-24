@@ -319,12 +319,6 @@ QToolButton::menu-button:hover {
     border-bottom-color: #f0f0f0;
 }
 
-/* Zoom buttons - darker text, adjusted padding for symbol centering */
-#mapZoomButton {
-    color: #303030;
-    padding: 0 0 2px 0;
-}
-
 QPushButton {
     background: qlineargradient(
         x1: 0, y1: 0, x2: 0, y2: 1,

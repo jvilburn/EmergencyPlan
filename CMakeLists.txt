@@ -415,6 +415,8 @@ qt_add_resources(EmergencyPlan "icons"
         src/resources/icons/map.svg
         src/resources/icons/satellite.svg
         src/resources/icons/recenter.svg
+        src/resources/icons/zoom-in.svg
+        src/resources/icons/zoom-out.svg
         # Windows 7 Aero theme icons
         src/resources/icons/win7/checkbox-check.png
         src/resources/icons/win7/checkbox-check-disabled.png

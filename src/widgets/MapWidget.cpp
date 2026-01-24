@@ -66,10 +66,11 @@ MapWidget::~MapWidget()
 void MapWidget::setupUi()
 {
     // Zoom in button
-    m_zoomInButton = new QPushButton("+", this);
+    m_zoomInButton = new QPushButton(this);
     m_zoomInButton->setObjectName("mapZoomButton");
     m_zoomInButton->setFixedSize(32, 32);
-    m_zoomInButton->setFont(QFont("Arial", 20, QFont::Black));
+    m_zoomInButton->setIcon(QIcon(":/icons/zoom-in.svg"));
+    m_zoomInButton->setIconSize(QSize(20, 20));
     m_zoomInButton->setCursor(Qt::PointingHandCursor);
     QGraphicsDropShadowEffect* zoomInShadow = new QGraphicsDropShadowEffect(m_zoomInButton);
     zoomInShadow->setBlurRadius(6);
@@ -78,11 +79,12 @@ void MapWidget::setupUi()
     m_zoomInButton->setGraphicsEffect(zoomInShadow);
     connect(m_zoomInButton, &QPushButton::clicked, this, &MapWidget::onZoomIn);
 
-    // Zoom out button - use Unicode minus sign (wider than hyphen)
-    m_zoomOutButton = new QPushButton(QChar(0x2212), this);
+    // Zoom out button
+    m_zoomOutButton = new QPushButton(this);
     m_zoomOutButton->setObjectName("mapZoomButton");
     m_zoomOutButton->setFixedSize(32, 32);
-    m_zoomOutButton->setFont(QFont("Arial", 20, QFont::Black));
+    m_zoomOutButton->setIcon(QIcon(":/icons/zoom-out.svg"));
+    m_zoomOutButton->setIconSize(QSize(20, 20));
     m_zoomOutButton->setCursor(Qt::PointingHandCursor);
     QGraphicsDropShadowEffect* zoomOutShadow = new QGraphicsDropShadowEffect(m_zoomOutButton);
     zoomOutShadow->setBlurRadius(6);
