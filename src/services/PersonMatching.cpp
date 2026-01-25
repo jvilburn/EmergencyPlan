@@ -198,7 +198,10 @@ FamilyReplacementResult findReplacedFamily(
         for (const Family& targetFamily : targetFamilies)
         {
             PersonMatchScore match = findBestPersonMatch(sourceMember, targetFamily);
-            if (match.score >= 10)  // Minimum threshold
+            // Higher threshold for cross-surname matching - require more than just first name
+            // First name alone (10) or first name + parent (12) isn't enough evidence
+            // Need first name + birthday/phone/email (15+) to claim same person
+            if (match.score >= 15)
             {
                 familyMatchCounts[targetFamily.id()]++;
                 familyPersonMappings[targetFamily.id()].insert(sourceMember.id(), match.personId);

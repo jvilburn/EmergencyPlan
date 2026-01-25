@@ -86,12 +86,20 @@ MinisteringImportResult MinisteringImportService::importFromPdf(
                   true);
 
     // Step 2: Merge with document families - respect date authority
-    result.families = existingFamilies;
-    mergeFamilies(result.families,
-                  parseResult.ministeredFamilies,
-                  parseResult.districts,
-                  parseResult.groups,
-                  isAuthoritative);
+    if (existingFamilies.isEmpty())
+    {
+        // No existing families - just copy directly (no matching needed)
+        result.families = parseResult.ministeredFamilies;
+    }
+    else
+    {
+        result.families = existingFamilies;
+        mergeFamilies(result.families,
+                      parseResult.ministeredFamilies,
+                      parseResult.districts,
+                      parseResult.groups,
+                      isAuthoritative);
+    }
 
     // Copy final districts and groups to result
     result.districts = parseResult.districts;

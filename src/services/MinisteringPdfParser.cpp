@@ -410,19 +410,17 @@ namespace
 
     /// Parse a single minister from their fields.
     /// Returns Person and Family for this minister.
-    std::pair<Person, Family> parseOneMinister(
-        const QList<PdfTextField>& ministerFields,
-        Gender ministerGender)
+    std::pair<Person, Family> parseOneMinister(const QList<PdfTextField>& ministerFields)
     {
         Name name(ministerFields[0].text().trimmed());
 
         Person minister = Person::create(
             name,
-            false,     // isParent (unknown - will be fixed on merge)
-            Phone(),   // phone (filled by parseContactInfo)
-            Phone(),   // altPhone
-            Email(),   // email (filled by parseContactInfo)
-            ministerGender,
+            false,        // isParent (unknown - will be fixed on merge)
+            Phone(),      // phone (filled by parseContactInfo)
+            Phone(),      // altPhone
+            Email(),      // email (filled by parseContactInfo)
+            std::nullopt, // gender (filled by merge with explicit data)
             Birthday()
         );
 
@@ -442,14 +440,13 @@ namespace
     void processPendingMinister(
         QList<PdfTextField>& pending,
         QHash<QString, Family>& ministerFamilies,
-        QList<Person>& ministers,
-        Gender ministerGender)
+        QList<Person>& ministers)
     {
         if (pending.isEmpty())
         {
             return;
         }
-        std::pair<Person, Family> parsed = parseOneMinister(pending, ministerGender);
+        std::pair<Person, Family> parsed = parseOneMinister(pending);
         Person minister = parsed.first;
         Family family = parsed.second;
         ministerFamilies.insert(family.id(), family);
@@ -462,8 +459,7 @@ namespace
     /// Also inserts minister families into the provided hash.
     QList<Person> parseMinistersFromFields(
         const QList<PdfTextField>& fields,
-        QHash<QString, Family>& ministerFamilies,
-        Gender ministerGender)
+        QHash<QString, Family>& ministerFamilies)
     {
         QList<Person> companionshipMinisters;
         QList<PdfTextField> currentMinisterFields;
@@ -473,13 +469,13 @@ namespace
             if (field.bold() && Name::looksLikeFullName(field.text().trimmed()))
             {
                 processPendingMinister(currentMinisterFields, ministerFamilies,
-                                       companionshipMinisters, ministerGender);
+                                       companionshipMinisters);
             }
             currentMinisterFields.append(field);
         }
 
         processPendingMinister(currentMinisterFields, ministerFamilies,
-                               companionshipMinisters, ministerGender);
+                               companionshipMinisters);
 
         return companionshipMinisters;
     }
@@ -802,7 +798,7 @@ namespace
         {
             result.detectedFormat = cols.isRSFormat;
 
-            // If we just detected RS format, backfill earlier groups and ministers
+            // Backfill earlier groups and presidency members now that we know the format
             if (cols.isRSFormat)
             {
                 // Convert earlier groups from EQ to RS
@@ -810,19 +806,33 @@ namespace
                 {
                     group.setIsRSGroup(true);
                 }
+            }
 
-                // Fix minister genders from Male to Female
-                for (auto& family : result.ministerFamilies)
+            // Set district presidency member genders based on detected format
+            Gender presidencyGender = cols.isRSFormat ? Gender::Female : Gender::Male;
+            for (const auto& district : result.districts)
+            {
+                if (district.presidencyMemberId().has_value())
                 {
-                    QList<Person> members = family.members();
-                    for (Person& member : members)
+                    QString personId = *district.presidencyMemberId();
+                    // Find the family containing this person
+                    for (auto& family : result.ministerFamilies)
                     {
-                        if (member.gender() == Gender::Male)
+                        QList<Person> members = family.members();
+                        bool changed = false;
+                        for (Person& member : members)
                         {
-                            member.setGender(Gender::Female);
+                            if (member.id() == personId)
+                            {
+                                member.setGender(presidencyGender);
+                                changed = true;
+                            }
+                        }
+                        if (changed)
+                        {
+                            family.setMembers(members);
                         }
                     }
-                    family.setMembers(members);
                 }
             }
         }
@@ -832,8 +842,7 @@ namespace
         result.isRSFormat = effectiveRSFormat;
 
         // Parse ministers into Family objects (with minister as member)
-        Gender ministerGender = effectiveRSFormat ? Gender::Female : Gender::Male;
-        QList<Person> ministers = parseMinistersFromFields(ministerFields, result.ministerFamilies, ministerGender);
+        QList<Person> ministers = parseMinistersFromFields(ministerFields, result.ministerFamilies);
 
         // Merge wrapped bold family headers before parsing
         if (cols.familyX)
@@ -1096,11 +1105,11 @@ MinisteringPdfParser::ParseResult MinisteringPdfParser::parse(const QString& pdf
                             Name name(presidencyMemberName);
                             Person presidencyMember = Person::create(
                                 name,
-                                true,      // isParent (presidency members are adults)
-                                Phone(),   // phone
-                                Phone(),   // altPhone
-                                Email(),   // email
-                                Gender::Male,  // EQ presidency members are male
+                                true,         // isParent (presidency members are adults)
+                                Phone(),      // phone
+                                Phone(),      // altPhone
+                                Email(),      // email
+                                std::nullopt, // gender (set by backfill once format detected)
                                 Birthday()
                             );
 

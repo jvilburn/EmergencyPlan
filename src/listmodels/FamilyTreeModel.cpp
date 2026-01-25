@@ -419,18 +419,6 @@ void FamilyTreeModel::buildFamilyNode(int familyIndex)
     {
         const Person& person = members.at(memberIdx);
 
-        // Debug: dump birthday data for Flake family only
-        if (person.surname() == "Flake")
-        {
-            const Birthday& bday = person.birthday();
-            qDebug() << "Person:" << person.givenNames()
-                     << "hasDate:" << bday.hasDate()
-                     << "month:" << (bday.month().has_value() ? bday.month().value() : -1)
-                     << "day:" << (bday.day().has_value() ? bday.day().value() : -1)
-                     << "year:" << (bday.year().has_value() ? bday.year().value() : -1)
-                     << "dateDisplay:" << person.birthDateDisplay();
-        }
-
         TreeNode* memberNode = new TreeNode();
         memberNode->type = RowType::Member;
         memberNode->familyIndex = familyIndex;
