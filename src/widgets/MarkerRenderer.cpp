@@ -3,6 +3,7 @@
 #include <QGraphicsBlurEffect>
 #include <QGraphicsPixmapItem>
 #include <QGraphicsScene>
+#include <QIcon>
 #include <QPainter>
 #include <QtMath>
 
@@ -151,6 +152,25 @@ QMarginsF boundingBox(const QVariantMap& family, const State& state)
     double bottom = extent + glowExtent;
 
     return QMarginsF(left, top, right, bottom);
+}
+
+void drawChurch(QPainter& painter, const QPointF& pos, const State& state)
+{
+    static QIcon chapelIcon(":/icons/chapel.svg");
+
+    double size = CHURCH_MARKER_SIZE * state.scale;
+    int intSize = static_cast<int>(qCeil(size));
+
+    // Get pixmap at the needed size
+    QPixmap pixmap = chapelIcon.pixmap(QSize(intSize, intSize));
+
+    painter.setOpacity(state.opacity);
+
+    // Draw centered on position
+    QPointF topLeft(pos.x() - size / 2.0, pos.y() - size / 2.0);
+    painter.drawPixmap(topLeft, pixmap);
+
+    painter.setOpacity(1.0);
 }
 
 }  // namespace MarkerRenderer

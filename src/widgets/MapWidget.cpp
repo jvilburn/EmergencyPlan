@@ -8,6 +8,7 @@
 #include "DocumentChange.h"
 #include "TileService.h"
 #include "Family.h"
+#include "Ward.h"
 #include "Document.h"
 
 #include <QPainter>
@@ -365,7 +366,10 @@ void MapWidget::paintEvent(QPaintEvent* /*event*/)
     // Draw tiles first (background)
     drawTiles(painter);
 
-    // Draw markers on top
+    // Draw church markers (reference points, below family markers)
+    drawChurchMarkers(painter);
+
+    // Draw family markers on top
     drawMarkers(painter);
 
     // Draw attribution
@@ -454,6 +458,49 @@ void MapWidget::drawTiles(QPainter& painter)
 
     // Reset smooth transform hint
     painter.setRenderHint(QPainter::SmoothPixmapTransform, false);
+}
+
+void MapWidget::drawChurchMarkers(QPainter& painter)
+{
+    const Document& doc = m_docManager->document();
+    const QHash<QString, Ward>& wards = doc.wards();
+
+    if (wards.isEmpty())
+    {
+        return;
+    }
+
+    double clampedZoom = qBound(static_cast<double>(MIN_ZOOM), m_zoom, static_cast<double>(MAX_ZOOM));
+
+    for (const Ward& ward : wards)
+    {
+        // Skip wards without chapel coordinates
+        if (!ward.chapelLat() || !ward.chapelLng())
+        {
+            continue;
+        }
+
+        double lat = ward.chapelLat().value();
+        double lng = ward.chapelLng().value();
+
+        QPointF pos = SlippyMapMath::latLngToPixel(lat, lng, clampedZoom,
+                                                    m_centerLat, m_centerLng,
+                                                    width(), height());
+
+        // Skip if outside visible area
+        double markerExtent = MarkerRenderer::CHURCH_MARKER_SIZE / 2.0;
+        if (pos.x() < -markerExtent || pos.x() > width() + markerExtent
+            || pos.y() < -markerExtent || pos.y() > height() + markerExtent)
+        {
+            continue;
+        }
+
+        MarkerRenderer::State state;
+        // Church markers don't dim when family highlighting is active
+        state.opacity = 1.0;
+
+        MarkerRenderer::drawChurch(painter, pos, state);
+    }
 }
 
 void MapWidget::drawMarkers(QPainter& painter)

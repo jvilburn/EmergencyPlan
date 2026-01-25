@@ -6,6 +6,8 @@
 #include <QColor>
 #include <QVariantMap>
 
+class Ward;
+
 /// Renders map markers for families/persons.
 namespace MarkerRenderer
 {
@@ -33,4 +35,10 @@ namespace MarkerRenderer
     /// Returns the bounding box as margins from the marker center point.
     /// This allows for markers that extend unevenly (e.g., labels, pins).
     QMarginsF boundingBox(const QVariantMap& family, const State& state);
+
+    /// Draw a church/chapel marker at the given position.
+    void drawChurch(QPainter& painter, const QPointF& pos, const State& state);
+
+    /// Size of the church marker icon (for bounding calculations).
+    constexpr double CHURCH_MARKER_SIZE = 24.0;
 }

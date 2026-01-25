@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+  <!-- Chapel with narrow triangular steeple -->
+  <!-- Base color: terracotta #C2703A, darker stroke #8B4F29 -->
+
+  <!-- Main building body -->
+  <rect x="2" y="14" width="20" height="9" fill="#C2703A" stroke="#8B4F29" stroke-width="0.75"/>
+
+  <!-- Main roof -->
+  <polygon points="1,14 12,10 23,14" fill="#C2703A" stroke="#8B4F29" stroke-width="0.75" stroke-linejoin="round"/>
+
+  <!-- Steeple (narrow triangle rising from roof peak) -->
+  <polygon points="10,10 12,1 14,10" fill="#C2703A" stroke="#8B4F29" stroke-width="0.75" stroke-linejoin="round"/>
+
+  <!-- Door (arched top) -->
+  <path d="M10,23 L10,18 Q10,16.5 12,16.5 Q14,16.5 14,18 L14,23" fill="#8B4F29"/>
+
+  <!-- Left window -->
+  <rect x="4" y="17" width="3" height="3.5" fill="#8B4F29"/>
+  <line x1="5.5" y1="17" x2="5.5" y2="20.5" stroke="#C2703A" stroke-width="0.5"/>
+  <line x1="4" y1="18.75" x2="7" y2="18.75" stroke="#C2703A" stroke-width="0.5"/>
+
+  <!-- Right window -->
+  <rect x="17" y="17" width="3" height="3.5" fill="#8B4F29"/>
+  <line x1="18.5" y1="17" x2="18.5" y2="20.5" stroke="#C2703A" stroke-width="0.5"/>
+  <line x1="17" y1="18.75" x2="20" y2="18.75" stroke="#C2703A" stroke-width="0.5"/>
+</svg>
