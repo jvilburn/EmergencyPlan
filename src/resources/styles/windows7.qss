@@ -79,12 +79,10 @@ QMainWindow::separator:hover {
 QMenuBar {
     background: qlineargradient(
         x1: 0, y1: 0, x2: 0, y2: 1,
-        stop: 0 #ffffff,
-        stop: 0.2 #ffffff,
-        stop: 0.25 #f1f4fa,
-        stop: 0.43 #f1f4fa,
-        stop: 0.48 #d4dbee,
-        stop: 1.0 #e6eaf6
+        stop: 0 #d0d8e6,
+        stop: 0.15 #fbfcfe,
+        stop: 0.5 #fbfcfe,
+        stop: 1.0 #c8d2e2
     );
     border-bottom: 1px solid #8e8f8f;
     padding: 1px;
