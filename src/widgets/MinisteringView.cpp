@@ -9,11 +9,9 @@
 #include <utility>
 
 #include <QVBoxLayout>
-#include <QLabel>
 #include <QTabBar>
 #include <QTreeWidget>
 #include <QHeaderView>
-#include <QEvent>
 
 MinisteringView::MinisteringView(DocumentManager* docManager, QWidget* parent)
     : QWidget(parent)
@@ -24,10 +22,12 @@ MinisteringView::MinisteringView(DocumentManager* docManager, QWidget* parent)
     connect(m_documentManager, &DocumentManager::documentChanged,
             this, &MinisteringView::onDocumentChanged);
 
-    // Initial population
-    regenerateColors();
-    rebuildTree();
-    updateUnassignedLabel();
+    // Initial population - rebuild all 4 trees
+    rebuildTreeImpl(m_eqTree, true);
+    rebuildTreeImpl(m_rsTree, false);
+    rebuildUnassignedTreeImpl(m_eqUnassignedTree, true);
+    rebuildUnassignedTreeImpl(m_rsUnassignedTree, false);
+    updateUnassignedVisibility();
 }
 
 void MinisteringView::setupUi()
@@ -44,176 +44,189 @@ void MinisteringView::setupUi()
     m_orgTabs->addTab(tr("Relief Society"));
     layout->addWidget(m_orgTabs);
 
-    // Unassigned section
-    m_unassignedLabel = new QLabel(tr("Unassigned (0)"));
-    m_unassignedLabel->setStyleSheet(R"(
-        QLabel {
-            padding: 8px;
-            background: #fff3e0;
-            border: 1px solid #ffcc80;
-            border-radius: 4px;
-            color: #e65100;
-            font-weight: bold;
+    // Helper to create tree widgets with common configuration
+    auto createTree = [](bool isUnassigned) {
+        auto* tree = new QTreeWidget();
+        tree->setHeaderHidden(true);
+        tree->setRootIsDecorated(true);
+        tree->setSelectionMode(QAbstractItemView::NoSelection);
+        tree->setIndentation(16);
+        if (isUnassigned)
+        {
+            tree->setFixedHeight(38);  // Single row height when collapsed
         }
-        QLabel:hover {
-            background: #ffe0b2;
-        }
-    )");
-    m_unassignedLabel->setCursor(Qt::PointingHandCursor);
-    m_unassignedLabel->installEventFilter(this);
-    layout->addWidget(m_unassignedLabel);
+        return tree;
+    };
 
-    // District/Companionship tree
-    m_tree = new QTreeWidget();
-    m_tree->setHeaderHidden(true);
-    m_tree->setRootIsDecorated(true);
-    m_tree->setSelectionMode(QAbstractItemView::NoSelection);  // We handle selection ourselves
-    m_tree->setIndentation(16);
-    m_tree->setStyleSheet(R"(
-        QTreeWidget {
-            border: 1px solid #e0e0e0;
-            border-radius: 4px;
-            background: white;
-        }
-        QTreeWidget::item {
-            padding: 4px 0;
-        }
-        QTreeWidget::item:hover {
-            background: #f5f5f5;
-        }
-    )");
-    layout->addWidget(m_tree, 1);
+    // Create all 4 trees
+    m_eqUnassignedTree = createTree(true);
+    m_rsUnassignedTree = createTree(true);
+    m_eqTree = createTree(false);
+    m_rsTree = createTree(false);
 
-    // Connections
+    // RS trees start hidden
+    m_rsTree->setVisible(false);
+    m_rsUnassignedTree->setVisible(false);
+
+    // Add to layout - unassigned trees first, then main trees
+    layout->addWidget(m_eqUnassignedTree);
+    layout->addWidget(m_rsUnassignedTree);
+    layout->addWidget(m_eqTree, 1);
+    layout->addWidget(m_rsTree, 1);
+
+    // Connections - tab switching
     connect(m_orgTabs, &QTabBar::currentChanged,
             this, &MinisteringView::onOrgToggled);
-    connect(m_tree, &QTreeWidget::itemClicked,
+
+    // Main tree connections
+    connect(m_eqTree, &QTreeWidget::itemClicked,
             this, &MinisteringView::onTreeItemClicked);
-    connect(m_tree, &QTreeWidget::itemExpanded,
+    connect(m_rsTree, &QTreeWidget::itemClicked,
+            this, &MinisteringView::onTreeItemClicked);
+    connect(m_eqTree, &QTreeWidget::itemExpanded,
             this, &MinisteringView::onTreeItemExpanded);
+    connect(m_rsTree, &QTreeWidget::itemExpanded,
+            this, &MinisteringView::onTreeItemExpanded);
+
+    // Unassigned tree connections
+    connect(m_eqUnassignedTree, &QTreeWidget::itemClicked,
+            this, &MinisteringView::onTreeItemClicked);
+    connect(m_rsUnassignedTree, &QTreeWidget::itemClicked,
+            this, &MinisteringView::onTreeItemClicked);
+    connect(m_eqUnassignedTree, &QTreeWidget::itemExpanded,
+            this, &MinisteringView::onUnassignedTreeItemExpanded);
+    connect(m_rsUnassignedTree, &QTreeWidget::itemExpanded,
+            this, &MinisteringView::onUnassignedTreeItemExpanded);
+    connect(m_eqUnassignedTree, &QTreeWidget::itemCollapsed,
+            this, &MinisteringView::onUnassignedTreeItemCollapsed);
+    connect(m_rsUnassignedTree, &QTreeWidget::itemCollapsed,
+            this, &MinisteringView::onUnassignedTreeItemCollapsed);
 }
 
 void MinisteringView::onOrgToggled(int id)
 {
     m_isEQ = (id == 0);
-    clearSelection();
-    regenerateColors();
-    rebuildTree();
-    updateUnassignedLabel();
-    emit highlightChanged();
-}
 
-void MinisteringView::onUnassignedClicked()
-{
-    m_unassignedSelected = !m_unassignedSelected;
-    if (m_unassignedSelected)
-    {
-        m_selectedDistrictIds.clear();
-        m_selectedCompanionshipIds.clear();
-    }
-
-    // Update visual state
-    if (m_unassignedSelected)
-    {
-        m_unassignedLabel->setStyleSheet(R"(
-            QLabel {
-                padding: 8px;
-                background: #e65100;
-                border: 1px solid #bf360c;
-                border-radius: 4px;
-                color: white;
-                font-weight: bold;
-            }
-        )");
-    }
-    else
-    {
-        m_unassignedLabel->setStyleSheet(R"(
-            QLabel {
-                padding: 8px;
-                background: #fff3e0;
-                border: 1px solid #ffcc80;
-                border-radius: 4px;
-                color: #e65100;
-                font-weight: bold;
-            }
-            QLabel:hover {
-                background: #ffe0b2;
-            }
-        )");
-    }
+    // Show/hide trees - no rebuild needed
+    m_eqTree->setVisible(m_isEQ);
+    m_rsTree->setVisible(!m_isEQ);
+    updateUnassignedVisibility();
 
     emit highlightChanged();
 }
 
 void MinisteringView::onTreeItemClicked(QTreeWidgetItem* item, int /*column*/)
 {
+    QTreeWidget* tree = qobject_cast<QTreeWidget*>(sender());
+
+    bool isEQ = (tree == m_eqTree || tree == m_eqUnassignedTree);
+    bool isUnassigned = (tree == m_eqUnassignedTree || tree == m_rsUnassignedTree);
+
+    handleTreeItemClicked(item, isEQ, isUnassigned);
+}
+
+void MinisteringView::onUnassignedTreeItemExpanded(QTreeWidgetItem* item)
+{
+    QTreeWidget* tree = qobject_cast<QTreeWidget*>(sender());
     ItemType type = static_cast<ItemType>(item->data(0, TypeRole).toInt());
 
-    // Section headers and contact details are not interactive for selection
-    if (type == ItemType::SectionHeader || type == ItemType::ContactDetail)
+    // Resize tree when header is expanded
+    if (type == ItemType::UnassignedHeader)
     {
-        return;
+        tree->setFixedHeight(200);
     }
-
-    // Ministers, ministered families/sisters just expand/collapse - no map selection change
-    if (type == ItemType::Minister
-        || type == ItemType::MinisteredFamily
-        || type == ItemType::MinisteredSister)
+    // Populate contact info on expand for families/sisters
+    else if (type == ItemType::MinisteredFamily || type == ItemType::MinisteredSister)
     {
-        // Toggle expansion
-        item->setExpanded(!item->isExpanded());
-        return;
+        if (item->childCount() == 0)
+        {
+            populateContactInfo(item);
+        }
     }
+}
 
+void MinisteringView::onUnassignedTreeItemCollapsed(QTreeWidgetItem* item)
+{
+    QTreeWidget* tree = qobject_cast<QTreeWidget*>(sender());
+    ItemType type = static_cast<ItemType>(item->data(0, TypeRole).toInt());
+
+    // Shrink tree when header is collapsed
+    if (type == ItemType::UnassignedHeader)
+    {
+        tree->setFixedHeight(38);
+    }
+}
+
+void MinisteringView::handleTreeItemClicked(QTreeWidgetItem* item, bool isEQ, bool isUnassigned)
+{
+    ItemType type = static_cast<ItemType>(item->data(0, TypeRole).toInt());
     QString itemId = item->data(0, IdRole).toString();
 
-    if (type == ItemType::District)
+    // Contact details are not interactive
+    if (type == ItemType::ContactDetail)
     {
-        // Toggle district selection
-        if (m_selectedDistrictIds.contains(itemId))
-        {
-            m_selectedDistrictIds.remove(itemId);
-        }
-        else
-        {
-            m_selectedDistrictIds.insert(itemId);
-        }
-        m_selectedCompanionshipIds.clear();
-        m_unassignedSelected = false;
-    }
-    else if (type == ItemType::Companionship)
-    {
-        // Toggle companionship selection
-        if (m_selectedCompanionshipIds.contains(itemId))
-        {
-            m_selectedCompanionshipIds.remove(itemId);
-        }
-        else
-        {
-            m_selectedCompanionshipIds.insert(itemId);
-        }
-        m_selectedDistrictIds.clear();
-        m_unassignedSelected = false;
+        return;
     }
 
-    // Update visual selection in tree (bold selected items)
-    rebuildTree();
+    // Get references to the appropriate selection state
+    QString& selectedId = isEQ ? m_eqSelectedId : m_rsSelectedId;
+    ItemType& selectedType = isEQ ? m_eqSelectedType : m_rsSelectedType;
+    QTreeWidgetItem*& selectedItem = isEQ ? m_eqSelectedItem : m_rsSelectedItem;
 
-    // Reset unassigned label style
-    m_unassignedLabel->setStyleSheet(R"(
-        QLabel {
-            padding: 8px;
-            background: #fff3e0;
-            border: 1px solid #ffcc80;
-            border-radius: 4px;
-            color: #e65100;
-            font-weight: bold;
+    // Build the selection ID based on type
+    QString selectionId;
+    if (type == ItemType::UnassignedHeader)
+    {
+        selectionId = "unassigned";
+    }
+    else if (type == ItemType::SectionHeader)
+    {
+        // Section headers need composite ID: "{compId}:ministers" or "{compId}:ministered"
+        QTreeWidgetItem* parent = item->parent();
+        if (parent)
+        {
+            QString compId = parent->data(0, IdRole).toString();
+            QString sectionName = item->text(0);
+            if (sectionName == tr("Ministers"))
+            {
+                selectionId = compId + ":ministers";
+            }
+            else
+            {
+                selectionId = compId + ":ministered";
+            }
         }
-        QLabel:hover {
-            background: #ffe0b2;
-        }
-    )");
+    }
+    else
+    {
+        selectionId = itemId;
+    }
+
+    // Unbold previously selected item
+    if (selectedItem)
+    {
+        QFont font = selectedItem->font(0);
+        font.setBold(false);
+        selectedItem->setFont(0, font);
+    }
+
+    // Toggle selection: if already selected, deselect; otherwise select
+    if (selectedId == selectionId && selectedType == type)
+    {
+        clearSelection(isEQ);
+        selectedItem = nullptr;
+    }
+    else
+    {
+        selectedId = selectionId;
+        selectedType = type;
+        selectedItem = item;
+
+        // Bold newly selected item
+        QFont font = item->font(0);
+        font.setBold(true);
+        item->setFont(0, font);
+    }
 
     emit highlightChanged();
 }
@@ -221,10 +234,18 @@ void MinisteringView::onTreeItemClicked(QTreeWidgetItem* item, int /*column*/)
 void MinisteringView::onDocumentChanged(const DocumentChange& change)
 {
     Q_UNUSED(change)
-    // TODO: optimize for EqDistrict/EqGroup/RsDistrict/RsGroup scope changes
-    regenerateColors();
-    rebuildTree();
-    updateUnassignedLabel();
+
+    // Clear item pointers (invalidated by rebuild)
+    m_eqSelectedItem = nullptr;
+    m_rsSelectedItem = nullptr;
+
+    // Rebuild all 4 trees
+    rebuildTreeImpl(m_eqTree, true);
+    rebuildTreeImpl(m_rsTree, false);
+    rebuildUnassignedTreeImpl(m_eqUnassignedTree, true);
+    rebuildUnassignedTreeImpl(m_rsUnassignedTree, false);
+
+    updateUnassignedVisibility();
     emit highlightChanged();
 }
 
@@ -353,8 +374,11 @@ void MinisteringView::populateContactInfo(QTreeWidgetItem* item)
     }
 }
 
-void MinisteringView::addMinistersSection(QTreeWidgetItem* companionshipItem, const MinisteringGroup& group)
+void MinisteringView::addMinistersSection(QTreeWidgetItem* companionshipItem, const MinisteringGroup& group, bool isEQ)
 {
+    const QString& selectedId = isEQ ? m_eqSelectedId : m_rsSelectedId;
+    ItemType selectedType = isEQ ? m_eqSelectedType : m_rsSelectedType;
+
     const Document& doc = m_documentManager->document();
 
     // Create "Ministers" section header
@@ -363,9 +387,14 @@ void MinisteringView::addMinistersSection(QTreeWidgetItem* companionshipItem, co
     ministersHeader->setData(0, TypeRole, static_cast<int>(ItemType::SectionHeader));
     ministersHeader->setFlags(ministersHeader->flags() & ~Qt::ItemIsSelectable);
 
-    // Style header italic
+    // Style header italic, bold if selected
     QFont headerFont = ministersHeader->font(0);
     headerFont.setItalic(true);
+    QString sectionId = group.id() + ":ministers";
+    if (selectedId == sectionId && selectedType == ItemType::SectionHeader)
+    {
+        headerFont.setBold(true);
+    }
     ministersHeader->setFont(0, headerFont);
     ministersHeader->setForeground(0, QColor(100, 100, 100));
 
@@ -383,26 +412,42 @@ void MinisteringView::addMinistersSection(QTreeWidgetItem* companionshipItem, co
         ministerItem->setData(0, IdRole, ministerId);
         ministerItem->setData(0, TypeRole, static_cast<int>(ItemType::Minister));
         ministerItem->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
+
+        // Bold if selected
+        if (selectedId == ministerId && selectedType == ItemType::Minister)
+        {
+            QFont font = ministerItem->font(0);
+            font.setBold(true);
+            ministerItem->setFont(0, font);
+        }
     }
 }
 
-void MinisteringView::addMinisteredSection(QTreeWidgetItem* companionshipItem, const MinisteringGroup& group)
+void MinisteringView::addMinisteredSection(QTreeWidgetItem* companionshipItem, const MinisteringGroup& group, bool isEQ)
 {
+    const QString& selectedId = isEQ ? m_eqSelectedId : m_rsSelectedId;
+    ItemType selectedType = isEQ ? m_eqSelectedType : m_rsSelectedType;
+
     const Document& doc = m_documentManager->document();
 
     // Create section header - "Families" for EQ, "Sisters" for RS
     QTreeWidgetItem* ministeredHeader = new QTreeWidgetItem(companionshipItem);
-    ministeredHeader->setText(0, m_isEQ ? tr("Families") : tr("Sisters"));
+    ministeredHeader->setText(0, isEQ ? tr("Families") : tr("Sisters"));
     ministeredHeader->setData(0, TypeRole, static_cast<int>(ItemType::SectionHeader));
     ministeredHeader->setFlags(ministeredHeader->flags() & ~Qt::ItemIsSelectable);
 
-    // Style header italic
+    // Style header italic, bold if selected
     QFont headerFont = ministeredHeader->font(0);
     headerFont.setItalic(true);
+    QString sectionId = group.id() + ":ministered";
+    if (selectedId == sectionId && selectedType == ItemType::SectionHeader)
+    {
+        headerFont.setBold(true);
+    }
     ministeredHeader->setFont(0, headerFont);
     ministeredHeader->setForeground(0, QColor(100, 100, 100));
 
-    if (m_isEQ)
+    if (isEQ)
     {
         // EQ: Add families
         const auto& families = doc.families();
@@ -419,6 +464,14 @@ void MinisteringView::addMinisteredSection(QTreeWidgetItem* companionshipItem, c
             familyItem->setData(0, IdRole, familyId);
             familyItem->setData(0, TypeRole, static_cast<int>(ItemType::MinisteredFamily));
             familyItem->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
+
+            // Bold if selected
+            if (selectedId == familyId && selectedType == ItemType::MinisteredFamily)
+            {
+                QFont font = familyItem->font(0);
+                font.setBold(true);
+                familyItem->setFont(0, font);
+            }
         }
     }
     else
@@ -437,17 +490,28 @@ void MinisteringView::addMinisteredSection(QTreeWidgetItem* companionshipItem, c
             sisterItem->setData(0, IdRole, personId);
             sisterItem->setData(0, TypeRole, static_cast<int>(ItemType::MinisteredSister));
             sisterItem->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
+
+            // Bold if selected
+            if (selectedId == personId && selectedType == ItemType::MinisteredSister)
+            {
+                QFont font = sisterItem->font(0);
+                font.setBold(true);
+                sisterItem->setFont(0, font);
+            }
         }
     }
 }
 
-void MinisteringView::rebuildTree()
+void MinisteringView::rebuildTreeImpl(QTreeWidget* tree, bool isEQ)
 {
-    m_tree->clear();
+    tree->clear();
+
+    const QString& selectedId = isEQ ? m_eqSelectedId : m_rsSelectedId;
+    ItemType selectedType = isEQ ? m_eqSelectedType : m_rsSelectedType;
 
     const Document& doc = m_documentManager->document();
-    const auto& districts = m_isEQ ? doc.eqDistricts() : doc.rsDistricts();
-    const auto& groups = m_isEQ ? doc.eqGroups() : doc.rsGroups();
+    const auto& districts = isEQ ? doc.eqDistricts() : doc.rsDistricts();
+    const auto& groups = isEQ ? doc.eqGroups() : doc.rsGroups();
 
     // Sort districts by name
     QList<MinisteringDistrict> sortedDistricts = districts.values();
@@ -466,14 +530,14 @@ void MinisteringView::rebuildTree()
             if (groups.contains(groupId))
             {
                 const MinisteringGroup& group = groups[groupId];
-                totalCount += m_isEQ ? group.familyCount() : group.ministeredPersonCount();
+                totalCount += isEQ ? group.familyCount() : group.ministeredPersonCount();
             }
         }
 
         QString districtText = QString("%1 (%2 %3)")
             .arg(district.name())
             .arg(totalCount)
-            .arg(m_isEQ ? tr("families") : tr("sisters"));
+            .arg(isEQ ? tr("families") : tr("sisters"));
 
         auto* districtItem = new QTreeWidgetItem();
         districtItem->setText(0, districtText);
@@ -481,7 +545,7 @@ void MinisteringView::rebuildTree()
         districtItem->setData(0, TypeRole, static_cast<int>(ItemType::District));
 
         // Bold if selected
-        if (m_selectedDistrictIds.contains(district.id()))
+        if (selectedId == district.id() && selectedType == ItemType::District)
         {
             QFont font = districtItem->font(0);
             font.setBold(true);
@@ -510,7 +574,7 @@ void MinisteringView::rebuildTree()
                 }
             }
 
-            int count = m_isEQ ? group.familyCount() : group.ministeredPersonCount();
+            int count = isEQ ? group.familyCount() : group.ministeredPersonCount();
             QString companionshipText = QString("%1 (%2)")
                 .arg(ministerNames.join(", "))
                 .arg(count);
@@ -534,16 +598,8 @@ void MinisteringView::rebuildTree()
             companionshipItem->setData(0, IdRole, group.id());
             companionshipItem->setData(0, TypeRole, static_cast<int>(ItemType::Companionship));
 
-            // Add color swatch as decoration
-            if (m_colorMap.contains(group.id()))
-            {
-                QPixmap swatch(12, 12);
-                swatch.fill(m_colorMap[group.id()]);
-                companionshipItem->setIcon(0, QIcon(swatch));
-            }
-
             // Bold if selected
-            if (m_selectedCompanionshipIds.contains(group.id()))
+            if (selectedId == group.id() && selectedType == ItemType::Companionship)
             {
                 QFont font = companionshipItem->font(0);
                 font.setBold(true);
@@ -551,189 +607,145 @@ void MinisteringView::rebuildTree()
             }
 
             // Add ministers and ministered sections
-            addMinistersSection(companionshipItem, group);
-            addMinisteredSection(companionshipItem, group);
+            addMinistersSection(companionshipItem, group, isEQ);
+            addMinisteredSection(companionshipItem, group, isEQ);
         }
 
-        m_tree->addTopLevelItem(districtItem);
+        tree->addTopLevelItem(districtItem);
         districtItem->setExpanded(true);
     }
 }
 
-void MinisteringView::regenerateColors()
+void MinisteringView::rebuildUnassignedTreeImpl(QTreeWidget* tree, bool isEQ)
 {
-    m_colorMap.clear();
+    tree->clear();
+
+    const QString& selectedId = isEQ ? m_eqSelectedId : m_rsSelectedId;
+    ItemType selectedType = isEQ ? m_eqSelectedType : m_rsSelectedType;
 
     const Document& doc = m_documentManager->document();
-    const auto& districts = m_isEQ ? doc.eqDistricts() : doc.rsDistricts();
-    const auto& groups = m_isEQ ? doc.eqGroups() : doc.rsGroups();
 
-    // Generate colors for companionships (more distinct)
-    int groupCount = groups.size();
-    int i = 0;
-    for (const auto& group : groups)
+    if (isEQ)
     {
-        float hue = static_cast<float>(360.0 * i) / static_cast<float>(qMax(1, groupCount));
-        m_colorMap[group.id()] = QColor::fromHslF(hue / 360.0f, 0.7f, 0.5f);
-        ++i;
-    }
+        QSet<QString> familyIds = unassignedFamilyIds();
+        if (familyIds.isEmpty())
+        {
+            return;
+        }
 
-    // Generate colors for districts (fewer, more distinct)
-    int districtCount = districts.size();
-    i = 0;
-    for (const auto& district : districts)
-    {
-        float hue = static_cast<float>(360.0 * i) / static_cast<float>(qMax(1, districtCount));
-        m_colorMap[district.id()] = QColor::fromHslF(hue / 360.0f, 0.8f, 0.45f);
-        ++i;
-    }
-}
+        // Create header item
+        QTreeWidgetItem* headerItem = new QTreeWidgetItem();
+        headerItem->setText(0, tr("Unassigned (%1 families)").arg(familyIds.size()));
+        headerItem->setData(0, TypeRole, static_cast<int>(ItemType::UnassignedHeader));
+        if (selectedId == "unassigned" && selectedType == ItemType::UnassignedHeader)
+        {
+            QFont font = headerItem->font(0);
+            font.setBold(true);
+            headerItem->setFont(0, font);
+        }
+        tree->addTopLevelItem(headerItem);
 
-void MinisteringView::updateUnassignedLabel()
-{
-    int count = 0;
-    if (m_isEQ)
-    {
-        count = unassignedFamilyIds().size();
-        m_unassignedLabel->setText(tr("Unassigned (%1 families)").arg(count));
+        // Collect and sort families by surname
+        const auto& families = doc.families();
+        QList<std::pair<QString, QString>> sortedFamilies;  // (display name, family ID)
+        for (const QString& familyId : familyIds)
+        {
+            if (families.contains(familyId))
+            {
+                const Family& family = families[familyId];
+                sortedFamilies.append({family.displayName(), familyId});
+            }
+        }
+        std::sort(sortedFamilies.begin(), sortedFamilies.end(),
+                  [](const auto& a, const auto& b) { return a.first.toLower() < b.first.toLower(); });
+
+        // Add family items
+        for (const auto& [displayName, familyId] : sortedFamilies)
+        {
+            QTreeWidgetItem* familyItem = new QTreeWidgetItem(headerItem);
+            familyItem->setText(0, displayName);
+            familyItem->setData(0, IdRole, familyId);
+            familyItem->setData(0, TypeRole, static_cast<int>(ItemType::MinisteredFamily));
+            familyItem->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
+
+            // Bold if selected
+            if (selectedId == familyId && selectedType == ItemType::MinisteredFamily)
+            {
+                QFont font = familyItem->font(0);
+                font.setBold(true);
+                familyItem->setFont(0, font);
+            }
+        }
     }
     else
     {
-        count = unassignedSisterIds().size();
-        m_unassignedLabel->setText(tr("Unassigned (%1 sisters)").arg(count));
-    }
+        QSet<QString> sisterIds = unassignedSisterIds();
+        if (sisterIds.isEmpty())
+        {
+            return;
+        }
 
-    m_unassignedLabel->setVisible(count > 0);
+        // Create header item
+        QTreeWidgetItem* headerItem = new QTreeWidgetItem();
+        headerItem->setText(0, tr("Unassigned (%1 sisters)").arg(sisterIds.size()));
+        headerItem->setData(0, TypeRole, static_cast<int>(ItemType::UnassignedHeader));
+        if (selectedId == "unassigned" && selectedType == ItemType::UnassignedHeader)
+        {
+            QFont font = headerItem->font(0);
+            font.setBold(true);
+            headerItem->setFont(0, font);
+        }
+        tree->addTopLevelItem(headerItem);
+
+        // Collect and sort sisters by name
+        QList<std::pair<QString, QString>> sortedSisters;  // (display name, person ID)
+        for (const QString& personId : sisterIds)
+        {
+            std::optional<Person> person = doc.findPersonById(personId);
+            if (person)
+            {
+                sortedSisters.append({person->displayName(), personId});
+            }
+        }
+        std::sort(sortedSisters.begin(), sortedSisters.end(),
+                  [](const auto& a, const auto& b) { return a.first.toLower() < b.first.toLower(); });
+
+        // Add sister items
+        for (const auto& [displayName, personId] : sortedSisters)
+        {
+            QTreeWidgetItem* sisterItem = new QTreeWidgetItem(headerItem);
+            sisterItem->setText(0, displayName);
+            sisterItem->setData(0, IdRole, personId);
+            sisterItem->setData(0, TypeRole, static_cast<int>(ItemType::MinisteredSister));
+            sisterItem->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
+
+            // Bold if selected
+            if (selectedId == personId && selectedType == ItemType::MinisteredSister)
+            {
+                QFont font = sisterItem->font(0);
+                font.setBold(true);
+                sisterItem->setFont(0, font);
+            }
+        }
+    }
 }
 
-void MinisteringView::clearSelection()
+void MinisteringView::updateUnassignedVisibility()
 {
-    m_selectedDistrictIds.clear();
-    m_selectedCompanionshipIds.clear();
-    m_unassignedSelected = false;
+    m_eqUnassignedTree->setVisible(m_isEQ && m_eqUnassignedTree->topLevelItemCount() > 0);
+    m_rsUnassignedTree->setVisible(!m_isEQ && m_rsUnassignedTree->topLevelItemCount() > 0);
 }
 
-QSet<QString> MinisteringView::selectedFamilyIds() const
+void MinisteringView::clearSelection(bool isEQ)
 {
-    QSet<QString> result;
-    const Document& doc = m_documentManager->document();
-    const auto& groups = m_isEQ ? doc.eqGroups() : doc.rsGroups();
-    const auto& districts = m_isEQ ? doc.eqDistricts() : doc.rsDistricts();
-
-    if (m_unassignedSelected)
+    if (isEQ)
     {
-        if (m_isEQ)
-        {
-            result = unassignedFamilyIds();
-        }
-        else
-        {
-            // RS: get family IDs for unassigned sisters
-            result = familyIdsForPersons(unassignedSisterIds());
-        }
+        m_eqSelectedId.clear();
     }
-    else if (!m_selectedCompanionshipIds.isEmpty())
+    else
     {
-        // Companionships selected
-        for (const QString& groupId : m_selectedCompanionshipIds)
-        {
-            if (!groups.contains(groupId))
-            {
-                continue;
-            }
-            const MinisteringGroup& group = groups[groupId];
-            if (m_isEQ)
-            {
-                result.unite(group.familyIds());
-            }
-            else
-            {
-                result.unite(familyIdsForPersons(group.ministeredPersonIds()));
-            }
-        }
+        m_rsSelectedId.clear();
     }
-    else if (!m_selectedDistrictIds.isEmpty())
-    {
-        // Districts selected - get all families in all groups in those districts
-        for (const QString& districtId : m_selectedDistrictIds)
-        {
-            if (!districts.contains(districtId))
-            {
-                continue;
-            }
-            const MinisteringDistrict& district = districts[districtId];
-            for (const QString& groupId : district.groupIds())
-            {
-                if (!groups.contains(groupId))
-                {
-                    continue;
-                }
-                const MinisteringGroup& group = groups[groupId];
-                if (m_isEQ)
-                {
-                    result.unite(group.familyIds());
-                }
-                else
-                {
-                    result.unite(familyIdsForPersons(group.ministeredPersonIds()));
-                }
-            }
-        }
-    }
-
-    return result;
-}
-
-QSet<QString> MinisteringView::ministerFamilyIds() const
-{
-    QSet<QString> result;
-    const Document& doc = m_documentManager->document();
-    const auto& groups = m_isEQ ? doc.eqGroups() : doc.rsGroups();
-    const auto& districts = m_isEQ ? doc.eqDistricts() : doc.rsDistricts();
-
-    // Unassigned selection has no ministers
-    if (m_unassignedSelected)
-    {
-        return result;
-    }
-
-    QSet<QString> ministerPersonIds;
-
-    if (!m_selectedCompanionshipIds.isEmpty())
-    {
-        // Get ministers from selected companionships
-        for (const QString& groupId : m_selectedCompanionshipIds)
-        {
-            if (groups.contains(groupId))
-            {
-                const MinisteringGroup& group = groups[groupId];
-                ministerPersonIds.unite(group.ministerIds());
-            }
-        }
-    }
-    else if (!m_selectedDistrictIds.isEmpty())
-    {
-        // Get ministers from all groups in selected districts
-        for (const QString& districtId : m_selectedDistrictIds)
-        {
-            if (!districts.contains(districtId))
-            {
-                continue;
-            }
-            const MinisteringDistrict& district = districts[districtId];
-            for (const QString& groupId : district.groupIds())
-            {
-                if (groups.contains(groupId))
-                {
-                    const MinisteringGroup& group = groups[groupId];
-                    ministerPersonIds.unite(group.ministerIds());
-                }
-            }
-        }
-    }
-
-    // Convert minister person IDs to family IDs
-    return familyIdsForPersons(ministerPersonIds);
 }
 
 QSet<QString> MinisteringView::familyIdsForPersons(const QSet<QString>& personIds) const
@@ -808,19 +820,148 @@ HighlightInfo MinisteringView::highlightInfo() const
 {
     HighlightInfo info;
 
-    // No selection - no highlighting
-    if (m_selectedDistrictIds.isEmpty()
-        && m_selectedCompanionshipIds.isEmpty()
-        && !m_unassignedSelected)
+    // Pick selection state based on current org
+    const QString& selectedId = m_isEQ ? m_eqSelectedId : m_rsSelectedId;
+    ItemType selectedType = m_isEQ ? m_eqSelectedType : m_rsSelectedType;
+
+    // No selection = no highlighting
+    if (selectedId.isEmpty())
     {
         return info;
     }
 
-    // Ministered families get highlighted
-    info.highlightedFamilyIds = selectedFamilyIds();
+    const Document& doc = m_documentManager->document();
+    const auto& districts = m_isEQ ? doc.eqDistricts() : doc.rsDistricts();
+    const auto& groups = m_isEQ ? doc.eqGroups() : doc.rsGroups();
 
-    // Ministers get highlighted AND pip
-    info.contactPointFamilyIds = ministerFamilyIds();
+    switch (selectedType)
+    {
+        case ItemType::UnassignedHeader:
+        {
+            if (m_isEQ)
+            {
+                info.highlightedFamilyIds = unassignedFamilyIds();
+            }
+            else
+            {
+                info.highlightedFamilyIds = familyIdsForPersons(unassignedSisterIds());
+            }
+            break;
+        }
+
+        case ItemType::District:
+        {
+            if (districts.contains(selectedId))
+            {
+                const MinisteringDistrict& district = districts[selectedId];
+                for (const QString& groupId : district.groupIds())
+                {
+                    if (groups.contains(groupId))
+                    {
+                        const MinisteringGroup& group = groups[groupId];
+                        if (m_isEQ)
+                        {
+                            info.highlightedFamilyIds.unite(group.familyIds());
+                        }
+                        else
+                        {
+                            info.highlightedFamilyIds.unite(familyIdsForPersons(group.ministeredPersonIds()));
+                        }
+                        info.contactPointFamilyIds.unite(familyIdsForPersons(group.ministerIds()));
+                    }
+                }
+            }
+            break;
+        }
+
+        case ItemType::Companionship:
+        {
+            if (groups.contains(selectedId))
+            {
+                const MinisteringGroup& group = groups[selectedId];
+                if (m_isEQ)
+                {
+                    info.highlightedFamilyIds = group.familyIds();
+                }
+                else
+                {
+                    info.highlightedFamilyIds = familyIdsForPersons(group.ministeredPersonIds());
+                }
+                info.contactPointFamilyIds = familyIdsForPersons(group.ministerIds());
+            }
+            break;
+        }
+
+        case ItemType::SectionHeader:
+        {
+            // Parse composite ID: "{compId}:ministers" or "{compId}:ministered"
+            int colonPos = selectedId.lastIndexOf(':');
+            if (colonPos > 0)
+            {
+                QString compId = selectedId.left(colonPos);
+                QString sectionType = selectedId.mid(colonPos + 1);
+
+                if (groups.contains(compId))
+                {
+                    const MinisteringGroup& group = groups[compId];
+                    if (sectionType == "ministers")
+                    {
+                        // Ministers section: highlight minister families with pips
+                        QSet<QString> ministerFamilies = familyIdsForPersons(group.ministerIds());
+                        info.highlightedFamilyIds = ministerFamilies;
+                        info.contactPointFamilyIds = ministerFamilies;
+                    }
+                    else
+                    {
+                        // Ministered section: highlight ministered families
+                        if (m_isEQ)
+                        {
+                            info.highlightedFamilyIds = group.familyIds();
+                        }
+                        else
+                        {
+                            info.highlightedFamilyIds = familyIdsForPersons(group.ministeredPersonIds());
+                        }
+                    }
+                }
+            }
+            break;
+        }
+
+        case ItemType::Minister:
+        {
+            // Individual minister: highlight their family with pip
+            QString familyId = doc.familyIdForPerson(selectedId);
+            if (!familyId.isEmpty())
+            {
+                info.highlightedFamilyIds.insert(familyId);
+                info.contactPointFamilyIds.insert(familyId);
+            }
+            break;
+        }
+
+        case ItemType::MinisteredFamily:
+        {
+            // Individual family: highlight that family
+            info.highlightedFamilyIds.insert(selectedId);
+            break;
+        }
+
+        case ItemType::MinisteredSister:
+        {
+            // Individual sister: highlight her family
+            QString familyId = doc.familyIdForPerson(selectedId);
+            if (!familyId.isEmpty())
+            {
+                info.highlightedFamilyIds.insert(familyId);
+            }
+            break;
+        }
+
+        case ItemType::ContactDetail:
+            // Should never be selected, but handle gracefully
+            break;
+    }
 
     return info;
 }
@@ -829,15 +970,4 @@ QSet<QString> MinisteringView::visibleFamilyIds() const
 {
     // MinisteringView shows all families - visibility is controlled by opacity
     return {};  // Empty = show all
-}
-
-// Event filter for unassigned label click
-bool MinisteringView::eventFilter(QObject* obj, QEvent* event)
-{
-    if (obj == m_unassignedLabel && event->type() == QEvent::MouseButtonPress)
-    {
-        onUnassignedClicked();
-        return true;
-    }
-    return QWidget::eventFilter(obj, event);
 }

@@ -9,7 +9,6 @@
 
 class DocumentManager;
 class MinisteringGroup;
-class QLabel;
 class QTabBar;
 class QTreeWidget;
 class QTreeWidgetItem;
@@ -34,31 +33,24 @@ signals:
     /// Emitted when highlighting changes (for map update)
     void highlightChanged();
 
-protected:
-    bool eventFilter(QObject* obj, QEvent* event) override;
-
 private slots:
     void onOrgToggled(int id);
-    void onUnassignedClicked();
     void onTreeItemClicked(QTreeWidgetItem* item, int column);
     void onDocumentChanged(const DocumentChange& change);
     void onTreeItemExpanded(QTreeWidgetItem* item);
+    void onUnassignedTreeItemExpanded(QTreeWidgetItem* item);
+    void onUnassignedTreeItemCollapsed(QTreeWidgetItem* item);
 
 private:
     void setupUi();
-    void rebuildTree();
-    void regenerateColors();
-    void updateUnassignedLabel();
-    void clearSelection();
+    void rebuildTreeImpl(QTreeWidget* tree, bool isEQ);
+    void rebuildUnassignedTreeImpl(QTreeWidget* tree, bool isEQ);
+    void updateUnassignedVisibility();
+    void handleTreeItemClicked(QTreeWidgetItem* item, bool isEQ, bool isUnassigned);
+    void clearSelection(bool isEQ);
     void populateContactInfo(QTreeWidgetItem* item);
-    void addMinistersSection(QTreeWidgetItem* companionshipItem, const MinisteringGroup& group);
-    void addMinisteredSection(QTreeWidgetItem* companionshipItem, const MinisteringGroup& group);
-
-    // Get family IDs for the current selection (ministered families)
-    QSet<QString> selectedFamilyIds() const;
-
-    // Get family IDs for ministers in the current selection (contact points)
-    QSet<QString> ministerFamilyIds() const;
+    void addMinistersSection(QTreeWidgetItem* companionshipItem, const MinisteringGroup& group, bool isEQ);
+    void addMinisteredSection(QTreeWidgetItem* companionshipItem, const MinisteringGroup& group, bool isEQ);
 
     // For RS: Get family IDs containing the given person IDs
     QSet<QString> familyIdsForPersons(const QSet<QString>& personIds) const;
@@ -66,20 +58,6 @@ private:
     // Get unassigned family IDs (EQ) or person IDs (RS)
     QSet<QString> unassignedFamilyIds() const;
     QSet<QString> unassignedSisterIds() const;
-
-    DocumentManager* m_documentManager;
-
-    // UI
-    QTabBar* m_orgTabs = nullptr;
-    QLabel* m_unassignedLabel = nullptr;
-    QTreeWidget* m_tree = nullptr;
-
-    // State
-    bool m_isEQ = true;
-    QSet<QString> m_selectedDistrictIds;
-    QSet<QString> m_selectedCompanionshipIds;
-    bool m_unassignedSelected = false;
-    QHash<QString, QColor> m_colorMap;  // ID -> color (for companionships and districts)
 
     // Constants for tree item data roles
     static constexpr int IdRole = Qt::UserRole;
@@ -92,6 +70,29 @@ private:
         Minister,          // Individual minister person
         MinisteredFamily,  // EQ: family being ministered to
         MinisteredSister,  // RS: sister being ministered to
-        ContactDetail      // Phone, email, address line
+        ContactDetail,     // Phone, email, address line
+        UnassignedHeader   // Root "Unassigned" item
     };
+
+    DocumentManager* m_documentManager;
+
+    // UI
+    QTabBar* m_orgTabs = nullptr;
+    QTreeWidget* m_eqTree = nullptr;
+    QTreeWidget* m_rsTree = nullptr;
+    QTreeWidget* m_eqUnassignedTree = nullptr;
+    QTreeWidget* m_rsUnassignedTree = nullptr;
+
+    // State
+    bool m_isEQ = true;
+
+    // EQ selection state
+    QString m_eqSelectedId;
+    ItemType m_eqSelectedType = ItemType::District;
+    QTreeWidgetItem* m_eqSelectedItem = nullptr;
+
+    // RS selection state
+    QString m_rsSelectedId;
+    ItemType m_rsSelectedType = ItemType::District;
+    QTreeWidgetItem* m_rsSelectedItem = nullptr;
 };
