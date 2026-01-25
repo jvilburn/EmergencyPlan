@@ -45,9 +45,9 @@ void MemberEditor::setupUi()
     parentGenderLayout->addSpacing(20);
     parentGenderLayout->addWidget(new QLabel(tr("Gender:"), this));
     m_genderCombo = new QComboBox(this);
-    m_genderCombo->addItem(QString(), QString());  // Empty/unspecified
-    m_genderCombo->addItem(tr("Male"), QStringLiteral("Male"));
-    m_genderCombo->addItem(tr("Female"), QStringLiteral("Female"));
+    m_genderCombo->addItem(QString(), QVariant::fromValue(Gender()));  // Unspecified
+    m_genderCombo->addItem(tr("Male"), QVariant::fromValue(Gender::Male));
+    m_genderCombo->addItem(tr("Female"), QVariant::fromValue(Gender::Female));
     parentGenderLayout->addWidget(m_genderCombo);
     parentGenderLayout->addStretch();
     mainLayout->addLayout(parentGenderLayout);
@@ -146,12 +146,18 @@ void MemberEditor::setPerson(const Person& person)
     m_givenNamesEdit->setText(person.givenNames());
     m_parentCheck->setChecked(person.isParent());
 
-    // Gender - use string matching
+    // Gender - find matching Gender in combo data
     if (person.gender().has_value())
     {
-        QString genderStr = person.gender()->toString();
-        int idx = m_genderCombo->findData(genderStr);
-        m_genderCombo->setCurrentIndex(idx >= 0 ? idx : 0);
+        for (int i = 0; i < m_genderCombo->count(); ++i)
+        {
+            Gender g = m_genderCombo->itemData(i).value<Gender>();
+            if (g.isValid() && g == *person.gender())
+            {
+                m_genderCombo->setCurrentIndex(i);
+                break;
+            }
+        }
     }
     else
     {
@@ -197,12 +203,12 @@ Person MemberEditor::person() const
         day > 0 ? std::optional<int>(day) : std::nullopt
     );
 
-    // Build gender from stored string
+    // Build gender from stored Gender object
     std::optional<Gender> gender;
-    QString genderStr = m_genderCombo->currentData().toString();
-    if (!genderStr.isEmpty())
+    Gender g = m_genderCombo->currentData().value<Gender>();
+    if (g.isValid())
     {
-        gender = Gender::fromString(genderStr);
+        gender = g;
     }
 
     // Use createWithId with correct parameter order:
