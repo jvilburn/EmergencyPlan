@@ -30,25 +30,6 @@ SkillsSubView::SkillsSubView(DocumentManager* documentManager, QWidget* parent)
     m_tree->setSelectionMode(QAbstractItemView::SingleSelection);
     m_tree->setContextMenuPolicy(Qt::CustomContextMenu);
     m_tree->setIndentation(16);
-
-    m_tree->setStyleSheet(R"(
-        QTreeWidget {
-            border: 1px solid #e0e0e0;
-            border-radius: 4px;
-            background: white;
-        }
-        QTreeWidget::item {
-            padding: 4px 0;
-        }
-        QTreeWidget::item:hover {
-            background: #f5f5f5;
-        }
-        QTreeWidget::item:selected {
-            background: #e3f2fd;
-            color: black;
-        }
-    )");
-
     layout->addWidget(m_tree);
 
     connect(m_tree, &QTreeWidget::itemClicked,
