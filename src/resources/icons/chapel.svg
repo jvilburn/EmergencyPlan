@@ -1,26 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
   <!-- Chapel with narrow triangular steeple -->
-  <!-- Base color: terracotta #C2703A, darker stroke #8B4F29 -->
+  <!-- Base color: orange #F57C00, white line art, dark outer border #B35A00 -->
+
+  <!-- Dark border (drawn first, slightly larger) -->
+  <rect x="1" y="13" width="22" height="11" fill="none" stroke="#B35A00" stroke-width="2"/>
+  <polygon points="0,14 12,9 24,14" fill="none" stroke="#B35A00" stroke-width="2" stroke-linejoin="round"/>
+  <polygon points="9,10 12,0 15,10" fill="none" stroke="#B35A00" stroke-width="2" stroke-linejoin="round"/>
 
   <!-- Main building body -->
-  <rect x="2" y="14" width="20" height="9" fill="#C2703A" stroke="#8B4F29" stroke-width="0.75"/>
+  <rect x="2" y="14" width="20" height="9" fill="#F57C00"/>
 
   <!-- Main roof -->
-  <polygon points="1,14 12,10 23,14" fill="#C2703A" stroke="#8B4F29" stroke-width="0.75" stroke-linejoin="round"/>
+  <polygon points="1,14 12,10 23,14" fill="#F57C00"/>
 
   <!-- Steeple (narrow triangle rising from roof peak) -->
-  <polygon points="10,10 12,1 14,10" fill="#C2703A" stroke="#8B4F29" stroke-width="0.75" stroke-linejoin="round"/>
+  <polygon points="10,10 12,1 14,10" fill="#F57C00"/>
 
   <!-- Door (arched top) -->
-  <path d="M10,23 L10,18 Q10,16.5 12,16.5 Q14,16.5 14,18 L14,23" fill="#8B4F29"/>
+  <path d="M10,23 L10,18 Q10,16.5 12,16.5 Q14,16.5 14,18 L14,23" fill="white"/>
 
   <!-- Left window -->
-  <rect x="4" y="17" width="3" height="3.5" fill="#8B4F29"/>
-  <line x1="5.5" y1="17" x2="5.5" y2="20.5" stroke="#C2703A" stroke-width="0.5"/>
-  <line x1="4" y1="18.75" x2="7" y2="18.75" stroke="#C2703A" stroke-width="0.5"/>
+  <rect x="4" y="17" width="3" height="3.5" fill="white"/>
+  <line x1="5.5" y1="17" x2="5.5" y2="20.5" stroke="#F57C00" stroke-width="0.5"/>
+  <line x1="4" y1="18.75" x2="7" y2="18.75" stroke="#F57C00" stroke-width="0.5"/>
 
   <!-- Right window -->
-  <rect x="17" y="17" width="3" height="3.5" fill="#8B4F29"/>
-  <line x1="18.5" y1="17" x2="18.5" y2="20.5" stroke="#C2703A" stroke-width="0.5"/>
-  <line x1="17" y1="18.75" x2="20" y2="18.75" stroke="#C2703A" stroke-width="0.5"/>
+  <rect x="17" y="17" width="3" height="3.5" fill="white"/>
+  <line x1="18.5" y1="17" x2="18.5" y2="20.5" stroke="#F57C00" stroke-width="0.5"/>
+  <line x1="17" y1="18.75" x2="20" y2="18.75" stroke="#F57C00" stroke-width="0.5"/>
 </svg>

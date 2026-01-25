@@ -9,6 +9,7 @@
 #include "TileService.h"
 #include "Family.h"
 #include "Ward.h"
+#include "Stake.h"
 #include "Document.h"
 
 #include <QPainter>
@@ -366,11 +367,11 @@ void MapWidget::paintEvent(QPaintEvent* /*event*/)
     // Draw tiles first (background)
     drawTiles(painter);
 
-    // Draw church markers (reference points, below family markers)
-    drawChurchMarkers(painter);
-
-    // Draw family markers on top
+    // Draw family markers
     drawMarkers(painter);
+
+    // Draw church markers on top (landmark reference points)
+    drawChurchMarkers(painter);
 
     // Draw attribution
     drawAttribution(painter);
@@ -464,31 +465,61 @@ void MapWidget::drawChurchMarkers(QPainter& painter)
 {
     const Document& doc = m_docManager->document();
     const QHash<QString, Ward>& wards = doc.wards();
+    const QHash<QString, Stake>& stakes = doc.stakes();
 
-    if (wards.isEmpty())
+    if (wards.isEmpty() && stakes.isEmpty())
     {
         return;
     }
 
-    double clampedZoom = qBound(static_cast<double>(MIN_ZOOM), m_zoom, static_cast<double>(MAX_ZOOM));
+    // Collect unique building locations (deduplicate shared buildings)
+    // Key: rounded lat/lng to 4 decimal places (~11m precision)
+    QSet<QPair<qint64, qint64>> seenLocations;
+    QVector<QPair<double, double>> buildingLocations;
 
+    auto addLocation = [&](double lat, double lng)
+    {
+        // Round to 4 decimal places for deduplication
+        qint64 latKey = static_cast<qint64>(lat * 10000);
+        qint64 lngKey = static_cast<qint64>(lng * 10000);
+        QPair<qint64, qint64> key(latKey, lngKey);
+
+        if (!seenLocations.contains(key))
+        {
+            seenLocations.insert(key);
+            buildingLocations.append({lat, lng});
+        }
+    };
+
+    // Collect ward chapel locations
     for (const Ward& ward : wards)
     {
-        // Skip wards without chapel coordinates
-        if (!ward.chapelLat() || !ward.chapelLng())
+        if (ward.chapelLat() && ward.chapelLng())
         {
-            continue;
+            addLocation(ward.chapelLat().value(), ward.chapelLng().value());
         }
+    }
 
-        double lat = ward.chapelLat().value();
-        double lng = ward.chapelLng().value();
+    // Collect stake center locations
+    for (const Stake& stake : stakes)
+    {
+        if (stake.stakeCenterLat() && stake.stakeCenterLng())
+        {
+            addLocation(stake.stakeCenterLat().value(), stake.stakeCenterLng().value());
+        }
+    }
 
+    // Draw markers for unique locations
+    double clampedZoom = qBound(static_cast<double>(MIN_ZOOM), m_zoom, static_cast<double>(MAX_ZOOM));
+    double markerExtent = MarkerRenderer::CHURCH_MARKER_SIZE / 2.0;
+
+    for (const auto& [lat, lng] : buildingLocations)
+    {
         QPointF pos = SlippyMapMath::latLngToPixel(lat, lng, clampedZoom,
                                                     m_centerLat, m_centerLng,
                                                     width(), height());
 
         // Skip if outside visible area
-        double markerExtent = MarkerRenderer::CHURCH_MARKER_SIZE / 2.0;
         if (pos.x() < -markerExtent || pos.x() > width() + markerExtent
             || pos.y() < -markerExtent || pos.y() > height() + markerExtent)
         {
@@ -496,7 +527,6 @@ void MapWidget::drawChurchMarkers(QPainter& painter)
         }
 
         MarkerRenderer::State state;
-        // Church markers don't dim when family highlighting is active
         state.opacity = 1.0;
 
         MarkerRenderer::drawChurch(painter, pos, state);
