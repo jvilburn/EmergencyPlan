@@ -156,7 +156,7 @@ QMarginsF boundingBox(const QVariantMap& family, const State& state)
 
 void drawChurch(QPainter& painter, const QPointF& pos, const State& state)
 {
-    static QIcon chapelIcon(":/icons/chapel.svg");
+    static QIcon chapelIcon(":/markers/marker_chapel.svg");
 
     double size = CHURCH_MARKER_SIZE * state.scale;
     int intSize = static_cast<int>(qCeil(size));

@@ -97,7 +97,6 @@ set(MODEL_SOURCES
     src/models/MinisteringDistrict.cpp
     src/models/SkillCategory.cpp
     src/models/Skill.cpp
-    src/models/SpecialNeed.cpp
     src/models/EquipmentCategory.cpp
     src/models/Equipment.cpp
     src/models/DocumentChange.cpp
@@ -124,7 +123,6 @@ set(MODEL_HEADERS
     src/models/MinisteringDistrict.h
     src/models/SkillCategory.h
     src/models/Skill.h
-    src/models/SpecialNeed.h
     src/models/EquipmentCategory.h
     src/models/Equipment.h
     src/models/DocumentChange.h
@@ -141,7 +139,6 @@ set(COMMAND_SOURCES
     src/commands/TagCommands.cpp
     src/commands/SkillCommands.cpp
     src/commands/EquipmentCommands.cpp
-    src/commands/SpecialNeedCommands.cpp
     # src/commands/ImportCommands.cpp
 )
 
@@ -157,7 +154,6 @@ set(COMMAND_HEADERS
     src/commands/TagCommands.h
     src/commands/SkillCommands.h
     src/commands/EquipmentCommands.h
-    src/commands/SpecialNeedCommands.h
     # src/commands/ImportCommands.h
 )
 
@@ -417,7 +413,6 @@ qt_add_resources(EmergencyPlan "icons"
         src/resources/icons/recenter.svg
         src/resources/icons/zoom-in.svg
         src/resources/icons/zoom-out.svg
-        src/resources/icons/chapel.svg
         # Windows 7 Aero theme icons
         src/resources/icons/win7/checkbox-check.png
         src/resources/icons/win7/checkbox-check-disabled.png
@@ -444,6 +439,22 @@ qt_add_resources(EmergencyPlan "icons"
         src/resources/icons/win7/slider-thumb-pressed.png
         src/resources/icons/win7/slider-thumb-disabled.png
         src/resources/icons/win7/button-focus.png
+)
+
+qt_add_resources(EmergencyPlan "markers"
+    PREFIX "/"
+    BASE "src/resources"
+    FILES
+        src/resources/markers/marker_chapel.svg
+        src/resources/markers/marker_home.svg
+        src/resources/markers/marker_medical.svg
+        src/resources/markers/marker_recovery.svg
+        src/resources/markers/marker_special.svg
+        src/resources/markers/marker_medical_recovery.svg
+        src/resources/markers/marker_special_medical.svg
+        src/resources/markers/marker_special_recovery.svg
+        src/resources/markers/marker_special_medical_recovery.svg
+        src/resources/markers/marker_antenna.svg
 )
 
 qt_add_resources(EmergencyPlan "styles"
