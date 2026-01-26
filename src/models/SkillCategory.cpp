@@ -9,6 +9,16 @@ SkillCategory SkillCategory::create(const QString& name, int sortOrder)
     return category;
 }
 
+SkillCategory SkillCategory::create(const QString& name, int sortOrder, std::optional<MarkerDecorationType> decorationType)
+{
+    SkillCategory category;
+    category.m_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    category.m_name = name;
+    category.m_sortOrder = sortOrder;
+    category.m_decorationType = decorationType;
+    return category;
+}
+
 QJsonObject SkillCategory::toJson() const
 {
     QJsonObject json;

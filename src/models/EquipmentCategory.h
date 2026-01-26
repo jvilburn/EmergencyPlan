@@ -11,8 +11,9 @@ class EquipmentCategory
 public:
     EquipmentCategory() = default;
 
-    // Factory method for creating new categories
+    // Factory methods for creating new categories
     static EquipmentCategory create(const QString& name, int sortOrder);
+    static EquipmentCategory create(const QString& name, int sortOrder, std::optional<MarkerDecorationType> decorationType);
 
     // Getters
     const QString& id() const { return m_id; }

@@ -1,4 +1,5 @@
 #include "Document.h"
+#include "MarkerDecorationType.h"
 
 Document Document::empty()
 {
@@ -10,32 +11,35 @@ Document Document::empty()
 void Document::initializeDefaultCategories()
 {
     // Default skill categories
-    auto medical = SkillCategory::create(QObject::tr("Medical"), 0);
+    auto medical = SkillCategory::create(QObject::tr("Medical"), 0, MarkerDecorationType::Medical);
     m_skillCategories.insert(medical.id(), medical);
 
-    auto communication = SkillCategory::create(QObject::tr("Communication"), 1);
+    auto communication = SkillCategory::create(QObject::tr("Communication"), 1, MarkerDecorationType::Communications);
     m_skillCategories.insert(communication.id(), communication);
 
-    auto repair = SkillCategory::create(QObject::tr("Repair"), 2);
+    auto repair = SkillCategory::create(QObject::tr("Repair"), 2, MarkerDecorationType::Recovery);
     m_skillCategories.insert(repair.id(), repair);
 
     // Default equipment categories
-    auto power = EquipmentCategory::create(QObject::tr("Power"), 0);
+    auto power = EquipmentCategory::create(QObject::tr("Power"), 0, MarkerDecorationType::Recovery);
     m_equipmentCategories.insert(power.id(), power);
 
-    auto tools = EquipmentCategory::create(QObject::tr("Tools"), 1);
+    auto hamRadio = EquipmentCategory::create(QObject::tr("Ham Radio"), 1, MarkerDecorationType::Communications);
+    m_equipmentCategories.insert(hamRadio.id(), hamRadio);
+
+    auto tools = EquipmentCategory::create(QObject::tr("Tools"), 2, std::nullopt);
     m_equipmentCategories.insert(tools.id(), tools);
 
-    auto transportation = EquipmentCategory::create(QObject::tr("Transportation"), 2);
+    auto transportation = EquipmentCategory::create(QObject::tr("Transportation"), 3, std::nullopt);
     m_equipmentCategories.insert(transportation.id(), transportation);
 
-    auto shelter = EquipmentCategory::create(QObject::tr("Shelter"), 3);
+    auto shelter = EquipmentCategory::create(QObject::tr("Shelter"), 4, std::nullopt);
     m_equipmentCategories.insert(shelter.id(), shelter);
 
-    auto water = EquipmentCategory::create(QObject::tr("Water"), 4);
+    auto water = EquipmentCategory::create(QObject::tr("Water"), 5, std::nullopt);
     m_equipmentCategories.insert(water.id(), water);
 
-    auto supplies = EquipmentCategory::create(QObject::tr("Supplies"), 5);
+    auto supplies = EquipmentCategory::create(QObject::tr("Supplies"), 6, std::nullopt);
     m_equipmentCategories.insert(supplies.id(), supplies);
 }
 
@@ -319,52 +323,6 @@ void Document::removeFamilyFromEquipment(const QString& equipmentId, const QStri
 }
 
 // ============================================================================
-// Special needs operations
-// ============================================================================
-
-std::optional<SpecialNeed> Document::findSpecialNeed(std::optional<QString> personId, std::optional<QString> familyId) const
-{
-    for (const SpecialNeed& need : m_specialNeeds)
-    {
-        if (need.matchesEntity(personId, familyId))
-        {
-            return need;
-        }
-    }
-    return std::nullopt;
-}
-
-void Document::setSpecialNeed(std::optional<QString> personId, std::optional<QString> familyId, const QString& note)
-{
-    // Remove any existing special need for this entity
-    clearSpecialNeed(personId, familyId);
-
-    // Add the new special need
-    SpecialNeed need;
-    need.personId = personId;
-    need.familyId = familyId;
-    need.note = note;
-    m_specialNeeds.append(need);
-}
-
-void Document::setSpecialNeed(const SpecialNeed& need)
-{
-    // Remove any existing special need for this entity
-    clearSpecialNeed(need.personId, need.familyId);
-
-    // Add the new special need
-    m_specialNeeds.append(need);
-}
-
-void Document::clearSpecialNeed(std::optional<QString> personId, std::optional<QString> familyId)
-{
-    m_specialNeeds.removeIf([&](const SpecialNeed& need)
-    {
-        return need.matchesEntity(personId, familyId);
-    });
-}
-
-// ============================================================================
 // Ministering operations
 // ============================================================================
 
@@ -494,9 +452,6 @@ void Document::cleanupPersonReferences(const QString& personId)
             it->removePerson(personId);
         }
     }
-
-    // Remove special needs for this person
-    clearSpecialNeed(personId, std::nullopt);
 
     // Remove from EQ groups (ministers only - families are not person IDs)
     for (auto it = m_eqGroups.begin(); it != m_eqGroups.end(); ++it)
@@ -705,17 +660,6 @@ QJsonObject Document::toJson() const
     serializeHashToJson(json, "equipmentCategories", m_equipmentCategories);
     serializeHashToJson(json, "equipment", m_equipment);
 
-    // Special needs (QList, not QHash)
-    if (!m_specialNeeds.isEmpty())
-    {
-        QJsonArray specialNeedsArray;
-        for (const SpecialNeed& need : m_specialNeeds)
-        {
-            specialNeedsArray.append(need.toJson());
-        }
-        json["specialNeeds"] = specialNeedsArray;
-    }
-
     // Ministering
     serializeHashToJson(json, "eqDistricts", m_eqDistricts);
     serializeHashToJson(json, "eqGroups", m_eqGroups);
@@ -752,16 +696,6 @@ Document Document::fromJson(const QJsonObject& json)
     deserializeJsonToHash(json, "skills", document.m_skills);
     deserializeJsonToHash(json, "equipmentCategories", document.m_equipmentCategories);
     deserializeJsonToHash(json, "equipment", document.m_equipment);
-
-    // Special needs
-    if (json.contains("specialNeeds"))
-    {
-        const QJsonArray specialNeedsArray = json["specialNeeds"].toArray();
-        for (const QJsonValue& value : specialNeedsArray)
-        {
-            document.m_specialNeeds.append(SpecialNeed::fromJson(value.toObject()));
-        }
-    }
 
     // Ministering
     deserializeJsonToHash(json, "eqDistricts", document.m_eqDistricts);
@@ -805,7 +739,6 @@ bool Document::operator==(const Document& other) const
         && m_skills == other.m_skills
         && m_equipmentCategories == other.m_equipmentCategories
         && m_equipment == other.m_equipment
-        && m_specialNeeds == other.m_specialNeeds
         && m_eqDistricts == other.m_eqDistricts
         && m_eqGroups == other.m_eqGroups
         && m_rsDistricts == other.m_rsDistricts
