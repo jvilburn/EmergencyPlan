@@ -25,16 +25,52 @@ constexpr double ANTENNA_OFFSET_X = 0.25;
 constexpr double ANTENNA_OFFSET_Y_BASE = -0.5;
 constexpr double ANTENNA_OFFSET_Y_ADJUST = -0.3;
 
-// File-local static icons (initialized on first use)
-static QIcon homeIcon(":/markers/marker_home.svg");
-static QIcon medicalIcon(":/markers/marker_medical.svg");
-static QIcon recoveryIcon(":/markers/marker_recovery.svg");
-static QIcon specialIcon(":/markers/marker_special.svg");
-static QIcon medicalRecoveryIcon(":/markers/marker_medical_recovery.svg");
-static QIcon specialMedicalIcon(":/markers/marker_special_medical.svg");
-static QIcon specialRecoveryIcon(":/markers/marker_special_recovery.svg");
-static QIcon specialMedicalRecoveryIcon(":/markers/marker_special_medical_recovery.svg");
-static QIcon antennaIcon(":/markers/marker_antenna.svg");
+// Lazy-initialized icons (must be function-local statics to ensure QApplication exists)
+static QIcon& homeIcon()
+{
+    static QIcon icon(":/markers/marker_home.svg");
+    return icon;
+}
+static QIcon& medicalIcon()
+{
+    static QIcon icon(":/markers/marker_medical.svg");
+    return icon;
+}
+static QIcon& recoveryIcon()
+{
+    static QIcon icon(":/markers/marker_recovery.svg");
+    return icon;
+}
+static QIcon& specialIcon()
+{
+    static QIcon icon(":/markers/marker_special.svg");
+    return icon;
+}
+static QIcon& medicalRecoveryIcon()
+{
+    static QIcon icon(":/markers/marker_medical_recovery.svg");
+    return icon;
+}
+static QIcon& specialMedicalIcon()
+{
+    static QIcon icon(":/markers/marker_special_medical.svg");
+    return icon;
+}
+static QIcon& specialRecoveryIcon()
+{
+    static QIcon icon(":/markers/marker_special_recovery.svg");
+    return icon;
+}
+static QIcon& specialMedicalRecoveryIcon()
+{
+    static QIcon icon(":/markers/marker_special_medical_recovery.svg");
+    return icon;
+}
+static QIcon& antennaIcon()
+{
+    static QIcon icon(":/markers/marker_antenna.svg");
+    return icon;
+}
 
 // Select base icon from decoration set
 static QIcon* selectBaseIcon(const QSet<MarkerDecorationType>& decorations)
@@ -45,33 +81,33 @@ static QIcon* selectBaseIcon(const QSet<MarkerDecorationType>& decorations)
 
     if (hasSpecialNeeds && hasMedical && hasRecovery)
     {
-        return &specialMedicalRecoveryIcon;
+        return &specialMedicalRecoveryIcon();
     }
     if (hasSpecialNeeds && hasMedical)
     {
-        return &specialMedicalIcon;
+        return &specialMedicalIcon();
     }
     if (hasSpecialNeeds && hasRecovery)
     {
-        return &specialRecoveryIcon;
+        return &specialRecoveryIcon();
     }
     if (hasSpecialNeeds)
     {
-        return &specialIcon;
+        return &specialIcon();
     }
     if (hasMedical && hasRecovery)
     {
-        return &medicalRecoveryIcon;
+        return &medicalRecoveryIcon();
     }
     if (hasMedical)
     {
-        return &medicalIcon;
+        return &medicalIcon();
     }
     if (hasRecovery)
     {
-        return &recoveryIcon;
+        return &recoveryIcon();
     }
-    return &homeIcon;
+    return &homeIcon();
 }
 
 MarkerIcons computeFamilyIcons(const QString& familyId, const Document& doc)
@@ -95,7 +131,7 @@ MarkerIcons computeFamilyIcons(const QString& familyId, const Document& doc)
     MarkerIcons icons;
     icons.baseIcon = selectBaseIcon(decorations);
     icons.antennaIcon = decorations.contains(MarkerDecorationType::Communications)
-                        ? &antennaIcon : nullptr;
+                        ? &antennaIcon() : nullptr;
     return icons;
 }
 
@@ -170,7 +206,7 @@ void draw(QPainter& painter, const QPointF& pos,
     }
 
     // Draw the marker icon (fallback to home if baseIcon not set)
-    QIcon* iconToDraw = state.icons.baseIcon ? state.icons.baseIcon : &homeIcon;
+    QIcon* iconToDraw = state.icons.baseIcon ? state.icons.baseIcon : &homeIcon();
     QPixmap pixmap = iconToDraw->pixmap(QSize(intSize, intSize));
     QPointF topLeft(pos.x() - size / 2.0, pos.y() - size / 2.0);
     painter.drawPixmap(topLeft, pixmap);
