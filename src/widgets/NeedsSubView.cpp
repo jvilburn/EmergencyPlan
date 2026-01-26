@@ -26,7 +26,7 @@ namespace
 void updatePersonInFamily(DocumentManager* docMgr, const QString& familyId, const Person& updatedPerson)
 {
     const Document& doc = docMgr->document();
-    auto familyOpt = doc.findFamilyById(familyId);
+    std::optional<Family> familyOpt = doc.findFamilyById(familyId);
     if (!familyOpt)
     {
         return;
