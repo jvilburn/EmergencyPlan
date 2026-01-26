@@ -595,6 +595,7 @@ void MapWidget::drawMarkers(QPainter& painter)
             state.showPip = isContactPoint;
             state.opacity = opacity;
             state.statusIcon = statusIcon;
+            state.icons = MarkerRenderer::computeFamilyIcons(id, m_docManager->document());
 
             markers.append({pos, hh, state, opacity});
         }

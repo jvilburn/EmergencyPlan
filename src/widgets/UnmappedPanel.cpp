@@ -1,9 +1,10 @@
 #include "UnmappedPanel.h"
-#include "FamilyMarkerProvider.h"
-#include "MarkerRenderer.h"
-#include "Filter.h"
-#include "FamilyListModel.h"
+#include "Document.h"
 #include "DocumentManager.h"
+#include "FamilyMarkerProvider.h"
+#include "FamilyListModel.h"
+#include "Filter.h"
+#include "MarkerRenderer.h"
 
 #include <QPainter>
 #include <QMouseEvent>
@@ -197,6 +198,7 @@ void UnmappedPanel::paintEvent(QPaintEvent* /*event*/)
         state.scale = 0.5;
         state.isHighlighted = highlight.allHighlightedIds().contains(item.familyId);
         state.showPip = highlight.contactPointFamilyIds.contains(item.familyId);
+        state.icons = MarkerRenderer::computeFamilyIcons(item.familyId, m_docManager->document());
 
         MarkerRenderer::draw(painter, item.markerPos, QVariantMap(), state);
 
