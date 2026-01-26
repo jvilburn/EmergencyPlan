@@ -157,7 +157,7 @@ void MinisteringView::onUnassignedTreeItemCollapsed(QTreeWidgetItem* item)
     }
 }
 
-void MinisteringView::handleTreeItemClicked(QTreeWidgetItem* item, bool isEQ, bool isUnassigned)
+void MinisteringView::handleTreeItemClicked(QTreeWidgetItem* item, bool isEQ, bool /*isUnassigned*/)
 {
     ItemType type = static_cast<ItemType>(item->data(0, TypeRole).toInt());
     QString itemId = item->data(0, IdRole).toString();

@@ -36,6 +36,7 @@ void DocumentManager::executeCommand(CommandPtr command)
     DocumentChange change = command->documentChange();
 
     m_commandHistory.execute(std::move(command), m_document);
+    m_document.onDocumentChanged(change);
     emit documentChanged(change);
     checkForIncompleteWards();
 }
@@ -47,6 +48,7 @@ void DocumentManager::undo()
         return;
     }
     DocumentChange change = m_commandHistory.undo(m_document);
+    m_document.onDocumentChanged(change);
     emit documentChanged(change);
 }
 
@@ -57,6 +59,7 @@ void DocumentManager::redo()
         return;
     }
     DocumentChange change = m_commandHistory.redo(m_document);
+    m_document.onDocumentChanged(change);
     emit documentChanged(change);
 }
 
@@ -122,6 +125,7 @@ bool DocumentManager::saveDocumentAs(const QString& filePath, QString* errorMess
 void DocumentManager::setDocument(const Document& document)
 {
     m_document = document;
+    m_document.onDocumentChanged(DocumentChange::full());
     emit documentChanged(DocumentChange::full());
 }
 

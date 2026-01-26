@@ -15,9 +15,10 @@
 #include "Skill.h"
 #include "EquipmentCategory.h"
 #include "Equipment.h"
-#include "SpecialNeed.h"
 #include "MinisteringDistrict.h"
 #include "MinisteringGroup.h"
+#include "MarkerDecorationType.h"
+#include <QSet>
 
 class Document
 {
@@ -55,7 +56,6 @@ public:
     const QHash<QString, Skill>& skills() const { return m_skills; }
     const QHash<QString, EquipmentCategory>& equipmentCategories() const { return m_equipmentCategories; }
     const QHash<QString, Equipment>& equipment() const { return m_equipment; }
-    const QList<SpecialNeed>& specialNeeds() const { return m_specialNeeds; }
 
     // ========================================================================
     // Ministering getters
@@ -140,14 +140,6 @@ public:
     void removeFamilyFromEquipment(const QString& equipmentId, const QString& familyId);
 
     // ========================================================================
-    // Mutating operations - special needs
-    // ========================================================================
-    std::optional<SpecialNeed> findSpecialNeed(std::optional<QString> personId, std::optional<QString> familyId) const;
-    void setSpecialNeed(std::optional<QString> personId, std::optional<QString> familyId, const QString& note);
-    void setSpecialNeed(const SpecialNeed& need);
-    void clearSpecialNeed(std::optional<QString> personId, std::optional<QString> familyId);
-
-    // ========================================================================
     // Mutating operations - ministering
     // ========================================================================
     void addEqDistrict(const MinisteringDistrict& district);
@@ -195,6 +187,16 @@ public:
     /// Used by UI to determine available age filter options.
     std::optional<int> maxKnownAge() const;
 
+    /// Get skill-based decorations for a person (from cache)
+    QSet<MarkerDecorationType> personSkillDecorations(const QString& personId) const;
+
+    /// Get equipment-based decorations for a family (from cache)
+    QSet<MarkerDecorationType> familyEquipmentDecorations(const QString& familyId) const;
+
+    /// Called after each command to rebuild caches as needed based on what changed.
+    /// This is more efficient than rebuilding in each command's execute/undo.
+    void onDocumentChanged(const struct DocumentChange& change);
+
     // JSON serialization
     QJsonObject toJson() const;
     static Document fromJson(const QJsonObject& json);
@@ -205,6 +207,7 @@ public:
 
 private:
     void rebuildPersonToFamilyMap();
+    void rebuildDecorationCaches();
 
     // Ward/Stake hierarchy and document naming
     DocumentMetadata m_metadata;
@@ -225,7 +228,6 @@ private:
     QHash<QString, Skill> m_skills;
     QHash<QString, EquipmentCategory> m_equipmentCategories;
     QHash<QString, Equipment> m_equipment;
-    QList<SpecialNeed> m_specialNeeds;
 
     // Ministering
     QHash<QString, MinisteringDistrict> m_eqDistricts;
@@ -236,4 +238,8 @@ private:
     // Import dates (for conflict resolution)
     std::optional<QDate> m_wardDirectoryPdfDate;
     std::optional<QDate> m_ministeringPdfDate;
+
+    // Decoration caches (rebuilt when skills/equipment/categories change)
+    QHash<QString, QSet<MarkerDecorationType>> m_personSkillDecorations;
+    QHash<QString, QSet<MarkerDecorationType>> m_familyEquipmentDecorations;
 };

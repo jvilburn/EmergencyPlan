@@ -59,6 +59,8 @@ public:
     const QString& stakeUnitNumber() const { return m_stakeUnitNumber; }
     const QString& wardUnitNumber() const { return m_wardUnitNumber; }
     bool isParent() const { return m_isParent; }
+    const QString& specialNeedNote() const { return m_specialNeedNote; }
+    bool hasSpecialNeed() const { return !m_specialNeedNote.isEmpty(); }
 
     // Setters
     void setName(const Name& name) { m_name = name; }
@@ -73,6 +75,7 @@ public:
     void setStakeUnitNumber(const QString& stakeUnitNumber) { m_stakeUnitNumber = stakeUnitNumber; }
     void setWardUnitNumber(const QString& wardUnitNumber) { m_wardUnitNumber = wardUnitNumber; }
     void setIsParent(bool isParent) { m_isParent = isParent; }
+    void setSpecialNeedNote(const QString& note) { m_specialNeedNote = note; }
 
     // Display name: "Surname, GivenNames" (delegates to Name)
     QString displayName() const { return m_name.full(); }
@@ -110,4 +113,5 @@ private:
     QString m_stakeUnitNumber;  // Associates person with a stake
     QString m_wardUnitNumber;   // Associates person with a ward
     bool m_isParent = false;
+    QString m_specialNeedNote;
 };

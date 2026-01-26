@@ -1,16 +1,96 @@
 #include "MarkerRenderer.h"
 
+#include "Document.h"
+#include "Family.h"
+#include "MarkerDecorationType.h"
+#include "Person.h"
+
 #include <QGraphicsBlurEffect>
 #include <QGraphicsPixmapItem>
 #include <QGraphicsScene>
 #include <QIcon>
 #include <QPainter>
+#include <QSet>
 #include <QtMath>
 
 namespace MarkerRenderer
 {
 
 constexpr double MARKER_RADIUS = 10.0;
+
+// File-local static icons (initialized on first use)
+static QIcon homeIcon(":/markers/marker_home.svg");
+static QIcon medicalIcon(":/markers/marker_medical.svg");
+static QIcon recoveryIcon(":/markers/marker_recovery.svg");
+static QIcon specialIcon(":/markers/marker_special.svg");
+static QIcon medicalRecoveryIcon(":/markers/marker_medical_recovery.svg");
+static QIcon specialMedicalIcon(":/markers/marker_special_medical.svg");
+static QIcon specialRecoveryIcon(":/markers/marker_special_recovery.svg");
+static QIcon specialMedicalRecoveryIcon(":/markers/marker_special_medical_recovery.svg");
+static QIcon antennaIcon(":/markers/marker_antenna.svg");
+
+// Select base icon from decoration set
+static QIcon* selectBaseIcon(const QSet<MarkerDecorationType>& decorations)
+{
+    bool hasMedical = decorations.contains(MarkerDecorationType::Medical);
+    bool hasRecovery = decorations.contains(MarkerDecorationType::Recovery);
+    bool hasSpecialNeeds = decorations.contains(MarkerDecorationType::SpecialNeeds);
+
+    if (hasSpecialNeeds && hasMedical && hasRecovery)
+    {
+        return &specialMedicalRecoveryIcon;
+    }
+    if (hasSpecialNeeds && hasMedical)
+    {
+        return &specialMedicalIcon;
+    }
+    if (hasSpecialNeeds && hasRecovery)
+    {
+        return &specialRecoveryIcon;
+    }
+    if (hasSpecialNeeds)
+    {
+        return &specialIcon;
+    }
+    if (hasMedical && hasRecovery)
+    {
+        return &medicalRecoveryIcon;
+    }
+    if (hasMedical)
+    {
+        return &medicalIcon;
+    }
+    if (hasRecovery)
+    {
+        return &recoveryIcon;
+    }
+    return &homeIcon;
+}
+
+MarkerIcons computeFamilyIcons(const QString& familyId, const Document& doc)
+{
+    QSet<MarkerDecorationType> decorations;
+    const Family& family = doc.families().value(familyId);
+
+    // Check each family member for special needs and skills
+    for (const Person& person : family.members())
+    {
+        if (person.hasSpecialNeed())
+        {
+            decorations.insert(MarkerDecorationType::SpecialNeeds);
+        }
+        decorations.unite(doc.personSkillDecorations(person.id()));
+    }
+
+    // Equipment decorations (family-level)
+    decorations.unite(doc.familyEquipmentDecorations(familyId));
+
+    MarkerIcons icons;
+    icons.baseIcon = selectBaseIcon(decorations);
+    icons.antennaIcon = decorations.contains(MarkerDecorationType::Communications)
+                        ? &antennaIcon : nullptr;
+    return icons;
+}
 
 void draw(QPainter& painter, const QPointF& pos,
           const QVariantMap& family, const State& state)

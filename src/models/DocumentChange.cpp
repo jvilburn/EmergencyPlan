@@ -64,11 +64,6 @@ ScopeBuilder DocumentChange::equipment()
     return ScopeBuilder{ChangeScope::Equipment};
 }
 
-ScopeBuilder DocumentChange::specialNeed()
-{
-    return ScopeBuilder{ChangeScope::SpecialNeed};
-}
-
 ScopeBuilder DocumentChange::eqDistrict()
 {
     return ScopeBuilder{ChangeScope::EqDistrict};

@@ -5,12 +5,21 @@
 #include <QMarginsF>
 #include <QColor>
 #include <QVariantMap>
+#include <QIcon>
 
 class Ward;
+class Document;
 
 /// Renders map markers for families/persons.
 namespace MarkerRenderer
 {
+    /// Pre-selected icons for a family marker (computed once, used during draw)
+    struct MarkerIcons
+    {
+        QIcon* baseIcon = nullptr;     // Points to static icon (home, medical, etc.)
+        QIcon* antennaIcon = nullptr;  // nullptr if no communications
+    };
+
     /// State affecting marker appearance
     struct State
     {
@@ -19,7 +28,11 @@ namespace MarkerRenderer
         double opacity = 1.0;
         double scale = 1.0;  // 0.5 for half-size markers
         QString statusIcon;  // For Response Mode welfare status overlay (e.g., "✓", "⚑", "?")
+        MarkerIcons icons;   // Pre-selected marker icons
     };
+
+    /// Compute marker icons for a family based on skills, equipment, and special needs.
+    MarkerIcons computeFamilyIcons(const QString& familyId, const Document& doc);
 
     /// Draw a family marker at the given position.
     void draw(QPainter& painter, const QPointF& pos,

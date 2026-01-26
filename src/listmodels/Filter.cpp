@@ -260,7 +260,7 @@ bool Filter::hasFamilyLevelResource(const Document& /*document*/, const QString&
 
 bool Filter::hasPersonLevelResource(const Document& /*document*/, const QString& /*personId*/) const
 {
-    // TODO: Implement filtering by Skills/SpecialNeeds (the new person-level resource types)
+    // TODO: Implement filtering by Skills (the person-level resource type)
     // For now, old resourceTypeIds don't match anything
     Q_UNUSED(m_resourceTypeIds);
     return false;

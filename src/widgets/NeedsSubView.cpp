@@ -2,11 +2,10 @@
 #include "WardListDialog.h"
 #include "DocumentManager.h"
 #include "Document.h"
-#include "SpecialNeed.h"
-#include "SpecialNeedCommands.h"
 #include "Person.h"
 #include "Phone.h"
 #include "Family.h"
+#include "FamilyCommands.h"
 
 #include <QTreeWidget>
 #include <QVBoxLayout>
@@ -15,11 +14,43 @@
 #include <QMessageBox>
 #include <QDialog>
 #include <QFormLayout>
-#include <QComboBox>
 #include <QPushButton>
 #include <QLineEdit>
 #include <QDialogButtonBox>
 #include <QLabel>
+
+namespace
+{
+
+/// Helper to update a person within their family
+void updatePersonInFamily(DocumentManager* docMgr, const QString& familyId, const Person& updatedPerson)
+{
+    const Document& doc = docMgr->document();
+    auto familyOpt = doc.findFamilyById(familyId);
+    if (!familyOpt)
+    {
+        return;
+    }
+
+    Family oldFamily = *familyOpt;
+    Family newFamily = oldFamily;
+
+    QList<Person> members = newFamily.members();
+    for (int i = 0; i < members.size(); ++i)
+    {
+        if (members[i].id() == updatedPerson.id())
+        {
+            members[i] = updatedPerson;
+            break;
+        }
+    }
+    newFamily.setMembers(members);
+
+    docMgr->executeCommand(
+        std::make_unique<UpdateFamilyCommand>(oldFamily, newFamily));
+}
+
+}  // namespace
 
 NeedsSubView::NeedsSubView(DocumentManager* documentManager, QWidget* parent)
     : QWidget(parent)
@@ -28,6 +59,11 @@ NeedsSubView::NeedsSubView(DocumentManager* documentManager, QWidget* parent)
 {
     QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(4, 4, 4, 4);
+
+    // Add button at top
+    QPushButton* addButton = new QPushButton(tr("Add Special Need..."));
+    connect(addButton, &QPushButton::clicked, this, &NeedsSubView::showAddNeedDialog);
+    layout->addWidget(addButton);
 
     m_tree = new QTreeWidget();
     m_tree->setHeaderHidden(true);
@@ -52,82 +88,60 @@ void NeedsSubView::rebuildTree()
     m_tree->clear();
 
     const Document& doc = m_documentManager->document();
-    const QList<SpecialNeed>& needs = doc.specialNeeds();
 
-    // Build list of (displayName, SpecialNeed) pairs for sorting
-    QList<QPair<QString, SpecialNeed>> sortedNeeds;
-    for (const SpecialNeed& need : needs)
+    // Build list of entries for sorting
+    struct NeedEntry
     {
         QString displayName;
+        QString personId;
+        QString familyId;
+        QString note;
+    };
+    QList<NeedEntry> entries;
 
-        if (need.personId.has_value())
+    // Iterate through all families and find persons with special needs
+    for (const Family& family : doc.families())
+    {
+        for (const Person& person : family.members())
         {
-            auto person = doc.findPersonById(*need.personId);
-            if (person)
+            if (person.hasSpecialNeed())
             {
-                displayName = person->displayName();
-            }
-            else
-            {
-                displayName = tr("Unknown Person");
+                entries.append({
+                    person.displayName(),
+                    person.id(),
+                    family.id(),
+                    person.specialNeedNote()
+                });
             }
         }
-        else if (need.familyId.has_value())
-        {
-            auto family = doc.findFamilyById(*need.familyId);
-            if (family)
-            {
-                displayName = family->displayName();
-            }
-            else
-            {
-                displayName = tr("Unknown Family");
-            }
-        }
-        else
-        {
-            // Neither person nor family - skip
-            continue;
-        }
-
-        sortedNeeds.append({displayName, need});
     }
 
     // Sort by display name
-    std::sort(sortedNeeds.begin(), sortedNeeds.end(),
-              [](const auto& a, const auto& b)
+    std::sort(entries.begin(), entries.end(),
+              [](const NeedEntry& a, const NeedEntry& b)
               {
-                  return a.first.toLower() < b.first.toLower();
+                  return a.displayName.toLower() < b.displayName.toLower();
               });
 
     // Build tree items
-    for (const auto& [displayName, need] : sortedNeeds)
+    for (const NeedEntry& entry : entries)
     {
         QTreeWidgetItem* item = new QTreeWidgetItem();
 
-        QString text = displayName;
-        if (!need.note.isEmpty())
+        QString text = entry.displayName;
+        if (!entry.note.isEmpty())
         {
-            text += QString(" - %1").arg(need.note);
+            text += QString(" - %1").arg(entry.note);
         }
         item->setText(0, text);
 
-        // Store person/family IDs for selection
-        item->setData(0, PersonIdRole, need.personId.value_or(QString()));
-        item->setData(0, FamilyIdRole, need.familyId.value_or(QString()));
+        // Store person and family IDs for selection and lookup
+        item->setData(0, PersonIdRole, entry.personId);
+        item->setData(0, FamilyIdRole, entry.familyId);
 
         // Bold if selected
-        bool isSelected = false;
-        if (!m_selectedPersonId.isEmpty() && need.personId.has_value()
-            && *need.personId == m_selectedPersonId)
-        {
-            isSelected = true;
-        }
-        else if (!m_selectedFamilyId.isEmpty() && need.familyId.has_value()
-                 && *need.familyId == m_selectedFamilyId)
-        {
-            isSelected = true;
-        }
+        bool isSelected = (!m_selectedPersonId.isEmpty()
+                           && entry.personId == m_selectedPersonId);
 
         if (isSelected)
         {
@@ -142,21 +156,8 @@ void NeedsSubView::rebuildTree()
 
 void NeedsSubView::onTreeItemClicked(QTreeWidgetItem* item, int /*column*/)
 {
-    // Clear all selections
-    m_selectedPersonId.clear();
-    m_selectedFamilyId.clear();
-
-    QString personId = item->data(0, PersonIdRole).toString();
-    QString familyId = item->data(0, FamilyIdRole).toString();
-
-    if (!personId.isEmpty())
-    {
-        m_selectedPersonId = personId;
-    }
-    else if (!familyId.isEmpty())
-    {
-        m_selectedFamilyId = familyId;
-    }
+    m_selectedPersonId = item->data(0, PersonIdRole).toString();
+    m_selectedFamilyId = item->data(0, FamilyIdRole).toString();
 
     rebuildTree();
     emit highlightChanged();
@@ -165,15 +166,12 @@ void NeedsSubView::onTreeItemClicked(QTreeWidgetItem* item, int /*column*/)
 void NeedsSubView::onContextMenu(const QPoint& pos)
 {
     QTreeWidgetItem* item = m_tree->itemAt(pos);
-
-    QMenu menu;
-
     if (!item)
     {
-        // No item - show add option
-        menu.addAction(tr("Add Special Need..."), this, &NeedsSubView::showAddNeedDialog);
+        return;  // No context menu on empty space (use the Add button instead)
     }
-    else
+
+    QMenu menu;
     {
         QString personId = item->data(0, PersonIdRole).toString();
         QString familyId = item->data(0, FamilyIdRole).toString();
@@ -181,51 +179,24 @@ void NeedsSubView::onContextMenu(const QPoint& pos)
         const Document& doc = m_documentManager->document();
 
         // Show contact info (disabled) if available
-        if (!personId.isEmpty())
+        auto person = doc.findPersonById(personId);
+        if (person)
         {
-            auto person = doc.findPersonById(personId);
-            if (person)
+            const Phone& phone = person->phone();
+            if (!phone.isEmpty())
             {
-                const Phone& phone = person->phone();
-                if (!phone.isEmpty())
-                {
-                    QAction* phoneAction = menu.addAction(phone);
-                    phoneAction->setEnabled(false);
-                }
-                const QString& email = person->email();
-                if (!email.isEmpty())
-                {
-                    QAction* emailAction = menu.addAction(email);
-                    emailAction->setEnabled(false);
-                }
-                if (!phone.isEmpty() || !email.isEmpty())
-                {
-                    menu.addSeparator();
-                }
+                QAction* phoneAction = menu.addAction(phone);
+                phoneAction->setEnabled(false);
             }
-        }
-        else if (!familyId.isEmpty())
-        {
-            // For family, show family contact info
-            auto family = doc.findFamilyById(familyId);
-            if (family)
+            const QString& email = person->email();
+            if (!email.isEmpty())
             {
-                const Phone phone = family->displayPhone();
-                if (!phone.isEmpty())
-                {
-                    QAction* phoneAction = menu.addAction(phone);
-                    phoneAction->setEnabled(false);
-                }
-                const QString email = family->displayEmail();
-                if (!email.isEmpty())
-                {
-                    QAction* emailAction = menu.addAction(email);
-                    emailAction->setEnabled(false);
-                }
-                if (!phone.isEmpty() || !email.isEmpty())
-                {
-                    menu.addSeparator();
-                }
+                QAction* emailAction = menu.addAction(email);
+                emailAction->setEnabled(false);
+            }
+            if (!phone.isEmpty() || !email.isEmpty())
+            {
+                menu.addSeparator();
             }
         }
 
@@ -250,8 +221,7 @@ void NeedsSubView::onDocumentChanged(const DocumentChange& change)
     switch (change.scope)
     {
     case ChangeScope::Full:
-    case ChangeScope::SpecialNeed:
-    case ChangeScope::Family:  // Person/family names
+    case ChangeScope::Family:  // Persons are in families
         validateSelections();
         rebuildTree();
         emit highlightChanged();
@@ -263,46 +233,28 @@ void NeedsSubView::onDocumentChanged(const DocumentChange& change)
 
 void NeedsSubView::validateSelections()
 {
-    const Document& doc = m_documentManager->document();
-
-    // Clear person selection if their special need no longer exists
-    if (!m_selectedPersonId.isEmpty())
+    if (m_selectedPersonId.isEmpty())
     {
-        auto needOpt = doc.findSpecialNeed(m_selectedPersonId, std::nullopt);
-        if (!needOpt)
-        {
-            m_selectedPersonId.clear();
-        }
+        return;
     }
 
-    // Clear family selection if their special need no longer exists
-    if (!m_selectedFamilyId.isEmpty())
+    const Document& doc = m_documentManager->document();
+
+    // Clear selection if person no longer has a special need
+    auto person = doc.findPersonById(m_selectedPersonId);
+    if (!person || !person->hasSpecialNeed())
     {
-        auto needOpt = doc.findSpecialNeed(std::nullopt, m_selectedFamilyId);
-        if (!needOpt)
-        {
-            m_selectedFamilyId.clear();
-        }
+        m_selectedPersonId.clear();
+        m_selectedFamilyId.clear();
     }
 }
 
 HighlightInfo NeedsSubView::highlightInfo() const
 {
     HighlightInfo info;
-    const Document& doc = m_documentManager->document();
 
-    if (!m_selectedPersonId.isEmpty())
+    if (!m_selectedFamilyId.isEmpty())
     {
-        // Person selected - highlight their family
-        QString familyId = doc.familyIdForPerson(m_selectedPersonId);
-        if (!familyId.isEmpty())
-        {
-            info.highlightedFamilyIds.insert(familyId);
-        }
-    }
-    else if (!m_selectedFamilyId.isEmpty())
-    {
-        // Family selected - highlight directly
         info.highlightedFamilyIds.insert(m_selectedFamilyId);
     }
 
@@ -323,19 +275,13 @@ void NeedsSubView::showAddNeedDialog()
 
     QFormLayout* formLayout = new QFormLayout(&dialog);
 
-    // Type combo (Person or Family)
-    QComboBox* typeCombo = new QComboBox();
-    typeCombo->addItem(tr("Person"));
-    typeCombo->addItem(tr("Family"));
-    formLayout->addRow(tr("Type:"), typeCombo);
-
     // Selection button and label
     QHBoxLayout* selectionLayout = new QHBoxLayout();
     QLabel* selectionLabel = new QLabel(tr("(none selected)"));
     QPushButton* selectButton = new QPushButton(tr("Select..."));
     selectionLayout->addWidget(selectionLabel, 1);
     selectionLayout->addWidget(selectButton);
-    formLayout->addRow(tr("Entity:"), selectionLayout);
+    formLayout->addRow(tr("Person:"), selectionLayout);
 
     // Note field
     QLineEdit* noteEdit = new QLineEdit();
@@ -345,49 +291,30 @@ void NeedsSubView::showAddNeedDialog()
     QDialogButtonBox* buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
     formLayout->addRow(buttonBox);
 
-    // Track selected ID
-    QString selectedId;
+    // Track selected person
+    QString selectedPersonId;
+    QString selectedFamilyId;
 
     // Connect select button
     connect(selectButton, &QPushButton::clicked, &dialog, [&]()
     {
-        if (typeCombo->currentIndex() == 0)
+        QString id = WardListDialog::selectPerson(m_documentManager, selectedPersonId, &dialog);
+        if (!id.isEmpty())
         {
-            // Person mode
-            QString id = WardListDialog::selectPerson(m_documentManager, selectedId, &dialog);
-            if (!id.isEmpty())
+            selectedPersonId = id;
+            const Document& doc = m_documentManager->document();
+            auto person = doc.findPersonById(id);
+            if (person)
             {
-                selectedId = id;
-                const Document& doc = m_documentManager->document();
-                auto person = doc.findPersonById(id);
-                if (person)
+                selectionLabel->setText(person->displayName());
+                // Pre-fill note if person already has a special need
+                if (person->hasSpecialNeed())
                 {
-                    selectionLabel->setText(person->displayName());
+                    noteEdit->setText(person->specialNeedNote());
                 }
+                selectedFamilyId = doc.familyIdForPerson(id);
             }
         }
-        else
-        {
-            // Family mode
-            QString id = WardListDialog::selectFamily(m_documentManager, selectedId, &dialog);
-            if (!id.isEmpty())
-            {
-                selectedId = id;
-                const Document& doc = m_documentManager->document();
-                auto family = doc.findFamilyById(id);
-                if (family)
-                {
-                    selectionLabel->setText(family->displayName());
-                }
-            }
-        }
-    });
-
-    // When type changes, clear selection
-    connect(typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), &dialog, [&](int)
-    {
-        selectedId.clear();
-        selectionLabel->setText(tr("(none selected)"));
     });
 
     connect(buttonBox, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
@@ -395,28 +322,23 @@ void NeedsSubView::showAddNeedDialog()
 
     if (dialog.exec() == QDialog::Accepted)
     {
-        if (selectedId.isEmpty())
+        if (selectedPersonId.isEmpty())
         {
             QMessageBox::warning(this, tr("Add Special Need"),
-                                 tr("Please select a person or family."));
+                                 tr("Please select a person."));
             return;
         }
 
         QString note = noteEdit->text().trimmed();
 
-        if (typeCombo->currentIndex() == 0)
+        // Update person's special need note
+        const Document& doc = m_documentManager->document();
+        auto personOpt = doc.findPersonById(selectedPersonId);
+        if (personOpt)
         {
-            // Person
-            m_documentManager->executeCommand(
-                std::make_unique<SetSpecialNeedCommand>(
-                    SetSpecialNeedCommand::forPerson(selectedId, note)));
-        }
-        else
-        {
-            // Family
-            m_documentManager->executeCommand(
-                std::make_unique<SetSpecialNeedCommand>(
-                    SetSpecialNeedCommand::forFamily(selectedId, note)));
+            Person updatedPerson = *personOpt;
+            updatedPerson.setSpecialNeedNote(note);
+            updatePersonInFamily(m_documentManager, selectedFamilyId, updatedPerson);
         }
     }
 }
@@ -425,52 +347,21 @@ void NeedsSubView::showEditNeedDialog(const QString& personId, const QString& fa
 {
     const Document& doc = m_documentManager->document();
 
-    std::optional<QString> personIdOpt = personId.isEmpty() ? std::nullopt : std::make_optional(personId);
-    std::optional<QString> familyIdOpt = familyId.isEmpty() ? std::nullopt : std::make_optional(familyId);
-
-    auto needOpt = doc.findSpecialNeed(personIdOpt, familyIdOpt);
-    if (!needOpt)
+    auto personOpt = doc.findPersonById(personId);
+    if (!personOpt || !personOpt->hasSpecialNeed())
     {
         return;
     }
 
-    // Get display name for dialog title
-    QString displayName;
-    if (!personId.isEmpty())
-    {
-        auto person = doc.findPersonById(personId);
-        if (person)
-        {
-            displayName = person->displayName();
-        }
-    }
-    else if (!familyId.isEmpty())
-    {
-        auto family = doc.findFamilyById(familyId);
-        if (family)
-        {
-            displayName = family->displayName();
-        }
-    }
-
     bool ok;
     QString note = QInputDialog::getText(this, tr("Edit Special Need"),
-                                          tr("Note for %1:").arg(displayName),
-                                          QLineEdit::Normal, needOpt->note, &ok);
+                                          tr("Note for %1:").arg(personOpt->displayName()),
+                                          QLineEdit::Normal, personOpt->specialNeedNote(), &ok);
     if (ok)
     {
-        if (!personId.isEmpty())
-        {
-            m_documentManager->executeCommand(
-                std::make_unique<SetSpecialNeedCommand>(
-                    SetSpecialNeedCommand::forPerson(personId, note)));
-        }
-        else
-        {
-            m_documentManager->executeCommand(
-                std::make_unique<SetSpecialNeedCommand>(
-                    SetSpecialNeedCommand::forFamily(familyId, note)));
-        }
+        Person updatedPerson = *personOpt;
+        updatedPerson.setSpecialNeedNote(note);
+        updatePersonInFamily(m_documentManager, familyId, updatedPerson);
     }
 }
 
@@ -478,48 +369,23 @@ void NeedsSubView::deleteNeed(const QString& personId, const QString& familyId)
 {
     const Document& doc = m_documentManager->document();
 
-    // Get display name for confirmation
-    QString displayName;
-    if (!personId.isEmpty())
+    auto personOpt = doc.findPersonById(personId);
+    if (!personOpt)
     {
-        auto person = doc.findPersonById(personId);
-        if (person)
-        {
-            displayName = person->displayName();
-        }
-    }
-    else if (!familyId.isEmpty())
-    {
-        auto family = doc.findFamilyById(familyId);
-        if (family)
-        {
-            displayName = family->displayName();
-        }
+        return;
     }
 
-    QString message = tr("Delete special need for \"%1\"?").arg(displayName);
+    QString message = tr("Delete special need for \"%1\"?").arg(personOpt->displayName());
     if (QMessageBox::question(this, tr("Delete Special Need"), message) == QMessageBox::Yes)
     {
-        if (!personId.isEmpty())
-        {
-            m_documentManager->executeCommand(
-                std::make_unique<ClearSpecialNeedCommand>(
-                    ClearSpecialNeedCommand::forPerson(personId)));
-        }
-        else
-        {
-            m_documentManager->executeCommand(
-                std::make_unique<ClearSpecialNeedCommand>(
-                    ClearSpecialNeedCommand::forFamily(familyId)));
-        }
+        Person updatedPerson = *personOpt;
+        updatedPerson.setSpecialNeedNote(QString());  // Clear the note
+        updatePersonInFamily(m_documentManager, familyId, updatedPerson);
 
         // Clear selection if we deleted the selected item
-        if (m_selectedPersonId == personId && !personId.isEmpty())
+        if (m_selectedPersonId == personId)
         {
             m_selectedPersonId.clear();
-        }
-        if (m_selectedFamilyId == familyId && !familyId.isEmpty())
-        {
             m_selectedFamilyId.clear();
         }
     }

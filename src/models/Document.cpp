@@ -1,4 +1,5 @@
 #include "Document.h"
+#include "DocumentChange.h"
 #include "MarkerDecorationType.h"
 
 Document Document::empty()
@@ -88,7 +89,6 @@ QList<Family> Document::familiesInWard(const QString& wardUnitNumber) const
 void Document::addFamily(const Family& family)
 {
     m_families.insert(family.id(), family);
-    rebuildPersonToFamilyMap();
 }
 
 void Document::addFamilies(const QList<Family>& families)
@@ -97,25 +97,21 @@ void Document::addFamilies(const QList<Family>& families)
     {
         m_families.insert(family.id(), family);
     }
-    rebuildPersonToFamilyMap();
 }
 
 void Document::updateFamily(const Family& family)
 {
     m_families.insert(family.id(), family);
-    rebuildPersonToFamilyMap();
 }
 
 void Document::removeFamily(const QString& id)
 {
     m_families.remove(id);
-    rebuildPersonToFamilyMap();
 }
 
 void Document::setFamilies(const QHash<QString, Family>& families)
 {
     m_families = families;
-    rebuildPersonToFamilyMap();
 }
 
 // ============================================================================
@@ -606,6 +602,87 @@ std::optional<int> Document::maxKnownAge() const
 }
 
 // ============================================================================
+// Decoration caches
+// ============================================================================
+
+void Document::rebuildDecorationCaches()
+{
+    m_personSkillDecorations.clear();
+    for (const Skill& skill : m_skills)
+    {
+        const SkillCategory& cat = m_skillCategories.value(skill.categoryId());
+        if (cat.decorationType().has_value())
+        {
+            MarkerDecorationType type = cat.decorationType().value();
+            for (const QString& personId : skill.personIds())
+            {
+                m_personSkillDecorations[personId].insert(type);
+            }
+        }
+    }
+
+    m_familyEquipmentDecorations.clear();
+    for (const Equipment& equip : m_equipment)
+    {
+        const EquipmentCategory& cat = m_equipmentCategories.value(equip.categoryId());
+        if (cat.decorationType().has_value())
+        {
+            MarkerDecorationType type = cat.decorationType().value();
+            for (const QString& familyId : equip.familyIds())
+            {
+                m_familyEquipmentDecorations[familyId].insert(type);
+            }
+        }
+    }
+}
+
+QSet<MarkerDecorationType> Document::personSkillDecorations(const QString& personId) const
+{
+    return m_personSkillDecorations.value(personId);
+}
+
+QSet<MarkerDecorationType> Document::familyEquipmentDecorations(const QString& familyId) const
+{
+    return m_familyEquipmentDecorations.value(familyId);
+}
+
+void Document::onDocumentChanged(const DocumentChange& change)
+{
+    // Person-to-family lookup cache
+    if (change.scope == ChangeScope::Full || change.scope == ChangeScope::Family)
+    {
+        rebuildPersonToFamilyMap();
+    }
+
+    // Decoration caches for map markers
+    bool needsDecorationRebuild = false;
+    switch (change.scope)
+    {
+        case ChangeScope::Full:
+        case ChangeScope::Skill:
+        case ChangeScope::SkillCategory:
+        case ChangeScope::Equipment:
+        case ChangeScope::EquipmentCategory:
+            needsDecorationRebuild = true;
+            break;
+
+        case ChangeScope::Family:
+            // Only when families are removed (orphans skill/equipment refs)
+            needsDecorationRebuild = (change.action == ChangeAction::Removed
+                                   || change.action == ChangeAction::BatchModified);
+            break;
+
+        default:
+            break;
+    }
+
+    if (needsDecorationRebuild)
+    {
+        rebuildDecorationCaches();
+    }
+}
+
+// ============================================================================
 // JSON serialization
 // ============================================================================
 
@@ -723,8 +800,7 @@ Document Document::fromJson(const QJsonObject& json)
         }
     }
 
-    // Build lookup cache
-    document.rebuildPersonToFamilyMap();
+    // Note: lookup caches are built by DocumentManager::setDocument() via onDocumentChanged()
 
     return document;
 }

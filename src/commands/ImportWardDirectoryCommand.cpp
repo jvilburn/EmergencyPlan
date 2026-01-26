@@ -179,13 +179,6 @@ void ImportWardDirectoryCommand::cleanupRemovedFamily(
         }
     }
 
-    // Remove special needs for family and members
-    document.clearSpecialNeed(std::nullopt, familyId);
-    for (const Person& member : family.members())
-    {
-        document.clearSpecialNeed(member.id(), std::nullopt);
-    }
-
     // Remove from EQ ministering groups
     for (const QString& groupId : document.eqGroups().keys())
     {
