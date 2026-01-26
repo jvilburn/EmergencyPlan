@@ -1,7 +1,6 @@
 #pragma once
 
 #include <QString>
-#include <QJsonValue>
 #include <optional>
 
 enum class MarkerDecorationType
@@ -14,6 +13,9 @@ enum class MarkerDecorationType
 };
 
 // JSON serialization helpers
+// Note: None and SpecialNeeds are intentionally not serialized. None means "no decoration",
+// and SpecialNeeds is derived from Person.specialNeedNote rather than stored on categories.
+// fromString("") returns nullopt (not None) because empty strings indicate absence of the field.
 inline QString markerDecorationTypeToString(MarkerDecorationType type)
 {
     switch (type)
@@ -24,9 +26,11 @@ inline QString markerDecorationTypeToString(MarkerDecorationType type)
             return "rec";
         case MarkerDecorationType::Communications:
             return "com";
-        default:
+        case MarkerDecorationType::None:
+        case MarkerDecorationType::SpecialNeeds:
             return QString();
     }
+    return QString();  // Unreachable, silences compiler warnings
 }
 
 inline std::optional<MarkerDecorationType> markerDecorationTypeFromString(const QString& str)
