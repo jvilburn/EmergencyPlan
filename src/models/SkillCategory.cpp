@@ -15,6 +15,14 @@ QJsonObject SkillCategory::toJson() const
     json["id"] = m_id;
     json["name"] = m_name;
     json["sortOrder"] = m_sortOrder;
+    if (m_decorationType.has_value())
+    {
+        QString typeStr = markerDecorationTypeToString(m_decorationType.value());
+        if (!typeStr.isEmpty())
+        {
+            json["decorationType"] = typeStr;
+        }
+    }
     return json;
 }
 
@@ -24,6 +32,10 @@ SkillCategory SkillCategory::fromJson(const QJsonObject& json)
     category.m_id = json["id"].toString();
     category.m_name = json["name"].toString();
     category.m_sortOrder = json["sortOrder"].toInt(0);
+    if (json.contains("decorationType"))
+    {
+        category.m_decorationType = markerDecorationTypeFromString(json["decorationType"].toString());
+    }
     return category;
 }
 
@@ -31,5 +43,6 @@ bool SkillCategory::operator==(const SkillCategory& other) const
 {
     return m_id == other.m_id
         && m_name == other.m_name
-        && m_sortOrder == other.m_sortOrder;
+        && m_sortOrder == other.m_sortOrder
+        && m_decorationType == other.m_decorationType;
 }
