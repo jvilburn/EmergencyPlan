@@ -141,6 +141,7 @@ set(COMMAND_SOURCES
     src/commands/TagCommands.cpp
     src/commands/SkillCommands.cpp
     src/commands/EquipmentCommands.cpp
+    src/commands/EmergencyResourceCommands.cpp
     # src/commands/ImportCommands.cpp
 )
 
@@ -156,6 +157,7 @@ set(COMMAND_HEADERS
     src/commands/TagCommands.h
     src/commands/SkillCommands.h
     src/commands/EquipmentCommands.h
+    src/commands/EmergencyResourceCommands.h
     # src/commands/ImportCommands.h
 )
 

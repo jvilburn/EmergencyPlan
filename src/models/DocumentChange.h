@@ -12,6 +12,7 @@ enum class ChangeScope
     Skill,
     EquipmentCategory,
     Equipment,
+    EmergencyResource,
     EqDistrict,
     EqGroup,
     RsDistrict,
@@ -56,6 +57,7 @@ struct DocumentChange
     static ScopeBuilder skill();
     static ScopeBuilder equipmentCategory();
     static ScopeBuilder equipment();
+    static ScopeBuilder emergencyResource();
     static ScopeBuilder eqDistrict();
     static ScopeBuilder eqGroup();
     static ScopeBuilder rsDistrict();

@@ -64,6 +64,11 @@ ScopeBuilder DocumentChange::equipment()
     return ScopeBuilder{ChangeScope::Equipment};
 }
 
+ScopeBuilder DocumentChange::emergencyResource()
+{
+    return ScopeBuilder{ChangeScope::EmergencyResource};
+}
+
 ScopeBuilder DocumentChange::eqDistrict()
 {
     return ScopeBuilder{ChangeScope::EqDistrict};
