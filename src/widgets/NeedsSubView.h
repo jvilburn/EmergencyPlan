@@ -10,7 +10,6 @@ class QTreeWidget;
 class QTreeWidgetItem;
 
 /// NeedsSubView displays a flat list of special needs (persons/families with special needs).
-/// Unlike SkillsSubView/EquipmentSubView, this is NOT a 3-level hierarchy - just a simple list.
 ///
 /// Each item displays: "DisplayName - note" where DisplayName is the person or family name.
 ///
