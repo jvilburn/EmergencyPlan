@@ -17,7 +17,7 @@
 #include "Equipment.h"
 #include "MinisteringDistrict.h"
 #include "MinisteringGroup.h"
-#include "MarkerDecorationType.h"
+#include "ResponseArea.h"
 #include <QSet>
 
 class Document
@@ -188,10 +188,10 @@ public:
     std::optional<int> maxKnownAge() const;
 
     /// Get skill-based decorations for a person (from cache)
-    QSet<MarkerDecorationType> personSkillDecorations(const QString& personId) const;
+    QSet<ResponseArea> personSkillDecorations(const QString& personId) const;
 
     /// Get equipment-based decorations for a family (from cache)
-    QSet<MarkerDecorationType> familyEquipmentDecorations(const QString& familyId) const;
+    QSet<ResponseArea> familyEquipmentDecorations(const QString& familyId) const;
 
     /// Called after each command to rebuild caches as needed based on what changed.
     /// This is more efficient than rebuilding in each command's execute/undo.
@@ -240,6 +240,6 @@ private:
     std::optional<QDate> m_ministeringPdfDate;
 
     // Decoration caches (rebuilt when skills/equipment/categories change)
-    QHash<QString, QSet<MarkerDecorationType>> m_personSkillDecorations;
-    QHash<QString, QSet<MarkerDecorationType>> m_familyEquipmentDecorations;
+    QHash<QString, QSet<ResponseArea>> m_personSkillDecorations;
+    QHash<QString, QSet<ResponseArea>> m_familyEquipmentDecorations;
 };

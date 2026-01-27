@@ -2,7 +2,7 @@
 
 #include "Document.h"
 #include "Family.h"
-#include "MarkerDecorationType.h"
+#include "ResponseArea.h"
 #include "Person.h"
 
 #include <QGraphicsBlurEffect>
@@ -73,11 +73,11 @@ static QIcon& antennaIcon()
 }
 
 // Select base icon from decoration set
-static QIcon* selectBaseIcon(const QSet<MarkerDecorationType>& decorations)
+static QIcon* selectBaseIcon(const QSet<ResponseArea>& decorations)
 {
-    bool hasMedical = decorations.contains(MarkerDecorationType::Medical);
-    bool hasRecovery = decorations.contains(MarkerDecorationType::Recovery);
-    bool hasSpecialNeeds = decorations.contains(MarkerDecorationType::SpecialNeeds);
+    bool hasMedical = decorations.contains(ResponseArea::Medical);
+    bool hasRecovery = decorations.contains(ResponseArea::Recovery);
+    bool hasSpecialNeeds = decorations.contains(ResponseArea::SpecialNeeds);
 
     if (hasSpecialNeeds && hasMedical && hasRecovery)
     {
@@ -112,7 +112,7 @@ static QIcon* selectBaseIcon(const QSet<MarkerDecorationType>& decorations)
 
 MarkerIcons computeFamilyIcons(const QString& familyId, const Document& doc)
 {
-    QSet<MarkerDecorationType> decorations;
+    QSet<ResponseArea> decorations;
     const Family& family = doc.families().value(familyId);
 
     // Check each family member for special needs and skills
@@ -120,7 +120,7 @@ MarkerIcons computeFamilyIcons(const QString& familyId, const Document& doc)
     {
         if (person.hasSpecialNeed())
         {
-            decorations.insert(MarkerDecorationType::SpecialNeeds);
+            decorations.insert(ResponseArea::SpecialNeeds);
         }
         decorations.unite(doc.personSkillDecorations(person.id()));
     }
@@ -130,7 +130,7 @@ MarkerIcons computeFamilyIcons(const QString& familyId, const Document& doc)
 
     MarkerIcons icons;
     icons.baseIcon = selectBaseIcon(decorations);
-    icons.antennaIcon = decorations.contains(MarkerDecorationType::Communications)
+    icons.antennaIcon = decorations.contains(ResponseArea::Communications)
                         ? &antennaIcon() : nullptr;
     return icons;
 }

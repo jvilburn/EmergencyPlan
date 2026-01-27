@@ -1,6 +1,6 @@
 #include "Document.h"
 #include "DocumentChange.h"
-#include "MarkerDecorationType.h"
+#include "ResponseArea.h"
 
 Document Document::empty()
 {
@@ -12,35 +12,35 @@ Document Document::empty()
 void Document::initializeDefaultCategories()
 {
     // Default skill categories
-    auto medical = SkillCategory::create(QObject::tr("Medical"), 0, MarkerDecorationType::Medical);
+    SkillCategory medical = SkillCategory::create(QObject::tr("Medical"), 0, ResponseArea::Medical);
     m_skillCategories.insert(medical.id(), medical);
 
-    auto communication = SkillCategory::create(QObject::tr("Communication"), 1, MarkerDecorationType::Communications);
+    SkillCategory communication = SkillCategory::create(QObject::tr("Communication"), 1, ResponseArea::Communications);
     m_skillCategories.insert(communication.id(), communication);
 
-    auto repair = SkillCategory::create(QObject::tr("Repair"), 2, MarkerDecorationType::Recovery);
+    SkillCategory repair = SkillCategory::create(QObject::tr("Repair"), 2, ResponseArea::Recovery);
     m_skillCategories.insert(repair.id(), repair);
 
     // Default equipment categories
-    auto power = EquipmentCategory::create(QObject::tr("Power"), 0, MarkerDecorationType::Recovery);
+    EquipmentCategory power = EquipmentCategory::create(QObject::tr("Power"), 0, ResponseArea::Recovery);
     m_equipmentCategories.insert(power.id(), power);
 
-    auto hamRadio = EquipmentCategory::create(QObject::tr("Ham Radio"), 1, MarkerDecorationType::Communications);
+    EquipmentCategory hamRadio = EquipmentCategory::create(QObject::tr("Ham Radio"), 1, ResponseArea::Communications);
     m_equipmentCategories.insert(hamRadio.id(), hamRadio);
 
-    auto tools = EquipmentCategory::create(QObject::tr("Tools"), 2, std::nullopt);
+    EquipmentCategory tools = EquipmentCategory::create(QObject::tr("Tools"), 2, ResponseArea::Recovery);
     m_equipmentCategories.insert(tools.id(), tools);
 
-    auto transportation = EquipmentCategory::create(QObject::tr("Transportation"), 3, std::nullopt);
+    EquipmentCategory transportation = EquipmentCategory::create(QObject::tr("Transportation"), 3, ResponseArea::Recovery);
     m_equipmentCategories.insert(transportation.id(), transportation);
 
-    auto shelter = EquipmentCategory::create(QObject::tr("Shelter"), 4, std::nullopt);
+    EquipmentCategory shelter = EquipmentCategory::create(QObject::tr("Shelter"), 4, ResponseArea::Recovery);
     m_equipmentCategories.insert(shelter.id(), shelter);
 
-    auto water = EquipmentCategory::create(QObject::tr("Water"), 5, std::nullopt);
+    EquipmentCategory water = EquipmentCategory::create(QObject::tr("Water"), 5, ResponseArea::Recovery);
     m_equipmentCategories.insert(water.id(), water);
 
-    auto supplies = EquipmentCategory::create(QObject::tr("Supplies"), 6, std::nullopt);
+    EquipmentCategory supplies = EquipmentCategory::create(QObject::tr("Supplies"), 6, ResponseArea::Recovery);
     m_equipmentCategories.insert(supplies.id(), supplies);
 }
 
@@ -611,9 +611,9 @@ void Document::rebuildDecorationCaches()
     for (const Skill& skill : m_skills)
     {
         const SkillCategory& cat = m_skillCategories.value(skill.categoryId());
-        if (cat.decorationType().has_value())
+        ResponseArea type = cat.decorationType();
+        if (type != ResponseArea::None)
         {
-            MarkerDecorationType type = cat.decorationType().value();
             for (const QString& personId : skill.personIds())
             {
                 m_personSkillDecorations[personId].insert(type);
@@ -625,9 +625,9 @@ void Document::rebuildDecorationCaches()
     for (const Equipment& equip : m_equipment)
     {
         const EquipmentCategory& cat = m_equipmentCategories.value(equip.categoryId());
-        if (cat.decorationType().has_value())
+        ResponseArea type = cat.decorationType();
+        if (type != ResponseArea::None)
         {
-            MarkerDecorationType type = cat.decorationType().value();
             for (const QString& familyId : equip.familyIds())
             {
                 m_familyEquipmentDecorations[familyId].insert(type);
@@ -636,12 +636,12 @@ void Document::rebuildDecorationCaches()
     }
 }
 
-QSet<MarkerDecorationType> Document::personSkillDecorations(const QString& personId) const
+QSet<ResponseArea> Document::personSkillDecorations(const QString& personId) const
 {
     return m_personSkillDecorations.value(personId);
 }
 
-QSet<MarkerDecorationType> Document::familyEquipmentDecorations(const QString& familyId) const
+QSet<ResponseArea> Document::familyEquipmentDecorations(const QString& familyId) const
 {
     return m_familyEquipmentDecorations.value(familyId);
 }

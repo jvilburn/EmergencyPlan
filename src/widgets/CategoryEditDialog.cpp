@@ -10,7 +10,7 @@
 CategoryEditDialog::CategoryEditDialog(
     const QString& title,
     const QString& currentName,
-    std::optional<MarkerDecorationType> currentType,
+    ResponseArea currentType,
     QWidget* parent)
     : QDialog(parent)
     , m_nameEdit(nullptr)
@@ -22,7 +22,7 @@ CategoryEditDialog::CategoryEditDialog(
 
 void CategoryEditDialog::setupUi(
     const QString& currentName,
-    std::optional<MarkerDecorationType> currentType)
+    ResponseArea currentType)
 {
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
 
@@ -37,19 +37,16 @@ void CategoryEditDialog::setupUi(
 
     // Store enum values as item data for type-safe retrieval
     m_decorationCombo->addItem(QIcon(":/markers/marker_home.svg"), tr("None"),
-                               static_cast<int>(MarkerDecorationType::None));
+                               static_cast<int>(ResponseArea::None));
     m_decorationCombo->addItem(QIcon(":/markers/marker_medical.svg"), tr("Medical"),
-                               static_cast<int>(MarkerDecorationType::Medical));
+                               static_cast<int>(ResponseArea::Medical));
     m_decorationCombo->addItem(QIcon(":/markers/marker_recovery.svg"), tr("Recovery"),
-                               static_cast<int>(MarkerDecorationType::Recovery));
+                               static_cast<int>(ResponseArea::Recovery));
     m_decorationCombo->addItem(QIcon(":/markers/marker_antenna.svg"), tr("Communications"),
-                               static_cast<int>(MarkerDecorationType::Communications));
+                               static_cast<int>(ResponseArea::Communications));
 
-    // Set current selection based on currentType (nullopt maps to None)
-    int dataValue = currentType.has_value()
-                    ? static_cast<int>(currentType.value())
-                    : static_cast<int>(MarkerDecorationType::None);
-    int index = m_decorationCombo->findData(dataValue);
+    // Set current selection based on currentType
+    int index = m_decorationCombo->findData(static_cast<int>(currentType));
     if (index >= 0)
     {
         m_decorationCombo->setCurrentIndex(index);
@@ -74,20 +71,8 @@ CategoryEditDialog::Result CategoryEditDialog::result() const
 {
     Result r;
     r.name = m_nameEdit->text().trimmed();
-
-    MarkerDecorationType type = static_cast<MarkerDecorationType>(
+    r.decorationType = static_cast<ResponseArea>(
         m_decorationCombo->currentData().toInt());
-
-    // None maps to nullopt (current design uses optional)
-    if (type == MarkerDecorationType::None)
-    {
-        r.decorationType = std::nullopt;
-    }
-    else
-    {
-        r.decorationType = type;
-    }
-
     return r;
 }
 
@@ -95,7 +80,7 @@ std::optional<CategoryEditDialog::Result> CategoryEditDialog::getCategory(
     QWidget* parent,
     const QString& title,
     const QString& currentName,
-    std::optional<MarkerDecorationType> currentType)
+    ResponseArea currentType)
 {
     CategoryEditDialog dialog(title, currentName, currentType, parent);
 

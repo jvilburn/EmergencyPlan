@@ -1,6 +1,6 @@
 #pragma once
 
-#include "MarkerDecorationType.h"
+#include "ResponseArea.h"
 
 #include <QDialog>
 #include <QString>
@@ -19,29 +19,29 @@ public:
     struct Result
     {
         QString name;
-        std::optional<MarkerDecorationType> decorationType;
+        ResponseArea decorationType;
     };
 
     /// Show dialog to add or edit a category.
     /// @param parent Parent widget
     /// @param title Dialog title (e.g., "Add Category" or "Edit Category")
     /// @param currentName Current name (empty for new category)
-    /// @param currentType Current decoration type (nullopt for new category)
+    /// @param currentType Current decoration type (None for new category)
     /// @return Result if OK was clicked, nullopt if cancelled
     static std::optional<Result> getCategory(
         QWidget* parent,
         const QString& title,
         const QString& currentName = QString(),
-        std::optional<MarkerDecorationType> currentType = std::nullopt);
+        ResponseArea currentType = ResponseArea::None);
 
 private:
     explicit CategoryEditDialog(
         const QString& title,
         const QString& currentName,
-        std::optional<MarkerDecorationType> currentType,
+        ResponseArea currentType,
         QWidget* parent);
 
-    void setupUi(const QString& currentName, std::optional<MarkerDecorationType> currentType);
+    void setupUi(const QString& currentName, ResponseArea currentType);
     Result result() const;
 
     QLineEdit* m_nameEdit;

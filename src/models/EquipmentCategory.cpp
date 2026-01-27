@@ -9,7 +9,7 @@ EquipmentCategory EquipmentCategory::create(const QString& name, int sortOrder)
     return category;
 }
 
-EquipmentCategory EquipmentCategory::create(const QString& name, int sortOrder, std::optional<MarkerDecorationType> decorationType)
+EquipmentCategory EquipmentCategory::create(const QString& name, int sortOrder, ResponseArea decorationType)
 {
     EquipmentCategory category;
     category.m_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
@@ -25,13 +25,10 @@ QJsonObject EquipmentCategory::toJson() const
     json["id"] = m_id;
     json["name"] = m_name;
     json["sortOrder"] = m_sortOrder;
-    if (m_decorationType.has_value())
+    QString typeStr = responseAreaToString(m_decorationType);
+    if (!typeStr.isEmpty())
     {
-        QString typeStr = markerDecorationTypeToString(m_decorationType.value());
-        if (!typeStr.isEmpty())
-        {
-            json["decorationType"] = typeStr;
-        }
+        json["decorationType"] = typeStr;
     }
     return json;
 }
@@ -44,7 +41,11 @@ EquipmentCategory EquipmentCategory::fromJson(const QJsonObject& json)
     category.m_sortOrder = json["sortOrder"].toInt(0);
     if (json.contains("decorationType"))
     {
-        category.m_decorationType = markerDecorationTypeFromString(json["decorationType"].toString());
+        category.m_decorationType = responseAreaFromString(json["decorationType"].toString());
+    }
+    else
+    {
+        category.m_decorationType = ResponseArea::None;
     }
     return category;
 }
