@@ -1,7 +1,6 @@
 #include "ImportWardDirectoryCommand.h"
 #include "Document.h"
-#include "Skill.h"
-#include "Equipment.h"
+#include "EmergencyResource.h"
 
 ImportWardDirectoryCommand::ImportWardDirectoryCommand(
     const QHash<QString, Family>& mergedFamilies,
@@ -156,26 +155,20 @@ void ImportWardDirectoryCommand::cleanupRemovedFamily(
         }
     }
 
-    // Remove from skills (person-level)
-    for (const QString& skillId : document.skills().keys())
+    // Remove from emergency resources (person-level)
+    for (const Person& member : family.members())
     {
-        const Skill& skill = document.skills()[skillId];
-        for (const Person& member : family.members())
+        for (const auto& [resourceId, resource] : document.emergencyResources().asKeyValueRange())
         {
-            if (skill.personIds().contains(member.id()))
+            if (resource.hasPerson(member.id()))
             {
-                document.removePersonFromSkill(skillId, member.id());
+                std::optional<EmergencyResource> r = document.findEmergencyResourceById(resourceId);
+                if (r)
+                {
+                    r->removePerson(member.id());
+                    document.updateEmergencyResource(*r);
+                }
             }
-        }
-    }
-
-    // Remove from equipment (family-level)
-    for (const QString& equipmentId : document.equipment().keys())
-    {
-        const Equipment& equip = document.equipment()[equipmentId];
-        if (equip.familyIds().contains(familyId))
-        {
-            document.removeFamilyFromEquipment(equipmentId, familyId);
         }
     }
 

@@ -95,10 +95,6 @@ set(MODEL_SOURCES
     src/models/Document.cpp
     src/models/MinisteringGroup.cpp
     src/models/MinisteringDistrict.cpp
-    src/models/SkillCategory.cpp
-    src/models/Skill.cpp
-    src/models/EquipmentCategory.cpp
-    src/models/Equipment.cpp
     src/models/EmergencyResource.cpp
     src/models/DocumentChange.cpp
 )
@@ -122,11 +118,8 @@ set(MODEL_HEADERS
     src/models/Document.h
     src/models/MinisteringGroup.h
     src/models/MinisteringDistrict.h
-    src/models/SkillCategory.h
-    src/models/Skill.h
-    src/models/EquipmentCategory.h
-    src/models/Equipment.h
     src/models/EmergencyResource.h
+    src/models/ResponseArea.h
     src/models/DocumentChange.h
 )
 
@@ -139,8 +132,6 @@ set(COMMAND_SOURCES
     src/commands/TeamCommands.cpp
     src/commands/MinisteringCommands.cpp
     src/commands/TagCommands.cpp
-    src/commands/SkillCommands.cpp
-    src/commands/EquipmentCommands.cpp
     src/commands/EmergencyResourceCommands.cpp
     # src/commands/ImportCommands.cpp
 )
@@ -155,8 +146,6 @@ set(COMMAND_HEADERS
     src/commands/TeamCommands.h
     src/commands/MinisteringCommands.h
     src/commands/TagCommands.h
-    src/commands/SkillCommands.h
-    src/commands/EquipmentCommands.h
     src/commands/EmergencyResourceCommands.h
     # src/commands/ImportCommands.h
 )

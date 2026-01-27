@@ -44,26 +44,6 @@ ScopeBuilder DocumentChange::tag()
     return ScopeBuilder{ChangeScope::Tag};
 }
 
-ScopeBuilder DocumentChange::skillCategory()
-{
-    return ScopeBuilder{ChangeScope::SkillCategory};
-}
-
-ScopeBuilder DocumentChange::skill()
-{
-    return ScopeBuilder{ChangeScope::Skill};
-}
-
-ScopeBuilder DocumentChange::equipmentCategory()
-{
-    return ScopeBuilder{ChangeScope::EquipmentCategory};
-}
-
-ScopeBuilder DocumentChange::equipment()
-{
-    return ScopeBuilder{ChangeScope::Equipment};
-}
-
 ScopeBuilder DocumentChange::emergencyResource()
 {
     return ScopeBuilder{ChangeScope::EmergencyResource};

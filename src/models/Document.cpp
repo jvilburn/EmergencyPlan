@@ -5,44 +5,8 @@
 Document Document::empty()
 {
     Document doc;
-    doc.initializeDefaultCategories();
     doc.initializeDefaultResources();
     return doc;
-}
-
-void Document::initializeDefaultCategories()
-{
-    // Default skill categories
-    SkillCategory medical = SkillCategory::create(QObject::tr("Medical"), 0, ResponseArea::Medical);
-    m_skillCategories.insert(medical.id(), medical);
-
-    SkillCategory communication = SkillCategory::create(QObject::tr("Communication"), 1, ResponseArea::Communications);
-    m_skillCategories.insert(communication.id(), communication);
-
-    SkillCategory repair = SkillCategory::create(QObject::tr("Repair"), 2, ResponseArea::Recovery);
-    m_skillCategories.insert(repair.id(), repair);
-
-    // Default equipment categories
-    EquipmentCategory power = EquipmentCategory::create(QObject::tr("Power"), 0, ResponseArea::Recovery);
-    m_equipmentCategories.insert(power.id(), power);
-
-    EquipmentCategory hamRadio = EquipmentCategory::create(QObject::tr("Ham Radio"), 1, ResponseArea::Communications);
-    m_equipmentCategories.insert(hamRadio.id(), hamRadio);
-
-    EquipmentCategory tools = EquipmentCategory::create(QObject::tr("Tools"), 2, ResponseArea::Recovery);
-    m_equipmentCategories.insert(tools.id(), tools);
-
-    EquipmentCategory transportation = EquipmentCategory::create(QObject::tr("Transportation"), 3, ResponseArea::Recovery);
-    m_equipmentCategories.insert(transportation.id(), transportation);
-
-    EquipmentCategory shelter = EquipmentCategory::create(QObject::tr("Shelter"), 4, ResponseArea::Recovery);
-    m_equipmentCategories.insert(shelter.id(), shelter);
-
-    EquipmentCategory water = EquipmentCategory::create(QObject::tr("Water"), 5, ResponseArea::Recovery);
-    m_equipmentCategories.insert(water.id(), water);
-
-    EquipmentCategory supplies = EquipmentCategory::create(QObject::tr("Supplies"), 6, ResponseArea::Recovery);
-    m_equipmentCategories.insert(supplies.id(), supplies);
 }
 
 void Document::initializeDefaultResources()
@@ -222,118 +186,6 @@ void Document::removeFamilyFromTag(const QString& tagId, const QString& familyId
 }
 
 // ============================================================================
-// Skill category operations
-// ============================================================================
-
-void Document::addSkillCategory(const SkillCategory& category)
-{
-    m_skillCategories.insert(category.id(), category);
-}
-
-void Document::updateSkillCategory(const SkillCategory& category)
-{
-    m_skillCategories.insert(category.id(), category);
-}
-
-void Document::removeSkillCategory(const QString& id)
-{
-    m_skillCategories.remove(id);
-}
-
-// ============================================================================
-// Skill operations
-// ============================================================================
-
-void Document::addSkill(const Skill& skill)
-{
-    m_skills.insert(skill.id(), skill);
-}
-
-void Document::updateSkill(const Skill& skill)
-{
-    m_skills.insert(skill.id(), skill);
-}
-
-void Document::removeSkill(const QString& id)
-{
-    m_skills.remove(id);
-}
-
-void Document::addPersonToSkill(const QString& skillId, const QString& personId)
-{
-    auto it = m_skills.find(skillId);
-    if (it != m_skills.end())
-    {
-        it->addPerson(personId);
-    }
-}
-
-void Document::removePersonFromSkill(const QString& skillId, const QString& personId)
-{
-    auto it = m_skills.find(skillId);
-    if (it != m_skills.end())
-    {
-        it->removePerson(personId);
-    }
-}
-
-// ============================================================================
-// Equipment category operations
-// ============================================================================
-
-void Document::addEquipmentCategory(const EquipmentCategory& category)
-{
-    m_equipmentCategories.insert(category.id(), category);
-}
-
-void Document::updateEquipmentCategory(const EquipmentCategory& category)
-{
-    m_equipmentCategories.insert(category.id(), category);
-}
-
-void Document::removeEquipmentCategory(const QString& id)
-{
-    m_equipmentCategories.remove(id);
-}
-
-// ============================================================================
-// Equipment operations
-// ============================================================================
-
-void Document::addEquipment(const Equipment& item)
-{
-    m_equipment.insert(item.id(), item);
-}
-
-void Document::updateEquipment(const Equipment& item)
-{
-    m_equipment.insert(item.id(), item);
-}
-
-void Document::removeEquipment(const QString& id)
-{
-    m_equipment.remove(id);
-}
-
-void Document::addFamilyToEquipment(const QString& equipmentId, const QString& familyId)
-{
-    auto it = m_equipment.find(equipmentId);
-    if (it != m_equipment.end())
-    {
-        it->addFamily(familyId);
-    }
-}
-
-void Document::removeFamilyFromEquipment(const QString& equipmentId, const QString& familyId)
-{
-    auto it = m_equipment.find(equipmentId);
-    if (it != m_equipment.end())
-    {
-        it->removeFamily(familyId);
-    }
-}
-
-// ============================================================================
 // EmergencyResource operations
 // ============================================================================
 
@@ -497,15 +349,6 @@ void Document::cleanupPersonReferences(const QString& personId)
         }
     }
 
-    // Remove from skills
-    for (auto it = m_skills.begin(); it != m_skills.end(); ++it)
-    {
-        if (it->personIds().contains(personId))
-        {
-            it->removePerson(personId);
-        }
-    }
-
     // Remove from emergency resources
     for (auto it = m_emergencyResources.begin(); it != m_emergencyResources.end(); ++it)
     {
@@ -614,26 +457,6 @@ std::optional<Tag> Document::findTagById(const QString& id) const
     return std::nullopt;
 }
 
-std::optional<Skill> Document::findSkillById(const QString& id) const
-{
-    auto it = m_skills.find(id);
-    if (it != m_skills.end())
-    {
-        return *it;
-    }
-    return std::nullopt;
-}
-
-std::optional<Equipment> Document::findEquipmentById(const QString& id) const
-{
-    auto it = m_equipment.find(id);
-    if (it != m_equipment.end())
-    {
-        return *it;
-    }
-    return std::nullopt;
-}
-
 void Document::rebuildPersonToFamilyMap()
 {
     m_personToFamily.clear();
@@ -706,10 +529,6 @@ void Document::onDocumentChanged(const DocumentChange& change)
     {
         case ChangeScope::Full:
         case ChangeScope::EmergencyResource:
-        case ChangeScope::Skill:
-        case ChangeScope::SkillCategory:
-        case ChangeScope::Equipment:
-        case ChangeScope::EquipmentCategory:
             needsDecorationRebuild = true;
             break;
 
@@ -776,10 +595,7 @@ QJsonObject Document::toJson() const
     serializeHashToJson(json, "emergencyResources", m_emergencyResources);
 
     // Emergency inventory (legacy)
-    serializeHashToJson(json, "skillCategories", m_skillCategories);
-    serializeHashToJson(json, "skills", m_skills);
-    serializeHashToJson(json, "equipmentCategories", m_equipmentCategories);
-    serializeHashToJson(json, "equipment", m_equipment);
+    // Legacy skill/equipment fields omitted (migrated to emergencyResources)
 
     // Ministering
     serializeHashToJson(json, "eqDistricts", m_eqDistricts);
@@ -816,10 +632,7 @@ Document Document::fromJson(const QJsonObject& json)
     deserializeJsonToHash(json, "emergencyResources", document.m_emergencyResources);
 
     // Emergency inventory (legacy)
-    deserializeJsonToHash(json, "skillCategories", document.m_skillCategories);
-    deserializeJsonToHash(json, "skills", document.m_skills);
-    deserializeJsonToHash(json, "equipmentCategories", document.m_equipmentCategories);
-    deserializeJsonToHash(json, "equipment", document.m_equipment);
+    // Legacy skill/equipment fields ignored on load (migrated to emergencyResources)
 
     // Ministering
     deserializeJsonToHash(json, "eqDistricts", document.m_eqDistricts);
@@ -859,10 +672,6 @@ bool Document::operator==(const Document& other) const
         && m_teams == other.m_teams
         && m_tags == other.m_tags
         && m_emergencyResources == other.m_emergencyResources
-        && m_skillCategories == other.m_skillCategories
-        && m_skills == other.m_skills
-        && m_equipmentCategories == other.m_equipmentCategories
-        && m_equipment == other.m_equipment
         && m_eqDistricts == other.m_eqDistricts
         && m_eqGroups == other.m_eqGroups
         && m_rsDistricts == other.m_rsDistricts

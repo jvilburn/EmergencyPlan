@@ -11,10 +11,6 @@
 #include "Family.h"
 #include "Team.h"
 #include "Tag.h"
-#include "SkillCategory.h"
-#include "Skill.h"
-#include "EquipmentCategory.h"
-#include "Equipment.h"
 #include "MinisteringDistrict.h"
 #include "MinisteringGroup.h"
 #include "EmergencyResource.h"
@@ -28,9 +24,6 @@ public:
 
     // Factory method for creating empty documents
     static Document empty();
-
-    // Initialize default categories for a new document
-    void initializeDefaultCategories();
 
     // Initialize default emergency resources for a new document
     void initializeDefaultResources();
@@ -52,14 +45,6 @@ public:
     const QHash<QString, Family>& families() const { return m_families; }
     const QHash<QString, Team>& teams() const { return m_teams; }
     const QHash<QString, Tag>& tags() const { return m_tags; }
-
-    // ========================================================================
-    // Emergency inventory getters
-    // ========================================================================
-    const QHash<QString, SkillCategory>& skillCategories() const { return m_skillCategories; }
-    const QHash<QString, Skill>& skills() const { return m_skills; }
-    const QHash<QString, EquipmentCategory>& equipmentCategories() const { return m_equipmentCategories; }
-    const QHash<QString, Equipment>& equipment() const { return m_equipment; }
 
     // ========================================================================
     // Ministering getters
@@ -112,38 +97,6 @@ public:
     void removeFamilyFromTag(const QString& tagId, const QString& familyId);
 
     // ========================================================================
-    // Mutating operations - skill categories
-    // ========================================================================
-    void addSkillCategory(const SkillCategory& category);
-    void updateSkillCategory(const SkillCategory& category);
-    void removeSkillCategory(const QString& id);
-
-    // ========================================================================
-    // Mutating operations - skills
-    // ========================================================================
-    void addSkill(const Skill& skill);
-    void updateSkill(const Skill& skill);
-    void removeSkill(const QString& id);
-    void addPersonToSkill(const QString& skillId, const QString& personId);
-    void removePersonFromSkill(const QString& skillId, const QString& personId);
-
-    // ========================================================================
-    // Mutating operations - equipment categories
-    // ========================================================================
-    void addEquipmentCategory(const EquipmentCategory& category);
-    void updateEquipmentCategory(const EquipmentCategory& category);
-    void removeEquipmentCategory(const QString& id);
-
-    // ========================================================================
-    // Mutating operations - equipment
-    // ========================================================================
-    void addEquipment(const Equipment& item);
-    void updateEquipment(const Equipment& item);
-    void removeEquipment(const QString& id);
-    void addFamilyToEquipment(const QString& equipmentId, const QString& familyId);
-    void removeFamilyFromEquipment(const QString& equipmentId, const QString& familyId);
-
-    // ========================================================================
     // EmergencyResource operations
     // ========================================================================
     const QHash<QString, EmergencyResource>& emergencyResources() const { return m_emergencyResources; }
@@ -194,8 +147,6 @@ public:
     QString familyIdForPerson(const QString& personId) const;
     std::optional<Team> findTeamById(const QString& id) const;
     std::optional<Tag> findTagById(const QString& id) const;
-    std::optional<Skill> findSkillById(const QString& id) const;
-    std::optional<Equipment> findEquipmentById(const QString& id) const;
 
     /// Returns the maximum known age across all persons, or nullopt if no ages are known.
     /// Used by UI to determine available age filter options.
@@ -234,14 +185,8 @@ private:
     // Cached max known age (computed in rebuildPersonToFamilyMap)
     std::optional<int> m_maxKnownAge;
 
-    // Emergency resources (new unified model)
+    // Emergency resources
     QHash<QString, EmergencyResource> m_emergencyResources;
-
-    // Emergency inventory (legacy - to be removed)
-    QHash<QString, SkillCategory> m_skillCategories;
-    QHash<QString, Skill> m_skills;
-    QHash<QString, EquipmentCategory> m_equipmentCategories;
-    QHash<QString, Equipment> m_equipment;
 
     // Ministering
     QHash<QString, MinisteringDistrict> m_eqDistricts;
