@@ -40,6 +40,7 @@ private:
     void validateSelections();
     void showAddCategoryDialog();
     void showAddSkillDialog(const QString& categoryId);
+    void showEditCategoryDialog(QTreeWidgetItem* item);
     void showRenameDialog(QTreeWidgetItem* item);
     void showSelectPeopleDialog(const QString& skillId);
     void deleteItem(QTreeWidgetItem* item);

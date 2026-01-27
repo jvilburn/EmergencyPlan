@@ -1,5 +1,6 @@
 #include "EquipmentSubView.h"
 #include "WardListDialog.h"
+#include "CategoryEditDialog.h"
 #include "DocumentManager.h"
 #include "Document.h"
 #include "DocumentChange.h"
@@ -214,9 +215,9 @@ void EquipmentSubView::onContextMenu(const QPoint& pos)
                 const EquipmentCategory& category = doc.equipmentCategories().value(id);
                 QString categoryName = category.name();
 
-                menu.addAction(tr("Rename..."), this, [this, item]()
+                menu.addAction(tr("Edit Category..."), this, [this, item]()
                 {
-                    showRenameDialog(item);
+                    showEditCategoryDialog(item);
                 });
                 menu.addAction(tr("Add %1 Equipment...").arg(categoryName), this, [this, id]()
                 {
@@ -394,11 +395,10 @@ QSet<QString> EquipmentSubView::visibleFamilyIds() const
 
 void EquipmentSubView::showAddCategoryDialog()
 {
-    bool ok;
-    QString name = QInputDialog::getText(this, tr("Add Category"),
-                                          tr("Category name:"),
-                                          QLineEdit::Normal, QString(), &ok);
-    if (ok && !name.isEmpty())
+    std::optional<CategoryEditDialog::Result> result =
+        CategoryEditDialog::getCategory(this, tr("Add Category"));
+
+    if (result.has_value())
     {
         const Document& doc = m_documentManager->document();
         const auto& categories = doc.equipmentCategories();
@@ -413,7 +413,8 @@ void EquipmentSubView::showAddCategoryDialog()
             }
         }
 
-        EquipmentCategory newCategory = EquipmentCategory::create(name, maxOrder + 1);
+        EquipmentCategory newCategory = EquipmentCategory::create(
+            result->name, maxOrder + 1, result->decorationType);
         m_documentManager->executeCommand(std::make_unique<AddEquipmentCategoryCommand>(newCategory));
     }
 }
@@ -431,48 +432,58 @@ void EquipmentSubView::showAddEquipmentDialog(const QString& categoryId)
     }
 }
 
-void EquipmentSubView::showRenameDialog(QTreeWidgetItem* item)
+void EquipmentSubView::showEditCategoryDialog(QTreeWidgetItem* item)
 {
-    ItemType type = static_cast<ItemType>(item->data(0, TypeRole).toInt());
     QString id = item->data(0, IdRole).toString();
-
     const Document& doc = m_documentManager->document();
 
-    if (type == ItemType::Category)
+    if (!doc.equipmentCategories().contains(id))
     {
-        if (!doc.equipmentCategories().contains(id))
-        {
-            return;
-        }
-        const EquipmentCategory& category = doc.equipmentCategories().value(id);
-        bool ok;
-        QString name = QInputDialog::getText(this, tr("Rename Category"),
-                                              tr("Category name:"),
-                                              QLineEdit::Normal, category.name(), &ok);
-        if (ok && !name.isEmpty() && name != category.name())
+        return;
+    }
+
+    const EquipmentCategory& category = doc.equipmentCategories().value(id);
+    std::optional<CategoryEditDialog::Result> result =
+        CategoryEditDialog::getCategory(
+            this,
+            tr("Edit Category"),
+            category.name(),
+            category.decorationType());
+
+    if (result.has_value())
+    {
+        bool nameChanged = result->name != category.name();
+        bool typeChanged = result->decorationType != category.decorationType();
+
+        if (nameChanged || typeChanged)
         {
             EquipmentCategory updated = category;
-            updated.setName(name);
+            updated.setName(result->name);
+            updated.setDecorationType(result->decorationType);
             m_documentManager->executeCommand(
                 std::make_unique<UpdateEquipmentCategoryCommand>(category, updated));
         }
     }
-    else if (type == ItemType::Equipment)
+}
+
+void EquipmentSubView::showRenameDialog(QTreeWidgetItem* item)
+{
+    QString id = item->data(0, IdRole).toString();
+    const Document& doc = m_documentManager->document();
+
+    std::optional<Equipment> equipOpt = doc.findEquipmentById(id);
+    if (equipOpt)
     {
-        auto equipOpt = doc.findEquipmentById(id);
-        if (equipOpt)
+        bool ok;
+        QString name = QInputDialog::getText(this, tr("Rename Equipment"),
+                                              tr("Equipment name:"),
+                                              QLineEdit::Normal, equipOpt->name(), &ok);
+        if (ok && !name.isEmpty() && name != equipOpt->name())
         {
-            bool ok;
-            QString name = QInputDialog::getText(this, tr("Rename Equipment"),
-                                                  tr("Equipment name:"),
-                                                  QLineEdit::Normal, equipOpt->name(), &ok);
-            if (ok && !name.isEmpty() && name != equipOpt->name())
-            {
-                Equipment updated = *equipOpt;
-                updated.setName(name);
-                m_documentManager->executeCommand(
-                    std::make_unique<UpdateEquipmentCommand>(*equipOpt, updated));
-            }
+            Equipment updated = *equipOpt;
+            updated.setName(name);
+            m_documentManager->executeCommand(
+                std::make_unique<UpdateEquipmentCommand>(*equipOpt, updated));
         }
     }
 }

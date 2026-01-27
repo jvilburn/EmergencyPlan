@@ -39,6 +39,7 @@ private:
     void validateSelections();
     void showAddCategoryDialog();
     void showAddEquipmentDialog(const QString& categoryId);
+    void showEditCategoryDialog(QTreeWidgetItem* item);
     void showRenameDialog(QTreeWidgetItem* item);
     void showSelectFamiliesDialog(const QString& equipmentId);
     void deleteItem(QTreeWidgetItem* item);

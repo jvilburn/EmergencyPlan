@@ -1,5 +1,6 @@
 #include "SkillsSubView.h"
 #include "WardListDialog.h"
+#include "CategoryEditDialog.h"
 #include "DocumentManager.h"
 #include "Document.h"
 #include "DocumentChange.h"
@@ -197,6 +198,9 @@ void SkillsSubView::onTreeItemDoubleClicked(QTreeWidgetItem* item, int /*column*
     switch (type)
     {
     case ItemType::Category:
+        showEditCategoryDialog(item);
+        break;
+
     case ItemType::Skill:
         showRenameDialog(item);
         break;
@@ -235,9 +239,9 @@ void SkillsSubView::onContextMenu(const QPoint& pos)
                 const SkillCategory& category = doc.skillCategories().value(id);
                 QString categoryName = category.name();
 
-                menu.addAction(tr("Rename..."), this, [this, item]()
+                menu.addAction(tr("Edit Category..."), this, [this, item]()
                 {
-                    showRenameDialog(item);
+                    showEditCategoryDialog(item);
                 });
                 menu.addAction(tr("Add %1 Skill...").arg(categoryName), this, [this, id]()
                 {
@@ -424,11 +428,10 @@ QSet<QString> SkillsSubView::visibleFamilyIds() const
 
 void SkillsSubView::showAddCategoryDialog()
 {
-    bool ok;
-    QString name = QInputDialog::getText(this, tr("Add Category"),
-                                          tr("Category name:"),
-                                          QLineEdit::Normal, QString(), &ok);
-    if (ok && !name.isEmpty())
+    std::optional<CategoryEditDialog::Result> result =
+        CategoryEditDialog::getCategory(this, tr("Add Category"));
+
+    if (result.has_value())
     {
         const Document& doc = m_documentManager->document();
         const auto& categories = doc.skillCategories();
@@ -443,7 +446,8 @@ void SkillsSubView::showAddCategoryDialog()
             }
         }
 
-        SkillCategory newCategory = SkillCategory::create(name, maxOrder + 1);
+        SkillCategory newCategory = SkillCategory::create(
+            result->name, maxOrder + 1, result->decorationType);
         m_documentManager->executeCommand(std::make_unique<AddSkillCategoryCommand>(newCategory));
     }
 }
@@ -461,48 +465,58 @@ void SkillsSubView::showAddSkillDialog(const QString& categoryId)
     }
 }
 
-void SkillsSubView::showRenameDialog(QTreeWidgetItem* item)
+void SkillsSubView::showEditCategoryDialog(QTreeWidgetItem* item)
 {
-    ItemType type = static_cast<ItemType>(item->data(0, TypeRole).toInt());
     QString id = item->data(0, IdRole).toString();
-
     const Document& doc = m_documentManager->document();
 
-    if (type == ItemType::Category)
+    if (!doc.skillCategories().contains(id))
     {
-        if (!doc.skillCategories().contains(id))
-        {
-            return;
-        }
-        const SkillCategory& category = doc.skillCategories().value(id);
-        bool ok;
-        QString name = QInputDialog::getText(this, tr("Rename Category"),
-                                              tr("Category name:"),
-                                              QLineEdit::Normal, category.name(), &ok);
-        if (ok && !name.isEmpty() && name != category.name())
+        return;
+    }
+
+    const SkillCategory& category = doc.skillCategories().value(id);
+    std::optional<CategoryEditDialog::Result> result =
+        CategoryEditDialog::getCategory(
+            this,
+            tr("Edit Category"),
+            category.name(),
+            category.decorationType());
+
+    if (result.has_value())
+    {
+        bool nameChanged = result->name != category.name();
+        bool typeChanged = result->decorationType != category.decorationType();
+
+        if (nameChanged || typeChanged)
         {
             SkillCategory updated = category;
-            updated.setName(name);
+            updated.setName(result->name);
+            updated.setDecorationType(result->decorationType);
             m_documentManager->executeCommand(
                 std::make_unique<UpdateSkillCategoryCommand>(category, updated));
         }
     }
-    else if (type == ItemType::Skill)
+}
+
+void SkillsSubView::showRenameDialog(QTreeWidgetItem* item)
+{
+    QString id = item->data(0, IdRole).toString();
+    const Document& doc = m_documentManager->document();
+
+    std::optional<Skill> skillOpt = doc.findSkillById(id);
+    if (skillOpt)
     {
-        auto skillOpt = doc.findSkillById(id);
-        if (skillOpt)
+        bool ok;
+        QString name = QInputDialog::getText(this, tr("Rename Skill"),
+                                              tr("Skill name:"),
+                                              QLineEdit::Normal, skillOpt->name(), &ok);
+        if (ok && !name.isEmpty() && name != skillOpt->name())
         {
-            bool ok;
-            QString name = QInputDialog::getText(this, tr("Rename Skill"),
-                                                  tr("Skill name:"),
-                                                  QLineEdit::Normal, skillOpt->name(), &ok);
-            if (ok && !name.isEmpty() && name != skillOpt->name())
-            {
-                Skill updated = *skillOpt;
-                updated.setName(name);
-                m_documentManager->executeCommand(
-                    std::make_unique<UpdateSkillCommand>(*skillOpt, updated));
-            }
+            Skill updated = *skillOpt;
+            updated.setName(name);
+            m_documentManager->executeCommand(
+                std::make_unique<UpdateSkillCommand>(*skillOpt, updated));
         }
     }
 }
