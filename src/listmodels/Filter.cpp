@@ -252,16 +252,14 @@ bool Filter::hasPersonLevelTag(const Document& document, const QString& personId
 
 bool Filter::hasFamilyLevelResource(const Document& /*document*/, const QString& /*familyId*/) const
 {
-    // TODO: Implement filtering by Equipment (the new family-level resource type)
-    // For now, old resourceTypeIds don't match anything
+    // TODO: Implement filtering by EmergencyResource (family-level)
     Q_UNUSED(m_resourceTypeIds);
     return false;
 }
 
 bool Filter::hasPersonLevelResource(const Document& /*document*/, const QString& /*personId*/) const
 {
-    // TODO: Implement filtering by Skills (the person-level resource type)
-    // For now, old resourceTypeIds don't match anything
+    // TODO: Implement filtering by EmergencyResource (person-level)
     Q_UNUSED(m_resourceTypeIds);
     return false;
 }

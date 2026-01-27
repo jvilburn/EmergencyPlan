@@ -162,12 +162,9 @@ void ImportWardDirectoryCommand::cleanupRemovedFamily(
         {
             if (resource.hasPerson(member.id()))
             {
-                std::optional<EmergencyResource> r = document.findEmergencyResourceById(resourceId);
-                if (r)
-                {
-                    r->removePerson(member.id());
-                    document.updateEmergencyResource(*r);
-                }
+                EmergencyResource updated = resource;
+                updated.removePerson(member.id());
+                document.updateEmergencyResource(updated);
             }
         }
     }
