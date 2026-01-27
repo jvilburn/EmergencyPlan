@@ -99,6 +99,7 @@ set(MODEL_SOURCES
     src/models/Skill.cpp
     src/models/EquipmentCategory.cpp
     src/models/Equipment.cpp
+    src/models/EmergencyResource.cpp
     src/models/DocumentChange.cpp
 )
 
@@ -125,6 +126,7 @@ set(MODEL_HEADERS
     src/models/Skill.h
     src/models/EquipmentCategory.h
     src/models/Equipment.h
+    src/models/EmergencyResource.h
     src/models/DocumentChange.h
 )
 
