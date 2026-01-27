@@ -47,21 +47,16 @@ void Document::initializeDefaultCategories()
 
 void Document::initializeDefaultResources()
 {
-    auto addDefault = [this](const QString& name, ResponseArea area)
-    {
-        addEmergencyResource(EmergencyResource::create(name, area));
-    };
+    addEmergencyResource(EmergencyResource::create(QObject::tr("First Aid"), ResponseArea::Medical));
+    addEmergencyResource(EmergencyResource::create(QObject::tr("CPR Certified"), ResponseArea::Medical));
+    addEmergencyResource(EmergencyResource::create(QObject::tr("Nurse / Doctor"), ResponseArea::Medical));
 
-    addDefault(QObject::tr("First Aid"), ResponseArea::Medical);
-    addDefault(QObject::tr("CPR Certified"), ResponseArea::Medical);
-    addDefault(QObject::tr("Nurse / Doctor"), ResponseArea::Medical);
+    addEmergencyResource(EmergencyResource::create(QObject::tr("Ham Radio"), ResponseArea::Communications));
+    addEmergencyResource(EmergencyResource::create(QObject::tr("CERT Trained"), ResponseArea::Communications));
 
-    addDefault(QObject::tr("Ham Radio"), ResponseArea::Communications);
-    addDefault(QObject::tr("CERT Trained"), ResponseArea::Communications);
-
-    addDefault(QObject::tr("Chainsaw"), ResponseArea::Recovery);
-    addDefault(QObject::tr("Generator"), ResponseArea::Recovery);
-    addDefault(QObject::tr("4WD Vehicle"), ResponseArea::Recovery);
+    addEmergencyResource(EmergencyResource::create(QObject::tr("Chainsaw"), ResponseArea::Recovery));
+    addEmergencyResource(EmergencyResource::create(QObject::tr("Generator"), ResponseArea::Recovery));
+    addEmergencyResource(EmergencyResource::create(QObject::tr("4WD Vehicle"), ResponseArea::Recovery));
 }
 
 // ============================================================================
