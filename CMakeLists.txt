@@ -241,6 +241,7 @@ set(WIDGET_SOURCES
     src/widgets/NeedsSubView.cpp
     src/widgets/CategoryEditDialog.cpp
     src/widgets/EmergencyResourceView.cpp
+    src/widgets/ResourcesView.cpp
     # src/widgets/Sidebar.cpp
     # src/widgets/MinisteringSidebar.cpp
     # src/widgets/ResourceView.cpp
@@ -283,6 +284,7 @@ set(WIDGET_HEADERS
     src/widgets/NeedsSubView.h
     src/widgets/CategoryEditDialog.h
     src/widgets/EmergencyResourceView.h
+    src/widgets/ResourcesView.h
     # src/widgets/Sidebar.h
     # src/widgets/MinisteringSidebar.h
     # src/widgets/ResourceView.h

@@ -1,7 +1,8 @@
 #include "MainWindow.h"
 #include "WardListView.h"
 #include "MinisteringView.h"
-#include "EmergencyView.h"
+#include "NeedsSubView.h"
+#include "ResourcesView.h"
 #include "FamilyEditPanel.h"
 #include "MapWidget.h"
 #include "FamilyMarkerProvider.h"
@@ -68,9 +69,21 @@ void MainWindow::setupUi()
     m_ministeringView = new MinisteringView(m_documentManager);
     m_sidebarTabs->addTab(m_ministeringView, tr("Ministering"));
 
-    // Emergency tab
-    m_emergencyView = new EmergencyView(m_documentManager);
-    m_sidebarTabs->addTab(m_emergencyView, tr("Emergency"));
+    // Teams placeholder (top-level tab)
+    QWidget* teamsPlaceholder = new QWidget();
+    QVBoxLayout* teamsLayout = new QVBoxLayout(teamsPlaceholder);
+    QLabel* teamsLabel = new QLabel(tr("Teams functionality coming soon"));
+    teamsLabel->setAlignment(Qt::AlignCenter);
+    teamsLayout->addWidget(teamsLabel);
+    m_sidebarTabs->addTab(teamsPlaceholder, tr("Teams"));
+
+    // Needs tab
+    m_needsView = new NeedsSubView(m_documentManager);
+    m_sidebarTabs->addTab(m_needsView, tr("Needs"));
+
+    // Resources tab (renamed from Emergency)
+    m_resourcesView = new ResourcesView(m_documentManager);
+    m_sidebarTabs->addTab(m_resourcesView, tr("Resources"));
 
     // Edit panel (initially hidden)
     m_editPanel = new FamilyEditPanel(m_documentManager, m_splitter);
@@ -172,7 +185,9 @@ void MainWindow::setupConnections()
             m_mapWidget, &MapWidget::updateHighlights);
     connect(m_ministeringView, &MinisteringView::highlightChanged,
             m_mapWidget, &MapWidget::updateHighlights);
-    connect(m_emergencyView, &EmergencyView::highlightChanged,
+    connect(m_needsView, &NeedsSubView::highlightChanged,
+            m_mapWidget, &MapWidget::updateHighlights);
+    connect(m_resourcesView, &ResourcesView::highlightChanged,
             m_mapWidget, &MapWidget::updateHighlights);
 
     // Family editing
