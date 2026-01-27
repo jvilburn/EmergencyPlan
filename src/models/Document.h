@@ -201,11 +201,8 @@ public:
     /// Used by UI to determine available age filter options.
     std::optional<int> maxKnownAge() const;
 
-    /// Get skill-based decorations for a person (from cache)
-    QSet<ResponseArea> personSkillDecorations(const QString& personId) const;
-
-    /// Get equipment-based decorations for a family (from cache)
-    QSet<ResponseArea> familyEquipmentDecorations(const QString& familyId) const;
+    /// Get response areas for a person based on their emergency resource assignments (from cache)
+    QSet<ResponseArea> personResponseAreas(const QString& personId) const;
 
     /// Called after each command to rebuild caches as needed based on what changed.
     /// This is more efficient than rebuilding in each command's execute/undo.
@@ -256,7 +253,6 @@ private:
     std::optional<QDate> m_wardDirectoryPdfDate;
     std::optional<QDate> m_ministeringPdfDate;
 
-    // Decoration caches (rebuilt when skills/equipment/categories change)
-    QHash<QString, QSet<ResponseArea>> m_personSkillDecorations;
-    QHash<QString, QSet<ResponseArea>> m_familyEquipmentDecorations;
+    // Decoration cache: personId -> set of response areas (rebuilt when emergency resources change)
+    QHash<QString, QSet<ResponseArea>> m_personResponseAreas;
 };

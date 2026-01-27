@@ -673,43 +673,23 @@ std::optional<int> Document::maxKnownAge() const
 
 void Document::rebuildDecorationCaches()
 {
-    m_personSkillDecorations.clear();
-    for (const Skill& skill : m_skills)
+    m_personResponseAreas.clear();
+    for (const EmergencyResource& resource : m_emergencyResources)
     {
-        const SkillCategory& cat = m_skillCategories.value(skill.categoryId());
-        ResponseArea type = cat.decorationType();
-        if (type != ResponseArea::None)
+        ResponseArea area = resource.responseArea();
+        if (area != ResponseArea::None)
         {
-            for (const QString& personId : skill.personIds())
+            for (const QString& personId : resource.personIds())
             {
-                m_personSkillDecorations[personId].insert(type);
-            }
-        }
-    }
-
-    m_familyEquipmentDecorations.clear();
-    for (const Equipment& equip : m_equipment)
-    {
-        const EquipmentCategory& cat = m_equipmentCategories.value(equip.categoryId());
-        ResponseArea type = cat.decorationType();
-        if (type != ResponseArea::None)
-        {
-            for (const QString& familyId : equip.familyIds())
-            {
-                m_familyEquipmentDecorations[familyId].insert(type);
+                m_personResponseAreas[personId].insert(area);
             }
         }
     }
 }
 
-QSet<ResponseArea> Document::personSkillDecorations(const QString& personId) const
+QSet<ResponseArea> Document::personResponseAreas(const QString& personId) const
 {
-    return m_personSkillDecorations.value(personId);
-}
-
-QSet<ResponseArea> Document::familyEquipmentDecorations(const QString& familyId) const
-{
-    return m_familyEquipmentDecorations.value(familyId);
+    return m_personResponseAreas.value(personId);
 }
 
 void Document::onDocumentChanged(const DocumentChange& change)
@@ -725,17 +705,12 @@ void Document::onDocumentChanged(const DocumentChange& change)
     switch (change.scope)
     {
         case ChangeScope::Full:
+        case ChangeScope::EmergencyResource:
         case ChangeScope::Skill:
         case ChangeScope::SkillCategory:
         case ChangeScope::Equipment:
         case ChangeScope::EquipmentCategory:
             needsDecorationRebuild = true;
-            break;
-
-        case ChangeScope::Family:
-            // Only when families are removed (orphans skill/equipment refs)
-            needsDecorationRebuild = (change.action == ChangeAction::Removed
-                                   || change.action == ChangeAction::BatchModified);
             break;
 
         default:

@@ -115,18 +115,15 @@ MarkerIcons computeFamilyIcons(const QString& familyId, const Document& doc)
     QSet<ResponseArea> decorations;
     const Family& family = doc.families().value(familyId);
 
-    // Check each family member for special needs and skills
+    // Check each family member for special needs and emergency resource assignments
     for (const Person& person : family.members())
     {
         if (person.hasSpecialNeed())
         {
             decorations.insert(ResponseArea::SpecialNeeds);
         }
-        decorations.unite(doc.personSkillDecorations(person.id()));
+        decorations.unite(doc.personResponseAreas(person.id()));
     }
-
-    // Equipment decorations (family-level)
-    decorations.unite(doc.familyEquipmentDecorations(familyId));
 
     MarkerIcons icons;
     icons.baseIcon = selectBaseIcon(decorations);
