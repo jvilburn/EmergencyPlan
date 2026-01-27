@@ -106,7 +106,7 @@ void EmergencyResourceView::rebuildTree()
         QList<QPair<QString, QString>> persons;  // (personId, displayName)
         for (const QString& personId : resource.personIds())
         {
-            auto person = doc.findPersonById(personId);
+            std::optional<Person> person = doc.findPersonById(personId);
             if (person)
             {
                 persons.append({personId, person->displayName()});
@@ -165,7 +165,7 @@ void EmergencyResourceView::validateSelections()
         bool valid = false;
         if (!m_selectedResourceId.isEmpty())
         {
-            auto resourceOpt = doc.findEmergencyResourceById(m_selectedResourceId);
+            std::optional<EmergencyResource> resourceOpt = doc.findEmergencyResourceById(m_selectedResourceId);
             if (resourceOpt && resourceOpt->personIds().contains(m_selectedPersonId))
             {
                 valid = true;
@@ -262,14 +262,8 @@ void EmergencyResourceView::onContextMenu(const QPoint& pos)
                     showSelectPeopleDialog(id);
                 });
                 menu.addSeparator();
-                menu.addAction(tr("Rename..."), this, [this]()
-                {
-                    editResource();
-                });
-                menu.addAction(tr("Delete"), this, [this]()
-                {
-                    deleteResource();
-                });
+                menu.addAction(tr("Rename..."), this, &EmergencyResourceView::editResource);
+                menu.addAction(tr("Delete"), this, &EmergencyResourceView::deleteResource);
             }
             break;
 
@@ -277,7 +271,7 @@ void EmergencyResourceView::onContextMenu(const QPoint& pos)
             {
                 // Show contact info (disabled) if available
                 const Document& doc = m_documentManager->document();
-                auto personOpt = doc.findPersonById(id);
+                std::optional<Person> personOpt = doc.findPersonById(id);
                 if (personOpt)
                 {
                     const Phone& phone = personOpt->phone();
@@ -336,7 +330,7 @@ HighlightInfo EmergencyResourceView::highlightInfo() const
     else if (!m_selectedResourceId.isEmpty())
     {
         // Resource selected - highlight all families with people having this resource
-        auto resourceOpt = doc.findEmergencyResourceById(m_selectedResourceId);
+        std::optional<EmergencyResource> resourceOpt = doc.findEmergencyResourceById(m_selectedResourceId);
         if (resourceOpt)
         {
             for (const QString& personId : resourceOpt->personIds())
@@ -381,7 +375,7 @@ void EmergencyResourceView::editResource()
     }
 
     const Document& doc = m_documentManager->document();
-    auto resourceOpt = doc.findEmergencyResourceById(m_selectedResourceId);
+    std::optional<EmergencyResource> resourceOpt = doc.findEmergencyResourceById(m_selectedResourceId);
     if (!resourceOpt)
     {
         return;
@@ -408,7 +402,7 @@ void EmergencyResourceView::deleteResource()
     }
 
     const Document& doc = m_documentManager->document();
-    auto resourceOpt = doc.findEmergencyResourceById(m_selectedResourceId);
+    std::optional<EmergencyResource> resourceOpt = doc.findEmergencyResourceById(m_selectedResourceId);
     if (!resourceOpt)
     {
         return;
@@ -425,7 +419,7 @@ void EmergencyResourceView::deleteResource()
 void EmergencyResourceView::showSelectPeopleDialog(const QString& resourceId)
 {
     const Document& doc = m_documentManager->document();
-    auto resourceOpt = doc.findEmergencyResourceById(resourceId);
+    std::optional<EmergencyResource> resourceOpt = doc.findEmergencyResourceById(resourceId);
     if (!resourceOpt)
     {
         return;
