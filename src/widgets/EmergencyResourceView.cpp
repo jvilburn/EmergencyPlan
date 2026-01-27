@@ -58,8 +58,6 @@ EmergencyResourceView::EmergencyResourceView(DocumentManager* documentManager, R
     connect(m_editButton, &QPushButton::clicked, this, &EmergencyResourceView::editResource);
     connect(m_deleteButton, &QPushButton::clicked, this, &EmergencyResourceView::deleteResource);
 
-    connect(m_tree, &QTreeWidget::itemClicked,
-            this, &EmergencyResourceView::onTreeItemClicked);
     connect(m_tree, &QTreeWidget::itemDoubleClicked,
             this, &EmergencyResourceView::onTreeItemDoubleClicked);
     connect(m_tree, &QTreeWidget::customContextMenuRequested,
@@ -195,32 +193,6 @@ void EmergencyResourceView::onDocumentChanged(const DocumentChange& change)
     }
 }
 
-void EmergencyResourceView::onTreeItemClicked(QTreeWidgetItem* item, int /*column*/)
-{
-    // Clear all selections
-    m_selectedResourceId.clear();
-    m_selectedPersonId.clear();
-
-    ItemType type = static_cast<ItemType>(item->data(0, TypeRole).toInt());
-    QString id = item->data(0, IdRole).toString();
-
-    switch (type)
-    {
-    case ItemType::EmergencyResource:
-        m_selectedResourceId = id;
-        break;
-
-    case ItemType::Person:
-        m_selectedPersonId = id;
-        m_selectedResourceId = item->data(0, SecondaryIdRole).toString();
-        break;
-    }
-
-    rebuildTree();
-    updateButtonStates();
-    emit highlightChanged();
-}
-
 void EmergencyResourceView::onTreeItemDoubleClicked(QTreeWidgetItem* item, int /*column*/)
 {
     ItemType type = static_cast<ItemType>(item->data(0, TypeRole).toInt());
@@ -310,7 +282,54 @@ void EmergencyResourceView::onContextMenu(const QPoint& pos)
 
 void EmergencyResourceView::onSelectionChanged()
 {
+    // Un-bold all items
+    for (int i = 0; i < m_tree->topLevelItemCount(); ++i)
+    {
+        QTreeWidgetItem* resourceItem = m_tree->topLevelItem(i);
+        QFont resourceFont = resourceItem->font(0);
+        resourceFont.setBold(false);
+        resourceItem->setFont(0, resourceFont);
+
+        for (int j = 0; j < resourceItem->childCount(); ++j)
+        {
+            QTreeWidgetItem* personItem = resourceItem->child(j);
+            QFont personFont = personItem->font(0);
+            personFont.setBold(false);
+            personItem->setFont(0, personFont);
+        }
+    }
+
+    // Sync selection state from tree
+    QList<QTreeWidgetItem*> selected = m_tree->selectedItems();
+    m_selectedResourceId.clear();
+    m_selectedPersonId.clear();
+
+    if (!selected.isEmpty())
+    {
+        QTreeWidgetItem* item = selected.first();
+        ItemType type = static_cast<ItemType>(item->data(0, TypeRole).toInt());
+        QString id = item->data(0, IdRole).toString();
+
+        switch (type)
+        {
+        case ItemType::EmergencyResource:
+            m_selectedResourceId = id;
+            break;
+
+        case ItemType::Person:
+            m_selectedPersonId = id;
+            m_selectedResourceId = item->data(0, SecondaryIdRole).toString();
+            break;
+        }
+
+        // Bold the selected item
+        QFont font = item->font(0);
+        font.setBold(true);
+        item->setFont(0, font);
+    }
+
     updateButtonStates();
+    emit highlightChanged();
 }
 
 HighlightInfo EmergencyResourceView::highlightInfo() const

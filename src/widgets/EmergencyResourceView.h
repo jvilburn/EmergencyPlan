@@ -32,7 +32,6 @@ signals:
 
 private slots:
     void onDocumentChanged(const DocumentChange& change);
-    void onTreeItemClicked(QTreeWidgetItem* item, int column);
     void onTreeItemDoubleClicked(QTreeWidgetItem* item, int column);
     void onContextMenu(const QPoint& pos);
     void onSelectionChanged();
