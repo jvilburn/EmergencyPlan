@@ -17,6 +17,7 @@
 #include "Equipment.h"
 #include "MinisteringDistrict.h"
 #include "MinisteringGroup.h"
+#include "EmergencyResource.h"
 #include "ResponseArea.h"
 #include <QSet>
 
@@ -30,6 +31,9 @@ public:
 
     // Initialize default categories for a new document
     void initializeDefaultCategories();
+
+    // Initialize default emergency resources for a new document
+    void initializeDefaultResources();
 
     // ========================================================================
     // Metadata (wards/stakes)
@@ -140,6 +144,16 @@ public:
     void removeFamilyFromEquipment(const QString& equipmentId, const QString& familyId);
 
     // ========================================================================
+    // EmergencyResource operations
+    // ========================================================================
+    const QHash<QString, EmergencyResource>& emergencyResources() const { return m_emergencyResources; }
+    void addEmergencyResource(const EmergencyResource& resource);
+    void updateEmergencyResource(const EmergencyResource& resource);
+    void removeEmergencyResource(const QString& id);
+    std::optional<EmergencyResource> findEmergencyResourceById(const QString& id) const;
+    QList<EmergencyResource> emergencyResourcesByArea(ResponseArea area) const;
+
+    // ========================================================================
     // Mutating operations - ministering
     // ========================================================================
     void addEqDistrict(const MinisteringDistrict& district);
@@ -223,7 +237,10 @@ private:
     // Cached max known age (computed in rebuildPersonToFamilyMap)
     std::optional<int> m_maxKnownAge;
 
-    // Emergency inventory
+    // Emergency resources (new unified model)
+    QHash<QString, EmergencyResource> m_emergencyResources;
+
+    // Emergency inventory (legacy - to be removed)
     QHash<QString, SkillCategory> m_skillCategories;
     QHash<QString, Skill> m_skills;
     QHash<QString, EquipmentCategory> m_equipmentCategories;

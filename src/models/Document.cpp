@@ -6,6 +6,7 @@ Document Document::empty()
 {
     Document doc;
     doc.initializeDefaultCategories();
+    doc.initializeDefaultResources();
     return doc;
 }
 
@@ -42,6 +43,25 @@ void Document::initializeDefaultCategories()
 
     EquipmentCategory supplies = EquipmentCategory::create(QObject::tr("Supplies"), 6, ResponseArea::Recovery);
     m_equipmentCategories.insert(supplies.id(), supplies);
+}
+
+void Document::initializeDefaultResources()
+{
+    auto addDefault = [this](const QString& name, ResponseArea area)
+    {
+        addEmergencyResource(EmergencyResource::create(name, area));
+    };
+
+    addDefault(QObject::tr("First Aid"), ResponseArea::Medical);
+    addDefault(QObject::tr("CPR Certified"), ResponseArea::Medical);
+    addDefault(QObject::tr("Nurse / Doctor"), ResponseArea::Medical);
+
+    addDefault(QObject::tr("Ham Radio"), ResponseArea::Communications);
+    addDefault(QObject::tr("CERT Trained"), ResponseArea::Communications);
+
+    addDefault(QObject::tr("Chainsaw"), ResponseArea::Recovery);
+    addDefault(QObject::tr("Generator"), ResponseArea::Recovery);
+    addDefault(QObject::tr("4WD Vehicle"), ResponseArea::Recovery);
 }
 
 // ============================================================================
@@ -319,6 +339,48 @@ void Document::removeFamilyFromEquipment(const QString& equipmentId, const QStri
 }
 
 // ============================================================================
+// EmergencyResource operations
+// ============================================================================
+
+void Document::addEmergencyResource(const EmergencyResource& resource)
+{
+    m_emergencyResources.insert(resource.id(), resource);
+}
+
+void Document::updateEmergencyResource(const EmergencyResource& resource)
+{
+    m_emergencyResources.insert(resource.id(), resource);
+}
+
+void Document::removeEmergencyResource(const QString& id)
+{
+    m_emergencyResources.remove(id);
+}
+
+std::optional<EmergencyResource> Document::findEmergencyResourceById(const QString& id) const
+{
+    auto it = m_emergencyResources.constFind(id);
+    if (it != m_emergencyResources.constEnd())
+    {
+        return *it;
+    }
+    return std::nullopt;
+}
+
+QList<EmergencyResource> Document::emergencyResourcesByArea(ResponseArea area) const
+{
+    QList<EmergencyResource> result;
+    for (const EmergencyResource& resource : m_emergencyResources)
+    {
+        if (resource.responseArea() == area)
+        {
+            result.append(resource);
+        }
+    }
+    return result;
+}
+
+// ============================================================================
 // Ministering operations
 // ============================================================================
 
@@ -444,6 +506,15 @@ void Document::cleanupPersonReferences(const QString& personId)
     for (auto it = m_skills.begin(); it != m_skills.end(); ++it)
     {
         if (it->personIds().contains(personId))
+        {
+            it->removePerson(personId);
+        }
+    }
+
+    // Remove from emergency resources
+    for (auto it = m_emergencyResources.begin(); it != m_emergencyResources.end(); ++it)
+    {
+        if (it->hasPerson(personId))
         {
             it->removePerson(personId);
         }
@@ -731,7 +802,10 @@ QJsonObject Document::toJson() const
     serializeHashToJson(json, "teams", m_teams);
     serializeHashToJson(json, "tags", m_tags);
 
-    // Emergency inventory
+    // Emergency resources
+    serializeHashToJson(json, "emergencyResources", m_emergencyResources);
+
+    // Emergency inventory (legacy)
     serializeHashToJson(json, "skillCategories", m_skillCategories);
     serializeHashToJson(json, "skills", m_skills);
     serializeHashToJson(json, "equipmentCategories", m_equipmentCategories);
@@ -768,7 +842,10 @@ Document Document::fromJson(const QJsonObject& json)
     deserializeJsonToHash(json, "teams", document.m_teams);
     deserializeJsonToHash(json, "tags", document.m_tags);
 
-    // Emergency inventory
+    // Emergency resources
+    deserializeJsonToHash(json, "emergencyResources", document.m_emergencyResources);
+
+    // Emergency inventory (legacy)
     deserializeJsonToHash(json, "skillCategories", document.m_skillCategories);
     deserializeJsonToHash(json, "skills", document.m_skills);
     deserializeJsonToHash(json, "equipmentCategories", document.m_equipmentCategories);
@@ -811,6 +888,7 @@ bool Document::operator==(const Document& other) const
         && m_families == other.m_families
         && m_teams == other.m_teams
         && m_tags == other.m_tags
+        && m_emergencyResources == other.m_emergencyResources
         && m_skillCategories == other.m_skillCategories
         && m_skills == other.m_skills
         && m_equipmentCategories == other.m_equipmentCategories
