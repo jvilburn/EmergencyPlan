@@ -34,32 +34,26 @@ void CategoryEditDialog::setupUi(
     formLayout->addRow(tr("Name:"), m_nameEdit);
 
     m_decorationCombo = new QComboBox();
-    m_decorationCombo->addItem(QIcon(":/markers/marker_home.svg"), tr("None"));
-    m_decorationCombo->addItem(QIcon(":/markers/marker_medical.svg"), tr("Medical"));
-    m_decorationCombo->addItem(QIcon(":/markers/marker_recovery.svg"), tr("Recovery"));
-    m_decorationCombo->addItem(QIcon(":/markers/marker_antenna.svg"), tr("Communications"));
 
-    // Set current index based on currentType
-    int index = 0;
-    if (currentType.has_value())
+    // Store enum values as item data for type-safe retrieval
+    m_decorationCombo->addItem(QIcon(":/markers/marker_home.svg"), tr("None"),
+                               static_cast<int>(MarkerDecorationType::None));
+    m_decorationCombo->addItem(QIcon(":/markers/marker_medical.svg"), tr("Medical"),
+                               static_cast<int>(MarkerDecorationType::Medical));
+    m_decorationCombo->addItem(QIcon(":/markers/marker_recovery.svg"), tr("Recovery"),
+                               static_cast<int>(MarkerDecorationType::Recovery));
+    m_decorationCombo->addItem(QIcon(":/markers/marker_antenna.svg"), tr("Communications"),
+                               static_cast<int>(MarkerDecorationType::Communications));
+
+    // Set current selection based on currentType (nullopt maps to None)
+    int dataValue = currentType.has_value()
+                    ? static_cast<int>(currentType.value())
+                    : static_cast<int>(MarkerDecorationType::None);
+    int index = m_decorationCombo->findData(dataValue);
+    if (index >= 0)
     {
-        switch (currentType.value())
-        {
-        case MarkerDecorationType::Medical:
-            index = 1;
-            break;
-        case MarkerDecorationType::Recovery:
-            index = 2;
-            break;
-        case MarkerDecorationType::Communications:
-            index = 3;
-            break;
-        default:
-            index = 0;
-            break;
-        }
+        m_decorationCombo->setCurrentIndex(index);
     }
-    m_decorationCombo->setCurrentIndex(index);
 
     formLayout->addRow(tr("Marker:"), m_decorationCombo);
     mainLayout->addLayout(formLayout);
@@ -81,21 +75,17 @@ CategoryEditDialog::Result CategoryEditDialog::result() const
     Result r;
     r.name = m_nameEdit->text().trimmed();
 
-    int index = m_decorationCombo->currentIndex();
-    switch (index)
+    MarkerDecorationType type = static_cast<MarkerDecorationType>(
+        m_decorationCombo->currentData().toInt());
+
+    // None maps to nullopt (current design uses optional)
+    if (type == MarkerDecorationType::None)
     {
-    case 1:
-        r.decorationType = MarkerDecorationType::Medical;
-        break;
-    case 2:
-        r.decorationType = MarkerDecorationType::Recovery;
-        break;
-    case 3:
-        r.decorationType = MarkerDecorationType::Communications;
-        break;
-    default:
         r.decorationType = std::nullopt;
-        break;
+    }
+    else
+    {
+        r.decorationType = type;
     }
 
     return r;

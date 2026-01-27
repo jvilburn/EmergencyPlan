@@ -33,6 +33,8 @@ EquipmentSubView::EquipmentSubView(DocumentManager* documentManager, QWidget* pa
 
     connect(m_tree, &QTreeWidget::itemClicked,
             this, &EquipmentSubView::onTreeItemClicked);
+    connect(m_tree, &QTreeWidget::itemDoubleClicked,
+            this, &EquipmentSubView::onTreeItemDoubleClicked);
     connect(m_tree, &QTreeWidget::customContextMenuRequested,
             this, &EquipmentSubView::onContextMenu);
     connect(m_documentManager, &DocumentManager::documentChanged,
@@ -185,6 +187,26 @@ void EquipmentSubView::onTreeItemClicked(QTreeWidgetItem* item, int /*column*/)
 
     rebuildTree();
     emit highlightChanged();
+}
+
+void EquipmentSubView::onTreeItemDoubleClicked(QTreeWidgetItem* item, int /*column*/)
+{
+    ItemType type = static_cast<ItemType>(item->data(0, TypeRole).toInt());
+
+    switch (type)
+    {
+    case ItemType::Category:
+        showEditCategoryDialog(item);
+        break;
+
+    case ItemType::Equipment:
+        showRenameDialog(item);
+        break;
+
+    case ItemType::Family:
+        // Could open family details in future
+        break;
+    }
 }
 
 void EquipmentSubView::onContextMenu(const QPoint& pos)
