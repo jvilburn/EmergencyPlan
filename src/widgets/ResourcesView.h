@@ -26,10 +26,10 @@ signals:
     void highlightChanged();
 
 private:
+    EmergencyResourceView* currentSubView() const;
+
     QTabWidget* m_subTabs;
     EmergencyResourceView* m_medicalView;
     EmergencyResourceView* m_commsView;
     EmergencyResourceView* m_recoveryView;
-
-    EmergencyResourceView* currentSubView() const;
 };
