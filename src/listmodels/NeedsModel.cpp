@@ -69,10 +69,7 @@ void NeedsModel::rebuild()
 
     // Sort alphabetically by display name
     std::sort(m_entries.begin(), m_entries.end(),
-              [](const NeedEntry& a, const NeedEntry& b)
-              {
-                  return a.sortKey < b.sortKey;
-              });
+              [](const NeedEntry& a, const NeedEntry& b) { return a.sortKey < b.sortKey; });
 
     endResetModel();
 }
