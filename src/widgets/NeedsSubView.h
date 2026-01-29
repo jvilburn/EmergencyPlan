@@ -1,13 +1,13 @@
 #pragma once
 
 #include "FamilyMarkerProvider.h"
-#include "DocumentChange.h"
 
 #include <QWidget>
 
 class DocumentManager;
-class QTreeWidget;
-class QTreeWidgetItem;
+class NeedsModel;
+class QTreeView;
+class QModelIndex;
 
 /// NeedsSubView displays a flat list of special needs (persons/families with special needs).
 ///
@@ -29,25 +29,15 @@ signals:
     void highlightChanged();
 
 private slots:
-    void onDocumentChanged(const DocumentChange& change);
-    void onTreeItemClicked(QTreeWidgetItem* item, int column);
+    void onSelectionChanged(const QModelIndex& current, const QModelIndex& previous);
     void onContextMenu(const QPoint& pos);
 
 private:
-    void rebuildTree();
-    void validateSelections();
     void showAddNeedDialog();
     void showEditNeedDialog(const QString& personId, const QString& familyId);
     void deleteNeed(const QString& personId, const QString& familyId);
 
-    // Constants for tree item data roles
-    static constexpr int PersonIdRole = Qt::UserRole;
-    static constexpr int FamilyIdRole = Qt::UserRole + 1;
-
     DocumentManager* m_documentManager;
-    QTreeWidget* m_tree;
-
-    // Selection state
-    QString m_selectedPersonId;
-    QString m_selectedFamilyId;
+    NeedsModel* m_model;
+    QTreeView* m_tree;
 };
