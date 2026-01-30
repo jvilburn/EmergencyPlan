@@ -83,7 +83,7 @@ void UnassignedMinisteringModel::rebuild()
         {
             // Create header
             m_headerNode = new TreeNode();
-            m_headerNode->type = NodeType::District;  // Reuse District type for header styling
+            m_headerNode->type = NodeType::UnassignedHeader;
             m_headerNode->id = "unassigned";
             m_headerNode->displayText = tr("Unassigned (%1 families)").arg(unassignedIds.size());
 
@@ -142,7 +142,7 @@ void UnassignedMinisteringModel::rebuild()
         {
             // Create header
             m_headerNode = new TreeNode();
-            m_headerNode->type = NodeType::District;
+            m_headerNode->type = NodeType::UnassignedHeader;
             m_headerNode->id = "unassigned";
             m_headerNode->displayText = tr("Unassigned (%1 sisters)").arg(unassignedIds.size());
 

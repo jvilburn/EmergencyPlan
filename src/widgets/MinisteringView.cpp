@@ -7,6 +7,7 @@
 #include "Family.h"
 #include "Person.h"
 
+#include <QFontMetrics>
 #include <QVBoxLayout>
 #include <QTabBar>
 #include <QTreeView>
@@ -48,25 +49,11 @@ void MinisteringView::setupUi()
     m_orgTabs->addTab(tr("Relief Society"));
     layout->addWidget(m_orgTabs);
 
-    // Helper to create tree views with common configuration
-    auto createTree = [](bool isUnassigned) {
-        auto* tree = new QTreeView();
-        tree->setHeaderHidden(true);
-        tree->setRootIsDecorated(true);
-        tree->setSelectionMode(QAbstractItemView::SingleSelection);
-        tree->setIndentation(16);
-        if (isUnassigned)
-        {
-            tree->setFixedHeight(38);  // Single row height when collapsed
-        }
-        return tree;
-    };
-
     // Create all 4 trees
-    m_eqUnassignedTree = createTree(true);
-    m_rsUnassignedTree = createTree(true);
-    m_eqTree = createTree(false);
-    m_rsTree = createTree(false);
+    m_eqUnassignedTree = createTreeView(true);
+    m_rsUnassignedTree = createTreeView(true);
+    m_eqTree = createTreeView(false);
+    m_rsTree = createTreeView(false);
 
     // Set models
     m_eqTree->setModel(m_eqModel);
@@ -241,9 +228,9 @@ void MinisteringView::onUnassignedTreeExpanded(const QModelIndex& index)
     NodeType type = model->nodeTypeAt(index);
 
     // Resize tree when header is expanded
-    if (type == NodeType::District)  // Header uses District type
+    if (type == NodeType::UnassignedHeader)
     {
-        tree->setFixedHeight(200);
+        tree->setFixedHeight(expandedTreeHeight());
     }
     // Load contact info on expand for families/sisters
     else if (type == NodeType::MinisteredFamily || type == NodeType::MinisteredSister)
@@ -261,9 +248,9 @@ void MinisteringView::onUnassignedTreeCollapsed(const QModelIndex& index)
     NodeType type = model->nodeTypeAt(index);
 
     // Shrink tree when header is collapsed
-    if (type == NodeType::District)
+    if (type == NodeType::UnassignedHeader)
     {
-        tree->setFixedHeight(38);
+        tree->setFixedHeight(collapsedTreeHeight());
     }
 }
 
@@ -272,14 +259,45 @@ void MinisteringView::onUnassignedModelReset()
     updateUnassignedVisibility();
 
     // Reset height when model rebuilds (in case it was expanded before)
-    m_eqUnassignedTree->setFixedHeight(38);
-    m_rsUnassignedTree->setFixedHeight(38);
+    int height = collapsedTreeHeight();
+    m_eqUnassignedTree->setFixedHeight(height);
+    m_rsUnassignedTree->setFixedHeight(height);
 }
 
 void MinisteringView::updateUnassignedVisibility()
 {
     m_eqUnassignedTree->setVisible(m_isEQ && m_eqUnassignedModel->hasUnassigned());
     m_rsUnassignedTree->setVisible(!m_isEQ && m_rsUnassignedModel->hasUnassigned());
+}
+
+QTreeView* MinisteringView::createTreeView(bool isUnassigned)
+{
+    auto* tree = new QTreeView();
+    tree->setHeaderHidden(true);
+    tree->setRootIsDecorated(true);
+    tree->setSelectionMode(QAbstractItemView::SingleSelection);
+    tree->setIndentation(16);
+    if (isUnassigned)
+    {
+        tree->setFixedHeight(collapsedTreeHeight());
+    }
+    return tree;
+}
+
+int MinisteringView::collapsedTreeHeight() const
+{
+    // Calculate height for a single row plus margins
+    QFontMetrics fm(font());
+    int rowHeight = fm.height() + 8;  // Text height + padding
+    return rowHeight + 16;  // Add margins
+}
+
+int MinisteringView::expandedTreeHeight() const
+{
+    // Calculate height for approximately 8 rows
+    QFontMetrics fm(font());
+    int rowHeight = fm.height() + 8;
+    return rowHeight * 8 + 16;
 }
 
 QSet<QString> MinisteringView::familyIdsForPersons(const QSet<QString>& personIds) const
@@ -375,19 +393,7 @@ HighlightInfo MinisteringView::highlightInfo() const
 
     case NodeType::District:
     {
-        // Check if this is the "unassigned" header
-        if (selectedId == "unassigned")
-        {
-            if (m_isEQ)
-            {
-                info.highlightedFamilyIds = unassignedFamilyIds();
-            }
-            else
-            {
-                info.highlightedFamilyIds = familyIdsForPersons(unassignedSisterIds());
-            }
-        }
-        else if (districts.contains(selectedId))
+        if (districts.contains(selectedId))
         {
             const MinisteringDistrict& district = districts[selectedId];
             for (const QString& groupId : district.groupIds())
@@ -406,6 +412,19 @@ HighlightInfo MinisteringView::highlightInfo() const
                     info.contactPointFamilyIds.unite(familyIdsForPersons(group.ministerIds()));
                 }
             }
+        }
+        break;
+    }
+
+    case NodeType::UnassignedHeader:
+    {
+        if (m_isEQ)
+        {
+            info.highlightedFamilyIds = unassignedFamilyIds();
+        }
+        else
+        {
+            info.highlightedFamilyIds = familyIdsForPersons(unassignedSisterIds());
         }
         break;
     }

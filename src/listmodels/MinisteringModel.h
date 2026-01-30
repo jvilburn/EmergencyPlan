@@ -34,7 +34,8 @@ public:
         Minister,
         MinisteredFamily,
         MinisteredSister,
-        ContactDetail
+        ContactDetail,
+        UnassignedHeader  // Header for unassigned families/sisters tree
     };
     Q_ENUM(NodeType)
 

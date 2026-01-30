@@ -47,6 +47,9 @@ private:
 
     void setupUi();
     void updateUnassignedVisibility();
+    QTreeView* createTreeView(bool isUnassigned);
+    int collapsedTreeHeight() const;
+    int expandedTreeHeight() const;
 
     // For RS: Get family IDs containing the given person IDs
     QSet<QString> familyIdsForPersons(const QSet<QString>& personIds) const;
