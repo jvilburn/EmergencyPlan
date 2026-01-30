@@ -255,3 +255,47 @@ void MyView::onSelectionChanged(const QModelIndex& current, const QModelIndex& p
 - **Surgical updates** — Still using full rebuilds. Model reset preserves state automatically.
 - **Shared base model** — Over-engineering for 3 small models.
 - **Lazy loading abstraction** — Handle per-view as needed.
+
+---
+
+## Implementation Progress
+
+### Completed Tasks
+
+| Task | Commits | Notes |
+|------|---------|-------|
+| 1. Create NeedsModel | 2bbbbe8, 1381c69 | Flat list model for special needs |
+| 2. Migrate NeedsSubView | a4eb8dd | QTreeView + NeedsModel |
+| 3. Create EmergencyResourceModel | 50abf67 | 2-level tree (Resource → Person) |
+| 4. Migrate EmergencyResourceView | 8126e75, 3b8f726, ef96543, 33bcacd, 36c32c6 | QTreeView + EmergencyResourceModel, removed lambdas |
+| 5. Create MinisteringModel | 5cf75a0, 139a486, dd5edfc + user fixes | Multi-level tree with lazy contact loading, NodeType::Invalid added |
+
+### Remaining Tasks
+
+| Task | Description |
+|------|-------------|
+| 6. Migrate MinisteringView | Replace 4 QTreeWidget instances with QTreeView + MinisteringModel |
+
+### Task 6 Details: Migrate MinisteringView
+
+MinisteringView is the most complex migration because it has:
+- 4 separate trees: `m_eqTree`, `m_rsTree`, `m_eqUnassignedTree`, `m_rsUnassignedTree`
+- EQ/RS tab switching
+- Manual bold styling for selection
+- Lazy contact info population on expand
+- Unassigned tree height adjustment on expand/collapse
+
+Key changes needed:
+1. Replace `QTreeWidget*` with `QTreeView*` for all 4 trees
+2. Create 2 MinisteringModel instances (EQ and RS) for main trees
+3. Decide on unassigned trees: either migrate or keep as QTreeWidget
+4. Remove `rebuildTreeImpl()`, `rebuildUnassignedTreeImpl()` from view
+5. Connect to `currentChanged` instead of `itemClicked`
+6. Connect to `expanded` signal to call `m_model->loadContactDetails()`
+7. Remove manual bold styling (`m_eqSelectedItem`, `m_rsSelectedItem`)
+8. Keep selection ID tracking (`m_eqSelectedId`, `m_rsSelectedId`) for `highlightInfo()`
+9. Update `highlightInfo()` to use model accessors
+
+Files to modify:
+- `src/widgets/MinisteringView.h`
+- `src/widgets/MinisteringView.cpp`
