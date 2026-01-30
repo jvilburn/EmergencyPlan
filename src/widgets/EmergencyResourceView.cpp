@@ -167,6 +167,10 @@ void EmergencyResourceView::onContextMenu(const QPoint& pos)
     {
         menu.exec(m_tree->viewport()->mapToGlobal(pos));
     }
+
+    // Clear context after menu closes (whether action taken or dismissed)
+    m_contextResourceId.clear();
+    m_contextPersonId.clear();
 }
 
 void EmergencyResourceView::expandResources()
@@ -178,6 +182,7 @@ void EmergencyResourceView::selectPeopleFromContextMenu()
 {
     QString resourceId = m_contextResourceId;
     m_contextResourceId.clear();
+    m_contextPersonId.clear();
     showSelectPeopleDialog(resourceId);
 }
 
