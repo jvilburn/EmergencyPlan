@@ -286,6 +286,7 @@ set(WIDGET_HEADERS
 )
 
 set(LISTMODEL_SOURCES
+    src/listmodels/EmergencyResourceModel.cpp
     src/listmodels/Filter.cpp
     src/listmodels/FamilyListModel.cpp
     src/listmodels/FamilyTreeModel.cpp
@@ -298,6 +299,7 @@ set(LISTMODEL_SOURCES
 )
 
 set(LISTMODEL_HEADERS
+    src/listmodels/EmergencyResourceModel.h
     src/listmodels/Filter.h
     src/listmodels/FamilyListModel.h
     src/listmodels/FamilyTreeModel.h
