@@ -60,6 +60,8 @@ public:
 
     // View-specific accessors
     QString idAt(const QModelIndex& index) const;
+    /// Returns the node type at the given index.
+    /// Returns NodeType::District for invalid indexes (caller should check index.isValid() first).
     NodeType nodeTypeAt(const QModelIndex& index) const;
     QString companionshipIdAt(const QModelIndex& index) const;
 
