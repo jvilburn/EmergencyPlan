@@ -34,6 +34,9 @@ private slots:
     void onSelectionChanged(const QModelIndex& current, const QModelIndex& previous);
     void onTreeDoubleClicked(const QModelIndex& index);
     void onContextMenu(const QPoint& pos);
+    void expandResources();
+    void selectPeopleFromContextMenu();
+    void removePersonFromContextMenu();
 
 private:
     void updateButtonStates();
@@ -56,4 +59,8 @@ private:
     QPushButton* m_addButton;
     QPushButton* m_editButton;
     QPushButton* m_deleteButton;
+
+    // Context menu targets
+    QString m_contextResourceId;
+    QString m_contextPersonId;
 };

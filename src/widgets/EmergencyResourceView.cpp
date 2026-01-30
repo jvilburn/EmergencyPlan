@@ -71,7 +71,7 @@ EmergencyResourceView::EmergencyResourceView(DocumentManager* documentManager, R
             this, &EmergencyResourceView::onContextMenu);
 
     // Expand top-level items when model is reset
-    connect(m_model, &QAbstractItemModel::modelReset, this, [this]() { m_tree->expandToDepth(0); });
+    connect(m_model, &QAbstractItemModel::modelReset, this, &EmergencyResourceView::expandResources);
 
     updateButtonStates();
 }
@@ -120,10 +120,8 @@ void EmergencyResourceView::onContextMenu(const QPoint& pos)
         {
         case EmergencyResourceModel::ItemType::Resource:
             {
-                menu.addAction(tr("Select People..."), this, [this, id]()
-                {
-                    showSelectPeopleDialog(id);
-                });
+                m_contextResourceId = id;
+                menu.addAction(tr("Select People..."), this, &EmergencyResourceView::selectPeopleFromContextMenu);
                 menu.addSeparator();
                 menu.addAction(tr("Rename..."), this, &EmergencyResourceView::editResource);
                 menu.addAction(tr("Delete"), this, &EmergencyResourceView::deleteResource);
@@ -155,11 +153,9 @@ void EmergencyResourceView::onContextMenu(const QPoint& pos)
                     }
                 }
 
-                QString resourceId = m_model->resourceIdAt(index);
-                menu.addAction(tr("Remove"), this, [this, resourceId, id]()
-                {
-                    removePersonFromResource(resourceId, id);
-                });
+                m_contextResourceId = m_model->resourceIdAt(index);
+                m_contextPersonId = id;
+                menu.addAction(tr("Remove"), this, &EmergencyResourceView::removePersonFromContextMenu);
             }
             break;
         }
@@ -169,6 +165,21 @@ void EmergencyResourceView::onContextMenu(const QPoint& pos)
     {
         menu.exec(m_tree->viewport()->mapToGlobal(pos));
     }
+}
+
+void EmergencyResourceView::expandResources()
+{
+    m_tree->expandToDepth(0);
+}
+
+void EmergencyResourceView::selectPeopleFromContextMenu()
+{
+    showSelectPeopleDialog(m_contextResourceId);
+}
+
+void EmergencyResourceView::removePersonFromContextMenu()
+{
+    removePersonFromResource(m_contextResourceId, m_contextPersonId);
 }
 
 void EmergencyResourceView::updateButtonStates()
