@@ -95,7 +95,7 @@ void MinisteringModel::rebuild()
         districtNode->displayText = districtText;
 
         // Collect and sort companionships by minister names
-        QList<std::pair<QString, QString>> sortedGroups;  // (display text, group ID)
+        QList<QPair<QString, QString>> sortedGroups;  // (display text, group ID)
         for (const QString& groupId : district.groupIds())
         {
             if (!groups.contains(groupId))
@@ -125,11 +125,11 @@ void MinisteringModel::rebuild()
         }
 
         std::sort(sortedGroups.begin(), sortedGroups.end(),
-                  [](const std::pair<QString, QString>& a, const std::pair<QString, QString>& b)
+                  [](const QPair<QString, QString>& a, const QPair<QString, QString>& b)
                   { return a.first.toLower() < b.first.toLower(); });
 
         // Add companionships under this district
-        for (const std::pair<QString, QString>& groupData : sortedGroups)
+        for (const QPair<QString, QString>& groupData : sortedGroups)
         {
             const QString& companionshipText = groupData.first;
             const QString& groupId = groupData.second;
@@ -173,7 +173,7 @@ void MinisteringModel::addMinistersSection(TreeNode* companionshipNode, const QS
     companionshipNode->children.append(ministersHeader);
 
     // Collect and sort ministers by name
-    QList<std::pair<QString, QString>> sortedMinisters;  // (display name, person ID)
+    QList<QPair<QString, QString>> sortedMinisters;  // (display name, person ID)
     for (const QString& ministerId : group.ministerIds())
     {
         std::optional<Person> person = doc.findPersonById(ministerId);
@@ -184,11 +184,11 @@ void MinisteringModel::addMinistersSection(TreeNode* companionshipNode, const QS
     }
 
     std::sort(sortedMinisters.begin(), sortedMinisters.end(),
-              [](const std::pair<QString, QString>& a, const std::pair<QString, QString>& b)
+              [](const QPair<QString, QString>& a, const QPair<QString, QString>& b)
               { return a.first.toLower() < b.first.toLower(); });
 
     // Add individual ministers
-    for (const std::pair<QString, QString>& ministerData : sortedMinisters)
+    for (const QPair<QString, QString>& ministerData : sortedMinisters)
     {
         TreeNode* ministerNode = new TreeNode();
         ministerNode->type = NodeType::Minister;
@@ -225,7 +225,7 @@ void MinisteringModel::addMinisteredSection(TreeNode* companionshipNode, const Q
         const QHash<QString, Family>& families = doc.families();
 
         // Collect and sort families by name
-        QList<std::pair<QString, QString>> sortedFamilies;  // (display name, family ID)
+        QList<QPair<QString, QString>> sortedFamilies;  // (display name, family ID)
         for (const QString& familyId : group.familyIds())
         {
             if (families.contains(familyId))
@@ -236,10 +236,10 @@ void MinisteringModel::addMinisteredSection(TreeNode* companionshipNode, const Q
         }
 
         std::sort(sortedFamilies.begin(), sortedFamilies.end(),
-                  [](const std::pair<QString, QString>& a, const std::pair<QString, QString>& b)
+                  [](const QPair<QString, QString>& a, const QPair<QString, QString>& b)
                   { return a.first.toLower() < b.first.toLower(); });
 
-        for (const std::pair<QString, QString>& familyData : sortedFamilies)
+        for (const QPair<QString, QString>& familyData : sortedFamilies)
         {
             TreeNode* familyNode = new TreeNode();
             familyNode->type = NodeType::MinisteredFamily;
@@ -252,7 +252,7 @@ void MinisteringModel::addMinisteredSection(TreeNode* companionshipNode, const Q
     else
     {
         // RS: Add sisters
-        QList<std::pair<QString, QString>> sortedSisters;  // (display name, person ID)
+        QList<QPair<QString, QString>> sortedSisters;  // (display name, person ID)
         for (const QString& personId : group.ministeredPersonIds())
         {
             std::optional<Person> person = doc.findPersonById(personId);
@@ -263,10 +263,10 @@ void MinisteringModel::addMinisteredSection(TreeNode* companionshipNode, const Q
         }
 
         std::sort(sortedSisters.begin(), sortedSisters.end(),
-                  [](const std::pair<QString, QString>& a, const std::pair<QString, QString>& b)
+                  [](const QPair<QString, QString>& a, const QPair<QString, QString>& b)
                   { return a.first.toLower() < b.first.toLower(); });
 
-        for (const std::pair<QString, QString>& sisterData : sortedSisters)
+        for (const QPair<QString, QString>& sisterData : sortedSisters)
         {
             TreeNode* sisterNode = new TreeNode();
             sisterNode->type = NodeType::MinisteredSister;

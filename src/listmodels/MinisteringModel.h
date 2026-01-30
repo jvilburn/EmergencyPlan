@@ -18,7 +18,7 @@ class DocumentManager;
 /// - ContactDetail - phone, email, address (loaded on demand)
 ///
 /// Contact details are loaded lazily when a person/family node is expanded.
-/// This model rebuilds on Full, MinisteringDistrict, MinisteringGroup, Family scopes.
+/// This model rebuilds on Full, EqDistrict, EqGroup, RsDistrict, RsGroup, Family scopes.
 class MinisteringModel : public QAbstractItemModel
 {
     Q_OBJECT
