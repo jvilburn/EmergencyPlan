@@ -36,8 +36,10 @@ bool MinisteringModel::shouldRebuild(const DocumentChange& change) const
     switch (change.scope)
     {
     case ChangeScope::Full:
-    case ChangeScope::MinisteringDistrict:
-    case ChangeScope::MinisteringGroup:
+    case ChangeScope::EqDistrict:
+    case ChangeScope::EqGroup:
+    case ChangeScope::RsDistrict:
+    case ChangeScope::RsGroup:
     case ChangeScope::Family:  // Person names and contact info are in families
         return true;
     default:
@@ -60,8 +62,8 @@ void MinisteringModel::rebuild()
     clearNodes();
 
     const Document& doc = m_documentManager->document();
-    const auto& districts = m_isEQ ? doc.eqDistricts() : doc.rsDistricts();
-    const auto& groups = m_isEQ ? doc.eqGroups() : doc.rsGroups();
+    const QHash<QString, MinisteringDistrict>& districts = m_isEQ ? doc.eqDistricts() : doc.rsDistricts();
+    const QHash<QString, MinisteringGroup>& groups = m_isEQ ? doc.eqGroups() : doc.rsGroups();
 
     // Sort districts by name
     QList<MinisteringDistrict> sortedDistricts = districts.values();
@@ -153,7 +155,7 @@ void MinisteringModel::rebuild()
 void MinisteringModel::addMinistersSection(TreeNode* companionshipNode, const QString& groupId)
 {
     const Document& doc = m_documentManager->document();
-    const auto& groups = m_isEQ ? doc.eqGroups() : doc.rsGroups();
+    const QHash<QString, MinisteringGroup>& groups = m_isEQ ? doc.eqGroups() : doc.rsGroups();
 
     if (!groups.contains(groupId))
     {
@@ -200,7 +202,7 @@ void MinisteringModel::addMinistersSection(TreeNode* companionshipNode, const QS
 void MinisteringModel::addMinisteredSection(TreeNode* companionshipNode, const QString& groupId)
 {
     const Document& doc = m_documentManager->document();
-    const auto& groups = m_isEQ ? doc.eqGroups() : doc.rsGroups();
+    const QHash<QString, MinisteringGroup>& groups = m_isEQ ? doc.eqGroups() : doc.rsGroups();
 
     if (!groups.contains(groupId))
     {
@@ -220,7 +222,7 @@ void MinisteringModel::addMinisteredSection(TreeNode* companionshipNode, const Q
     if (m_isEQ)
     {
         // EQ: Add families
-        const auto& families = doc.families();
+        const QHash<QString, Family>& families = doc.families();
 
         // Collect and sort families by name
         QList<std::pair<QString, QString>> sortedFamilies;  // (display name, family ID)
@@ -490,7 +492,41 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
             return;
         }
 
-        beginInsertRows(index, insertRow, insertRow + 3);  // Max 4 items
+        // Check for address availability
+        QString familyId = doc.familyIdForPerson(node->id);
+        const QHash<QString, Family>& families = doc.families();
+        bool hasAddress = false;
+        if (!familyId.isEmpty() && families.contains(familyId))
+        {
+            hasAddress = !families[familyId].address().isEmpty();
+        }
+
+        // Count actual items to insert
+        int itemCount = 0;
+        if (!person->phone().isEmpty())
+        {
+            itemCount++;
+        }
+        if (!person->altPhone().isEmpty())
+        {
+            itemCount++;
+        }
+        if (!person->email().isEmpty())
+        {
+            itemCount++;
+        }
+        if (hasAddress)
+        {
+            itemCount++;
+        }
+
+        if (itemCount == 0)
+        {
+            node->contactsLoaded = true;
+            return;
+        }
+
+        beginInsertRows(index, insertRow, insertRow + itemCount - 1);
 
         // Phone
         if (!person->phone().isEmpty())
@@ -526,23 +562,15 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
         }
 
         // Address (from family)
-        QString familyId = doc.familyIdForPerson(node->id);
-        if (!familyId.isEmpty())
+        if (hasAddress)
         {
-            const auto& families = doc.families();
-            if (families.contains(familyId))
-            {
-                const Family& family = families[familyId];
-                if (!family.address().isEmpty())
-                {
-                    TreeNode* addrNode = new TreeNode();
-                    addrNode->type = NodeType::ContactDetail;
-                    addrNode->displayText = QString::fromUtf8("\xf0\x9f\x93\x8d ") + family.address().full();
-                    addrNode->secondaryId = node->id;
-                    addrNode->parent = node;
-                    node->children.append(addrNode);
-                }
-            }
+            const Family& family = families[familyId];
+            TreeNode* addrNode = new TreeNode();
+            addrNode->type = NodeType::ContactDetail;
+            addrNode->displayText = QString::fromUtf8("\xf0\x9f\x93\x8d ") + family.address().full();
+            addrNode->secondaryId = node->id;
+            addrNode->parent = node;
+            node->children.append(addrNode);
         }
 
         endInsertRows();
@@ -550,7 +578,7 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
     else if (node->type == NodeType::MinisteredFamily)
     {
         // Family contact info
-        const auto& families = doc.families();
+        const QHash<QString, Family>& families = doc.families();
         if (!families.contains(node->id))
         {
             node->contactsLoaded = true;
@@ -559,20 +587,46 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
 
         const Family& family = families[node->id];
 
-        beginInsertRows(index, insertRow, insertRow + 1);  // Max 2 items
-
-        // Find head of household for phone
+        // Count actual items to insert
+        int itemCount = 0;
+        bool hasParentPhone = false;
         for (const Person& member : family.members())
         {
             if (member.isParent() && !member.phone().isEmpty())
             {
-                TreeNode* phoneNode = new TreeNode();
-                phoneNode->type = NodeType::ContactDetail;
-                phoneNode->displayText = QString::fromUtf8("\xf0\x9f\x93\x9e ") + member.phone();
-                phoneNode->secondaryId = node->id;
-                phoneNode->parent = node;
-                node->children.append(phoneNode);
-                break;  // Only show first parent's phone
+                hasParentPhone = true;
+                itemCount++;
+                break;
+            }
+        }
+        if (!family.address().isEmpty())
+        {
+            itemCount++;
+        }
+
+        if (itemCount == 0)
+        {
+            node->contactsLoaded = true;
+            return;
+        }
+
+        beginInsertRows(index, insertRow, insertRow + itemCount - 1);
+
+        // Find head of household for phone
+        if (hasParentPhone)
+        {
+            for (const Person& member : family.members())
+            {
+                if (member.isParent() && !member.phone().isEmpty())
+                {
+                    TreeNode* phoneNode = new TreeNode();
+                    phoneNode->type = NodeType::ContactDetail;
+                    phoneNode->displayText = QString::fromUtf8("\xf0\x9f\x93\x9e ") + member.phone();
+                    phoneNode->secondaryId = node->id;
+                    phoneNode->parent = node;
+                    node->children.append(phoneNode);
+                    break;
+                }
             }
         }
 
