@@ -2,14 +2,13 @@
 #include "WardListDialog.h"
 #include "DocumentManager.h"
 #include "Document.h"
-#include "DocumentChange.h"
 #include "EmergencyResource.h"
+#include "EmergencyResourceModel.h"
 #include "Person.h"
 #include "Phone.h"
-#include "Family.h"
 #include "EmergencyResourceCommands.h"
 
-#include <QTreeWidget>
+#include <QTreeView>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QPushButton>
@@ -21,6 +20,7 @@ EmergencyResourceView::EmergencyResourceView(DocumentManager* documentManager, R
     : QWidget(parent)
     , m_documentManager(documentManager)
     , m_area(area)
+    , m_model(nullptr)
     , m_tree(nullptr)
     , m_addButton(nullptr)
     , m_editButton(nullptr)
@@ -44,13 +44,18 @@ EmergencyResourceView::EmergencyResourceView(DocumentManager* documentManager, R
 
     layout->addLayout(toolbar);
 
-    // Tree
-    m_tree = new QTreeWidget();
+    // Create model
+    m_model = new EmergencyResourceModel(m_documentManager, m_area, this);
+
+    // Create tree view
+    m_tree = new QTreeView();
     m_tree->setHeaderHidden(true);
     m_tree->setRootIsDecorated(true);
     m_tree->setSelectionMode(QAbstractItemView::SingleSelection);
     m_tree->setContextMenuPolicy(Qt::CustomContextMenu);
     m_tree->setIndentation(16);
+    m_tree->setModel(m_model);
+    m_tree->expandToDepth(0);  // Expand only top-level (resources)
     layout->addWidget(m_tree);
 
     // Connections
@@ -58,152 +63,38 @@ EmergencyResourceView::EmergencyResourceView(DocumentManager* documentManager, R
     connect(m_editButton, &QPushButton::clicked, this, &EmergencyResourceView::editResource);
     connect(m_deleteButton, &QPushButton::clicked, this, &EmergencyResourceView::deleteResource);
 
-    connect(m_tree, &QTreeWidget::itemDoubleClicked,
-            this, &EmergencyResourceView::onTreeItemDoubleClicked);
-    connect(m_tree, &QTreeWidget::customContextMenuRequested,
-            this, &EmergencyResourceView::onContextMenu);
-    connect(m_tree, &QTreeWidget::itemSelectionChanged,
+    connect(m_tree->selectionModel(), &QItemSelectionModel::currentChanged,
             this, &EmergencyResourceView::onSelectionChanged);
-    connect(m_documentManager, &DocumentManager::documentChanged,
-            this, &EmergencyResourceView::onDocumentChanged);
+    connect(m_tree, &QTreeView::doubleClicked,
+            this, &EmergencyResourceView::onTreeDoubleClicked);
+    connect(m_tree, &QTreeView::customContextMenuRequested,
+            this, &EmergencyResourceView::onContextMenu);
 
-    rebuildTree();
+    // Expand top-level items when model is reset
+    connect(m_model, &QAbstractItemModel::modelReset, this, [this]() { m_tree->expandToDepth(0); });
+
     updateButtonStates();
 }
 
-void EmergencyResourceView::rebuildTree()
+void EmergencyResourceView::onSelectionChanged(const QModelIndex& current, const QModelIndex& previous)
 {
-    m_tree->clear();
-
-    const Document& doc = m_documentManager->document();
-    QList<EmergencyResource> resources = doc.emergencyResourcesByArea(m_area);
-
-    // Sort by name
-    std::sort(resources.begin(), resources.end(),
-              [](const EmergencyResource& a, const EmergencyResource& b)
-              {
-                  return a.name().toLower() < b.name().toLower();
-              });
-
-    for (const EmergencyResource& resource : resources)
-    {
-        QTreeWidgetItem* resourceItem = new QTreeWidgetItem();
-        resourceItem->setText(0, QString("%1 (%2)").arg(resource.name()).arg(resource.personIds().size()));
-        resourceItem->setData(0, IdRole, resource.id());
-        resourceItem->setData(0, TypeRole, static_cast<int>(ItemType::EmergencyResource));
-
-        // Bold if selected
-        if (m_selectedResourceId == resource.id())
-        {
-            QFont font = resourceItem->font(0);
-            font.setBold(true);
-            resourceItem->setFont(0, font);
-        }
-
-        // Get persons assigned to this resource, sorted by display name
-        QList<QPair<QString, QString>> persons;  // (personId, displayName)
-        for (const QString& personId : resource.personIds())
-        {
-            std::optional<Person> person = doc.findPersonById(personId);
-            if (person)
-            {
-                persons.append({personId, person->displayName()});
-            }
-        }
-        std::sort(persons.begin(), persons.end(),
-                  [](const auto& a, const auto& b)
-                  {
-                      return a.second.toLower() < b.second.toLower();
-                  });
-
-        // Add person items
-        for (const auto& [personId, displayName] : persons)
-        {
-            QTreeWidgetItem* personItem = new QTreeWidgetItem(resourceItem);
-            personItem->setText(0, displayName);
-            personItem->setData(0, IdRole, personId);
-            personItem->setData(0, TypeRole, static_cast<int>(ItemType::Person));
-            personItem->setData(0, SecondaryIdRole, resource.id());
-
-            // Bold if selected
-            if (m_selectedPersonId == personId)
-            {
-                QFont font = personItem->font(0);
-                font.setBold(true);
-                personItem->setFont(0, font);
-            }
-        }
-
-        m_tree->addTopLevelItem(resourceItem);
-        resourceItem->setExpanded(true);
-    }
+    Q_UNUSED(current)
+    Q_UNUSED(previous)
+    updateButtonStates();
+    emit highlightChanged();
 }
 
-void EmergencyResourceView::updateButtonStates()
+void EmergencyResourceView::onTreeDoubleClicked(const QModelIndex& index)
 {
-    bool hasResourceSelected = !m_selectedResourceId.isEmpty();
-    m_editButton->setEnabled(hasResourceSelected);
-    m_deleteButton->setEnabled(hasResourceSelected);
-}
-
-void EmergencyResourceView::validateSelections()
-{
-    const Document& doc = m_documentManager->document();
-
-    // Clear resource selection if it no longer exists
-    if (!m_selectedResourceId.isEmpty()
-        && !doc.findEmergencyResourceById(m_selectedResourceId))
-    {
-        m_selectedResourceId.clear();
-    }
-
-    // Clear person selection if they are no longer in the resource
-    if (!m_selectedPersonId.isEmpty())
-    {
-        bool valid = false;
-        if (!m_selectedResourceId.isEmpty())
-        {
-            std::optional<EmergencyResource> resourceOpt = doc.findEmergencyResourceById(m_selectedResourceId);
-            if (resourceOpt && resourceOpt->personIds().contains(m_selectedPersonId))
-            {
-                valid = true;
-            }
-        }
-        if (!valid)
-        {
-            m_selectedPersonId.clear();
-        }
-    }
-}
-
-void EmergencyResourceView::onDocumentChanged(const DocumentChange& change)
-{
-    switch (change.scope)
-    {
-    case ChangeScope::Full:
-    case ChangeScope::EmergencyResource:
-    case ChangeScope::Family:  // Person names are in Family
-        validateSelections();
-        rebuildTree();
-        updateButtonStates();
-        emit highlightChanged();
-        break;
-    default:
-        break;
-    }
-}
-
-void EmergencyResourceView::onTreeItemDoubleClicked(QTreeWidgetItem* item, int /*column*/)
-{
-    ItemType type = static_cast<ItemType>(item->data(0, TypeRole).toInt());
+    EmergencyResourceModel::ItemType type = m_model->itemTypeAt(index);
 
     switch (type)
     {
-    case ItemType::EmergencyResource:
+    case EmergencyResourceModel::ItemType::Resource:
         editResource();
         break;
 
-    case ItemType::Person:
+    case EmergencyResourceModel::ItemType::Person:
         // Could open person details in future
         break;
     }
@@ -211,23 +102,23 @@ void EmergencyResourceView::onTreeItemDoubleClicked(QTreeWidgetItem* item, int /
 
 void EmergencyResourceView::onContextMenu(const QPoint& pos)
 {
-    QTreeWidgetItem* item = m_tree->itemAt(pos);
+    QModelIndex index = m_tree->indexAt(pos);
 
     QMenu menu;
 
-    if (!item)
+    if (!index.isValid())
     {
         // No item - show add option
         menu.addAction(tr("Add Resource..."), this, &EmergencyResourceView::addResource);
     }
     else
     {
-        ItemType type = static_cast<ItemType>(item->data(0, TypeRole).toInt());
-        QString id = item->data(0, IdRole).toString();
+        EmergencyResourceModel::ItemType type = m_model->itemTypeAt(index);
+        QString id = m_model->idAt(index);
 
         switch (type)
         {
-        case ItemType::EmergencyResource:
+        case EmergencyResourceModel::ItemType::Resource:
             {
                 menu.addAction(tr("Select People..."), this, [this, id]()
                 {
@@ -239,7 +130,7 @@ void EmergencyResourceView::onContextMenu(const QPoint& pos)
             }
             break;
 
-        case ItemType::Person:
+        case EmergencyResourceModel::ItemType::Person:
             {
                 // Show contact info (disabled) if available
                 const Document& doc = m_documentManager->document();
@@ -264,7 +155,7 @@ void EmergencyResourceView::onContextMenu(const QPoint& pos)
                     }
                 }
 
-                QString resourceId = item->data(0, SecondaryIdRole).toString();
+                QString resourceId = m_model->resourceIdAt(index);
                 menu.addAction(tr("Remove"), this, [this, resourceId, id]()
                 {
                     removePersonFromResource(resourceId, id);
@@ -280,87 +171,70 @@ void EmergencyResourceView::onContextMenu(const QPoint& pos)
     }
 }
 
-void EmergencyResourceView::onSelectionChanged()
+void EmergencyResourceView::updateButtonStates()
 {
-    // Un-bold all items
-    for (int i = 0; i < m_tree->topLevelItemCount(); ++i)
-    {
-        QTreeWidgetItem* resourceItem = m_tree->topLevelItem(i);
-        QFont resourceFont = resourceItem->font(0);
-        resourceFont.setBold(false);
-        resourceItem->setFont(0, resourceFont);
+    QString resourceId = selectedResourceId();
+    bool hasResourceSelected = !resourceId.isEmpty();
+    m_editButton->setEnabled(hasResourceSelected);
+    m_deleteButton->setEnabled(hasResourceSelected);
+}
 
-        for (int j = 0; j < resourceItem->childCount(); ++j)
-        {
-            QTreeWidgetItem* personItem = resourceItem->child(j);
-            QFont personFont = personItem->font(0);
-            personFont.setBold(false);
-            personItem->setFont(0, personFont);
-        }
+QString EmergencyResourceView::selectedResourceId() const
+{
+    QModelIndex current = m_tree->currentIndex();
+    if (!current.isValid())
+    {
+        return QString();
     }
 
-    // Sync selection state from tree
-    QList<QTreeWidgetItem*> selected = m_tree->selectedItems();
-    m_selectedResourceId.clear();
-    m_selectedPersonId.clear();
-
-    if (!selected.isEmpty())
-    {
-        QTreeWidgetItem* item = selected.first();
-        ItemType type = static_cast<ItemType>(item->data(0, TypeRole).toInt());
-        QString id = item->data(0, IdRole).toString();
-
-        switch (type)
-        {
-        case ItemType::EmergencyResource:
-            m_selectedResourceId = id;
-            break;
-
-        case ItemType::Person:
-            m_selectedPersonId = id;
-            m_selectedResourceId = item->data(0, SecondaryIdRole).toString();
-            break;
-        }
-
-        // Bold the selected item
-        QFont font = item->font(0);
-        font.setBold(true);
-        item->setFont(0, font);
-    }
-
-    updateButtonStates();
-    emit highlightChanged();
+    // For both Resource and Person items, resourceIdAt returns the resource ID
+    return m_model->resourceIdAt(current);
 }
 
 HighlightInfo EmergencyResourceView::highlightInfo() const
 {
     HighlightInfo info;
-    const Document& doc = m_documentManager->document();
 
-    if (!m_selectedPersonId.isEmpty())
+    QModelIndex current = m_tree->currentIndex();
+    if (!current.isValid())
     {
-        // Single person selected - highlight their family
-        QString familyId = doc.familyIdForPerson(m_selectedPersonId);
-        if (!familyId.isEmpty())
-        {
-            info.highlightedFamilyIds.insert(familyId);
-        }
+        return info;
     }
-    else if (!m_selectedResourceId.isEmpty())
+
+    const Document& doc = m_documentManager->document();
+    EmergencyResourceModel::ItemType type = m_model->itemTypeAt(current);
+    QString id = m_model->idAt(current);
+
+    switch (type)
     {
-        // Resource selected - highlight all families with people having this resource
-        std::optional<EmergencyResource> resourceOpt = doc.findEmergencyResourceById(m_selectedResourceId);
-        if (resourceOpt)
+    case EmergencyResourceModel::ItemType::Person:
         {
-            for (const QString& personId : resourceOpt->personIds())
+            // Single person selected - highlight their family
+            QString familyId = doc.familyIdForPerson(id);
+            if (!familyId.isEmpty())
             {
-                QString familyId = doc.familyIdForPerson(personId);
-                if (!familyId.isEmpty())
+                info.highlightedFamilyIds.insert(familyId);
+            }
+        }
+        break;
+
+    case EmergencyResourceModel::ItemType::Resource:
+        {
+            // Resource selected - highlight all families with people having this resource
+            std::optional<EmergencyResource> resourceOpt = doc.findEmergencyResourceById(id);
+            if (resourceOpt)
+            {
+                for (const QString& personId : resourceOpt->personIds())
                 {
-                    info.highlightedFamilyIds.insert(familyId);
+                    QString familyId = doc.familyIdForPerson(personId);
+                    if (!familyId.isEmpty())
+                    {
+                        info.highlightedFamilyIds.insert(familyId);
+                    }
                 }
             }
         }
+        break;
     }
 
     return info;
@@ -388,13 +262,14 @@ void EmergencyResourceView::addResource()
 
 void EmergencyResourceView::editResource()
 {
-    if (m_selectedResourceId.isEmpty())
+    QString resourceId = selectedResourceId();
+    if (resourceId.isEmpty())
     {
         return;
     }
 
     const Document& doc = m_documentManager->document();
-    std::optional<EmergencyResource> resourceOpt = doc.findEmergencyResourceById(m_selectedResourceId);
+    std::optional<EmergencyResource> resourceOpt = doc.findEmergencyResourceById(resourceId);
     if (!resourceOpt)
     {
         return;
@@ -415,13 +290,14 @@ void EmergencyResourceView::editResource()
 
 void EmergencyResourceView::deleteResource()
 {
-    if (m_selectedResourceId.isEmpty())
+    QString resourceId = selectedResourceId();
+    if (resourceId.isEmpty())
     {
         return;
     }
 
     const Document& doc = m_documentManager->document();
-    std::optional<EmergencyResource> resourceOpt = doc.findEmergencyResourceById(m_selectedResourceId);
+    std::optional<EmergencyResource> resourceOpt = doc.findEmergencyResourceById(resourceId);
     if (!resourceOpt)
     {
         return;
