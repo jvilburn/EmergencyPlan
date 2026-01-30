@@ -135,8 +135,8 @@ void MinisteringView::onSelectionChanged(const QModelIndex& current, const QMode
 {
     Q_UNUSED(previous)
 
-    QTreeView* tree = qobject_cast<QTreeView*>(sender()->parent());
-    bool isEQ = (tree == m_eqTree);
+    QItemSelectionModel* selModel = qobject_cast<QItemSelectionModel*>(sender());
+    bool isEQ = (selModel == m_eqTree->selectionModel());
     MinisteringModel* model = isEQ ? m_eqModel : m_rsModel;
 
     QString& selectedId = isEQ ? m_eqSelectedId : m_rsSelectedId;
@@ -170,8 +170,8 @@ void MinisteringView::onUnassignedSelectionChanged(const QModelIndex& current, c
 {
     Q_UNUSED(previous)
 
-    QTreeView* tree = qobject_cast<QTreeView*>(sender()->parent());
-    bool isEQ = (tree == m_eqUnassignedTree);
+    QItemSelectionModel* selModel = qobject_cast<QItemSelectionModel*>(sender());
+    bool isEQ = (selModel == m_eqUnassignedTree->selectionModel());
     UnassignedMinisteringModel* model = isEQ ? m_eqUnassignedModel : m_rsUnassignedModel;
 
     QString& selectedId = isEQ ? m_eqSelectedId : m_rsSelectedId;
