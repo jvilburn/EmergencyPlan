@@ -5,52 +5,39 @@
 #include <QString>
 
 #include "DocumentChange.h"
+#include "MinisteringModel.h"  // For NodeType enum
 
 class DocumentManager;
 
-/// Model for ministering tree (multi-level: District → Companionship → Section → Person).
+/// Model for unassigned ministering tree (2-level: Header → Person/Family).
 ///
 /// Structure:
-/// - District (top level) - shows "Name (N families/sisters)"
-/// - Companionship - shows "Minister1, Minister2 (N)"
-/// - SectionHeader - "Ministers" or "Families"/"Sisters" (italic)
-/// - Minister/MinisteredFamily/MinisteredSister - individual person/family
+/// - UnassignedHeader (top level) - shows "Unassigned (N families/sisters)"
+/// - MinisteredFamily (EQ) or MinisteredSister (RS) - individual items
 /// - ContactDetail - phone, email, address (loaded on demand)
 ///
-/// Contact details are loaded lazily when a person/family node is expanded.
-/// This model rebuilds on Full, EqDistrict, EqGroup, RsDistrict, RsGroup, Family scopes.
-class MinisteringModel : public QAbstractItemModel
+/// This model rebuilds on Full, EqGroup, RsGroup, Family scopes.
+class UnassignedMinisteringModel : public QAbstractItemModel
 {
     Q_OBJECT
 
 public:
-    /// Node types in the tree
-    enum class NodeType
-    {
-        Invalid,  // Returned for invalid indexes
-        District,
-        Companionship,
-        SectionHeader,
-        Minister,
-        MinisteredFamily,
-        MinisteredSister,
-        ContactDetail
-    };
-    Q_ENUM(NodeType)
+    // Reuse NodeType from MinisteringModel
+    using NodeType = MinisteringModel::NodeType;
 
     /// Custom roles for accessing item data
     enum Roles
     {
         IdRole = Qt::UserRole + 1,
         NodeTypeRole,
-        SecondaryIdRole  // For ContactDetail: the parent person/family ID
+        SecondaryIdRole
     };
     Q_ENUM(Roles)
 
-    explicit MinisteringModel(DocumentManager* documentManager,
-                               bool isEQ,
-                               QObject* parent = nullptr);
-    ~MinisteringModel() override;
+    explicit UnassignedMinisteringModel(DocumentManager* documentManager,
+                                         bool isEQ,
+                                         QObject* parent = nullptr);
+    ~UnassignedMinisteringModel() override;
 
     // QAbstractItemModel interface
     QModelIndex index(int row, int column, const QModelIndex& parent = {}) const override;
@@ -63,11 +50,13 @@ public:
     QString idAt(const QModelIndex& index) const;
     /// Returns the node type at the given index, or NodeType::Invalid for invalid indexes.
     NodeType nodeTypeAt(const QModelIndex& index) const;
-    QString companionshipIdAt(const QModelIndex& index) const;
 
     // Lazy loading for contact details
     void loadContactDetails(const QModelIndex& index);
     bool hasContactsLoaded(const QModelIndex& index) const;
+
+    // Check if there are any unassigned items
+    bool hasUnassigned() const;
 
 private slots:
     void onDocumentChanged(const DocumentChange& change);
@@ -83,7 +72,7 @@ private:
         NodeType type;
         QString id;
         QString displayText;
-        QString secondaryId;  // For ContactDetail: person/family ID
+        QString secondaryId;
         TreeNode* parent = nullptr;
         QList<TreeNode*> children;
         bool contactsLoaded = false;
@@ -95,10 +84,8 @@ private:
     };
 
     TreeNode* nodeFromIndex(const QModelIndex& index) const;
-    void addMinistersSection(TreeNode* companionshipNode, const QString& groupId);
-    void addMinisteredSection(TreeNode* companionshipNode, const QString& groupId);
 
-    QList<TreeNode*> m_districtNodes;  // Top-level nodes (owned)
+    TreeNode* m_headerNode = nullptr;  // Single top-level node (owned)
     DocumentManager* m_documentManager;
     bool m_isEQ;
 };

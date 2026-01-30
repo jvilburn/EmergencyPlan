@@ -440,7 +440,7 @@ MinisteringModel::NodeType MinisteringModel::nodeTypeAt(const QModelIndex& index
     {
         return node->type;
     }
-    return NodeType::District;
+    return NodeType::Invalid;
 }
 
 QString MinisteringModel::companionshipIdAt(const QModelIndex& index) const
