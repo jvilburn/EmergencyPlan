@@ -60,7 +60,8 @@ private:
     QPushButton* m_editButton;
     QPushButton* m_deleteButton;
 
-    // Context menu targets
+    // Context menu targets - set in onContextMenu(), used by selectPeopleFromContextMenu()
+    // and removePersonFromContextMenu()
     QString m_contextResourceId;
     QString m_contextPersonId;
 };

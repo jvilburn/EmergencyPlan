@@ -25,6 +25,8 @@ EmergencyResourceView::EmergencyResourceView(DocumentManager* documentManager, R
     , m_addButton(nullptr)
     , m_editButton(nullptr)
     , m_deleteButton(nullptr)
+    , m_contextResourceId()
+    , m_contextPersonId()
 {
     QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(4, 4, 4, 4);
@@ -174,12 +176,18 @@ void EmergencyResourceView::expandResources()
 
 void EmergencyResourceView::selectPeopleFromContextMenu()
 {
-    showSelectPeopleDialog(m_contextResourceId);
+    QString resourceId = m_contextResourceId;
+    m_contextResourceId.clear();
+    showSelectPeopleDialog(resourceId);
 }
 
 void EmergencyResourceView::removePersonFromContextMenu()
 {
-    removePersonFromResource(m_contextResourceId, m_contextPersonId);
+    QString resourceId = m_contextResourceId;
+    QString personId = m_contextPersonId;
+    m_contextResourceId.clear();
+    m_contextPersonId.clear();
+    removePersonFromResource(resourceId, personId);
 }
 
 void EmergencyResourceView::updateButtonStates()
