@@ -338,7 +338,7 @@ QString UnassignedMinisteringModel::idAt(const QModelIndex& index) const
     return QString();
 }
 
-UnassignedMinisteringModel::ItemType UnassignedMinisteringModel::nodeTypeAt(const QModelIndex& index) const
+ItemType UnassignedMinisteringModel::itemTypeAt(const QModelIndex& index) const
 {
     TreeNode* node = nodeFromIndex(index);
     if (node)

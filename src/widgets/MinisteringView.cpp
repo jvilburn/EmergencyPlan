@@ -174,7 +174,7 @@ void MinisteringView::onUnassignedSelectionChanged(const QModelIndex& current, c
         return;
     }
 
-    ItemType type = model->nodeTypeAt(current);
+    ItemType type = model->itemTypeAt(current);
 
     // Contact details are not interactive
     if (type == ItemType::ContactDetail)
@@ -227,7 +227,7 @@ void MinisteringView::onUnassignedTreeExpanded(const QModelIndex& index)
     bool isEQ = (tree == m_eqUnassignedTree);
     UnassignedMinisteringModel* model = isEQ ? m_eqUnassignedModel : m_rsUnassignedModel;
 
-    ItemType type = model->nodeTypeAt(index);
+    ItemType type = model->itemTypeAt(index);
 
     // Resize tree when header is expanded
     if (type == ItemType::UnassignedHeader)
@@ -247,7 +247,7 @@ void MinisteringView::onUnassignedTreeCollapsed(const QModelIndex& index)
     bool isEQ = (tree == m_eqUnassignedTree);
     UnassignedMinisteringModel* model = isEQ ? m_eqUnassignedModel : m_rsUnassignedModel;
 
-    ItemType type = model->nodeTypeAt(index);
+    ItemType type = model->itemTypeAt(index);
 
     // Shrink tree when header is collapsed
     if (type == ItemType::UnassignedHeader)

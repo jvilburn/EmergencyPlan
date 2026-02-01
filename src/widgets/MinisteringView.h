@@ -1,6 +1,7 @@
 #pragma once
 
 #include "FamilyMarkerProvider.h"
+#include "ItemType.h"
 #include "MinisteringModel.h"
 
 #include <QWidget>
@@ -43,8 +44,6 @@ private slots:
     void onUnassignedModelReset();
 
 private:
-    using ItemType = MinisteringModel::ItemType;
-
     void setupUi();
     void updateUnassignedVisibility();
     QTreeView* createTreeView(bool isUnassigned);
