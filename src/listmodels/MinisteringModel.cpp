@@ -387,6 +387,30 @@ int MinisteringModel::columnCount(const QModelIndex& parent) const
     return 1;
 }
 
+bool MinisteringModel::hasChildren(const QModelIndex& parent) const
+{
+    if (!parent.isValid())
+    {
+        return !m_districtNodes.isEmpty();
+    }
+
+    TreeNode* node = nodeFromIndex(parent);
+    if (!node)
+    {
+        return false;
+    }
+
+    // Person/family nodes can have contact children (lazy loaded)
+    if (node->type == NodeType::Minister
+        || node->type == NodeType::MinisteredFamily
+        || node->type == NodeType::MinisteredSister)
+    {
+        return true;
+    }
+
+    return !node->children.isEmpty();
+}
+
 QVariant MinisteringModel::data(const QModelIndex& index, int role) const
 {
     TreeNode* node = nodeFromIndex(index);
