@@ -92,32 +92,32 @@ void EmergencyResourceView::onSelectionChanged(const QModelIndex& current, const
 
 void EmergencyResourceView::onTreeDoubleClicked(const QModelIndex& index)
 {
-    EmergencyResourceModel::ItemType type = m_model->itemTypeAt(index);
+    ItemType type = m_model->itemTypeAt(index);
 
     switch (type)
     {
-    case EmergencyResourceModel::ItemType::Resource:
+    case ItemType::Resource:
         editResource();
         break;
 
-    case EmergencyResourceModel::ItemType::Person:
+    case ItemType::Person:
         // Could open person details in future
         break;
 
-    case EmergencyResourceModel::ItemType::ContactDetail:
+    case ItemType::ContactDetail:
         // Contact details are read-only display nodes
         break;
 
-    case EmergencyResourceModel::ItemType::Invalid:
+    case ItemType::Invalid:
         break;
     }
 }
 
 void EmergencyResourceView::onTreeExpanded(const QModelIndex& index)
 {
-    EmergencyResourceModel::ItemType type = m_model->itemTypeAt(index);
+    ItemType type = m_model->itemTypeAt(index);
 
-    if (type == EmergencyResourceModel::ItemType::Person)
+    if (type == ItemType::Person)
     {
         m_model->loadContactDetails(index);
     }
@@ -136,12 +136,12 @@ void EmergencyResourceView::onContextMenu(const QPoint& pos)
     }
     else
     {
-        EmergencyResourceModel::ItemType type = m_model->itemTypeAt(index);
+        ItemType type = m_model->itemTypeAt(index);
         QString id = m_model->idAt(index);
 
         switch (type)
         {
-        case EmergencyResourceModel::ItemType::Resource:
+        case ItemType::Resource:
             {
                 m_contextResourceId = id;
                 menu.addAction(tr("Select People..."), this, &EmergencyResourceView::selectPeopleFromContextMenu);
@@ -151,7 +151,7 @@ void EmergencyResourceView::onContextMenu(const QPoint& pos)
             }
             break;
 
-        case EmergencyResourceModel::ItemType::Person:
+        case ItemType::Person:
             {
                 // Show contact info (disabled) if available
                 const Document& doc = m_documentManager->document();
@@ -182,11 +182,11 @@ void EmergencyResourceView::onContextMenu(const QPoint& pos)
             }
             break;
 
-        case EmergencyResourceModel::ItemType::ContactDetail:
+        case ItemType::ContactDetail:
             // Contact details are read-only display nodes
             break;
 
-        case EmergencyResourceModel::ItemType::Invalid:
+        case ItemType::Invalid:
             break;
         }
     }
@@ -254,12 +254,12 @@ HighlightInfo EmergencyResourceView::highlightInfo() const
     }
 
     const Document& doc = m_documentManager->document();
-    EmergencyResourceModel::ItemType type = m_model->itemTypeAt(current);
+    ItemType type = m_model->itemTypeAt(current);
     QString id = m_model->idAt(current);
 
     switch (type)
     {
-    case EmergencyResourceModel::ItemType::Person:
+    case ItemType::Person:
         {
             // Single person selected - highlight their family
             QString familyId = doc.familyIdForPerson(id);
@@ -270,7 +270,7 @@ HighlightInfo EmergencyResourceView::highlightInfo() const
         }
         break;
 
-    case EmergencyResourceModel::ItemType::Resource:
+    case ItemType::Resource:
         {
             // Resource selected - highlight all families with people having this resource
             std::optional<EmergencyResource> resourceOpt = doc.findEmergencyResourceById(id);
@@ -288,7 +288,7 @@ HighlightInfo EmergencyResourceView::highlightInfo() const
         }
         break;
 
-    case EmergencyResourceModel::ItemType::ContactDetail:
+    case ItemType::ContactDetail:
         {
             // Contact detail selected - highlight parent person's family
             QString personId = m_model->idAt(current);
@@ -300,7 +300,7 @@ HighlightInfo EmergencyResourceView::highlightInfo() const
         }
         break;
 
-    case EmergencyResourceModel::ItemType::Invalid:
+    case ItemType::Invalid:
         break;
     }
 

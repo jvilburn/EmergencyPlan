@@ -262,7 +262,7 @@ QString EmergencyResourceModel::idAt(const QModelIndex& index) const
     return QString();
 }
 
-EmergencyResourceModel::ItemType EmergencyResourceModel::itemTypeAt(const QModelIndex& index) const
+ItemType EmergencyResourceModel::itemTypeAt(const QModelIndex& index) const
 {
     TreeNode* node = nodeFromIndex(index);
     if (node)

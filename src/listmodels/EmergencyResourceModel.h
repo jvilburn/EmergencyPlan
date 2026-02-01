@@ -5,6 +5,7 @@
 #include <QString>
 
 #include "DocumentChange.h"
+#include "ItemType.h"
 #include "ResponseArea.h"
 
 class DocumentManager;
@@ -22,16 +23,6 @@ class EmergencyResourceModel : public QAbstractItemModel
     Q_OBJECT
 
 public:
-    /// Node types in the tree
-    enum class ItemType
-    {
-        Invalid,
-        Resource,
-        Person,
-        ContactDetail
-    };
-    Q_ENUM(ItemType)
-
     /// Custom roles for accessing item data
     enum Roles
     {
