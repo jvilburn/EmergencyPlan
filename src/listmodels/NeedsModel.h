@@ -5,6 +5,7 @@
 #include <QString>
 
 #include "DocumentChange.h"
+#include "ItemType.h"
 
 class DocumentManager;
 
@@ -19,14 +20,6 @@ class NeedsModel : public QAbstractItemModel
     Q_OBJECT
 
 public:
-    /// Node types in the tree
-    enum class ItemType
-    {
-        Invalid,
-        Person,
-        ContactDetail
-    };
-    Q_ENUM(ItemType)
 
     // Custom roles
     enum Roles
@@ -51,7 +44,7 @@ public:
     void loadContactDetails(const QModelIndex& index);
 
     // View-specific accessors
-    QString personIdAt(const QModelIndex& index) const;
+    QString idAt(const QModelIndex& index) const;
     QString familyIdAt(const QModelIndex& index) const;
     QModelIndex indexForPersonId(const QString& personId) const;
     ItemType itemTypeAt(const QModelIndex& index) const;

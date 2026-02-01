@@ -225,7 +225,7 @@ QVariant NeedsModel::data(const QModelIndex& index, int role) const
     }
 }
 
-QString NeedsModel::personIdAt(const QModelIndex& index) const
+QString NeedsModel::idAt(const QModelIndex& index) const
 {
     TreeNode* node = nodeFromIndex(index);
     if (!node)

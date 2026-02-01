@@ -6,6 +6,7 @@
 #include "Phone.h"
 #include "Family.h"
 #include "FamilyCommands.h"
+#include "ItemType.h"
 #include "NeedsModel.h"
 
 #include <QTreeView>
@@ -97,9 +98,9 @@ void NeedsSubView::onSelectionChanged(const QModelIndex& current, const QModelIn
 
 void NeedsSubView::onTreeExpanded(const QModelIndex& index)
 {
-    NeedsModel::ItemType type = m_model->itemTypeAt(index);
+    ItemType type = m_model->itemTypeAt(index);
 
-    if (type == NeedsModel::ItemType::Person)
+    if (type == ItemType::Person)
     {
         m_model->loadContactDetails(index);
     }
@@ -113,7 +114,7 @@ void NeedsSubView::onContextMenu(const QPoint& pos)
         return;  // No context menu on empty space (use the Add button instead)
     }
 
-    QString personId = m_model->personIdAt(index);
+    QString personId = m_model->idAt(index);
     QString familyId = m_model->familyIdAt(index);
 
     QMenu menu;
