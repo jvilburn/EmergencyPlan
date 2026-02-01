@@ -96,7 +96,7 @@ void UnassignedMinisteringModel::rebuild()
         {
             // Create header
             m_headerNode = new TreeNode();
-            m_headerNode->type = NodeType::UnassignedHeader;
+            m_headerNode->type = ItemType::UnassignedHeader;
             m_headerNode->id = "unassigned";
             m_headerNode->displayText = tr("Unassigned (%1 families)").arg(unassignedIds.size());
 
@@ -118,7 +118,7 @@ void UnassignedMinisteringModel::rebuild()
             for (const QPair<QString, QString>& familyData : sortedFamilies)
             {
                 TreeNode* familyNode = new TreeNode();
-                familyNode->type = NodeType::MinisteredFamily;
+                familyNode->type = ItemType::MinisteredFamily;
                 familyNode->id = familyData.second;
                 familyNode->displayText = familyData.first;
                 familyNode->parent = m_headerNode;
@@ -155,7 +155,7 @@ void UnassignedMinisteringModel::rebuild()
         {
             // Create header
             m_headerNode = new TreeNode();
-            m_headerNode->type = NodeType::UnassignedHeader;
+            m_headerNode->type = ItemType::UnassignedHeader;
             m_headerNode->id = "unassigned";
             m_headerNode->displayText = tr("Unassigned (%1 sisters)").arg(unassignedIds.size());
 
@@ -177,7 +177,7 @@ void UnassignedMinisteringModel::rebuild()
             for (const QPair<QString, QString>& sisterData : sortedSisters)
             {
                 TreeNode* sisterNode = new TreeNode();
-                sisterNode->type = NodeType::MinisteredSister;
+                sisterNode->type = ItemType::MinisteredSister;
                 sisterNode->id = sisterData.second;
                 sisterNode->displayText = sisterData.first;
                 sisterNode->parent = m_headerNode;
@@ -292,8 +292,8 @@ bool UnassignedMinisteringModel::hasChildren(const QModelIndex& parent) const
     }
 
     // Family/sister nodes can have contact children (lazy loaded)
-    if (node->type == NodeType::MinisteredFamily
-        || node->type == NodeType::MinisteredSister)
+    if (node->type == ItemType::MinisteredFamily
+        || node->type == ItemType::MinisteredSister)
     {
         return true;
     }
@@ -338,14 +338,14 @@ QString UnassignedMinisteringModel::idAt(const QModelIndex& index) const
     return QString();
 }
 
-UnassignedMinisteringModel::NodeType UnassignedMinisteringModel::nodeTypeAt(const QModelIndex& index) const
+UnassignedMinisteringModel::ItemType UnassignedMinisteringModel::nodeTypeAt(const QModelIndex& index) const
 {
     TreeNode* node = nodeFromIndex(index);
     if (node)
     {
         return node->type;
     }
-    return NodeType::Invalid;
+    return ItemType::Invalid;
 }
 
 // Note: Similar logic exists in MinisteringModel::loadContactDetails().
@@ -359,7 +359,7 @@ void UnassignedMinisteringModel::loadContactDetails(const QModelIndex& index)
     }
 
     // Only load contacts for person/family nodes
-    if (node->type != NodeType::MinisteredFamily && node->type != NodeType::MinisteredSister)
+    if (node->type != ItemType::MinisteredFamily && node->type != ItemType::MinisteredSister)
     {
         return;
     }
@@ -367,7 +367,7 @@ void UnassignedMinisteringModel::loadContactDetails(const QModelIndex& index)
     const Document& doc = m_documentManager->document();
     int insertRow = node->children.size();
 
-    if (node->type == NodeType::MinisteredSister)
+    if (node->type == ItemType::MinisteredSister)
     {
         // Person contact info
         std::optional<Person> person = doc.findPersonById(node->id);
@@ -417,7 +417,7 @@ void UnassignedMinisteringModel::loadContactDetails(const QModelIndex& index)
         if (!person->phone().isEmpty())
         {
             TreeNode* phoneNode = new TreeNode();
-            phoneNode->type = NodeType::ContactDetail;
+            phoneNode->type = ItemType::ContactDetail;
             phoneNode->displayText = ContactIcons::Phone + person->phone();
             phoneNode->secondaryId = node->id;
             phoneNode->parent = node;
@@ -428,7 +428,7 @@ void UnassignedMinisteringModel::loadContactDetails(const QModelIndex& index)
         if (!person->altPhone().isEmpty())
         {
             TreeNode* altPhoneNode = new TreeNode();
-            altPhoneNode->type = NodeType::ContactDetail;
+            altPhoneNode->type = ItemType::ContactDetail;
             altPhoneNode->displayText = ContactIcons::Phone + person->altPhone() + tr(" (alt)");
             altPhoneNode->secondaryId = node->id;
             altPhoneNode->parent = node;
@@ -439,7 +439,7 @@ void UnassignedMinisteringModel::loadContactDetails(const QModelIndex& index)
         if (!person->email().isEmpty())
         {
             TreeNode* emailNode = new TreeNode();
-            emailNode->type = NodeType::ContactDetail;
+            emailNode->type = ItemType::ContactDetail;
             emailNode->displayText = ContactIcons::Email + person->email();
             emailNode->secondaryId = node->id;
             emailNode->parent = node;
@@ -451,7 +451,7 @@ void UnassignedMinisteringModel::loadContactDetails(const QModelIndex& index)
         {
             const Family& family = families[familyId];
             TreeNode* addrNode = new TreeNode();
-            addrNode->type = NodeType::ContactDetail;
+            addrNode->type = ItemType::ContactDetail;
             addrNode->displayText = ContactIcons::Address + family.address().full();
             addrNode->secondaryId = node->id;
             addrNode->parent = node;
@@ -460,7 +460,7 @@ void UnassignedMinisteringModel::loadContactDetails(const QModelIndex& index)
 
         endInsertRows();
     }
-    else if (node->type == NodeType::MinisteredFamily)
+    else if (node->type == ItemType::MinisteredFamily)
     {
         // Family contact info
         const QHash<QString, Family>& families = doc.families();
@@ -505,7 +505,7 @@ void UnassignedMinisteringModel::loadContactDetails(const QModelIndex& index)
                 if (member.isParent() && !member.phone().isEmpty())
                 {
                     TreeNode* phoneNode = new TreeNode();
-                    phoneNode->type = NodeType::ContactDetail;
+                    phoneNode->type = ItemType::ContactDetail;
                     phoneNode->displayText = ContactIcons::Phone + member.phone();
                     phoneNode->secondaryId = node->id;
                     phoneNode->parent = node;
@@ -519,7 +519,7 @@ void UnassignedMinisteringModel::loadContactDetails(const QModelIndex& index)
         if (!family.address().isEmpty())
         {
             TreeNode* addrNode = new TreeNode();
-            addrNode->type = NodeType::ContactDetail;
+            addrNode->type = ItemType::ContactDetail;
             addrNode->displayText = ContactIcons::Address + family.address().full();
             addrNode->secondaryId = node->id;
             addrNode->parent = node;
@@ -577,7 +577,7 @@ void UnassignedMinisteringModel::refreshFamilyDisplayText(const QString& familyI
         TreeNode* itemNode = m_headerNode->children[itemRow];
         bool needsUpdate = false;
 
-        if (itemNode->type == NodeType::MinisteredSister)
+        if (itemNode->type == ItemType::MinisteredSister)
         {
             // Person node - check if person is in updated family
             if (personIds.contains(itemNode->id))
@@ -590,7 +590,7 @@ void UnassignedMinisteringModel::refreshFamilyDisplayText(const QString& familyI
                 }
             }
         }
-        else if (itemNode->type == NodeType::MinisteredFamily)
+        else if (itemNode->type == ItemType::MinisteredFamily)
         {
             // Family node - check if this is the updated family
             if (itemNode->id == familyId)

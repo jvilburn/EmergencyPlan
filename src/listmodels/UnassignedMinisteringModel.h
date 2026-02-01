@@ -5,7 +5,7 @@
 #include <QString>
 
 #include "DocumentChange.h"
-#include "MinisteringModel.h"  // For NodeType enum
+#include "MinisteringModel.h"  // For ItemType enum
 
 class DocumentManager;
 
@@ -23,8 +23,8 @@ class UnassignedMinisteringModel : public QAbstractItemModel
     Q_OBJECT
 
 public:
-    // Reuse NodeType from MinisteringModel
-    using NodeType = MinisteringModel::NodeType;
+    // Reuse ItemType from MinisteringModel
+    using ItemType = MinisteringModel::ItemType;
 
     /// Custom roles for accessing item data
     enum Roles
@@ -50,8 +50,8 @@ public:
 
     // View-specific accessors
     QString idAt(const QModelIndex& index) const;
-    /// Returns the node type at the given index, or NodeType::Invalid for invalid indexes.
-    NodeType nodeTypeAt(const QModelIndex& index) const;
+    /// Returns the node type at the given index, or ItemType::Invalid for invalid indexes.
+    ItemType nodeTypeAt(const QModelIndex& index) const;
 
     // Lazy loading for contact details
     void loadContactDetails(const QModelIndex& index);
@@ -71,7 +71,7 @@ private:
     /// Internal tree node structure
     struct TreeNode
     {
-        NodeType type;
+        ItemType type;
         QString id;
         QString displayText;
         QString secondaryId;

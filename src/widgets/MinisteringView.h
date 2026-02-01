@@ -43,7 +43,7 @@ private slots:
     void onUnassignedModelReset();
 
 private:
-    using NodeType = MinisteringModel::NodeType;
+    using ItemType = MinisteringModel::ItemType;
 
     void setupUi();
     void updateUnassignedVisibility();
@@ -78,9 +78,9 @@ private:
 
     // EQ selection state (ID and type for highlightInfo)
     QString m_eqSelectedId;
-    NodeType m_eqSelectedType = NodeType::Invalid;
+    ItemType m_eqSelectedType = ItemType::Invalid;
 
     // RS selection state
     QString m_rsSelectedId;
-    NodeType m_rsSelectedType = NodeType::Invalid;
+    ItemType m_rsSelectedType = ItemType::Invalid;
 };

@@ -103,7 +103,7 @@ void MinisteringModel::rebuild()
             .arg(m_isEQ ? tr("families") : tr("sisters"));
 
         TreeNode* districtNode = new TreeNode();
-        districtNode->type = NodeType::District;
+        districtNode->type = ItemType::District;
         districtNode->id = district.id();
         districtNode->displayText = districtText;
 
@@ -148,7 +148,7 @@ void MinisteringModel::rebuild()
             const QString& groupId = groupData.second;
 
             TreeNode* companionshipNode = new TreeNode();
-            companionshipNode->type = NodeType::Companionship;
+            companionshipNode->type = ItemType::Companionship;
             companionshipNode->id = groupId;
             companionshipNode->displayText = companionshipText;
             companionshipNode->parent = districtNode;
@@ -179,7 +179,7 @@ void MinisteringModel::addMinistersSection(TreeNode* companionshipNode, const QS
 
     // Create "Ministers" section header
     TreeNode* ministersHeader = new TreeNode();
-    ministersHeader->type = NodeType::SectionHeader;
+    ministersHeader->type = ItemType::SectionHeader;
     ministersHeader->id = groupId + ":ministers";
     ministersHeader->displayText = tr("Ministers");
     ministersHeader->parent = companionshipNode;
@@ -204,7 +204,7 @@ void MinisteringModel::addMinistersSection(TreeNode* companionshipNode, const QS
     for (const QPair<QString, QString>& ministerData : sortedMinisters)
     {
         TreeNode* ministerNode = new TreeNode();
-        ministerNode->type = NodeType::Minister;
+        ministerNode->type = ItemType::Minister;
         ministerNode->id = ministerData.second;
         ministerNode->displayText = ministerData.first;
         ministerNode->parent = ministersHeader;
@@ -226,7 +226,7 @@ void MinisteringModel::addMinisteredSection(TreeNode* companionshipNode, const Q
 
     // Create section header - "Families" for EQ, "Sisters" for RS
     TreeNode* ministeredHeader = new TreeNode();
-    ministeredHeader->type = NodeType::SectionHeader;
+    ministeredHeader->type = ItemType::SectionHeader;
     ministeredHeader->id = groupId + ":ministered";
     ministeredHeader->displayText = m_isEQ ? tr("Families") : tr("Sisters");
     ministeredHeader->parent = companionshipNode;
@@ -255,7 +255,7 @@ void MinisteringModel::addMinisteredSection(TreeNode* companionshipNode, const Q
         for (const QPair<QString, QString>& familyData : sortedFamilies)
         {
             TreeNode* familyNode = new TreeNode();
-            familyNode->type = NodeType::MinisteredFamily;
+            familyNode->type = ItemType::MinisteredFamily;
             familyNode->id = familyData.second;
             familyNode->displayText = familyData.first;
             familyNode->parent = ministeredHeader;
@@ -282,7 +282,7 @@ void MinisteringModel::addMinisteredSection(TreeNode* companionshipNode, const Q
         for (const QPair<QString, QString>& sisterData : sortedSisters)
         {
             TreeNode* sisterNode = new TreeNode();
-            sisterNode->type = NodeType::MinisteredSister;
+            sisterNode->type = ItemType::MinisteredSister;
             sisterNode->id = sisterData.second;
             sisterNode->displayText = sisterData.first;
             sisterNode->parent = ministeredHeader;
@@ -401,9 +401,9 @@ bool MinisteringModel::hasChildren(const QModelIndex& parent) const
     }
 
     // Person/family nodes can have contact children (lazy loaded)
-    if (node->type == NodeType::Minister
-        || node->type == NodeType::MinisteredFamily
-        || node->type == NodeType::MinisteredSister)
+    if (node->type == ItemType::Minister
+        || node->type == ItemType::MinisteredFamily
+        || node->type == ItemType::MinisteredSister)
     {
         return true;
     }
@@ -427,7 +427,7 @@ QVariant MinisteringModel::data(const QModelIndex& index, int role) const
     case Qt::FontRole:
         {
             // Section headers are italic
-            if (node->type == NodeType::SectionHeader)
+            if (node->type == ItemType::SectionHeader)
             {
                 QFont font;
                 font.setItalic(true);
@@ -439,7 +439,7 @@ QVariant MinisteringModel::data(const QModelIndex& index, int role) const
     case Qt::ForegroundRole:
         {
             // Section headers are gray
-            if (node->type == NodeType::SectionHeader)
+            if (node->type == ItemType::SectionHeader)
             {
                 return QColor(100, 100, 100);
             }
@@ -470,14 +470,14 @@ QString MinisteringModel::idAt(const QModelIndex& index) const
     return QString();
 }
 
-MinisteringModel::NodeType MinisteringModel::nodeTypeAt(const QModelIndex& index) const
+MinisteringModel::ItemType MinisteringModel::nodeTypeAt(const QModelIndex& index) const
 {
     TreeNode* node = nodeFromIndex(index);
     if (node)
     {
         return node->type;
     }
-    return NodeType::Invalid;
+    return ItemType::Invalid;
 }
 
 QString MinisteringModel::companionshipIdAt(const QModelIndex& index) const
@@ -491,7 +491,7 @@ QString MinisteringModel::companionshipIdAt(const QModelIndex& index) const
     // Walk up to find the companionship
     while (node)
     {
-        if (node->type == NodeType::Companionship)
+        if (node->type == ItemType::Companionship)
         {
             return node->id;
         }
@@ -511,9 +511,9 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
     }
 
     // Only load contacts for person/family nodes
-    if (node->type != NodeType::Minister
-        && node->type != NodeType::MinisteredFamily
-        && node->type != NodeType::MinisteredSister)
+    if (node->type != ItemType::Minister
+        && node->type != ItemType::MinisteredFamily
+        && node->type != ItemType::MinisteredSister)
     {
         return;
     }
@@ -521,7 +521,7 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
     const Document& doc = m_documentManager->document();
     int insertRow = node->children.size();
 
-    if (node->type == NodeType::Minister || node->type == NodeType::MinisteredSister)
+    if (node->type == ItemType::Minister || node->type == ItemType::MinisteredSister)
     {
         // Person contact info
         std::optional<Person> person = doc.findPersonById(node->id);
@@ -571,7 +571,7 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
         if (!person->phone().isEmpty())
         {
             TreeNode* phoneNode = new TreeNode();
-            phoneNode->type = NodeType::ContactDetail;
+            phoneNode->type = ItemType::ContactDetail;
             phoneNode->displayText = ContactIcons::Phone + person->phone();
             phoneNode->secondaryId = node->id;
             phoneNode->parent = node;
@@ -582,7 +582,7 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
         if (!person->altPhone().isEmpty())
         {
             TreeNode* altPhoneNode = new TreeNode();
-            altPhoneNode->type = NodeType::ContactDetail;
+            altPhoneNode->type = ItemType::ContactDetail;
             altPhoneNode->displayText = ContactIcons::Phone + person->altPhone() + tr(" (alt)");
             altPhoneNode->secondaryId = node->id;
             altPhoneNode->parent = node;
@@ -593,7 +593,7 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
         if (!person->email().isEmpty())
         {
             TreeNode* emailNode = new TreeNode();
-            emailNode->type = NodeType::ContactDetail;
+            emailNode->type = ItemType::ContactDetail;
             emailNode->displayText = ContactIcons::Email + person->email();
             emailNode->secondaryId = node->id;
             emailNode->parent = node;
@@ -605,7 +605,7 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
         {
             const Family& family = families[familyId];
             TreeNode* addrNode = new TreeNode();
-            addrNode->type = NodeType::ContactDetail;
+            addrNode->type = ItemType::ContactDetail;
             addrNode->displayText = ContactIcons::Address + family.address().full();
             addrNode->secondaryId = node->id;
             addrNode->parent = node;
@@ -614,7 +614,7 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
 
         endInsertRows();
     }
-    else if (node->type == NodeType::MinisteredFamily)
+    else if (node->type == ItemType::MinisteredFamily)
     {
         // Family contact info
         const QHash<QString, Family>& families = doc.families();
@@ -659,7 +659,7 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
                 if (member.isParent() && !member.phone().isEmpty())
                 {
                     TreeNode* phoneNode = new TreeNode();
-                    phoneNode->type = NodeType::ContactDetail;
+                    phoneNode->type = ItemType::ContactDetail;
                     phoneNode->displayText = ContactIcons::Phone + member.phone();
                     phoneNode->secondaryId = node->id;
                     phoneNode->parent = node;
@@ -673,7 +673,7 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
         if (!family.address().isEmpty())
         {
             TreeNode* addrNode = new TreeNode();
-            addrNode->type = NodeType::ContactDetail;
+            addrNode->type = ItemType::ContactDetail;
             addrNode->displayText = ContactIcons::Address + family.address().full();
             addrNode->secondaryId = node->id;
             addrNode->parent = node;
@@ -723,7 +723,7 @@ void MinisteringModel::refreshFamilyDisplayText(const QString& familyId)
         for (int compRow = 0; compRow < districtNode->children.size(); ++compRow)
         {
             TreeNode* compNode = districtNode->children[compRow];
-            if (compNode->type != NodeType::Companionship)
+            if (compNode->type != ItemType::Companionship)
             {
                 continue;
             }
@@ -733,7 +733,7 @@ void MinisteringModel::refreshFamilyDisplayText(const QString& familyId)
             for (int sectionRow = 0; sectionRow < compNode->children.size(); ++sectionRow)
             {
                 TreeNode* sectionNode = compNode->children[sectionRow];
-                if (sectionNode->type != NodeType::SectionHeader)
+                if (sectionNode->type != ItemType::SectionHeader)
                 {
                     continue;
                 }
@@ -743,8 +743,8 @@ void MinisteringModel::refreshFamilyDisplayText(const QString& familyId)
                     TreeNode* itemNode = sectionNode->children[itemRow];
                     bool needsUpdate = false;
 
-                    if (itemNode->type == NodeType::Minister
-                        || itemNode->type == NodeType::MinisteredSister)
+                    if (itemNode->type == ItemType::Minister
+                        || itemNode->type == ItemType::MinisteredSister)
                     {
                         // Person node - check if person is in updated family
                         if (personIds.contains(itemNode->id))
@@ -754,14 +754,14 @@ void MinisteringModel::refreshFamilyDisplayText(const QString& familyId)
                             {
                                 itemNode->displayText = person->displayName();
                                 needsUpdate = true;
-                                if (itemNode->type == NodeType::Minister)
+                                if (itemNode->type == ItemType::Minister)
                                 {
                                     companionshipAffected = true;
                                 }
                             }
                         }
                     }
-                    else if (itemNode->type == NodeType::MinisteredFamily)
+                    else if (itemNode->type == ItemType::MinisteredFamily)
                     {
                         // Family node - check if this is the updated family
                         if (itemNode->id == familyId)

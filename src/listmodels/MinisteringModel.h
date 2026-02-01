@@ -25,7 +25,7 @@ class MinisteringModel : public QAbstractItemModel
 
 public:
     /// Node types in the tree
-    enum class NodeType
+    enum class ItemType
     {
         Invalid,  // Returned for invalid indexes
         District,
@@ -37,7 +37,7 @@ public:
         ContactDetail,
         UnassignedHeader  // Header for unassigned families/sisters tree
     };
-    Q_ENUM(NodeType)
+    Q_ENUM(ItemType)
 
     /// Custom roles for accessing item data
     enum Roles
@@ -63,8 +63,8 @@ public:
 
     // View-specific accessors
     QString idAt(const QModelIndex& index) const;
-    /// Returns the node type at the given index, or NodeType::Invalid for invalid indexes.
-    NodeType nodeTypeAt(const QModelIndex& index) const;
+    /// Returns the node type at the given index, or ItemType::Invalid for invalid indexes.
+    ItemType nodeTypeAt(const QModelIndex& index) const;
     QString companionshipIdAt(const QModelIndex& index) const;
 
     // Lazy loading for contact details
@@ -82,7 +82,7 @@ private:
     /// Internal tree node structure
     struct TreeNode
     {
-        NodeType type;
+        ItemType type;
         QString id;
         QString displayText;
         QString secondaryId;  // For ContactDetail: person/family ID

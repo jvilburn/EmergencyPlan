@@ -39,7 +39,7 @@ void MinisteringView::setupUi()
 {
     setMinimumWidth(250);
 
-    auto* layout = new QVBoxLayout(this);
+    QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(8, 8, 8, 8);
     layout->setSpacing(8);
 
@@ -127,26 +127,28 @@ void MinisteringView::onSelectionChanged(const QModelIndex& current, const QMode
     MinisteringModel* model = isEQ ? m_eqModel : m_rsModel;
 
     QString& selectedId = isEQ ? m_eqSelectedId : m_rsSelectedId;
-    NodeType& selectedType = isEQ ? m_eqSelectedType : m_rsSelectedType;
+    ItemType& selectedType = isEQ ? m_eqSelectedType : m_rsSelectedType;
 
     if (!current.isValid())
     {
         selectedId.clear();
-        selectedType = NodeType::Invalid;
+        selectedType = ItemType::Invalid;
         emit highlightChanged();
         return;
     }
 
-    NodeType type = model->nodeTypeAt(current);
+    ItemType type = model->nodeTypeAt(current);
 
-    // Contact details are not interactive
-    if (type == NodeType::ContactDetail)
+    // For ContactDetail nodes, use the parent's type and id for highlighting
+    QModelIndex nodeToUse = current;
+    if (type == ItemType::ContactDetail)
     {
-        return;
+        nodeToUse = current.parent();
+        type = model->nodeTypeAt(nodeToUse);
     }
 
     // Build the selection ID based on type
-    QString itemId = model->idAt(current);
+    QString itemId = model->idAt(nodeToUse);
     selectedId = itemId;
     selectedType = type;
 
@@ -162,20 +164,20 @@ void MinisteringView::onUnassignedSelectionChanged(const QModelIndex& current, c
     UnassignedMinisteringModel* model = isEQ ? m_eqUnassignedModel : m_rsUnassignedModel;
 
     QString& selectedId = isEQ ? m_eqSelectedId : m_rsSelectedId;
-    NodeType& selectedType = isEQ ? m_eqSelectedType : m_rsSelectedType;
+    ItemType& selectedType = isEQ ? m_eqSelectedType : m_rsSelectedType;
 
     if (!current.isValid())
     {
         selectedId.clear();
-        selectedType = NodeType::Invalid;
+        selectedType = ItemType::Invalid;
         emit highlightChanged();
         return;
     }
 
-    NodeType type = model->nodeTypeAt(current);
+    ItemType type = model->nodeTypeAt(current);
 
     // Contact details are not interactive
-    if (type == NodeType::ContactDetail)
+    if (type == ItemType::ContactDetail)
     {
         return;
     }
@@ -194,25 +196,25 @@ void MinisteringView::onTreeExpanded(const QModelIndex& index)
     bool isEQ = (tree == m_eqTree);
     MinisteringModel* model = isEQ ? m_eqModel : m_rsModel;
 
-    NodeType type = model->nodeTypeAt(index);
+    ItemType type = model->nodeTypeAt(index);
 
-    if (type == NodeType::Companionship)
+    if (type == ItemType::Companionship)
     {
         // Expand section headers (Ministers, Families/Sisters) when companionship is expanded
         int rowCount = model->rowCount(index);
         for (int i = 0; i < rowCount; ++i)
         {
             QModelIndex childIndex = model->index(i, 0, index);
-            NodeType childType = model->nodeTypeAt(childIndex);
-            if (childType == NodeType::SectionHeader)
+            ItemType childType = model->nodeTypeAt(childIndex);
+            if (childType == ItemType::SectionHeader)
             {
                 tree->expand(childIndex);
             }
         }
     }
-    else if (type == NodeType::Minister
-             || type == NodeType::MinisteredFamily
-             || type == NodeType::MinisteredSister)
+    else if (type == ItemType::Minister
+             || type == ItemType::MinisteredFamily
+             || type == ItemType::MinisteredSister)
     {
         // Load contact info on expand
         model->loadContactDetails(index);
@@ -225,15 +227,15 @@ void MinisteringView::onUnassignedTreeExpanded(const QModelIndex& index)
     bool isEQ = (tree == m_eqUnassignedTree);
     UnassignedMinisteringModel* model = isEQ ? m_eqUnassignedModel : m_rsUnassignedModel;
 
-    NodeType type = model->nodeTypeAt(index);
+    ItemType type = model->nodeTypeAt(index);
 
     // Resize tree when header is expanded
-    if (type == NodeType::UnassignedHeader)
+    if (type == ItemType::UnassignedHeader)
     {
         tree->setFixedHeight(expandedTreeHeight());
     }
     // Load contact info on expand for families/sisters
-    else if (type == NodeType::MinisteredFamily || type == NodeType::MinisteredSister)
+    else if (type == ItemType::MinisteredFamily || type == ItemType::MinisteredSister)
     {
         model->loadContactDetails(index);
     }
@@ -245,10 +247,10 @@ void MinisteringView::onUnassignedTreeCollapsed(const QModelIndex& index)
     bool isEQ = (tree == m_eqUnassignedTree);
     UnassignedMinisteringModel* model = isEQ ? m_eqUnassignedModel : m_rsUnassignedModel;
 
-    NodeType type = model->nodeTypeAt(index);
+    ItemType type = model->nodeTypeAt(index);
 
     // Shrink tree when header is collapsed
-    if (type == NodeType::UnassignedHeader)
+    if (type == ItemType::UnassignedHeader)
     {
         tree->setFixedHeight(collapsedTreeHeight());
     }
@@ -374,10 +376,10 @@ HighlightInfo MinisteringView::highlightInfo() const
 
     // Pick selection state based on current org
     const QString& selectedId = m_isEQ ? m_eqSelectedId : m_rsSelectedId;
-    NodeType selectedType = m_isEQ ? m_eqSelectedType : m_rsSelectedType;
+    ItemType selectedType = m_isEQ ? m_eqSelectedType : m_rsSelectedType;
 
     // No selection = no highlighting
-    if (selectedId.isEmpty() || selectedType == NodeType::Invalid)
+    if (selectedId.isEmpty() || selectedType == ItemType::Invalid)
     {
         return info;
     }
@@ -388,10 +390,10 @@ HighlightInfo MinisteringView::highlightInfo() const
 
     switch (selectedType)
     {
-    case NodeType::Invalid:
+    case ItemType::Invalid:
         break;
 
-    case NodeType::District:
+    case ItemType::District:
     {
         if (districts.contains(selectedId))
         {
@@ -416,7 +418,7 @@ HighlightInfo MinisteringView::highlightInfo() const
         break;
     }
 
-    case NodeType::UnassignedHeader:
+    case ItemType::UnassignedHeader:
     {
         if (m_isEQ)
         {
@@ -429,7 +431,7 @@ HighlightInfo MinisteringView::highlightInfo() const
         break;
     }
 
-    case NodeType::Companionship:
+    case ItemType::Companionship:
     {
         if (groups.contains(selectedId))
         {
@@ -447,7 +449,7 @@ HighlightInfo MinisteringView::highlightInfo() const
         break;
     }
 
-    case NodeType::SectionHeader:
+    case ItemType::SectionHeader:
     {
         // Parse composite ID: "{compId}:ministers" or "{compId}:ministered"
         int colonPos = selectedId.lastIndexOf(':');
@@ -483,7 +485,7 @@ HighlightInfo MinisteringView::highlightInfo() const
         break;
     }
 
-    case NodeType::Minister:
+    case ItemType::Minister:
     {
         // Individual minister: highlight their family with pip
         QString familyId = doc.familyIdForPerson(selectedId);
@@ -495,14 +497,14 @@ HighlightInfo MinisteringView::highlightInfo() const
         break;
     }
 
-    case NodeType::MinisteredFamily:
+    case ItemType::MinisteredFamily:
     {
         // Individual family: highlight that family
         info.highlightedFamilyIds.insert(selectedId);
         break;
     }
 
-    case NodeType::MinisteredSister:
+    case ItemType::MinisteredSister:
     {
         // Individual sister: highlight her family
         QString familyId = doc.familyIdForPerson(selectedId);
@@ -513,7 +515,7 @@ HighlightInfo MinisteringView::highlightInfo() const
         break;
     }
 
-    case NodeType::ContactDetail:
+    case ItemType::ContactDetail:
         // Should never be selected, but handle gracefully
         break;
     }

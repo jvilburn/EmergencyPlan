@@ -33,6 +33,24 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
+/// Placeholder widget that implements FamilyMarkerProvider with no-op defaults.
+/// Used for tabs that don't yet have full implementation (e.g., Teams).
+class PlaceholderView : public QWidget, public FamilyMarkerProvider
+{
+public:
+    explicit PlaceholderView(const QString& message, QWidget* parent = nullptr)
+        : QWidget(parent)
+    {
+        QVBoxLayout* layout = new QVBoxLayout(this);
+        QLabel* label = new QLabel(message);
+        label->setAlignment(Qt::AlignCenter);
+        layout->addWidget(label);
+    }
+
+    HighlightInfo highlightInfo() const override { return {}; }
+    QSet<QString> visibleFamilyIds() const override { return {}; }
+};
+
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
     , m_documentManager(new DocumentManager(this))
@@ -70,11 +88,7 @@ void MainWindow::setupUi()
     m_sidebarTabs->addTab(m_ministeringView, tr("Ministering"));
 
     // Teams placeholder (top-level tab)
-    QWidget* teamsPlaceholder = new QWidget();
-    QVBoxLayout* teamsLayout = new QVBoxLayout(teamsPlaceholder);
-    QLabel* teamsLabel = new QLabel(tr("Teams functionality coming soon"));
-    teamsLabel->setAlignment(Qt::AlignCenter);
-    teamsLayout->addWidget(teamsLabel);
+    PlaceholderView* teamsPlaceholder = new PlaceholderView(tr("Teams functionality coming soon"));
     m_sidebarTabs->addTab(teamsPlaceholder, tr("Teams"));
 
     // Needs tab
