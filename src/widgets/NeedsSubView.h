@@ -9,11 +9,11 @@ class NeedsModel;
 class QTreeView;
 class QModelIndex;
 
-/// NeedsSubView displays a flat list of special needs (persons/families with special needs).
+/// NeedsSubView displays a 2-level tree of special needs:
+/// - Person (top level) - shows "DisplayName - note" or just "DisplayName"
+/// - ContactDetail (under person) - phone, email, address (lazy loaded on expand)
 ///
-/// Each item displays: "DisplayName - note" where DisplayName is the person or family name.
-///
-/// Implements FamilyMarkerProvider to highlight families of selected persons or directly selected families.
+/// Implements FamilyMarkerProvider to highlight families of selected persons.
 class NeedsSubView : public QWidget, public FamilyMarkerProvider
 {
     Q_OBJECT
