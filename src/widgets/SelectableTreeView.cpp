@@ -3,15 +3,10 @@
 #include <QTreeView>
 #include <QItemSelectionModel>
 
-SelectableTreeView::SelectableTreeView(QWidget* parent)
+SelectableTreeView::SelectableTreeView(QTreeView* tree, QWidget* parent)
     : QWidget(parent)
 {
-}
-
-void SelectableTreeView::initTree(QTreeView* tree)
-{
-    m_tree = tree;
-    connect(m_tree->selectionModel(), &QItemSelectionModel::currentChanged,
+    connect(tree->selectionModel(), &QItemSelectionModel::currentChanged,
             this, &SelectableTreeView::onSelectionChanged);
 }
 
