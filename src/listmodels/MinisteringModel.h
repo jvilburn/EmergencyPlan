@@ -5,6 +5,7 @@
 #include <QString>
 
 #include "DocumentChange.h"
+#include "ItemType.h"
 
 class DocumentManager;
 
@@ -24,21 +25,6 @@ class MinisteringModel : public QAbstractItemModel
     Q_OBJECT
 
 public:
-    /// Node types in the tree
-    enum class ItemType
-    {
-        Invalid,  // Returned for invalid indexes
-        District,
-        Companionship,
-        SectionHeader,
-        Minister,
-        MinisteredFamily,
-        MinisteredSister,
-        ContactDetail,
-        UnassignedHeader  // Header for unassigned families/sisters tree
-    };
-    Q_ENUM(ItemType)
-
     /// Custom roles for accessing item data
     enum Roles
     {
