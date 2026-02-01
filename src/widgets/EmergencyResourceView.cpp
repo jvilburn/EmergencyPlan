@@ -76,10 +76,8 @@ EmergencyResourceView::EmergencyResourceView(DocumentManager* documentManager, R
     connect(m_model, &QAbstractItemModel::modelReset, this, &EmergencyResourceView::expandResources);
 
     // Load contact details when person node is expanded
-    connect(m_tree, &QTreeView::expanded, this, [this](const QModelIndex& index)
-    {
-        m_model->loadContactDetails(index);
-    });
+    connect(m_tree, &QTreeView::expanded,
+            this, &EmergencyResourceView::onTreeExpanded);
 
     updateButtonStates();
 }
@@ -106,8 +104,22 @@ void EmergencyResourceView::onTreeDoubleClicked(const QModelIndex& index)
         // Could open person details in future
         break;
 
+    case EmergencyResourceModel::ItemType::ContactDetail:
+        // Contact details are read-only display nodes
+        break;
+
     case EmergencyResourceModel::ItemType::Invalid:
         break;
+    }
+}
+
+void EmergencyResourceView::onTreeExpanded(const QModelIndex& index)
+{
+    EmergencyResourceModel::ItemType type = m_model->itemTypeAt(index);
+
+    if (type == EmergencyResourceModel::ItemType::Person)
+    {
+        m_model->loadContactDetails(index);
     }
 }
 
@@ -168,6 +180,10 @@ void EmergencyResourceView::onContextMenu(const QPoint& pos)
                 m_contextPersonId = id;
                 menu.addAction(tr("Remove"), this, &EmergencyResourceView::removePersonFromContextMenu);
             }
+            break;
+
+        case EmergencyResourceModel::ItemType::ContactDetail:
+            // Contact details are read-only display nodes
             break;
 
         case EmergencyResourceModel::ItemType::Invalid:
@@ -268,6 +284,18 @@ HighlightInfo EmergencyResourceView::highlightInfo() const
                         info.highlightedFamilyIds.insert(familyId);
                     }
                 }
+            }
+        }
+        break;
+
+    case EmergencyResourceModel::ItemType::ContactDetail:
+        {
+            // Contact detail selected - highlight parent person's family
+            QString personId = m_model->idAt(current);
+            QString familyId = doc.familyIdForPerson(personId);
+            if (!familyId.isEmpty())
+            {
+                info.highlightedFamilyIds.insert(familyId);
             }
         }
         break;
