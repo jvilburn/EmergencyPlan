@@ -2,6 +2,7 @@
 #include "DocumentManager.h"
 #include "Document.h"
 #include "EmergencyResource.h"
+#include "Family.h"
 #include "Person.h"
 
 #include <algorithm>
@@ -29,22 +30,27 @@ void EmergencyResourceModel::clearNodes()
     m_resourceNodes.clear();
 }
 
-bool EmergencyResourceModel::shouldRebuild(const DocumentChange& change) const
-{
-    switch (change.scope)
-    {
-    case ChangeScope::Full:
-    case ChangeScope::EmergencyResource:
-    case ChangeScope::Family:  // Person names are in families
-        return true;
-    default:
-        return false;
-    }
-}
-
 void EmergencyResourceModel::onDocumentChanged(const DocumentChange& change)
 {
-    if (shouldRebuild(change))
+    // Structural changes: full rebuild
+    if (change.scope == ChangeScope::Full
+        || change.action == ChangeAction::BatchModified
+        || change.scope == ChangeScope::EmergencyResource)
+    {
+        rebuild();
+        return;
+    }
+
+    // Family updated: refresh display text only
+    if (change.scope == ChangeScope::Family
+        && change.action == ChangeAction::Updated)
+    {
+        refreshFamilyDisplayText(change.entityId);
+        return;
+    }
+
+    // Family added/removed: rebuild
+    if (change.scope == ChangeScope::Family)
     {
         rebuild();
     }
@@ -229,7 +235,7 @@ EmergencyResourceModel::ItemType EmergencyResourceModel::itemTypeAt(const QModel
     {
         return node->type;
     }
-    return ItemType::Resource;
+    return ItemType::Invalid;
 }
 
 QString EmergencyResourceModel::resourceIdAt(const QModelIndex& index) const
@@ -247,4 +253,48 @@ QString EmergencyResourceModel::resourceIdAt(const QModelIndex& index) const
         return node->id;
     }
     return node->resourceId;
+}
+
+void EmergencyResourceModel::refreshFamilyDisplayText(const QString& familyId)
+{
+    const Document& doc = m_documentManager->document();
+    const auto& families = doc.families();
+
+    if (!families.contains(familyId))
+    {
+        return;
+    }
+
+    const Family& family = families[familyId];
+
+    // Build set of person IDs in this family for quick lookup
+    QSet<QString> personIds;
+    for (const Person& member : family.members())
+    {
+        personIds.insert(member.id());
+    }
+
+    // Walk tree and update affected person nodes
+    for (int resourceRow = 0; resourceRow < m_resourceNodes.size(); ++resourceRow)
+    {
+        TreeNode* resourceNode = m_resourceNodes[resourceRow];
+
+        for (int personRow = 0; personRow < resourceNode->children.size(); ++personRow)
+        {
+            TreeNode* personNode = resourceNode->children[personRow];
+
+            if (personNode->type == ItemType::Person && personIds.contains(personNode->id))
+            {
+                std::optional<Person> person = doc.findPersonById(personNode->id);
+                if (person)
+                {
+                    personNode->displayText = person->displayName();
+
+                    QModelIndex resourceIndex = createIndex(resourceRow, 0, resourceNode);
+                    QModelIndex personIndex = index(personRow, 0, resourceIndex);
+                    emit dataChanged(personIndex, personIndex);
+                }
+            }
+        }
+    }
 }

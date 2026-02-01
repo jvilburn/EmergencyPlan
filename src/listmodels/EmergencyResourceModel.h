@@ -23,6 +23,7 @@ public:
     /// Node types in the tree
     enum class ItemType
     {
+        Invalid,
         Resource,
         Person
     };
@@ -59,7 +60,7 @@ private slots:
 
 private:
     void rebuild();
-    bool shouldRebuild(const DocumentChange& change) const;
+    void refreshFamilyDisplayText(const QString& familyId);
     void clearNodes();
 
     /// Internal tree node structure
