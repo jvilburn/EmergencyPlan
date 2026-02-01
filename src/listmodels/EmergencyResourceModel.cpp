@@ -1,4 +1,5 @@
 #include "EmergencyResourceModel.h"
+#include "ContactIcons.h"
 #include "DocumentManager.h"
 #include "Document.h"
 #include "EmergencyResource.h"
@@ -163,11 +164,21 @@ QModelIndex EmergencyResourceModel::parent(const QModelIndex& child) const
 
     TreeNode* parentNode = node->parent;
 
-    // Parent is always a resource node (top-level)
-    int row = m_resourceNodes.indexOf(parentNode);
-    if (row >= 0)
+    // If parent is a resource node (top-level)
+    int resourceRow = m_resourceNodes.indexOf(parentNode);
+    if (resourceRow >= 0)
     {
-        return createIndex(row, 0, parentNode);
+        return createIndex(resourceRow, 0, parentNode);
+    }
+
+    // Parent is a person node - find its row within the resource
+    if (parentNode->parent)
+    {
+        int personRow = parentNode->parent->children.indexOf(parentNode);
+        if (personRow >= 0)
+        {
+            return createIndex(personRow, 0, parentNode);
+        }
     }
 
     return QModelIndex();
@@ -194,6 +205,28 @@ int EmergencyResourceModel::columnCount(const QModelIndex& parent) const
 {
     Q_UNUSED(parent)
     return 1;
+}
+
+bool EmergencyResourceModel::hasChildren(const QModelIndex& parent) const
+{
+    if (!parent.isValid())
+    {
+        return !m_resourceNodes.isEmpty();
+    }
+
+    TreeNode* node = nodeFromIndex(parent);
+    if (!node)
+    {
+        return false;
+    }
+
+    // Person nodes can have contact children (lazy loaded)
+    if (node->type == ItemType::Person)
+    {
+        return true;
+    }
+
+    return !node->children.isEmpty();
 }
 
 QVariant EmergencyResourceModel::data(const QModelIndex& index, int role) const
@@ -254,6 +287,118 @@ QString EmergencyResourceModel::resourceIdAt(const QModelIndex& index) const
         return node->id;
     }
     return node->resourceId;
+}
+
+void EmergencyResourceModel::loadContactDetails(const QModelIndex& index)
+{
+    TreeNode* node = nodeFromIndex(index);
+    if (!node || node->contactsLoaded)
+    {
+        return;
+    }
+
+    // Only load contacts for person nodes
+    if (node->type != ItemType::Person)
+    {
+        return;
+    }
+
+    const Document& doc = m_documentManager->document();
+    std::optional<Person> person = doc.findPersonById(node->id);
+    if (!person)
+    {
+        node->contactsLoaded = true;
+        return;
+    }
+
+    // Check for address availability
+    QString familyId = doc.familyIdForPerson(node->id);
+    const QHash<QString, Family>& families = doc.families();
+    bool hasAddress = false;
+    if (!familyId.isEmpty() && families.contains(familyId))
+    {
+        hasAddress = !families[familyId].address().isEmpty();
+    }
+
+    // Count actual items to insert
+    int itemCount = 0;
+    if (!person->phone().isEmpty())
+    {
+        itemCount++;
+    }
+    if (!person->altPhone().isEmpty())
+    {
+        itemCount++;
+    }
+    if (!person->email().isEmpty())
+    {
+        itemCount++;
+    }
+    if (hasAddress)
+    {
+        itemCount++;
+    }
+
+    if (itemCount == 0)
+    {
+        node->contactsLoaded = true;
+        return;
+    }
+
+    int insertRow = node->children.size();
+    beginInsertRows(index, insertRow, insertRow + itemCount - 1);
+
+    // Phone
+    if (!person->phone().isEmpty())
+    {
+        TreeNode* phoneNode = new TreeNode();
+        phoneNode->type = ItemType::ContactDetail;
+        phoneNode->id = node->id;
+        phoneNode->resourceId = node->resourceId;
+        phoneNode->displayText = ContactIcons::Phone + person->phone();
+        phoneNode->parent = node;
+        node->children.append(phoneNode);
+    }
+
+    // Alt phone
+    if (!person->altPhone().isEmpty())
+    {
+        TreeNode* altPhoneNode = new TreeNode();
+        altPhoneNode->type = ItemType::ContactDetail;
+        altPhoneNode->id = node->id;
+        altPhoneNode->resourceId = node->resourceId;
+        altPhoneNode->displayText = ContactIcons::Phone + person->altPhone() + tr(" (alt)");
+        altPhoneNode->parent = node;
+        node->children.append(altPhoneNode);
+    }
+
+    // Email
+    if (!person->email().isEmpty())
+    {
+        TreeNode* emailNode = new TreeNode();
+        emailNode->type = ItemType::ContactDetail;
+        emailNode->id = node->id;
+        emailNode->resourceId = node->resourceId;
+        emailNode->displayText = ContactIcons::Email + person->email();
+        emailNode->parent = node;
+        node->children.append(emailNode);
+    }
+
+    // Address (from family)
+    if (hasAddress)
+    {
+        const Family& family = families[familyId];
+        TreeNode* addrNode = new TreeNode();
+        addrNode->type = ItemType::ContactDetail;
+        addrNode->id = node->id;
+        addrNode->resourceId = node->resourceId;
+        addrNode->displayText = ContactIcons::Address + family.address().full();
+        addrNode->parent = node;
+        node->children.append(addrNode);
+    }
+
+    endInsertRows();
+    node->contactsLoaded = true;
 }
 
 void EmergencyResourceModel::refreshFamilyDisplayText(const QString& familyId)

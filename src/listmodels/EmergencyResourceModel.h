@@ -9,10 +9,11 @@
 
 class DocumentManager;
 
-/// Model for emergency resources tree (2-level: Resource → Person).
+/// Model for emergency resources tree (3-level: Resource → Person → ContactDetail).
 ///
 /// Level 0: Resources sorted by name, displayed as "Name (N)" where N = people count
 /// Level 1: People in each resource, sorted by display name
+/// Level 2: Contact details (phone, email, address) - lazy loaded on expand
 ///
 /// This model rebuilds on Full, EmergencyResource, and Family add/remove changes.
 /// Family updates only refresh display text (no structural rebuild).
@@ -26,7 +27,8 @@ public:
     {
         Invalid,
         Resource,
-        Person
+        Person,
+        ContactDetail
     };
     Q_ENUM(ItemType)
 
@@ -50,6 +52,10 @@ public:
     int rowCount(const QModelIndex& parent = {}) const override;
     int columnCount(const QModelIndex& parent = {}) const override;
     QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
+    bool hasChildren(const QModelIndex& parent = {}) const override;
+
+    // Lazy loading for contact details
+    void loadContactDetails(const QModelIndex& index);
 
     // View-specific accessors
     QString idAt(const QModelIndex& index) const;
@@ -73,6 +79,7 @@ private:
         QString displayText;
         TreeNode* parent = nullptr;
         QList<TreeNode*> children;
+        bool contactsLoaded = false;
 
         ~TreeNode()
         {
