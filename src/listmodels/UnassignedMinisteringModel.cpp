@@ -278,6 +278,29 @@ int UnassignedMinisteringModel::columnCount(const QModelIndex& parent) const
     return 1;
 }
 
+bool UnassignedMinisteringModel::hasChildren(const QModelIndex& parent) const
+{
+    if (!parent.isValid())
+    {
+        return m_headerNode != nullptr;
+    }
+
+    TreeNode* node = nodeFromIndex(parent);
+    if (!node)
+    {
+        return false;
+    }
+
+    // Family/sister nodes can have contact children (lazy loaded)
+    if (node->type == NodeType::MinisteredFamily
+        || node->type == NodeType::MinisteredSister)
+    {
+        return true;
+    }
+
+    return !node->children.isEmpty();
+}
+
 QVariant UnassignedMinisteringModel::data(const QModelIndex& index, int role) const
 {
     TreeNode* node = nodeFromIndex(index);
