@@ -6,6 +6,7 @@
 #include "Person.h"
 
 #include <algorithm>
+#include <QSet>
 
 EmergencyResourceModel::EmergencyResourceModel(DocumentManager* documentManager,
                                                  ResponseArea area,
@@ -258,7 +259,7 @@ QString EmergencyResourceModel::resourceIdAt(const QModelIndex& index) const
 void EmergencyResourceModel::refreshFamilyDisplayText(const QString& familyId)
 {
     const Document& doc = m_documentManager->document();
-    const auto& families = doc.families();
+    const QHash<QString, Family>& families = doc.families();
 
     if (!families.contains(familyId))
     {

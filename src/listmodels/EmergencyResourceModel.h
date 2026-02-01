@@ -14,7 +14,8 @@ class DocumentManager;
 /// Level 0: Resources sorted by name, displayed as "Name (N)" where N = people count
 /// Level 1: People in each resource, sorted by display name
 ///
-/// This model rebuilds on Full, EmergencyResource, and Family scope changes.
+/// This model rebuilds on Full, EmergencyResource, and Family add/remove changes.
+/// Family updates only refresh display text (no structural rebuild).
 class EmergencyResourceModel : public QAbstractItemModel
 {
     Q_OBJECT
