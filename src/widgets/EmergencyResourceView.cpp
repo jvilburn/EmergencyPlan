@@ -75,6 +75,12 @@ EmergencyResourceView::EmergencyResourceView(DocumentManager* documentManager, R
     // Expand top-level items when model is reset
     connect(m_model, &QAbstractItemModel::modelReset, this, &EmergencyResourceView::expandResources);
 
+    // Load contact details when person node is expanded
+    connect(m_tree, &QTreeView::expanded, this, [this](const QModelIndex& index)
+    {
+        m_model->loadContactDetails(index);
+    });
+
     updateButtonStates();
 }
 
@@ -98,6 +104,9 @@ void EmergencyResourceView::onTreeDoubleClicked(const QModelIndex& index)
 
     case EmergencyResourceModel::ItemType::Person:
         // Could open person details in future
+        break;
+
+    case EmergencyResourceModel::ItemType::Invalid:
         break;
     }
 }
@@ -159,6 +168,9 @@ void EmergencyResourceView::onContextMenu(const QPoint& pos)
                 m_contextPersonId = id;
                 menu.addAction(tr("Remove"), this, &EmergencyResourceView::removePersonFromContextMenu);
             }
+            break;
+
+        case EmergencyResourceModel::ItemType::Invalid:
             break;
         }
     }
@@ -258,6 +270,9 @@ HighlightInfo EmergencyResourceView::highlightInfo() const
                 }
             }
         }
+        break;
+
+    case EmergencyResourceModel::ItemType::Invalid:
         break;
     }
 
