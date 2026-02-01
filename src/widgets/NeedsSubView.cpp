@@ -73,7 +73,7 @@ NeedsSubView::NeedsSubView(DocumentManager* documentManager, QWidget* parent)
     // Create tree view
     m_tree = new QTreeView();
     m_tree->setHeaderHidden(true);
-    m_tree->setRootIsDecorated(false);  // Flat list, no expand/collapse indicators
+    m_tree->setRootIsDecorated(true);
     m_tree->setSelectionMode(QAbstractItemView::SingleSelection);
     m_tree->setContextMenuPolicy(Qt::CustomContextMenu);
     m_tree->setIndentation(16);
@@ -84,6 +84,8 @@ NeedsSubView::NeedsSubView(DocumentManager* documentManager, QWidget* parent)
             this, &NeedsSubView::onSelectionChanged);
     connect(m_tree, &QTreeView::customContextMenuRequested,
             this, &NeedsSubView::onContextMenu);
+    connect(m_tree, &QTreeView::expanded,
+            this, &NeedsSubView::onTreeExpanded);
 }
 
 void NeedsSubView::onSelectionChanged(const QModelIndex& current, const QModelIndex& previous)
@@ -91,6 +93,16 @@ void NeedsSubView::onSelectionChanged(const QModelIndex& current, const QModelIn
     Q_UNUSED(current)
     Q_UNUSED(previous)
     emit highlightChanged();
+}
+
+void NeedsSubView::onTreeExpanded(const QModelIndex& index)
+{
+    NeedsModel::ItemType type = m_model->itemTypeAt(index);
+
+    if (type == NeedsModel::ItemType::Person)
+    {
+        m_model->loadContactDetails(index);
+    }
 }
 
 void NeedsSubView::onContextMenu(const QPoint& pos)

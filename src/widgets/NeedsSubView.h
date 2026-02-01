@@ -30,6 +30,7 @@ signals:
 
 private slots:
     void onSelectionChanged(const QModelIndex& current, const QModelIndex& previous);
+    void onTreeExpanded(const QModelIndex& index);
     void onContextMenu(const QPoint& pos);
 
 private:
