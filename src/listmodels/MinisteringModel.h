@@ -75,7 +75,7 @@ private slots:
 
 private:
     void rebuild();
-    bool shouldRebuild(const DocumentChange& change) const;
+    void refreshFamilyDisplayText(const QString& familyId);
     void clearNodes();
 
     /// Internal tree node structure

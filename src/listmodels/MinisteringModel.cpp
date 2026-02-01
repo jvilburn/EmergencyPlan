@@ -1,4 +1,5 @@
 #include "MinisteringModel.h"
+#include "ContactIcons.h"
 #include "DocumentManager.h"
 #include "Document.h"
 #include "MinisteringDistrict.h"
@@ -7,6 +8,7 @@
 #include "Person.h"
 
 #include <algorithm>
+#include <QFont>
 
 MinisteringModel::MinisteringModel(DocumentManager* documentManager,
                                      bool isEQ,
@@ -31,25 +33,36 @@ void MinisteringModel::clearNodes()
     m_districtNodes.clear();
 }
 
-bool MinisteringModel::shouldRebuild(const DocumentChange& change) const
-{
-    switch (change.scope)
-    {
-    case ChangeScope::Full:
-    case ChangeScope::EqDistrict:
-    case ChangeScope::EqGroup:
-    case ChangeScope::RsDistrict:
-    case ChangeScope::RsGroup:
-    case ChangeScope::Family:  // Person names and contact info are in families
-        return true;
-    default:
-        return false;
-    }
-}
-
 void MinisteringModel::onDocumentChanged(const DocumentChange& change)
 {
-    if (shouldRebuild(change))
+    // Structural changes: full rebuild
+    if (change.scope == ChangeScope::Full
+        || change.action == ChangeAction::BatchModified)
+    {
+        rebuild();
+        return;
+    }
+
+    // Ministering structure changes: full rebuild
+    if (change.scope == ChangeScope::EqDistrict
+        || change.scope == ChangeScope::EqGroup
+        || change.scope == ChangeScope::RsDistrict
+        || change.scope == ChangeScope::RsGroup)
+    {
+        rebuild();
+        return;
+    }
+
+    // Family updated: refresh display text only
+    if (change.scope == ChangeScope::Family
+        && change.action == ChangeAction::Updated)
+    {
+        refreshFamilyDisplayText(change.entityId);
+        return;
+    }
+
+    // Family added/removed: rebuild (rare, structure might change)
+    if (change.scope == ChangeScope::Family)
     {
         rebuild();
     }
@@ -463,6 +476,8 @@ QString MinisteringModel::companionshipIdAt(const QModelIndex& index) const
     return QString();
 }
 
+// Note: Similar logic exists in UnassignedMinisteringModel::loadContactDetails().
+// Kept separate per "no base class" design decision (see tree-view-model-migration.md).
 void MinisteringModel::loadContactDetails(const QModelIndex& index)
 {
     TreeNode* node = nodeFromIndex(index);
@@ -533,7 +548,7 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
         {
             TreeNode* phoneNode = new TreeNode();
             phoneNode->type = NodeType::ContactDetail;
-            phoneNode->displayText = QString::fromUtf8("\xf0\x9f\x93\x9e ") + person->phone();
+            phoneNode->displayText = ContactIcons::Phone + person->phone();
             phoneNode->secondaryId = node->id;
             phoneNode->parent = node;
             node->children.append(phoneNode);
@@ -544,7 +559,7 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
         {
             TreeNode* altPhoneNode = new TreeNode();
             altPhoneNode->type = NodeType::ContactDetail;
-            altPhoneNode->displayText = QString::fromUtf8("\xf0\x9f\x93\x9e ") + person->altPhone() + tr(" (alt)");
+            altPhoneNode->displayText = ContactIcons::Phone + person->altPhone() + tr(" (alt)");
             altPhoneNode->secondaryId = node->id;
             altPhoneNode->parent = node;
             node->children.append(altPhoneNode);
@@ -555,7 +570,7 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
         {
             TreeNode* emailNode = new TreeNode();
             emailNode->type = NodeType::ContactDetail;
-            emailNode->displayText = QString::fromUtf8("\xf0\x9f\x93\xa7 ") + person->email();
+            emailNode->displayText = ContactIcons::Email + person->email();
             emailNode->secondaryId = node->id;
             emailNode->parent = node;
             node->children.append(emailNode);
@@ -567,7 +582,7 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
             const Family& family = families[familyId];
             TreeNode* addrNode = new TreeNode();
             addrNode->type = NodeType::ContactDetail;
-            addrNode->displayText = QString::fromUtf8("\xf0\x9f\x93\x8d ") + family.address().full();
+            addrNode->displayText = ContactIcons::Address + family.address().full();
             addrNode->secondaryId = node->id;
             addrNode->parent = node;
             node->children.append(addrNode);
@@ -621,7 +636,7 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
                 {
                     TreeNode* phoneNode = new TreeNode();
                     phoneNode->type = NodeType::ContactDetail;
-                    phoneNode->displayText = QString::fromUtf8("\xf0\x9f\x93\x9e ") + member.phone();
+                    phoneNode->displayText = ContactIcons::Phone + member.phone();
                     phoneNode->secondaryId = node->id;
                     phoneNode->parent = node;
                     node->children.append(phoneNode);
@@ -635,7 +650,7 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
         {
             TreeNode* addrNode = new TreeNode();
             addrNode->type = NodeType::ContactDetail;
-            addrNode->displayText = QString::fromUtf8("\xf0\x9f\x93\x8d ") + family.address().full();
+            addrNode->displayText = ContactIcons::Address + family.address().full();
             addrNode->secondaryId = node->id;
             addrNode->parent = node;
             node->children.append(addrNode);
@@ -655,4 +670,121 @@ bool MinisteringModel::hasContactsLoaded(const QModelIndex& index) const
         return node->contactsLoaded;
     }
     return false;
+}
+
+void MinisteringModel::refreshFamilyDisplayText(const QString& familyId)
+{
+    const Document& doc = m_documentManager->document();
+    const auto& families = doc.families();
+
+    if (!families.contains(familyId))
+    {
+        return;
+    }
+
+    const Family& family = families[familyId];
+
+    // Build set of person IDs in this family for quick lookup
+    QSet<QString> personIds;
+    for (const Person& member : family.members())
+    {
+        personIds.insert(member.id());
+    }
+
+    // Walk tree and update affected nodes
+    for (int districtRow = 0; districtRow < m_districtNodes.size(); ++districtRow)
+    {
+        TreeNode* districtNode = m_districtNodes[districtRow];
+
+        for (int compRow = 0; compRow < districtNode->children.size(); ++compRow)
+        {
+            TreeNode* compNode = districtNode->children[compRow];
+            if (compNode->type != NodeType::Companionship)
+            {
+                continue;
+            }
+
+            bool companionshipAffected = false;
+
+            for (int sectionRow = 0; sectionRow < compNode->children.size(); ++sectionRow)
+            {
+                TreeNode* sectionNode = compNode->children[sectionRow];
+                if (sectionNode->type != NodeType::SectionHeader)
+                {
+                    continue;
+                }
+
+                for (int itemRow = 0; itemRow < sectionNode->children.size(); ++itemRow)
+                {
+                    TreeNode* itemNode = sectionNode->children[itemRow];
+                    bool needsUpdate = false;
+
+                    if (itemNode->type == NodeType::Minister
+                        || itemNode->type == NodeType::MinisteredSister)
+                    {
+                        // Person node - check if person is in updated family
+                        if (personIds.contains(itemNode->id))
+                        {
+                            std::optional<Person> person = doc.findPersonById(itemNode->id);
+                            if (person)
+                            {
+                                itemNode->displayText = person->displayName();
+                                needsUpdate = true;
+                                if (itemNode->type == NodeType::Minister)
+                                {
+                                    companionshipAffected = true;
+                                }
+                            }
+                        }
+                    }
+                    else if (itemNode->type == NodeType::MinisteredFamily)
+                    {
+                        // Family node - check if this is the updated family
+                        if (itemNode->id == familyId)
+                        {
+                            itemNode->displayText = family.displayName();
+                            needsUpdate = true;
+                        }
+                    }
+
+                    if (needsUpdate)
+                    {
+                        QModelIndex sectionIndex = createIndex(sectionRow, 0, sectionNode);
+                        QModelIndex itemIndex = index(itemRow, 0, sectionIndex);
+                        emit dataChanged(itemIndex, itemIndex);
+                    }
+                }
+            }
+
+            // Update companionship text if any minister was affected
+            if (companionshipAffected)
+            {
+                // Rebuild companionship display text from current minister names
+                const QHash<QString, MinisteringGroup>& groups =
+                    m_isEQ ? doc.eqGroups() : doc.rsGroups();
+
+                if (groups.contains(compNode->id))
+                {
+                    const MinisteringGroup& group = groups[compNode->id];
+                    QStringList ministerNames;
+                    for (const QString& ministerId : group.ministerIds())
+                    {
+                        std::optional<Person> person = doc.findPersonById(ministerId);
+                        if (person)
+                        {
+                            ministerNames.append(person->displayName());
+                        }
+                    }
+                    int count = m_isEQ ? group.familyCount() : group.ministeredPersonCount();
+                    compNode->displayText = QString("%1 (%2)")
+                        .arg(ministerNames.join(", "))
+                        .arg(count);
+
+                    QModelIndex districtIndex = createIndex(districtRow, 0, districtNode);
+                    QModelIndex compIndex = index(compRow, 0, districtIndex);
+                    emit dataChanged(compIndex, compIndex);
+                }
+            }
+        }
+    }
 }
