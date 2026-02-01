@@ -253,14 +253,13 @@ bool DocumentManager::isGeocoding() const
 
 void DocumentManager::onFamilyGeocoded(const QString& id, double latitude, double longitude)
 {
-    // Silent update - no undo/redo, just update the document directly
+    // Silent update - no undo/redo, no signal (nothing needs to rebuild for coord changes)
     auto existing = m_document.findFamilyById(id);
     if (existing.has_value())
     {
         Family updated = *existing;
         updated.setLocation(latitude, longitude);
         m_document.updateFamily(updated);
-        emit documentChanged(DocumentChange::family().updated(id));
     }
 }
 
