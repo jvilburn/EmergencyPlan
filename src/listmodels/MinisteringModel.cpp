@@ -470,7 +470,7 @@ QString MinisteringModel::idAt(const QModelIndex& index) const
     return QString();
 }
 
-ItemType MinisteringModel::nodeTypeAt(const QModelIndex& index) const
+ItemType MinisteringModel::itemTypeAt(const QModelIndex& index) const
 {
     TreeNode* node = nodeFromIndex(index);
     if (node)

@@ -49,8 +49,8 @@ public:
 
     // View-specific accessors
     QString idAt(const QModelIndex& index) const;
-    /// Returns the node type at the given index, or ItemType::Invalid for invalid indexes.
-    ItemType nodeTypeAt(const QModelIndex& index) const;
+    /// Returns the item type at the given index, or ItemType::Invalid for invalid indexes.
+    ItemType itemTypeAt(const QModelIndex& index) const;
     QString companionshipIdAt(const QModelIndex& index) const;
 
     // Lazy loading for contact details

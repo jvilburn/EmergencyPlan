@@ -1,7 +1,6 @@
 #pragma once
 
 #include "FamilyMarkerProvider.h"
-#include "ItemType.h"
 #include "MinisteringModel.h"
 
 #include <QWidget>

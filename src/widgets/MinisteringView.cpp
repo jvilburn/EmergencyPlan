@@ -137,14 +137,14 @@ void MinisteringView::onSelectionChanged(const QModelIndex& current, const QMode
         return;
     }
 
-    ItemType type = model->nodeTypeAt(current);
+    ItemType type = model->itemTypeAt(current);
 
     // For ContactDetail nodes, use the parent's type and id for highlighting
     QModelIndex nodeToUse = current;
     if (type == ItemType::ContactDetail)
     {
         nodeToUse = current.parent();
-        type = model->nodeTypeAt(nodeToUse);
+        type = model->itemTypeAt(nodeToUse);
     }
 
     // Build the selection ID based on type
@@ -196,7 +196,7 @@ void MinisteringView::onTreeExpanded(const QModelIndex& index)
     bool isEQ = (tree == m_eqTree);
     MinisteringModel* model = isEQ ? m_eqModel : m_rsModel;
 
-    ItemType type = model->nodeTypeAt(index);
+    ItemType type = model->itemTypeAt(index);
 
     if (type == ItemType::Companionship)
     {
@@ -205,7 +205,7 @@ void MinisteringView::onTreeExpanded(const QModelIndex& index)
         for (int i = 0; i < rowCount; ++i)
         {
             QModelIndex childIndex = model->index(i, 0, index);
-            ItemType childType = model->nodeTypeAt(childIndex);
+            ItemType childType = model->itemTypeAt(childIndex);
             if (childType == ItemType::SectionHeader)
             {
                 tree->expand(childIndex);
