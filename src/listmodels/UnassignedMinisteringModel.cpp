@@ -1,4 +1,5 @@
 #include "UnassignedMinisteringModel.h"
+#include "ContactIcons.h"
 #include "DocumentManager.h"
 #include "Document.h"
 #include "MinisteringGroup.h"
@@ -6,6 +7,7 @@
 #include "Person.h"
 
 #include <algorithm>
+#include <QSet>
 
 UnassignedMinisteringModel::UnassignedMinisteringModel(DocumentManager* documentManager,
                                                          bool isEQ,
@@ -30,23 +32,34 @@ void UnassignedMinisteringModel::clearNodes()
     m_headerNode = nullptr;
 }
 
-bool UnassignedMinisteringModel::shouldRebuild(const DocumentChange& change) const
-{
-    switch (change.scope)
-    {
-    case ChangeScope::Full:
-    case ChangeScope::EqGroup:
-    case ChangeScope::RsGroup:
-    case ChangeScope::Family:
-        return true;
-    default:
-        return false;
-    }
-}
-
 void UnassignedMinisteringModel::onDocumentChanged(const DocumentChange& change)
 {
-    if (shouldRebuild(change))
+    // Structural changes: full rebuild
+    if (change.scope == ChangeScope::Full
+        || change.action == ChangeAction::BatchModified)
+    {
+        rebuild();
+        return;
+    }
+
+    // Ministering group changes: full rebuild (affects who is unassigned)
+    if (change.scope == ChangeScope::EqGroup
+        || change.scope == ChangeScope::RsGroup)
+    {
+        rebuild();
+        return;
+    }
+
+    // Family updated: refresh display text only
+    if (change.scope == ChangeScope::Family
+        && change.action == ChangeAction::Updated)
+    {
+        refreshFamilyDisplayText(change.entityId);
+        return;
+    }
+
+    // Family added/removed: rebuild (affects unassigned list)
+    if (change.scope == ChangeScope::Family)
     {
         rebuild();
     }
@@ -312,6 +325,8 @@ UnassignedMinisteringModel::NodeType UnassignedMinisteringModel::nodeTypeAt(cons
     return NodeType::Invalid;
 }
 
+// Note: Similar logic exists in MinisteringModel::loadContactDetails().
+// Kept separate per "no base class" design decision (see tree-view-model-migration.md).
 void UnassignedMinisteringModel::loadContactDetails(const QModelIndex& index)
 {
     TreeNode* node = nodeFromIndex(index);
@@ -380,7 +395,7 @@ void UnassignedMinisteringModel::loadContactDetails(const QModelIndex& index)
         {
             TreeNode* phoneNode = new TreeNode();
             phoneNode->type = NodeType::ContactDetail;
-            phoneNode->displayText = QString::fromUtf8("\xf0\x9f\x93\x9e ") + person->phone();
+            phoneNode->displayText = ContactIcons::Phone + person->phone();
             phoneNode->secondaryId = node->id;
             phoneNode->parent = node;
             node->children.append(phoneNode);
@@ -391,7 +406,7 @@ void UnassignedMinisteringModel::loadContactDetails(const QModelIndex& index)
         {
             TreeNode* altPhoneNode = new TreeNode();
             altPhoneNode->type = NodeType::ContactDetail;
-            altPhoneNode->displayText = QString::fromUtf8("\xf0\x9f\x93\x9e ") + person->altPhone() + tr(" (alt)");
+            altPhoneNode->displayText = ContactIcons::Phone + person->altPhone() + tr(" (alt)");
             altPhoneNode->secondaryId = node->id;
             altPhoneNode->parent = node;
             node->children.append(altPhoneNode);
@@ -402,7 +417,7 @@ void UnassignedMinisteringModel::loadContactDetails(const QModelIndex& index)
         {
             TreeNode* emailNode = new TreeNode();
             emailNode->type = NodeType::ContactDetail;
-            emailNode->displayText = QString::fromUtf8("\xf0\x9f\x93\xa7 ") + person->email();
+            emailNode->displayText = ContactIcons::Email + person->email();
             emailNode->secondaryId = node->id;
             emailNode->parent = node;
             node->children.append(emailNode);
@@ -414,7 +429,7 @@ void UnassignedMinisteringModel::loadContactDetails(const QModelIndex& index)
             const Family& family = families[familyId];
             TreeNode* addrNode = new TreeNode();
             addrNode->type = NodeType::ContactDetail;
-            addrNode->displayText = QString::fromUtf8("\xf0\x9f\x93\x8d ") + family.address().full();
+            addrNode->displayText = ContactIcons::Address + family.address().full();
             addrNode->secondaryId = node->id;
             addrNode->parent = node;
             node->children.append(addrNode);
@@ -468,7 +483,7 @@ void UnassignedMinisteringModel::loadContactDetails(const QModelIndex& index)
                 {
                     TreeNode* phoneNode = new TreeNode();
                     phoneNode->type = NodeType::ContactDetail;
-                    phoneNode->displayText = QString::fromUtf8("\xf0\x9f\x93\x9e ") + member.phone();
+                    phoneNode->displayText = ContactIcons::Phone + member.phone();
                     phoneNode->secondaryId = node->id;
                     phoneNode->parent = node;
                     node->children.append(phoneNode);
@@ -482,7 +497,7 @@ void UnassignedMinisteringModel::loadContactDetails(const QModelIndex& index)
         {
             TreeNode* addrNode = new TreeNode();
             addrNode->type = NodeType::ContactDetail;
-            addrNode->displayText = QString::fromUtf8("\xf0\x9f\x93\x8d ") + family.address().full();
+            addrNode->displayText = ContactIcons::Address + family.address().full();
             addrNode->secondaryId = node->id;
             addrNode->parent = node;
             node->children.append(addrNode);
@@ -507,4 +522,66 @@ bool UnassignedMinisteringModel::hasContactsLoaded(const QModelIndex& index) con
 bool UnassignedMinisteringModel::hasUnassigned() const
 {
     return m_headerNode != nullptr;
+}
+
+void UnassignedMinisteringModel::refreshFamilyDisplayText(const QString& familyId)
+{
+    if (!m_headerNode)
+    {
+        return;
+    }
+
+    const Document& doc = m_documentManager->document();
+    const QHash<QString, Family>& families = doc.families();
+
+    if (!families.contains(familyId))
+    {
+        return;
+    }
+
+    const Family& family = families[familyId];
+
+    // Build set of person IDs in this family for quick lookup
+    QSet<QString> personIds;
+    for (const Person& member : family.members())
+    {
+        personIds.insert(member.id());
+    }
+
+    // Walk children of header and update affected nodes
+    for (int itemRow = 0; itemRow < m_headerNode->children.size(); ++itemRow)
+    {
+        TreeNode* itemNode = m_headerNode->children[itemRow];
+        bool needsUpdate = false;
+
+        if (itemNode->type == NodeType::MinisteredSister)
+        {
+            // Person node - check if person is in updated family
+            if (personIds.contains(itemNode->id))
+            {
+                std::optional<Person> person = doc.findPersonById(itemNode->id);
+                if (person)
+                {
+                    itemNode->displayText = person->displayName();
+                    needsUpdate = true;
+                }
+            }
+        }
+        else if (itemNode->type == NodeType::MinisteredFamily)
+        {
+            // Family node - check if this is the updated family
+            if (itemNode->id == familyId)
+            {
+                itemNode->displayText = family.displayName();
+                needsUpdate = true;
+            }
+        }
+
+        if (needsUpdate)
+        {
+            QModelIndex headerIndex = createIndex(0, 0, m_headerNode);
+            QModelIndex itemIndex = index(itemRow, 0, headerIndex);
+            emit dataChanged(itemIndex, itemIndex);
+        }
+    }
 }

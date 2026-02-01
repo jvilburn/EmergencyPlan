@@ -16,7 +16,8 @@ class DocumentManager;
 /// - MinisteredFamily (EQ) or MinisteredSister (RS) - individual items
 /// - ContactDetail - phone, email, address (loaded on demand)
 ///
-/// This model rebuilds on Full, EqGroup, RsGroup, Family scopes.
+/// This model rebuilds on Full, EqGroup, RsGroup, and Family add/remove changes.
+/// Family updates only refresh display text (no structural rebuild).
 class UnassignedMinisteringModel : public QAbstractItemModel
 {
     Q_OBJECT
@@ -63,7 +64,7 @@ private slots:
 
 private:
     void rebuild();
-    bool shouldRebuild(const DocumentChange& change) const;
+    void refreshFamilyDisplayText(const QString& familyId);
     void clearNodes();
 
     /// Internal tree node structure
