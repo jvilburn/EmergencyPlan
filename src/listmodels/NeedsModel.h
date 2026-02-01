@@ -20,7 +20,6 @@ class NeedsModel : public QAbstractItemModel
     Q_OBJECT
 
 public:
-
     // Custom roles
     enum Roles
     {

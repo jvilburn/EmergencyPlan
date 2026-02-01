@@ -257,7 +257,7 @@ QModelIndex NeedsModel::indexForPersonId(const QString& personId) const
     return QModelIndex();
 }
 
-NeedsModel::ItemType NeedsModel::itemTypeAt(const QModelIndex& index) const
+ItemType NeedsModel::itemTypeAt(const QModelIndex& index) const
 {
     TreeNode* node = nodeFromIndex(index);
     if (node)
