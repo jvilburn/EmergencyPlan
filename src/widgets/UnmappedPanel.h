@@ -5,7 +5,7 @@
 #include <QList>
 
 class DocumentManager;
-class FamilyListModel;
+class FamilyTreeModel;
 class Filter;
 class FamilyMarkerProvider;
 
@@ -61,7 +61,7 @@ private:
 
     DocumentManager* m_docManager;
     Filter* m_filter;
-    FamilyListModel* m_model;
+    FamilyTreeModel* m_model;
     FamilyMarkerProvider* m_markerProvider = nullptr;
     bool m_isExpanded = true;
 

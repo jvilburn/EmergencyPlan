@@ -222,7 +222,6 @@ set(WIDGET_SOURCES
     src/widgets/UnmappedPanel.cpp
     src/widgets/WardListDialog.cpp
     src/widgets/WardListView.cpp
-    src/widgets/shared/FilterableListWidget.cpp
     src/widgets/shared/FilterBar.cpp
     src/widgets/shared/FilterChip.cpp
     src/widgets/shared/SearchField.cpp
@@ -267,7 +266,6 @@ set(WIDGET_HEADERS
     src/widgets/UnmappedPanel.h
     src/widgets/WardListDialog.h
     src/widgets/WardListView.h
-    src/widgets/shared/FilterableListWidget.h
     src/widgets/shared/FilterBar.h
     src/widgets/shared/FilterChip.h
     src/widgets/shared/SearchField.h
@@ -298,13 +296,11 @@ set(LISTMODEL_SOURCES
     src/listmodels/BaseTreeModel.cpp
     src/listmodels/EmergencyResourceModel.cpp
     src/listmodels/Filter.cpp
-    src/listmodels/FamilyListModel.cpp
     src/listmodels/FamilyTreeModel.cpp
     src/listmodels/MinisteringModel.cpp
     src/listmodels/NeedsModel.cpp
     src/listmodels/PersonTreeModel.cpp
     src/listmodels/UnassignedMinisteringModel.cpp
-    src/listmodels/PersonListModel.cpp
     src/listmodels/TeamListModel.cpp
     src/listmodels/TagListModel.cpp
     # src/listmodels/DistrictTreeModel.cpp
@@ -315,13 +311,11 @@ set(LISTMODEL_HEADERS
     src/listmodels/BaseTreeModel.h
     src/listmodels/EmergencyResourceModel.h
     src/listmodels/Filter.h
-    src/listmodels/FamilyListModel.h
     src/listmodels/FamilyTreeModel.h
     src/listmodels/MinisteringModel.h
     src/listmodels/NeedsModel.h
     src/listmodels/PersonTreeModel.h
     src/listmodels/UnassignedMinisteringModel.h
-    src/listmodels/PersonListModel.h
     src/listmodels/TeamListModel.h
     src/listmodels/TagListModel.h
     # src/listmodels/DistrictTreeModel.h

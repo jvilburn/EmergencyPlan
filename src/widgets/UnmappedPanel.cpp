@@ -2,7 +2,7 @@
 #include "Document.h"
 #include "DocumentManager.h"
 #include "FamilyMarkerProvider.h"
-#include "FamilyListModel.h"
+#include "FamilyTreeModel.h"
 #include "Filter.h"
 #include "MarkerRenderer.h"
 
@@ -20,7 +20,7 @@ UnmappedPanel::UnmappedPanel(DocumentManager* docManager, QWidget* parent)
     m_filter->setMappedFilter(MappedFilter::Unmapped);
 
     // Create model with unmapped filter
-    m_model = new FamilyListModel(docManager, m_filter, this);
+    m_model = new FamilyTreeModel(docManager, m_filter, this);
 
     // Rebuild layout when model changes
     connect(m_model, &QAbstractItemModel::modelReset,
@@ -92,8 +92,9 @@ void UnmappedPanel::recalculateLayout()
         int row = i % rowsPerColumn;
 
         MarkerLayout item;
-        item.familyId = m_model->idAt(i);
-        item.name = m_model->data(m_model->index(i, 0), FamilyListModel::DisplayNameRole).toString();
+        QModelIndex idx = m_model->index(i, 0);
+        item.familyId = m_model->familyIdAt(idx);
+        item.name = m_model->data(idx, Qt::DisplayRole).toString();
 
         // Position: columns from left to right for natural reading order
         double x = H_PADDING + col * COLUMN_WIDTH + MARKER_SIZE / 2.0;
