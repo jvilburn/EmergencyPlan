@@ -6,20 +6,19 @@
 
 class DocumentManager;
 class NeedsModel;
-class QTreeView;
 class QModelIndex;
+class SelectionPreservingTreeView;
 
-/// NeedsSubView displays a 2-level tree of special needs:
-/// - Person (top level) - shows "DisplayName - note" or just "DisplayName"
-/// - ContactDetail (under person) - phone, email, address (lazy loaded on expand)
-///
-/// Implements FamilyMarkerProvider to highlight families of selected persons.
+/// NeedsSubView displays a 2-level tree of special needs.
+/// Takes model pointer - parent creates model.
 class NeedsSubView : public QWidget, public FamilyMarkerProvider
 {
     Q_OBJECT
 
 public:
-    explicit NeedsSubView(DocumentManager* documentManager, QWidget* parent = nullptr);
+    explicit NeedsSubView(NeedsModel* model,
+                          DocumentManager* documentManager,
+                          QWidget* parent = nullptr);
 
     // FamilyMarkerProvider interface
     HighlightInfo highlightInfo() const override;
@@ -29,7 +28,7 @@ signals:
     void highlightChanged();
 
 private slots:
-    void onSelectionChanged(const QModelIndex& current, const QModelIndex& previous);
+    void onSelectionChanged();
     void onTreeExpanded(const QModelIndex& index);
     void onContextMenu(const QPoint& pos);
 
@@ -40,5 +39,5 @@ private:
 
     DocumentManager* m_documentManager;
     NeedsModel* m_model;
-    QTreeView* m_tree;
+    SelectionPreservingTreeView* m_tree;
 };

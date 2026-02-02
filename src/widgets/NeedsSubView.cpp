@@ -1,4 +1,5 @@
 #include "NeedsSubView.h"
+#include "BaseTreeModel.h"
 #include "WardListDialog.h"
 #include "DocumentManager.h"
 #include "Document.h"
@@ -8,8 +9,8 @@
 #include "FamilyCommands.h"
 #include "ItemType.h"
 #include "NeedsModel.h"
+#include "SelectionPreservingTreeView.h"
 
-#include <QTreeView>
 #include <QVBoxLayout>
 #include <QMenu>
 #include <QInputDialog>
@@ -54,11 +55,12 @@ void updatePersonInFamily(DocumentManager* docMgr, const QString& familyId, cons
 
 }  // namespace
 
-NeedsSubView::NeedsSubView(DocumentManager* documentManager, QWidget* parent)
+NeedsSubView::NeedsSubView(NeedsModel* model,
+                           DocumentManager* documentManager,
+                           QWidget* parent)
     : QWidget(parent)
     , m_documentManager(documentManager)
-    , m_model(nullptr)
-    , m_tree(nullptr)
+    , m_model(model)
 {
     QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(4, 4, 4, 4);
@@ -68,20 +70,16 @@ NeedsSubView::NeedsSubView(DocumentManager* documentManager, QWidget* parent)
     connect(addButton, &QPushButton::clicked, this, &NeedsSubView::showAddNeedDialog);
     layout->addWidget(addButton);
 
-    // Create model
-    m_model = new NeedsModel(m_documentManager, this);
-
-    // Create tree view
-    m_tree = new QTreeView();
+    // Create tree view with model
+    m_tree = new SelectionPreservingTreeView(m_model, this);
     m_tree->setHeaderHidden(true);
     m_tree->setRootIsDecorated(true);
     m_tree->setSelectionMode(QAbstractItemView::SingleSelection);
     m_tree->setContextMenuPolicy(Qt::CustomContextMenu);
     m_tree->setIndentation(16);
-    m_tree->setModel(m_model);
     layout->addWidget(m_tree);
 
-    connect(m_tree->selectionModel(), &QItemSelectionModel::currentChanged,
+    connect(m_tree, &SelectionPreservingTreeView::selectionChanged,
             this, &NeedsSubView::onSelectionChanged);
     connect(m_tree, &QTreeView::customContextMenuRequested,
             this, &NeedsSubView::onContextMenu);
@@ -89,10 +87,8 @@ NeedsSubView::NeedsSubView(DocumentManager* documentManager, QWidget* parent)
             this, &NeedsSubView::onTreeExpanded);
 }
 
-void NeedsSubView::onSelectionChanged(const QModelIndex& current, const QModelIndex& previous)
+void NeedsSubView::onSelectionChanged()
 {
-    Q_UNUSED(current)
-    Q_UNUSED(previous)
     emit highlightChanged();
 }
 
@@ -160,19 +156,8 @@ void NeedsSubView::onContextMenu(const QPoint& pos)
 
 HighlightInfo NeedsSubView::highlightInfo() const
 {
-    HighlightInfo info;
-
-    QModelIndex current = m_tree->currentIndex();
-    if (current.isValid())
-    {
-        QString familyId = m_model->familyIdAt(current);
-        if (!familyId.isEmpty())
-        {
-            info.highlightedFamilyIds.insert(familyId);
-        }
-    }
-
-    return info;
+    FamilyAssociation assoc = m_model->relatedFamiliesAt(m_tree->currentIndex());
+    return {assoc.relatedFamilyIds, assoc.contactPointFamilyIds};
 }
 
 QSet<QString> NeedsSubView::visibleFamilyIds() const

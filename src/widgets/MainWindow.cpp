@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 #include "WardListView.h"
 #include "MinisteringView.h"
+#include "NeedsModel.h"
 #include "NeedsSubView.h"
 #include "ResourcesView.h"
 #include "FamilyEditPanel.h"
@@ -92,7 +93,8 @@ void MainWindow::setupUi()
     m_sidebarTabs->addTab(teamsPlaceholder, tr("Teams"));
 
     // Needs tab
-    m_needsView = new NeedsSubView(m_documentManager);
+    m_needsModel = new NeedsModel(m_documentManager, this);
+    m_needsView = new NeedsSubView(m_needsModel, m_documentManager, this);
     m_sidebarTabs->addTab(m_needsView, tr("Needs"));
 
     // Resources tab (renamed from Emergency)

@@ -11,6 +11,7 @@ class QTabWidget;
 class DocumentManager;
 class FamilyEditPanel;
 class MapWidget;
+class NeedsModel;
 class WardListView;
 class MinisteringView;
 class NeedsSubView;
@@ -80,6 +81,7 @@ private:
     QTabWidget* m_sidebarTabs;
     WardListView* m_wardListView;
     MinisteringView* m_ministeringView;
+    NeedsModel* m_needsModel;
     NeedsSubView* m_needsView;
     ResourcesView* m_resourcesView;
     FamilyEditPanel* m_editPanel;
