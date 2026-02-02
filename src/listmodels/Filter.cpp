@@ -1,5 +1,6 @@
 #include "Filter.h"
 #include "Document.h"
+#include "EmergencyResource.h"
 #include "Family.h"
 #include "Person.h"
 #include "Tag.h"
@@ -135,6 +136,32 @@ void Filter::setHasAnySpecialNeed(bool value)
     }
 }
 
+void Filter::setResponseAreas(const QSet<ResponseArea>& areas)
+{
+    if (m_responseAreas != areas)
+    {
+        m_responseAreas = areas;
+        emit changed();
+    }
+}
+
+void Filter::addResponseArea(ResponseArea area)
+{
+    if (!m_responseAreas.contains(area))
+    {
+        m_responseAreas.insert(area);
+        emit changed();
+    }
+}
+
+void Filter::removeResponseArea(ResponseArea area)
+{
+    if (m_responseAreas.remove(area))
+    {
+        emit changed();
+    }
+}
+
 void Filter::clear()
 {
     bool wasEmpty = isEmpty();
@@ -151,6 +178,7 @@ void Filter::clear()
     m_onlyWithContact = false;
     m_specialNeeds.clear();
     m_hasAnySpecialNeed = false;
+    m_responseAreas.clear();
 
     if (!wasEmpty)
     {
@@ -171,7 +199,8 @@ bool Filter::isEmpty() const
         && m_mappedFilter == MappedFilter::All
         && !m_onlyWithContact
         && m_specialNeeds.isEmpty()
-        && !m_hasAnySpecialNeed;
+        && !m_hasAnySpecialNeed
+        && m_responseAreas.isEmpty();
 }
 
 bool Filter::passesFamilyCriteria(const Family& family) const
@@ -306,20 +335,6 @@ bool Filter::hasPersonLevelTag(const Document& document, const QString& personId
     return false;
 }
 
-bool Filter::hasFamilyLevelResource(const Document& /*document*/, const QString& /*familyId*/) const
-{
-    // TODO: Implement filtering by EmergencyResource (family-level)
-    Q_UNUSED(m_resourceTypeIds);
-    return false;
-}
-
-bool Filter::hasPersonLevelResource(const Document& /*document*/, const QString& /*personId*/) const
-{
-    // TODO: Implement filtering by EmergencyResource (person-level)
-    Q_UNUSED(m_resourceTypeIds);
-    return false;
-}
-
 bool Filter::isOnTeam(const Document& document, const QString& personId) const
 {
     for (const QString& teamId : m_teamIds)
@@ -328,6 +343,52 @@ bool Filter::isOnTeam(const Document& document, const QString& personId) const
         if (teamOpt && teamOpt->hasMember(personId))
         {
             return true;
+        }
+    }
+    return false;
+}
+
+bool Filter::hasResponseArea(const Document& document, const QString& personId) const
+{
+    // Case 1: Only resourceTypeIds set (no response areas) - check specific resources
+    if (m_responseAreas.isEmpty() && !m_resourceTypeIds.isEmpty())
+    {
+        for (const QString& resourceId : m_resourceTypeIds)
+        {
+            std::optional<EmergencyResource> resource = document.findEmergencyResourceById(resourceId);
+            if (resource && resource->hasPerson(personId))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Case 2: Response areas set (optionally combined with specific resources)
+    QSet<ResponseArea> personAreas = document.personResponseAreas(personId);
+
+    for (const ResponseArea& area : m_responseAreas)
+    {
+        if (personAreas.contains(area))
+        {
+            // If specific resources are also filtered, check those too
+            if (!m_resourceTypeIds.isEmpty())
+            {
+                // Check if person has any of the specific resources in this area
+                for (const QString& resourceId : m_resourceTypeIds)
+                {
+                    std::optional<EmergencyResource> resource = document.findEmergencyResourceById(resourceId);
+                    if (resource && resource->responseArea() == area
+                        && resource->hasPerson(personId))
+                    {
+                        return true;
+                    }
+                }
+            }
+            else
+            {
+                return true;  // Area matches, no specific resource filter
+            }
         }
     }
     return false;
@@ -358,8 +419,7 @@ bool Filter::passes(const Document& document, const Family& family) const
 
     // Pre-compute family-level tag/resource matches
     bool tagsOk = m_tagIds.isEmpty() || hasFamilyLevelTag(document, family.id());
-    bool resourcesOk = m_resourceTypeIds.isEmpty()
-        || hasFamilyLevelResource(document, family.id());
+    bool resourcesOk = m_responseAreas.isEmpty() && m_resourceTypeIds.isEmpty();
     bool teamsOk = m_teamIds.isEmpty();
     bool personCriteriaOk = m_callings.isEmpty()
         && !m_gender.has_value()
@@ -387,8 +447,8 @@ bool Filter::passes(const Document& document, const Family& family) const
             tagsOk = true;
         }
 
-        // Resources: person-level
-        if (!resourcesOk && hasPersonLevelResource(document, member.id()))
+        // Resources: response areas
+        if (!resourcesOk && hasResponseArea(document, member.id()))
         {
             resourcesOk = true;
         }
@@ -489,15 +549,10 @@ bool Filter::passes(const Document& document, const Person& person) const
         return false;
     }
 
-    // Resources: person-level OR family-level
-    if (!m_resourceTypeIds.isEmpty())
+    // Resources: response areas
+    if (!m_responseAreas.isEmpty() || !m_resourceTypeIds.isEmpty())
     {
-        bool found = hasPersonLevelResource(document, person.id());
-        if (!found && familyOpt.has_value())
-        {
-            found = hasFamilyLevelResource(document, familyId);
-        }
-        if (!found)
+        if (!hasResponseArea(document, person.id()))
         {
             return false;
         }

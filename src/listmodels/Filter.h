@@ -7,6 +7,7 @@
 #include <optional>
 
 #include "Gender.h"
+#include "ResponseArea.h"
 
 class Document;
 class Family;
@@ -50,6 +51,7 @@ public:
     bool onlyWithContact() const { return m_onlyWithContact; }
     QSet<QString> specialNeeds() const { return m_specialNeeds; }
     bool hasAnySpecialNeed() const { return m_hasAnySpecialNeed; }
+    QSet<ResponseArea> responseAreas() const { return m_responseAreas; }
 
     // Setters (emit changed() signal)
     void setSearchText(const QString& text);
@@ -66,6 +68,9 @@ public:
     void addSpecialNeed(const QString& need);
     void removeSpecialNeed(const QString& need);
     void setHasAnySpecialNeed(bool value);
+    void setResponseAreas(const QSet<ResponseArea>& areas);
+    void addResponseArea(ResponseArea area);
+    void removeResponseArea(ResponseArea area);
 
     // Bulk operations
     void clear();
@@ -92,9 +97,8 @@ private:
     // Tag/resource helpers (separate family-level and person-level)
     bool hasFamilyLevelTag(const Document& document, const QString& familyId) const;
     bool hasPersonLevelTag(const Document& document, const QString& personId) const;
-    bool hasFamilyLevelResource(const Document& document, const QString& familyId) const;
-    bool hasPersonLevelResource(const Document& document, const QString& personId) const;
     bool isOnTeam(const Document& document, const QString& personId) const;
+    bool hasResponseArea(const Document& document, const QString& personId) const;
 
     QString m_searchText;
     QSet<QString> m_tagIds;
@@ -108,4 +112,5 @@ private:
     bool m_onlyWithContact = false;
     QSet<QString> m_specialNeeds;
     bool m_hasAnySpecialNeed = false;
+    QSet<ResponseArea> m_responseAreas;
 };
