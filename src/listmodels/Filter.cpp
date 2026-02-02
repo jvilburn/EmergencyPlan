@@ -100,6 +100,41 @@ void Filter::setOnlyWithContact(bool value)
     }
 }
 
+void Filter::setSpecialNeeds(const QSet<QString>& needs)
+{
+    if (m_specialNeeds != needs)
+    {
+        m_specialNeeds = needs;
+        emit changed();
+    }
+}
+
+void Filter::addSpecialNeed(const QString& need)
+{
+    if (!m_specialNeeds.contains(need))
+    {
+        m_specialNeeds.insert(need);
+        emit changed();
+    }
+}
+
+void Filter::removeSpecialNeed(const QString& need)
+{
+    if (m_specialNeeds.remove(need))
+    {
+        emit changed();
+    }
+}
+
+void Filter::setHasAnySpecialNeed(bool value)
+{
+    if (m_hasAnySpecialNeed != value)
+    {
+        m_hasAnySpecialNeed = value;
+        emit changed();
+    }
+}
+
 void Filter::clear()
 {
     bool wasEmpty = isEmpty();
@@ -114,6 +149,8 @@ void Filter::clear()
     m_specificAge = std::nullopt;
     m_mappedFilter = MappedFilter::All;
     m_onlyWithContact = false;
+    m_specialNeeds.clear();
+    m_hasAnySpecialNeed = false;
 
     if (!wasEmpty)
     {
@@ -132,7 +169,9 @@ bool Filter::isEmpty() const
         && m_ageFilter == AgeFilter::All
         && !m_specificAge.has_value()
         && m_mappedFilter == MappedFilter::All
-        && !m_onlyWithContact;
+        && !m_onlyWithContact
+        && m_specialNeeds.isEmpty()
+        && !m_hasAnySpecialNeed;
 }
 
 bool Filter::passesFamilyCriteria(const Family& family) const
@@ -202,6 +241,23 @@ bool Filter::passesPersonCriteria(const Person& person) const
         if (!person.isChild())
         {
             return false;
+        }
+    }
+
+    // Special needs
+    if (m_hasAnySpecialNeed || !m_specialNeeds.isEmpty())
+    {
+        if (!person.hasSpecialNeed())
+        {
+            return false;
+        }
+        // If specific needs specified, must match one (OR within)
+        if (!m_specialNeeds.isEmpty())
+        {
+            if (!m_specialNeeds.contains(person.specialNeedNote()))
+            {
+                return false;
+            }
         }
     }
 
@@ -308,7 +364,9 @@ bool Filter::passes(const Document& document, const Family& family) const
     bool personCriteriaOk = m_callings.isEmpty()
         && !m_gender.has_value()
         && m_ageFilter == AgeFilter::All
-        && !m_specificAge.has_value();
+        && !m_specificAge.has_value()
+        && m_specialNeeds.isEmpty()
+        && !m_hasAnySpecialNeed;
 
     // 3. Single loop through members
     for (const Person& member : family.members())

@@ -48,6 +48,8 @@ public:
     std::optional<int> specificAge() const { return m_specificAge; }
     MappedFilter mappedFilter() const { return m_mappedFilter; }
     bool onlyWithContact() const { return m_onlyWithContact; }
+    QSet<QString> specialNeeds() const { return m_specialNeeds; }
+    bool hasAnySpecialNeed() const { return m_hasAnySpecialNeed; }
 
     // Setters (emit changed() signal)
     void setSearchText(const QString& text);
@@ -60,6 +62,10 @@ public:
     void setSpecificAge(std::optional<int> age);
     void setMappedFilter(MappedFilter filter);
     void setOnlyWithContact(bool value);
+    void setSpecialNeeds(const QSet<QString>& needs);
+    void addSpecialNeed(const QString& need);
+    void removeSpecialNeed(const QString& need);
+    void setHasAnySpecialNeed(bool value);
 
     // Bulk operations
     void clear();
@@ -100,4 +106,6 @@ private:
     std::optional<int> m_specificAge;
     MappedFilter m_mappedFilter = MappedFilter::All;
     bool m_onlyWithContact = false;
+    QSet<QString> m_specialNeeds;
+    bool m_hasAnySpecialNeed = false;
 };
