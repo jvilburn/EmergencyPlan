@@ -228,6 +228,8 @@ set(WIDGET_SOURCES
     src/widgets/SelectionPreservingTreeView.cpp
     src/widgets/EmergencyResourceView.cpp
     src/widgets/ResourcesView.cpp
+    src/widgets/MinisteringTreeView.cpp
+    src/widgets/UnassignedTreeView.cpp
     # src/widgets/Sidebar.cpp
     # src/widgets/MinisteringSidebar.cpp
     # src/widgets/ResourceView.cpp
