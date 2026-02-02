@@ -6,11 +6,10 @@
 
 class QTabWidget;
 class DocumentManager;
-class EmergencyResourceModel;
 class EmergencyResourceView;
 
 /// ResourcesView displays emergency resources organized into three sub-tabs:
-/// Medical, Communications, and Recovery. Creates models and passes to views.
+/// Medical, Communications, and Recovery. Each sub-view owns its FilterBar and model.
 class ResourcesView : public QWidget, public FamilyMarkerProvider
 {
     Q_OBJECT
@@ -30,12 +29,7 @@ private:
 
     QTabWidget* m_subTabs;
 
-    // Models owned by ResourcesView
-    EmergencyResourceModel* m_medicalModel;
-    EmergencyResourceModel* m_commsModel;
-    EmergencyResourceModel* m_recoveryModel;
-
-    // Views take model pointers
+    // Views own their FilterBar and model
     EmergencyResourceView* m_medicalView;
     EmergencyResourceView* m_commsView;
     EmergencyResourceView* m_recoveryView;

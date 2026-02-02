@@ -5,6 +5,7 @@
 #include "Document.h"
 #include "EmergencyResource.h"
 #include "EmergencyResourceModel.h"
+#include "FilterBar.h"
 #include "Person.h"
 #include "Phone.h"
 #include "EmergencyResourceCommands.h"
@@ -17,15 +18,19 @@
 #include <QInputDialog>
 #include <QMessageBox>
 
-EmergencyResourceView::EmergencyResourceView(EmergencyResourceModel* model,
-                                              DocumentManager* documentManager,
+EmergencyResourceView::EmergencyResourceView(DocumentManager* documentManager,
+                                              ResponseArea area,
                                               QWidget* parent)
     : QWidget(parent)
     , m_documentManager(documentManager)
-    , m_model(model)
 {
     QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(4, 4, 4, 4);
+    layout->setSpacing(4);
+
+    // FilterBar owns Filter
+    m_filterBar = new FilterBar(documentManager, this);
+    layout->addWidget(m_filterBar);
 
     // Toolbar
     QHBoxLayout* toolbar = new QHBoxLayout();
@@ -41,6 +46,9 @@ EmergencyResourceView::EmergencyResourceView(EmergencyResourceModel* model,
     toolbar->addStretch();
 
     layout->addLayout(toolbar);
+
+    // Create model with filter from FilterBar
+    m_model = new EmergencyResourceModel(documentManager, m_filterBar->filter(), area, this);
 
     // Create tree view with model
     m_tree = new SelectionPreservingTreeView(m_model, this);

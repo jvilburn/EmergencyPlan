@@ -1,5 +1,4 @@
 #include "ResourcesView.h"
-#include "EmergencyResourceModel.h"
 #include "EmergencyResourceView.h"
 #include "ResponseArea.h"
 
@@ -14,19 +13,14 @@ ResourcesView::ResourcesView(DocumentManager* documentManager, QWidget* parent)
 
     m_subTabs = new QTabWidget();
 
-    // Create models with ResponseArea
-    m_medicalModel = new EmergencyResourceModel(documentManager, ResponseArea::Medical, this);
-    m_commsModel = new EmergencyResourceModel(documentManager, ResponseArea::Communications, this);
-    m_recoveryModel = new EmergencyResourceModel(documentManager, ResponseArea::Recovery, this);
-
-    // Pass models to views
-    m_medicalView = new EmergencyResourceView(m_medicalModel, documentManager, this);
+    // Each view owns its FilterBar and model
+    m_medicalView = new EmergencyResourceView(documentManager, ResponseArea::Medical, this);
     m_subTabs->addTab(m_medicalView, tr("Medical"));
 
-    m_commsView = new EmergencyResourceView(m_commsModel, documentManager, this);
+    m_commsView = new EmergencyResourceView(documentManager, ResponseArea::Communications, this);
     m_subTabs->addTab(m_commsView, tr("Communications"));
 
-    m_recoveryView = new EmergencyResourceView(m_recoveryModel, documentManager, this);
+    m_recoveryView = new EmergencyResourceView(documentManager, ResponseArea::Recovery, this);
     m_subTabs->addTab(m_recoveryView, tr("Recovery"));
 
     layout->addWidget(m_subTabs);

@@ -8,6 +8,7 @@
 #include <QString>
 
 class DocumentManager;
+class Filter;
 
 /// Model for emergency resources tree (3-level: Resource → Person → ContactDetail).
 ///
@@ -32,6 +33,7 @@ public:
     Q_ENUM(Roles)
 
     explicit EmergencyResourceModel(DocumentManager* documentManager,
+                                     Filter* filter,
                                      ResponseArea area,
                                      QObject* parent = nullptr);
     ~EmergencyResourceModel() override;
@@ -88,5 +90,6 @@ private:
 
     QList<TreeNode*> m_resourceNodes;  // Top-level nodes (owned)
     DocumentManager* m_documentManager;
+    Filter* m_filter;
     ResponseArea m_area;
 };

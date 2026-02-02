@@ -1,25 +1,27 @@
 #pragma once
 
 #include "FamilyMarkerProvider.h"
+#include "ResponseArea.h"
 
 #include <QWidget>
 
 class DocumentManager;
 class EmergencyResourceModel;
+class FilterBar;
 class QModelIndex;
 class QPushButton;
 class SelectionPreservingTreeView;
 
 /// EmergencyResourceView displays a 3-level tree of resources.
-/// Takes model pointer - parent creates model with ResponseArea.
+/// Owns FilterBar (which owns Filter) and EmergencyResourceModel internally.
 /// Includes a toolbar with Add, Edit, Delete buttons.
 class EmergencyResourceView : public QWidget, public FamilyMarkerProvider
 {
     Q_OBJECT
 
 public:
-    explicit EmergencyResourceView(EmergencyResourceModel* model,
-                                    DocumentManager* documentManager,
+    explicit EmergencyResourceView(DocumentManager* documentManager,
+                                    ResponseArea area,
                                     QWidget* parent = nullptr);
 
     // FamilyMarkerProvider interface
@@ -50,6 +52,7 @@ private:
     QString selectedResourceId() const;
 
     DocumentManager* m_documentManager;
+    FilterBar* m_filterBar;
     EmergencyResourceModel* m_model;
     SelectionPreservingTreeView* m_tree;
 

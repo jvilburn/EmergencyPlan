@@ -4,20 +4,27 @@
 #include "Document.h"
 #include "EmergencyResource.h"
 #include "Family.h"
+#include "Filter.h"
 #include "Person.h"
 
 #include <algorithm>
 #include <QSet>
 
 EmergencyResourceModel::EmergencyResourceModel(DocumentManager* documentManager,
+                                                 Filter* filter,
                                                  ResponseArea area,
                                                  QObject* parent)
     : BaseTreeModel(parent)
     , m_documentManager(documentManager)
+    , m_filter(filter)
     , m_area(area)
 {
     connect(m_documentManager, &DocumentManager::documentChanged,
             this, &EmergencyResourceModel::onDocumentChanged);
+    if (m_filter)
+    {
+        connect(m_filter, &Filter::changed, this, &EmergencyResourceModel::rebuild);
+    }
     rebuild();
 }
 
@@ -74,27 +81,32 @@ void EmergencyResourceModel::rebuild()
 
     for (const EmergencyResource& resource : resources)
     {
-        // Create resource node
-        TreeNode* resourceNode = new TreeNode();
-        resourceNode->type = ItemType::Resource;
-        resourceNode->id = resource.id();
-        resourceNode->displayText = QString("%1 (%2)")
-            .arg(resource.name())
-            .arg(resource.personIds().size());
-
-        // Collect and sort people in this resource
+        // Collect and sort people in this resource (with filtering)
         QList<QPair<QString, QString>> people;  // (personId, displayName)
         for (const QString& personId : resource.personIds())
         {
             std::optional<Person> person = doc.findPersonById(personId);
             if (person)
             {
+                // Apply filter if set
+                if (m_filter && !m_filter->passes(doc, *person))
+                {
+                    continue;
+                }
                 people.append({personId, person->displayName()});
             }
         }
         std::sort(people.begin(), people.end(),
                   [](const QPair<QString, QString>& a, const QPair<QString, QString>& b)
                   { return a.second.toLower() < b.second.toLower(); });
+
+        // Create resource node with filtered count
+        TreeNode* resourceNode = new TreeNode();
+        resourceNode->type = ItemType::Resource;
+        resourceNode->id = resource.id();
+        resourceNode->displayText = QString("%1 (%2)")
+            .arg(resource.name())
+            .arg(people.size());
 
         // Create person nodes as children of resource
         for (const QPair<QString, QString>& personData : people)
