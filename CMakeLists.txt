@@ -225,7 +225,7 @@ set(WIDGET_SOURCES
     src/widgets/shared/FilterableListWidget.cpp
     src/widgets/shared/SearchField.cpp
     src/widgets/NeedsSubView.cpp
-    src/widgets/SelectableTreeView.cpp
+    src/widgets/SelectionPreservingTreeView.cpp
     src/widgets/EmergencyResourceView.cpp
     src/widgets/ResourcesView.cpp
     # src/widgets/Sidebar.cpp

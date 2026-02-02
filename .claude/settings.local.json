@@ -1,17 +1,4 @@
 {
-  "hooks": {
-    "PreCompact": [
-      {
-        "matcher": "auto",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "echo COMPACTION BLOCKED - start new session && exit 2"
-          }
-        ]
-      }
-    ]
-  },
   "env": {
     "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "100"
   },
@@ -33,7 +20,23 @@
       "Skill(superpowers:writing-plans)",
       "Skill(superpowers:writing-plans:*)",
       "Skill(superpowers:subagent-driven-development)",
-      "Skill(superpowers:subagent-driven-development:*)"
+      "Skill(superpowers:subagent-driven-development:*)",
+      "Bash(git show:*)",
+      "Read(//c/Users/johnv/.claude/skills/executing-with-review/**)",
+      "Bash(git mv:*)"
+    ]
+  },
+  "hooks": {
+    "PreCompact": [
+      {
+        "matcher": "auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo COMPACTION BLOCKED - start new session && exit 2"
+          }
+        ]
+      }
     ]
   }
 }

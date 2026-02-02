@@ -1,13 +1,10 @@
 #pragma once
 
-#include "FamilyMarkerProvider.h"
+#include "SelectableTreeView.h"
 #include "ResponseArea.h"
-
-#include <QWidget>
 
 class DocumentManager;
 class EmergencyResourceModel;
-class QTreeView;
 class QModelIndex;
 class QPushButton;
 
@@ -17,22 +14,21 @@ class QPushButton;
 /// - ContactDetail (under person) - phone, email, address (lazy loaded on expand)
 ///
 /// Includes a toolbar with Add, Edit, Delete buttons for discoverability.
-class EmergencyResourceView : public QWidget, public FamilyMarkerProvider
+class EmergencyResourceView : public SelectableTreeView
 {
     Q_OBJECT
 
 public:
     explicit EmergencyResourceView(DocumentManager* documentManager, ResponseArea area, QWidget* parent = nullptr);
 
-    // FamilyMarkerProvider interface
-    HighlightInfo highlightInfo() const override;
-    QSet<QString> visibleFamilyIds() const override;
-
-signals:
-    void highlightChanged();
+protected:
+    // SelectableTreeView interface
+    ItemType itemTypeAt(const QModelIndex& index) const override;
+    QString idAt(const QModelIndex& index) const override;
+    HighlightInfo computeHighlight() const override;
 
 private slots:
-    void onSelectionChanged(const QModelIndex& current, const QModelIndex& previous);
+    void onSelectionChanged();
     void onTreeDoubleClicked(const QModelIndex& index);
     void onTreeExpanded(const QModelIndex& index);
     void onContextMenu(const QPoint& pos);
