@@ -6,12 +6,13 @@
 #include "MapWidget.h"
 #include "DocumentManager.h"
 #include "Document.h"
+#include "SelectionPreservingTreeView.h"
 
 #include <QVBoxLayout>
 #include <QSplitter>
 #include <QDialogButtonBox>
-#include <QTreeView>
 #include <QItemSelectionModel>
+#include <QSet>
 
 WardListDialog::WardListDialog(DocumentManager* documentManager,
                                Mode mode,
@@ -46,23 +47,20 @@ void WardListDialog::setupUi()
     // Create splitter with tree and map
     m_splitter = new QSplitter(Qt::Horizontal, this);
 
-    // Create tree view
-    m_treeView = new QTreeView(this);
-    m_treeView->setHeaderHidden(true);
-    m_treeView->setRootIsDecorated(true);
-    m_treeView->setIndentation(16);
-
-    // Create appropriate model based on mode
+    // Create appropriate model based on mode, then tree view with model
     if (m_mode == FamilyMode)
     {
         m_familyModel = new FamilyTreeModel(m_documentManager, m_filterBar->filter(), this);
-        m_treeView->setModel(m_familyModel);
+        m_treeView = new SelectionPreservingTreeView(m_familyModel, this);
     }
     else
     {
         m_personModel = new PersonTreeModel(m_documentManager, m_filterBar->filter(), this);
-        m_treeView->setModel(m_personModel);
+        m_treeView = new SelectionPreservingTreeView(m_personModel, this);
     }
+    m_treeView->setHeaderHidden(true);
+    m_treeView->setRootIsDecorated(true);
+    m_treeView->setIndentation(16);
 
     // Create map widget
     m_mapWidget = new MapWidget(m_documentManager, this);
@@ -86,7 +84,7 @@ void WardListDialog::setupUi()
     m_mapWidget->setMarkerProvider(this);
 
     // Connections
-    connect(m_treeView->selectionModel(), &QItemSelectionModel::selectionChanged,
+    connect(m_treeView, &SelectionPreservingTreeView::selectionChanged,
             this, &WardListDialog::onSelectionChanged);
     connect(m_mapWidget, &MapWidget::familyClicked,
             this, &WardListDialog::onMapFamilyClicked);
@@ -116,6 +114,7 @@ void WardListDialog::setPreselectedIds(const QStringList& ids)
     QItemSelectionModel* selModel = m_treeView->selectionModel();
     selModel->clearSelection();
 
+    bool scrolledToFirst = false;
     for (const QString& id : ids)
     {
         QModelIndex index;
@@ -132,9 +131,10 @@ void WardListDialog::setPreselectedIds(const QStringList& ids)
         {
             selModel->select(index, QItemSelectionModel::Select);
             // Scroll to first selected item
-            if (ids.indexOf(id) == 0)
+            if (!scrolledToFirst)
             {
                 m_treeView->scrollTo(index);
+                scrolledToFirst = true;
             }
         }
     }
@@ -143,6 +143,7 @@ void WardListDialog::setPreselectedIds(const QStringList& ids)
 QStringList WardListDialog::selectedIds() const
 {
     QStringList ids;
+    QSet<QString> seen;
     QModelIndexList selected = m_treeView->selectionModel()->selectedIndexes();
 
     for (const QModelIndex& index : selected)
@@ -153,8 +154,9 @@ QStringList WardListDialog::selectedIds() const
             if (m_familyModel->itemTypeAt(index) == ItemType::Family)
             {
                 QString id = m_familyModel->familyIdAt(index);
-                if (!id.isEmpty() && !ids.contains(id))
+                if (!id.isEmpty() && !seen.contains(id))
                 {
+                    seen.insert(id);
                     ids.append(id);
                 }
             }
@@ -165,8 +167,9 @@ QStringList WardListDialog::selectedIds() const
             if (m_personModel->itemTypeAt(index) == ItemType::Person)
             {
                 QString id = m_personModel->personIdAt(index);
-                if (!id.isEmpty() && !ids.contains(id))
+                if (!id.isEmpty() && !seen.contains(id))
                 {
+                    seen.insert(id);
                     ids.append(id);
                 }
             }

@@ -12,7 +12,7 @@ class PersonTreeModel;
 class MapWidget;
 class QSplitter;
 class QDialogButtonBox;
-class QTreeView;
+class SelectionPreservingTreeView;
 
 /// Modal dialog for selecting families or persons from the ward list.
 /// Features a split view with tree on left and map on right.
@@ -86,7 +86,7 @@ private:
     Mode m_mode;
     DocumentManager* m_documentManager;
     FilterBar* m_filterBar = nullptr;
-    QTreeView* m_treeView = nullptr;
+    SelectionPreservingTreeView* m_treeView = nullptr;
     MapWidget* m_mapWidget = nullptr;
     QDialogButtonBox* m_buttonBox = nullptr;
     QSplitter* m_splitter = nullptr;
