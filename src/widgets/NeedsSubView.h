@@ -5,19 +5,19 @@
 #include <QWidget>
 
 class DocumentManager;
+class FilterBar;
 class NeedsModel;
 class QModelIndex;
 class SelectionPreservingTreeView;
 
 /// NeedsSubView displays a 2-level tree of special needs.
-/// Takes model pointer - parent creates model.
+/// Owns FilterBar (which owns Filter) and NeedsModel internally.
 class NeedsSubView : public QWidget, public FamilyMarkerProvider
 {
     Q_OBJECT
 
 public:
-    explicit NeedsSubView(NeedsModel* model,
-                          DocumentManager* documentManager,
+    explicit NeedsSubView(DocumentManager* documentManager,
                           QWidget* parent = nullptr);
 
     // FamilyMarkerProvider interface
@@ -38,6 +38,7 @@ private:
     void deleteNeed(const QString& personId, const QString& familyId);
 
     DocumentManager* m_documentManager;
+    FilterBar* m_filterBar;
     NeedsModel* m_model;
     SelectionPreservingTreeView* m_tree;
 };

@@ -3,6 +3,7 @@
 #include "WardListDialog.h"
 #include "DocumentManager.h"
 #include "Document.h"
+#include "FilterBar.h"
 #include "Person.h"
 #include "Phone.h"
 #include "Family.h"
@@ -55,20 +56,26 @@ void updatePersonInFamily(DocumentManager* docMgr, const QString& familyId, cons
 
 }  // namespace
 
-NeedsSubView::NeedsSubView(NeedsModel* model,
-                           DocumentManager* documentManager,
+NeedsSubView::NeedsSubView(DocumentManager* documentManager,
                            QWidget* parent)
     : QWidget(parent)
     , m_documentManager(documentManager)
-    , m_model(model)
 {
     QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(4, 4, 4, 4);
+    layout->setSpacing(4);
 
-    // Add button at top
+    // FilterBar owns Filter
+    m_filterBar = new FilterBar(documentManager, this);
+    layout->addWidget(m_filterBar);
+
+    // Add button
     QPushButton* addButton = new QPushButton(tr("Add Special Need..."));
     connect(addButton, &QPushButton::clicked, this, &NeedsSubView::showAddNeedDialog);
     layout->addWidget(addButton);
+
+    // Create model with filter from FilterBar
+    m_model = new NeedsModel(documentManager, m_filterBar->filter(), this);
 
     // Create tree view with model
     m_tree = new SelectionPreservingTreeView(m_model, this);

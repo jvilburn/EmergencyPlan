@@ -3,16 +3,24 @@
 #include "DocumentManager.h"
 #include "Document.h"
 #include "Family.h"
+#include "Filter.h"
 #include "Person.h"
 
 #include <algorithm>
 
-NeedsModel::NeedsModel(DocumentManager* documentManager, QObject* parent)
+NeedsModel::NeedsModel(DocumentManager* documentManager,
+                       Filter* filter,
+                       QObject* parent)
     : BaseTreeModel(parent)
     , m_documentManager(documentManager)
+    , m_filter(filter)
 {
     connect(m_documentManager, &DocumentManager::documentChanged,
             this, &NeedsModel::onDocumentChanged);
+    if (m_filter)
+    {
+        connect(m_filter, &Filter::changed, this, &NeedsModel::rebuild);
+    }
     rebuild();
 }
 
@@ -79,6 +87,12 @@ void NeedsModel::rebuild()
         {
             if (person.hasSpecialNeed())
             {
+                // Apply filter if set
+                if (m_filter && !m_filter->passes(doc, person))
+                {
+                    continue;
+                }
+
                 TreeNode* node = new TreeNode();
                 node->type = ItemType::Person;
                 node->personId = person.id();
