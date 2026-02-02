@@ -8,6 +8,7 @@ enum class ItemType
 {
     Invalid,
     ContactDetail,  // All models - expandable contact info
+    Family,         // FamilyTreeModel - family group
 
     // Emergency Resource types
     Resource,       // EmergencyResourceModel - resource group
@@ -25,3 +26,11 @@ enum class ItemType
     UnassignedHeader    // UnassignedModel - "Unassigned (N)" header
 };
 Q_DECLARE_METATYPE(ItemType)
+
+/// Organization type for ministering views.
+/// Used instead of bool to clarify intent at call sites.
+enum class MinisteringOrg
+{
+    EldersQuorum,
+    ReliefSociety
+};
