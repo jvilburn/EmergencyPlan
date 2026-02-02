@@ -93,29 +93,13 @@ void MinisteringModel::rebuild()
 
     for (const MinisteringDistrict& district : sortedDistricts)
     {
-        // Count total families/persons in district
-        int totalCount = 0;
-        for (const QString& groupId : district.groupIds())
-        {
-            if (groups.contains(groupId))
-            {
-                const MinisteringGroup& group = groups[groupId];
-                totalCount += isEQ() ? group.familyCount() : group.ministeredPersonCount();
-            }
-        }
-
-        QString districtText = QString("%1 (%2 %3)")
-            .arg(district.name())
-            .arg(totalCount)
-            .arg(isEQ() ? tr("families") : tr("sisters"));
-
         TreeNode* districtNode = new TreeNode();
         districtNode->type = ItemType::District;
         districtNode->id = district.id();
-        districtNode->displayText = districtText;
+        // Display text will be updated after filtering
 
-        // Collect and sort companionships by minister names
-        QList<QPair<QString, QString>> sortedGroups;  // (display text, group ID)
+        // Collect companionships with minister names for sorting
+        QList<QPair<QString, QString>> sortedGroups;  // (minister names, group ID)
         for (const QString& groupId : district.groupIds())
         {
             if (!groups.contains(groupId))
@@ -136,12 +120,7 @@ void MinisteringModel::rebuild()
                 }
             }
 
-            int count = isEQ() ? group.familyCount() : group.ministeredPersonCount();
-            QString companionshipText = QString("%1 (%2)")
-                .arg(ministerNames.join(", "))
-                .arg(count);
-
-            sortedGroups.append({companionshipText, groupId});
+            sortedGroups.append({ministerNames.join(", "), groupId});
         }
 
         std::sort(sortedGroups.begin(), sortedGroups.end(),
@@ -149,22 +128,48 @@ void MinisteringModel::rebuild()
                   { return a.first.toLower() < b.first.toLower(); });
 
         // Add companionships under this district
+        int districtCount = 0;
         for (const QPair<QString, QString>& groupData : sortedGroups)
         {
-            const QString& companionshipText = groupData.first;
+            const QString& ministerNames = groupData.first;
             const QString& groupId = groupData.second;
 
             TreeNode* companionshipNode = new TreeNode();
             companionshipNode->type = ItemType::Companionship;
             companionshipNode->id = groupId;
-            companionshipNode->displayText = companionshipText;
+            // Display text will be updated after filtering
             companionshipNode->parent = districtNode;
             districtNode->children.append(companionshipNode);
 
             // Add ministers and ministered sections
             addMinistersSection(companionshipNode, groupId);
             addMinisteredSection(companionshipNode, groupId);
+
+            // Count filtered items from the "ministered" section
+            int filteredCount = 0;
+            for (TreeNode* section : companionshipNode->children)
+            {
+                if (section->type == ItemType::SectionHeader
+                    && section->id.endsWith(":ministered"))
+                {
+                    filteredCount = section->children.size();
+                    break;
+                }
+            }
+
+            // Update companionship text with filtered count
+            companionshipNode->displayText = QString("%1 (%2)")
+                .arg(ministerNames)
+                .arg(filteredCount);
+
+            districtCount += filteredCount;
         }
+
+        // Update district text with filtered count
+        districtNode->displayText = QString("%1 (%2 %3)")
+            .arg(district.name())
+            .arg(districtCount)
+            .arg(isEQ() ? tr("families") : tr("sisters"));
 
         m_districtNodes.append(districtNode);
     }

@@ -99,33 +99,34 @@ void UnassignedMinisteringModel::rebuild()
 
         QSet<QString> unassignedIds = allIds - assignedIds;
 
-        if (!unassignedIds.isEmpty())
+        // Sort families by name, applying filter
+        QList<QPair<QString, QString>> sortedFamilies;
+        for (const QString& familyId : unassignedIds)
         {
-            // Create header
-            m_headerNode = new TreeNode();
-            m_headerNode->type = ItemType::UnassignedHeader;
-            m_headerNode->id = "unassigned";
-            m_headerNode->displayText = tr("Unassigned (%1 families)").arg(unassignedIds.size());
-
-            // Sort families by name, applying filter
-            QList<QPair<QString, QString>> sortedFamilies;
-            for (const QString& familyId : unassignedIds)
+            if (families.contains(familyId))
             {
-                if (families.contains(familyId))
+                const Family& family = families[familyId];
+                // Apply filter if set
+                if (m_filter && !m_filter->passes(doc, family))
                 {
-                    const Family& family = families[familyId];
-                    // Apply filter if set
-                    if (m_filter && !m_filter->passes(doc, family))
-                    {
-                        continue;
-                    }
-                    sortedFamilies.append({family.displayName(), familyId});
+                    continue;
                 }
+                sortedFamilies.append({family.displayName(), familyId});
             }
+        }
 
+        // Only create header if we have filtered results
+        if (!sortedFamilies.isEmpty())
+        {
             std::sort(sortedFamilies.begin(), sortedFamilies.end(),
                       [](const QPair<QString, QString>& a, const QPair<QString, QString>& b)
                       { return a.first.toLower() < b.first.toLower(); });
+
+            // Create header with filtered count
+            m_headerNode = new TreeNode();
+            m_headerNode->type = ItemType::UnassignedHeader;
+            m_headerNode->id = "unassigned";
+            m_headerNode->displayText = tr("Unassigned (%1 families)").arg(sortedFamilies.size());
 
             for (const QPair<QString, QString>& familyData : sortedFamilies)
             {
@@ -163,33 +164,34 @@ void UnassignedMinisteringModel::rebuild()
 
         QSet<QString> unassignedIds = allSisterIds - assignedPersonIds;
 
-        if (!unassignedIds.isEmpty())
+        // Sort sisters by name, applying filter
+        QList<QPair<QString, QString>> sortedSisters;
+        for (const QString& personId : unassignedIds)
         {
-            // Create header
-            m_headerNode = new TreeNode();
-            m_headerNode->type = ItemType::UnassignedHeader;
-            m_headerNode->id = "unassigned";
-            m_headerNode->displayText = tr("Unassigned (%1 sisters)").arg(unassignedIds.size());
-
-            // Sort sisters by name, applying filter
-            QList<QPair<QString, QString>> sortedSisters;
-            for (const QString& personId : unassignedIds)
+            std::optional<Person> person = doc.findPersonById(personId);
+            if (person)
             {
-                std::optional<Person> person = doc.findPersonById(personId);
-                if (person)
+                // Apply filter if set
+                if (m_filter && !m_filter->passes(doc, *person))
                 {
-                    // Apply filter if set
-                    if (m_filter && !m_filter->passes(doc, *person))
-                    {
-                        continue;
-                    }
-                    sortedSisters.append({person->displayName(), personId});
+                    continue;
                 }
+                sortedSisters.append({person->displayName(), personId});
             }
+        }
 
+        // Only create header if we have filtered results
+        if (!sortedSisters.isEmpty())
+        {
             std::sort(sortedSisters.begin(), sortedSisters.end(),
                       [](const QPair<QString, QString>& a, const QPair<QString, QString>& b)
                       { return a.first.toLower() < b.first.toLower(); });
+
+            // Create header with filtered count
+            m_headerNode = new TreeNode();
+            m_headerNode->type = ItemType::UnassignedHeader;
+            m_headerNode->id = "unassigned";
+            m_headerNode->displayText = tr("Unassigned (%1 sisters)").arg(sortedSisters.size());
 
             for (const QPair<QString, QString>& sisterData : sortedSisters)
             {
