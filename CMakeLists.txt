@@ -223,6 +223,7 @@ set(WIDGET_SOURCES
     src/widgets/WardListDialog.cpp
     src/widgets/WardListView.cpp
     src/widgets/shared/FilterableListWidget.cpp
+    src/widgets/shared/FilterChip.cpp
     src/widgets/shared/SearchField.cpp
     src/widgets/NeedsSubView.cpp
     src/widgets/SelectionPreservingTreeView.cpp
@@ -266,8 +267,10 @@ set(WIDGET_HEADERS
     src/widgets/WardListDialog.h
     src/widgets/WardListView.h
     src/widgets/shared/FilterableListWidget.h
+    src/widgets/shared/FilterChip.h
     src/widgets/shared/SearchField.h
     src/widgets/NeedsSubView.h
+    src/widgets/SelectionPreservingTreeView.h
     src/widgets/EmergencyResourceView.h
     src/widgets/ResourcesView.h
     # src/widgets/Sidebar.h
@@ -290,6 +293,7 @@ set(WIDGET_HEADERS
 )
 
 set(LISTMODEL_SOURCES
+    src/listmodels/BaseTreeModel.cpp
     src/listmodels/EmergencyResourceModel.cpp
     src/listmodels/Filter.cpp
     src/listmodels/FamilyListModel.cpp
@@ -305,6 +309,7 @@ set(LISTMODEL_SOURCES
 )
 
 set(LISTMODEL_HEADERS
+    src/listmodels/BaseTreeModel.h
     src/listmodels/EmergencyResourceModel.h
     src/listmodels/Filter.h
     src/listmodels/FamilyListModel.h
