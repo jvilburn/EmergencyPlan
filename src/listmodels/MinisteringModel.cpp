@@ -11,11 +11,11 @@
 #include <QFont>
 
 MinisteringModel::MinisteringModel(DocumentManager* documentManager,
-                                     bool isEQ,
+                                     MinisteringOrg org,
                                      QObject* parent)
-    : QAbstractItemModel(parent)
+    : BaseTreeModel(parent)
     , m_documentManager(documentManager)
-    , m_isEQ(isEQ)
+    , m_org(org)
 {
     connect(m_documentManager, &DocumentManager::documentChanged,
             this, &MinisteringModel::onDocumentChanged);
@@ -75,8 +75,8 @@ void MinisteringModel::rebuild()
     clearNodes();
 
     const Document& doc = m_documentManager->document();
-    const QHash<QString, MinisteringDistrict>& districts = m_isEQ ? doc.eqDistricts() : doc.rsDistricts();
-    const QHash<QString, MinisteringGroup>& groups = m_isEQ ? doc.eqGroups() : doc.rsGroups();
+    const QHash<QString, MinisteringDistrict>& districts = isEQ() ? doc.eqDistricts() : doc.rsDistricts();
+    const QHash<QString, MinisteringGroup>& groups = isEQ() ? doc.eqGroups() : doc.rsGroups();
 
     // Sort districts by name
     QList<MinisteringDistrict> sortedDistricts = districts.values();
@@ -93,14 +93,14 @@ void MinisteringModel::rebuild()
             if (groups.contains(groupId))
             {
                 const MinisteringGroup& group = groups[groupId];
-                totalCount += m_isEQ ? group.familyCount() : group.ministeredPersonCount();
+                totalCount += isEQ() ? group.familyCount() : group.ministeredPersonCount();
             }
         }
 
         QString districtText = QString("%1 (%2 %3)")
             .arg(district.name())
             .arg(totalCount)
-            .arg(m_isEQ ? tr("families") : tr("sisters"));
+            .arg(isEQ() ? tr("families") : tr("sisters"));
 
         TreeNode* districtNode = new TreeNode();
         districtNode->type = ItemType::District;
@@ -129,7 +129,7 @@ void MinisteringModel::rebuild()
                 }
             }
 
-            int count = m_isEQ ? group.familyCount() : group.ministeredPersonCount();
+            int count = isEQ() ? group.familyCount() : group.ministeredPersonCount();
             QString companionshipText = QString("%1 (%2)")
                 .arg(ministerNames.join(", "))
                 .arg(count);
@@ -168,7 +168,7 @@ void MinisteringModel::rebuild()
 void MinisteringModel::addMinistersSection(TreeNode* companionshipNode, const QString& groupId)
 {
     const Document& doc = m_documentManager->document();
-    const QHash<QString, MinisteringGroup>& groups = m_isEQ ? doc.eqGroups() : doc.rsGroups();
+    const QHash<QString, MinisteringGroup>& groups = isEQ() ? doc.eqGroups() : doc.rsGroups();
 
     if (!groups.contains(groupId))
     {
@@ -215,7 +215,7 @@ void MinisteringModel::addMinistersSection(TreeNode* companionshipNode, const QS
 void MinisteringModel::addMinisteredSection(TreeNode* companionshipNode, const QString& groupId)
 {
     const Document& doc = m_documentManager->document();
-    const QHash<QString, MinisteringGroup>& groups = m_isEQ ? doc.eqGroups() : doc.rsGroups();
+    const QHash<QString, MinisteringGroup>& groups = isEQ() ? doc.eqGroups() : doc.rsGroups();
 
     if (!groups.contains(groupId))
     {
@@ -228,11 +228,11 @@ void MinisteringModel::addMinisteredSection(TreeNode* companionshipNode, const Q
     TreeNode* ministeredHeader = new TreeNode();
     ministeredHeader->type = ItemType::SectionHeader;
     ministeredHeader->id = groupId + ":ministered";
-    ministeredHeader->displayText = m_isEQ ? tr("Families") : tr("Sisters");
+    ministeredHeader->displayText = isEQ() ? tr("Families") : tr("Sisters");
     ministeredHeader->parent = companionshipNode;
     companionshipNode->children.append(ministeredHeader);
 
-    if (m_isEQ)
+    if (isEQ())
     {
         // EQ: Add families
         const QHash<QString, Family>& families = doc.families();
@@ -468,6 +468,172 @@ QString MinisteringModel::idAt(const QModelIndex& index) const
         return node->id;
     }
     return QString();
+}
+
+QString MinisteringModel::selectionKeyAt(const QModelIndex& index) const
+{
+    TreeNode* node = nodeFromIndex(index);
+    if (!node)
+    {
+        return QString();
+    }
+
+    switch (node->type)
+    {
+    case ItemType::District:
+        return node->id;
+    case ItemType::Companionship:
+        return node->id;  // groupId stored in node->id
+    case ItemType::SectionHeader:
+        return node->id;  // Already formatted as "{groupId}:ministers" etc.
+    case ItemType::Minister:
+        return QString("%1:minister:%2").arg(companionshipIdAt(index), node->id);
+    case ItemType::MinisteredFamily:
+        return QString("%1:family:%2").arg(companionshipIdAt(index), node->id);
+    case ItemType::MinisteredSister:
+        return QString("%1:sister:%2").arg(companionshipIdAt(index), node->id);
+    case ItemType::ContactDetail:
+        // Delegate to parent (selecting detail row selects parent)
+        return selectionKeyAt(index.parent());
+    default:
+        return QString();
+    }
+}
+
+QSet<QString> MinisteringModel::familyIdsForPersons(const QSet<QString>& personIds) const
+{
+    QSet<QString> familyIds;
+    const Document& doc = m_documentManager->document();
+    for (const QString& personId : personIds)
+    {
+        QString familyId = doc.familyIdForPerson(personId);
+        if (!familyId.isEmpty())
+        {
+            familyIds.insert(familyId);
+        }
+    }
+    return familyIds;
+}
+
+FamilyAssociation MinisteringModel::relatedFamiliesAt(const QModelIndex& index) const
+{
+    FamilyAssociation assoc;
+    if (!index.isValid())
+    {
+        return assoc;
+    }
+
+    ItemType type = itemTypeAt(index);
+    QString id = idAt(index);
+
+    const Document& doc = m_documentManager->document();
+    const auto& districts = isEQ() ? doc.eqDistricts() : doc.rsDistricts();
+    const auto& groups = isEQ() ? doc.eqGroups() : doc.rsGroups();
+
+    switch (type)
+    {
+    case ItemType::District:
+        if (districts.contains(id))
+        {
+            const MinisteringDistrict& district = districts[id];
+            for (const QString& groupId : district.groupIds())
+            {
+                if (groups.contains(groupId))
+                {
+                    const MinisteringGroup& group = groups[groupId];
+                    if (isEQ())
+                    {
+                        assoc.relatedFamilyIds.unite(group.familyIds());
+                    }
+                    else
+                    {
+                        assoc.relatedFamilyIds.unite(familyIdsForPersons(group.ministeredPersonIds()));
+                    }
+                    assoc.contactPointFamilyIds.unite(familyIdsForPersons(group.ministerIds()));
+                }
+            }
+        }
+        break;
+
+    case ItemType::Companionship:
+        if (groups.contains(id))
+        {
+            const MinisteringGroup& group = groups[id];
+            if (isEQ())
+            {
+                assoc.relatedFamilyIds = group.familyIds();
+            }
+            else
+            {
+                assoc.relatedFamilyIds = familyIdsForPersons(group.ministeredPersonIds());
+            }
+            assoc.contactPointFamilyIds = familyIdsForPersons(group.ministerIds());
+        }
+        break;
+
+    case ItemType::SectionHeader:
+    {
+        int colonPos = id.lastIndexOf(':');
+        if (colonPos > 0)
+        {
+            QString compId = id.left(colonPos);
+            QString sectionType = id.mid(colonPos + 1);
+
+            if (groups.contains(compId))
+            {
+                const MinisteringGroup& group = groups[compId];
+                if (sectionType == "ministers")
+                {
+                    QSet<QString> ministerFamilies = familyIdsForPersons(group.ministerIds());
+                    assoc.relatedFamilyIds = ministerFamilies;
+                    assoc.contactPointFamilyIds = ministerFamilies;
+                }
+                else
+                {
+                    if (isEQ())
+                    {
+                        assoc.relatedFamilyIds = group.familyIds();
+                    }
+                    else
+                    {
+                        assoc.relatedFamilyIds = familyIdsForPersons(group.ministeredPersonIds());
+                    }
+                }
+            }
+        }
+        break;
+    }
+
+    case ItemType::Minister:
+    {
+        QString familyId = doc.familyIdForPerson(id);
+        if (!familyId.isEmpty())
+        {
+            assoc.relatedFamilyIds.insert(familyId);
+            assoc.contactPointFamilyIds.insert(familyId);
+        }
+        break;
+    }
+
+    case ItemType::MinisteredFamily:
+        assoc.relatedFamilyIds.insert(id);
+        break;
+
+    case ItemType::MinisteredSister:
+    {
+        QString familyId = doc.familyIdForPerson(id);
+        if (!familyId.isEmpty())
+        {
+            assoc.relatedFamilyIds.insert(familyId);
+        }
+        break;
+    }
+
+    default:
+        break;
+    }
+
+    return assoc;
 }
 
 ItemType MinisteringModel::itemTypeAt(const QModelIndex& index) const
@@ -785,7 +951,7 @@ void MinisteringModel::refreshFamilyDisplayText(const QString& familyId)
             {
                 // Rebuild companionship display text from current minister names
                 const QHash<QString, MinisteringGroup>& groups =
-                    m_isEQ ? doc.eqGroups() : doc.rsGroups();
+                    isEQ() ? doc.eqGroups() : doc.rsGroups();
 
                 if (groups.contains(compNode->id))
                 {
@@ -799,7 +965,7 @@ void MinisteringModel::refreshFamilyDisplayText(const QString& familyId)
                             ministerNames.append(person->displayName());
                         }
                     }
-                    int count = m_isEQ ? group.familyCount() : group.ministeredPersonCount();
+                    int count = isEQ() ? group.familyCount() : group.ministeredPersonCount();
                     compNode->displayText = QString("%1 (%2)")
                         .arg(ministerNames.join(", "))
                         .arg(count);

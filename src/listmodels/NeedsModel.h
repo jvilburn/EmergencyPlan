@@ -1,11 +1,10 @@
 #pragma once
 
-#include <QAbstractItemModel>
+#include "BaseTreeModel.h"
+#include "DocumentChange.h"
+
 #include <QList>
 #include <QString>
-
-#include "DocumentChange.h"
-#include "ItemType.h"
 
 class DocumentManager;
 
@@ -15,7 +14,7 @@ class DocumentManager;
 /// Level 1: Contact details (phone, email, address) - lazy loaded on expand
 ///
 /// Sorted alphabetically by person display name.
-class NeedsModel : public QAbstractItemModel
+class NeedsModel : public BaseTreeModel
 {
     Q_OBJECT
 
@@ -42,11 +41,17 @@ public:
     // Lazy loading for contact details
     void loadContactDetails(const QModelIndex& index);
 
+    // BaseTreeModel interface
+    ItemType itemTypeAt(const QModelIndex& index) const override;
+    QString selectionKeyAt(const QModelIndex& index) const override;
+    QString idAt(const QModelIndex& index) const override;
+
+    /// Returns family associations for the given index.
+    FamilyAssociation relatedFamiliesAt(const QModelIndex& index) const;
+
     // View-specific accessors
-    QString idAt(const QModelIndex& index) const;
     QString familyIdAt(const QModelIndex& index) const;
     QModelIndex indexForPersonId(const QString& personId) const;
-    ItemType itemTypeAt(const QModelIndex& index) const;
 
 private slots:
     void onDocumentChanged(const DocumentChange& change);

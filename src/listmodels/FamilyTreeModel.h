@@ -1,10 +1,10 @@
 #pragma once
 
-#include <QAbstractItemModel>
+#include "BaseTreeModel.h"
+#include "DocumentChange.h"
+
 #include <QList>
 #include <QString>
-
-#include "DocumentChange.h"
 
 class DocumentManager;
 class Filter;
@@ -17,7 +17,7 @@ class Filter;
 ///     - Address (level 1) - text only
 ///     - Phone (level 1) - text only
 ///     - Actions (level 1) - widget row for Edit/Delete buttons
-class FamilyTreeModel : public QAbstractItemModel
+class FamilyTreeModel : public BaseTreeModel
 {
     Q_OBJECT
 
@@ -68,6 +68,11 @@ public:
     QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
     bool hasChildren(const QModelIndex& parent = QModelIndex()) const override;
     QHash<int, QByteArray> roleNames() const override;
+
+    // BaseTreeModel interface
+    ItemType itemTypeAt(const QModelIndex& index) const override;
+    QString selectionKeyAt(const QModelIndex& index) const override;
+    QString idAt(const QModelIndex& index) const override;
 
     // Lookup helpers
     QString familyIdAt(const QModelIndex& index) const;

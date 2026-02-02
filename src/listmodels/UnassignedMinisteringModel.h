@@ -1,11 +1,10 @@
 #pragma once
 
-#include <QAbstractItemModel>
+#include "BaseTreeModel.h"
+#include "DocumentChange.h"
+
 #include <QList>
 #include <QString>
-
-#include "DocumentChange.h"
-#include "ItemType.h"
 
 class DocumentManager;
 
@@ -18,7 +17,7 @@ class DocumentManager;
 ///
 /// This model rebuilds on Full, EqGroup, RsGroup, and Family add/remove changes.
 /// Family updates only refresh display text (no structural rebuild).
-class UnassignedMinisteringModel : public QAbstractItemModel
+class UnassignedMinisteringModel : public BaseTreeModel
 {
     Q_OBJECT
 
@@ -33,7 +32,7 @@ public:
     Q_ENUM(Roles)
 
     explicit UnassignedMinisteringModel(DocumentManager* documentManager,
-                                         bool isEQ,
+                                         MinisteringOrg org,
                                          QObject* parent = nullptr);
     ~UnassignedMinisteringModel() override;
 
@@ -45,10 +44,13 @@ public:
     QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
     bool hasChildren(const QModelIndex& parent = {}) const override;
 
-    // View-specific accessors
-    QString idAt(const QModelIndex& index) const;
-    /// Returns the item type at the given index, or ItemType::Invalid for invalid indexes.
-    ItemType itemTypeAt(const QModelIndex& index) const;
+    // BaseTreeModel interface
+    ItemType itemTypeAt(const QModelIndex& index) const override;
+    QString selectionKeyAt(const QModelIndex& index) const override;
+    QString idAt(const QModelIndex& index) const override;
+
+    /// Returns family associations for the given index.
+    FamilyAssociation relatedFamiliesAt(const QModelIndex& index) const;
 
     // Lazy loading for contact details
     void loadContactDetails(const QModelIndex& index);
@@ -83,8 +85,12 @@ private:
     };
 
     TreeNode* nodeFromIndex(const QModelIndex& index) const;
+    bool isEQ() const { return m_org == MinisteringOrg::EldersQuorum; }
+    QSet<QString> familyIdsForPersons(const QSet<QString>& personIds) const;
+    QSet<QString> unassignedFamilyIds() const;
+    QSet<QString> unassignedSisterIds() const;
 
     TreeNode* m_headerNode = nullptr;  // Single top-level node (owned)
     DocumentManager* m_documentManager;
-    bool m_isEQ;
+    MinisteringOrg m_org;
 };

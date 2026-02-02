@@ -12,7 +12,7 @@
 EmergencyResourceModel::EmergencyResourceModel(DocumentManager* documentManager,
                                                  ResponseArea area,
                                                  QObject* parent)
-    : QAbstractItemModel(parent)
+    : BaseTreeModel(parent)
     , m_documentManager(documentManager)
     , m_area(area)
 {
@@ -260,6 +260,75 @@ QString EmergencyResourceModel::idAt(const QModelIndex& index) const
         return node->id;
     }
     return QString();
+}
+
+QString EmergencyResourceModel::selectionKeyAt(const QModelIndex& index) const
+{
+    TreeNode* node = nodeFromIndex(index);
+    if (!node)
+    {
+        return QString();
+    }
+
+    switch (node->type)
+    {
+    case ItemType::Resource:
+        return node->id;
+    case ItemType::Person:
+        return QString("%1:%2").arg(node->resourceId, node->id);
+    case ItemType::ContactDetail:
+        // Delegate to parent
+        return selectionKeyAt(index.parent());
+    default:
+        return QString();
+    }
+}
+
+FamilyAssociation EmergencyResourceModel::relatedFamiliesAt(const QModelIndex& index) const
+{
+    FamilyAssociation assoc;
+    if (!index.isValid())
+    {
+        return assoc;
+    }
+
+    const Document& doc = m_documentManager->document();
+    ItemType type = itemTypeAt(index);
+    QString id = idAt(index);
+
+    switch (type)
+    {
+    case ItemType::Resource:
+    {
+        std::optional<EmergencyResource> resourceOpt = doc.findEmergencyResourceById(id);
+        if (resourceOpt)
+        {
+            for (const QString& personId : resourceOpt->personIds())
+            {
+                QString familyId = doc.familyIdForPerson(personId);
+                if (!familyId.isEmpty())
+                {
+                    assoc.relatedFamilyIds.insert(familyId);
+                }
+            }
+        }
+        break;
+    }
+    case ItemType::Person:
+    {
+        QString familyId = doc.familyIdForPerson(id);
+        if (!familyId.isEmpty())
+        {
+            assoc.relatedFamilyIds.insert(familyId);
+        }
+        break;
+    }
+    default:
+        break;
+    }
+
+    // No contact points in emergency resources
+    return assoc;
 }
 
 ItemType EmergencyResourceModel::itemTypeAt(const QModelIndex& index) const

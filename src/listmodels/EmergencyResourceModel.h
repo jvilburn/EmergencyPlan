@@ -1,12 +1,11 @@
 #pragma once
 
-#include <QAbstractItemModel>
+#include "BaseTreeModel.h"
+#include "DocumentChange.h"
+#include "ResponseArea.h"
+
 #include <QList>
 #include <QString>
-
-#include "DocumentChange.h"
-#include "ItemType.h"
-#include "ResponseArea.h"
 
 class DocumentManager;
 
@@ -18,7 +17,7 @@ class DocumentManager;
 ///
 /// This model rebuilds on Full, EmergencyResource, and Family add/remove changes.
 /// Family updates only refresh display text (no structural rebuild).
-class EmergencyResourceModel : public QAbstractItemModel
+class EmergencyResourceModel : public BaseTreeModel
 {
     Q_OBJECT
 
@@ -48,9 +47,15 @@ public:
     // Lazy loading for contact details
     void loadContactDetails(const QModelIndex& index);
 
+    // BaseTreeModel interface
+    ItemType itemTypeAt(const QModelIndex& index) const override;
+    QString selectionKeyAt(const QModelIndex& index) const override;
+    QString idAt(const QModelIndex& index) const override;
+
+    /// Returns family associations for the given index.
+    FamilyAssociation relatedFamiliesAt(const QModelIndex& index) const;
+
     // View-specific accessors
-    QString idAt(const QModelIndex& index) const;
-    ItemType itemTypeAt(const QModelIndex& index) const;
     QString resourceIdAt(const QModelIndex& index) const;
 
 private slots:

@@ -10,11 +10,11 @@
 #include <QSet>
 
 UnassignedMinisteringModel::UnassignedMinisteringModel(DocumentManager* documentManager,
-                                                         bool isEQ,
+                                                         MinisteringOrg org,
                                                          QObject* parent)
-    : QAbstractItemModel(parent)
+    : BaseTreeModel(parent)
     , m_documentManager(documentManager)
-    , m_isEQ(isEQ)
+    , m_org(org)
 {
     connect(m_documentManager, &DocumentManager::documentChanged,
             this, &UnassignedMinisteringModel::onDocumentChanged);
@@ -72,9 +72,9 @@ void UnassignedMinisteringModel::rebuild()
     clearNodes();
 
     const Document& doc = m_documentManager->document();
-    const QHash<QString, MinisteringGroup>& groups = m_isEQ ? doc.eqGroups() : doc.rsGroups();
+    const QHash<QString, MinisteringGroup>& groups = isEQ() ? doc.eqGroups() : doc.rsGroups();
 
-    if (m_isEQ)
+    if (isEQ())
     {
         // Find unassigned families
         QSet<QString> assignedIds;
@@ -336,6 +336,121 @@ QString UnassignedMinisteringModel::idAt(const QModelIndex& index) const
         return node->id;
     }
     return QString();
+}
+
+QString UnassignedMinisteringModel::selectionKeyAt(const QModelIndex& index) const
+{
+    TreeNode* node = nodeFromIndex(index);
+    if (!node)
+    {
+        return QString();
+    }
+
+    switch (node->type)
+    {
+    case ItemType::UnassignedHeader:
+        return QStringLiteral("unassigned");
+    case ItemType::MinisteredFamily:
+        return node->id;  // Family ID - only appears once in unassigned list
+    case ItemType::MinisteredSister:
+        return node->id;  // Person ID - only appears once in unassigned list
+    default:
+        return QString();
+    }
+}
+
+QSet<QString> UnassignedMinisteringModel::familyIdsForPersons(const QSet<QString>& personIds) const
+{
+    QSet<QString> familyIds;
+    const Document& doc = m_documentManager->document();
+    for (const QString& personId : personIds)
+    {
+        QString familyId = doc.familyIdForPerson(personId);
+        if (!familyId.isEmpty())
+        {
+            familyIds.insert(familyId);
+        }
+    }
+    return familyIds;
+}
+
+QSet<QString> UnassignedMinisteringModel::unassignedFamilyIds() const
+{
+    // Collect all family IDs from tree nodes
+    QSet<QString> familyIds;
+    if (!m_headerNode)
+    {
+        return familyIds;
+    }
+    for (const TreeNode* child : m_headerNode->children)
+    {
+        if (child->type == ItemType::MinisteredFamily)
+        {
+            familyIds.insert(child->id);
+        }
+    }
+    return familyIds;
+}
+
+QSet<QString> UnassignedMinisteringModel::unassignedSisterIds() const
+{
+    // Collect all person IDs from tree nodes
+    QSet<QString> personIds;
+    if (!m_headerNode)
+    {
+        return personIds;
+    }
+    for (const TreeNode* child : m_headerNode->children)
+    {
+        if (child->type == ItemType::MinisteredSister)
+        {
+            personIds.insert(child->id);
+        }
+    }
+    return personIds;
+}
+
+FamilyAssociation UnassignedMinisteringModel::relatedFamiliesAt(const QModelIndex& index) const
+{
+    FamilyAssociation assoc;
+    if (!index.isValid())
+    {
+        return assoc;
+    }
+
+    ItemType type = itemTypeAt(index);
+    QString id = idAt(index);
+
+    switch (type)
+    {
+    case ItemType::UnassignedHeader:
+        if (isEQ())
+        {
+            assoc.relatedFamilyIds = unassignedFamilyIds();
+        }
+        else
+        {
+            assoc.relatedFamilyIds = familyIdsForPersons(unassignedSisterIds());
+        }
+        break;
+    case ItemType::MinisteredFamily:
+        assoc.relatedFamilyIds.insert(id);
+        break;
+    case ItemType::MinisteredSister:
+    {
+        QString familyId = m_documentManager->document().familyIdForPerson(id);
+        if (!familyId.isEmpty())
+        {
+            assoc.relatedFamilyIds.insert(familyId);
+        }
+        break;
+    }
+    default:
+        break;
+    }
+
+    // No contact points in unassigned list
+    return assoc;
 }
 
 ItemType UnassignedMinisteringModel::itemTypeAt(const QModelIndex& index) const

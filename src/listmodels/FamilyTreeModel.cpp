@@ -12,7 +12,7 @@
 FamilyTreeModel::FamilyTreeModel(DocumentManager* documentManager,
                                  Filter* filter,
                                  QObject* parent)
-    : QAbstractItemModel(parent)
+    : BaseTreeModel(parent)
     , m_documentManager(documentManager)
     , m_filter(filter)
 {
@@ -740,4 +740,96 @@ FamilyTreeModel::RowType FamilyTreeModel::rowTypeAt(const QModelIndex& index) co
         return node->type;
     }
     return RowType::Family;
+}
+
+ItemType FamilyTreeModel::itemTypeAt(const QModelIndex& index) const
+{
+    if (!index.isValid())
+    {
+        return ItemType::Invalid;
+    }
+
+    switch (rowTypeAt(index))
+    {
+    case RowType::Family:
+        return ItemType::Family;
+    case RowType::Member:
+        return ItemType::Person;
+    case RowType::MemberDetail:
+    case RowType::Address:
+    case RowType::Phone:
+    case RowType::Actions:
+        return ItemType::ContactDetail;
+    default:
+        return ItemType::Invalid;
+    }
+}
+
+QString FamilyTreeModel::selectionKeyAt(const QModelIndex& index) const
+{
+    if (!index.isValid())
+    {
+        return QString();
+    }
+
+    switch (rowTypeAt(index))
+    {
+    case RowType::Family:
+    case RowType::Member:
+        return idAt(index);
+    case RowType::MemberDetail:
+    case RowType::Address:
+    case RowType::Phone:
+    case RowType::Actions:
+        // Delegate to parent
+        return selectionKeyAt(index.parent());
+    default:
+        return QString();
+    }
+}
+
+QString FamilyTreeModel::idAt(const QModelIndex& index) const
+{
+    if (!index.isValid())
+    {
+        return QString();
+    }
+
+    TreeNode* node = nodeFromIndex(index);
+    if (!node)
+    {
+        return QString();
+    }
+
+    switch (node->type)
+    {
+    case RowType::Family:
+        return familyIdAt(index);
+    case RowType::Member:
+    {
+        // Get family ID and member index
+        QString familyId = familyIdAt(index);
+        if (familyId.isEmpty() || node->memberIndex < 0)
+        {
+            return QString();
+        }
+
+        // Look up the person
+        const auto& families = m_documentManager->document().families();
+        if (!families.contains(familyId))
+        {
+            return QString();
+        }
+
+        const Family& family = families[familyId];
+        if (node->memberIndex >= family.members().size())
+        {
+            return QString();
+        }
+
+        return family.members().at(node->memberIndex).id();
+    }
+    default:
+        return QString();
+    }
 }

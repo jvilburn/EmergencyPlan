@@ -8,7 +8,7 @@
 #include <algorithm>
 
 NeedsModel::NeedsModel(DocumentManager* documentManager, QObject* parent)
-    : QAbstractItemModel(parent)
+    : BaseTreeModel(parent)
     , m_documentManager(documentManager)
 {
     connect(m_documentManager, &DocumentManager::documentChanged,
@@ -233,6 +233,53 @@ QString NeedsModel::idAt(const QModelIndex& index) const
         return QString();
     }
     return node->personId;
+}
+
+QString NeedsModel::selectionKeyAt(const QModelIndex& index) const
+{
+    TreeNode* node = nodeFromIndex(index);
+    if (!node)
+    {
+        return QString();
+    }
+
+    switch (node->type)
+    {
+    case ItemType::Person:
+        // Currently one need per person (stored as Person.specialNeedNote).
+        // If multiple needs per person is added later, this would need a needId.
+        return node->personId;
+    case ItemType::ContactDetail:
+        // Delegate to parent (selecting detail row selects parent)
+        return selectionKeyAt(index.parent());
+    default:
+        return QString();
+    }
+}
+
+FamilyAssociation NeedsModel::relatedFamiliesAt(const QModelIndex& index) const
+{
+    FamilyAssociation assoc;
+    if (!index.isValid())
+    {
+        return assoc;
+    }
+
+    const Document& doc = m_documentManager->document();
+    ItemType type = itemTypeAt(index);
+    QString id = idAt(index);
+
+    if (type == ItemType::Person)
+    {
+        QString familyId = doc.familyIdForPerson(id);
+        if (!familyId.isEmpty())
+        {
+            assoc.relatedFamilyIds.insert(familyId);
+        }
+    }
+
+    // No contact points in needs view
+    return assoc;
 }
 
 QString NeedsModel::familyIdAt(const QModelIndex& index) const

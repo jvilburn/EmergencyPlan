@@ -1,11 +1,10 @@
 #pragma once
 
-#include <QAbstractItemModel>
+#include "BaseTreeModel.h"
+#include "DocumentChange.h"
+
 #include <QList>
 #include <QString>
-
-#include "DocumentChange.h"
-#include "ItemType.h"
 
 class DocumentManager;
 
@@ -20,7 +19,7 @@ class DocumentManager;
 ///
 /// Contact details are loaded lazily when a person/family node is expanded.
 /// This model rebuilds on Full, EqDistrict, EqGroup, RsDistrict, RsGroup, Family scopes.
-class MinisteringModel : public QAbstractItemModel
+class MinisteringModel : public BaseTreeModel
 {
     Q_OBJECT
 
@@ -35,7 +34,7 @@ public:
     Q_ENUM(Roles)
 
     explicit MinisteringModel(DocumentManager* documentManager,
-                               bool isEQ,
+                               MinisteringOrg org,
                                QObject* parent = nullptr);
     ~MinisteringModel() override;
 
@@ -47,10 +46,16 @@ public:
     QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
     bool hasChildren(const QModelIndex& parent = {}) const override;
 
+    // BaseTreeModel interface
+    ItemType itemTypeAt(const QModelIndex& index) const override;
+    QString selectionKeyAt(const QModelIndex& index) const override;
+    QString idAt(const QModelIndex& index) const override;
+
+    /// Returns family associations for the given index.
+    /// Used by views to compute map highlights.
+    FamilyAssociation relatedFamiliesAt(const QModelIndex& index) const;
+
     // View-specific accessors
-    QString idAt(const QModelIndex& index) const;
-    /// Returns the item type at the given index, or ItemType::Invalid for invalid indexes.
-    ItemType itemTypeAt(const QModelIndex& index) const;
     QString companionshipIdAt(const QModelIndex& index) const;
 
     // Lazy loading for contact details
@@ -85,8 +90,10 @@ private:
     TreeNode* nodeFromIndex(const QModelIndex& index) const;
     void addMinistersSection(TreeNode* companionshipNode, const QString& groupId);
     void addMinisteredSection(TreeNode* companionshipNode, const QString& groupId);
+    bool isEQ() const { return m_org == MinisteringOrg::EldersQuorum; }
+    QSet<QString> familyIdsForPersons(const QSet<QString>& personIds) const;
 
     QList<TreeNode*> m_districtNodes;  // Top-level nodes (owned)
     DocumentManager* m_documentManager;
-    bool m_isEQ;
+    MinisteringOrg m_org;
 };
