@@ -10,19 +10,17 @@ class ActionButtonsWidget;
 class DocumentManager;
 class FamilyTreeModel;
 class Filter;
+class FilterBar;
 class SelectionPreservingTreeView;
-class SearchField;
 
 /// Tree view for ward family list.
-/// Takes model pointer - parent creates model with Filter.
+/// Owns FilterBar (which owns Filter) and FamilyTreeModel internally.
 class WardListView : public QWidget, public FamilyMarkerProvider
 {
     Q_OBJECT
 
 public:
-    explicit WardListView(FamilyTreeModel* model,
-                          Filter* filter,
-                          DocumentManager* documentManager,
+    explicit WardListView(DocumentManager* documentManager,
                           QWidget* parent = nullptr);
 
     // FamilyMarkerProvider interface
@@ -33,7 +31,7 @@ public:
     void setSelectedFamilyId(const QString& id);
     QStringList visibleFamilyIdsList() const;
 
-    Filter* filter() const { return m_filter; }
+    Filter* filter() const;
 
 signals:
     void highlightChanged();
@@ -43,7 +41,6 @@ signals:
 
 private slots:
     void onSelectionChanged();
-    void onSearchTextChanged(const QString& text);
     void onModelReset();
     void onRowsRemoved(const QModelIndex& parent, int first, int last);
     void onRowsInserted(const QModelIndex& parent, int first, int last);
@@ -55,9 +52,8 @@ private:
     void detachActionButtons(const QString& familyId);
 
     DocumentManager* m_documentManager;
+    FilterBar* m_filterBar;
     FamilyTreeModel* m_model;
-    Filter* m_filter;
     SelectionPreservingTreeView* m_treeView;
-    SearchField* m_searchField;
     QHash<QString, ActionButtonsWidget*> m_actionWidgets;
 };

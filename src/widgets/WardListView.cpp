@@ -3,21 +3,16 @@
 #include "DocumentManager.h"
 #include "Family.h"
 #include "FamilyTreeModel.h"
-#include "Filter.h"
-#include "SearchField.h"
+#include "FilterBar.h"
 #include "SelectionPreservingTreeView.h"
 
 #include <QHeaderView>
 #include <QVBoxLayout>
 
-WardListView::WardListView(FamilyTreeModel* model,
-                           Filter* filter,
-                           DocumentManager* documentManager,
+WardListView::WardListView(DocumentManager* documentManager,
                            QWidget* parent)
     : QWidget(parent)
     , m_documentManager(documentManager)
-    , m_model(model)
-    , m_filter(filter)
 {
     setMinimumWidth(250);
 
@@ -25,10 +20,12 @@ WardListView::WardListView(FamilyTreeModel* model,
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(4);
 
-    // Search field (still owned by view - it's UI)
-    m_searchField = new SearchField(this);
-    m_searchField->setPlaceholderText(tr("Search families..."));
-    layout->addWidget(m_searchField);
+    // FilterBar owns Filter
+    m_filterBar = new FilterBar(documentManager, this);
+    layout->addWidget(m_filterBar);
+
+    // Create model with filter from FilterBar
+    m_model = new FamilyTreeModel(documentManager, m_filterBar->filter(), this);
 
     // Tree view with selection preservation
     m_treeView = new SelectionPreservingTreeView(m_model, this);
@@ -41,10 +38,6 @@ WardListView::WardListView(FamilyTreeModel* model,
     m_treeView->header()->setStretchLastSection(true);
     m_treeView->header()->setSectionResizeMode(QHeaderView::Stretch);
     layout->addWidget(m_treeView, 1);
-
-    // Connect search to filter
-    connect(m_searchField, &SearchField::searchTextChanged,
-            this, &WardListView::onSearchTextChanged);
 
     // Connect tree events
     connect(m_treeView, &SelectionPreservingTreeView::selectionChanged,
@@ -128,9 +121,9 @@ void WardListView::onSelectionChanged()
     }
 }
 
-void WardListView::onSearchTextChanged(const QString& text)
+Filter* WardListView::filter() const
 {
-    m_filter->setSearchText(text);
+    return m_filterBar->filter();
 }
 
 void WardListView::onModelReset()

@@ -5,8 +5,6 @@
 #include "NeedsSubView.h"
 #include "ResourcesView.h"
 #include "FamilyEditPanel.h"
-#include "FamilyTreeModel.h"
-#include "Filter.h"
 #include "MapWidget.h"
 #include "FamilyMarkerProvider.h"
 #include "DocumentManager.h"
@@ -82,9 +80,7 @@ void MainWindow::setupUi()
     m_sidebarTabs = new QTabWidget(m_splitter);
 
     // Ward list tab
-    m_familyFilter = new Filter(this);
-    m_familyModel = new FamilyTreeModel(m_documentManager, m_familyFilter, this);
-    m_wardListView = new WardListView(m_familyModel, m_familyFilter, m_documentManager, this);
+    m_wardListView = new WardListView(m_documentManager, this);
     m_sidebarTabs->addTab(m_wardListView, tr("Families"));
 
     // Ministering tab
