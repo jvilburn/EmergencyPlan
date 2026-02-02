@@ -302,6 +302,7 @@ set(LISTMODEL_SOURCES
     src/listmodels/FamilyTreeModel.cpp
     src/listmodels/MinisteringModel.cpp
     src/listmodels/NeedsModel.cpp
+    src/listmodels/PersonTreeModel.cpp
     src/listmodels/UnassignedMinisteringModel.cpp
     src/listmodels/PersonListModel.cpp
     src/listmodels/TeamListModel.cpp
@@ -318,6 +319,7 @@ set(LISTMODEL_HEADERS
     src/listmodels/FamilyTreeModel.h
     src/listmodels/MinisteringModel.h
     src/listmodels/NeedsModel.h
+    src/listmodels/PersonTreeModel.h
     src/listmodels/UnassignedMinisteringModel.h
     src/listmodels/PersonListModel.h
     src/listmodels/TeamListModel.h
