@@ -10,6 +10,8 @@ class QProgressBar;
 class QTabWidget;
 class DocumentManager;
 class FamilyEditPanel;
+class FamilyTreeModel;
+class Filter;
 class MapWidget;
 class NeedsModel;
 class WardListView;
@@ -79,6 +81,8 @@ private:
     // Widgets
     QSplitter* m_splitter;
     QTabWidget* m_sidebarTabs;
+    Filter* m_familyFilter;
+    FamilyTreeModel* m_familyModel;
     WardListView* m_wardListView;
     MinisteringView* m_ministeringView;
     NeedsModel* m_needsModel;

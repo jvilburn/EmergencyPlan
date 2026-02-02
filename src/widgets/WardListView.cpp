@@ -5,18 +5,19 @@
 #include "FamilyTreeModel.h"
 #include "Filter.h"
 #include "SearchField.h"
+#include "SelectionPreservingTreeView.h"
 
 #include <QHeaderView>
-#include <QTreeView>
 #include <QVBoxLayout>
 
-WardListView::WardListView(QWidget* parent)
+WardListView::WardListView(FamilyTreeModel* model,
+                           Filter* filter,
+                           DocumentManager* documentManager,
+                           QWidget* parent)
     : QWidget(parent)
-{
-    setupUi();
-}
-
-void WardListView::setupUi()
+    , m_documentManager(documentManager)
+    , m_model(model)
+    , m_filter(filter)
 {
     setMinimumWidth(250);
 
@@ -24,58 +25,40 @@ void WardListView::setupUi()
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(4);
 
-    // Search field
+    // Search field (still owned by view - it's UI)
     m_searchField = new SearchField(this);
     m_searchField->setPlaceholderText(tr("Search families..."));
     layout->addWidget(m_searchField);
 
-    // Tree view
-    m_treeView = new QTreeView(this);
+    // Tree view with selection preservation
+    m_treeView = new SelectionPreservingTreeView(m_model, this);
     m_treeView->setHeaderHidden(true);
     m_treeView->setRootIsDecorated(true);
     m_treeView->setAnimated(true);
-    m_treeView->setExpandsOnDoubleClick(false);  // We handle expand on single click
+    m_treeView->setExpandsOnDoubleClick(false);
     m_treeView->setSelectionMode(QAbstractItemView::SingleSelection);
     m_treeView->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_treeView->header()->setStretchLastSection(true);
     m_treeView->header()->setSectionResizeMode(QHeaderView::Stretch);
     layout->addWidget(m_treeView, 1);
 
+    // Connect search to filter
     connect(m_searchField, &SearchField::searchTextChanged,
             this, &WardListView::onSearchTextChanged);
 
+    // Connect tree events
+    connect(m_treeView, &SelectionPreservingTreeView::selectionChanged,
+            this, &WardListView::onSelectionChanged);
     connect(m_treeView, &QTreeView::expanded,
             this, &WardListView::onItemExpanded);
-
     connect(m_treeView, &QTreeView::collapsed,
             this, &WardListView::onItemCollapsed);
-}
 
-void WardListView::setup(DocumentManager* documentManager)
-{
-    m_documentManager = documentManager;
-
-    // Create owned filter
-    m_filter = new Filter(this);
-
-    // Create tree model with document manager and filter
-    m_model = new FamilyTreeModel(documentManager, m_filter, this);
-
-    m_treeView->setModel(m_model);
-
-    // Connect selection changes
-    connect(m_treeView->selectionModel(), &QItemSelectionModel::selectionChanged,
-            this, &WardListView::onSelectionChanged);
-
-    // Connect model reset to handle expanded state
+    // Connect model signals
     connect(m_model, &QAbstractItemModel::modelReset,
             this, &WardListView::onModelReset);
-
-    // Connect rowsRemoved to clean up action widgets when children are rebuilt
     connect(m_model, &QAbstractItemModel::rowsRemoved,
             this, &WardListView::onRowsRemoved);
-
-    // Connect rowsInserted to re-attach action widgets for expanded families
     connect(m_model, &QAbstractItemModel::rowsInserted,
             this, &WardListView::onRowsInserted);
 
@@ -85,27 +68,16 @@ void WardListView::setup(DocumentManager* documentManager)
 
 QString WardListView::selectedFamilyId() const
 {
-    if (!m_treeView || !m_model)
-    {
-        return QString();
-    }
-
     QModelIndex current = m_treeView->currentIndex();
     if (!current.isValid())
     {
         return QString();
     }
-
     return m_model->familyIdAt(current);
 }
 
 void WardListView::setSelectedFamilyId(const QString& id)
 {
-    if (!m_model || !m_treeView)
-    {
-        return;
-    }
-
     QModelIndex familyIndex = m_model->indexForFamilyId(id);
     if (familyIndex.isValid())
     {
@@ -116,27 +88,17 @@ void WardListView::setSelectedFamilyId(const QString& id)
 
 QStringList WardListView::visibleFamilyIdsList() const
 {
-    if (!m_model)
-    {
-        return {};
-    }
     return m_model->familyIds();
 }
-
-// FamilyMarkerProvider interface implementation
 
 HighlightInfo WardListView::highlightInfo() const
 {
     HighlightInfo info;
-
-    // Highlight selected family (if any)
     QString selected = selectedFamilyId();
     if (!selected.isEmpty())
     {
         info.highlightedFamilyIds.insert(selected);
     }
-
-    // WardListView has no contact point concept
     return info;
 }
 
@@ -168,17 +130,13 @@ void WardListView::onSelectionChanged()
 
 void WardListView::onSearchTextChanged(const QString& text)
 {
-    if (m_filter)
-    {
-        m_filter->setSearchText(text);
-    }
+    m_filter->setSearchText(text);
 }
 
 void WardListView::onModelReset()
 {
     // Clear all action widgets - they were deleted by the model reset
     m_actionWidgets.clear();
-
     emit visibleFamiliesChanged(visibleFamilyIdsList());
 }
 
@@ -219,10 +177,8 @@ void WardListView::onRowsInserted(const QModelIndex& parent, int first, int last
 void WardListView::onItemExpanded(const QModelIndex& index)
 {
     FamilyTreeModel::RowType type = m_model->rowTypeAt(index);
-
     if (type == FamilyTreeModel::RowType::Family)
     {
-        // Attach action buttons when family is expanded
         attachActionButtons(index);
     }
 }
@@ -230,7 +186,6 @@ void WardListView::onItemExpanded(const QModelIndex& index)
 void WardListView::onItemCollapsed(const QModelIndex& index)
 {
     FamilyTreeModel::RowType type = m_model->rowTypeAt(index);
-
     if (type == FamilyTreeModel::RowType::Family)
     {
         QString familyId = m_model->familyIdAt(index);
@@ -283,7 +238,6 @@ void WardListView::detachActionButtons(const QString& familyId)
     }
 
     // The widget will be deleted by setIndexWidget(nullptr)
-    // We just need to remove from our tracking hash
     QModelIndex familyIndex = m_model->indexForFamilyId(familyId);
     if (familyIndex.isValid())
     {
