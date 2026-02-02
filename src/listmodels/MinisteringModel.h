@@ -92,6 +92,7 @@ private:
     TreeNode* nodeFromIndex(const QModelIndex& index) const;
     void addMinistersSection(TreeNode* companionshipNode, const QString& groupId);
     void addMinisteredSection(TreeNode* companionshipNode, const QString& groupId);
+    int countMinisteredChildren(TreeNode* companionshipNode) const;
     bool isEQ() const { return m_org == MinisteringOrg::EldersQuorum; }
     QSet<QString> familyIdsForPersons(const QSet<QString>& personIds) const;
 

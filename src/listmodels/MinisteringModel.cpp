@@ -145,19 +145,8 @@ void MinisteringModel::rebuild()
             addMinistersSection(companionshipNode, groupId);
             addMinisteredSection(companionshipNode, groupId);
 
-            // Count filtered items from the "ministered" section
-            int filteredCount = 0;
-            for (TreeNode* section : companionshipNode->children)
-            {
-                if (section->type == ItemType::SectionHeader
-                    && section->id.endsWith(":ministered"))
-                {
-                    filteredCount = section->children.size();
-                    break;
-                }
-            }
-
-            // Update companionship text with filtered count
+            // Count filtered items and update companionship text
+            int filteredCount = countMinisteredChildren(companionshipNode);
             companionshipNode->displayText = QString("%1 (%2)")
                 .arg(ministerNames)
                 .arg(filteredCount);
@@ -535,6 +524,19 @@ QSet<QString> MinisteringModel::familyIdsForPersons(const QSet<QString>& personI
         }
     }
     return familyIds;
+}
+
+int MinisteringModel::countMinisteredChildren(TreeNode* companionshipNode) const
+{
+    for (TreeNode* section : companionshipNode->children)
+    {
+        if (section->type == ItemType::SectionHeader
+            && section->id.endsWith(":ministered"))
+        {
+            return section->children.size();
+        }
+    }
+    return 0;
 }
 
 FamilyAssociation MinisteringModel::relatedFamiliesAt(const QModelIndex& index) const
@@ -987,16 +989,39 @@ void MinisteringModel::refreshFamilyDisplayText(const QString& familyId)
                             ministerNames.append(person->displayName());
                         }
                     }
-                    int count = isEQ() ? group.familyCount() : group.ministeredPersonCount();
+                    // Use filtered count from actual children
+                    int filteredCount = countMinisteredChildren(compNode);
                     compNode->displayText = QString("%1 (%2)")
                         .arg(ministerNames.join(", "))
-                        .arg(count);
+                        .arg(filteredCount);
 
                     QModelIndex districtIndex = createIndex(districtRow, 0, districtNode);
                     QModelIndex compIndex = index(compRow, 0, districtIndex);
                     emit dataChanged(compIndex, compIndex);
                 }
             }
+        }
+
+        // Update district header with sum of filtered counts from all companionships
+        int districtCount = 0;
+        for (TreeNode* compNode : districtNode->children)
+        {
+            if (compNode->type == ItemType::Companionship)
+            {
+                districtCount += countMinisteredChildren(compNode);
+            }
+        }
+
+        const auto& districts = isEQ() ? doc.eqDistricts() : doc.rsDistricts();
+        if (districts.contains(districtNode->id))
+        {
+            districtNode->displayText = QString("%1 (%2 %3)")
+                .arg(districts[districtNode->id].name())
+                .arg(districtCount)
+                .arg(isEQ() ? tr("families") : tr("sisters"));
+
+            QModelIndex districtIndex = createIndex(districtRow, 0, districtNode);
+            emit dataChanged(districtIndex, districtIndex);
         }
     }
 }
