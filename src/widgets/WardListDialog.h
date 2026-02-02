@@ -6,18 +6,17 @@
 #include <QStringList>
 
 class DocumentManager;
-class Filter;
-class FilterableListWidget;
-class FamilyListModel;
-class PersonListModel;
+class FilterBar;
+class FamilyTreeModel;
+class PersonTreeModel;
 class MapWidget;
 class QSplitter;
 class QDialogButtonBox;
-class QAbstractListModel;
+class QTreeView;
 
 /// Modal dialog for selecting families or persons from the ward list.
-/// Features a split view with list on left and map on right.
-/// Owns its own Filter and model instances.
+/// Features a split view with tree on left and map on right.
+/// Uses FilterBar for search/filtering and tree models for display.
 class WardListDialog : public QDialog, public FamilyMarkerProvider
 {
     Q_OBJECT
@@ -50,9 +49,6 @@ public:
     /// Get selected IDs after dialog is accepted.
     QStringList selectedIds() const;
 
-    /// Access the filter for external configuration.
-    Filter* filter() const { return m_filter; }
-
     // FamilyMarkerProvider interface
     HighlightInfo highlightInfo() const override;
     QSet<QString> visibleFamilyIds() const override;
@@ -81,8 +77,7 @@ public:
 
 private slots:
     void onMapFamilyClicked(const QString& id);
-    void onSearchTextChanged(const QString& text);
-    void onModelReset();
+    void onSelectionChanged();
 
 private:
     void setupUi();
@@ -90,13 +85,13 @@ private:
 
     Mode m_mode;
     DocumentManager* m_documentManager;
-    Filter* m_filter = nullptr;
-    FilterableListWidget* m_listWidget = nullptr;
+    FilterBar* m_filterBar = nullptr;
+    QTreeView* m_treeView = nullptr;
     MapWidget* m_mapWidget = nullptr;
     QDialogButtonBox* m_buttonBox = nullptr;
     QSplitter* m_splitter = nullptr;
 
     // Model - only one is non-null depending on mode
-    FamilyListModel* m_familyModel = nullptr;
-    PersonListModel* m_personModel = nullptr;
+    FamilyTreeModel* m_familyModel = nullptr;
+    PersonTreeModel* m_personModel = nullptr;
 };

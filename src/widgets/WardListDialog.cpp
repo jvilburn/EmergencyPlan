@@ -1,8 +1,8 @@
 #include "WardListDialog.h"
-#include "FilterableListWidget.h"
-#include "FamilyListModel.h"
-#include "PersonListModel.h"
-#include "Filter.h"
+#include "FilterBar.h"
+#include "FamilyTreeModel.h"
+#include "PersonTreeModel.h"
+#include "ItemType.h"
 #include "MapWidget.h"
 #include "DocumentManager.h"
 #include "Document.h"
@@ -10,7 +10,8 @@
 #include <QVBoxLayout>
 #include <QSplitter>
 #include <QDialogButtonBox>
-#include <QPushButton>
+#include <QTreeView>
+#include <QItemSelectionModel>
 
 WardListDialog::WardListDialog(DocumentManager* documentManager,
                                Mode mode,
@@ -38,35 +39,29 @@ void WardListDialog::setupUi()
 
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
 
-    // Create splitter with list and map
+    // Create FilterBar (owns Filter internally)
+    m_filterBar = new FilterBar(m_documentManager, this);
+    mainLayout->addWidget(m_filterBar);
+
+    // Create splitter with tree and map
     m_splitter = new QSplitter(Qt::Horizontal, this);
 
-    // Create filter (owned by dialog)
-    m_filter = new Filter(this);
-
-    // Create list widget
-    m_listWidget = new FilterableListWidget(this);
+    // Create tree view
+    m_treeView = new QTreeView(this);
+    m_treeView->setHeaderHidden(true);
+    m_treeView->setRootIsDecorated(true);
+    m_treeView->setIndentation(16);
 
     // Create appropriate model based on mode
     if (m_mode == FamilyMode)
     {
-        m_familyModel = new FamilyListModel(m_documentManager, m_filter, this);
-        m_listWidget->setModel(m_familyModel);
-        m_listWidget->setIdRole(FamilyListModel::IdRole);
-
-        // Connect model reset
-        connect(m_familyModel, &QAbstractItemModel::modelReset,
-                this, &WardListDialog::onModelReset);
+        m_familyModel = new FamilyTreeModel(m_documentManager, m_filterBar->filter(), this);
+        m_treeView->setModel(m_familyModel);
     }
     else
     {
-        m_personModel = new PersonListModel(m_documentManager, m_filter, this);
-        m_listWidget->setModel(m_personModel);
-        m_listWidget->setIdRole(PersonListModel::IdRole);
-
-        // Connect model reset
-        connect(m_personModel, &QAbstractItemModel::modelReset,
-                this, &WardListDialog::onModelReset);
+        m_personModel = new PersonTreeModel(m_documentManager, m_filterBar->filter(), this);
+        m_treeView->setModel(m_personModel);
     }
 
     // Create map widget
@@ -74,10 +69,10 @@ void WardListDialog::setupUi()
     m_mapWidget->setMinimumWidth(400);
 
     // Add to splitter
-    m_splitter->addWidget(m_listWidget);
+    m_splitter->addWidget(m_treeView);
     m_splitter->addWidget(m_mapWidget);
     m_splitter->setSizes({350, 650});
-    m_splitter->setStretchFactor(0, 0);  // List doesn't stretch
+    m_splitter->setStretchFactor(0, 0);  // Tree doesn't stretch
     m_splitter->setStretchFactor(1, 1);  // Map stretches
 
     mainLayout->addWidget(m_splitter, 1);
@@ -91,10 +86,8 @@ void WardListDialog::setupUi()
     m_mapWidget->setMarkerProvider(this);
 
     // Connections
-    connect(m_listWidget, &FilterableListWidget::selectionChanged,
-            m_mapWidget, &MapWidget::updateHighlights);
-    connect(m_listWidget, &FilterableListWidget::searchTextChanged,
-            this, &WardListDialog::onSearchTextChanged);
+    connect(m_treeView->selectionModel(), &QItemSelectionModel::selectionChanged,
+            this, &WardListDialog::onSelectionChanged);
     connect(m_mapWidget, &MapWidget::familyClicked,
             this, &WardListDialog::onMapFamilyClicked);
     connect(m_buttonBox, &QDialogButtonBox::accepted,
@@ -110,32 +103,93 @@ void WardListDialog::setSelectionMode(SelectionMode mode)
 {
     if (mode == MultiSelect)
     {
-        m_listWidget->setSelectionMode(FilterableListWidget::MultiSelect);
+        m_treeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     }
     else
     {
-        m_listWidget->setSelectionMode(FilterableListWidget::SingleSelect);
+        m_treeView->setSelectionMode(QAbstractItemView::SingleSelection);
     }
 }
 
 void WardListDialog::setPreselectedIds(const QStringList& ids)
 {
-    m_listWidget->setSelectedIds(ids);
+    QItemSelectionModel* selModel = m_treeView->selectionModel();
+    selModel->clearSelection();
+
+    for (const QString& id : ids)
+    {
+        QModelIndex index;
+        if (m_mode == FamilyMode && m_familyModel)
+        {
+            index = m_familyModel->indexForFamilyId(id);
+        }
+        else if (m_mode == PersonMode && m_personModel)
+        {
+            index = m_personModel->indexForPersonId(id);
+        }
+
+        if (index.isValid())
+        {
+            selModel->select(index, QItemSelectionModel::Select);
+            // Scroll to first selected item
+            if (ids.indexOf(id) == 0)
+            {
+                m_treeView->scrollTo(index);
+            }
+        }
+    }
 }
 
 QStringList WardListDialog::selectedIds() const
 {
-    return m_listWidget->selectedIds();
+    QStringList ids;
+    QModelIndexList selected = m_treeView->selectionModel()->selectedIndexes();
+
+    for (const QModelIndex& index : selected)
+    {
+        if (m_mode == FamilyMode && m_familyModel)
+        {
+            // Only include Family-type rows (not members or details)
+            if (m_familyModel->itemTypeAt(index) == ItemType::Family)
+            {
+                QString id = m_familyModel->familyIdAt(index);
+                if (!id.isEmpty() && !ids.contains(id))
+                {
+                    ids.append(id);
+                }
+            }
+        }
+        else if (m_mode == PersonMode && m_personModel)
+        {
+            // Only include Person-type rows (not contact details)
+            if (m_personModel->itemTypeAt(index) == ItemType::Person)
+            {
+                QString id = m_personModel->personIdAt(index);
+                if (!id.isEmpty() && !ids.contains(id))
+                {
+                    ids.append(id);
+                }
+            }
+        }
+    }
+
+    return ids;
 }
 
 void WardListDialog::onMapFamilyClicked(const QString& familyId)
 {
-    if (m_mode == FamilyMode)
+    if (m_mode == FamilyMode && m_familyModel)
     {
         // Direct selection
-        m_listWidget->setSelectedIds({familyId});
+        QModelIndex index = m_familyModel->indexForFamilyId(familyId);
+        if (index.isValid())
+        {
+            m_treeView->selectionModel()->select(
+                index, QItemSelectionModel::ClearAndSelect);
+            m_treeView->scrollTo(index);
+        }
     }
-    else
+    else if (m_personModel)
     {
         // In person mode, select the first person from this family
         std::optional<Family> familyOpt =
@@ -143,38 +197,45 @@ void WardListDialog::onMapFamilyClicked(const QString& familyId)
         if (familyOpt && !familyOpt->members().isEmpty())
         {
             QString personId = familyOpt->members().first().id();
-            m_listWidget->setSelectedIds({personId});
+            QModelIndex index = m_personModel->indexForPersonId(personId);
+            if (index.isValid())
+            {
+                m_treeView->selectionModel()->select(
+                    index, QItemSelectionModel::ClearAndSelect);
+                m_treeView->scrollTo(index);
+            }
         }
     }
 }
 
-void WardListDialog::onSearchTextChanged(const QString& text)
+void WardListDialog::onSelectionChanged()
 {
-    m_filter->setSearchText(text);
-}
-
-void WardListDialog::onModelReset()
-{
-    // Could update map highlighting here if needed
+    // Update map highlighting
+    m_mapWidget->updateHighlights();
 }
 
 QString WardListDialog::familyIdForCurrentSelection() const
 {
-    QStringList ids = m_listWidget->selectedIds();
-    if (ids.isEmpty())
+    QModelIndex current = m_treeView->currentIndex();
+    if (!current.isValid())
     {
         return QString();
     }
 
-    if (m_mode == FamilyMode)
+    if (m_mode == FamilyMode && m_familyModel)
     {
-        return ids.first();
+        return m_familyModel->familyIdAt(current);
     }
-    else
+    else if (m_personModel)
     {
         // Look up family for selected person
-        return m_documentManager->document().familyIdForPerson(ids.first());
+        QString personId = m_personModel->personIdAt(current);
+        if (!personId.isEmpty())
+        {
+            return m_documentManager->document().familyIdForPerson(personId);
+        }
     }
+    return QString();
 }
 
 HighlightInfo WardListDialog::highlightInfo() const
