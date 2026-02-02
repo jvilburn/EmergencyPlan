@@ -57,6 +57,7 @@ public:
 
     // View-specific accessors
     QString resourceIdAt(const QModelIndex& index) const;
+    ResponseArea area() const { return m_area; }
 
 private slots:
     void onDocumentChanged(const DocumentChange& change);

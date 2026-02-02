@@ -1,4 +1,5 @@
 #include "EmergencyResourceView.h"
+#include "BaseTreeModel.h"
 #include "WardListDialog.h"
 #include "DocumentManager.h"
 #include "Document.h"
@@ -7,8 +8,8 @@
 #include "Person.h"
 #include "Phone.h"
 #include "EmergencyResourceCommands.h"
+#include "SelectionPreservingTreeView.h"
 
-#include <QTreeView>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QPushButton>
@@ -16,17 +17,12 @@
 #include <QInputDialog>
 #include <QMessageBox>
 
-EmergencyResourceView::EmergencyResourceView(DocumentManager* documentManager, ResponseArea area, QWidget* parent)
+EmergencyResourceView::EmergencyResourceView(EmergencyResourceModel* model,
+                                              DocumentManager* documentManager,
+                                              QWidget* parent)
     : QWidget(parent)
     , m_documentManager(documentManager)
-    , m_area(area)
-    , m_model(nullptr)
-    , m_tree(nullptr)
-    , m_addButton(nullptr)
-    , m_editButton(nullptr)
-    , m_deleteButton(nullptr)
-    , m_contextResourceId()
-    , m_contextPersonId()
+    , m_model(model)
 {
     QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(4, 4, 4, 4);
@@ -46,18 +42,14 @@ EmergencyResourceView::EmergencyResourceView(DocumentManager* documentManager, R
 
     layout->addLayout(toolbar);
 
-    // Create model
-    m_model = new EmergencyResourceModel(m_documentManager, m_area, this);
-
-    // Create tree view
-    m_tree = new QTreeView();
+    // Create tree view with model
+    m_tree = new SelectionPreservingTreeView(m_model, this);
     m_tree->setHeaderHidden(true);
     m_tree->setRootIsDecorated(true);
     m_tree->setSelectionMode(QAbstractItemView::SingleSelection);
     m_tree->setContextMenuPolicy(Qt::CustomContextMenu);
     m_tree->setIndentation(16);
-    m_tree->setModel(m_model);
-    m_tree->expandToDepth(0);  // Expand only top-level (resources)
+    m_tree->expandToDepth(0);
     layout->addWidget(m_tree);
 
     // Connections
@@ -65,7 +57,7 @@ EmergencyResourceView::EmergencyResourceView(DocumentManager* documentManager, R
     connect(m_editButton, &QPushButton::clicked, this, &EmergencyResourceView::editResource);
     connect(m_deleteButton, &QPushButton::clicked, this, &EmergencyResourceView::deleteResource);
 
-    connect(m_tree->selectionModel(), &QItemSelectionModel::currentChanged,
+    connect(m_tree, &SelectionPreservingTreeView::selectionChanged,
             this, &EmergencyResourceView::onSelectionChanged);
     connect(m_tree, &QTreeView::doubleClicked,
             this, &EmergencyResourceView::onTreeDoubleClicked);
@@ -82,10 +74,8 @@ EmergencyResourceView::EmergencyResourceView(DocumentManager* documentManager, R
     updateButtonStates();
 }
 
-void EmergencyResourceView::onSelectionChanged(const QModelIndex& current, const QModelIndex& previous)
+void EmergencyResourceView::onSelectionChanged()
 {
-    Q_UNUSED(current)
-    Q_UNUSED(previous)
     updateButtonStates();
     emit highlightChanged();
 }
@@ -245,66 +235,8 @@ QString EmergencyResourceView::selectedResourceId() const
 
 HighlightInfo EmergencyResourceView::highlightInfo() const
 {
-    HighlightInfo info;
-
-    QModelIndex current = m_tree->currentIndex();
-    if (!current.isValid())
-    {
-        return info;
-    }
-
-    const Document& doc = m_documentManager->document();
-    ItemType type = m_model->itemTypeAt(current);
-    QString id = m_model->idAt(current);
-
-    switch (type)
-    {
-    case ItemType::Person:
-        {
-            // Single person selected - highlight their family
-            QString familyId = doc.familyIdForPerson(id);
-            if (!familyId.isEmpty())
-            {
-                info.highlightedFamilyIds.insert(familyId);
-            }
-        }
-        break;
-
-    case ItemType::Resource:
-        {
-            // Resource selected - highlight all families with people having this resource
-            std::optional<EmergencyResource> resourceOpt = doc.findEmergencyResourceById(id);
-            if (resourceOpt)
-            {
-                for (const QString& personId : resourceOpt->personIds())
-                {
-                    QString familyId = doc.familyIdForPerson(personId);
-                    if (!familyId.isEmpty())
-                    {
-                        info.highlightedFamilyIds.insert(familyId);
-                    }
-                }
-            }
-        }
-        break;
-
-    case ItemType::ContactDetail:
-        {
-            // Contact detail selected - highlight parent person's family
-            QString personId = m_model->idAt(current);
-            QString familyId = doc.familyIdForPerson(personId);
-            if (!familyId.isEmpty())
-            {
-                info.highlightedFamilyIds.insert(familyId);
-            }
-        }
-        break;
-
-    case ItemType::Invalid:
-        break;
-    }
-
-    return info;
+    FamilyAssociation assoc = m_model->relatedFamiliesAt(m_tree->currentIndex());
+    return {assoc.relatedFamilyIds, assoc.contactPointFamilyIds};
 }
 
 QSet<QString> EmergencyResourceView::visibleFamilyIds() const
@@ -321,7 +253,7 @@ void EmergencyResourceView::addResource()
                                           QLineEdit::Normal, QString(), &ok);
     if (ok && !name.isEmpty())
     {
-        EmergencyResource resource = EmergencyResource::create(name, m_area);
+        EmergencyResource resource = EmergencyResource::create(name, m_model->area());
         m_documentManager->executeCommand(
             std::make_unique<AddEmergencyResourceCommand>(resource));
     }
