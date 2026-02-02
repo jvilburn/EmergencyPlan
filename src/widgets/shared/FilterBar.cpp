@@ -82,6 +82,16 @@ void FilterBar::onClearAllClicked()
     m_searchField->clear();
 }
 
+void FilterBar::onContactFilterTriggered(bool checked)
+{
+    m_filter->setOnlyWithContact(checked);
+}
+
+void FilterBar::onUnmappedFilterTriggered(bool checked)
+{
+    m_filter->setMappedFilter(checked ? MappedFilter::Unmapped : MappedFilter::All);
+}
+
 void FilterBar::rebuildChips()
 {
     // Clear existing chips
@@ -133,18 +143,14 @@ void FilterBar::showAddFilterMenu()
     QAction* contactAction = menu.addAction(tr("Has Contact Info"));
     contactAction->setCheckable(true);
     contactAction->setChecked(m_filter->onlyWithContact());
-    connect(contactAction, &QAction::triggered, this, [this](bool checked)
-    {
-        m_filter->setOnlyWithContact(checked);
-    });
+    connect(contactAction, &QAction::triggered,
+            this, &FilterBar::onContactFilterTriggered);
 
     QAction* unmappedAction = menu.addAction(tr("Unmapped Only"));
     unmappedAction->setCheckable(true);
     unmappedAction->setChecked(m_filter->mappedFilter() == MappedFilter::Unmapped);
-    connect(unmappedAction, &QAction::triggered, this, [this](bool checked)
-    {
-        m_filter->setMappedFilter(checked ? MappedFilter::Unmapped : MappedFilter::All);
-    });
+    connect(unmappedAction, &QAction::triggered,
+            this, &FilterBar::onUnmappedFilterTriggered);
 
     menu.exec(m_addFilterButton->mapToGlobal(
         QPoint(0, m_addFilterButton->height())));

@@ -29,6 +29,8 @@ private slots:
     void onFilterChanged();
     void onAddFilterClicked();
     void onClearAllClicked();
+    void onContactFilterTriggered(bool checked);
+    void onUnmappedFilterTriggered(bool checked);
 
 private:
     void rebuildChips();
