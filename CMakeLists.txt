@@ -230,6 +230,7 @@ set(WIDGET_SOURCES
     src/widgets/ResourcesView.cpp
     src/widgets/MinisteringTreeView.cpp
     src/widgets/UnassignedTreeView.cpp
+    src/widgets/MinisteringTabView.cpp
     # src/widgets/Sidebar.cpp
     # src/widgets/MinisteringSidebar.cpp
     # src/widgets/ResourceView.cpp

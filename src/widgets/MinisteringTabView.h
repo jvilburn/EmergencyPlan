@@ -1,0 +1,52 @@
+#pragma once
+
+#include "FamilyMarkerProvider.h"
+#include "ItemType.h"
+
+#include <QWidget>
+
+class DocumentManager;
+class MinisteringModel;
+class UnassignedMinisteringModel;
+class MinisteringTreeView;
+class UnassignedTreeView;
+
+/// Tab content - creates models, owns tree views for one org.
+/// Delegates highlightInfo() to whichever tree view has selection.
+/// IMPORTANT: Manages UnassignedTreeView height (connects to headerExpansionChanged).
+class MinisteringTabView : public QWidget, public FamilyMarkerProvider
+{
+    Q_OBJECT
+
+public:
+    explicit MinisteringTabView(DocumentManager* documentManager,
+                                 MinisteringOrg org,
+                                 QWidget* parent = nullptr);
+
+    HighlightInfo highlightInfo() const override;
+    QSet<QString> visibleFamilyIds() const override;
+
+    void expandDistricts();
+
+signals:
+    void highlightChanged();
+
+private slots:
+    void onMainHighlightChanged();
+    void onUnassignedHighlightChanged();
+    void updateUnassignedVisibility();
+    void onHeaderExpansionChanged(bool isExpanded);
+
+private:
+    int collapsedTreeHeight() const;
+    int expandedTreeHeight() const;
+
+    // Models owned by tab view
+    MinisteringModel* m_mainModel;
+    UnassignedMinisteringModel* m_unassignedModel;
+
+    // Views take model pointers
+    MinisteringTreeView* m_mainView;
+    UnassignedTreeView* m_unassignedView;
+    FamilyMarkerProvider* m_activeProvider = nullptr;
+};
