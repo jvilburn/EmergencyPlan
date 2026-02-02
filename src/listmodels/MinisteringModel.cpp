@@ -2,6 +2,7 @@
 #include "ContactIcons.h"
 #include "DocumentManager.h"
 #include "Document.h"
+#include "Filter.h"
 #include "MinisteringDistrict.h"
 #include "MinisteringGroup.h"
 #include "Family.h"
@@ -11,14 +12,20 @@
 #include <QFont>
 
 MinisteringModel::MinisteringModel(DocumentManager* documentManager,
+                                     Filter* filter,
                                      MinisteringOrg org,
                                      QObject* parent)
     : BaseTreeModel(parent)
     , m_documentManager(documentManager)
+    , m_filter(filter)
     , m_org(org)
 {
     connect(m_documentManager, &DocumentManager::documentChanged,
             this, &MinisteringModel::onDocumentChanged);
+    if (m_filter)
+    {
+        connect(m_filter, &Filter::changed, this, &MinisteringModel::rebuild);
+    }
     rebuild();
 }
 
@@ -244,6 +251,11 @@ void MinisteringModel::addMinisteredSection(TreeNode* companionshipNode, const Q
             if (families.contains(familyId))
             {
                 const Family& family = families[familyId];
+                // Apply filter if set
+                if (m_filter && !m_filter->passes(doc, family))
+                {
+                    continue;
+                }
                 sortedFamilies.append({family.displayName(), familyId});
             }
         }
@@ -271,6 +283,11 @@ void MinisteringModel::addMinisteredSection(TreeNode* companionshipNode, const Q
             std::optional<Person> person = doc.findPersonById(personId);
             if (person)
             {
+                // Apply filter if set
+                if (m_filter && !m_filter->passes(doc, *person))
+                {
+                    continue;
+                }
                 sortedSisters.append({person->displayName(), personId});
             }
         }

@@ -1,4 +1,5 @@
 #include "MinisteringTabView.h"
+#include "FilterBar.h"
 #include "MinisteringModel.h"
 #include "UnassignedMinisteringModel.h"
 #include "MinisteringTreeView.h"
@@ -12,9 +13,17 @@ MinisteringTabView::MinisteringTabView(DocumentManager* documentManager,
                                          QWidget* parent)
     : QWidget(parent)
 {
-    // Create models with org - models own the org context
-    m_mainModel = new MinisteringModel(documentManager, org, this);
-    m_unassignedModel = new UnassignedMinisteringModel(documentManager, org, this);
+    QVBoxLayout* layout = new QVBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(8);
+
+    // FilterBar shared between both trees
+    m_filterBar = new FilterBar(documentManager, this);
+    layout->addWidget(m_filterBar);
+
+    // Create models with filter from FilterBar
+    m_mainModel = new MinisteringModel(documentManager, m_filterBar->filter(), org, this);
+    m_unassignedModel = new UnassignedMinisteringModel(documentManager, m_filterBar->filter(), org, this);
 
     // Pass models to tree views - views don't need org
     m_mainView = new MinisteringTreeView(m_mainModel, this);
@@ -23,9 +32,6 @@ MinisteringTabView::MinisteringTabView(DocumentManager* documentManager,
     // Set initial collapsed height
     m_unassignedView->setFixedHeight(collapsedTreeHeight());
 
-    QVBoxLayout* layout = new QVBoxLayout(this);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(8);
     layout->addWidget(m_unassignedView);
     layout->addWidget(m_mainView, 1);
 

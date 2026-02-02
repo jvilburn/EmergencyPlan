@@ -6,6 +6,7 @@
 #include <QWidget>
 
 class DocumentManager;
+class FilterBar;
 class MinisteringModel;
 class UnassignedMinisteringModel;
 class MinisteringTreeView;
@@ -40,6 +41,9 @@ private slots:
 private:
     int collapsedTreeHeight() const;
     int expandedTreeHeight() const;
+
+    // FilterBar shared between both trees
+    FilterBar* m_filterBar;
 
     // Models owned by tab view
     MinisteringModel* m_mainModel;

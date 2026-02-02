@@ -7,6 +7,7 @@
 #include <QString>
 
 class DocumentManager;
+class Filter;
 
 /// Model for ministering tree (multi-level: District → Companionship → Section → Person).
 ///
@@ -34,6 +35,7 @@ public:
     Q_ENUM(Roles)
 
     explicit MinisteringModel(DocumentManager* documentManager,
+                               Filter* filter,
                                MinisteringOrg org,
                                QObject* parent = nullptr);
     ~MinisteringModel() override;
@@ -95,5 +97,6 @@ private:
 
     QList<TreeNode*> m_districtNodes;  // Top-level nodes (owned)
     DocumentManager* m_documentManager;
+    Filter* m_filter;
     MinisteringOrg m_org;
 };

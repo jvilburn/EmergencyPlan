@@ -2,6 +2,7 @@
 #include "ContactIcons.h"
 #include "DocumentManager.h"
 #include "Document.h"
+#include "Filter.h"
 #include "MinisteringGroup.h"
 #include "Family.h"
 #include "Person.h"
@@ -10,14 +11,20 @@
 #include <QSet>
 
 UnassignedMinisteringModel::UnassignedMinisteringModel(DocumentManager* documentManager,
+                                                         Filter* filter,
                                                          MinisteringOrg org,
                                                          QObject* parent)
     : BaseTreeModel(parent)
     , m_documentManager(documentManager)
+    , m_filter(filter)
     , m_org(org)
 {
     connect(m_documentManager, &DocumentManager::documentChanged,
             this, &UnassignedMinisteringModel::onDocumentChanged);
+    if (m_filter)
+    {
+        connect(m_filter, &Filter::changed, this, &UnassignedMinisteringModel::rebuild);
+    }
     rebuild();
 }
 
@@ -100,13 +107,18 @@ void UnassignedMinisteringModel::rebuild()
             m_headerNode->id = "unassigned";
             m_headerNode->displayText = tr("Unassigned (%1 families)").arg(unassignedIds.size());
 
-            // Sort families by name
+            // Sort families by name, applying filter
             QList<QPair<QString, QString>> sortedFamilies;
             for (const QString& familyId : unassignedIds)
             {
                 if (families.contains(familyId))
                 {
                     const Family& family = families[familyId];
+                    // Apply filter if set
+                    if (m_filter && !m_filter->passes(doc, family))
+                    {
+                        continue;
+                    }
                     sortedFamilies.append({family.displayName(), familyId});
                 }
             }
@@ -159,13 +171,18 @@ void UnassignedMinisteringModel::rebuild()
             m_headerNode->id = "unassigned";
             m_headerNode->displayText = tr("Unassigned (%1 sisters)").arg(unassignedIds.size());
 
-            // Sort sisters by name
+            // Sort sisters by name, applying filter
             QList<QPair<QString, QString>> sortedSisters;
             for (const QString& personId : unassignedIds)
             {
                 std::optional<Person> person = doc.findPersonById(personId);
                 if (person)
                 {
+                    // Apply filter if set
+                    if (m_filter && !m_filter->passes(doc, *person))
+                    {
+                        continue;
+                    }
                     sortedSisters.append({person->displayName(), personId});
                 }
             }
