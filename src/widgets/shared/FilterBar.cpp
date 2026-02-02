@@ -195,10 +195,17 @@ void FilterBar::rebuildChips()
         QString areaName;
         switch (area)
         {
-            case ResponseArea::Medical: areaName = tr("Medical"); break;
-            case ResponseArea::Communications: areaName = tr("Communications"); break;
-            case ResponseArea::Recovery: areaName = tr("Recovery"); break;
-            default: continue;
+            case ResponseArea::Medical:
+                areaName = tr("Medical");
+                break;
+            case ResponseArea::Communications:
+                areaName = tr("Communications");
+                break;
+            case ResponseArea::Recovery:
+                areaName = tr("Recovery");
+                break;
+            default:
+                continue;
         }
         addChip(tr("Area"), areaName, [this, area]() {
             m_filter->removeResponseArea(area);
