@@ -223,6 +223,7 @@ set(WIDGET_SOURCES
     src/widgets/WardListDialog.cpp
     src/widgets/WardListView.cpp
     src/widgets/shared/FilterableListWidget.cpp
+    src/widgets/shared/FilterBar.cpp
     src/widgets/shared/FilterChip.cpp
     src/widgets/shared/SearchField.cpp
     src/widgets/NeedsSubView.cpp
@@ -267,6 +268,7 @@ set(WIDGET_HEADERS
     src/widgets/WardListDialog.h
     src/widgets/WardListView.h
     src/widgets/shared/FilterableListWidget.h
+    src/widgets/shared/FilterBar.h
     src/widgets/shared/FilterChip.h
     src/widgets/shared/SearchField.h
     src/widgets/NeedsSubView.h
