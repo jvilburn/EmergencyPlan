@@ -159,6 +159,9 @@ private:
     bool m_isGeocoding = false;
     bool m_unmappedPanelManualOverride = false;
 
+    // Attribution box geometry (updated in drawAttribution, used for collision detection)
+    QRect m_attributionRect;
+
     // UI controls
     QPushButton* m_zoomInButton;
     QPushButton* m_zoomOutButton;

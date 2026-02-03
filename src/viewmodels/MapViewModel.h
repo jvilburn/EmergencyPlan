@@ -1,11 +1,13 @@
 #pragma once
 
+#include <QHash>
 #include <QObject>
 #include <QString>
 #include <QVariantList>
 #include <QVariantMap>
 
 #include "DocumentChange.h"
+#include "MarkerRenderer.h"
 
 class DocumentManager;
 
@@ -59,6 +61,9 @@ public:
     // Called when map is clicked (for deselection)
     Q_INVOKABLE void mapClicked(double lat, double lng);
 
+    /// Get pre-computed marker icons for a family (computed when document changes)
+    MarkerRenderer::MarkerIcons familyIcons(const QString& familyId) const;
+
 signals:
     void familiesChanged();
     void highlightingChanged();
@@ -83,6 +88,7 @@ private:
 
     DocumentManager* m_docManager;
     QVariantList m_families;
+    QHash<QString, MarkerRenderer::MarkerIcons> m_familyIcons;  // Pre-computed marker icons
     QVariantMap m_highlightedIds;  // familyId -> color (as string)
     bool m_useSatelliteView = false;
     double m_centerLat = 40.0;

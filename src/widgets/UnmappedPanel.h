@@ -8,6 +8,7 @@ class DocumentManager;
 class FamilyTreeModel;
 class Filter;
 class FamilyMarkerProvider;
+class MapViewModel;
 
 /// Panel showing unmapped families with half-size markers.
 /// Displays in a flow layout: 2 columns, expands up, then adds columns.
@@ -16,7 +17,8 @@ class UnmappedPanel : public QWidget
     Q_OBJECT
 
 public:
-    explicit UnmappedPanel(DocumentManager* docManager, QWidget* parent = nullptr);
+    explicit UnmappedPanel(DocumentManager* docManager, MapViewModel* viewModel,
+                           QWidget* parent = nullptr);
 
     /// Returns true if there are unmapped families to show
     bool hasUnmappedFamilies() const;
@@ -59,7 +61,7 @@ private:
     void recalculateLayout();
     QString markerAtPoint(const QPoint& pos) const;
 
-    DocumentManager* m_docManager;
+    MapViewModel* m_viewModel;
     Filter* m_filter;
     FamilyTreeModel* m_model;
     FamilyMarkerProvider* m_markerProvider = nullptr;

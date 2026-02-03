@@ -1,11 +1,11 @@
 #pragma once
 
-#include <QPainter>
-#include <QPointF>
-#include <QMarginsF>
 #include <QColor>
+#include <QMarginsF>
+#include <QPainter>
+#include <QPixmap>
+#include <QPointF>
 #include <QVariantMap>
-#include <QIcon>
 
 class Ward;
 class Document;
@@ -13,11 +13,12 @@ class Document;
 /// Renders map markers for families/persons.
 namespace MarkerRenderer
 {
-    /// Pre-selected icons for a family marker (computed once, used during draw)
+    /// Pre-rendered pixmaps for a family marker (computed once, used during draw)
     struct MarkerIcons
     {
-        QIcon* baseIcon = nullptr;     // Points to static icon (home, medical, etc.)
-        QIcon* antennaIcon = nullptr;  // nullptr if no communications
+        QPixmap basePixmap;      // Pre-rendered at standard size (24px)
+        QPixmap antennaPixmap;   // Empty if no communications
+        bool hasAntenna = false; // For bounds calculation
     };
 
     /// State affecting marker appearance
@@ -45,9 +46,9 @@ namespace MarkerRenderer
     /// Check if a marker at the given position is visible within widget bounds.
     bool isVisible(const QPointF& pos, int widgetWidth, int widgetHeight);
 
-    /// Returns bounding box for a family marker (highlighted, with actual icons).
+    /// Returns bounding box for a family marker (highlighted, with given icons).
     /// Used for zoom-to-fit calculations.
-    QMarginsF familyBounds(const QString& familyId, const Document& doc);
+    QMarginsF familyBounds(const MarkerIcons& icons);
 
     /// Returns bounding box for a church/chapel marker.
     /// Used for zoom-to-fit calculations.

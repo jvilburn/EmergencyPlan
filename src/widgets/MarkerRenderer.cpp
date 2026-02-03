@@ -132,10 +132,18 @@ MarkerIcons computeFamilyIcons(const QString& familyId, const Document& doc)
         decorations.unite(doc.personResponseAreas(person.id()));
     }
 
+    // Pre-render pixmaps at standard size to avoid repeated QIcon::pixmap() calls
+    constexpr int standardSize = static_cast<int>(SVG_BASE_SIZE);
+    QIcon* baseIcon = selectBaseIcon(decorations);
+    bool hasCommunications = decorations.contains(ResponseArea::Communications);
+
     MarkerIcons icons;
-    icons.baseIcon = selectBaseIcon(decorations);
-    icons.antennaIcon = decorations.contains(ResponseArea::Communications)
-                        ? &antennaIcon() : nullptr;
+    icons.basePixmap = baseIcon->pixmap(QSize(standardSize, standardSize));
+    icons.hasAntenna = hasCommunications;
+    if (hasCommunications)
+    {
+        icons.antennaPixmap = antennaIcon().pixmap(QSize(standardSize, standardSize));
+    }
     return icons;
 }
 
@@ -209,18 +217,28 @@ void draw(QPainter& painter, const QPointF& pos,
         painter.drawEllipse(pos, ringRadius, ringRadius);
     }
 
-    // Draw the marker icon (fallback to home if baseIcon not set)
-    QIcon* iconToDraw = state.icons.baseIcon ? state.icons.baseIcon : &homeIcon();
-    QPixmap pixmap = iconToDraw->pixmap(QSize(intSize, intSize));
+    // Draw the marker icon using pre-rendered pixmap
+    QPixmap pixmap = state.icons.basePixmap;
+    if (pixmap.isNull())
+    {
+        // Fallback to home icon if no pixmap cached
+        pixmap = homeIcon().pixmap(QSize(intSize, intSize));
+    }
+    else if (state.scale != 1.0)
+    {
+        // Scale the pre-rendered pixmap for non-standard sizes
+        pixmap = pixmap.scaled(intSize, intSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    }
     QPointF topLeft(pos.x() - size / 2.0, pos.y() - size / 2.0);
     painter.drawPixmap(topLeft, pixmap);
 
     // Draw antenna overlay if present
-    if (state.icons.antennaIcon)
+    if (state.icons.hasAntenna && !state.icons.antennaPixmap.isNull())
     {
         double antennaSize = size * ANTENNA_SCALE;
         int antennaIntSize = static_cast<int>(qCeil(antennaSize));
-        QPixmap antennaPixmap = state.icons.antennaIcon->pixmap(QSize(antennaIntSize, antennaIntSize));
+        QPixmap antennaPixmap = state.icons.antennaPixmap.scaled(
+            antennaIntSize, antennaIntSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
 
         // Position antenna at top-right, partially overlapping
         QPointF antennaPos(pos.x() + size * ANTENNA_OFFSET_X,
@@ -266,14 +284,11 @@ bool isVisible(const QPointF& pos, int widgetWidth, int widgetHeight)
            && pos.y() <= widgetHeight + margin;
 }
 
-QMarginsF familyBounds(const QString& familyId, const Document& doc)
+QMarginsF familyBounds(const MarkerIcons& icons)
 {
-    MarkerIcons icons = computeFamilyIcons(familyId, doc);
-
     // Compute bounds assuming highlighted (for zoom-to-fit, target will be selected)
     double markerRadius = SVG_BASE_SIZE / 2.0;
-    double antennaExtent = (icons.antennaIcon != nullptr)
-                           ? SVG_BASE_SIZE * ANTENNA_SCALE : 0.0;
+    double antennaExtent = icons.hasAntenna ? SVG_BASE_SIZE * ANTENNA_SCALE : 0.0;
 
     double left = markerRadius + HIGHLIGHT_GLOW_EXTENT;
     double top = markerRadius + HIGHLIGHT_GLOW_EXTENT + antennaExtent;

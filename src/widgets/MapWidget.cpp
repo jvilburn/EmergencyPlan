@@ -123,7 +123,7 @@ void MapWidget::setupUi()
     connect(m_layerButton, &QPushButton::clicked, this, &MapWidget::onToggleLayer);
 
     // Unmapped families panel
-    m_unmappedPanel = new UnmappedPanel(m_docManager, this);
+    m_unmappedPanel = new UnmappedPanel(m_docManager, m_viewModel, this);
     connect(m_unmappedPanel, &UnmappedPanel::familyClicked,
             this, &MapWidget::familyClicked);
     connect(this, &MapWidget::highlightChanged,
@@ -348,16 +348,9 @@ void MapWidget::paintEvent(QPaintEvent* /*event*/)
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
 
-    // Draw tiles first (background)
     drawTiles(painter);
-
-    // Draw family markers
     drawMarkers(painter);
-
-    // Draw church markers on top (landmark reference points)
     drawChurchMarkers(painter);
-
-    // Draw attribution
     drawAttribution(painter);
 }
 
@@ -405,8 +398,10 @@ void MapWidget::drawTiles(QPainter& painter)
 
     int maxTile = (1 << tileZoom) - 1;
 
-    // Enable smooth scaling for better visual quality during zoom animation
-    painter.setRenderHint(QPainter::SmoothPixmapTransform, scale != 1.0);
+    // Enable smooth scaling for quality when static, fast scaling when dragging
+    bool needsScaling = scale != 1.0;
+    bool useSmoothScaling = needsScaling && !m_isDragging;
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, useSmoothScaling);
 
     for (int ty = startTileY; ty <= endTileY; ++ty)
     {
@@ -579,7 +574,7 @@ void MapWidget::drawMarkers(QPainter& painter)
             state.showPip = isContactPoint;
             state.opacity = opacity;
             state.statusIcon = statusIcon;
-            state.icons = MarkerRenderer::computeFamilyIcons(id, m_docManager->document());
+            state.icons = m_viewModel->familyIcons(id);  // Use cached icons
 
             markers.append({pos, hh, state, opacity});
         }
@@ -618,6 +613,7 @@ void MapWidget::drawAttribution(QPainter& painter)
 
     if (attribution.isEmpty())
     {
+        m_attributionRect = QRect();
         return;
     }
 
@@ -635,6 +631,9 @@ void MapWidget::drawAttribution(QPainter& painter)
                  textRect.width() + padding * 2,
                  textRect.height() + padding * 2);
 
+    // Cache for collision detection
+    m_attributionRect = bgRect;
+
     // Semi-transparent background
     painter.fillRect(bgRect, QColor(255, 255, 255, 200));
 
@@ -651,6 +650,9 @@ void MapWidget::mousePressEvent(QMouseEvent* event)
 {
     if (event->button() == Qt::LeftButton)
     {
+        // Stop any animation immediately to prevent position changes during drag
+        stopAnimation();
+
         m_isDragging = true;
         m_wasDragging = false;
         m_lastMousePos = event->pos();
@@ -908,7 +910,7 @@ void MapWidget::ensureVisible(const QSet<QString>& familyIds)
             && lng >= currentViewport.minLng && lng <= currentViewport.maxLng)
         {
             QString id = fam["id"].toString();
-            markers.append({lat, lng, MarkerRenderer::familyBounds(id, doc)});
+            markers.append({lat, lng, MarkerRenderer::familyBounds(m_viewModel->familyIcons(id))});
             addedIds.insert(id);
         }
     }
@@ -926,7 +928,7 @@ void MapWidget::ensureVisible(const QSet<QString>& familyIds)
             markers.append({
                 family->latitude().value(),
                 family->longitude().value(),
-                MarkerRenderer::familyBounds(id, doc)
+                MarkerRenderer::familyBounds(m_viewModel->familyIcons(id))
             });
         }
     }
@@ -966,7 +968,7 @@ void MapWidget::fitAllFamilies()
         markers.append({
             fam["latitude"].toDouble(),
             fam["longitude"].toDouble(),
-            MarkerRenderer::familyBounds(id, doc)
+            MarkerRenderer::familyBounds(m_viewModel->familyIcons(id))
         });
     }
 
@@ -1068,16 +1070,13 @@ MapWidget::AdaptiveZoomResult MapWidget::calculateAdaptiveZoom(
     double centerLat = (minLat + maxLat) / 2.0;
     double centerLng = (minLng + maxLng) / 2.0;
 
-    // Build UI element rectangles (with margin for visual clearance)
-    constexpr int uiMargin = 5;
+    // Build UI element rectangle for left button stack
     QRect leftButtonsRect(
-        m_zoomInButton->x() - uiMargin,
-        m_zoomInButton->y() - uiMargin,
-        m_zoomInButton->width() + uiMargin * 2,
-        m_recenterButton->y() + m_recenterButton->height() - m_zoomInButton->y() + uiMargin * 2
+        m_zoomInButton->x(),
+        m_zoomInButton->y(),
+        m_zoomInButton->width(),
+        m_recenterButton->y() + m_recenterButton->height() - m_zoomInButton->y()
     );
-    QRect layerButtonRect = m_layerButton->geometry().adjusted(-uiMargin, -uiMargin, uiMargin, uiMargin);
-    QRect attributionRect(0, height() - 25, 200, 25);
 
     // Start with zoom that fits bounds with max marker padding
     double availableWidth = width() - maxPadding.left() - maxPadding.right();
@@ -1108,21 +1107,21 @@ MapWidget::AdaptiveZoomResult MapWidget::calculateAdaptiveZoom(
             {
                 needsLeftButtons = true;
             }
-            if (markerRect.intersects(layerButtonRect))
+            if (markerRect.intersects(m_layerButton->geometry()))
             {
                 needsLayerButton = true;
             }
-            if (markerRect.intersects(attributionRect))
+            if (markerRect.intersects(m_attributionRect))
             {
                 needsAttribution = true;
             }
         }
 
         QMarginsF newSafeArea(
-            needsLeftButtons ? (leftButtonsRect.right() + uiMargin) : 0,
+            needsLeftButtons ? leftButtonsRect.right() : 0,
             0,
-            needsLayerButton ? (width() - layerButtonRect.left() + uiMargin) : 0,
-            needsAttribution ? (height() - attributionRect.top() + uiMargin) : 0
+            needsLayerButton ? (width() - m_layerButton->x()) : 0,
+            needsAttribution ? (height() - m_attributionRect.top()) : 0
         );
 
         // If no change in safe area, we're done

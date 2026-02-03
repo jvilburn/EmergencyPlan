@@ -1,26 +1,23 @@
 #include "UnmappedPanel.h"
-#include "Document.h"
-#include "DocumentManager.h"
 #include "FamilyMarkerProvider.h"
 #include "FamilyTreeModel.h"
 #include "Filter.h"
+#include "MapViewModel.h"
 #include "MarkerRenderer.h"
 
-#include <QPainter>
-#include <QMouseEvent>
 #include <QFontMetrics>
+#include <QMouseEvent>
+#include <QPainter>
 
-UnmappedPanel::UnmappedPanel(DocumentManager* docManager, QWidget* parent)
+UnmappedPanel::UnmappedPanel(DocumentManager* docManager, MapViewModel* viewModel,
+                             QWidget* parent)
     : QWidget(parent)
-    , m_docManager(docManager)
+    , m_viewModel(viewModel)
     , m_filter(new Filter(this))
-    , m_model(nullptr)
+    , m_model(new FamilyTreeModel(docManager, m_filter, this))
 {
     // Set up filter for unmapped families only
     m_filter->setMappedFilter(MappedFilter::Unmapped);
-
-    // Create model with unmapped filter
-    m_model = new FamilyTreeModel(docManager, m_filter, this);
 
     // Rebuild layout when model changes
     connect(m_model, &QAbstractItemModel::modelReset,
@@ -199,7 +196,7 @@ void UnmappedPanel::paintEvent(QPaintEvent* /*event*/)
         state.scale = 0.5;
         state.isHighlighted = highlight.allHighlightedIds().contains(item.familyId);
         state.showPip = highlight.contactPointFamilyIds.contains(item.familyId);
-        state.icons = MarkerRenderer::computeFamilyIcons(item.familyId, m_docManager->document());
+        state.icons = m_viewModel->familyIcons(item.familyId);
 
         MarkerRenderer::draw(painter, item.markerPos, QVariantMap(), state);
 

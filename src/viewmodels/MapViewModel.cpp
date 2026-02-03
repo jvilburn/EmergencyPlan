@@ -27,6 +27,7 @@ void MapViewModel::onDocumentChanged(const DocumentChange& change)
 void MapViewModel::updateFamilies()
 {
     m_families.clear();
+    m_familyIcons.clear();
 
     const Document& doc = m_docManager->document();
     const QHash<QString, Family>& familyMap = doc.families();
@@ -39,6 +40,9 @@ void MapViewModel::updateFamilies()
         if (family.isMapped())
         {
             m_families.append(familyToVariant(family));
+            // Pre-compute marker icons (expensive operation moved out of paint loop)
+            m_familyIcons.insert(family.id(),
+                                 MarkerRenderer::computeFamilyIcons(family.id(), doc));
         }
     }
 
@@ -198,4 +202,9 @@ void MapViewModel::mapClicked(double /*lat*/, double /*lng*/)
     {
         setSelectedFamilyId(QString());
     }
+}
+
+MarkerRenderer::MarkerIcons MapViewModel::familyIcons(const QString& familyId) const
+{
+    return m_familyIcons.value(familyId);
 }
