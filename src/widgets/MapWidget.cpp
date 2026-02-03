@@ -334,25 +334,9 @@ void MapWidget::updateZoomForBounds()
         return;
     }
 
-    double latRange = m_bounds->maxLat - m_bounds->minLat;
-    double lngRange = m_bounds->maxLng - m_bounds->minLng;
-    double centerLat = (m_bounds->minLat + m_bounds->maxLat) / 2.0;
-
-    // Find zoom level that fits both dimensions
-    for (int z = MAX_ZOOM; z >= MIN_ZOOM; --z)
-    {
-        double degreesPerPixelLng = SlippyMapMath::lngDegreesPerPixel(z);
-        double degreesPerPixelLat = SlippyMapMath::latDegreesPerPixel(z, centerLat);
-
-        double widgetLngRange = width() * degreesPerPixelLng;
-        double widgetLatRange = height() * degreesPerPixelLat;
-
-        if (widgetLngRange >= lngRange && widgetLatRange >= latRange)
-        {
-            m_zoom = static_cast<double>(z);
-            break;
-        }
-    }
+    m_zoom = SlippyMapMath::zoomToFit(m_bounds->minLat, m_bounds->maxLat,
+                                       m_bounds->minLng, m_bounds->maxLng,
+                                       width(), height(), MIN_ZOOM, MAX_ZOOM);
 }
 
 // ============================================================================
@@ -688,7 +672,6 @@ void MapWidget::mouseMoveEvent(QMouseEvent* event)
             || qAbs(totalDelta.y()) > DRAG_THRESHOLD)
         {
             m_wasDragging = true;
-            m_bounds.reset();  // User is manually panning, stop auto-fitting
         }
 
         // Stop any animation when user drags
@@ -735,7 +718,7 @@ void MapWidget::mouseReleaseEvent(QMouseEvent* event)
         }
         else
         {
-            // Update layer preview after drag ends
+            m_bounds = viewportBounds(m_centerLat, m_centerLng, m_zoom);
             updateLayerButtonIcon();
         }
     }
@@ -770,7 +753,6 @@ void MapWidget::wheelEvent(QWheelEvent* event)
     if (targetInt != currentInt)
     {
         m_zoom = static_cast<double>(targetInt);
-        m_bounds.reset();  // User is manually zooming, stop auto-fitting
 
         // Adjust center so mouse position stays fixed
         // After zoom, recalculate where the mouse lat/lng would appear
@@ -789,6 +771,8 @@ void MapWidget::wheelEvent(QWheelEvent* event)
         m_centerLat += dy * latPerPixel;
 
         m_centerLat = qBound(-85.0, m_centerLat, 85.0);
+
+        m_bounds = viewportBounds(m_centerLat, m_centerLng, m_zoom);
 
         update();
         updateLayerButtonIcon();
@@ -908,138 +892,105 @@ void MapWidget::ensureVisible(const QSet<QString>& familyIds)
         return;
     }
 
-    // Need to adjust view - compute target that shows all highlighted families
-    double targetLat = (minLat + maxLat) / 2.0;
-    double targetLng = (minLng + maxLng) / 2.0;
+    // Collect visible markers + target markers
+    QVector<MarkerInfo> markers;
+    QSet<QString> addedIds;
 
-    // Calculate zoom needed to fit the highlighted bounds (never zoom in past current)
-    LatLngBounds targetBounds{minLat, maxLat, minLng, maxLng};
-    QMarginsF markerPadding = MarkerRenderer::boundingBox(QVariantMap(), MarkerRenderer::State());
-    QMarginsF safeArea = calculateSafeAreaPadding();
-
-    double availableWidth = width() - safeArea.left() - safeArea.right()
-                            - markerPadding.left() - markerPadding.right();
-    double availableHeight = height() - safeArea.top() - safeArea.bottom()
-                             - markerPadding.top() - markerPadding.bottom();
-
-    double latSpan = maxLat - minLat;
-    double lngSpan = maxLng - minLng;
-
-    double targetZoom = m_zoom;
-    if (availableWidth > 0 && availableHeight > 0 && (lngSpan > 0 || latSpan > 0))
-    {
-        if (lngSpan > 0)
-        {
-            double zoomForLng = qLn(360.0 * availableWidth / (SlippyMapMath::TILE_SIZE * lngSpan)) / qLn(2.0);
-            targetZoom = qMin(targetZoom, zoomForLng);
-        }
-        if (latSpan > 0)
-        {
-            double tileY1 = SlippyMapMath::latToTileY(minLat, 0);
-            double tileY2 = SlippyMapMath::latToTileY(maxLat, 0);
-            double tileYSpan = qAbs(tileY1 - tileY2);
-            double zoomForLat = qLn(availableHeight / (tileYSpan * SlippyMapMath::TILE_SIZE)) / qLn(2.0);
-            targetZoom = qMin(targetZoom, zoomForLat);
-        }
-        targetZoom = qBound(static_cast<double>(MIN_ZOOM), targetZoom, m_zoom);
-    }
-
-    // Clear bounds tracking since we're manually positioning
-    m_bounds = std::nullopt;
-
-    // Combine safe area and marker padding for animateTo
-    QMarginsF contentPadding(
-        safeArea.left() + markerPadding.left(),
-        safeArea.top() + markerPadding.top(),
-        safeArea.right() + markerPadding.right(),
-        safeArea.bottom() + markerPadding.bottom()
-    );
-    animateTo(targetLat, targetLng, targetZoom, targetBounds, contentPadding);
-}
-
-void MapWidget::fitAllFamilies()
-{
-    const QVariantList& families = m_viewModel->families();
-
-    if (families.isEmpty())
-    {
-        return;
-    }
-
-    double minLat = 90.0;
-    double maxLat = -90.0;
-    double minLng = 180.0;
-    double maxLng = -180.0;
-
-    for (const QVariant& var : families)
+    // Add currently visible family markers
+    const QVariantList& allFamilies = m_viewModel->families();
+    for (const QVariant& var : allFamilies)
     {
         QVariantMap fam = var.toMap();
         double lat = fam["latitude"].toDouble();
         double lng = fam["longitude"].toDouble();
 
-        minLat = qMin(minLat, lat);
-        maxLat = qMax(maxLat, lat);
-        minLng = qMin(minLng, lng);
-        maxLng = qMax(maxLng, lng);
+        if (lat >= currentViewport.minLat && lat <= currentViewport.maxLat
+            && lng >= currentViewport.minLng && lng <= currentViewport.maxLng)
+        {
+            QString id = fam["id"].toString();
+            markers.append({lat, lng, MarkerRenderer::familyBounds(id, doc)});
+            addedIds.insert(id);
+        }
     }
 
-    // Calculate target center
-    double targetLat = (minLat + maxLat) / 2.0;
-    double targetLng = (minLng + maxLng) / 2.0;
-
-    // Store bounds with 5% padding
-    double latPadding = (maxLat - minLat) * 0.05;
-    double lngPadding = (maxLng - minLng) * 0.05;
-    m_bounds = LatLngBounds{
-        minLat - latPadding,
-        maxLat + latPadding,
-        minLng - lngPadding,
-        maxLng + lngPadding
-    };
-
-    // Calculate target zoom for bounds
-    double latRange = m_bounds->maxLat - m_bounds->minLat;
-    double lngRange = m_bounds->maxLng - m_bounds->minLng;
-    double targetZoom = MIN_ZOOM;
-
-    // Get marker bounds and safe area for content padding
-    MarkerRenderer::State markerState;
-    QMarginsF markerPadding = MarkerRenderer::boundingBox(QVariantMap(), markerState);
-    QMarginsF safeArea = calculateSafeAreaPadding();
-
-    double availableWidth = width() - safeArea.left() - safeArea.right()
-                            - markerPadding.left() - markerPadding.right();
-    double availableHeight = height() - safeArea.top() - safeArea.bottom()
-                             - markerPadding.top() - markerPadding.bottom();
-
-    if (availableWidth > 0 && availableHeight > 0)
+    // Add target families (if not already added)
+    for (const QString& id : familyIds)
     {
-        for (int z = MAX_ZOOM; z >= MIN_ZOOM; --z)
+        if (addedIds.contains(id))
         {
-            double degreesPerPixelLng = SlippyMapMath::lngDegreesPerPixel(z);
-            double degreesPerPixelLat = SlippyMapMath::latDegreesPerPixel(z, targetLat);
+            continue;
+        }
+        std::optional<Family> family = doc.findFamilyById(id);
+        if (family && family->isMapped())
+        {
+            markers.append({
+                family->latitude().value(),
+                family->longitude().value(),
+                MarkerRenderer::familyBounds(id, doc)
+            });
+        }
+    }
 
-            double visibleLngRange = availableWidth * degreesPerPixelLng;
-            double visibleLatRange = availableHeight * degreesPerPixelLat;
-
-            if (visibleLngRange >= lngRange && visibleLatRange >= latRange)
+    // Add chapel if currently visible
+    const QHash<QString, Ward>& wards = doc.wards();
+    for (const Ward& ward : wards)
+    {
+        if (ward.chapelLat() && ward.chapelLng())
+        {
+            double lat = ward.chapelLat().value();
+            double lng = ward.chapelLng().value();
+            if (lat >= currentViewport.minLat && lat <= currentViewport.maxLat
+                && lng >= currentViewport.minLng && lng <= currentViewport.maxLng)
             {
-                targetZoom = static_cast<double>(z);
-                break;
+                markers.append({lat, lng, MarkerRenderer::churchBounds()});
             }
         }
     }
 
-    // Combine safe area and marker padding for animateTo
-    QMarginsF contentPadding(
-        safeArea.left() + markerPadding.left(),
-        safeArea.top() + markerPadding.top(),
-        safeArea.right() + markerPadding.right(),
-        safeArea.bottom() + markerPadding.bottom()
-    );
+    auto result = calculateAdaptiveZoom(markers);
+    animateTo(result.lat, result.lng, result.zoom);
+}
 
-    // Animate to target, passing family bounds so mid-zoom fits all markers
-    animateTo(targetLat, targetLng, targetZoom, m_bounds, contentPadding);
+void MapWidget::fitAllFamilies()
+{
+    const Document& doc = m_docManager->document();
+    const QVariantList& families = m_viewModel->families();
+
+    QVector<MarkerInfo> markers;
+
+    // Add all family markers
+    for (const QVariant& var : families)
+    {
+        QVariantMap fam = var.toMap();
+        QString id = fam["id"].toString();
+        markers.append({
+            fam["latitude"].toDouble(),
+            fam["longitude"].toDouble(),
+            MarkerRenderer::familyBounds(id, doc)
+        });
+    }
+
+    // Add chapel if it has a location
+    const QHash<QString, Ward>& wards = doc.wards();
+    for (const Ward& ward : wards)
+    {
+        if (ward.chapelLat() && ward.chapelLng())
+        {
+            markers.append({
+                ward.chapelLat().value(),
+                ward.chapelLng().value(),
+                MarkerRenderer::churchBounds()
+            });
+        }
+    }
+
+    if (markers.isEmpty())
+    {
+        return;
+    }
+
+    auto result = calculateAdaptiveZoom(markers);
+    animateTo(result.lat, result.lng, result.zoom);
 }
 
 
@@ -1088,32 +1039,121 @@ LatLngBounds MapWidget::viewportBounds(double centerLat, double centerLng, doubl
     };
 }
 
-QMarginsF MapWidget::calculateSafeAreaPadding() const
+MapWidget::AdaptiveZoomResult MapWidget::calculateAdaptiveZoom(
+    const QVector<MarkerInfo>& markers) const
 {
-    // Left: zoom/recenter buttons (stacked vertically on left edge)
-    double left = m_recenterButton->x() + m_recenterButton->width() + 10;
+    if (markers.isEmpty())
+    {
+        return {m_centerLat, m_centerLng, m_zoom};
+    }
 
-    // Top: small margin (buttons are on left, layer button on right - top-center is clear)
-    double top = 20;
+    // Calculate bounds and max padding from markers
+    double minLat = 90.0, maxLat = -90.0;
+    double minLng = 180.0, maxLng = -180.0;
+    QMarginsF maxPadding;
+    for (const MarkerInfo& m : markers)
+    {
+        minLat = qMin(minLat, m.lat);
+        maxLat = qMax(maxLat, m.lat);
+        minLng = qMin(minLng, m.lng);
+        maxLng = qMax(maxLng, m.lng);
+        maxPadding = QMarginsF(
+            qMax(maxPadding.left(), m.bounds.left()),
+            qMax(maxPadding.top(), m.bounds.top()),
+            qMax(maxPadding.right(), m.bounds.right()),
+            qMax(maxPadding.bottom(), m.bounds.bottom())
+        );
+    }
 
-    // Right: unmapped panel width if visible and expanded, else layer button area
-    // Note: panel grows upward first, so only its width affects right margin
-    double right = (m_unmappedPanel->isVisible() && m_unmappedPanel->isExpanded())
-        ? (width() - m_unmappedPanel->x() + 10)
-        : (m_layerButton->width() + 20);
+    double centerLat = (minLat + maxLat) / 2.0;
+    double centerLng = (minLng + maxLng) / 2.0;
 
-    // Bottom: attribution area in bottom-left (~30px)
-    // Note: unmapped panel is bottom-right, only affects right margin not bottom
-    double bottom = 30;
+    // Build UI element rectangles (with margin for visual clearance)
+    constexpr int uiMargin = 5;
+    QRect leftButtonsRect(
+        m_zoomInButton->x() - uiMargin,
+        m_zoomInButton->y() - uiMargin,
+        m_zoomInButton->width() + uiMargin * 2,
+        m_recenterButton->y() + m_recenterButton->height() - m_zoomInButton->y() + uiMargin * 2
+    );
+    QRect layerButtonRect = m_layerButton->geometry().adjusted(-uiMargin, -uiMargin, uiMargin, uiMargin);
+    QRect attributionRect(0, height() - 25, 200, 25);
 
-    return QMarginsF(left, top, right, bottom);
+    // Start with zoom that fits bounds with max marker padding
+    double availableWidth = width() - maxPadding.left() - maxPadding.right();
+    double availableHeight = height() - maxPadding.top() - maxPadding.bottom();
+    double zoom = SlippyMapMath::zoomToFit(minLat, maxLat, minLng, maxLng,
+                                            availableWidth, availableHeight, MIN_ZOOM, MAX_ZOOM);
+
+    // Iterate until no new UI collisions (max 3 iterations to prevent infinite loops)
+    QMarginsF safeArea;
+    for (int i = 0; i < 3; ++i)
+    {
+        bool needsLeftButtons = false;
+        bool needsLayerButton = false;
+        bool needsAttribution = false;
+
+        for (const MarkerInfo& m : markers)
+        {
+            QPointF pos = SlippyMapMath::latLngToPixel(m.lat, m.lng, zoom,
+                                                        centerLat, centerLng, width(), height());
+            QRectF markerRect(
+                pos.x() - m.bounds.left(),
+                pos.y() - m.bounds.top(),
+                m.bounds.left() + m.bounds.right(),
+                m.bounds.top() + m.bounds.bottom()
+            );
+
+            if (markerRect.intersects(leftButtonsRect))
+            {
+                needsLeftButtons = true;
+            }
+            if (markerRect.intersects(layerButtonRect))
+            {
+                needsLayerButton = true;
+            }
+            if (markerRect.intersects(attributionRect))
+            {
+                needsAttribution = true;
+            }
+        }
+
+        QMarginsF newSafeArea(
+            needsLeftButtons ? (leftButtonsRect.right() + uiMargin) : 0,
+            0,
+            needsLayerButton ? (width() - layerButtonRect.left() + uiMargin) : 0,
+            needsAttribution ? (height() - attributionRect.top() + uiMargin) : 0
+        );
+
+        // If no change in safe area, we're done
+        if (newSafeArea == safeArea)
+        {
+            break;
+        }
+
+        safeArea = newSafeArea;
+
+        // Recalculate zoom with new safe area
+        availableWidth = width() - safeArea.left() - safeArea.right()
+                         - maxPadding.left() - maxPadding.right();
+        availableHeight = height() - safeArea.top() - safeArea.bottom()
+                          - maxPadding.top() - maxPadding.bottom();
+        zoom = SlippyMapMath::zoomToFit(minLat, maxLat, minLng, maxLng,
+                                         availableWidth, availableHeight, MIN_ZOOM, MAX_ZOOM);
+    }
+
+    // Offset center to account for asymmetric safe areas
+    // (content should be centered in safe area, not whole widget)
+    double yOffsetPx = (safeArea.bottom() - safeArea.top()) / 2.0;
+    double xOffsetPx = (safeArea.left() - safeArea.right()) / 2.0;
+    centerLat -= yOffsetPx * SlippyMapMath::latDegreesPerPixel(zoom, centerLat);
+    centerLng -= xOffsetPx * SlippyMapMath::lngDegreesPerPixel(zoom);
+
+    return {centerLat, centerLng, zoom};
 }
 
-void MapWidget::animateTo(double lat, double lng, double zoom,
-                          std::optional<LatLngBounds> targetBounds,
-                          QMarginsF contentPadding)
+void MapWidget::animateTo(double lat, double lng, double zoom)
 {
-    // Store start and target
     m_animStartLat = m_centerLat;
     m_animStartLng = m_centerLng;
     m_animStartZoom = m_zoom;
@@ -1121,81 +1161,7 @@ void MapWidget::animateTo(double lat, double lng, double zoom,
     m_animTargetLng = lng;
     m_animTargetZoom = qBound(static_cast<double>(MIN_ZOOM), zoom, static_cast<double>(MAX_ZOOM));
     m_animProgress = 0.0;
-
-    // Calculate viewport bounds
-    m_animStartBounds = viewportBounds(m_animStartLat, m_animStartLng, m_animStartZoom);
-    // Use provided target bounds if given, otherwise calculate from viewport
-    m_animTargetBounds = targetBounds.value_or(
-        viewportBounds(m_animTargetLat, m_animTargetLng, m_animTargetZoom));
-
-    // Check if target is already visible in current viewport
-    bool targetVisible =
-        m_animTargetBounds.minLat >= m_animStartBounds.minLat
-        && m_animTargetBounds.maxLat <= m_animStartBounds.maxLat
-        && m_animTargetBounds.minLng >= m_animStartBounds.minLng
-        && m_animTargetBounds.maxLng <= m_animStartBounds.maxLng;
-
-    // Calculate combined bounds: union of start viewport and target bounds
-    // At mid-zoom, the full start viewport and target content must be visible
-    double combinedMinLat = qMin(m_animStartBounds.minLat, m_animTargetBounds.minLat);
-    double combinedMaxLat = qMax(m_animStartBounds.maxLat, m_animTargetBounds.maxLat);
-    double combinedMinLng = qMin(m_animStartBounds.minLng, m_animTargetBounds.minLng);
-    double combinedMaxLng = qMax(m_animStartBounds.maxLng, m_animTargetBounds.maxLng);
-
-    double latSpan = combinedMaxLat - combinedMinLat;
-    double lngSpan = combinedMaxLng - combinedMinLng;
-
-    // Calculate safe area that avoids UI overlays (buttons, panels)
-    QMarginsF safeArea = calculateSafeAreaPadding();
-
-    // Available screen space = widget size minus UI overlays minus marker padding
-    double availableWidth = width() - safeArea.left() - safeArea.right()
-                            - contentPadding.left() - contentPadding.right();
-    double availableHeight = height() - safeArea.top() - safeArea.bottom()
-                             - contentPadding.top() - contentPadding.bottom();
-
-    // Find exact fractional zoom level that fits this combined span
-    // For longitude: at zoom z, degrees per pixel = 360 / (2^z * 256)
-    // For latitude: use proper Mercator projection (non-linear)
-    m_animMidZoom = MIN_ZOOM;
-    if (availableWidth > 0 && availableHeight > 0 && lngSpan > 0 && latSpan > 0)
-    {
-        // Calculate zoom needed for longitude span
-        double zoomForLng = qLn(360.0 * availableWidth / (SlippyMapMath::TILE_SIZE * lngSpan)) / qLn(2.0);
-
-        // Calculate zoom needed for latitude span using proper Mercator math
-        double tileY1 = SlippyMapMath::latToTileY(combinedMinLat, 0);
-        double tileY2 = SlippyMapMath::latToTileY(combinedMaxLat, 0);
-        double tileYSpan = qAbs(tileY1 - tileY2);
-
-        double zoomForLat = qLn(availableHeight / (tileYSpan * SlippyMapMath::TILE_SIZE)) / qLn(2.0);
-
-        // Use the more restrictive (lower) zoom to fit both dimensions
-        m_animMidZoom = qMin(zoomForLng, zoomForLat);
-        m_animMidZoom = qBound(static_cast<double>(MIN_ZOOM), m_animMidZoom, static_cast<double>(MAX_ZOOM));
-    }
-
-    // If target not already visible, zoom out to show both start and target
-    if (!targetVisible)
-    {
-        // Calculate center that shows both start and target
-        double combinedCenterLat = (combinedMinLat + combinedMaxLat) / 2.0;
-        double combinedCenterLng = (combinedMinLng + combinedMaxLng) / 2.0;
-
-        // Adjust center for asymmetric content padding (shift toward start side)
-        double hOffset = (contentPadding.left() - contentPadding.right()) / 2.0;
-        double vOffset = (contentPadding.top() - contentPadding.bottom()) / 2.0;
-
-        double lngPerPixel = SlippyMapMath::lngDegreesPerPixel(m_animMidZoom);
-        double latPerPixel = SlippyMapMath::latDegreesPerPixel(m_animMidZoom, combinedCenterLat);
-
-        // Set target to the combined view (no zoom-in phase, just zoom out and stop)
-        m_animTargetLng = combinedCenterLng + hOffset * lngPerPixel;
-        m_animTargetLat = combinedCenterLat - vOffset * latPerPixel;
-        m_animTargetZoom = m_animMidZoom;
-    }
-
-    // Start animation
+    m_bounds = viewportBounds(lat, lng, m_animTargetZoom);
     m_animationTimer->start();
 }
 
@@ -1212,12 +1178,10 @@ double MapWidget::easeOutCubic(double t)
 
 void MapWidget::onAnimationTick()
 {
-    // Advance progress
     m_animProgress += static_cast<double>(ANIM_TICK_MS) / ANIM_DURATION_MS;
 
     if (m_animProgress >= 1.0)
     {
-        // Animation complete - snap to final values
         m_centerLat = m_animTargetLat;
         m_centerLng = m_animTargetLng;
         m_zoom = m_animTargetZoom;
@@ -1226,49 +1190,11 @@ void MapWidget::onAnimationTick()
     }
     else
     {
-        // Animate zoom while keeping original viewport bounds visible
         double t = easeOutCubic(m_animProgress);
-
-        // Interpolate zoom
+        m_centerLat = m_animStartLat + (m_animTargetLat - m_animStartLat) * t;
+        m_centerLng = m_animStartLng + (m_animTargetLng - m_animStartLng) * t;
         m_zoom = m_animStartZoom + (m_animTargetZoom - m_animStartZoom) * t;
-
-        // Ideal center (linear interpolation toward target)
-        double idealLat = m_animStartLat + (m_animTargetLat - m_animStartLat) * t;
-        double idealLng = m_animStartLng + (m_animTargetLng - m_animStartLng) * t;
-
-        // Calculate viewport half-dimensions at current zoom
-        // Use start latitude for consistency with how start bounds were calculated
-        double halfWidthLng = (width() / 2.0) * SlippyMapMath::lngDegreesPerPixel(m_zoom);
-        double halfHeightLat = (height() / 2.0) * SlippyMapMath::latDegreesPerPixel(m_zoom, m_animStartLat);
-
-        // Clamp center so original bounds stay fully visible
-        // For south edge visible: startBounds.minLat >= center - halfHeight => center <= minLat + halfHeight
-        // For north edge visible: startBounds.maxLat <= center + halfHeight => center >= maxLat - halfHeight
-        double minCenterLat = m_animStartBounds.maxLat - halfHeightLat;
-        double maxCenterLat = m_animStartBounds.minLat + halfHeightLat;
-        double minCenterLng = m_animStartBounds.maxLng - halfWidthLng;
-        double maxCenterLng = m_animStartBounds.minLng + halfWidthLng;
-
-        // If viewport is too small to contain original bounds (min > max), use ideal center
-        if (minCenterLat <= maxCenterLat)
-        {
-            m_centerLat = qBound(minCenterLat, idealLat, maxCenterLat);
-        }
-        else
-        {
-            m_centerLat = idealLat;
-        }
-
-        if (minCenterLng <= maxCenterLng)
-        {
-            m_centerLng = qBound(minCenterLng, idealLng, maxCenterLng);
-        }
-        else
-        {
-            m_centerLng = idealLng;
-        }
     }
 
     update();
-    updateLayerButtonIcon();
 }

@@ -5,6 +5,7 @@
 #include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 
@@ -30,7 +31,13 @@ void TileDiskCacheService::initialize()
     dir.mkpath("street");
     dir.mkpath("satellite");
 
-    scanTileDirectories();
+    // Try loading persisted index first (fast path)
+    if (!loadIndex())
+    {
+        // Fall back to directory scan (slow path, rebuilds index)
+        scanTileDirectories();
+        saveIndex();
+    }
 
     m_initialized = true;
 }
@@ -63,6 +70,63 @@ void TileDiskCacheService::scanTileDirectories()
                 m_tileIndex.insert(TileId(layer, z, x, y));
             }
         }
+    }
+}
+
+QString TileDiskCacheService::getIndexPath() const
+{
+    return m_cacheDir + "/index.json";
+}
+
+bool TileDiskCacheService::loadIndex()
+{
+    QFile file(getIndexPath());
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        return false;
+    }
+
+    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+    if (!doc.isArray())
+    {
+        return false;
+    }
+
+    m_tileIndex.clear();
+    QJsonArray arr = doc.array();
+    for (const QJsonValue& val : arr)
+    {
+        QJsonArray tile = val.toArray();
+        if (tile.size() == 4)
+        {
+            TileLayer layer = static_cast<TileLayer>(tile[0].toInt());
+            int z = tile[1].toInt();
+            int x = tile[2].toInt();
+            int y = tile[3].toInt();
+            m_tileIndex.insert(TileId(layer, z, x, y));
+        }
+    }
+
+    return true;
+}
+
+void TileDiskCacheService::saveIndex() const
+{
+    QJsonArray arr;
+    for (const TileId& id : m_tileIndex)
+    {
+        QJsonArray tile;
+        tile.append(static_cast<int>(id.layer()));
+        tile.append(id.zoom());
+        tile.append(id.x());
+        tile.append(id.y());
+        arr.append(tile);
+    }
+
+    QFile file(getIndexPath());
+    if (file.open(QIODevice::WriteOnly))
+    {
+        file.write(QJsonDocument(arr).toJson(QJsonDocument::Compact));
     }
 }
 
@@ -121,7 +185,13 @@ void TileDiskCacheService::save(TileId id, const CachedTile& tile)
         file.close();
 
         saveMetadata(tilePath + ".meta", tile.metadata);
+
+        bool isNew = !m_tileIndex.contains(id);
         m_tileIndex.insert(id);
+        if (isNew)
+        {
+            saveIndex();
+        }
     }
 }
 

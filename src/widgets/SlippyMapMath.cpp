@@ -152,4 +152,31 @@ double latDegreesPerPixel(double zoom, double atLat)
     return lngDegreesPerPixel(zoom) * qCos(qDegreesToRadians(atLat));
 }
 
+double zoomToFit(double minLat, double maxLat, double minLng, double maxLng,
+                 double pixelWidth, double pixelHeight, double minZoom, double maxZoom)
+{
+    double lngSpan = maxLng - minLng;
+    double zoomForLng = maxZoom;
+    if (lngSpan > 0 && pixelWidth > 0)
+    {
+        zoomForLng = qLn(pixelWidth * 360.0 / (TILE_SIZE * lngSpan)) / qLn(2.0);
+    }
+
+    // Use proper Mercator projection for latitude (tile Y coordinates)
+    double zoomForLat = maxZoom;
+    if (maxLat > minLat && pixelHeight > 0)
+    {
+        double tileY1 = latToTileY(minLat, 0);
+        double tileY2 = latToTileY(maxLat, 0);
+        double tileYSpan = qAbs(tileY1 - tileY2);
+        if (tileYSpan > 0)
+        {
+            zoomForLat = qLn(pixelHeight / (tileYSpan * TILE_SIZE)) / qLn(2.0);
+        }
+    }
+
+    double zoom = qMin(zoomForLng, zoomForLat);
+    return qBound(minZoom, zoom, maxZoom);
+}
+
 }  // namespace SlippyMapMath

@@ -19,6 +19,13 @@ namespace MarkerRenderer
 // Marker sizing constants
 constexpr double SVG_BASE_SIZE = 24.0;
 
+// Highlight ring and shadow parameters
+constexpr double HIGHLIGHT_RING_WIDTH = 1.5;
+constexpr double SHADOW_BLUR_RADIUS = 14.0;   // Largest blur layer
+constexpr double SHADOW_SPREAD_RADIUS = 2.0;  // Largest spread layer
+// Glow extent beyond marker radius (for bounding box calculations)
+constexpr double HIGHLIGHT_GLOW_EXTENT = HIGHLIGHT_RING_WIDTH + SHADOW_SPREAD_RADIUS + SHADOW_BLUR_RADIUS;
+
 // Antenna overlay positioning (relative to marker size)
 constexpr double ANTENNA_SCALE = 0.6;
 constexpr double ANTENNA_OFFSET_X = 0.25;
@@ -182,14 +189,14 @@ void draw(QPainter& painter, const QPointF& pos,
 
     if (state.isHighlighted)
     {
-        // Ring dimensions (thin black ring around the marker)
-        double ringWidth = 1.5 * state.scale;
+        // Ring dimensions (thin ring around the marker)
+        double ringWidth = HIGHLIGHT_RING_WIDTH * state.scale;
         double markerRadius = size / 2.0;
         double ringOuterRadius = markerRadius + ringWidth;
 
         // Draw all 3 shadow layers (order: largest blur first)
         drawBlurredShadow(painter, pos, ringOuterRadius, state.scale,
-                          14.0 * state.scale, 2.0, 140, 0.0, 0.0);
+                          SHADOW_BLUR_RADIUS * state.scale, SHADOW_SPREAD_RADIUS, 140, 0.0, 0.0);
         drawBlurredShadow(painter, pos, ringOuterRadius, state.scale,
                           8.0 * state.scale, 1.0, 100, 0.0, 0.0);
         drawBlurredShadow(painter, pos, ringOuterRadius, state.scale,
@@ -259,29 +266,28 @@ bool isVisible(const QPointF& pos, int widgetWidth, int widgetHeight)
            && pos.y() <= widgetHeight + margin;
 }
 
-QMarginsF boundingBox(const QVariantMap& family, const State& state)
+QMarginsF familyBounds(const QString& familyId, const Document& doc)
 {
-    Q_UNUSED(family)
+    MarkerIcons icons = computeFamilyIcons(familyId, doc);
 
-    double markerRadius = (SVG_BASE_SIZE / 2.0) * state.scale;
+    // Compute bounds assuming highlighted (for zoom-to-fit, target will be selected)
+    double markerRadius = SVG_BASE_SIZE / 2.0;
+    double antennaExtent = (icons.antennaIcon != nullptr)
+                           ? SVG_BASE_SIZE * ANTENNA_SCALE : 0.0;
 
-    // Highlighted markers have glow extending equally in all directions
-    double glowExtent = state.isHighlighted ? 23.0 * state.scale : 0.0;
-
-    // Pip extends up-right from marker
-    double pipExtent = state.showPip ? 3.5 * state.scale : 0.0;
-    double pipOffset = state.showPip ? markerRadius * 0.7 : 0.0;
-
-    // Antenna extends up-right
-    double antennaExtent = (state.icons.antennaIcon != nullptr)
-                           ? SVG_BASE_SIZE * ANTENNA_SCALE * state.scale : 0.0;
-
-    double left = markerRadius + glowExtent;
-    double top = markerRadius + glowExtent + antennaExtent;
-    double right = markerRadius + glowExtent + qMax(pipOffset + pipExtent, antennaExtent);
-    double bottom = markerRadius + glowExtent;
+    double left = markerRadius + HIGHLIGHT_GLOW_EXTENT;
+    double top = markerRadius + HIGHLIGHT_GLOW_EXTENT + antennaExtent;
+    double right = markerRadius + HIGHLIGHT_GLOW_EXTENT + antennaExtent;
+    double bottom = markerRadius + HIGHLIGHT_GLOW_EXTENT;
 
     return QMarginsF(left, top, right, bottom);
+}
+
+QMarginsF churchBounds()
+{
+    // Church marker is a simple centered icon with no glow
+    double radius = CHURCH_MARKER_SIZE / 2.0;
+    return QMarginsF(radius, radius, radius, radius);
 }
 
 void drawChurch(QPainter& painter, const QPointF& pos, const State& state)

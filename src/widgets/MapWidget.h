@@ -81,9 +81,7 @@ private:
     void updateLayerButtonIcon();
 
     // Animation
-    void animateTo(double lat, double lng, double zoom,
-                   std::optional<LatLngBounds> targetBounds = std::nullopt,
-                   QMarginsF contentPadding = QMarginsF());
+    void animateTo(double lat, double lng, double zoom);
     void stopAnimation();
     double easeOutCubic(double t);
     LatLngBounds viewportBounds(double centerLat, double centerLng, double zoom) const;
@@ -106,8 +104,24 @@ private:
     void updateZoomForBounds();
     void ensureVisible(const QSet<QString>& familyIds);
 
-    // Calculate padding for UI overlays (buttons, panels, attribution)
-    QMarginsF calculateSafeAreaPadding() const;
+    // Marker info for adaptive zoom calculation
+    struct MarkerInfo
+    {
+        double lat;
+        double lng;
+        QMarginsF bounds;
+    };
+
+    // Result from adaptive zoom calculation
+    struct AdaptiveZoomResult
+    {
+        double lat;
+        double lng;
+        double zoom;
+    };
+
+    // Calculate zoom and center that fits markers without UI collisions.
+    AdaptiveZoomResult calculateAdaptiveZoom(const QVector<MarkerInfo>& markers) const;
 
     // Core state
     DocumentManager* m_docManager;
@@ -125,13 +139,10 @@ private:
     double m_animStartLat = 0.0;
     double m_animStartLng = 0.0;
     double m_animStartZoom = 0.0;
-    double m_animMidZoom = 0.0;     // Zoom level showing both start and target
     double m_animTargetLat = 0.0;
     double m_animTargetLng = 0.0;
     double m_animTargetZoom = 0.0;
     double m_animProgress = 0.0;    // 0.0 to 1.0
-    LatLngBounds m_animStartBounds; // Viewport bounds at start
-    LatLngBounds m_animTargetBounds; // Viewport bounds at target
     static constexpr int ANIM_DURATION_MS = 400;
     static constexpr int ANIM_TICK_MS = 16;  // ~60fps
 

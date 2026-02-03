@@ -35,8 +35,11 @@ private:
     void saveMetadata(const QString& metaPath, const TileMetadata& metadata);
 
     void scanTileDirectories();
+    bool loadIndex();
+    void saveIndex() const;
 
     QString getTilePath(TileId id) const;
+    QString getIndexPath() const;
 
     QSet<TileId> m_tileIndex;
     QString m_cacheDir;

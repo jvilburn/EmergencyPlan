@@ -45,9 +45,13 @@ namespace MarkerRenderer
     /// Check if a marker at the given position is visible within widget bounds.
     bool isVisible(const QPointF& pos, int widgetWidth, int widgetHeight);
 
-    /// Returns the bounding box as margins from the marker center point.
-    /// This allows for markers that extend unevenly (e.g., labels, pins).
-    QMarginsF boundingBox(const QVariantMap& family, const State& state);
+    /// Returns bounding box for a family marker (highlighted, with actual icons).
+    /// Used for zoom-to-fit calculations.
+    QMarginsF familyBounds(const QString& familyId, const Document& doc);
+
+    /// Returns bounding box for a church/chapel marker.
+    /// Used for zoom-to-fit calculations.
+    QMarginsF churchBounds();
 
     /// Draw a church/chapel marker at the given position.
     void drawChurch(QPainter& painter, const QPointF& pos, const State& state);

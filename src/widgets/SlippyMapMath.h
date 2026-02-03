@@ -38,4 +38,9 @@ namespace SlippyMapMath
     double lngDegreesPerPixel(double zoom);
     double latDegreesPerPixel(int zoom, double atLat);
     double latDegreesPerPixel(double zoom, double atLat);
+
+    /// Calculate exact fractional zoom to fit given bounds in pixel area
+    /// Uses proper Mercator projection for latitude calculation
+    double zoomToFit(double minLat, double maxLat, double minLng, double maxLng,
+                     double pixelWidth, double pixelHeight, double minZoom, double maxZoom);
 }
