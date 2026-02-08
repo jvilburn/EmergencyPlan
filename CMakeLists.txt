@@ -228,7 +228,7 @@ set(WIDGET_SOURCES
     src/widgets/NeedsSubView.cpp
     src/widgets/SelectionPreservingTreeView.cpp
     src/widgets/EmergencyResourceView.cpp
-    src/widgets/ResourcesView.cpp
+    src/widgets/SidebarWidget.cpp
     src/widgets/MinisteringTreeView.cpp
     src/widgets/UnassignedTreeView.cpp
     src/widgets/MinisteringTabView.cpp
@@ -272,7 +272,7 @@ set(WIDGET_HEADERS
     src/widgets/NeedsSubView.h
     src/widgets/SelectionPreservingTreeView.h
     src/widgets/EmergencyResourceView.h
-    src/widgets/ResourcesView.h
+    src/widgets/SidebarWidget.h
     # src/widgets/Sidebar.h
     # src/widgets/MinisteringSidebar.h
     # src/widgets/ResourceView.h
