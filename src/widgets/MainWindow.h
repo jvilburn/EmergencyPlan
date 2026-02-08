@@ -7,14 +7,14 @@
 
 class QLabel;
 class QProgressBar;
-class QTabWidget;
 class DocumentManager;
+class EmergencyResourceView;
 class FamilyEditPanel;
 class MapWidget;
 class WardListView;
 class MinisteringView;
 class NeedsSubView;
-class ResourcesView;
+class SidebarWidget;
 class GeoLocation;
 
 class MainWindow : public QMainWindow
@@ -77,11 +77,13 @@ private:
 
     // Widgets
     QSplitter* m_splitter;
-    QTabWidget* m_sidebarTabs;
+    SidebarWidget* m_sidebarTabs;
     WardListView* m_wardListView;
     MinisteringView* m_ministeringView;
     NeedsSubView* m_needsView;
-    ResourcesView* m_resourcesView;
+    EmergencyResourceView* m_medicalView;
+    EmergencyResourceView* m_commsView;
+    EmergencyResourceView* m_recoveryView;
     FamilyEditPanel* m_editPanel;
     MapWidget* m_mapWidget;
 
