@@ -2,7 +2,9 @@
 #include "WardListView.h"
 #include "MinisteringView.h"
 #include "NeedsSubView.h"
-#include "ResourcesView.h"
+#include "SidebarWidget.h"
+#include "EmergencyResourceView.h"
+#include "ResponseArea.h"
 #include "FamilyEditPanel.h"
 #include "MapWidget.h"
 #include "FamilyMarkerProvider.h"
@@ -26,7 +28,6 @@
 #include <QCloseEvent>
 #include <QLabel>
 #include <QProgressBar>
-#include <QTabWidget>
 #include <QStandardPaths>
 #include <QFile>
 #include <QDir>
@@ -75,28 +76,31 @@ void MainWindow::setupUi()
     m_splitter = new QSplitter(Qt::Horizontal, this);
     setCentralWidget(m_splitter);
 
-    // Sidebar tabs on the left
-    m_sidebarTabs = new QTabWidget(m_splitter);
+    // Sidebar navigation (two-row button bar)
+    m_sidebarTabs = new SidebarWidget(4, m_splitter);
 
-    // Ward list tab
+    // Row 1
     m_wardListView = new WardListView(m_documentManager, this);
-    m_sidebarTabs->addTab(m_wardListView, tr("Families"));
+    m_sidebarTabs->addPage(m_wardListView, tr("Families"));
 
-    // Ministering tab
     m_ministeringView = new MinisteringView(m_documentManager);
-    m_sidebarTabs->addTab(m_ministeringView, tr("Ministering"));
+    m_sidebarTabs->addPage(m_ministeringView, tr("Ministering"));
 
-    // Teams placeholder (top-level tab)
     PlaceholderView* teamsPlaceholder = new PlaceholderView(tr("Teams functionality coming soon"));
-    m_sidebarTabs->addTab(teamsPlaceholder, tr("Teams"));
+    m_sidebarTabs->addPage(teamsPlaceholder, tr("Teams"));
 
-    // Needs tab - NeedsSubView owns FilterBar and NeedsModel
     m_needsView = new NeedsSubView(m_documentManager, this);
-    m_sidebarTabs->addTab(m_needsView, tr("Needs"));
+    m_sidebarTabs->addPage(m_needsView, tr("Needs"));
 
-    // Resources tab (renamed from Emergency)
-    m_resourcesView = new ResourcesView(m_documentManager);
-    m_sidebarTabs->addTab(m_resourcesView, tr("Resources"));
+    // Row 2
+    m_medicalView = new EmergencyResourceView(m_documentManager, ResponseArea::Medical, this);
+    m_sidebarTabs->addPage(m_medicalView, tr("Medical"));
+
+    m_commsView = new EmergencyResourceView(m_documentManager, ResponseArea::Communications, this);
+    m_sidebarTabs->addPage(m_commsView, tr("Comms"));
+
+    m_recoveryView = new EmergencyResourceView(m_documentManager, ResponseArea::Recovery, this);
+    m_sidebarTabs->addPage(m_recoveryView, tr("Recovery"));
 
     // Edit panel (initially hidden)
     m_editPanel = new FamilyEditPanel(m_documentManager, m_splitter);
@@ -184,7 +188,7 @@ void MainWindow::setupConnections()
             this, &MainWindow::updateUndoRedoActions);
 
     // Sidebar tab changes
-    connect(m_sidebarTabs, &QTabWidget::currentChanged,
+    connect(m_sidebarTabs, &SidebarWidget::currentChanged,
             this, &MainWindow::onSidebarTabChanged);
 
     // Map <-> WardListView selection sync
@@ -200,7 +204,11 @@ void MainWindow::setupConnections()
             m_mapWidget, &MapWidget::updateHighlights);
     connect(m_needsView, &NeedsSubView::highlightChanged,
             m_mapWidget, &MapWidget::updateHighlights);
-    connect(m_resourcesView, &ResourcesView::highlightChanged,
+    connect(m_medicalView, &EmergencyResourceView::highlightChanged,
+            m_mapWidget, &MapWidget::updateHighlights);
+    connect(m_commsView, &EmergencyResourceView::highlightChanged,
+            m_mapWidget, &MapWidget::updateHighlights);
+    connect(m_recoveryView, &EmergencyResourceView::highlightChanged,
             m_mapWidget, &MapWidget::updateHighlights);
 
     // Family editing
