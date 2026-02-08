@@ -281,6 +281,21 @@ QToolButton::menu-button:hover {
     border-left: 1px solid #3c7fb1;
 }
 
+/* Sidebar navigation buttons */
+SidebarWidget > QToolButton {
+    padding: 3px 8px;
+    border-radius: 0px;
+    margin: 0;
+    border: 1px solid #8e8f8f;
+    background: qlineargradient(y1:0, y2:1, stop:0 #f2f2f2, stop:1 #cfcfcf);
+}
+
+/* Sidebar content pane */
+#sidebarPane {
+    border: 1px solid #8e8f8f;
+    background: white;
+}
+
 /* ============================================================================
  * Push Buttons
  * ============================================================================ */
