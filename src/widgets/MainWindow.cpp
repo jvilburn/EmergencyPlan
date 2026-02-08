@@ -83,7 +83,7 @@ void MainWindow::setupUi()
     m_wardListView = new WardListView(m_documentManager, this);
     m_sidebarTabs->addPage(m_wardListView, tr("Families"));
 
-    m_ministeringView = new MinisteringView(m_documentManager);
+    m_ministeringView = new MinisteringView(m_documentManager, this);
     m_sidebarTabs->addPage(m_ministeringView, tr("Ministering"));
 
     PlaceholderView* teamsPlaceholder = new PlaceholderView(tr("Teams functionality coming soon"));
