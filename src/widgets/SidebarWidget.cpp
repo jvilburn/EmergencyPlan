@@ -43,11 +43,8 @@ SidebarWidget::SidebarWidget(int firstRowCount, QWidget* parent)
 
     outer->addWidget(pane, 1);
 
-    connect(m_buttonGroup, &QButtonGroup::idClicked, this, [this](int id)
-    {
-        m_stack->setCurrentIndex(id);
-        emit currentChanged(id);
-    });
+    connect(m_buttonGroup, &QButtonGroup::idClicked,
+            this, &SidebarWidget::onButtonClicked);
 }
 
 void SidebarWidget::addPage(QWidget* page, const QString& label)
@@ -103,4 +100,10 @@ void SidebarWidget::setCurrentIndex(int index)
 int SidebarWidget::count() const
 {
     return m_stack->count();
+}
+
+void SidebarWidget::onButtonClicked(int id)
+{
+    m_stack->setCurrentIndex(id);
+    emit currentChanged(id);
 }

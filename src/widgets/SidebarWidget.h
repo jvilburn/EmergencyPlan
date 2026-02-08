@@ -5,8 +5,6 @@
 class QButtonGroup;
 class QHBoxLayout;
 class QStackedWidget;
-class QToolButton;
-
 /// Two-row navigation widget replacing QTabWidget for the sidebar.
 /// Buttons are split across two rows: the first `firstRowCount` pages
 /// go to row 1, the rest to row 2. A single QButtonGroup ensures
@@ -27,10 +25,13 @@ public:
 signals:
     void currentChanged(int index);
 
+private slots:
+    void onButtonClicked(int id);
+
 private:
-    int m_firstRowCount;
-    QHBoxLayout* m_row1;
-    QHBoxLayout* m_row2;
-    QButtonGroup* m_buttonGroup;
-    QStackedWidget* m_stack;
+    const int m_firstRowCount;
+    QHBoxLayout* m_row1 = nullptr;
+    QHBoxLayout* m_row2 = nullptr;
+    QButtonGroup* m_buttonGroup = nullptr;
+    QStackedWidget* m_stack = nullptr;
 };
