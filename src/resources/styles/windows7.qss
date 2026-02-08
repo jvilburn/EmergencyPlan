@@ -290,10 +290,40 @@ SidebarWidget > QToolButton {
     background: qlineargradient(y1:0, y2:1, stop:0 #f2f2f2, stop:1 #cfcfcf);
 }
 
+SidebarWidget > QToolButton:hover {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #ecf4fc, stop: 0.45 #dcecfc,
+        stop: 0.5 #c0ddf4, stop: 1.0 #a8cce8
+    );
+    border: 1px solid #3c7fb1;
+}
+
+SidebarWidget > QToolButton:pressed,
+SidebarWidget > QToolButton:checked {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #e5f4fc, stop: 0.3 #c4e5f6,
+        stop: 0.5 #98d1ef, stop: 1.0 #68b3db
+    );
+    border: 1px solid #6d91ab;
+}
+
+SidebarWidget > QToolButton:checked:hover {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #ecf8ff, stop: 0.3 #cce8f8,
+        stop: 0.5 #a0d8f4, stop: 1.0 #78c0e4
+    );
+}
+
 /* Sidebar content pane */
 #sidebarPane {
     border: 1px solid #8e8f8f;
     background: white;
+    top: -1px;
+    padding: 14px;
+    margin-bottom: 9px;
 }
 
 /* ============================================================================
