@@ -913,30 +913,16 @@ QTreeView, QTreeWidget {
     alternate-background-color: #f5f9ff;
     show-decoration-selected: 1;
     outline: none;
-    padding: 6px 6px 6px 20px;
+    padding: 2px;
 }
 
 QTreeView:disabled, QTreeWidget:disabled {
     opacity: 0.5;
 }
 
+/* Item painting handled by SculptedItemDelegate */
 QTreeView::item {
     padding: 2px 2px;
-}
-
-QTreeView::item:hover {
-    background: #2a90ff;
-    color: white;
-}
-
-QTreeView::item:selected {
-    background: #2a90ff;
-    color: white;
-}
-
-QTreeView::item:selected:!active {
-    background: #d4d4d4;
-    color: #000000;
 }
 
 /* Branch expand/collapse arrows - Windows 7 style triangles */

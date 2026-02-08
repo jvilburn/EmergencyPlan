@@ -227,6 +227,7 @@ set(WIDGET_SOURCES
     src/widgets/shared/SearchField.cpp
     src/widgets/NeedsSubView.cpp
     src/widgets/SelectionPreservingTreeView.cpp
+    src/widgets/SculptedItemDelegate.cpp
     src/widgets/EmergencyResourceView.cpp
     src/widgets/SidebarWidget.cpp
     src/widgets/MinisteringTreeView.cpp
@@ -271,6 +272,7 @@ set(WIDGET_HEADERS
     src/widgets/shared/SearchField.h
     src/widgets/NeedsSubView.h
     src/widgets/SelectionPreservingTreeView.h
+    src/widgets/SculptedItemDelegate.h
     src/widgets/EmergencyResourceView.h
     src/widgets/SidebarWidget.h
     # src/widgets/Sidebar.h

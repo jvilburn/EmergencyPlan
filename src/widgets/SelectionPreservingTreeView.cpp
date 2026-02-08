@@ -1,6 +1,7 @@
 #include "SelectionPreservingTreeView.h"
 #include "ItemType.h"
 #include "BaseTreeModel.h"
+#include "SculptedItemDelegate.h"
 
 #include <QItemSelectionModel>
 
@@ -10,6 +11,9 @@ SelectionPreservingTreeView::SelectionPreservingTreeView(BaseTreeModel* model, Q
 {
     // BaseTreeModel inherits from QAbstractItemModel, so no cast needed
     QTreeView::setModel(model);
+
+    // Sculpted delegate for button-like item appearance
+    setItemDelegate(new SculptedItemDelegate(model, this));
 
     connect(model, &QAbstractItemModel::modelAboutToBeReset,
             this, &SelectionPreservingTreeView::onModelAboutToBeReset);
