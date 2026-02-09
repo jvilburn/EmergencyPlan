@@ -2,8 +2,6 @@
 
 #include <QDir>
 #include <QDirIterator>
-#include <QDebug>
-#include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -169,9 +167,6 @@ bool TileDiskCacheService::loadIndex()
 
 void TileDiskCacheService::saveIndex()
 {
-    QElapsedTimer stepTimer;
-    stepTimer.start();
-
     QJsonArray arr;
     for (const TileId& id : m_tileIndex)
     {
@@ -190,9 +185,6 @@ void TileDiskCacheService::saveIndex()
     }
 
     m_indexDirty = false;
-
-    qDebug() << "    saveIndex:" << stepTimer.nsecsElapsed() / 1000 << "us"
-             << "tiles:" << m_tileIndex.size();
 }
 
 void TileDiskCacheService::scheduleIndexSave()
@@ -215,24 +207,13 @@ std::optional<CachedTile> TileDiskCacheService::load(TileId id) const
         return std::nullopt;
     }
 
-    QElapsedTimer stepTimer;
-
-    stepTimer.start();
     QString tilePath = getTilePath(id);
-    qint64 pathUs = stepTimer.nsecsElapsed() / 1000;
-
-    stepTimer.start();
     QFile file(tilePath);
-    qint64 ctorUs = stepTimer.nsecsElapsed() / 1000;
-
-    stepTimer.start();
     if (!file.open(QIODevice::ReadOnly))
     {
         return std::nullopt;
     }
-    qint64 openUs = stepTimer.nsecsElapsed() / 1000;
 
-    // Verify file size before reading
     qint64 fileSize = file.size();
     if (fileSize < PIXEL_BYTES)
     {
@@ -240,18 +221,13 @@ std::optional<CachedTile> TileDiskCacheService::load(TileId id) const
     }
 
     // Read pixel data directly into QImage buffer — no intermediate QByteArray, no copy
-    stepTimer.start();
     QImage image(256, 256, QImage::Format_ARGB32_Premultiplied);
-    qint64 bytesRead = file.read(reinterpret_cast<char*>(image.bits()), PIXEL_BYTES);
-    qint64 readUs = stepTimer.nsecsElapsed() / 1000;
-
-    if (bytesRead != PIXEL_BYTES)
+    if (file.read(reinterpret_cast<char*>(image.bits()), PIXEL_BYTES) != PIXEL_BYTES)
     {
         return std::nullopt;
     }
 
     // Read metadata from the trailer (if present)
-    stepTimer.start();
     TileMetadata meta;
     if (fileSize >= EXPECTED_SIZE)
     {
@@ -259,32 +235,20 @@ std::optional<CachedTile> TileDiskCacheService::load(TileId id) const
         file.read(reinterpret_cast<char*>(&d), sizeof(TileMetaDisk));
         meta = fromMetaDisk(d);
     }
-    qint64 metaUs = stepTimer.nsecsElapsed() / 1000;
-
-    qDebug() << "    diskLoad: path:" << pathUs << "ctor:" << ctorUs
-             << "open:" << openUs << "read:" << readUs
-             << "meta:" << metaUs
-             << "bytes:" << fileSize;
 
     return CachedTile{image, meta};
 }
 
 void TileDiskCacheService::save(TileId id, const CachedTile& tile)
 {
-    QElapsedTimer stepTimer;
-
-    stepTimer.start();
     QString tilePath = getTilePath(id);
     QDir().mkpath(QFileInfo(tilePath).absolutePath());
-    qint64 mkpathUs = stepTimer.nsecsElapsed() / 1000;
 
-    stepTimer.start();
     QImage image = tile.image;
     if (image.format() != QImage::Format_ARGB32_Premultiplied)
     {
         image = image.convertToFormat(QImage::Format_ARGB32_Premultiplied);
     }
-    qint64 convertUs = stepTimer.nsecsElapsed() / 1000;
 
     if (image.isNull() || image.width() != 256 || image.height() != 256)
     {
@@ -294,13 +258,11 @@ void TileDiskCacheService::save(TileId id, const CachedTile& tile)
     QFile file(tilePath);
     if (file.open(QIODevice::WriteOnly))
     {
-        stepTimer.start();
         file.write(reinterpret_cast<const char*>(image.constBits()), PIXEL_BYTES);
 
         TileMetaDisk d = toMetaDisk(tile.metadata);
         file.write(reinterpret_cast<const char*>(&d), sizeof(d));
         file.close();
-        qint64 writeUs = stepTimer.nsecsElapsed() / 1000;
 
         bool isNew = !m_tileIndex.contains(id);
         m_tileIndex.insert(id);
@@ -308,10 +270,6 @@ void TileDiskCacheService::save(TileId id, const CachedTile& tile)
         {
             scheduleIndexSave();
         }
-
-        qDebug() << "    diskSave: mkpath:" << mkpathUs << "convert:" << convertUs
-                 << "write:" << writeUs
-                 << "bytes:" << EXPECTED_SIZE;
     }
 }
 
