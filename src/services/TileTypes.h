@@ -2,7 +2,7 @@
 
 #include <QDateTime>
 #include <QHashFunctions>
-#include <QPixmap>
+#include <QImage>
 #include <QString>
 
 #include <cstdint>
@@ -58,10 +58,10 @@ struct TileMetadata
     bool isValid() const { return fetchDate.isValid(); }
 };
 
-/// A cached tile with its pixmap and metadata.
+/// A cached tile with its image and metadata.
 /// Used by both memory cache and disk cache.
 struct CachedTile
 {
-    QPixmap pixmap;
+    QImage image;
     TileMetadata metadata;
 };
