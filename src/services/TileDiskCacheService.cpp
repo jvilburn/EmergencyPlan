@@ -232,40 +232,41 @@ std::optional<CachedTile> TileDiskCacheService::load(TileId id) const
     }
     qint64 openUs = stepTimer.nsecsElapsed() / 1000;
 
-    stepTimer.start();
-    QByteArray data = file.readAll();
-    qint64 readUs = stepTimer.nsecsElapsed() / 1000;
-
-    if (data.size() < PIXEL_BYTES)
+    // Verify file size before reading
+    qint64 fileSize = file.size();
+    if (fileSize < PIXEL_BYTES)
     {
         return std::nullopt;
     }
 
+    // Read pixel data directly into QImage buffer — no intermediate QByteArray, no copy
     stepTimer.start();
-    QImage image(
-        reinterpret_cast<const uchar*>(data.constData()),
-        256, 256,
-        256 * 4,
-        QImage::Format_ARGB32_Premultiplied);
-    QImage owned = image.copy();  // detach from QByteArray — single memcpy
-    qint64 copyUs = stepTimer.nsecsElapsed() / 1000;
+    QImage image(256, 256, QImage::Format_ARGB32_Premultiplied);
+    qint64 bytesRead = file.read(reinterpret_cast<char*>(image.bits()), PIXEL_BYTES);
+    qint64 readUs = stepTimer.nsecsElapsed() / 1000;
 
+    if (bytesRead != PIXEL_BYTES)
+    {
+        return std::nullopt;
+    }
+
+    // Read metadata from the trailer (if present)
     stepTimer.start();
     TileMetadata meta;
-    if (data.size() >= EXPECTED_SIZE)
+    if (fileSize >= EXPECTED_SIZE)
     {
-        TileMetaDisk d;
-        memcpy(&d, data.constData() + PIXEL_BYTES, sizeof(TileMetaDisk));
+        TileMetaDisk d{};
+        file.read(reinterpret_cast<char*>(&d), sizeof(TileMetaDisk));
         meta = fromMetaDisk(d);
     }
     qint64 metaUs = stepTimer.nsecsElapsed() / 1000;
 
     qDebug() << "    diskLoad: path:" << pathUs << "ctor:" << ctorUs
              << "open:" << openUs << "read:" << readUs
-             << "copy:" << copyUs << "meta:" << metaUs
-             << "bytes:" << data.size();
+             << "meta:" << metaUs
+             << "bytes:" << fileSize;
 
-    return CachedTile{owned, meta};
+    return CachedTile{image, meta};
 }
 
 void TileDiskCacheService::save(TileId id, const CachedTile& tile)
