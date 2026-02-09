@@ -7,7 +7,7 @@ int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
     app.setApplicationName("Emergency Plan");
-    app.setOrganizationName("Church");
+    app.setOrganizationName("");
 
     // Load Windows 7 Aero stylesheet
     QFile styleFile(":/styles/windows7.qss");

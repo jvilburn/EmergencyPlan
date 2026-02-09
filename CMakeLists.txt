@@ -160,7 +160,6 @@ set(SERVICE_SOURCES
     src/services/WardDirectoryPdfParser.cpp
     src/services/MinisteringPdfParser.cpp
     src/services/MinisteringImportService.cpp
-    src/services/QoiCodec.cpp
     src/services/TileDiskCacheService.cpp
     src/services/TileFetchService.cpp
     src/services/TileService.cpp
@@ -184,7 +183,6 @@ set(SERVICE_HEADERS
     src/services/WardDirectoryPdfParser.h
     src/services/MinisteringPdfParser.h
     src/services/MinisteringImportService.h
-    src/services/QoiCodec.h
     src/services/TileDiskCacheService.h
     src/services/TileFetchService.h
     src/services/TileTypes.h
