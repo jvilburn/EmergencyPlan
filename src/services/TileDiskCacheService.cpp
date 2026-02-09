@@ -217,12 +217,20 @@ std::optional<CachedTile> TileDiskCacheService::load(TileId id) const
 
     QElapsedTimer stepTimer;
 
+    stepTimer.start();
     QString tilePath = getTilePath(id);
+    qint64 pathUs = stepTimer.nsecsElapsed() / 1000;
+
+    stepTimer.start();
     QFile file(tilePath);
+    qint64 ctorUs = stepTimer.nsecsElapsed() / 1000;
+
+    stepTimer.start();
     if (!file.open(QIODevice::ReadOnly))
     {
         return std::nullopt;
     }
+    qint64 openUs = stepTimer.nsecsElapsed() / 1000;
 
     stepTimer.start();
     QByteArray data = file.readAll();
@@ -239,8 +247,8 @@ std::optional<CachedTile> TileDiskCacheService::load(TileId id) const
         256, 256,
         256 * 4,
         QImage::Format_ARGB32_Premultiplied);
-    QPixmap pixmap = QPixmap::fromImage(image);
-    qint64 toPixmapUs = stepTimer.nsecsElapsed() / 1000;
+    QImage owned = image.copy();  // detach from QByteArray — single memcpy
+    qint64 copyUs = stepTimer.nsecsElapsed() / 1000;
 
     stepTimer.start();
     TileMetadata meta;
@@ -252,11 +260,12 @@ std::optional<CachedTile> TileDiskCacheService::load(TileId id) const
     }
     qint64 metaUs = stepTimer.nsecsElapsed() / 1000;
 
-    qDebug() << "    diskLoad: read:" << readUs
-             << "toPixmap:" << toPixmapUs << "meta:" << metaUs
+    qDebug() << "    diskLoad: path:" << pathUs << "ctor:" << ctorUs
+             << "open:" << openUs << "read:" << readUs
+             << "copy:" << copyUs << "meta:" << metaUs
              << "bytes:" << data.size();
 
-    return CachedTile{pixmap, meta};
+    return CachedTile{owned, meta};
 }
 
 void TileDiskCacheService::save(TileId id, const CachedTile& tile)
@@ -269,7 +278,7 @@ void TileDiskCacheService::save(TileId id, const CachedTile& tile)
     qint64 mkpathUs = stepTimer.nsecsElapsed() / 1000;
 
     stepTimer.start();
-    QImage image = tile.pixmap.toImage();
+    QImage image = tile.image;
     if (image.format() != QImage::Format_ARGB32_Premultiplied)
     {
         image = image.convertToFormat(QImage::Format_ARGB32_Premultiplied);
