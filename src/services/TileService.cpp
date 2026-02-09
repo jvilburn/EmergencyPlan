@@ -47,9 +47,6 @@ bool TileService::isInitialized() const
 
 QImage TileService::getTile(TileId id)
 {
-    QElapsedTimer tileTimer;
-    tileTimer.start();
-
     // Check memory cache first (no disk I/O)
     CachedTile* entry = m_memoryCache.object(id);
 
@@ -110,24 +107,8 @@ QImage TileService::getTile(TileId id)
         }
 
         // Insert into memory cache
-        stepTimer.start();
         entry = new CachedTile{*loaded};
         m_memoryCache.insert(id, entry);
-        qint64 cacheInsertUs = stepTimer.nsecsElapsed() / 1000;
-
-        stepTimer.start();
-        if (!entry->metadata.providerId.isEmpty())
-        {
-            m_usedProviders.insert(entry->metadata.providerId);
-        }
-        if (m_fetchService->needsFetch(id, entry->metadata))
-        {
-            m_fetchService->fetch(id, entry->metadata);
-        }
-        qint64 fetchCheckUs = stepTimer.nsecsElapsed() / 1000;
-
-        qDebug() << "    getTile overhead: cacheInsert:" << cacheInsertUs
-                 << "fetchCheck:" << fetchCheckUs;
     }
 
     // Track provider for attribution
