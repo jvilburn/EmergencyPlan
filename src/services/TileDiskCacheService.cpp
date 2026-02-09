@@ -2,8 +2,8 @@
 
 #include <QDir>
 #include <QDirIterator>
-#include <QElapsedTimer>
 #include <QDebug>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -27,6 +27,9 @@ struct TileMetaDisk
 };
 static_assert(std::is_trivially_copyable_v<TileMetaDisk>);
 
+static constexpr qint64 PIXEL_BYTES = 256 * 256 * 4;
+static constexpr qint64 EXPECTED_SIZE = PIXEL_BYTES + sizeof(TileMetaDisk);
+
 static TileMetaDisk toMetaDisk(const TileMetadata& meta)
 {
     TileMetaDisk d{};
@@ -45,9 +48,9 @@ static TileMetadata fromMetaDisk(const TileMetaDisk& d)
     {
         meta.fetchDate = QDateTime::fromMSecsSinceEpoch(d.fetchEpochMs, Qt::UTC);
     }
-    meta.providerId = QString::fromUtf8(d.providerId);
-    meta.etag = QString::fromUtf8(d.etag);
-    meta.lastModified = QString::fromUtf8(d.lastModified);
+    meta.providerId = QString::fromUtf8(d.providerId, strnlen(d.providerId, sizeof(d.providerId)));
+    meta.etag = QString::fromUtf8(d.etag, strnlen(d.etag, sizeof(d.etag)));
+    meta.lastModified = QString::fromUtf8(d.lastModified, strnlen(d.lastModified, sizeof(d.lastModified)));
     meta.isScaledUp = d.isScaledUp != 0;
     return meta;
 }
@@ -221,9 +224,6 @@ std::optional<CachedTile> TileDiskCacheService::load(TileId id) const
         return std::nullopt;
     }
 
-    static constexpr qint64 PIXEL_BYTES = 256 * 256 * 4;
-    static constexpr qint64 EXPECTED_SIZE = PIXEL_BYTES + sizeof(TileMetaDisk);
-
     stepTimer.start();
     QByteArray data = file.readAll();
     qint64 readUs = stepTimer.nsecsElapsed() / 1000;
@@ -276,7 +276,7 @@ void TileDiskCacheService::save(TileId id, const CachedTile& tile)
     }
     qint64 convertUs = stepTimer.nsecsElapsed() / 1000;
 
-    if (image.isNull())
+    if (image.isNull() || image.width() != 256 || image.height() != 256)
     {
         return;
     }
@@ -285,8 +285,7 @@ void TileDiskCacheService::save(TileId id, const CachedTile& tile)
     if (file.open(QIODevice::WriteOnly))
     {
         stepTimer.start();
-        file.write(reinterpret_cast<const char*>(image.constBits()),
-                   image.sizeInBytes());
+        file.write(reinterpret_cast<const char*>(image.constBits()), PIXEL_BYTES);
 
         TileMetaDisk d = toMetaDisk(tile.metadata);
         file.write(reinterpret_cast<const char*>(&d), sizeof(d));
@@ -302,7 +301,7 @@ void TileDiskCacheService::save(TileId id, const CachedTile& tile)
 
         qDebug() << "    diskSave: mkpath:" << mkpathUs << "convert:" << convertUs
                  << "write:" << writeUs
-                 << "bytes:" << (image.sizeInBytes() + sizeof(TileMetaDisk));
+                 << "bytes:" << EXPECTED_SIZE;
     }
 }
 
