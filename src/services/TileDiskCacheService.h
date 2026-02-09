@@ -4,18 +4,19 @@
 
 #include <QObject>
 #include <QSet>
+#include <QTimer>
 
 #include <optional>
 
 /// Disk cache for map tiles with O(1) lookup using in-memory index.
-/// Directory structure: {cacheDir}/{layer}/{z}/{x}/{y}.qoi
+/// Directory structure: {cacheDir}/{layer}/{z}/{x}/{y}.tile
 class TileDiskCacheService : public QObject
 {
     Q_OBJECT
 
 public:
     explicit TileDiskCacheService(const QString& cacheDir, QObject* parent = nullptr);
-    ~TileDiskCacheService() override = default;
+    ~TileDiskCacheService() override;
 
     /// Initialize the cache service (scans directories, builds index).
     /// Call once before using the service.
@@ -31,12 +32,10 @@ public:
     void save(TileId id, const CachedTile& tile);
 
 private:
-    std::optional<TileMetadata> loadMetadata(const QString& metaPath) const;
-    void saveMetadata(const QString& metaPath, const TileMetadata& metadata);
-
     void scanTileDirectories();
     bool loadIndex();
-    void saveIndex() const;
+    void saveIndex();
+    void scheduleIndexSave();
 
     QString getTilePath(TileId id) const;
     QString getIndexPath() const;
@@ -44,4 +43,6 @@ private:
     QSet<TileId> m_tileIndex;
     QString m_cacheDir;
     bool m_initialized = false;
+    bool m_indexDirty = false;
+    QTimer m_indexSaveTimer;
 };

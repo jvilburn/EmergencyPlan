@@ -1,18 +1,72 @@
 #include "TileDiskCacheService.h"
-#include "QoiCodec.h"
 
 #include <QDir>
 #include <QDirIterator>
+#include <QElapsedTimer>
+#include <QDebug>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 
+#include <cstring>
+
+static constexpr int INDEX_SAVE_DELAY_MS = 5000;
+
+/// POD struct for on-disk tile metadata — appended after pixel data.
+/// Must be trivially copyable (no Qt types, no pointers).
+struct TileMetaDisk
+{
+    int64_t fetchEpochMs;       ///< QDateTime::toMSecsSinceEpoch()
+    char providerId[16];        ///< e.g. "osm", "usgs", "esri-street"
+    char etag[64];              ///< ETag header (often empty)
+    char lastModified[64];      ///< Last-Modified header (often empty)
+    uint8_t isScaledUp;         ///< bool
+    uint8_t reserved[7];        ///< padding for future use
+};
+static_assert(std::is_trivially_copyable_v<TileMetaDisk>);
+
+static TileMetaDisk toMetaDisk(const TileMetadata& meta)
+{
+    TileMetaDisk d{};
+    d.fetchEpochMs = meta.fetchDate.isValid() ? meta.fetchDate.toMSecsSinceEpoch() : 0;
+    qstrncpy(d.providerId, meta.providerId.toUtf8().constData(), sizeof(d.providerId));
+    qstrncpy(d.etag, meta.etag.toUtf8().constData(), sizeof(d.etag));
+    qstrncpy(d.lastModified, meta.lastModified.toUtf8().constData(), sizeof(d.lastModified));
+    d.isScaledUp = meta.isScaledUp ? 1 : 0;
+    return d;
+}
+
+static TileMetadata fromMetaDisk(const TileMetaDisk& d)
+{
+    TileMetadata meta;
+    if (d.fetchEpochMs != 0)
+    {
+        meta.fetchDate = QDateTime::fromMSecsSinceEpoch(d.fetchEpochMs, Qt::UTC);
+    }
+    meta.providerId = QString::fromUtf8(d.providerId);
+    meta.etag = QString::fromUtf8(d.etag);
+    meta.lastModified = QString::fromUtf8(d.lastModified);
+    meta.isScaledUp = d.isScaledUp != 0;
+    return meta;
+}
+
 TileDiskCacheService::TileDiskCacheService(const QString& cacheDir, QObject* parent)
     : QObject(parent)
     , m_cacheDir(cacheDir)
 {
+    m_indexSaveTimer.setSingleShot(true);
+    connect(&m_indexSaveTimer, &QTimer::timeout, this, &TileDiskCacheService::saveIndex);
+}
+
+TileDiskCacheService::~TileDiskCacheService()
+{
+    // Flush dirty index on shutdown
+    if (m_indexDirty)
+    {
+        saveIndex();
+    }
 }
 
 void TileDiskCacheService::initialize()
@@ -54,7 +108,7 @@ void TileDiskCacheService::scanTileDirectories()
             continue;
         }
 
-        QDirIterator it(layerDir.absolutePath(), {"*.qoi"}, QDir::Files, QDirIterator::Subdirectories);
+        QDirIterator it(layerDir.absolutePath(), {"*.tile"}, QDir::Files, QDirIterator::Subdirectories);
         while (it.hasNext())
         {
             it.next();
@@ -66,7 +120,7 @@ void TileDiskCacheService::scanTileDirectories()
             {
                 int z = parts[0].toInt();
                 int x = parts[1].toInt();
-                int y = parts[2].chopped(4).toInt();
+                int y = parts[2].chopped(5).toInt();
                 m_tileIndex.insert(TileId(layer, z, x, y));
             }
         }
@@ -110,8 +164,11 @@ bool TileDiskCacheService::loadIndex()
     return true;
 }
 
-void TileDiskCacheService::saveIndex() const
+void TileDiskCacheService::saveIndex()
 {
+    QElapsedTimer stepTimer;
+    stepTimer.start();
+
     QJsonArray arr;
     for (const TileId& id : m_tileIndex)
     {
@@ -128,11 +185,22 @@ void TileDiskCacheService::saveIndex() const
     {
         file.write(QJsonDocument(arr).toJson(QJsonDocument::Compact));
     }
+
+    m_indexDirty = false;
+
+    qDebug() << "    saveIndex:" << stepTimer.nsecsElapsed() / 1000 << "us"
+             << "tiles:" << m_tileIndex.size();
+}
+
+void TileDiskCacheService::scheduleIndexSave()
+{
+    m_indexDirty = true;
+    m_indexSaveTimer.start(INDEX_SAVE_DELAY_MS);
 }
 
 QString TileDiskCacheService::getTilePath(TileId id) const
 {
-    return QString("%1/%2/%3/%4/%5.qoi")
+    return QString("%1/%2/%3/%4/%5.tile")
         .arg(m_cacheDir, layerName(id.layer()))
         .arg(id.zoom()).arg(id.x()).arg(id.y());
 }
@@ -144,6 +212,8 @@ std::optional<CachedTile> TileDiskCacheService::load(TileId id) const
         return std::nullopt;
     }
 
+    QElapsedTimer stepTimer;
+
     QString tilePath = getTilePath(id);
     QFile file(tilePath);
     if (!file.open(QIODevice::ReadOnly))
@@ -151,29 +221,62 @@ std::optional<CachedTile> TileDiskCacheService::load(TileId id) const
         return std::nullopt;
     }
 
-    QImage image = QoiCodec::decode(file.readAll());
-    if (image.isNull())
+    static constexpr qint64 PIXEL_BYTES = 256 * 256 * 4;
+    static constexpr qint64 EXPECTED_SIZE = PIXEL_BYTES + sizeof(TileMetaDisk);
+
+    stepTimer.start();
+    QByteArray data = file.readAll();
+    qint64 readUs = stepTimer.nsecsElapsed() / 1000;
+
+    if (data.size() < PIXEL_BYTES)
     {
         return std::nullopt;
     }
 
-    TileMetadata meta;
-    std::optional<TileMetadata> m = loadMetadata(tilePath + ".meta");
-    if (m)
-    {
-        meta = *m;
-    }
+    stepTimer.start();
+    QImage image(
+        reinterpret_cast<const uchar*>(data.constData()),
+        256, 256,
+        256 * 4,
+        QImage::Format_ARGB32_Premultiplied);
+    QPixmap pixmap = QPixmap::fromImage(image);
+    qint64 toPixmapUs = stepTimer.nsecsElapsed() / 1000;
 
-    return CachedTile{QPixmap::fromImage(image), meta};
+    stepTimer.start();
+    TileMetadata meta;
+    if (data.size() >= EXPECTED_SIZE)
+    {
+        TileMetaDisk d;
+        memcpy(&d, data.constData() + PIXEL_BYTES, sizeof(TileMetaDisk));
+        meta = fromMetaDisk(d);
+    }
+    qint64 metaUs = stepTimer.nsecsElapsed() / 1000;
+
+    qDebug() << "    diskLoad: read:" << readUs
+             << "toPixmap:" << toPixmapUs << "meta:" << metaUs
+             << "bytes:" << data.size();
+
+    return CachedTile{pixmap, meta};
 }
 
 void TileDiskCacheService::save(TileId id, const CachedTile& tile)
 {
+    QElapsedTimer stepTimer;
+
+    stepTimer.start();
     QString tilePath = getTilePath(id);
     QDir().mkpath(QFileInfo(tilePath).absolutePath());
+    qint64 mkpathUs = stepTimer.nsecsElapsed() / 1000;
 
-    QByteArray qoiData = QoiCodec::encode(tile.pixmap.toImage());
-    if (qoiData.isEmpty())
+    stepTimer.start();
+    QImage image = tile.pixmap.toImage();
+    if (image.format() != QImage::Format_ARGB32_Premultiplied)
+    {
+        image = image.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    }
+    qint64 convertUs = stepTimer.nsecsElapsed() / 1000;
+
+    if (image.isNull())
     {
         return;
     }
@@ -181,57 +284,25 @@ void TileDiskCacheService::save(TileId id, const CachedTile& tile)
     QFile file(tilePath);
     if (file.open(QIODevice::WriteOnly))
     {
-        file.write(qoiData);
-        file.close();
+        stepTimer.start();
+        file.write(reinterpret_cast<const char*>(image.constBits()),
+                   image.sizeInBytes());
 
-        saveMetadata(tilePath + ".meta", tile.metadata);
+        TileMetaDisk d = toMetaDisk(tile.metadata);
+        file.write(reinterpret_cast<const char*>(&d), sizeof(d));
+        file.close();
+        qint64 writeUs = stepTimer.nsecsElapsed() / 1000;
 
         bool isNew = !m_tileIndex.contains(id);
         m_tileIndex.insert(id);
         if (isNew)
         {
-            saveIndex();
+            scheduleIndexSave();
         }
+
+        qDebug() << "    diskSave: mkpath:" << mkpathUs << "convert:" << convertUs
+                 << "write:" << writeUs
+                 << "bytes:" << (image.sizeInBytes() + sizeof(TileMetaDisk));
     }
 }
 
-std::optional<TileMetadata> TileDiskCacheService::loadMetadata(const QString& metaPath) const
-{
-    QFile file(metaPath);
-    if (!file.open(QIODevice::ReadOnly))
-    {
-        return std::nullopt;
-    }
-
-    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-    if (!doc.isObject())
-    {
-        return std::nullopt;
-    }
-
-    QJsonObject obj = doc.object();
-    TileMetadata meta;
-    meta.fetchDate = QDateTime::fromString(obj["fetchDate"].toString(), Qt::ISODate);
-    meta.etag = obj["etag"].toString();
-    meta.lastModified = obj["lastModified"].toString();
-    meta.providerId = obj["providerId"].toString();
-    meta.isScaledUp = obj["isScaledUp"].toBool(false);
-
-    return meta;
-}
-
-void TileDiskCacheService::saveMetadata(const QString& metaPath, const TileMetadata& metadata)
-{
-    QJsonObject obj;
-    obj["fetchDate"] = metadata.fetchDate.toString(Qt::ISODate);
-    obj["etag"] = metadata.etag;
-    obj["lastModified"] = metadata.lastModified;
-    obj["providerId"] = metadata.providerId;
-    obj["isScaledUp"] = metadata.isScaledUp;
-
-    QFile file(metaPath);
-    if (file.open(QIODevice::WriteOnly))
-    {
-        file.write(QJsonDocument(obj).toJson(QJsonDocument::Compact));
-    }
-}
