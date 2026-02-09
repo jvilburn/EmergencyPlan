@@ -419,7 +419,8 @@ void MapWidget::drawTiles(QPainter& painter)
 
     int maxTile = (1 << tileZoom) - 1;
 
-    // Enable smooth scaling for quality when static, fast scaling when dragging
+    // Enable smooth scaling for quality when static, fast scaling when dragging.
+    // Note: SmoothPixmapTransform applies to drawImage() as well.
     bool needsScaling = scale != 1.0;
     bool useSmoothScaling = needsScaling && !m_isDragging;
     painter.setRenderHint(QPainter::SmoothPixmapTransform, useSmoothScaling);
