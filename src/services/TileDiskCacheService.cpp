@@ -241,16 +241,7 @@ std::optional<CachedTile> TileDiskCacheService::load(TileId id) const
         return std::nullopt;
     }
 
-    stepTimer.start();
-    QImage image(
-        reinterpret_cast<const uchar*>(data.constData()),
-        256, 256,
-        256 * 4,
-        QImage::Format_ARGB32_Premultiplied);
-    QImage owned = image.copy();  // detach from QByteArray — single memcpy
-    qint64 copyUs = stepTimer.nsecsElapsed() / 1000;
-
-    stepTimer.start();
+    // Extract metadata before transferring data ownership
     TileMetadata meta;
     if (data.size() >= EXPECTED_SIZE)
     {
@@ -258,14 +249,26 @@ std::optional<CachedTile> TileDiskCacheService::load(TileId id) const
         memcpy(&d, data.constData() + PIXEL_BYTES, sizeof(TileMetaDisk));
         meta = fromMetaDisk(d);
     }
-    qint64 metaUs = stepTimer.nsecsElapsed() / 1000;
+
+    stepTimer.start();
+    // Zero-copy: move QByteArray to heap, QImage wraps its buffer.
+    // Cleanup function deletes the QByteArray when last QImage ref is destroyed.
+    auto* backing = new QByteArray(std::move(data));
+    QImage image(
+        reinterpret_cast<uchar*>(backing->data()),
+        256, 256,
+        256 * 4,
+        QImage::Format_ARGB32_Premultiplied,
+        [](void* info) { delete static_cast<QByteArray*>(info); },
+        backing);
+    qint64 wrapUs = stepTimer.nsecsElapsed() / 1000;
 
     qDebug() << "    diskLoad: path:" << pathUs << "ctor:" << ctorUs
              << "open:" << openUs << "read:" << readUs
-             << "copy:" << copyUs << "meta:" << metaUs
-             << "bytes:" << data.size();
+             << "wrap:" << wrapUs
+             << "bytes:" << backing->size();
 
-    return CachedTile{owned, meta};
+    return CachedTile{image, meta};
 }
 
 void TileDiskCacheService::save(TileId id, const CachedTile& tile)
