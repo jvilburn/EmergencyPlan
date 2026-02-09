@@ -13,6 +13,7 @@
 #include "Document.h"
 
 #include <QPainter>
+#include <QPixmap>
 #include <QPushButton>
 #include <QMouseEvent>
 #include <QWheelEvent>
@@ -22,6 +23,7 @@
 #include <QIcon>
 #include <QtMath>
 #include <QDebug>
+#include <QElapsedTimer>
 
 MapWidget::MapWidget(DocumentManager* docManager, QWidget* parent)
     : QWidget(parent)
@@ -278,7 +280,7 @@ void MapWidget::updateLayerButtonIcon()
 
     // Get tile for the OTHER layer
     TileLayer otherLayer = m_useSatellite ? TileLayer::Street : TileLayer::Satellite;
-    QPixmap tile = tileService->getTile(TileId(otherLayer, tileZoom, tileX, tileY));
+    QImage tile = tileService->getTile(TileId(otherLayer, tileZoom, tileX, tileY));
 
     if (tile.isNull())
     {
@@ -306,12 +308,12 @@ void MapWidget::updateLayerButtonIcon()
 
     // Crop and scale to match the map's display
     int cropSizeInt = qMax(1, static_cast<int>(qCeil(cropSize)));
-    QPixmap cropped = tile.copy(static_cast<int>(cropX), static_cast<int>(cropY),
-                                 cropSizeInt, cropSizeInt);
-    QPixmap scaled = cropped.scaled(buttonIconSize, buttonIconSize,
-                                     Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    QImage cropped = tile.copy(static_cast<int>(cropX), static_cast<int>(cropY),
+                               cropSizeInt, cropSizeInt);
+    QImage scaled = cropped.scaled(buttonIconSize, buttonIconSize,
+                                    Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
 
-    m_layerButton->setIcon(QIcon(scaled));
+    m_layerButton->setIcon(QIcon(QPixmap::fromImage(scaled)));
     m_layerButton->setIconSize(QSize(buttonIconSize, buttonIconSize));
 }
 
@@ -345,13 +347,32 @@ void MapWidget::updateZoomForBounds()
 
 void MapWidget::paintEvent(QPaintEvent* /*event*/)
 {
+    QElapsedTimer totalTimer, phaseTimer;
+    totalTimer.start();
+
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
 
+    phaseTimer.start();
     drawTiles(painter);
+    qint64 tilesUs = phaseTimer.nsecsElapsed() / 1000;
+
+    phaseTimer.start();
     drawMarkers(painter);
+    qint64 markersUs = phaseTimer.nsecsElapsed() / 1000;
+
+    phaseTimer.start();
     drawChurchMarkers(painter);
+    qint64 churchUs = phaseTimer.nsecsElapsed() / 1000;
+
+    phaseTimer.start();
     drawAttribution(painter);
+    qint64 attribUs = phaseTimer.nsecsElapsed() / 1000;
+
+    qint64 totalUs = totalTimer.nsecsElapsed() / 1000;
+    qDebug() << "paintEvent:" << totalUs << "us | tiles:" << tilesUs
+             << "markers:" << markersUs << "church:" << churchUs
+             << "attrib:" << attribUs;
 }
 
 void MapWidget::drawTiles(QPainter& painter)
@@ -428,11 +449,11 @@ void MapWidget::drawTiles(QPainter& painter)
                              + (ty - qFloor(centerTileY)) * scaledTileSize;
 
             // Get tile from service (always returns something drawable)
-            QPixmap tile = tileService->getTile(TileId(layer, tileZoom, wrappedX, ty));
+            QImage tile = tileService->getTile(TileId(layer, tileZoom, wrappedX, ty));
 
             // Draw the tile scaled
             QRectF targetRect(screenX, screenY, scaledTileSize, scaledTileSize);
-            painter.drawPixmap(targetRect, tile, tile.rect());
+            painter.drawImage(targetRect, tile);
         }
     }
 
@@ -700,8 +721,16 @@ void MapWidget::mouseMoveEvent(QMouseEvent* event)
             m_centerLng -= 360.0;
         }
 
+        QElapsedTimer dragTimer;
+        dragTimer.start();
         update();
+        qint64 updateUs = dragTimer.nsecsElapsed() / 1000;
+
+        dragTimer.start();
         updateLayerButtonIcon();
+        qint64 layerBtnUs = dragTimer.nsecsElapsed() / 1000;
+
+        qDebug() << "mouseMoveEvent: update:" << updateUs << "us | layerBtn:" << layerBtnUs << "us";
     }
 }
 
@@ -776,8 +805,16 @@ void MapWidget::wheelEvent(QWheelEvent* event)
 
         m_bounds = viewportBounds(m_centerLat, m_centerLng, m_zoom);
 
+        QElapsedTimer wheelTimer;
+        wheelTimer.start();
         update();
+        qint64 updateUs = wheelTimer.nsecsElapsed() / 1000;
+
+        wheelTimer.start();
         updateLayerButtonIcon();
+        qint64 layerBtnUs = wheelTimer.nsecsElapsed() / 1000;
+
+        qDebug() << "wheelEvent: update:" << updateUs << "us | layerBtn:" << layerBtnUs << "us";
     }
 
     event->accept();
