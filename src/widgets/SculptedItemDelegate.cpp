@@ -50,21 +50,13 @@ void SculptedItemDelegate::paintSculpted(QPainter* painter, const QStyleOptionVi
 
     bool selected = option.state & QStyle::State_Selected;
     bool hovered = option.state & QStyle::State_MouseOver;
-    bool active = option.state & QStyle::State_Active;
 
-    if (selected && active)
+    if (selected)
     {
-        gradient.setColorAt(0, QColor(0x3e, 0xa1, 0xff));
-        gradient.setColorAt(1, QColor(0x1a, 0x7e, 0xe6));
-        borderColor = QColor(0x15, 0x65, 0xc0);
+        gradient.setColorAt(0, QColor(0x5b, 0xa3, 0xd9));    // #5BA3D9
+        gradient.setColorAt(1, QColor(0x3d, 0x87, 0xc4));    // #3D87C4
+        borderColor = QColor(0x2e, 0x6f, 0xa8);               // #2E6FA8
         textColor = Qt::white;
-    }
-    else if (selected && !active)
-    {
-        gradient.setColorAt(0, QColor(0xe0, 0xe0, 0xe0));
-        gradient.setColorAt(1, QColor(0xc8, 0xc8, 0xc8));
-        borderColor = QColor(0xb0, 0xb0, 0xb0);
-        textColor = Qt::black;
     }
     else if (hovered)
     {
