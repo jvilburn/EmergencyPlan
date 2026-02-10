@@ -22,8 +22,6 @@
 #include <QGraphicsDropShadowEffect>
 #include <QIcon>
 #include <QtMath>
-#include <QDebug>
-#include <QElapsedTimer>
 
 MapWidget::MapWidget(DocumentManager* docManager, QWidget* parent)
     : QWidget(parent)
@@ -347,32 +345,13 @@ void MapWidget::updateZoomForBounds()
 
 void MapWidget::paintEvent(QPaintEvent* /*event*/)
 {
-    QElapsedTimer totalTimer, phaseTimer;
-    totalTimer.start();
-
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
 
-    phaseTimer.start();
     drawTiles(painter);
-    qint64 tilesUs = phaseTimer.nsecsElapsed() / 1000;
-
-    phaseTimer.start();
     drawMarkers(painter);
-    qint64 markersUs = phaseTimer.nsecsElapsed() / 1000;
-
-    phaseTimer.start();
     drawChurchMarkers(painter);
-    qint64 churchUs = phaseTimer.nsecsElapsed() / 1000;
-
-    phaseTimer.start();
     drawAttribution(painter);
-    qint64 attribUs = phaseTimer.nsecsElapsed() / 1000;
-
-    qint64 totalUs = totalTimer.nsecsElapsed() / 1000;
-    qDebug() << "paintEvent:" << totalUs << "us | tiles:" << tilesUs
-             << "markers:" << markersUs << "church:" << churchUs
-             << "attrib:" << attribUs;
 }
 
 void MapWidget::drawTiles(QPainter& painter)
@@ -726,16 +705,8 @@ void MapWidget::mouseMoveEvent(QMouseEvent* event)
             m_centerLng -= 360.0;
         }
 
-        QElapsedTimer dragTimer;
-        dragTimer.start();
         update();
-        qint64 updateUs = dragTimer.nsecsElapsed() / 1000;
-
-        dragTimer.start();
         updateLayerButtonIcon();
-        qint64 layerBtnUs = dragTimer.nsecsElapsed() / 1000;
-
-        qDebug() << "mouseMoveEvent: update:" << updateUs << "us | layerBtn:" << layerBtnUs << "us";
     }
 }
 
@@ -810,16 +781,8 @@ void MapWidget::wheelEvent(QWheelEvent* event)
 
         m_bounds = viewportBounds(m_centerLat, m_centerLng, m_zoom);
 
-        QElapsedTimer wheelTimer;
-        wheelTimer.start();
         update();
-        qint64 updateUs = wheelTimer.nsecsElapsed() / 1000;
-
-        wheelTimer.start();
         updateLayerButtonIcon();
-        qint64 layerBtnUs = wheelTimer.nsecsElapsed() / 1000;
-
-        qDebug() << "wheelEvent: update:" << updateUs << "us | layerBtn:" << layerBtnUs << "us";
     }
 
     event->accept();
