@@ -220,7 +220,7 @@ std::optional<CachedTile> TileDiskCacheService::load(TileId id) const
         return std::nullopt;
     }
 
-    // Read pixel data directly into QImage buffer — no intermediate QByteArray, no copy
+    // Read pixel data directly into QImage buffer -- no intermediate QByteArray, no copy
     QImage image(256, 256, QImage::Format_ARGB32_Premultiplied);
     if (file.read(reinterpret_cast<char*>(image.bits()), PIXEL_BYTES) != PIXEL_BYTES)
     {

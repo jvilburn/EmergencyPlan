@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QWidget>
+#include <QPixmap>
 #include <QPoint>
 #include <QPointF>
 #include <QVariantMap>
@@ -159,8 +160,10 @@ private:
     bool m_isGeocoding = false;
     bool m_unmappedPanelManualOverride = false;
 
-    // Attribution box geometry (updated in drawAttribution, used for collision detection)
+    // Attribution cache (pre-rendered pixmap, avoids drawText every paint)
     QRect m_attributionRect;
+    QString m_cachedAttributionText;
+    QPixmap m_cachedAttributionPixmap;
 
     // UI controls
     QPushButton* m_zoomInButton;

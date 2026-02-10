@@ -639,29 +639,33 @@ void MapWidget::drawAttribution(QPainter& painter)
         return;
     }
 
-    QFont font = painter.font();
-    font.setPointSize(9);
-    painter.setFont(font);
+    // Pre-render to pixmap when text changes
+    if (attribution != m_cachedAttributionText)
+    {
+        m_cachedAttributionText = attribution;
 
-    QFontMetrics fm(font);
-    QRect textRect = fm.boundingRect(attribution);
-    int padding = 4;
+        QFont font = painter.font();
+        font.setPointSize(9);
+        QFontMetrics fm(font);
+        QRect textRect = fm.boundingRect(attribution);
+        int padding = 4;
+
+        int w = textRect.width() + padding * 2;
+        int h = textRect.height() + padding * 2;
+
+        m_cachedAttributionPixmap = QPixmap(w, h);
+        m_cachedAttributionPixmap.fill(QColor(255, 255, 255, 200));
+
+        QPainter pm(&m_cachedAttributionPixmap);
+        pm.setFont(font);
+        pm.setPen(QColor(100, 100, 100));
+        pm.drawText(m_cachedAttributionPixmap.rect(), Qt::AlignCenter, attribution);
+    }
+
     int margin = 8;
-
-    QRect bgRect(margin,
-                 height() - textRect.height() - padding * 2 - margin,
-                 textRect.width() + padding * 2,
-                 textRect.height() + padding * 2);
-
-    // Cache for collision detection
-    m_attributionRect = bgRect;
-
-    // Semi-transparent background
-    painter.fillRect(bgRect, QColor(255, 255, 255, 200));
-
-    // Text
-    painter.setPen(QColor(100, 100, 100));
-    painter.drawText(bgRect, Qt::AlignCenter, attribution);
+    QPoint pos(margin, height() - m_cachedAttributionPixmap.height() - margin);
+    m_attributionRect = QRect(pos, m_cachedAttributionPixmap.size());
+    painter.drawPixmap(pos, m_cachedAttributionPixmap);
 }
 
 // ============================================================================

@@ -4,7 +4,6 @@
 
 #include <QStandardPaths>
 #include <QPainter>
-#include <QElapsedTimer>
 #include <QDebug>
 
 TileService* TileService::s_instance = nullptr;
@@ -53,55 +52,34 @@ QImage TileService::getTile(TileId id)
     if (!entry)
     {
         // Cache miss - load from disk or generate
-        QElapsedTimer stepTimer;
-        stepTimer.start();
         std::optional<CachedTile> loaded = m_diskCache->load(id);
-        qint64 diskLoadUs = stepTimer.nsecsElapsed() / 1000;
 
-        if (loaded)
-        {
-            qDebug() << "  getTile" << id.zoom() << id.x() << id.y()
-                     << "disk:" << diskLoadUs << "us";
-        }
-        else
+        if (!loaded)
         {
             // Try composite from 4 children at z+1 (full resolution)
             TileMetadata meta;
-            stepTimer.start();
             QImage composited = tryComposite(id, &meta);
-            qint64 compositeUs = stepTimer.nsecsElapsed() / 1000;
 
             if (!composited.isNull())
             {
-                stepTimer.start();
                 loaded = CachedTile{composited, meta};
                 m_diskCache->save(id, *loaded);
-                qint64 saveUs = stepTimer.nsecsElapsed() / 1000;
-                qDebug() << "  getTile" << id.zoom() << id.x() << id.y()
-                         << "diskMiss:" << diskLoadUs << "us composite:" << compositeUs
-                         << "us save:" << saveUs << "us";
             }
             else
             {
                 // Try scale from parent at z-1 (fuzzy)
-                stepTimer.start();
                 QImage scaled = tryScale(id, &meta);
-                qint64 scaleUs = stepTimer.nsecsElapsed() / 1000;
 
                 if (!scaled.isNull())
                 {
                     // Don't save to disk - scaled tiles are temporary placeholders.
                     // The fetch service will retrieve the native tile shortly.
                     loaded = CachedTile{scaled, meta};
-                    qDebug() << "  getTile" << id.zoom() << id.x() << id.y()
-                             << "diskMiss:" << diskLoadUs << "us scale:" << scaleUs << "us";
                 }
                 else
                 {
                     // Nothing available - return placeholder
                     loaded = CachedTile{grayPlaceholder(), TileMetadata{}};
-                    qDebug() << "  getTile" << id.zoom() << id.x() << id.y()
-                             << "diskMiss:" << diskLoadUs << "us -> placeholder";
                 }
             }
         }
@@ -111,10 +89,21 @@ QImage TileService::getTile(TileId id)
         m_memoryCache.insert(id, entry);
     }
 
-    // Track provider for attribution
-    if (!entry->metadata.providerId.isEmpty())
+    // Track provider for attribution (rebuild cached string only when set grows)
+    if (!entry->metadata.providerId.isEmpty()
+        && !m_usedProviders.contains(entry->metadata.providerId))
     {
         m_usedProviders.insert(entry->metadata.providerId);
+        QStringList parts;
+        for (const QString& pid : m_usedProviders)
+        {
+            QString attr = m_fetchService->providerAttribution(pid);
+            if (!attr.isEmpty() && !parts.contains(attr))
+            {
+                parts.append(attr);
+            }
+        }
+        m_cachedAttribution = parts.join(" | ");
     }
 
     // Trigger fetch if needed
@@ -128,16 +117,7 @@ QImage TileService::getTile(TileId id)
 
 QString TileService::attribution() const
 {
-    QStringList attributions;
-    for (const QString& providerId : m_usedProviders)
-    {
-        QString attr = m_fetchService->providerAttribution(providerId);
-        if (!attr.isEmpty() && !attributions.contains(attr))
-        {
-            attributions.append(attr);
-        }
-    }
-    return attributions.join(" | ");
+    return m_cachedAttribution;
 }
 
 // ============================================================================

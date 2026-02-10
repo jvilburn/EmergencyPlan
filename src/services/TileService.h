@@ -104,6 +104,7 @@ private:
 
     // Track which providers have been used (for attribution)
     QSet<QString> m_usedProviders;
+    QString m_cachedAttribution;
 
     static TileService* s_instance;
 };
