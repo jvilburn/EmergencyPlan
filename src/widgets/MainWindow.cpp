@@ -97,10 +97,10 @@ void MainWindow::setupUi()
     m_sidebarTabs->addPage(m_medicalView, tr("Medical"));
 
     m_commsView = new EmergencyResourceView(m_documentManager, ResponseArea::Communications, this);
-    m_sidebarTabs->addPage(m_commsView, tr("Comms"));
+    m_sidebarTabs->addPage(m_commsView, tr("Communications"));
 
     m_recoveryView = new EmergencyResourceView(m_documentManager, ResponseArea::Recovery, this);
-    m_sidebarTabs->addPage(m_recoveryView, tr("Recovery"));
+    m_sidebarTabs->addPage(m_recoveryView, tr("Skills && Gear"));
 
     // Edit panel (initially hidden)
     m_editPanel = new FamilyEditPanel(m_documentManager, m_splitter);

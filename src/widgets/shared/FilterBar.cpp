@@ -202,7 +202,7 @@ void FilterBar::rebuildChips()
                 areaName = tr("Communications");
                 break;
             case ResponseArea::Recovery:
-                areaName = tr("Recovery");
+                areaName = tr("Skills & Gear");
                 break;
             default:
                 continue;
@@ -530,8 +530,8 @@ void FilterBar::addResponseAreaSubmenu(QMenu* menu)
     QMenu* commSub = sub->addMenu(tr("Communications"));
     addResponseAreaItems(commSub, ResponseArea::Communications);
 
-    // Recovery submenu
-    QMenu* recoverySub = sub->addMenu(tr("Recovery"));
+    // Skills & Gear submenu
+    QMenu* recoverySub = sub->addMenu(tr("Skills && Gear"));
     addResponseAreaItems(recoverySub, ResponseArea::Recovery);
 }
 

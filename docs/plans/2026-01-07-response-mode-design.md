@@ -1,35 +1,59 @@
-# Response Mode (Welfare Check) Design
+# Emergency Response Design
 
 ## Overview
 
-Response Mode is a separate application mode activated during emergencies. The UI shifts from preparation concerns (data completeness, assignment planning) to crisis coordination (who's been reached, who needs help).
+Emergency response is not a separate mode — it augments the existing views. When an emergency is active, the Families, Ministering, and Teams views gain response-specific UI elements (status tracking, tasks, progress). When the emergency ends, those elements disappear and the views return to normal.
 
-This design covers the Welfare Check view. Needs & Assignments and Resource Lookup views will be designed separately.
+No new tabs. No mode toggle. The leader uses the same views they already know.
 
 ---
 
-## Mode Structure
+## Activating an Emergency
 
-### Mode Toggle
+### Starting
 
-A prominent control in MainWindow switches between Preparation and Response modes. The toggle should provide clear visual distinction when in Response Mode (color change, banner, or similar).
+Menu action: **File → Start Emergency**
 
-### View Structure in Response Mode
+1. Confirmation dialog prompts for emergency name (e.g., "January 2026 Ice Storm")
+2. If document has unsaved changes, prompt to save first
+3. Confirm → initializes response data, all families start as "Not contacted"
+
+### Visual Indicator
+
+When an emergency is active, a banner appears above the sidebar navigation buttons showing the emergency name. This is the only persistent visual change — it signals that response UI is active without disrupting the layout.
 
 ```
-[Preparation / Response toggle]
-
-─── Response Mode ───
-├── Welfare Check (toggle: Families | Ministering)
-├── Needs & Assignments (future)
-└── Resource Lookup (future)
+┌─────────────────────────────────┐
+│ ⚠ January 2026 Ice Storm       │  ← banner (amber/warm tint)
+├─────────────────────────────────┤
+│ [Families] [Ministering] [Teams] [Needs]  │
+│ [Medical]  [Comms]  [Recovery]            │
+├─────────────────────────────────┤
+│ (view content)                  │
 ```
 
-Welfare Check has two sub-views toggled within it:
-- **Families View** - flat list of all families with status
-- **Ministering View** - hierarchical by district/companionship with progress bars
+### Ending
 
-Both views share the same underlying family status data.
+Menu action: **File → End Emergency**
+
+```
+End "January 2026 Ice Storm"?
+
+☑ Generate summary report (PDF)
+
+[Archive & End] [Discard & End] [Cancel]
+```
+
+**Archive & End:**
+- Saves full response data to archive file
+- Optionally generates summary report (PDF)
+- Clears response data and undo/redo stack
+- Response UI elements disappear from all views
+
+**Discard & End:**
+- Confirms "This will permanently delete all response data"
+- Clears response data and undo/redo stack
+- Response UI elements disappear from all views
 
 ---
 
@@ -37,9 +61,9 @@ Both views share the same underlying family status data.
 
 ### Data Separation
 
-- **Preparation data** (families, ministering, teams) - persists in the main document
-- **Response data** (contact statuses, attempts, needs) - stored separately, keyed by family ID
-- **Archives** - each completed emergency saves as a separate file containing full response data
+- **Preparation data** (families, ministering, teams) — persists in the main document
+- **Response data** (contact statuses, attempts, tasks) — stored separately, keyed by family ID
+- **Archives** — each completed emergency saves as a separate file
 
 Response data is ephemeral and separate from the main document. This keeps emergency tracking cleanly isolated.
 
@@ -51,9 +75,9 @@ Each family entry in response data includes:
 - Family address (for context and matching)
 - Contact status
 - List of contact attempts
-- List of needs
+- List of tasks
 
-This redundant family info ensures archives remain useful even if preparation data changes.
+Redundant family info ensures archives remain useful even if preparation data changes.
 
 ---
 
@@ -65,10 +89,10 @@ This redundant family info ensures archives remain useful even if preparation da
 |--------|---------|-------------|
 | Not contacted | Default | Starting state for all families |
 | OK | Explicit | Family has been contacted and is fine |
-| Needs help | Derived | Family has one or more unresolved needs |
+| Needs help | Derived | Family has one or more unresolved tasks |
 | Unable to reach | Explicit | Contact attempted but couldn't get through |
 
-**Key design decision:** "Needs Help" is derived from having unresolved need entries, not stored as a separate status. This prevents data inconsistency.
+**Key design decision:** "Needs Help" is derived from having unresolved task entries, not stored as a separate status. This prevents data inconsistency.
 
 ### Contact Attempt
 
@@ -87,12 +111,12 @@ Method is selected via radio control for quick entry. "Who" is a combo box allow
 
 ---
 
-## Need Model
+## Task Model
 
-### Need Entry
+### Task Entry
 
 ```
-NeedEntry {
+TaskEntry {
     id: string
     category: string (from configured list)
     description: string (can be updated anytime)
@@ -114,36 +138,33 @@ NeedEntry {
 }
 ```
 
-### Need Categories
+### Task Categories
 
-Configured in Settings during Preparation Mode:
+Configured in Settings:
 - Default list provided: Tree removal, Generator, Medical, Transport, Shelter, Other
 - Ward leader can add/remove/reorder
 - Can also add new categories on the fly during emergency
 
-### Need Resolution
+### Task Resolution
 
 Three valid resolution paths:
-1. **Quick resolve** - Toggle resolved, no notes
-2. **Resolve with notes** - Add resolution notes describing what was done
-3. **Full workflow** - Assigned team/person marks complete from Needs & Assignments view
+1. **Quick resolve** — Toggle resolved, no notes
+2. **Resolve with notes** — Add resolution notes describing what was done
+3. **Full workflow** — Assigned team/person marks complete from Teams view
 
-When all needs for a family are resolved, status automatically returns to "OK".
+When all tasks for a family are resolved, status automatically returns to "OK".
 
 ---
 
-## Welfare Check - Families View
+## Families View — Emergency Enhancements
 
-### Layout
-
-Same pattern as existing Families view: sidebar list on left, map on right.
+When an emergency is active, the Families view gains:
 
 ### Progress Summary
 
-Displayed at top of sidebar:
+Displayed at top of the family list:
 
 ```
-January 2026 Ice Storm
 47 families: 23 OK • 3 need help • 2 unable to reach • 19 remaining
 [====green====][orange][yellow][----gray----]
 ```
@@ -156,52 +177,36 @@ Segmented progress bar showing all statuses at a glance.
 [All (47)] [Remaining (19)] [Needs Help (3)] [OK (23)] [Unable to Reach (2)]
 ```
 
-These status tabs are most frequently used. Additionally, preparation mode filters (search, teams, tags, skills) remain available for combined filtering like "Remaining families with generators".
-
-Filter hierarchy:
-- Status tabs - prominent, most used
-- Search field - always visible
-- Additional filters (teams, tags, skills) - secondary, collapsible
+These status filter tabs appear above the family list. Existing preparation filters (search, tags, skills) remain available for combined filtering like "Remaining families with generators".
 
 Filtering applies to list; map dims filtered-out families rather than hiding them.
 
-### Family Row
+### Family Row Additions
 
+Each family row gains:
 - Status icon (color + icon for accessibility)
-- Family display name
-- Address
 - Phone number (prominent for quick calling)
-- Action buttons: [OK] [Add Need] [Unable to Reach]
-- Expandable section showing:
-  - Family members
+- Action buttons: [OK] [Add Task] [Unable to Reach]
+- Expandable section additions:
   - Contact attempt history
-  - Active needs with actions
+  - Active tasks with actions
 
-### Map
+### Map Marker Changes
 
-- Pins colored by status with icon overlay:
+- Pins colored by welfare check status with icon overlay:
   - Gray circle: Not contacted
   - Green checkmark: OK
   - Orange flag: Needs help
   - Yellow question mark: Unable to reach
-- Clicking pin selects family in list
-- Filtered families dimmed but visible (not hidden)
+- Existing click-to-select and highlighting behavior unchanged
 
 ---
 
-## Welfare Check - Ministering View
+## Ministering View — Emergency Enhancements
 
-### Layout
+When an emergency is active, the Ministering view gains welfare check progress tracking overlaid on the existing district/companionship hierarchy.
 
-Same sidebar + map pattern. Sidebar shows hierarchical list.
-
-### Toggle
-
-EQ / RS toggle at top, same pattern as Preparation Mode ministering.
-
-**RS handling:** RS assignments are to individual sisters, but for welfare check purposes, status is tracked at the family level. The RS view shows sisters grouped by companionship, but clicking a ministered sister highlights/shows her family's status.
-
-### Hierarchy Display
+### Hierarchy Display with Status
 
 ```
 District 1 - Brother Johnson              [====75%====]
@@ -218,31 +223,63 @@ District 1 - Brother Johnson              [====75%====]
 
 ### Per District
 
-- District name and leader
-- Progress bar (segmented by status)
-- Leader phone number for quick contact
+- Progress bar (segmented by status) added next to district name
+- Leader phone number shown for quick contact
 
 ### Per Companionship
 
-- Minister names
 - Status icons for assigned families (compact row)
-- Minister phone numbers
-- If a minister's own family has status, show their icon too
+- Minister phone numbers shown
+
+### RS Handling
+
+RS assignments are to individual sisters, but status is tracked at the family level. The RS view shows sisters grouped by companionship, but clicking a ministered sister highlights/shows her family's status.
 
 ### Selection and Highlighting
 
+Same as existing behavior:
 - Click district → highlights presidency member's family + all families in that district
 - Click companionship → highlights ministers' families + ministered families
 - Click individual family → highlights just that family
-- Map shows highlighted families prominently, others dimmed
 
 ---
 
-## Needs Workflow
+## Teams View — Emergency Enhancements
 
-### Creating a Need
+When an emergency is active, the Teams view gains a task list showing work assigned to each team.
 
-From family row, click [Add Need] → dialog opens:
+### Task List Per Team
+
+Each team shows its assigned tasks:
+
+```
+Chainsaw Crew (4 members)
+├── Generator - Anderson Family - "No power since Tuesday" ✓ notified
+├── Tree removal - Baker Family - "Tree on driveway" ○ not notified
+└── Tree removal - Clark Family - "Blocking road" ✓ notified [RESOLVED]
+```
+
+### Task Assignment
+
+Tasks are created from the Families view ([Add Task] button) and assigned to a team or individual. The Teams view shows the receiving end — what work each team has.
+
+### Unassigned Tasks
+
+A section at the top or bottom shows tasks not yet assigned to any team, allowing the leader to dispatch them.
+
+---
+
+## Needs View — No Changes
+
+The Needs view (special needs: oxygen, mobility, dialysis) is unchanged during emergencies. These ongoing conditions remain relevant for context — a family with oxygen dependency is a higher priority for welfare check contact.
+
+---
+
+## Task Workflow
+
+### Creating a Task
+
+From family row in Families view, click [Add Task] → dialog opens:
 - Category dropdown (from configured list, plus "Add new...")
 - Description text field
 - Assignment (optional): team or person picker
@@ -250,12 +287,12 @@ From family row, click [Add Need] → dialog opens:
 
 Family immediately shows "Needs Help" status.
 
-### Viewing Needs
+### Viewing Tasks
 
-Expanded family row shows active needs:
+Expanded family row shows active tasks:
 
 ```
-Needs:
+Tasks:
 • Generator - "No power since Tuesday"
   Assigned to Chainsaw Crew ✓ notified
   [Edit] [Resolve]
@@ -264,7 +301,7 @@ Needs:
   [Edit] [Notify] [Resolve]
 ```
 
-### Assigning a Need
+### Assigning a Task
 
 Click [Assign] → picker for team or person:
 - Shows teams with their capabilities
@@ -273,52 +310,11 @@ Click [Assign] → picker for team or person:
 
 ### Notifying Assignee
 
-After assigning, need shows [Notify] button. Clicking opens quick picker for method (phone/text/email/visit/other), records timestamp automatically.
+After assigning, task shows [Notify] button. Clicking opens quick picker for method (phone/text/email/visit/other), records timestamp automatically.
 
 ### Assignment Notes
 
 Can add ongoing notes to track progress: "Started work, waiting for equipment", "50% cleared", etc.
-
----
-
-## Emergency Lifecycle
-
-### Starting an Emergency
-
-1. Click mode toggle → "Start Emergency" confirmation dialog
-2. Prompt for emergency name (e.g., "January 2026 Ice Storm")
-3. If document has unsaved changes, prompt to save first
-4. Confirm → clears any previous response data, switches to Response Mode
-5. All families start as "Not contacted"
-
-### During Emergency
-
-- Response data auto-saves periodically (separate from main document)
-- Auto-save preserves undo/redo stack
-- Can switch back to Preparation Mode temporarily if needed (response data preserved)
-- Undo/redo works for response actions
-- Summary report viewable anytime for briefings or handoffs
-
-### Ending an Emergency
-
-```
-End "January 2026 Ice Storm"?
-
-☑ Generate summary report (PDF)
-
-[Archive & End] [Discard & End] [Cancel]
-```
-
-**Archive & End:**
-- Saves full response data to archive file
-- Optionally generates summary report (PDF)
-- Clears response data and undo/redo stack
-- Returns to Preparation Mode
-
-**Discard & End:**
-- Confirms "This will permanently delete all response data"
-- Clears response data and undo/redo stack
-- Returns to Preparation Mode
 
 ---
 
@@ -333,18 +329,18 @@ Menu action: File → Open Emergency Archive
 Shows list of past emergencies:
 
 ```
-January 2026 Ice Storm - Jan 4-6, 2026 - 47 families, 12 needs
-December 2025 Power Outage - Dec 18, 2025 - 47 families, 3 needs
-Training Exercise - Nov 15, 2025 - 47 families, 0 needs
+January 2026 Ice Storm - Jan 4-6, 2026 - 47 families, 12 tasks
+December 2025 Power Outage - Dec 18, 2025 - 47 families, 3 tasks
+Training Exercise - Nov 15, 2025 - 47 families, 0 tasks
 ```
 
 ### Viewing an Archive (Read-Only)
 
-- Opens in Response Mode UI but clearly marked "ARCHIVED - READ ONLY"
-- Full Welfare Check view with all statuses, attempts, needs
+- Opens emergency UI overlays but clearly marked "ARCHIVED - READ ONLY"
+- Full welfare check data visible across Families, Ministering, Teams views
 - Families matched to current prep data by ID, fallback to display name matching
 - Families no longer in ward shown grayed with stored name/address
-- Cannot edit - view and report only
+- Cannot edit — view and report only
 
 ### Reopening an Archive
 
@@ -374,8 +370,8 @@ Training Exercise - Nov 15, 2025 - 47 families, 0 needs
 - Unable to Reach: count (with attempt summary)
 - Not Contacted: count
 
-**Needs Summary:**
-- Total needs created
+**Task Summary:**
+- Total tasks created
 - By category (Generator: 5, Medical: 3, etc.)
 - Resolved vs unresolved
 - Assigned vs unassigned
@@ -383,7 +379,7 @@ Training Exercise - Nov 15, 2025 - 47 families, 0 needs
 **Response Activity:**
 - Total contact attempts logged
 - Attempts by method (phone, visit, etc.)
-- Needs assigned to teams/individuals
+- Tasks assigned to teams/individuals
 - Resolution rate
 
 **Unresolved Items (if any):**
@@ -394,39 +390,19 @@ Training Exercise - Nov 15, 2025 - 47 families, 0 needs
 
 ---
 
-## UI Consistency and Integration
+## During Emergency
 
-### Consistent Patterns
-
-- Sidebar + map layout (matches Families view, Ministering view)
-- Map dimming for filtered items (matches ministering view design)
-- EQ/RS toggle in ministering view (matches Preparation Mode)
-- Search field always visible (matches all views)
-- Family row expansion pattern (matches existing)
-
-### Map Widget Extensions
-
-- Status-colored pins with icon overlays (new)
-- Same highlighting behavior for selection
-- Same zoom/pan persistence across views
-
-### Shared Components
-
-- Person/team picker (reusable for assignment and "who attempted")
-- Filter chips (prep mode filters available in response mode)
-- Progress bar widget (new, reusable)
-
-### Settings Additions
-
-- Need categories configuration (in Preparation Mode settings)
-- Default categories shipped with app
-
-### Undo/Redo
-
-- Response actions are undoable throughout the emergency
-- Separate undo stack from preparation document
+- Response data auto-saves periodically (separate from main document)
 - Auto-save preserves undo/redo stack
-- Archive & End clears undo/redo stack
+- Undo/redo works for response actions (separate stack from preparation document)
+- Summary report viewable anytime for briefings or handoffs
+
+---
+
+## Settings Additions
+
+- Task categories configuration
+- Default categories shipped with app
 
 ---
 
@@ -434,19 +410,19 @@ Training Exercise - Nov 15, 2025 - 47 families, 0 needs
 
 ### Phased Implementation
 
-1. **Phase 1:** Core welfare check - mode toggle, families view, status tracking, basic needs
-2. **Phase 2:** Ministering view with progress tracking
-3. **Phase 3:** Emergency lifecycle (start/end/archive)
-4. **Phase 4:** Summary reports
-5. **Phase 5:** Needs & Assignments view (future design)
-6. **Phase 6:** Resource Lookup view (future design)
+1. **Phase 1:** Data model + emergency lifecycle (start/end/archive menu actions, response data storage, banner)
+2. **Phase 2:** Families view enhancements (status tracking, filter tabs, progress bar, action buttons, tasks)
+3. **Phase 3:** Ministering view enhancements (progress roll-up per district/companionship)
+4. **Phase 4:** Teams view enhancements (task list per team, unassigned tasks)
+5. **Phase 5:** Summary reports (PDF generation)
+6. **Phase 6:** Archives (browse, view read-only, reopen)
 
 ### Data Model Changes
 
-- New: EmergencyResponse model (status, attempts, needs per family)
-- New: NeedCategory model (configurable list)
+- New: EmergencyResponse model (status, attempts, tasks per family)
+- New: TaskCategory model (configurable list)
 - New: EmergencyArchive model (metadata + full response data)
-- Settings: Add need categories configuration
+- Settings: Add task categories configuration
 
 ### File Format
 
