@@ -1,6 +1,6 @@
 #include "Filter.h"
 #include "Document.h"
-#include "EmergencyResource.h"
+#include "EmergencyAsset.h"
 #include "Family.h"
 #include "Person.h"
 #include "Tag.h"
@@ -38,11 +38,11 @@ void Filter::setTeamIds(const QSet<QString>& ids)
     }
 }
 
-void Filter::setResourceTypeIds(const QSet<QString>& ids)
+void Filter::setAssetTypeIds(const QSet<QString>& ids)
 {
-    if (m_resourceTypeIds != ids)
+    if (m_assetTypeIds != ids)
     {
-        m_resourceTypeIds = ids;
+        m_assetTypeIds = ids;
         emit changed();
     }
 }
@@ -169,7 +169,7 @@ void Filter::clear()
     m_searchText.clear();
     m_tagIds.clear();
     m_teamIds.clear();
-    m_resourceTypeIds.clear();
+    m_assetTypeIds.clear();
     m_callings.clear();
     m_gender = std::nullopt;
     m_ageFilter = AgeFilter::All;
@@ -191,7 +191,7 @@ bool Filter::isEmpty() const
     return m_searchText.isEmpty()
         && m_tagIds.isEmpty()
         && m_teamIds.isEmpty()
-        && m_resourceTypeIds.isEmpty()
+        && m_assetTypeIds.isEmpty()
         && m_callings.isEmpty()
         && !m_gender.has_value()
         && m_ageFilter == AgeFilter::All
@@ -350,13 +350,13 @@ bool Filter::isOnTeam(const Document& document, const QString& personId) const
 
 bool Filter::hasResponseArea(const Document& document, const QString& personId) const
 {
-    // Case 1: Only resourceTypeIds set (no response areas) - check specific resources
-    if (m_responseAreas.isEmpty() && !m_resourceTypeIds.isEmpty())
+    // Case 1: Only assetTypeIds set (no response areas) - check specific assets
+    if (m_responseAreas.isEmpty() && !m_assetTypeIds.isEmpty())
     {
-        for (const QString& resourceId : m_resourceTypeIds)
+        for (const QString& assetId : m_assetTypeIds)
         {
-            std::optional<EmergencyResource> resource = document.findEmergencyResourceById(resourceId);
-            if (resource && resource->hasPerson(personId))
+            std::optional<EmergencyAsset> asset = document.findEmergencyAssetById(assetId);
+            if (asset && asset->hasPerson(personId))
             {
                 return true;
             }
@@ -364,22 +364,22 @@ bool Filter::hasResponseArea(const Document& document, const QString& personId) 
         return false;
     }
 
-    // Case 2: Response areas set (optionally combined with specific resources)
+    // Case 2: Response areas set (optionally combined with specific assets)
     QSet<ResponseArea> personAreas = document.personResponseAreas(personId);
 
     for (const ResponseArea& area : m_responseAreas)
     {
         if (personAreas.contains(area))
         {
-            // If specific resources are also filtered, check those too
-            if (!m_resourceTypeIds.isEmpty())
+            // If specific assets are also filtered, check those too
+            if (!m_assetTypeIds.isEmpty())
             {
-                // Check if person has any of the specific resources in this area
-                for (const QString& resourceId : m_resourceTypeIds)
+                // Check if person has any of the specific assets in this area
+                for (const QString& assetId : m_assetTypeIds)
                 {
-                    std::optional<EmergencyResource> resource = document.findEmergencyResourceById(resourceId);
-                    if (resource && resource->responseArea() == area
-                        && resource->hasPerson(personId))
+                    std::optional<EmergencyAsset> asset = document.findEmergencyAssetById(assetId);
+                    if (asset && asset->responseArea() == area
+                        && asset->hasPerson(personId))
                     {
                         return true;
                     }
@@ -387,7 +387,7 @@ bool Filter::hasResponseArea(const Document& document, const QString& personId) 
             }
             else
             {
-                return true;  // Area matches, no specific resource filter
+                return true;  // Area matches, no specific asset filter
             }
         }
     }
@@ -417,9 +417,9 @@ bool Filter::passes(const Document& document, const Family& family) const
         }
     }
 
-    // Pre-compute family-level tag/resource matches
+    // Pre-compute family-level tag/asset matches
     bool tagsOk = m_tagIds.isEmpty() || hasFamilyLevelTag(document, family.id());
-    bool resourcesOk = m_responseAreas.isEmpty() && m_resourceTypeIds.isEmpty();
+    bool assetsOk = m_responseAreas.isEmpty() && m_assetTypeIds.isEmpty();
     bool teamsOk = m_teamIds.isEmpty();
     bool personCriteriaOk = m_callings.isEmpty()
         && !m_gender.has_value()
@@ -447,10 +447,10 @@ bool Filter::passes(const Document& document, const Family& family) const
             tagsOk = true;
         }
 
-        // Resources: response areas
-        if (!resourcesOk && hasResponseArea(document, member.id()))
+        // Assets: response areas
+        if (!assetsOk && hasResponseArea(document, member.id()))
         {
-            resourcesOk = true;
+            assetsOk = true;
         }
 
         // Teams
@@ -467,7 +467,7 @@ bool Filter::passes(const Document& document, const Family& family) const
 
         // Early exit if all satisfied
         bool allWordsFound = (famMatchedWordIndices.size() == searchWords.size());
-        if (allWordsFound && tagsOk && resourcesOk && teamsOk && personCriteriaOk)
+        if (allWordsFound && tagsOk && assetsOk && teamsOk && personCriteriaOk)
         {
             return true;
         }
@@ -476,7 +476,7 @@ bool Filter::passes(const Document& document, const Family& family) const
     // Final check
     bool allWordsFound = searchWords.isEmpty()
         || (famMatchedWordIndices.size() == searchWords.size());
-    return allWordsFound && tagsOk && resourcesOk && teamsOk && personCriteriaOk;
+    return allWordsFound && tagsOk && assetsOk && teamsOk && personCriteriaOk;
 }
 
 bool Filter::passes(const Document& document, const Person& person) const
@@ -549,8 +549,8 @@ bool Filter::passes(const Document& document, const Person& person) const
         return false;
     }
 
-    // Resources: response areas
-    if (!m_responseAreas.isEmpty() || !m_resourceTypeIds.isEmpty())
+    // Assets: response areas
+    if (!m_responseAreas.isEmpty() || !m_assetTypeIds.isEmpty())
     {
         if (!hasResponseArea(document, person.id()))
         {

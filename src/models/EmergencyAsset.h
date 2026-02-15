@@ -7,13 +7,13 @@
 #include <QJsonObject>
 #include <QUuid>
 
-class EmergencyResource
+class EmergencyAsset
 {
 public:
-    EmergencyResource() = default;
+    EmergencyAsset() = default;
 
-    // Factory method for creating new resources
-    static EmergencyResource create(const QString& name, ResponseArea area);
+    // Factory method for creating new assets
+    static EmergencyAsset create(const QString& name, ResponseArea area);
 
     // Getters
     const QString& id() const { return m_id; }
@@ -33,11 +33,11 @@ public:
 
     // JSON serialization
     QJsonObject toJson() const;
-    static EmergencyResource fromJson(const QJsonObject& json);
+    static EmergencyAsset fromJson(const QJsonObject& json);
 
     // Value-based equality
-    bool operator==(const EmergencyResource& other) const;
-    bool operator!=(const EmergencyResource& other) const { return !(*this == other); }
+    bool operator==(const EmergencyAsset& other) const;
+    bool operator!=(const EmergencyAsset& other) const { return !(*this == other); }
 
 private:
     QString m_id;

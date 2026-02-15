@@ -122,7 +122,7 @@ MarkerIcons computeFamilyIcons(const QString& familyId, const Document& doc)
     QSet<ResponseArea> decorations;
     const Family& family = doc.families().value(familyId);
 
-    // Check each family member for special needs and emergency resource assignments
+    // Check each family member for special needs and emergency asset assignments
     for (const Person& person : family.members())
     {
         if (person.hasSpecialNeed())

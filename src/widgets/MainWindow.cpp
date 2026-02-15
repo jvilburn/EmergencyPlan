@@ -3,7 +3,7 @@
 #include "MinisteringView.h"
 #include "NeedsSubView.h"
 #include "SidebarWidget.h"
-#include "EmergencyResourceView.h"
+#include "EmergencyAssetView.h"
 #include "ResponseArea.h"
 #include "FamilyEditPanel.h"
 #include "MapWidget.h"
@@ -93,13 +93,13 @@ void MainWindow::setupUi()
     m_sidebarTabs->addPage(m_needsView, tr("Needs"));
 
     // Row 2
-    m_medicalView = new EmergencyResourceView(m_documentManager, ResponseArea::Medical, this);
+    m_medicalView = new EmergencyAssetView(m_documentManager, ResponseArea::Medical, this);
     m_sidebarTabs->addPage(m_medicalView, tr("Medical"));
 
-    m_commsView = new EmergencyResourceView(m_documentManager, ResponseArea::Communications, this);
+    m_commsView = new EmergencyAssetView(m_documentManager, ResponseArea::Communications, this);
     m_sidebarTabs->addPage(m_commsView, tr("Communications"));
 
-    m_recoveryView = new EmergencyResourceView(m_documentManager, ResponseArea::Recovery, this);
+    m_recoveryView = new EmergencyAssetView(m_documentManager, ResponseArea::Recovery, this);
     m_sidebarTabs->addPage(m_recoveryView, tr("Skills && Gear"));
 
     // Edit panel (initially hidden)
@@ -204,11 +204,11 @@ void MainWindow::setupConnections()
             m_mapWidget, &MapWidget::updateHighlights);
     connect(m_needsView, &NeedsSubView::highlightChanged,
             m_mapWidget, &MapWidget::updateHighlights);
-    connect(m_medicalView, &EmergencyResourceView::highlightChanged,
+    connect(m_medicalView, &EmergencyAssetView::highlightChanged,
             m_mapWidget, &MapWidget::updateHighlights);
-    connect(m_commsView, &EmergencyResourceView::highlightChanged,
+    connect(m_commsView, &EmergencyAssetView::highlightChanged,
             m_mapWidget, &MapWidget::updateHighlights);
-    connect(m_recoveryView, &EmergencyResourceView::highlightChanged,
+    connect(m_recoveryView, &EmergencyAssetView::highlightChanged,
             m_mapWidget, &MapWidget::updateHighlights);
 
     // Family editing

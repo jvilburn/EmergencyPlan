@@ -95,7 +95,7 @@ set(MODEL_SOURCES
     src/models/Document.cpp
     src/models/MinisteringGroup.cpp
     src/models/MinisteringDistrict.cpp
-    src/models/EmergencyResource.cpp
+    src/models/EmergencyAsset.cpp
     src/models/DocumentChange.cpp
 )
 
@@ -118,7 +118,7 @@ set(MODEL_HEADERS
     src/models/Document.h
     src/models/MinisteringGroup.h
     src/models/MinisteringDistrict.h
-    src/models/EmergencyResource.h
+    src/models/EmergencyAsset.h
     src/models/ResponseArea.h
     src/models/DocumentChange.h
 )
@@ -132,7 +132,7 @@ set(COMMAND_SOURCES
     src/commands/TeamCommands.cpp
     src/commands/MinisteringCommands.cpp
     src/commands/TagCommands.cpp
-    src/commands/EmergencyResourceCommands.cpp
+    src/commands/EmergencyAssetCommands.cpp
     # src/commands/ImportCommands.cpp
 )
 
@@ -146,7 +146,7 @@ set(COMMAND_HEADERS
     src/commands/TeamCommands.h
     src/commands/MinisteringCommands.h
     src/commands/TagCommands.h
-    src/commands/EmergencyResourceCommands.h
+    src/commands/EmergencyAssetCommands.h
     # src/commands/ImportCommands.h
 )
 
@@ -226,7 +226,7 @@ set(WIDGET_SOURCES
     src/widgets/NeedsSubView.cpp
     src/widgets/SelectionPreservingTreeView.cpp
     src/widgets/SculptedItemDelegate.cpp
-    src/widgets/EmergencyResourceView.cpp
+    src/widgets/EmergencyAssetView.cpp
     src/widgets/SidebarWidget.cpp
     src/widgets/MinisteringTreeView.cpp
     src/widgets/UnassignedTreeView.cpp
@@ -271,7 +271,7 @@ set(WIDGET_HEADERS
     src/widgets/NeedsSubView.h
     src/widgets/SelectionPreservingTreeView.h
     src/widgets/SculptedItemDelegate.h
-    src/widgets/EmergencyResourceView.h
+    src/widgets/EmergencyAssetView.h
     src/widgets/SidebarWidget.h
     # src/widgets/Sidebar.h
     # src/widgets/MinisteringSidebar.h
@@ -294,7 +294,7 @@ set(WIDGET_HEADERS
 
 set(LISTMODEL_SOURCES
     src/listmodels/BaseTreeModel.cpp
-    src/listmodels/EmergencyResourceModel.cpp
+    src/listmodels/EmergencyAssetModel.cpp
     src/listmodels/Filter.cpp
     src/listmodels/FamilyTreeModel.cpp
     src/listmodels/MinisteringModel.cpp
@@ -309,7 +309,7 @@ set(LISTMODEL_SOURCES
 
 set(LISTMODEL_HEADERS
     src/listmodels/BaseTreeModel.h
-    src/listmodels/EmergencyResourceModel.h
+    src/listmodels/EmergencyAssetModel.h
     src/listmodels/Filter.h
     src/listmodels/FamilyTreeModel.h
     src/listmodels/MinisteringModel.h

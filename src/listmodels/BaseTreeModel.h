@@ -20,9 +20,9 @@
 ///     Need         -> {personId}
 ///     ContactDetail-> parent's key
 ///
-///   EmergencyResourceModel:
-///     Resource     -> {resourceId}
-///     Person       -> {resourceId}:{personId}
+///   EmergencyAssetModel:
+///     Asset        -> {assetId}
+///     Person       -> {assetId}:{personId}
 ///     ContactDetail-> parent's key
 ///
 ///   MinisteringModel:

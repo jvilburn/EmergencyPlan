@@ -10,11 +10,11 @@ enum class ItemType
     ContactDetail,  // All models - expandable contact info
     Family,         // FamilyTreeModel - family group
 
-    // Emergency Resource types
-    Resource,       // EmergencyResourceModel - resource group
+    // Emergency Asset types
+    Asset,       // EmergencyAssetModel - asset group
 
     // Needs types
-    Person,         // NeedsModel, EmergencyResourceModel - individual person
+    Person,         // NeedsModel, EmergencyAssetModel - individual person
 
     // Ministering types
     District,           // MinisteringModel - top level grouping

@@ -1,12 +1,12 @@
 #pragma once
 
 #include "Command.h"
-#include "EmergencyResource.h"
+#include "EmergencyAsset.h"
 
-class AddEmergencyResourceCommand : public Command
+class AddEmergencyAssetCommand : public Command
 {
 public:
-    explicit AddEmergencyResourceCommand(const EmergencyResource& resource);
+    explicit AddEmergencyAssetCommand(const EmergencyAsset& asset);
 
     void execute(Document& document) override;
     void undo(Document& document) override;
@@ -14,13 +14,13 @@ public:
     DocumentChange documentChange() const override;
 
 private:
-    EmergencyResource m_resource;
+    EmergencyAsset m_asset;
 };
 
-class UpdateEmergencyResourceCommand : public Command
+class UpdateEmergencyAssetCommand : public Command
 {
 public:
-    UpdateEmergencyResourceCommand(const EmergencyResource& oldResource, const EmergencyResource& newResource);
+    UpdateEmergencyAssetCommand(const EmergencyAsset& oldAsset, const EmergencyAsset& newAsset);
 
     void execute(Document& document) override;
     void undo(Document& document) override;
@@ -28,14 +28,14 @@ public:
     DocumentChange documentChange() const override;
 
 private:
-    EmergencyResource m_oldResource;
-    EmergencyResource m_newResource;
+    EmergencyAsset m_oldAsset;
+    EmergencyAsset m_newAsset;
 };
 
-class DeleteEmergencyResourceCommand : public Command
+class DeleteEmergencyAssetCommand : public Command
 {
 public:
-    explicit DeleteEmergencyResourceCommand(const EmergencyResource& resource);
+    explicit DeleteEmergencyAssetCommand(const EmergencyAsset& asset);
 
     void execute(Document& document) override;
     void undo(Document& document) override;
@@ -43,13 +43,13 @@ public:
     DocumentChange documentChange() const override;
 
 private:
-    EmergencyResource m_resource;
+    EmergencyAsset m_asset;
 };
 
-class AssignEmergencyResourceToPersonCommand : public Command
+class AssignEmergencyAssetToPersonCommand : public Command
 {
 public:
-    AssignEmergencyResourceToPersonCommand(const QString& resourceId, const QString& personId);
+    AssignEmergencyAssetToPersonCommand(const QString& assetId, const QString& personId);
 
     void execute(Document& document) override;
     void undo(Document& document) override;
@@ -57,14 +57,14 @@ public:
     DocumentChange documentChange() const override;
 
 private:
-    QString m_resourceId;
+    QString m_assetId;
     QString m_personId;
 };
 
-class UnassignEmergencyResourceFromPersonCommand : public Command
+class UnassignEmergencyAssetFromPersonCommand : public Command
 {
 public:
-    UnassignEmergencyResourceFromPersonCommand(const QString& resourceId, const QString& personId);
+    UnassignEmergencyAssetFromPersonCommand(const QString& assetId, const QString& personId);
 
     void execute(Document& document) override;
     void undo(Document& document) override;
@@ -72,6 +72,6 @@ public:
     DocumentChange documentChange() const override;
 
 private:
-    QString m_resourceId;
+    QString m_assetId;
     QString m_personId;
 };

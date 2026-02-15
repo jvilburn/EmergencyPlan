@@ -1,7 +1,7 @@
 #include "FilterBar.h"
 #include "DocumentManager.h"
 #include "Document.h"
-#include "EmergencyResource.h"
+#include "EmergencyAsset.h"
 #include "Family.h"
 #include "Filter.h"
 #include "FilterChip.h"
@@ -212,16 +212,16 @@ void FilterBar::rebuildChips()
         });
     }
 
-    // Resource IDs
-    for (const QString& resourceId : m_filter->resourceTypeIds())
+    // Asset IDs
+    for (const QString& assetId : m_filter->assetTypeIds())
     {
-        std::optional<EmergencyResource> resource = doc.findEmergencyResourceById(resourceId);
-        if (resource)
+        std::optional<EmergencyAsset> asset = doc.findEmergencyAssetById(assetId);
+        if (asset)
         {
-            addChip(tr("Resource"), resource->name(), [this, resourceId]() {
-                QSet<QString> ids = m_filter->resourceTypeIds();
-                ids.remove(resourceId);
-                m_filter->setResourceTypeIds(ids);
+            addChip(tr("Asset"), asset->name(), [this, assetId]() {
+                QSet<QString> ids = m_filter->assetTypeIds();
+                ids.remove(assetId);
+                m_filter->setAssetTypeIds(ids);
             });
         }
     }
@@ -537,7 +537,7 @@ void FilterBar::addResponseAreaSubmenu(QMenu* menu)
 
 void FilterBar::addResponseAreaItems(QMenu* menu, ResponseArea area)
 {
-    // "(All)" option for any resource in this area
+    // "(All)" option for any asset in this area
     QAction* allAction = menu->addAction(tr("(All)"));
     allAction->setCheckable(true);
     allAction->setChecked(m_filter->responseAreas().contains(area));
@@ -554,39 +554,39 @@ void FilterBar::addResponseAreaItems(QMenu* menu, ResponseArea area)
 
     menu->addSeparator();
 
-    // Get resources in this area
+    // Get assets in this area
     const Document& doc = m_documentManager->document();
-    QList<EmergencyResource> resources;
-    for (const EmergencyResource& resource : doc.emergencyResources())
+    QList<EmergencyAsset> assets;
+    for (const EmergencyAsset& asset : doc.emergencyAssets())
     {
-        if (resource.responseArea() == area)
+        if (asset.responseArea() == area)
         {
-            resources.append(resource);
+            assets.append(asset);
         }
     }
 
-    std::sort(resources.begin(), resources.end(),
-              [](const EmergencyResource& a, const EmergencyResource& b) {
+    std::sort(assets.begin(), assets.end(),
+              [](const EmergencyAsset& a, const EmergencyAsset& b) {
         return a.name().toLower() < b.name().toLower();
     });
 
-    for (const EmergencyResource& resource : resources)
+    for (const EmergencyAsset& asset : assets)
     {
-        QAction* action = menu->addAction(resource.name());
+        QAction* action = menu->addAction(asset.name());
         action->setCheckable(true);
-        action->setChecked(m_filter->resourceTypeIds().contains(resource.id()));
+        action->setChecked(m_filter->assetTypeIds().contains(asset.id()));
         connect(action, &QAction::triggered,
-                this, [this, resourceId = resource.id()](bool checked) {
-            QSet<QString> ids = m_filter->resourceTypeIds();
+                this, [this, assetId = asset.id()](bool checked) {
+            QSet<QString> ids = m_filter->assetTypeIds();
             if (checked)
             {
-                ids.insert(resourceId);
+                ids.insert(assetId);
             }
             else
             {
-                ids.remove(resourceId);
+                ids.remove(assetId);
             }
-            m_filter->setResourceTypeIds(ids);
+            m_filter->setAssetTypeIds(ids);
         });
     }
 }

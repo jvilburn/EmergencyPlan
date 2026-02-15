@@ -10,15 +10,15 @@
 class DocumentManager;
 class Filter;
 
-/// Model for emergency resources tree (3-level: Resource → Person → ContactDetail).
+/// Model for emergency assets tree (3-level: Asset → Person → ContactDetail).
 ///
-/// Level 0: Resources sorted by name, displayed as "Name (N)" where N = people count
-/// Level 1: People in each resource, sorted by display name
+/// Level 0: Assets sorted by name, displayed as "Name (N)" where N = people count
+/// Level 1: People in each asset, sorted by display name
 /// Level 2: Contact details (phone, email, address) - lazy loaded on expand
 ///
-/// This model rebuilds on Full, EmergencyResource, and Family add/remove changes.
+/// This model rebuilds on Full, EmergencyAsset, and Family add/remove changes.
 /// Family updates only refresh display text (no structural rebuild).
-class EmergencyResourceModel : public BaseTreeModel
+class EmergencyAssetModel : public BaseTreeModel
 {
     Q_OBJECT
 
@@ -28,15 +28,15 @@ public:
     {
         IdRole = Qt::UserRole + 1,
         ItemTypeRole,
-        ResourceIdRole  // For Person items: the parent resource's ID
+        AssetIdRole  // For Person items: the parent asset's ID
     };
     Q_ENUM(Roles)
 
-    explicit EmergencyResourceModel(DocumentManager* documentManager,
+    explicit EmergencyAssetModel(DocumentManager* documentManager,
                                      Filter* filter,
                                      ResponseArea area,
                                      QObject* parent = nullptr);
-    ~EmergencyResourceModel() override;
+    ~EmergencyAssetModel() override;
 
     // QAbstractItemModel interface
     QModelIndex index(int row, int column, const QModelIndex& parent = {}) const override;
@@ -58,7 +58,7 @@ public:
     FamilyAssociation relatedFamiliesAt(const QModelIndex& index) const;
 
     // View-specific accessors
-    QString resourceIdAt(const QModelIndex& index) const;
+    QString assetIdAt(const QModelIndex& index) const;
     ResponseArea area() const { return m_area; }
 
 private slots:
@@ -73,8 +73,8 @@ private:
     struct TreeNode
     {
         ItemType type;
-        QString id;           // Resource ID or Person ID
-        QString resourceId;   // For Person nodes: parent resource's ID
+        QString id;           // Asset ID or Person ID
+        QString assetId;   // For Person nodes: parent asset's ID
         QString displayText;
         TreeNode* parent = nullptr;
         QList<TreeNode*> children;
@@ -88,7 +88,7 @@ private:
 
     TreeNode* nodeFromIndex(const QModelIndex& index) const;
 
-    QList<TreeNode*> m_resourceNodes;  // Top-level nodes (owned)
+    QList<TreeNode*> m_assetNodes;  // Top-level nodes (owned)
     DocumentManager* m_documentManager;
     Filter* m_filter;
     ResponseArea m_area;

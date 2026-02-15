@@ -44,9 +44,9 @@ ScopeBuilder DocumentChange::tag()
     return ScopeBuilder{ChangeScope::Tag};
 }
 
-ScopeBuilder DocumentChange::emergencyResource()
+ScopeBuilder DocumentChange::emergencyAsset()
 {
-    return ScopeBuilder{ChangeScope::EmergencyResource};
+    return ScopeBuilder{ChangeScope::EmergencyAsset};
 }
 
 ScopeBuilder DocumentChange::eqDistrict()

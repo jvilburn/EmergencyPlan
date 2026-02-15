@@ -1,6 +1,6 @@
 #include "ImportWardDirectoryCommand.h"
 #include "Document.h"
-#include "EmergencyResource.h"
+#include "EmergencyAsset.h"
 
 ImportWardDirectoryCommand::ImportWardDirectoryCommand(
     const QHash<QString, Family>& mergedFamilies,
@@ -158,13 +158,13 @@ void ImportWardDirectoryCommand::cleanupRemovedFamily(
     // Remove from emergency resources (person-level)
     for (const Person& member : family.members())
     {
-        for (const auto& [resourceId, resource] : document.emergencyResources().asKeyValueRange())
+        for (const auto& [assetId, asset] : document.emergencyAssets().asKeyValueRange())
         {
-            if (resource.hasPerson(member.id()))
+            if (asset.hasPerson(member.id()))
             {
-                EmergencyResource updated = resource;
+                EmergencyAsset updated = asset;
                 updated.removePerson(member.id());
-                document.updateEmergencyResource(updated);
+                document.updateEmergencyAsset(updated);
             }
         }
     }

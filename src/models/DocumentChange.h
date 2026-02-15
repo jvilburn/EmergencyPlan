@@ -8,7 +8,7 @@ enum class ChangeScope
     Family,
     Team,
     Tag,
-    EmergencyResource,
+    EmergencyAsset,
     EqDistrict,
     EqGroup,
     RsDistrict,
@@ -49,7 +49,7 @@ struct DocumentChange
     static ScopeBuilder family();
     static ScopeBuilder team();
     static ScopeBuilder tag();
-    static ScopeBuilder emergencyResource();
+    static ScopeBuilder emergencyAsset();
     static ScopeBuilder eqDistrict();
     static ScopeBuilder eqGroup();
     static ScopeBuilder rsDistrict();

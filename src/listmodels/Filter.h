@@ -42,7 +42,7 @@ public:
     QString searchText() const { return m_searchText; }
     QSet<QString> tagIds() const { return m_tagIds; }
     QSet<QString> teamIds() const { return m_teamIds; }
-    QSet<QString> resourceTypeIds() const { return m_resourceTypeIds; }
+    QSet<QString> assetTypeIds() const { return m_assetTypeIds; }
     QSet<QString> callings() const { return m_callings; }
     std::optional<Gender> gender() const { return m_gender; }
     AgeFilter ageFilter() const { return m_ageFilter; }
@@ -57,7 +57,7 @@ public:
     void setSearchText(const QString& text);
     void setTagIds(const QSet<QString>& ids);
     void setTeamIds(const QSet<QString>& ids);
-    void setResourceTypeIds(const QSet<QString>& ids);
+    void setAssetTypeIds(const QSet<QString>& ids);
     void setCallings(const QSet<QString>& callings);
     void setGender(std::optional<Gender> gender);
     void setAgeFilter(AgeFilter filter);
@@ -94,7 +94,7 @@ private:
     static bool personContainsWord(const Person& person, const QString& word);
     static bool familyContainsWord(const Family& family, const QString& word);
 
-    // Tag/resource helpers (separate family-level and person-level)
+    // Tag/asset helpers (separate family-level and person-level)
     bool hasFamilyLevelTag(const Document& document, const QString& familyId) const;
     bool hasPersonLevelTag(const Document& document, const QString& personId) const;
     bool isOnTeam(const Document& document, const QString& personId) const;
@@ -103,7 +103,7 @@ private:
     QString m_searchText;
     QSet<QString> m_tagIds;
     QSet<QString> m_teamIds;
-    QSet<QString> m_resourceTypeIds;
+    QSet<QString> m_assetTypeIds;
     QSet<QString> m_callings;
     std::optional<Gender> m_gender;
     AgeFilter m_ageFilter = AgeFilter::All;

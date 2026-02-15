@@ -13,7 +13,7 @@
 #include "Tag.h"
 #include "MinisteringDistrict.h"
 #include "MinisteringGroup.h"
-#include "EmergencyResource.h"
+#include "EmergencyAsset.h"
 #include "ResponseArea.h"
 #include <QSet>
 
@@ -25,8 +25,8 @@ public:
     // Factory method for creating empty documents
     static Document empty();
 
-    // Initialize default emergency resources for a new document
-    void initializeDefaultResources();
+    // Initialize default emergency assets for a new document
+    void initializeDefaultAssets();
 
     // ========================================================================
     // Metadata (wards/stakes)
@@ -97,14 +97,14 @@ public:
     void removeFamilyFromTag(const QString& tagId, const QString& familyId);
 
     // ========================================================================
-    // EmergencyResource operations
+    // EmergencyAsset operations
     // ========================================================================
-    const QHash<QString, EmergencyResource>& emergencyResources() const { return m_emergencyResources; }
-    void addEmergencyResource(const EmergencyResource& resource);
-    void updateEmergencyResource(const EmergencyResource& resource);
-    void removeEmergencyResource(const QString& id);
-    std::optional<EmergencyResource> findEmergencyResourceById(const QString& id) const;
-    QList<EmergencyResource> emergencyResourcesByArea(ResponseArea area) const;
+    const QHash<QString, EmergencyAsset>& emergencyAssets() const { return m_emergencyAssets; }
+    void addEmergencyAsset(const EmergencyAsset& asset);
+    void updateEmergencyAsset(const EmergencyAsset& asset);
+    void removeEmergencyAsset(const QString& id);
+    std::optional<EmergencyAsset> findEmergencyAssetById(const QString& id) const;
+    QList<EmergencyAsset> emergencyAssetsByArea(ResponseArea area) const;
 
     // ========================================================================
     // Mutating operations - ministering
@@ -135,7 +135,7 @@ public:
     // Cascading cleanup
     // ========================================================================
 
-    /// Remove a person from all references (teams, tags, resources, ministering).
+    /// Remove a person from all references (teams, tags, assets, ministering).
     /// Does NOT remove the person from their family - caller must handle that.
     void cleanupPersonReferences(const QString& personId);
 
@@ -152,7 +152,7 @@ public:
     /// Used by UI to determine available age filter options.
     std::optional<int> maxKnownAge() const;
 
-    /// Get response areas for a person based on their emergency resource assignments (from cache)
+    /// Get response areas for a person based on their emergency asset assignments (from cache)
     QSet<ResponseArea> personResponseAreas(const QString& personId) const;
 
     /// Called after each command to rebuild caches as needed based on what changed.
@@ -185,8 +185,8 @@ private:
     // Cached max known age (computed in rebuildPersonToFamilyMap)
     std::optional<int> m_maxKnownAge;
 
-    // Emergency resources
-    QHash<QString, EmergencyResource> m_emergencyResources;
+    // Emergency assets
+    QHash<QString, EmergencyAsset> m_emergencyAssets;
 
     // Ministering
     QHash<QString, MinisteringDistrict> m_eqDistricts;
@@ -198,6 +198,6 @@ private:
     std::optional<QDate> m_wardDirectoryPdfDate;
     std::optional<QDate> m_ministeringPdfDate;
 
-    // Decoration cache: personId -> set of response areas (rebuilt when emergency resources change)
+    // Decoration cache: personId -> set of response areas (rebuilt when emergency assets change)
     QHash<QString, QSet<ResponseArea>> m_personResponseAreas;
 };

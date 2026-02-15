@@ -8,7 +8,7 @@
 class QLabel;
 class QProgressBar;
 class DocumentManager;
-class EmergencyResourceView;
+class EmergencyAssetView;
 class FamilyEditPanel;
 class MapWidget;
 class WardListView;
@@ -81,9 +81,9 @@ private:
     WardListView* m_wardListView;
     MinisteringView* m_ministeringView;
     NeedsSubView* m_needsView;
-    EmergencyResourceView* m_medicalView;
-    EmergencyResourceView* m_commsView;
-    EmergencyResourceView* m_recoveryView;
+    EmergencyAssetView* m_medicalView;
+    EmergencyAssetView* m_commsView;
+    EmergencyAssetView* m_recoveryView;
     FamilyEditPanel* m_editPanel;
     MapWidget* m_mapWidget;
 

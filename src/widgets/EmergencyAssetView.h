@@ -6,21 +6,21 @@
 #include <QWidget>
 
 class DocumentManager;
-class EmergencyResourceModel;
+class EmergencyAssetModel;
 class FilterBar;
 class QModelIndex;
 class QPushButton;
 class SelectionPreservingTreeView;
 
-/// EmergencyResourceView displays a 3-level tree of resources.
-/// Owns FilterBar (which owns Filter) and EmergencyResourceModel internally.
+/// EmergencyAssetView displays a 3-level tree of assets.
+/// Owns FilterBar (which owns Filter) and EmergencyAssetModel internally.
 /// Includes a toolbar with Add, Edit, Delete buttons.
-class EmergencyResourceView : public QWidget, public FamilyMarkerProvider
+class EmergencyAssetView : public QWidget, public FamilyMarkerProvider
 {
     Q_OBJECT
 
 public:
-    explicit EmergencyResourceView(DocumentManager* documentManager,
+    explicit EmergencyAssetView(DocumentManager* documentManager,
                                     ResponseArea area,
                                     QWidget* parent = nullptr);
 
@@ -36,30 +36,30 @@ private slots:
     void onTreeDoubleClicked(const QModelIndex& index);
     void onTreeExpanded(const QModelIndex& index);
     void onContextMenu(const QPoint& pos);
-    void expandResources();
+    void expandAssets();
     void selectPeopleFromContextMenu();
     void removePersonFromContextMenu();
 
 private:
     void updateButtonStates();
 
-    void addResource();
-    void editResource();
-    void deleteResource();
-    void showSelectPeopleDialog(const QString& resourceId);
-    void removePersonFromResource(const QString& resourceId, const QString& personId);
+    void addAsset();
+    void editAsset();
+    void deleteAsset();
+    void showSelectPeopleDialog(const QString& assetId);
+    void removePersonFromAsset(const QString& assetId, const QString& personId);
 
-    QString selectedResourceId() const;
+    QString selectedAssetId() const;
 
     DocumentManager* m_documentManager;
     FilterBar* m_filterBar;
-    EmergencyResourceModel* m_model;
+    EmergencyAssetModel* m_model;
     SelectionPreservingTreeView* m_tree;
 
     QPushButton* m_addButton;
     QPushButton* m_editButton;
     QPushButton* m_deleteButton;
 
-    QString m_contextResourceId;
+    QString m_contextAssetId;
     QString m_contextPersonId;
 };

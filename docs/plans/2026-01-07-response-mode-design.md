@@ -122,8 +122,9 @@ TaskEntry {
     description: string (can be updated anytime)
     createdAt: datetime
 
-    // Assignment (optional)
-    assignee: TeamId | PersonId | null
+    // Assignment (optional — at most one of these is set)
+    assignedTeamId: TeamId | null
+    assignedPersonId: PersonId | null
     assignmentNotes: string (progress updates, partial completion)
     notification: {
         method: enum (phone, text, email, visit, other)
@@ -193,11 +194,17 @@ Each family row gains:
 
 ### Map Marker Changes
 
-- Pins colored by welfare check status with icon overlay:
-  - Gray circle: Not contacted
-  - Green checkmark: OK
-  - Orange flag: Needs help
-  - Yellow question mark: Unable to reach
+Existing marker colors (ResponseArea: blue/medical, green/recovery, red/special needs) are preserved during emergencies. A small badge in the bottom-right corner of each marker shows welfare check status:
+
+| Status | Badge |
+|--------|-------|
+| Not contacted | No badge (absence = not yet contacted) |
+| OK | Small green checkmark |
+| Needs help | Small orange flag |
+| Unable to reach | Small yellow question mark |
+
+This avoids losing resource information during emergencies — knowing which families have medical equipment or generators matters most when responding. Badges only render for families whose status has changed, keeping the map clean at the start of an emergency.
+
 - Existing click-to-select and highlighting behavior unchanged
 
 ---
@@ -393,8 +400,7 @@ Training Exercise - Nov 15, 2025 - 47 families, 0 tasks
 ## During Emergency
 
 - Response data auto-saves periodically (separate from main document)
-- Auto-save preserves undo/redo stack
-- Undo/redo works for response actions (separate stack from preparation document)
+- No undo/redo for response actions — these are event logs (contact attempts, status changes, tasks), not document edits. Mistakes are corrected by deleting the wrong entry or changing the status back. The preparation document's undo stack is unaffected by emergency lifecycle.
 - Summary report viewable anytime for briefings or handoffs
 
 ---
@@ -417,11 +423,16 @@ Training Exercise - Nov 15, 2025 - 47 families, 0 tasks
 5. **Phase 5:** Summary reports (PDF generation)
 6. **Phase 6:** Archives (browse, view read-only, reopen)
 
+### Prerequisites
+
+- **Strong ID types refactor:** Introduce `StrongId<Tag>` template and convert existing `QString` IDs to `FamilyId`, `PersonId`, `TeamId`, etc. This is a separate design and plan — must be completed before Phase 1 so response mode models use strong types from the start.
+
 ### Data Model Changes
 
 - New: EmergencyResponse model (status, attempts, tasks per family)
 - New: TaskCategory model (configurable list)
 - New: EmergencyArchive model (metadata + full response data)
+- New: TaskId, ContactAttemptId (strong ID types for response-specific entities)
 - Settings: Add task categories configuration
 
 ### File Format

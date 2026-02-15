@@ -5,22 +5,22 @@
 Document Document::empty()
 {
     Document doc;
-    doc.initializeDefaultResources();
+    doc.initializeDefaultAssets();
     return doc;
 }
 
-void Document::initializeDefaultResources()
+void Document::initializeDefaultAssets()
 {
-    addEmergencyResource(EmergencyResource::create(QObject::tr("First Aid"), ResponseArea::Medical));
-    addEmergencyResource(EmergencyResource::create(QObject::tr("CPR Certified"), ResponseArea::Medical));
-    addEmergencyResource(EmergencyResource::create(QObject::tr("Nurse / Doctor"), ResponseArea::Medical));
+    addEmergencyAsset(EmergencyAsset::create(QObject::tr("First Aid"), ResponseArea::Medical));
+    addEmergencyAsset(EmergencyAsset::create(QObject::tr("CPR Certified"), ResponseArea::Medical));
+    addEmergencyAsset(EmergencyAsset::create(QObject::tr("Nurse / Doctor"), ResponseArea::Medical));
 
-    addEmergencyResource(EmergencyResource::create(QObject::tr("Ham Radio"), ResponseArea::Communications));
-    addEmergencyResource(EmergencyResource::create(QObject::tr("CERT Trained"), ResponseArea::Communications));
+    addEmergencyAsset(EmergencyAsset::create(QObject::tr("Ham Radio"), ResponseArea::Communications));
+    addEmergencyAsset(EmergencyAsset::create(QObject::tr("CERT Trained"), ResponseArea::Communications));
 
-    addEmergencyResource(EmergencyResource::create(QObject::tr("Chainsaw"), ResponseArea::Recovery));
-    addEmergencyResource(EmergencyResource::create(QObject::tr("Generator"), ResponseArea::Recovery));
-    addEmergencyResource(EmergencyResource::create(QObject::tr("4WD Vehicle"), ResponseArea::Recovery));
+    addEmergencyAsset(EmergencyAsset::create(QObject::tr("Chainsaw"), ResponseArea::Recovery));
+    addEmergencyAsset(EmergencyAsset::create(QObject::tr("Generator"), ResponseArea::Recovery));
+    addEmergencyAsset(EmergencyAsset::create(QObject::tr("4WD Vehicle"), ResponseArea::Recovery));
 }
 
 // ============================================================================
@@ -186,42 +186,42 @@ void Document::removeFamilyFromTag(const QString& tagId, const QString& familyId
 }
 
 // ============================================================================
-// EmergencyResource operations
+// EmergencyAsset operations
 // ============================================================================
 
-void Document::addEmergencyResource(const EmergencyResource& resource)
+void Document::addEmergencyAsset(const EmergencyAsset& asset)
 {
-    m_emergencyResources.insert(resource.id(), resource);
+    m_emergencyAssets.insert(asset.id(), asset);
 }
 
-void Document::updateEmergencyResource(const EmergencyResource& resource)
+void Document::updateEmergencyAsset(const EmergencyAsset& asset)
 {
-    m_emergencyResources.insert(resource.id(), resource);
+    m_emergencyAssets.insert(asset.id(), asset);
 }
 
-void Document::removeEmergencyResource(const QString& id)
+void Document::removeEmergencyAsset(const QString& id)
 {
-    m_emergencyResources.remove(id);
+    m_emergencyAssets.remove(id);
 }
 
-std::optional<EmergencyResource> Document::findEmergencyResourceById(const QString& id) const
+std::optional<EmergencyAsset> Document::findEmergencyAssetById(const QString& id) const
 {
-    auto it = m_emergencyResources.constFind(id);
-    if (it != m_emergencyResources.constEnd())
+    auto it = m_emergencyAssets.constFind(id);
+    if (it != m_emergencyAssets.constEnd())
     {
         return *it;
     }
     return std::nullopt;
 }
 
-QList<EmergencyResource> Document::emergencyResourcesByArea(ResponseArea area) const
+QList<EmergencyAsset> Document::emergencyAssetsByArea(ResponseArea area) const
 {
-    QList<EmergencyResource> result;
-    for (const EmergencyResource& resource : m_emergencyResources)
+    QList<EmergencyAsset> result;
+    for (const EmergencyAsset& asset : m_emergencyAssets)
     {
-        if (resource.responseArea() == area)
+        if (asset.responseArea() == area)
         {
-            result.append(resource);
+            result.append(asset);
         }
     }
     return result;
@@ -349,8 +349,8 @@ void Document::cleanupPersonReferences(const QString& personId)
         }
     }
 
-    // Remove from emergency resources
-    for (auto it = m_emergencyResources.begin(); it != m_emergencyResources.end(); ++it)
+    // Remove from emergency assets
+    for (auto it = m_emergencyAssets.begin(); it != m_emergencyAssets.end(); ++it)
     {
         if (it->hasPerson(personId))
         {
@@ -497,12 +497,12 @@ std::optional<int> Document::maxKnownAge() const
 void Document::rebuildDecorationCaches()
 {
     m_personResponseAreas.clear();
-    for (const EmergencyResource& resource : m_emergencyResources)
+    for (const EmergencyAsset& asset : m_emergencyAssets)
     {
-        ResponseArea area = resource.responseArea();
+        ResponseArea area = asset.responseArea();
         if (area != ResponseArea::None)
         {
-            for (const QString& personId : resource.personIds())
+            for (const QString& personId : asset.personIds())
             {
                 m_personResponseAreas[personId].insert(area);
             }
@@ -528,7 +528,7 @@ void Document::onDocumentChanged(const DocumentChange& change)
     switch (change.scope)
     {
         case ChangeScope::Full:
-        case ChangeScope::EmergencyResource:
+        case ChangeScope::EmergencyAsset:
             needsDecorationRebuild = true;
             break;
 
@@ -591,11 +591,11 @@ QJsonObject Document::toJson() const
     serializeHashToJson(json, "teams", m_teams);
     serializeHashToJson(json, "tags", m_tags);
 
-    // Emergency resources
-    serializeHashToJson(json, "emergencyResources", m_emergencyResources);
+    // Emergency assets
+    serializeHashToJson(json, "emergencyResources", m_emergencyAssets);
 
     // Emergency inventory (legacy)
-    // Legacy skill/equipment fields omitted (migrated to emergencyResources)
+    // Legacy skill/equipment fields omitted (migrated to emergency assets)
 
     // Ministering
     serializeHashToJson(json, "eqDistricts", m_eqDistricts);
@@ -628,11 +628,11 @@ Document Document::fromJson(const QJsonObject& json)
     deserializeJsonToHash(json, "teams", document.m_teams);
     deserializeJsonToHash(json, "tags", document.m_tags);
 
-    // Emergency resources
-    deserializeJsonToHash(json, "emergencyResources", document.m_emergencyResources);
+    // Emergency assets
+    deserializeJsonToHash(json, "emergencyResources", document.m_emergencyAssets);
 
     // Emergency inventory (legacy)
-    // Legacy skill/equipment fields ignored on load (migrated to emergencyResources)
+    // Legacy skill/equipment fields ignored on load (migrated to emergency assets)
 
     // Ministering
     deserializeJsonToHash(json, "eqDistricts", document.m_eqDistricts);
@@ -671,7 +671,7 @@ bool Document::operator==(const Document& other) const
         && m_families == other.m_families
         && m_teams == other.m_teams
         && m_tags == other.m_tags
-        && m_emergencyResources == other.m_emergencyResources
+        && m_emergencyAssets == other.m_emergencyAssets
         && m_eqDistricts == other.m_eqDistricts
         && m_eqGroups == other.m_eqGroups
         && m_rsDistricts == other.m_rsDistricts
