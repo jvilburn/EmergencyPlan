@@ -121,6 +121,7 @@ set(MODEL_HEADERS
     src/models/EmergencyAsset.h
     src/models/ResponseArea.h
     src/models/DocumentChange.h
+    src/models/Id.h
 )
 
 set(COMMAND_SOURCES
