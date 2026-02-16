@@ -157,7 +157,7 @@ FamilyMemberMatchResult findFamilyByMembers(
             if (match.score >= 10)  // Uses the minimum threshold
             {
                 current.matchedMembers++;
-                current.personIdMapping.insert(sourceMember.id(), match.personId);
+                current.personIdMapping.insert(sourceMember.id(), *match.personId);
             }
         }
 
@@ -204,7 +204,7 @@ FamilyReplacementResult findReplacedFamily(
             if (match.score >= 15)
             {
                 familyMatchCounts[targetFamily.id()]++;
-                familyPersonMappings[targetFamily.id()].insert(sourceMember.id(), match.personId);
+                familyPersonMappings[targetFamily.id()].insert(sourceMember.id(), *match.personId);
             }
         }
     }

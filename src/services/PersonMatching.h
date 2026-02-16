@@ -19,7 +19,7 @@ namespace PersonMatching
     /// Score for a person match
     struct PersonMatchScore
     {
-        PersonId personId;
+        std::optional<PersonId> personId;
         int score = 0;
     };
 

@@ -696,7 +696,6 @@ namespace
         return groups;
     }
 
-    /// Parse families from fields, creating Family and Person objects.
     /// Parses families from fields, inserting into ministeredFamilies hash.
     /// Populates ministeredFamilyIds (EQ format) or ministeredPersonIds (RS format).
     /// Sets errorOut on failure.
