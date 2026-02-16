@@ -53,7 +53,6 @@ Tag Tag::fromJson(const QJsonObject& json)
     tag.m_color = json["color"].toString();
     tag.m_level = tagLevelFromJson(json["level"]);
 
-    // Read new format (personIds/familyIds)
     if (json.contains("personIds"))
     {
         QJsonArray personIdsArray = json["personIds"].toArray();
@@ -68,23 +67,6 @@ Tag Tag::fromJson(const QJsonObject& json)
         for (const QJsonValue& value : familyIdsArray)
         {
             tag.m_familyIds.insert(FamilyId::fromString(value.toString()));
-        }
-    }
-
-    // Backward compatibility: read old "entityIds" format
-    if (json.contains("entityIds"))
-    {
-        QJsonArray entityIdsArray = json["entityIds"].toArray();
-        for (const QJsonValue& value : entityIdsArray)
-        {
-            if (tag.m_level == TagLevel::Person)
-            {
-                tag.m_personIds.insert(PersonId::fromString(value.toString()));
-            }
-            else
-            {
-                tag.m_familyIds.insert(FamilyId::fromString(value.toString()));
-            }
         }
     }
 
