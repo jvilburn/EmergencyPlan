@@ -93,7 +93,7 @@ DocumentChange DeleteFamilyCommand::documentChange() const
 // SetFamiliesCommand
 // ============================================================================
 
-SetFamiliesCommand::SetFamiliesCommand(const QHash<QString, Family>& families,
+SetFamiliesCommand::SetFamiliesCommand(const QHash<FamilyId, Family>& families,
                                        const QString& description)
     : m_newFamilies(families)
     , m_description(description)
@@ -122,5 +122,5 @@ QString SetFamiliesCommand::description() const
 
 DocumentChange SetFamiliesCommand::documentChange() const
 {
-    return DocumentChange::family().batchModified();
+    return DocumentChange::family().full();
 }

@@ -15,9 +15,9 @@ class ImportRSMinisteringCommand : public Command
 {
 public:
     ImportRSMinisteringCommand(
-        const QHash<QString, MinisteringDistrict>& districts,
-        const QHash<QString, MinisteringGroup>& groups,
-        const QHash<QString, Family>& families,
+        const QHash<MinisteringDistrictId, MinisteringDistrict>& districts,
+        const QHash<MinisteringGroupId, MinisteringGroup>& groups,
+        const QHash<FamilyId, Family>& families,
         std::optional<QDate> pdfDate = std::nullopt,
         const QString& description = QString());
 
@@ -27,16 +27,16 @@ public:
     DocumentChange documentChange() const override;
 
 private:
-    QHash<QString, MinisteringDistrict> m_newDistricts;
-    QHash<QString, MinisteringGroup> m_newGroups;
-    QHash<QString, Family> m_newFamilies;
+    QHash<MinisteringDistrictId, MinisteringDistrict> m_newDistricts;
+    QHash<MinisteringGroupId, MinisteringGroup> m_newGroups;
+    QHash<FamilyId, Family> m_newFamilies;
     QString m_description;
 
     std::optional<QDate> m_pdfDate;
 
     // For undo
-    QHash<QString, MinisteringDistrict> m_previousDistricts;
-    QHash<QString, MinisteringGroup> m_previousGroups;
-    QHash<QString, Family> m_previousFamilies;
+    QHash<MinisteringDistrictId, MinisteringDistrict> m_previousDistricts;
+    QHash<MinisteringGroupId, MinisteringGroup> m_previousGroups;
+    QHash<FamilyId, Family> m_previousFamilies;
     std::optional<QDate> m_previousMinisteringPdfDate;
 };

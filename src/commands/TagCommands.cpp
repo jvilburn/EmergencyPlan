@@ -93,7 +93,7 @@ DocumentChange DeleteTagCommand::documentChange() const
 // AssignTagToPersonCommand
 // ============================================================================
 
-AssignTagToPersonCommand::AssignTagToPersonCommand(const QString& tagId, const QString& personId)
+AssignTagToPersonCommand::AssignTagToPersonCommand(const TagId& tagId, const PersonId& personId)
     : m_tagId(tagId)
     , m_personId(personId)
 {
@@ -123,7 +123,7 @@ DocumentChange AssignTagToPersonCommand::documentChange() const
 // AssignTagToFamilyCommand
 // ============================================================================
 
-AssignTagToFamilyCommand::AssignTagToFamilyCommand(const QString& tagId, const QString& familyId)
+AssignTagToFamilyCommand::AssignTagToFamilyCommand(const TagId& tagId, const FamilyId& familyId)
     : m_tagId(tagId)
     , m_familyId(familyId)
 {
@@ -153,7 +153,7 @@ DocumentChange AssignTagToFamilyCommand::documentChange() const
 // UnassignTagFromPersonCommand
 // ============================================================================
 
-UnassignTagFromPersonCommand::UnassignTagFromPersonCommand(const QString& tagId, const QString& personId)
+UnassignTagFromPersonCommand::UnassignTagFromPersonCommand(const TagId& tagId, const PersonId& personId)
     : m_tagId(tagId)
     , m_personId(personId)
 {
@@ -183,7 +183,7 @@ DocumentChange UnassignTagFromPersonCommand::documentChange() const
 // UnassignTagFromFamilyCommand
 // ============================================================================
 
-UnassignTagFromFamilyCommand::UnassignTagFromFamilyCommand(const QString& tagId, const QString& familyId)
+UnassignTagFromFamilyCommand::UnassignTagFromFamilyCommand(const TagId& tagId, const FamilyId& familyId)
     : m_tagId(tagId)
     , m_familyId(familyId)
 {

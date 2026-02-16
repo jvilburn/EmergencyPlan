@@ -93,7 +93,7 @@ DocumentChange DeleteEmergencyAssetCommand::documentChange() const
 // AssignEmergencyAssetToPersonCommand
 // ============================================================================
 
-AssignEmergencyAssetToPersonCommand::AssignEmergencyAssetToPersonCommand(const QString& assetId, const QString& personId)
+AssignEmergencyAssetToPersonCommand::AssignEmergencyAssetToPersonCommand(const EmergencyAssetId& assetId, const PersonId& personId)
     : m_assetId(assetId)
     , m_personId(personId)
 {
@@ -133,7 +133,7 @@ DocumentChange AssignEmergencyAssetToPersonCommand::documentChange() const
 // UnassignEmergencyAssetFromPersonCommand
 // ============================================================================
 
-UnassignEmergencyAssetFromPersonCommand::UnassignEmergencyAssetFromPersonCommand(const QString& assetId, const QString& personId)
+UnassignEmergencyAssetFromPersonCommand::UnassignEmergencyAssetFromPersonCommand(const EmergencyAssetId& assetId, const PersonId& personId)
     : m_assetId(assetId)
     , m_personId(personId)
 {

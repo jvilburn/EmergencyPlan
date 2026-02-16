@@ -16,8 +16,8 @@ class ImportWardDirectoryCommand : public Command
 {
 public:
     ImportWardDirectoryCommand(
-        const QHash<QString, Family>& mergedFamilies,
-        const QSet<QString>& removedFamilyIds,
+        const QHash<FamilyId, Family>& mergedFamilies,
+        const QSet<FamilyId>& removedFamilyIds,
         const QString& wardUnitNumber,
         const QString& wardName,
         std::optional<QDate> pdfDate = std::nullopt,
@@ -29,9 +29,9 @@ public:
     DocumentChange documentChange() const override;
 
 private:
-    QHash<QString, Family> m_newFamilies;
-    QHash<QString, Family> m_previousFamilies;
-    QSet<QString> m_removedFamilyIds;
+    QHash<FamilyId, Family> m_newFamilies;
+    QHash<FamilyId, Family> m_previousFamilies;
+    QSet<FamilyId> m_removedFamilyIds;
     std::optional<QDate> m_pdfDate;
     QString m_wardUnitNumber;
     QString m_wardName;
@@ -40,8 +40,8 @@ private:
     Ward m_previousWard;  // For undo if ward existed (to restore previous state)
 
     // For undo - track what was removed and previous date
-    QHash<QString, Family> m_removedFamilies;
+    QHash<FamilyId, Family> m_removedFamilies;
     std::optional<QDate> m_previousWardDirectoryPdfDate;
 
-    void cleanupRemovedFamily(Document& document, const QString& familyId, const Family& family);
+    void cleanupRemovedFamily(Document& document, const FamilyId& familyId, const Family& family);
 };

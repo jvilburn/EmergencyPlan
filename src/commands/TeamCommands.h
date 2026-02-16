@@ -49,7 +49,7 @@ private:
 class AddTeamMemberCommand : public Command
 {
 public:
-    AddTeamMemberCommand(const QString& teamId, const QString& memberId);
+    AddTeamMemberCommand(const TeamId& teamId, const PersonId& memberId);
 
     void execute(Document& document) override;
     void undo(Document& document) override;
@@ -57,14 +57,14 @@ public:
     DocumentChange documentChange() const override;
 
 private:
-    QString m_teamId;
-    QString m_memberId;
+    TeamId m_teamId;
+    PersonId m_memberId;
 };
 
 class RemoveTeamMemberCommand : public Command
 {
 public:
-    RemoveTeamMemberCommand(const QString& teamId, const QString& memberId);
+    RemoveTeamMemberCommand(const TeamId& teamId, const PersonId& memberId);
 
     void execute(Document& document) override;
     void undo(Document& document) override;
@@ -72,6 +72,6 @@ public:
     DocumentChange documentChange() const override;
 
 private:
-    QString m_teamId;
-    QString m_memberId;
+    TeamId m_teamId;
+    PersonId m_memberId;
 };

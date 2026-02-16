@@ -93,7 +93,7 @@ DocumentChange DeleteTeamCommand::documentChange() const
 // AddTeamMemberCommand
 // ============================================================================
 
-AddTeamMemberCommand::AddTeamMemberCommand(const QString& teamId, const QString& memberId)
+AddTeamMemberCommand::AddTeamMemberCommand(const TeamId& teamId, const PersonId& memberId)
     : m_teamId(teamId)
     , m_memberId(memberId)
 {
@@ -123,7 +123,7 @@ DocumentChange AddTeamMemberCommand::documentChange() const
 // RemoveTeamMemberCommand
 // ============================================================================
 
-RemoveTeamMemberCommand::RemoveTeamMemberCommand(const QString& teamId, const QString& memberId)
+RemoveTeamMemberCommand::RemoveTeamMemberCommand(const TeamId& teamId, const PersonId& memberId)
     : m_teamId(teamId)
     , m_memberId(memberId)
 {

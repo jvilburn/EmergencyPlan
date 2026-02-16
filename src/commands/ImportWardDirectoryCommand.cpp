@@ -3,8 +3,8 @@
 #include "EmergencyAsset.h"
 
 ImportWardDirectoryCommand::ImportWardDirectoryCommand(
-    const QHash<QString, Family>& mergedFamilies,
-    const QSet<QString>& removedFamilyIds,
+    const QHash<FamilyId, Family>& mergedFamilies,
+    const QSet<FamilyId>& removedFamilyIds,
     const QString& wardUnitNumber,
     const QString& wardName,
     std::optional<QDate> pdfDate,
@@ -24,7 +24,7 @@ void ImportWardDirectoryCommand::execute(Document& document)
     m_previousFamilies = document.families();
 
     // Save removed families for undo
-    for (const QString& familyId : m_removedFamilyIds)
+    for (const FamilyId& familyId : m_removedFamilyIds)
     {
         auto it = m_previousFamilies.find(familyId);
         if (it != m_previousFamilies.end())
@@ -37,7 +37,7 @@ void ImportWardDirectoryCommand::execute(Document& document)
     document.setFamilies(m_newFamilies);
 
     // Cleanup references to removed families
-    for (const QString& familyId : m_removedFamilyIds)
+    for (const FamilyId& familyId : m_removedFamilyIds)
     {
         if (m_removedFamilies.contains(familyId))
         {
@@ -124,7 +124,7 @@ DocumentChange ImportWardDirectoryCommand::documentChange() const
 
 void ImportWardDirectoryCommand::cleanupRemovedFamily(
     Document& document,
-    const QString& familyId,
+    const FamilyId& familyId,
     const Family& family)
 {
     // Remove persons from teams
@@ -142,20 +142,20 @@ void ImportWardDirectoryCommand::cleanupRemovedFamily(
     // Remove from tags (both family and person)
     for (const auto& [tagId, tag] : document.tags().asKeyValueRange())
     {
-        if (tag.entityIds().contains(familyId))
+        if (tag.hasFamily(familyId))
         {
             document.removeFamilyFromTag(tagId, familyId);
         }
         for (const Person& member : family.members())
         {
-            if (tag.entityIds().contains(member.id()))
+            if (tag.hasPerson(member.id()))
             {
                 document.removePersonFromTag(tagId, member.id());
             }
         }
     }
 
-    // Remove from emergency resources (person-level)
+    // Remove from emergency assets (person-level)
     for (const Person& member : family.members())
     {
         for (const auto& [assetId, asset] : document.emergencyAssets().asKeyValueRange())
@@ -170,14 +170,14 @@ void ImportWardDirectoryCommand::cleanupRemovedFamily(
     }
 
     // Remove from EQ ministering groups
-    for (const QString& groupId : document.eqGroups().keys())
+    for (const MinisteringGroupId& groupId : document.eqGroups().keys())
     {
         MinisteringGroup group = document.eqGroups()[groupId];
         bool modified = false;
 
-        QSet<QString> ministerIds = group.ministerIds();
-        QSet<QString> familyIds = group.familyIds();
-        QSet<QString> ministeredPersonIds = group.ministeredPersonIds();
+        QSet<PersonId> ministerIds = group.ministerIds();
+        QSet<FamilyId> familyIds = group.familyIds();
+        QSet<PersonId> ministeredPersonIds = group.ministeredPersonIds();
 
         if (familyIds.remove(familyId))
         {
@@ -211,14 +211,14 @@ void ImportWardDirectoryCommand::cleanupRemovedFamily(
     }
 
     // Remove from RS ministering groups (same logic)
-    for (const QString& groupId : document.rsGroups().keys())
+    for (const MinisteringGroupId& groupId : document.rsGroups().keys())
     {
         MinisteringGroup group = document.rsGroups()[groupId];
         bool modified = false;
 
-        QSet<QString> ministerIds = group.ministerIds();
-        QSet<QString> familyIds = group.familyIds();
-        QSet<QString> ministeredPersonIds = group.ministeredPersonIds();
+        QSet<PersonId> ministerIds = group.ministerIds();
+        QSet<FamilyId> familyIds = group.familyIds();
+        QSet<PersonId> ministeredPersonIds = group.ministeredPersonIds();
 
         if (familyIds.remove(familyId))
         {
@@ -252,7 +252,7 @@ void ImportWardDirectoryCommand::cleanupRemovedFamily(
     }
 
     // Remove from EQ district presidencies
-    for (const QString& districtId : document.eqDistricts().keys())
+    for (const MinisteringDistrictId& districtId : document.eqDistricts().keys())
     {
         MinisteringDistrict district = document.eqDistricts()[districtId];
         for (const Person& member : family.members())
@@ -267,7 +267,7 @@ void ImportWardDirectoryCommand::cleanupRemovedFamily(
     }
 
     // Remove from RS district presidencies
-    for (const QString& districtId : document.rsDistricts().keys())
+    for (const MinisteringDistrictId& districtId : document.rsDistricts().keys())
     {
         MinisteringDistrict district = document.rsDistricts()[districtId];
         for (const Person& member : family.members())

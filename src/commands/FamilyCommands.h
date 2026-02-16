@@ -49,7 +49,7 @@ private:
 class SetFamiliesCommand : public Command
 {
 public:
-    explicit SetFamiliesCommand(const QHash<QString, Family>& families,
+    explicit SetFamiliesCommand(const QHash<FamilyId, Family>& families,
                                 const QString& description = QString());
 
     void execute(Document& document) override;
@@ -58,7 +58,7 @@ public:
     DocumentChange documentChange() const override;
 
 private:
-    QHash<QString, Family> m_newFamilies;
-    QHash<QString, Family> m_oldFamilies;
+    QHash<FamilyId, Family> m_newFamilies;
+    QHash<FamilyId, Family> m_oldFamilies;
     QString m_description;
 };

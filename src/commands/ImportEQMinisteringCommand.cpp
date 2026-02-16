@@ -2,9 +2,9 @@
 #include "Document.h"
 
 ImportEQMinisteringCommand::ImportEQMinisteringCommand(
-    const QHash<QString, MinisteringDistrict>& districts,
-    const QHash<QString, MinisteringGroup>& groups,
-    const QHash<QString, Family>& families,
+    const QHash<MinisteringDistrictId, MinisteringDistrict>& districts,
+    const QHash<MinisteringGroupId, MinisteringGroup>& groups,
+    const QHash<FamilyId, Family>& families,
     std::optional<QDate> pdfDate,
     const QString& description)
     : m_newDistricts(districts)

@@ -49,7 +49,7 @@ private:
 class AssignEmergencyAssetToPersonCommand : public Command
 {
 public:
-    AssignEmergencyAssetToPersonCommand(const QString& assetId, const QString& personId);
+    AssignEmergencyAssetToPersonCommand(const EmergencyAssetId& assetId, const PersonId& personId);
 
     void execute(Document& document) override;
     void undo(Document& document) override;
@@ -57,14 +57,14 @@ public:
     DocumentChange documentChange() const override;
 
 private:
-    QString m_assetId;
-    QString m_personId;
+    EmergencyAssetId m_assetId;
+    PersonId m_personId;
 };
 
 class UnassignEmergencyAssetFromPersonCommand : public Command
 {
 public:
-    UnassignEmergencyAssetFromPersonCommand(const QString& assetId, const QString& personId);
+    UnassignEmergencyAssetFromPersonCommand(const EmergencyAssetId& assetId, const PersonId& personId);
 
     void execute(Document& document) override;
     void undo(Document& document) override;
@@ -72,6 +72,6 @@ public:
     DocumentChange documentChange() const override;
 
 private:
-    QString m_assetId;
-    QString m_personId;
+    EmergencyAssetId m_assetId;
+    PersonId m_personId;
 };

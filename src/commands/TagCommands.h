@@ -49,7 +49,7 @@ private:
 class AssignTagToPersonCommand : public Command
 {
 public:
-    AssignTagToPersonCommand(const QString& tagId, const QString& personId);
+    AssignTagToPersonCommand(const TagId& tagId, const PersonId& personId);
 
     void execute(Document& document) override;
     void undo(Document& document) override;
@@ -57,14 +57,14 @@ public:
     DocumentChange documentChange() const override;
 
 private:
-    QString m_tagId;
-    QString m_personId;
+    TagId m_tagId;
+    PersonId m_personId;
 };
 
 class AssignTagToFamilyCommand : public Command
 {
 public:
-    AssignTagToFamilyCommand(const QString& tagId, const QString& familyId);
+    AssignTagToFamilyCommand(const TagId& tagId, const FamilyId& familyId);
 
     void execute(Document& document) override;
     void undo(Document& document) override;
@@ -72,14 +72,14 @@ public:
     DocumentChange documentChange() const override;
 
 private:
-    QString m_tagId;
-    QString m_familyId;
+    TagId m_tagId;
+    FamilyId m_familyId;
 };
 
 class UnassignTagFromPersonCommand : public Command
 {
 public:
-    UnassignTagFromPersonCommand(const QString& tagId, const QString& personId);
+    UnassignTagFromPersonCommand(const TagId& tagId, const PersonId& personId);
 
     void execute(Document& document) override;
     void undo(Document& document) override;
@@ -87,14 +87,14 @@ public:
     DocumentChange documentChange() const override;
 
 private:
-    QString m_tagId;
-    QString m_personId;
+    TagId m_tagId;
+    PersonId m_personId;
 };
 
 class UnassignTagFromFamilyCommand : public Command
 {
 public:
-    UnassignTagFromFamilyCommand(const QString& tagId, const QString& familyId);
+    UnassignTagFromFamilyCommand(const TagId& tagId, const FamilyId& familyId);
 
     void execute(Document& document) override;
     void undo(Document& document) override;
@@ -102,6 +102,6 @@ public:
     DocumentChange documentChange() const override;
 
 private:
-    QString m_tagId;
-    QString m_familyId;
+    TagId m_tagId;
+    FamilyId m_familyId;
 };
