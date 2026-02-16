@@ -710,14 +710,14 @@ QList<FamilyId> FamilyTreeModel::familyIds() const
     return m_familyIds;
 }
 
-FamilyId FamilyTreeModel::familyIdAt(const QModelIndex& index) const
+std::optional<FamilyId> FamilyTreeModel::familyIdAt(const QModelIndex& index) const
 {
     TreeNode* node = nodeFromIndex(index);
     if (node && node->familyIndex >= 0 && node->familyIndex < m_familyIds.size())
     {
         return m_familyIds.at(node->familyIndex);
     }
-    return FamilyId::from(QString());
+    return std::nullopt;
 }
 
 std::optional<PersonId> FamilyTreeModel::personIdAt(const QModelIndex& index) const
@@ -728,14 +728,14 @@ std::optional<PersonId> FamilyTreeModel::personIdAt(const QModelIndex& index) co
         return std::nullopt;
     }
 
-    FamilyId famId = familyIdAt(index);
-    if (famId.toString().isEmpty())
+    std::optional<FamilyId> famId = familyIdAt(index);
+    if (!famId)
     {
         return std::nullopt;
     }
 
     const auto& families = m_documentManager->document().families();
-    auto it = families.find(famId);
+    auto it = families.find(*famId);
     if (it == families.end())
     {
         return std::nullopt;
@@ -796,13 +796,20 @@ SelectionKey FamilyTreeModel::selectionKeyAt(const QModelIndex& index) const
 {
     if (!index.isValid())
     {
-        return SelectionKey::from(QString());
+        return SelectionKey::literal(QString());
     }
 
     switch (rowTypeAt(index))
     {
     case RowType::Family:
-        return SelectionKey::from(familyIdAt(index));
+    {
+        auto famId = familyIdAt(index);
+        if (famId)
+        {
+            return SelectionKey::from(*famId);
+        }
+        return SelectionKey::literal(QString());
+    }
     case RowType::Member:
     {
         auto personId = personIdAt(index);
@@ -810,7 +817,7 @@ SelectionKey FamilyTreeModel::selectionKeyAt(const QModelIndex& index) const
         {
             return SelectionKey::from(*personId);
         }
-        return SelectionKey::from(QString());
+        return SelectionKey::literal(QString());
     }
     case RowType::MemberDetail:
     case RowType::Address:
@@ -819,6 +826,6 @@ SelectionKey FamilyTreeModel::selectionKeyAt(const QModelIndex& index) const
         // Delegate to parent
         return selectionKeyAt(index.parent());
     default:
-        return SelectionKey::from(QString());
+        return SelectionKey::literal(QString());
     }
 }

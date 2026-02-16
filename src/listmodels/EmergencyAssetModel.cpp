@@ -264,7 +264,7 @@ SelectionKey EmergencyAssetModel::selectionKeyAt(const QModelIndex& index) const
     TreeNode* node = nodeFromIndex(index);
     if (!node)
     {
-        return SelectionKey::from(QString());
+        return SelectionKey::literal(QString());
     }
 
     switch (node->type)
@@ -280,7 +280,7 @@ SelectionKey EmergencyAssetModel::selectionKeyAt(const QModelIndex& index) const
     case ItemType::ContactDetail:
         return selectionKeyAt(index.parent());
     default:
-        return SelectionKey::from(QString());
+        return SelectionKey::literal(QString());
     }
 }
 
@@ -351,7 +351,7 @@ EmergencyAssetId EmergencyAssetModel::assetIdAt(const QModelIndex& index) const
     TreeNode* node = nodeFromIndex(index);
     if (!node)
     {
-        return EmergencyAssetId::from(QString());
+        return EmergencyAssetId::fromString(QString());
     }
     return node->assetId;
 }

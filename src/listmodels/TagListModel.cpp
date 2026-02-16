@@ -58,7 +58,7 @@ QVariant TagListModel::data(const QModelIndex& index, int role) const
             return tagLevelToString(tag.level());
 
         case EntityCountRole:
-            return tag.entityCount();
+            return tag.isPersonLevel() ? tag.personIds().size() : tag.familyIds().size();
 
         case IsEmptyRole:
             return tag.isEmpty();
@@ -93,7 +93,7 @@ TagId TagListModel::tagIdAt(int row) const
     {
         return m_tagIds.at(row);
     }
-    return TagId::from(QString());
+    return TagId::fromString(QString());
 }
 
 int TagListModel::rowForId(const TagId& id) const

@@ -341,7 +341,7 @@ SelectionKey UnassignedMinisteringModel::selectionKeyAt(const QModelIndex& index
     TreeNode* node = nodeFromIndex(index);
     if (!node)
     {
-        return SelectionKey::from(QString());
+        return SelectionKey::literal(QString());
     }
 
     switch (node->type)
@@ -353,17 +353,17 @@ SelectionKey UnassignedMinisteringModel::selectionKeyAt(const QModelIndex& index
         {
             return SelectionKey::from(*node->familyId);
         }
-        return SelectionKey::from(QString());
+        return SelectionKey::literal(QString());
     case ItemType::MinisteredSister:
         if (node->personId)
         {
             return SelectionKey::from(*node->personId);
         }
-        return SelectionKey::from(QString());
+        return SelectionKey::literal(QString());
     case ItemType::ContactDetail:
         return selectionKeyAt(index.parent());
     default:
-        return SelectionKey::from(QString());
+        return SelectionKey::literal(QString());
     }
 }
 

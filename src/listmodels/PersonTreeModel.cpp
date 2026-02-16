@@ -329,7 +329,7 @@ SelectionKey PersonTreeModel::selectionKeyAt(const QModelIndex& index) const
     TreeNode* node = nodeFromIndex(index);
     if (!node)
     {
-        return SelectionKey::from(QString());
+        return SelectionKey::literal(QString());
     }
 
     // Contact detail nodes delegate to parent
@@ -340,24 +340,24 @@ SelectionKey PersonTreeModel::selectionKeyAt(const QModelIndex& index) const
     return SelectionKey::from(node->personId);
 }
 
-PersonId PersonTreeModel::personIdAt(const QModelIndex& index) const
+std::optional<PersonId> PersonTreeModel::personIdAt(const QModelIndex& index) const
 {
     TreeNode* node = nodeFromIndex(index);
     if (node)
     {
         return node->personId;
     }
-    return PersonId::from(QString());
+    return std::nullopt;
 }
 
-FamilyId PersonTreeModel::familyIdAt(const QModelIndex& index) const
+std::optional<FamilyId> PersonTreeModel::familyIdAt(const QModelIndex& index) const
 {
     TreeNode* node = nodeFromIndex(index);
     if (node)
     {
         return node->familyId;
     }
-    return FamilyId::from(QString());
+    return std::nullopt;
 }
 
 QModelIndex PersonTreeModel::indexForPersonId(const PersonId& personId) const

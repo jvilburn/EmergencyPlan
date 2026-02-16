@@ -73,7 +73,7 @@ public:
     SelectionKey selectionKeyAt(const QModelIndex& index) const override;
 
     // Lookup helpers
-    FamilyId familyIdAt(const QModelIndex& index) const;
+    std::optional<FamilyId> familyIdAt(const QModelIndex& index) const;
     std::optional<PersonId> personIdAt(const QModelIndex& index) const;
     QModelIndex indexForFamilyId(const FamilyId& id) const;
     RowType rowTypeAt(const QModelIndex& index) const;

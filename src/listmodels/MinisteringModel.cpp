@@ -466,7 +466,7 @@ SelectionKey MinisteringModel::selectionKeyAt(const QModelIndex& index) const
     TreeNode* node = nodeFromIndex(index);
     if (!node)
     {
-        return SelectionKey::from(QString());
+        return SelectionKey::literal(QString());
     }
 
     switch (node->type)
@@ -476,24 +476,23 @@ SelectionKey MinisteringModel::selectionKeyAt(const QModelIndex& index) const
         {
             return SelectionKey::from(*node->districtId);
         }
-        return SelectionKey::from(QString());
+        return SelectionKey::literal(QString());
     case ItemType::Companionship:
         if (node->groupId)
         {
             return SelectionKey::from(*node->groupId);
         }
-        return SelectionKey::from(QString());
+        return SelectionKey::literal(QString());
     case ItemType::SectionHeader:
     {
         // Determine if this is the ministers or ministered section
         // Ministers section is always first child of companionship
         if (node->groupId && node->parent && node->parent->type == ItemType::Companionship)
         {
-            bool isMinistersSection = (node->parent->children.indexOf(const_cast<TreeNode*>(node)) == 0);
-            QString suffix = isMinistersSection ? "ministers" : "ministered";
+            QString suffix = isMinistersSection(node) ? "ministers" : "ministered";
             return SelectionKey::literal(node->groupId->toString() + ":" + suffix);
         }
-        return SelectionKey::from(QString());
+        return SelectionKey::literal(QString());
     }
     case ItemType::Minister:
     {
@@ -502,7 +501,7 @@ SelectionKey MinisteringModel::selectionKeyAt(const QModelIndex& index) const
         {
             return SelectionKey::literal(compId.toString() + ":minister:" + node->personId->toString());
         }
-        return SelectionKey::from(QString());
+        return SelectionKey::literal(QString());
     }
     case ItemType::MinisteredFamily:
     {
@@ -511,7 +510,7 @@ SelectionKey MinisteringModel::selectionKeyAt(const QModelIndex& index) const
         {
             return SelectionKey::literal(compId.toString() + ":family:" + node->familyId->toString());
         }
-        return SelectionKey::from(QString());
+        return SelectionKey::literal(QString());
     }
     case ItemType::MinisteredSister:
     {
@@ -520,12 +519,12 @@ SelectionKey MinisteringModel::selectionKeyAt(const QModelIndex& index) const
         {
             return SelectionKey::literal(compId.toString() + ":sister:" + node->personId->toString());
         }
-        return SelectionKey::from(QString());
+        return SelectionKey::literal(QString());
     }
     case ItemType::ContactDetail:
         return selectionKeyAt(index.parent());
     default:
-        return SelectionKey::from(QString());
+        return SelectionKey::literal(QString());
     }
 }
 
@@ -556,6 +555,14 @@ int MinisteringModel::countMinisteredChildren(TreeNode* companionshipNode) const
         }
     }
     return 0;
+}
+
+bool MinisteringModel::isMinistersSection(const TreeNode* sectionNode) const
+{
+    return sectionNode->parent
+           && sectionNode->parent->type == ItemType::Companionship
+           && !sectionNode->parent->children.isEmpty()
+           && sectionNode->parent->children.first() == sectionNode;
 }
 
 FamilyAssociation MinisteringModel::relatedFamiliesAt(const QModelIndex& index) const
@@ -622,10 +629,7 @@ FamilyAssociation MinisteringModel::relatedFamiliesAt(const QModelIndex& index) 
         if (node->groupId && groups.contains(*node->groupId))
         {
             const MinisteringGroup& group = groups[*node->groupId];
-            bool isMinistersSection = (node->parent
-                                       && node->parent->type == ItemType::Companionship
-                                       && node->parent->children.indexOf(const_cast<TreeNode*>(node)) == 0);
-            if (isMinistersSection)
+            if (isMinistersSection(node))
             {
                 QSet<FamilyId> ministerFamilies = familyIdsForPersons(group.ministerIds());
                 assoc.relatedFamilyIds = ministerFamilies;
@@ -702,7 +706,7 @@ MinisteringGroupId MinisteringModel::companionshipIdAt(const QModelIndex& index)
     TreeNode* node = nodeFromIndex(index);
     if (!node)
     {
-        return MinisteringGroupId::from(QString());
+        return MinisteringGroupId::fromString(QString());
     }
 
     // Walk up to find the companionship
@@ -714,7 +718,7 @@ MinisteringGroupId MinisteringModel::companionshipIdAt(const QModelIndex& index)
         }
         node = node->parent;
     }
-    return MinisteringGroupId::from(QString());
+    return MinisteringGroupId::fromString(QString());
 }
 
 // Note: Similar logic exists in UnassignedMinisteringModel::loadContactDetails().

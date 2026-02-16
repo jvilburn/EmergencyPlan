@@ -52,8 +52,8 @@ public:
     FamilyAssociation relatedFamiliesAt(const QModelIndex& index) const;
 
     // View-specific accessors
-    PersonId personIdAt(const QModelIndex& index) const;
-    FamilyId familyIdAt(const QModelIndex& index) const;
+    std::optional<PersonId> personIdAt(const QModelIndex& index) const;
+    std::optional<FamilyId> familyIdAt(const QModelIndex& index) const;
     QModelIndex indexForPersonId(const PersonId& personId) const;
 
 private slots:

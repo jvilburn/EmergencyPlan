@@ -54,7 +54,7 @@ QVariant TeamListModel::data(const QModelIndex& index, int role) const
             return team.color();
 
         case LeaderIdRole:
-            return team.hasLeader() ? team.leaderId().toString() : QString();
+            return team.hasLeader() ? team.leaderId()->toString() : QString();
 
         case HasLeaderRole:
             return team.hasLeader();
@@ -96,7 +96,7 @@ TeamId TeamListModel::teamIdAt(int row) const
     {
         return m_teamIds.at(row);
     }
-    return TeamId::from(QString());
+    return TeamId::fromString(QString());
 }
 
 int TeamListModel::rowForId(const TeamId& id) const

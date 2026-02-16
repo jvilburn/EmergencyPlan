@@ -92,6 +92,7 @@ private:
     void addMinistersSection(TreeNode* companionshipNode, const MinisteringGroupId& groupId);
     void addMinisteredSection(TreeNode* companionshipNode, const MinisteringGroupId& groupId);
     int countMinisteredChildren(TreeNode* companionshipNode) const;
+    bool isMinistersSection(const TreeNode* sectionNode) const;
     bool isEQ() const { return m_org == MinisteringOrg::EldersQuorum; }
     QSet<FamilyId> familyIdsForPersons(const QSet<PersonId>& personIds) const;
 

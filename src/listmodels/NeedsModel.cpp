@@ -237,7 +237,7 @@ SelectionKey NeedsModel::selectionKeyAt(const QModelIndex& index) const
     TreeNode* node = nodeFromIndex(index);
     if (!node)
     {
-        return SelectionKey::from(QString());
+        return SelectionKey::literal(QString());
     }
 
     switch (node->type)
@@ -247,7 +247,7 @@ SelectionKey NeedsModel::selectionKeyAt(const QModelIndex& index) const
     case ItemType::ContactDetail:
         return selectionKeyAt(index.parent());
     default:
-        return SelectionKey::from(QString());
+        return SelectionKey::literal(QString());
     }
 }
 
@@ -281,22 +281,22 @@ FamilyAssociation NeedsModel::relatedFamiliesAt(const QModelIndex& index) const
     return assoc;
 }
 
-PersonId NeedsModel::personIdAt(const QModelIndex& index) const
+std::optional<PersonId> NeedsModel::personIdAt(const QModelIndex& index) const
 {
     TreeNode* node = nodeFromIndex(index);
     if (!node)
     {
-        return PersonId::from(QString());
+        return std::nullopt;
     }
     return node->personId;
 }
 
-FamilyId NeedsModel::familyIdAt(const QModelIndex& index) const
+std::optional<FamilyId> NeedsModel::familyIdAt(const QModelIndex& index) const
 {
     TreeNode* node = nodeFromIndex(index);
     if (!node)
     {
-        return FamilyId::from(QString());
+        return std::nullopt;
     }
     return node->familyId;
 }
@@ -347,7 +347,7 @@ void NeedsModel::loadContactDetails(const QModelIndex& index)
     // Check for address availability
     const QHash<FamilyId, Family>& families = doc.families();
     bool hasAddress = false;
-    if (!node->familyId.toString().isEmpty() && families.contains(node->familyId))
+    if (families.contains(node->familyId))
     {
         hasAddress = !families[node->familyId].address().isEmpty();
     }
