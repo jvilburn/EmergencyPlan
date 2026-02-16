@@ -5,8 +5,9 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QJsonValue>
-#include <QUuid>
 #include <optional>
+
+#include "Id.h"
 
 // Tag level - whether the tag applies to persons or families
 enum class TagLevel
@@ -60,23 +61,28 @@ public:
                       const QString& color = QString());
 
     // Getters
-    const QString& id() const { return m_id; }
+    const TagId& id() const { return m_id; }
     const QString& name() const { return m_name; }
     const QString& color() const { return m_color; }
     TagLevel level() const { return m_level; }
-    const QSet<QString>& entityIds() const { return m_entityIds; }
+    const QSet<PersonId>& personIds() const { return m_personIds; }
+    const QSet<FamilyId>& familyIds() const { return m_familyIds; }
 
     // Setters
     void setName(const QString& name) { m_name = name; }
     void setColor(const QString& color) { m_color = color; }
     void setLevel(TagLevel level) { m_level = level; }
-    void setEntityIds(const QSet<QString>& entityIds) { m_entityIds = entityIds; }
-    void addEntity(const QString& entityId) { m_entityIds.insert(entityId); }
-    void removeEntity(const QString& entityId) { m_entityIds.remove(entityId); }
+    void setPersonIds(const QSet<PersonId>& ids) { m_personIds = ids; }
+    void setFamilyIds(const QSet<FamilyId>& ids) { m_familyIds = ids; }
+    void addPerson(const PersonId& personId) { m_personIds.insert(personId); }
+    void removePerson(const PersonId& personId) { m_personIds.remove(personId); }
+    void addFamily(const FamilyId& familyId) { m_familyIds.insert(familyId); }
+    void removeFamily(const FamilyId& familyId) { m_familyIds.remove(familyId); }
 
     // Computed properties
-    bool hasEntity(const QString& entityId) const { return m_entityIds.contains(entityId); }
-    bool isEmpty() const { return m_entityIds.isEmpty(); }
+    bool hasPerson(const PersonId& personId) const { return m_personIds.contains(personId); }
+    bool hasFamily(const FamilyId& familyId) const { return m_familyIds.contains(familyId); }
+    bool isEmpty() const { return m_personIds.isEmpty() && m_familyIds.isEmpty(); }
 
     // Convenience for checking level
     bool isPersonLevel() const { return m_level == TagLevel::Person; }
@@ -91,9 +97,10 @@ public:
     bool operator!=(const Tag& other) const { return !(*this == other); }
 
 private:
-    QString m_id;
+    TagId m_id;
     QString m_name;
     QString m_color;
     TagLevel m_level = TagLevel::Person;
-    QSet<QString> m_entityIds;
+    QSet<PersonId> m_personIds;
+    QSet<FamilyId> m_familyIds;
 };

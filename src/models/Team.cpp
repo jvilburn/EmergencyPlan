@@ -2,10 +2,10 @@
 
 Team Team::create(const QString& name,
                   const QColor& color,
-                  const QString& leaderId)
+                  std::optional<PersonId> leaderId)
 {
     Team team;
-    team.m_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    team.m_id = TeamId::generate();
     team.m_name = name;
     team.m_color = color;
     team.m_leaderId = leaderId;
@@ -15,24 +15,24 @@ Team Team::create(const QString& name,
 QJsonObject Team::toJson() const
 {
     QJsonObject json;
-    json["id"] = m_id;
+    json["id"] = m_id.toString();
     json["name"] = m_name;
 
     if (m_color.isValid())
     {
         json["color"] = m_color.name();
     }
-    if (!m_leaderId.isEmpty())
+    if (m_leaderId.has_value())
     {
-        json["leaderId"] = m_leaderId;
+        json["leaderId"] = m_leaderId->toString();
     }
 
     if (!m_memberIds.isEmpty())
     {
         QJsonArray memberIdsArray;
-        for (const QString& id : m_memberIds)
+        for (const PersonId& id : m_memberIds)
         {
-            memberIdsArray.append(id);
+            memberIdsArray.append(id.toString());
         }
         json["memberIds"] = memberIdsArray;
     }
@@ -43,7 +43,7 @@ QJsonObject Team::toJson() const
 Team Team::fromJson(const QJsonObject& json)
 {
     Team team;
-    team.m_id = json["id"].toString();
+    team.m_id = TeamId::fromString(json["id"].toString());
     team.m_name = json["name"].toString();
 
     if (json.contains("color"))
@@ -51,14 +51,18 @@ Team Team::fromJson(const QJsonObject& json)
         team.m_color = QColor(json["color"].toString());
     }
 
-    team.m_leaderId = json["leaderId"].toString();
+    QString leaderStr = json["leaderId"].toString();
+    if (!leaderStr.isEmpty())
+    {
+        team.m_leaderId = PersonId::fromString(leaderStr);
+    }
 
     if (json.contains("memberIds"))
     {
         QJsonArray memberIdsArray = json["memberIds"].toArray();
         for (const QJsonValue& value : memberIdsArray)
         {
-            team.m_memberIds.insert(value.toString());
+            team.m_memberIds.insert(PersonId::fromString(value.toString()));
         }
     }
 

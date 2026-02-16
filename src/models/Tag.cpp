@@ -3,7 +3,7 @@
 Tag Tag::create(const QString& name, TagLevel level, const QString& color)
 {
     Tag tag;
-    tag.m_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    tag.m_id = TagId::generate();
     tag.m_name = name;
     tag.m_level = level;
     tag.m_color = color;
@@ -13,7 +13,7 @@ Tag Tag::create(const QString& name, TagLevel level, const QString& color)
 QJsonObject Tag::toJson() const
 {
     QJsonObject json;
-    json["id"] = m_id;
+    json["id"] = m_id.toString();
     json["name"] = m_name;
     json["level"] = tagLevelToString(m_level);
 
@@ -22,14 +22,24 @@ QJsonObject Tag::toJson() const
         json["color"] = m_color;
     }
 
-    if (!m_entityIds.isEmpty())
+    if (!m_personIds.isEmpty())
     {
-        QJsonArray entityIdsArray;
-        for (const QString& id : m_entityIds)
+        QJsonArray personIdsArray;
+        for (const PersonId& id : m_personIds)
         {
-            entityIdsArray.append(id);
+            personIdsArray.append(id.toString());
         }
-        json["entityIds"] = entityIdsArray;
+        json["personIds"] = personIdsArray;
+    }
+
+    if (!m_familyIds.isEmpty())
+    {
+        QJsonArray familyIdsArray;
+        for (const FamilyId& id : m_familyIds)
+        {
+            familyIdsArray.append(id.toString());
+        }
+        json["familyIds"] = familyIdsArray;
     }
 
     return json;
@@ -38,17 +48,43 @@ QJsonObject Tag::toJson() const
 Tag Tag::fromJson(const QJsonObject& json)
 {
     Tag tag;
-    tag.m_id = json["id"].toString();
+    tag.m_id = TagId::fromString(json["id"].toString());
     tag.m_name = json["name"].toString();
     tag.m_color = json["color"].toString();
     tag.m_level = tagLevelFromJson(json["level"]);
 
+    // Read new format (personIds/familyIds)
+    if (json.contains("personIds"))
+    {
+        QJsonArray personIdsArray = json["personIds"].toArray();
+        for (const QJsonValue& value : personIdsArray)
+        {
+            tag.m_personIds.insert(PersonId::fromString(value.toString()));
+        }
+    }
+    if (json.contains("familyIds"))
+    {
+        QJsonArray familyIdsArray = json["familyIds"].toArray();
+        for (const QJsonValue& value : familyIdsArray)
+        {
+            tag.m_familyIds.insert(FamilyId::fromString(value.toString()));
+        }
+    }
+
+    // Backward compatibility: read old "entityIds" format
     if (json.contains("entityIds"))
     {
         QJsonArray entityIdsArray = json["entityIds"].toArray();
         for (const QJsonValue& value : entityIdsArray)
         {
-            tag.m_entityIds.insert(value.toString());
+            if (tag.m_level == TagLevel::Person)
+            {
+                tag.m_personIds.insert(PersonId::fromString(value.toString()));
+            }
+            else
+            {
+                tag.m_familyIds.insert(FamilyId::fromString(value.toString()));
+            }
         }
     }
 
@@ -61,5 +97,6 @@ bool Tag::operator==(const Tag& other) const
         && m_name == other.m_name
         && m_color == other.m_color
         && m_level == other.m_level
-        && m_entityIds == other.m_entityIds;
+        && m_personIds == other.m_personIds
+        && m_familyIds == other.m_familyIds;
 }
