@@ -83,12 +83,12 @@ void Document::updateFamily(const Family& family)
     m_families.insert(family.id(), family);
 }
 
-void Document::removeFamily(const QString& id)
+void Document::removeFamily(const FamilyId& id)
 {
     m_families.remove(id);
 }
 
-void Document::setFamilies(const QHash<QString, Family>& families)
+void Document::setFamilies(const QHash<FamilyId, Family>& families)
 {
     m_families = families;
 }
@@ -107,12 +107,12 @@ void Document::updateTeam(const Team& team)
     m_teams.insert(team.id(), team);
 }
 
-void Document::removeTeam(const QString& id)
+void Document::removeTeam(const TeamId& id)
 {
     m_teams.remove(id);
 }
 
-void Document::addMemberToTeam(const QString& teamId, const QString& memberId)
+void Document::addMemberToTeam(const TeamId& teamId, const PersonId& memberId)
 {
     auto it = m_teams.find(teamId);
     if (it != m_teams.end())
@@ -121,7 +121,7 @@ void Document::addMemberToTeam(const QString& teamId, const QString& memberId)
     }
 }
 
-void Document::removeMemberFromTeam(const QString& teamId, const QString& memberId)
+void Document::removeMemberFromTeam(const TeamId& teamId, const PersonId& memberId)
 {
     auto it = m_teams.find(teamId);
     if (it != m_teams.end())
@@ -144,44 +144,44 @@ void Document::updateTag(const Tag& tag)
     m_tags.insert(tag.id(), tag);
 }
 
-void Document::removeTag(const QString& id)
+void Document::removeTag(const TagId& id)
 {
     m_tags.remove(id);
 }
 
-void Document::addPersonToTag(const QString& tagId, const QString& personId)
+void Document::addPersonToTag(const TagId& tagId, const PersonId& personId)
 {
     auto it = m_tags.find(tagId);
     if (it != m_tags.end())
     {
-        it->addEntity(personId);
+        it->addPerson(personId);
     }
 }
 
-void Document::removePersonFromTag(const QString& tagId, const QString& personId)
+void Document::removePersonFromTag(const TagId& tagId, const PersonId& personId)
 {
     auto it = m_tags.find(tagId);
     if (it != m_tags.end())
     {
-        it->removeEntity(personId);
+        it->removePerson(personId);
     }
 }
 
-void Document::addFamilyToTag(const QString& tagId, const QString& familyId)
+void Document::addFamilyToTag(const TagId& tagId, const FamilyId& familyId)
 {
     auto it = m_tags.find(tagId);
     if (it != m_tags.end())
     {
-        it->addEntity(familyId);
+        it->addFamily(familyId);
     }
 }
 
-void Document::removeFamilyFromTag(const QString& tagId, const QString& familyId)
+void Document::removeFamilyFromTag(const TagId& tagId, const FamilyId& familyId)
 {
     auto it = m_tags.find(tagId);
     if (it != m_tags.end())
     {
-        it->removeEntity(familyId);
+        it->removeFamily(familyId);
     }
 }
 
@@ -199,12 +199,12 @@ void Document::updateEmergencyAsset(const EmergencyAsset& asset)
     m_emergencyAssets.insert(asset.id(), asset);
 }
 
-void Document::removeEmergencyAsset(const QString& id)
+void Document::removeEmergencyAsset(const EmergencyAssetId& id)
 {
     m_emergencyAssets.remove(id);
 }
 
-std::optional<EmergencyAsset> Document::findEmergencyAssetById(const QString& id) const
+std::optional<EmergencyAsset> Document::findEmergencyAssetById(const EmergencyAssetId& id) const
 {
     auto it = m_emergencyAssets.constFind(id);
     if (it != m_emergencyAssets.constEnd())
@@ -241,7 +241,7 @@ void Document::updateEqDistrict(const MinisteringDistrict& district)
     m_eqDistricts.insert(district.id(), district);
 }
 
-void Document::removeEqDistrict(const QString& id)
+void Document::removeEqDistrict(const MinisteringDistrictId& id)
 {
     m_eqDistricts.remove(id);
 }
@@ -256,17 +256,17 @@ void Document::updateEqGroup(const MinisteringGroup& group)
     m_eqGroups.insert(group.id(), group);
 }
 
-void Document::removeEqGroup(const QString& id)
+void Document::removeEqGroup(const MinisteringGroupId& id)
 {
     m_eqGroups.remove(id);
 }
 
-void Document::setEqDistricts(const QHash<QString, MinisteringDistrict>& districts)
+void Document::setEqDistricts(const QHash<MinisteringDistrictId, MinisteringDistrict>& districts)
 {
     m_eqDistricts = districts;
 }
 
-void Document::setEqGroups(const QHash<QString, MinisteringGroup>& groups)
+void Document::setEqGroups(const QHash<MinisteringGroupId, MinisteringGroup>& groups)
 {
     m_eqGroups = groups;
 }
@@ -281,7 +281,7 @@ void Document::updateRsDistrict(const MinisteringDistrict& district)
     m_rsDistricts.insert(district.id(), district);
 }
 
-void Document::removeRsDistrict(const QString& id)
+void Document::removeRsDistrict(const MinisteringDistrictId& id)
 {
     m_rsDistricts.remove(id);
 }
@@ -296,17 +296,17 @@ void Document::updateRsGroup(const MinisteringGroup& group)
     m_rsGroups.insert(group.id(), group);
 }
 
-void Document::removeRsGroup(const QString& id)
+void Document::removeRsGroup(const MinisteringGroupId& id)
 {
     m_rsGroups.remove(id);
 }
 
-void Document::setRsDistricts(const QHash<QString, MinisteringDistrict>& districts)
+void Document::setRsDistricts(const QHash<MinisteringDistrictId, MinisteringDistrict>& districts)
 {
     m_rsDistricts = districts;
 }
 
-void Document::setRsGroups(const QHash<QString, MinisteringGroup>& groups)
+void Document::setRsGroups(const QHash<MinisteringGroupId, MinisteringGroup>& groups)
 {
     m_rsGroups = groups;
 }
@@ -325,7 +325,7 @@ void Document::setMinisteringPdfDate(std::optional<QDate> date)
 // Cascading cleanup
 // ============================================================================
 
-void Document::cleanupPersonReferences(const QString& personId)
+void Document::cleanupPersonReferences(const PersonId& personId)
 {
     // Remove from teams (both as member and leader)
     for (auto it = m_teams.begin(); it != m_teams.end(); ++it)
@@ -336,16 +336,16 @@ void Document::cleanupPersonReferences(const QString& personId)
         }
         if (it->leaderId() == personId)
         {
-            it->setLeaderId(QString());
+            it->setLeaderId(std::nullopt);
         }
     }
 
     // Remove from person-level tags
     for (auto it = m_tags.begin(); it != m_tags.end(); ++it)
     {
-        if (it->isPersonLevel() && it->entityIds().contains(personId))
+        if (it->isPersonLevel() && it->hasPerson(personId))
         {
-            it->removeEntity(personId);
+            it->removePerson(personId);
         }
     }
 
@@ -412,7 +412,7 @@ void Document::cleanupPersonReferences(const QString& personId)
 // Lookup helpers
 // ============================================================================
 
-std::optional<Family> Document::findFamilyById(const QString& id) const
+std::optional<Family> Document::findFamilyById(const FamilyId& id) const
 {
     auto it = m_families.find(id);
     if (it != m_families.end())
@@ -422,7 +422,7 @@ std::optional<Family> Document::findFamilyById(const QString& id) const
     return std::nullopt;
 }
 
-std::optional<Person> Document::findPersonById(const QString& id) const
+std::optional<Person> Document::findPersonById(const PersonId& id) const
 {
     for (const Family& family : m_families)
     {
@@ -437,7 +437,7 @@ std::optional<Person> Document::findPersonById(const QString& id) const
     return std::nullopt;
 }
 
-std::optional<Team> Document::findTeamById(const QString& id) const
+std::optional<Team> Document::findTeamById(const TeamId& id) const
 {
     auto it = m_teams.find(id);
     if (it != m_teams.end())
@@ -447,7 +447,7 @@ std::optional<Team> Document::findTeamById(const QString& id) const
     return std::nullopt;
 }
 
-std::optional<Tag> Document::findTagById(const QString& id) const
+std::optional<Tag> Document::findTagById(const TagId& id) const
 {
     auto it = m_tags.find(id);
     if (it != m_tags.end())
@@ -480,9 +480,14 @@ void Document::rebuildPersonToFamilyMap()
     }
 }
 
-QString Document::familyIdForPerson(const QString& personId) const
+std::optional<FamilyId> Document::familyIdForPerson(const PersonId& personId) const
 {
-    return m_personToFamily.value(personId);
+    auto it = m_personToFamily.find(personId);
+    if (it != m_personToFamily.end())
+    {
+        return it.value();
+    }
+    return std::nullopt;
 }
 
 std::optional<int> Document::maxKnownAge() const
@@ -502,7 +507,7 @@ void Document::rebuildDecorationCaches()
         ResponseArea area = asset.responseArea();
         if (area != ResponseArea::None)
         {
-            for (const QString& personId : asset.personIds())
+            for (const PersonId& personId : asset.personIds())
             {
                 m_personResponseAreas[personId].insert(area);
             }
@@ -510,7 +515,7 @@ void Document::rebuildDecorationCaches()
     }
 }
 
-QSet<ResponseArea> Document::personResponseAreas(const QString& personId) const
+QSet<ResponseArea> Document::personResponseAreas(const PersonId& personId) const
 {
     return m_personResponseAreas.value(personId);
 }
@@ -518,25 +523,13 @@ QSet<ResponseArea> Document::personResponseAreas(const QString& personId) const
 void Document::onDocumentChanged(const DocumentChange& change)
 {
     // Person-to-family lookup cache
-    if (change.scope == ChangeScope::Full || change.scope == ChangeScope::Family)
+    if (change.action == ChangeAction::Full || change.familyId.has_value())
     {
         rebuildPersonToFamilyMap();
     }
 
     // Decoration caches for map markers
-    bool needsDecorationRebuild = false;
-    switch (change.scope)
-    {
-        case ChangeScope::Full:
-        case ChangeScope::EmergencyAsset:
-            needsDecorationRebuild = true;
-            break;
-
-        default:
-            break;
-    }
-
-    if (needsDecorationRebuild)
+    if (change.action == ChangeAction::Full || change.assetId.has_value())
     {
         rebuildDecorationCaches();
     }
@@ -549,8 +542,8 @@ void Document::onDocumentChanged(const DocumentChange& change)
 namespace
 {
 
-template<typename T>
-void serializeHashToJson(QJsonObject& json, const QString& key, const QHash<QString, T>& hash)
+template<typename K, typename T>
+void serializeHashToJson(QJsonObject& json, const QString& key, const QHash<K, T>& hash)
 {
     if (!hash.isEmpty())
     {
@@ -563,8 +556,8 @@ void serializeHashToJson(QJsonObject& json, const QString& key, const QHash<QStr
     }
 }
 
-template<typename T>
-void deserializeJsonToHash(const QJsonObject& json, const QString& key, QHash<QString, T>& hash)
+template<typename K, typename T>
+void deserializeJsonToHash(const QJsonObject& json, const QString& key, QHash<K, T>& hash)
 {
     if (json.contains(key))
     {
