@@ -46,15 +46,15 @@ public:
 
     // BaseTreeModel interface
     ItemType itemTypeAt(const QModelIndex& index) const override;
-    QString selectionKeyAt(const QModelIndex& index) const override;
-    QString idAt(const QModelIndex& index) const override;
+    SelectionKey selectionKeyAt(const QModelIndex& index) const override;
 
     /// Returns family associations for the given index.
     FamilyAssociation relatedFamiliesAt(const QModelIndex& index) const;
 
     // View-specific accessors
-    QString familyIdAt(const QModelIndex& index) const;
-    QModelIndex indexForPersonId(const QString& personId) const;
+    PersonId personIdAt(const QModelIndex& index) const;
+    FamilyId familyIdAt(const QModelIndex& index) const;
+    QModelIndex indexForPersonId(const PersonId& personId) const;
 
 private slots:
     void onDocumentChanged(const DocumentChange& change);
@@ -66,8 +66,8 @@ private:
     struct TreeNode
     {
         ItemType type = ItemType::Invalid;
-        QString personId;
-        QString familyId;
+        PersonId personId;
+        FamilyId familyId;
         QString displayText;
         TreeNode* parent = nullptr;
         QList<TreeNode*> children;

@@ -41,25 +41,22 @@ void EmergencyAssetModel::clearNodes()
 
 void EmergencyAssetModel::onDocumentChanged(const DocumentChange& change)
 {
-    // Structural changes: full rebuild
-    if (change.scope == ChangeScope::Full
-        || change.action == ChangeAction::BatchModified
-        || change.scope == ChangeScope::EmergencyAsset)
+    // Full document reload or asset changes: rebuild
+    if (change.action == ChangeAction::Full || change.assetId)
     {
         rebuild();
         return;
     }
 
     // Family updated: refresh display text only
-    if (change.scope == ChangeScope::Family
-        && change.action == ChangeAction::Updated)
+    if (change.familyId && change.action == ChangeAction::Updated)
     {
-        refreshFamilyDisplayText(change.entityId);
+        refreshFamilyDisplayText(*change.familyId);
         return;
     }
 
     // Family added/removed: rebuild
-    if (change.scope == ChangeScope::Family)
+    if (change.familyId)
     {
         rebuild();
     }
@@ -82,8 +79,8 @@ void EmergencyAssetModel::rebuild()
     for (const EmergencyAsset& asset : assets)
     {
         // Collect and sort people in this asset (with filtering)
-        QList<QPair<QString, QString>> people;  // (personId, displayName)
-        for (const QString& personId : asset.personIds())
+        QList<QPair<PersonId, QString>> people;  // (personId, displayName)
+        for (const PersonId& personId : asset.personIds())
         {
             std::optional<Person> person = doc.findPersonById(personId);
             if (person)
@@ -97,23 +94,23 @@ void EmergencyAssetModel::rebuild()
             }
         }
         std::sort(people.begin(), people.end(),
-                  [](const QPair<QString, QString>& a, const QPair<QString, QString>& b)
+                  [](const QPair<PersonId, QString>& a, const QPair<PersonId, QString>& b)
                   { return a.second.toLower() < b.second.toLower(); });
 
         // Create asset node with filtered count
         TreeNode* assetNode = new TreeNode();
         assetNode->type = ItemType::Asset;
-        assetNode->id = asset.id();
+        assetNode->assetId = asset.id();
         assetNode->displayText = QString("%1 (%2)")
             .arg(asset.name())
             .arg(people.size());
 
         // Create person nodes as children of asset
-        for (const QPair<QString, QString>& personData : people)
+        for (const QPair<PersonId, QString>& personData : people)
         {
             TreeNode* personNode = new TreeNode();
             personNode->type = ItemType::Person;
-            personNode->id = personData.first;
+            personNode->personId = personData.first;
             personNode->assetId = asset.id();
             personNode->displayText = personData.second;
             personNode->parent = assetNode;
@@ -253,46 +250,37 @@ QVariant EmergencyAssetModel::data(const QModelIndex& index, int role) const
     {
     case Qt::DisplayRole:
         return node->displayText;
-    case IdRole:
-        return node->id;
     case ItemTypeRole:
         return QVariant::fromValue(node->type);
     case AssetIdRole:
-        return node->assetId;
+        return node->assetId.toString();
     default:
         return QVariant();
     }
 }
 
-QString EmergencyAssetModel::idAt(const QModelIndex& index) const
-{
-    TreeNode* node = nodeFromIndex(index);
-    if (node)
-    {
-        return node->id;
-    }
-    return QString();
-}
-
-QString EmergencyAssetModel::selectionKeyAt(const QModelIndex& index) const
+SelectionKey EmergencyAssetModel::selectionKeyAt(const QModelIndex& index) const
 {
     TreeNode* node = nodeFromIndex(index);
     if (!node)
     {
-        return QString();
+        return SelectionKey::from(QString());
     }
 
     switch (node->type)
     {
     case ItemType::Asset:
-        return node->id;
+        return SelectionKey::from(node->assetId);
     case ItemType::Person:
-        return QString("%1:%2").arg(node->assetId, node->id);
+        if (node->personId)
+        {
+            return SelectionKey::literal(node->assetId.toString() + ":" + node->personId->toString());
+        }
+        return SelectionKey::from(node->assetId);
     case ItemType::ContactDetail:
-        // Delegate to parent
         return selectionKeyAt(index.parent());
     default:
-        return QString();
+        return SelectionKey::from(QString());
     }
 }
 
@@ -305,22 +293,25 @@ FamilyAssociation EmergencyAssetModel::relatedFamiliesAt(const QModelIndex& inde
     }
 
     const Document& doc = m_documentManager->document();
-    ItemType type = itemTypeAt(index);
-    QString id = idAt(index);
+    TreeNode* node = nodeFromIndex(index);
+    if (!node)
+    {
+        return assoc;
+    }
 
-    switch (type)
+    switch (node->type)
     {
     case ItemType::Asset:
     {
-        std::optional<EmergencyAsset> assetOpt = doc.findEmergencyAssetById(id);
+        std::optional<EmergencyAsset> assetOpt = doc.findEmergencyAssetById(node->assetId);
         if (assetOpt)
         {
-            for (const QString& personId : assetOpt->personIds())
+            for (const PersonId& personId : assetOpt->personIds())
             {
-                QString familyId = doc.familyIdForPerson(personId);
-                if (!familyId.isEmpty())
+                std::optional<FamilyId> familyId = doc.familyIdForPerson(personId);
+                if (familyId)
                 {
-                    assoc.relatedFamilyIds.insert(familyId);
+                    assoc.relatedFamilyIds.insert(*familyId);
                 }
             }
         }
@@ -328,10 +319,13 @@ FamilyAssociation EmergencyAssetModel::relatedFamiliesAt(const QModelIndex& inde
     }
     case ItemType::Person:
     {
-        QString familyId = doc.familyIdForPerson(id);
-        if (!familyId.isEmpty())
+        if (node->personId)
         {
-            assoc.relatedFamilyIds.insert(familyId);
+            std::optional<FamilyId> familyId = doc.familyIdForPerson(*node->personId);
+            if (familyId)
+            {
+                assoc.relatedFamilyIds.insert(*familyId);
+            }
         }
         break;
     }
@@ -339,7 +333,6 @@ FamilyAssociation EmergencyAssetModel::relatedFamiliesAt(const QModelIndex& inde
         break;
     }
 
-    // No contact points in emergency assets
     return assoc;
 }
 
@@ -353,21 +346,24 @@ ItemType EmergencyAssetModel::itemTypeAt(const QModelIndex& index) const
     return ItemType::Invalid;
 }
 
-QString EmergencyAssetModel::assetIdAt(const QModelIndex& index) const
+EmergencyAssetId EmergencyAssetModel::assetIdAt(const QModelIndex& index) const
 {
     TreeNode* node = nodeFromIndex(index);
     if (!node)
     {
-        return QString();
-    }
-
-    // For asset nodes, return the node's own ID
-    // For person nodes, return the parent asset's ID
-    if (node->type == ItemType::Asset)
-    {
-        return node->id;
+        return EmergencyAssetId::from(QString());
     }
     return node->assetId;
+}
+
+std::optional<PersonId> EmergencyAssetModel::personIdAt(const QModelIndex& index) const
+{
+    TreeNode* node = nodeFromIndex(index);
+    if (!node)
+    {
+        return std::nullopt;
+    }
+    return node->personId;
 }
 
 void EmergencyAssetModel::loadContactDetails(const QModelIndex& index)
@@ -385,7 +381,13 @@ void EmergencyAssetModel::loadContactDetails(const QModelIndex& index)
     }
 
     const Document& doc = m_documentManager->document();
-    std::optional<Person> person = doc.findPersonById(node->id);
+    if (!node->personId)
+    {
+        node->contactsLoaded = true;
+        return;
+    }
+
+    std::optional<Person> person = doc.findPersonById(*node->personId);
     if (!person)
     {
         node->contactsLoaded = true;
@@ -393,12 +395,12 @@ void EmergencyAssetModel::loadContactDetails(const QModelIndex& index)
     }
 
     // Check for address availability
-    QString familyId = doc.familyIdForPerson(node->id);
-    const QHash<QString, Family>& families = doc.families();
+    std::optional<FamilyId> familyId = doc.familyIdForPerson(*node->personId);
+    const QHash<FamilyId, Family>& families = doc.families();
     bool hasAddress = false;
-    if (!familyId.isEmpty() && families.contains(familyId))
+    if (familyId && families.contains(*familyId))
     {
-        hasAddress = !families[familyId].address().isEmpty();
+        hasAddress = !families[*familyId].address().isEmpty();
     }
 
     // Count actual items to insert
@@ -434,7 +436,7 @@ void EmergencyAssetModel::loadContactDetails(const QModelIndex& index)
     {
         TreeNode* phoneNode = new TreeNode();
         phoneNode->type = ItemType::ContactDetail;
-        phoneNode->id = node->id;
+        phoneNode->personId = node->personId;
         phoneNode->assetId = node->assetId;
         phoneNode->displayText = ContactIcons::Phone + person->phone();
         phoneNode->parent = node;
@@ -446,7 +448,7 @@ void EmergencyAssetModel::loadContactDetails(const QModelIndex& index)
     {
         TreeNode* altPhoneNode = new TreeNode();
         altPhoneNode->type = ItemType::ContactDetail;
-        altPhoneNode->id = node->id;
+        altPhoneNode->personId = node->personId;
         altPhoneNode->assetId = node->assetId;
         altPhoneNode->displayText = ContactIcons::Phone + person->altPhone() + tr(" (alt)");
         altPhoneNode->parent = node;
@@ -458,7 +460,7 @@ void EmergencyAssetModel::loadContactDetails(const QModelIndex& index)
     {
         TreeNode* emailNode = new TreeNode();
         emailNode->type = ItemType::ContactDetail;
-        emailNode->id = node->id;
+        emailNode->personId = node->personId;
         emailNode->assetId = node->assetId;
         emailNode->displayText = ContactIcons::Email + person->email();
         emailNode->parent = node;
@@ -468,10 +470,10 @@ void EmergencyAssetModel::loadContactDetails(const QModelIndex& index)
     // Address (from family)
     if (hasAddress)
     {
-        const Family& family = families[familyId];
+        const Family& family = families[*familyId];
         TreeNode* addrNode = new TreeNode();
         addrNode->type = ItemType::ContactDetail;
-        addrNode->id = node->id;
+        addrNode->personId = node->personId;
         addrNode->assetId = node->assetId;
         addrNode->displayText = ContactIcons::Address + family.address().full();
         addrNode->parent = node;
@@ -482,10 +484,10 @@ void EmergencyAssetModel::loadContactDetails(const QModelIndex& index)
     node->contactsLoaded = true;
 }
 
-void EmergencyAssetModel::refreshFamilyDisplayText(const QString& familyId)
+void EmergencyAssetModel::refreshFamilyDisplayText(const FamilyId& familyId)
 {
     const Document& doc = m_documentManager->document();
-    const QHash<QString, Family>& families = doc.families();
+    const QHash<FamilyId, Family>& families = doc.families();
 
     if (!families.contains(familyId))
     {
@@ -495,7 +497,7 @@ void EmergencyAssetModel::refreshFamilyDisplayText(const QString& familyId)
     const Family& family = families[familyId];
 
     // Build set of person IDs in this family for quick lookup
-    QSet<QString> personIds;
+    QSet<PersonId> personIds;
     for (const Person& member : family.members())
     {
         personIds.insert(member.id());
@@ -510,9 +512,11 @@ void EmergencyAssetModel::refreshFamilyDisplayText(const QString& familyId)
         {
             TreeNode* personNode = assetNode->children[personRow];
 
-            if (personNode->type == ItemType::Person && personIds.contains(personNode->id))
+            if (personNode->type == ItemType::Person
+                && personNode->personId
+                && personIds.contains(*personNode->personId))
             {
-                std::optional<Person> person = doc.findPersonById(personNode->id);
+                std::optional<Person> person = doc.findPersonById(*personNode->personId);
                 if (person)
                 {
                     personNode->displayText = person->displayName();

@@ -33,7 +33,7 @@ QVariant TagListModel::data(const QModelIndex& index, int role) const
         return QVariant();
     }
 
-    const QString& id = m_tagIds.at(index.row());
+    const TagId& id = m_tagIds.at(index.row());
     std::optional<Tag> opt = m_documentManager->document().findTagById(id);
     if (!opt)
     {
@@ -49,7 +49,7 @@ QVariant TagListModel::data(const QModelIndex& index, int role) const
             return tag.name();
 
         case IdRole:
-            return tag.id();
+            return tag.id().toString();
 
         case ColorRole:
             return tag.color();
@@ -58,7 +58,7 @@ QVariant TagListModel::data(const QModelIndex& index, int role) const
             return tagLevelToString(tag.level());
 
         case EntityCountRole:
-            return static_cast<int>(tag.entityIds().size());
+            return tag.entityCount();
 
         case IsEmptyRole:
             return tag.isEmpty();
@@ -80,23 +80,23 @@ QHash<int, QByteArray> TagListModel::roleNames() const
     return roles;
 }
 
-void TagListModel::setTagIds(const QList<QString>& ids)
+void TagListModel::setTagIds(const QList<TagId>& ids)
 {
     beginResetModel();
     m_tagIds = ids;
     endResetModel();
 }
 
-QString TagListModel::idAt(int row) const
+TagId TagListModel::tagIdAt(int row) const
 {
     if (row >= 0 && row < m_tagIds.size())
     {
         return m_tagIds.at(row);
     }
-    return QString();
+    return TagId::from(QString());
 }
 
-int TagListModel::rowForId(const QString& id) const
+int TagListModel::rowForId(const TagId& id) const
 {
     return m_tagIds.indexOf(id);
 }

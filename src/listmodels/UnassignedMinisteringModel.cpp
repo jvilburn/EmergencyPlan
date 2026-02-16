@@ -41,32 +41,29 @@ void UnassignedMinisteringModel::clearNodes()
 
 void UnassignedMinisteringModel::onDocumentChanged(const DocumentChange& change)
 {
-    // Structural changes: full rebuild
-    if (change.scope == ChangeScope::Full
-        || change.action == ChangeAction::BatchModified)
+    // Full document reload
+    if (change.action == ChangeAction::Full)
     {
         rebuild();
         return;
     }
 
     // Ministering group changes: full rebuild (affects who is unassigned)
-    if (change.scope == ChangeScope::EqGroup
-        || change.scope == ChangeScope::RsGroup)
+    if (change.eqGroupId || change.rsGroupId)
     {
         rebuild();
         return;
     }
 
     // Family updated: refresh display text only
-    if (change.scope == ChangeScope::Family
-        && change.action == ChangeAction::Updated)
+    if (change.familyId && change.action == ChangeAction::Updated)
     {
-        refreshFamilyDisplayText(change.entityId);
+        refreshFamilyDisplayText(*change.familyId);
         return;
     }
 
     // Family added/removed: rebuild (affects unassigned list)
-    if (change.scope == ChangeScope::Family)
+    if (change.familyId)
     {
         rebuild();
     }
@@ -79,29 +76,29 @@ void UnassignedMinisteringModel::rebuild()
     clearNodes();
 
     const Document& doc = m_documentManager->document();
-    const QHash<QString, MinisteringGroup>& groups = isEQ() ? doc.eqGroups() : doc.rsGroups();
+    const QHash<MinisteringGroupId, MinisteringGroup>& groups = isEQ() ? doc.eqGroups() : doc.rsGroups();
 
     if (isEQ())
     {
         // Find unassigned families
-        QSet<QString> assignedIds;
+        QSet<FamilyId> assignedIds;
         for (const auto& group : groups)
         {
             assignedIds.unite(group.familyIds());
         }
 
-        const QHash<QString, Family>& families = doc.families();
-        QSet<QString> allIds;
+        const QHash<FamilyId, Family>& families = doc.families();
+        QSet<FamilyId> allIds;
         for (const auto& family : families)
         {
             allIds.insert(family.id());
         }
 
-        QSet<QString> unassignedIds = allIds - assignedIds;
+        QSet<FamilyId> unassignedIds = allIds - assignedIds;
 
         // Sort families by name, applying filter
-        QList<QPair<QString, QString>> sortedFamilies;
-        for (const QString& familyId : unassignedIds)
+        QList<QPair<QString, FamilyId>> sortedFamilies;
+        for (const FamilyId& familyId : unassignedIds)
         {
             if (families.contains(familyId))
             {
@@ -119,20 +116,19 @@ void UnassignedMinisteringModel::rebuild()
         if (!sortedFamilies.isEmpty())
         {
             std::sort(sortedFamilies.begin(), sortedFamilies.end(),
-                      [](const QPair<QString, QString>& a, const QPair<QString, QString>& b)
+                      [](const QPair<QString, FamilyId>& a, const QPair<QString, FamilyId>& b)
                       { return a.first.toLower() < b.first.toLower(); });
 
             // Create header with filtered count
             m_headerNode = new TreeNode();
             m_headerNode->type = ItemType::UnassignedHeader;
-            m_headerNode->id = "unassigned";
             m_headerNode->displayText = tr("Unassigned (%1 families)").arg(sortedFamilies.size());
 
-            for (const QPair<QString, QString>& familyData : sortedFamilies)
+            for (const QPair<QString, FamilyId>& familyData : sortedFamilies)
             {
                 TreeNode* familyNode = new TreeNode();
                 familyNode->type = ItemType::MinisteredFamily;
-                familyNode->id = familyData.second;
+                familyNode->familyId = familyData.second;
                 familyNode->displayText = familyData.first;
                 familyNode->parent = m_headerNode;
                 m_headerNode->children.append(familyNode);
@@ -142,15 +138,15 @@ void UnassignedMinisteringModel::rebuild()
     else
     {
         // Find unassigned sisters
-        QSet<QString> assignedPersonIds;
+        QSet<PersonId> assignedPersonIds;
         for (const auto& group : groups)
         {
             assignedPersonIds.unite(group.ministeredPersonIds());
         }
 
         // Collect all adult female person IDs
-        const QHash<QString, Family>& families = doc.families();
-        QSet<QString> allSisterIds;
+        const QHash<FamilyId, Family>& families = doc.families();
+        QSet<PersonId> allSisterIds;
         for (const auto& family : families)
         {
             for (const auto& member : family.members())
@@ -162,11 +158,11 @@ void UnassignedMinisteringModel::rebuild()
             }
         }
 
-        QSet<QString> unassignedIds = allSisterIds - assignedPersonIds;
+        QSet<PersonId> unassignedIds = allSisterIds - assignedPersonIds;
 
         // Sort sisters by name, applying filter
-        QList<QPair<QString, QString>> sortedSisters;
-        for (const QString& personId : unassignedIds)
+        QList<QPair<QString, PersonId>> sortedSisters;
+        for (const PersonId& personId : unassignedIds)
         {
             std::optional<Person> person = doc.findPersonById(personId);
             if (person)
@@ -184,20 +180,19 @@ void UnassignedMinisteringModel::rebuild()
         if (!sortedSisters.isEmpty())
         {
             std::sort(sortedSisters.begin(), sortedSisters.end(),
-                      [](const QPair<QString, QString>& a, const QPair<QString, QString>& b)
+                      [](const QPair<QString, PersonId>& a, const QPair<QString, PersonId>& b)
                       { return a.first.toLower() < b.first.toLower(); });
 
             // Create header with filtered count
             m_headerNode = new TreeNode();
             m_headerNode->type = ItemType::UnassignedHeader;
-            m_headerNode->id = "unassigned";
             m_headerNode->displayText = tr("Unassigned (%1 sisters)").arg(sortedSisters.size());
 
-            for (const QPair<QString, QString>& sisterData : sortedSisters)
+            for (const QPair<QString, PersonId>& sisterData : sortedSisters)
             {
                 TreeNode* sisterNode = new TreeNode();
                 sisterNode->type = ItemType::MinisteredSister;
-                sisterNode->id = sisterData.second;
+                sisterNode->personId = sisterData.second;
                 sisterNode->displayText = sisterData.first;
                 sisterNode->parent = m_headerNode;
                 m_headerNode->children.append(sisterNode);
@@ -333,97 +328,89 @@ QVariant UnassignedMinisteringModel::data(const QModelIndex& index, int role) co
     case Qt::DisplayRole:
         return node->displayText;
 
-    case IdRole:
-        return node->id;
-
     case NodeTypeRole:
         return QVariant::fromValue(node->type);
-
-    case SecondaryIdRole:
-        return node->secondaryId;
 
     default:
         return QVariant();
     }
 }
 
-QString UnassignedMinisteringModel::idAt(const QModelIndex& index) const
-{
-    TreeNode* node = nodeFromIndex(index);
-    if (node)
-    {
-        return node->id;
-    }
-    return QString();
-}
-
-QString UnassignedMinisteringModel::selectionKeyAt(const QModelIndex& index) const
+SelectionKey UnassignedMinisteringModel::selectionKeyAt(const QModelIndex& index) const
 {
     TreeNode* node = nodeFromIndex(index);
     if (!node)
     {
-        return QString();
+        return SelectionKey::from(QString());
     }
 
     switch (node->type)
     {
     case ItemType::UnassignedHeader:
-        return QStringLiteral("unassigned");
+        return SelectionKey::literal("unassigned");
     case ItemType::MinisteredFamily:
-        return node->id;  // Family ID - only appears once in unassigned list
+        if (node->familyId)
+        {
+            return SelectionKey::from(*node->familyId);
+        }
+        return SelectionKey::from(QString());
     case ItemType::MinisteredSister:
-        return node->id;  // Person ID - only appears once in unassigned list
+        if (node->personId)
+        {
+            return SelectionKey::from(*node->personId);
+        }
+        return SelectionKey::from(QString());
+    case ItemType::ContactDetail:
+        return selectionKeyAt(index.parent());
     default:
-        return QString();
+        return SelectionKey::from(QString());
     }
 }
 
-QSet<QString> UnassignedMinisteringModel::familyIdsForPersons(const QSet<QString>& personIds) const
+QSet<FamilyId> UnassignedMinisteringModel::familyIdsForPersons(const QSet<PersonId>& personIds) const
 {
-    QSet<QString> familyIds;
+    QSet<FamilyId> familyIds;
     const Document& doc = m_documentManager->document();
-    for (const QString& personId : personIds)
+    for (const PersonId& personId : personIds)
     {
-        QString familyId = doc.familyIdForPerson(personId);
-        if (!familyId.isEmpty())
+        std::optional<FamilyId> familyId = doc.familyIdForPerson(personId);
+        if (familyId)
         {
-            familyIds.insert(familyId);
+            familyIds.insert(*familyId);
         }
     }
     return familyIds;
 }
 
-QSet<QString> UnassignedMinisteringModel::unassignedFamilyIds() const
+QSet<FamilyId> UnassignedMinisteringModel::unassignedFamilyIds() const
 {
-    // Collect all family IDs from tree nodes
-    QSet<QString> familyIds;
+    QSet<FamilyId> familyIds;
     if (!m_headerNode)
     {
         return familyIds;
     }
     for (const TreeNode* child : m_headerNode->children)
     {
-        if (child->type == ItemType::MinisteredFamily)
+        if (child->type == ItemType::MinisteredFamily && child->familyId)
         {
-            familyIds.insert(child->id);
+            familyIds.insert(*child->familyId);
         }
     }
     return familyIds;
 }
 
-QSet<QString> UnassignedMinisteringModel::unassignedSisterIds() const
+QSet<PersonId> UnassignedMinisteringModel::unassignedSisterIds() const
 {
-    // Collect all person IDs from tree nodes
-    QSet<QString> personIds;
+    QSet<PersonId> personIds;
     if (!m_headerNode)
     {
         return personIds;
     }
     for (const TreeNode* child : m_headerNode->children)
     {
-        if (child->type == ItemType::MinisteredSister)
+        if (child->type == ItemType::MinisteredSister && child->personId)
         {
-            personIds.insert(child->id);
+            personIds.insert(*child->personId);
         }
     }
     return personIds;
@@ -437,10 +424,13 @@ FamilyAssociation UnassignedMinisteringModel::relatedFamiliesAt(const QModelInde
         return assoc;
     }
 
-    ItemType type = itemTypeAt(index);
-    QString id = idAt(index);
+    TreeNode* node = nodeFromIndex(index);
+    if (!node)
+    {
+        return assoc;
+    }
 
-    switch (type)
+    switch (node->type)
     {
     case ItemType::UnassignedHeader:
         if (isEQ())
@@ -453,14 +443,20 @@ FamilyAssociation UnassignedMinisteringModel::relatedFamiliesAt(const QModelInde
         }
         break;
     case ItemType::MinisteredFamily:
-        assoc.relatedFamilyIds.insert(id);
+        if (node->familyId)
+        {
+            assoc.relatedFamilyIds.insert(*node->familyId);
+        }
         break;
     case ItemType::MinisteredSister:
     {
-        QString familyId = m_documentManager->document().familyIdForPerson(id);
-        if (!familyId.isEmpty())
+        if (node->personId)
         {
-            assoc.relatedFamilyIds.insert(familyId);
+            std::optional<FamilyId> fid = m_documentManager->document().familyIdForPerson(*node->personId);
+            if (fid)
+            {
+                assoc.relatedFamilyIds.insert(*fid);
+            }
         }
         break;
     }
@@ -468,7 +464,6 @@ FamilyAssociation UnassignedMinisteringModel::relatedFamiliesAt(const QModelInde
         break;
     }
 
-    // No contact points in unassigned list
     return assoc;
 }
 
@@ -504,7 +499,13 @@ void UnassignedMinisteringModel::loadContactDetails(const QModelIndex& index)
     if (node->type == ItemType::MinisteredSister)
     {
         // Person contact info
-        std::optional<Person> person = doc.findPersonById(node->id);
+        if (!node->personId)
+        {
+            node->contactsLoaded = true;
+            return;
+        }
+
+        std::optional<Person> person = doc.findPersonById(*node->personId);
         if (!person)
         {
             node->contactsLoaded = true;
@@ -512,12 +513,12 @@ void UnassignedMinisteringModel::loadContactDetails(const QModelIndex& index)
         }
 
         // Check for address availability
-        QString familyId = doc.familyIdForPerson(node->id);
-        const QHash<QString, Family>& families = doc.families();
+        std::optional<FamilyId> familyId = doc.familyIdForPerson(*node->personId);
+        const QHash<FamilyId, Family>& families = doc.families();
         bool hasAddress = false;
-        if (!familyId.isEmpty() && families.contains(familyId))
+        if (familyId && families.contains(*familyId))
         {
-            hasAddress = !families[familyId].address().isEmpty();
+            hasAddress = !families[*familyId].address().isEmpty();
         }
 
         // Count actual items to insert
@@ -553,7 +554,7 @@ void UnassignedMinisteringModel::loadContactDetails(const QModelIndex& index)
             TreeNode* phoneNode = new TreeNode();
             phoneNode->type = ItemType::ContactDetail;
             phoneNode->displayText = ContactIcons::Phone + person->phone();
-            phoneNode->secondaryId = node->id;
+            phoneNode->personId = node->personId;
             phoneNode->parent = node;
             node->children.append(phoneNode);
         }
@@ -564,7 +565,7 @@ void UnassignedMinisteringModel::loadContactDetails(const QModelIndex& index)
             TreeNode* altPhoneNode = new TreeNode();
             altPhoneNode->type = ItemType::ContactDetail;
             altPhoneNode->displayText = ContactIcons::Phone + person->altPhone() + tr(" (alt)");
-            altPhoneNode->secondaryId = node->id;
+            altPhoneNode->personId = node->personId;
             altPhoneNode->parent = node;
             node->children.append(altPhoneNode);
         }
@@ -575,7 +576,7 @@ void UnassignedMinisteringModel::loadContactDetails(const QModelIndex& index)
             TreeNode* emailNode = new TreeNode();
             emailNode->type = ItemType::ContactDetail;
             emailNode->displayText = ContactIcons::Email + person->email();
-            emailNode->secondaryId = node->id;
+            emailNode->personId = node->personId;
             emailNode->parent = node;
             node->children.append(emailNode);
         }
@@ -583,11 +584,11 @@ void UnassignedMinisteringModel::loadContactDetails(const QModelIndex& index)
         // Address (from family)
         if (hasAddress)
         {
-            const Family& family = families[familyId];
+            const Family& family = families[*familyId];
             TreeNode* addrNode = new TreeNode();
             addrNode->type = ItemType::ContactDetail;
             addrNode->displayText = ContactIcons::Address + family.address().full();
-            addrNode->secondaryId = node->id;
+            addrNode->personId = node->personId;
             addrNode->parent = node;
             node->children.append(addrNode);
         }
@@ -597,14 +598,14 @@ void UnassignedMinisteringModel::loadContactDetails(const QModelIndex& index)
     else if (node->type == ItemType::MinisteredFamily)
     {
         // Family contact info
-        const QHash<QString, Family>& families = doc.families();
-        if (!families.contains(node->id))
+        const QHash<FamilyId, Family>& families = doc.families();
+        if (!node->familyId || !families.contains(*node->familyId))
         {
             node->contactsLoaded = true;
             return;
         }
 
-        const Family& family = families[node->id];
+        const Family& family = families[*node->familyId];
 
         // Count actual items to insert
         int itemCount = 0;
@@ -641,7 +642,7 @@ void UnassignedMinisteringModel::loadContactDetails(const QModelIndex& index)
                     TreeNode* phoneNode = new TreeNode();
                     phoneNode->type = ItemType::ContactDetail;
                     phoneNode->displayText = ContactIcons::Phone + member.phone();
-                    phoneNode->secondaryId = node->id;
+                    phoneNode->familyId = node->familyId;
                     phoneNode->parent = node;
                     node->children.append(phoneNode);
                     break;
@@ -655,7 +656,7 @@ void UnassignedMinisteringModel::loadContactDetails(const QModelIndex& index)
             TreeNode* addrNode = new TreeNode();
             addrNode->type = ItemType::ContactDetail;
             addrNode->displayText = ContactIcons::Address + family.address().full();
-            addrNode->secondaryId = node->id;
+            addrNode->familyId = node->familyId;
             addrNode->parent = node;
             node->children.append(addrNode);
         }
@@ -681,7 +682,7 @@ bool UnassignedMinisteringModel::hasUnassigned() const
     return m_headerNode != nullptr;
 }
 
-void UnassignedMinisteringModel::refreshFamilyDisplayText(const QString& familyId)
+void UnassignedMinisteringModel::refreshFamilyDisplayText(const FamilyId& familyId)
 {
     if (!m_headerNode)
     {
@@ -689,7 +690,7 @@ void UnassignedMinisteringModel::refreshFamilyDisplayText(const QString& familyI
     }
 
     const Document& doc = m_documentManager->document();
-    const QHash<QString, Family>& families = doc.families();
+    const QHash<FamilyId, Family>& families = doc.families();
 
     if (!families.contains(familyId))
     {
@@ -699,7 +700,7 @@ void UnassignedMinisteringModel::refreshFamilyDisplayText(const QString& familyI
     const Family& family = families[familyId];
 
     // Build set of person IDs in this family for quick lookup
-    QSet<QString> personIds;
+    QSet<PersonId> personIds;
     for (const Person& member : family.members())
     {
         personIds.insert(member.id());
@@ -714,9 +715,9 @@ void UnassignedMinisteringModel::refreshFamilyDisplayText(const QString& familyI
         if (itemNode->type == ItemType::MinisteredSister)
         {
             // Person node - check if person is in updated family
-            if (personIds.contains(itemNode->id))
+            if (itemNode->personId && personIds.contains(*itemNode->personId))
             {
-                std::optional<Person> person = doc.findPersonById(itemNode->id);
+                std::optional<Person> person = doc.findPersonById(*itemNode->personId);
                 if (person)
                 {
                     itemNode->displayText = person->displayName();
@@ -727,7 +728,7 @@ void UnassignedMinisteringModel::refreshFamilyDisplayText(const QString& familyI
         else if (itemNode->type == ItemType::MinisteredFamily)
         {
             // Family node - check if this is the updated family
-            if (itemNode->id == familyId)
+            if (itemNode->familyId && *itemNode->familyId == familyId)
             {
                 itemNode->displayText = family.displayName();
                 needsUpdate = true;

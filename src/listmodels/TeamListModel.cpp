@@ -32,7 +32,7 @@ QVariant TeamListModel::data(const QModelIndex& index, int role) const
         return QVariant();
     }
 
-    const QString& id = m_teamIds.at(index.row());
+    const TeamId& id = m_teamIds.at(index.row());
     std::optional<Team> opt = m_documentManager->document().findTeamById(id);
     if (!opt)
     {
@@ -48,13 +48,13 @@ QVariant TeamListModel::data(const QModelIndex& index, int role) const
             return team.name();
 
         case IdRole:
-            return team.id();
+            return team.id().toString();
 
         case ColorRole:
             return team.color();
 
         case LeaderIdRole:
-            return team.leaderId();
+            return team.hasLeader() ? team.leaderId().toString() : QString();
 
         case HasLeaderRole:
             return team.hasLeader();
@@ -83,23 +83,23 @@ QHash<int, QByteArray> TeamListModel::roleNames() const
     return roles;
 }
 
-void TeamListModel::setTeamIds(const QList<QString>& ids)
+void TeamListModel::setTeamIds(const QList<TeamId>& ids)
 {
     beginResetModel();
     m_teamIds = ids;
     endResetModel();
 }
 
-QString TeamListModel::idAt(int row) const
+TeamId TeamListModel::teamIdAt(int row) const
 {
     if (row >= 0 && row < m_teamIds.size())
     {
         return m_teamIds.at(row);
     }
-    return QString();
+    return TeamId::from(QString());
 }
 
-int TeamListModel::rowForId(const QString& id) const
+int TeamListModel::rowForId(const TeamId& id) const
 {
     return m_teamIds.indexOf(id);
 }

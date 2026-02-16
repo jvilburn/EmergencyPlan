@@ -23,8 +23,7 @@ class PersonTreeModel : public BaseTreeModel
 public:
     enum Roles
     {
-        IdRole = Qt::UserRole + 1,
-        PersonIdRole,
+        PersonIdRole = Qt::UserRole + 1,
         FamilyIdRole
     };
     Q_ENUM(Roles)
@@ -45,13 +44,12 @@ public:
 
     // BaseTreeModel interface
     ItemType itemTypeAt(const QModelIndex& index) const override;
-    QString selectionKeyAt(const QModelIndex& index) const override;
-    QString idAt(const QModelIndex& index) const override;
+    SelectionKey selectionKeyAt(const QModelIndex& index) const override;
 
     // Person-specific
-    QString personIdAt(const QModelIndex& index) const;
-    QString familyIdAt(const QModelIndex& index) const;
-    QModelIndex indexForPersonId(const QString& personId) const;
+    PersonId personIdAt(const QModelIndex& index) const;
+    FamilyId familyIdAt(const QModelIndex& index) const;
+    QModelIndex indexForPersonId(const PersonId& personId) const;
 
 public slots:
     void rebuild();
@@ -67,8 +65,8 @@ private:
     struct TreeNode
     {
         ItemType type;
-        QString personId;
-        QString familyId;
+        PersonId personId;
+        FamilyId familyId;
         QString displayText;
         TreeNode* parent = nullptr;
         QList<TreeNode*> children;
@@ -79,7 +77,7 @@ private:
     TreeNode* nodeFromIndex(const QModelIndex& index) const;
 
     // Sorted list of (personId, familyId) pairs
-    QList<QPair<QString, QString>> m_personData;
+    QList<QPair<PersonId, FamilyId>> m_personData;
     QList<TreeNode*> m_personNodes;  // Top-level nodes (owned)
     DocumentManager* m_documentManager;
     Filter* m_filter;

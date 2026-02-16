@@ -40,9 +40,7 @@ void PersonTreeModel::clearNodes()
 void PersonTreeModel::onDocumentChanged(const DocumentChange& change)
 {
     // Full rebuild for structural changes
-    if (change.scope == ChangeScope::Full
-        || change.action == ChangeAction::BatchModified
-        || change.scope == ChangeScope::Family)
+    if (change.action == ChangeAction::Full || change.familyId)
     {
         rebuild();
     }
@@ -56,13 +54,13 @@ void PersonTreeModel::rebuild()
     m_personData.clear();
 
     const Document& doc = m_documentManager->document();
-    const QHash<QString, Family>& families = doc.families();
+    const QHash<FamilyId, Family>& families = doc.families();
 
     // Collect all persons with their family IDs
     struct PersonInfo
     {
-        QString personId;
-        QString familyId;
+        PersonId personId;
+        FamilyId familyId;
         QString displayName;
     };
     QList<PersonInfo> allPersons;
@@ -99,9 +97,9 @@ void PersonTreeModel::rebuild()
 
 void PersonTreeModel::buildPersonNode(int personIndex)
 {
-    const QPair<QString, QString>& data = m_personData.at(personIndex);
-    const QString& personId = data.first;
-    const QString& familyId = data.second;
+    const QPair<PersonId, FamilyId>& data = m_personData.at(personIndex);
+    const PersonId& personId = data.first;
+    const FamilyId& familyId = data.second;
 
     const Document& doc = m_documentManager->document();
     std::optional<Person> personOpt = doc.findPersonById(personId);
@@ -157,7 +155,7 @@ void PersonTreeModel::buildPersonNode(int personIndex)
     }
 
     // Add address from family
-    const QHash<QString, Family>& families = doc.families();
+    const QHash<FamilyId, Family>& families = doc.families();
     if (families.contains(familyId))
     {
         const Family& family = families[familyId];
@@ -297,12 +295,11 @@ QVariant PersonTreeModel::data(const QModelIndex& index, int role) const
     case Qt::DisplayRole:
         return node->displayText;
 
-    case IdRole:
     case PersonIdRole:
-        return node->personId;
+        return node->personId.toString();
 
     case FamilyIdRole:
-        return node->familyId;
+        return node->familyId.toString();
 
     case Qt::ForegroundRole:
         // Gray out placeholder text
@@ -327,49 +324,43 @@ ItemType PersonTreeModel::itemTypeAt(const QModelIndex& index) const
     return ItemType::Invalid;
 }
 
-QString PersonTreeModel::selectionKeyAt(const QModelIndex& index) const
+SelectionKey PersonTreeModel::selectionKeyAt(const QModelIndex& index) const
 {
     TreeNode* node = nodeFromIndex(index);
     if (!node)
     {
-        return QString();
+        return SelectionKey::from(QString());
     }
 
-    // Person nodes use personId as key
     // Contact detail nodes delegate to parent
     if (node->type == ItemType::ContactDetail)
     {
         return selectionKeyAt(index.parent());
     }
-    return node->personId;
+    return SelectionKey::from(node->personId);
 }
 
-QString PersonTreeModel::idAt(const QModelIndex& index) const
+PersonId PersonTreeModel::personIdAt(const QModelIndex& index) const
 {
     TreeNode* node = nodeFromIndex(index);
     if (node)
     {
         return node->personId;
     }
-    return QString();
+    return PersonId::from(QString());
 }
 
-QString PersonTreeModel::personIdAt(const QModelIndex& index) const
-{
-    return idAt(index);
-}
-
-QString PersonTreeModel::familyIdAt(const QModelIndex& index) const
+FamilyId PersonTreeModel::familyIdAt(const QModelIndex& index) const
 {
     TreeNode* node = nodeFromIndex(index);
     if (node)
     {
         return node->familyId;
     }
-    return QString();
+    return FamilyId::from(QString());
 }
 
-QModelIndex PersonTreeModel::indexForPersonId(const QString& personId) const
+QModelIndex PersonTreeModel::indexForPersonId(const PersonId& personId) const
 {
     for (int i = 0; i < m_personNodes.size(); ++i)
     {

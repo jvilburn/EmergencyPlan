@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Id.h"
+
 #include <QAbstractListModel>
 #include <QList>
 #include <QString>
@@ -33,14 +35,14 @@ public:
     QHash<int, QByteArray> roleNames() const override;
 
     // ID list management (called by controller)
-    void setTagIds(const QList<QString>& ids);
-    const QList<QString>& tagIds() const { return m_tagIds; }
+    void setTagIds(const QList<TagId>& ids);
+    const QList<TagId>& tagIds() const { return m_tagIds; }
 
     // Lookup
-    QString idAt(int row) const;
-    int rowForId(const QString& id) const;
+    TagId tagIdAt(int row) const;
+    int rowForId(const TagId& id) const;
 
 private:
-    QList<QString> m_tagIds;
+    QList<TagId> m_tagIds;
     DocumentManager* m_documentManager = nullptr;
 };

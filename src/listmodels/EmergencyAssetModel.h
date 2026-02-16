@@ -26,8 +26,7 @@ public:
     /// Custom roles for accessing item data
     enum Roles
     {
-        IdRole = Qt::UserRole + 1,
-        ItemTypeRole,
+        ItemTypeRole = Qt::UserRole + 1,
         AssetIdRole  // For Person items: the parent asset's ID
     };
     Q_ENUM(Roles)
@@ -51,14 +50,14 @@ public:
 
     // BaseTreeModel interface
     ItemType itemTypeAt(const QModelIndex& index) const override;
-    QString selectionKeyAt(const QModelIndex& index) const override;
-    QString idAt(const QModelIndex& index) const override;
+    SelectionKey selectionKeyAt(const QModelIndex& index) const override;
 
     /// Returns family associations for the given index.
     FamilyAssociation relatedFamiliesAt(const QModelIndex& index) const;
 
     // View-specific accessors
-    QString assetIdAt(const QModelIndex& index) const;
+    EmergencyAssetId assetIdAt(const QModelIndex& index) const;
+    std::optional<PersonId> personIdAt(const QModelIndex& index) const;
     ResponseArea area() const { return m_area; }
 
 private slots:
@@ -66,15 +65,15 @@ private slots:
 
 private:
     void rebuild();
-    void refreshFamilyDisplayText(const QString& familyId);
+    void refreshFamilyDisplayText(const FamilyId& familyId);
     void clearNodes();
 
     /// Internal tree node structure
     struct TreeNode
     {
         ItemType type;
-        QString id;           // Asset ID or Person ID
-        QString assetId;   // For Person nodes: parent asset's ID
+        EmergencyAssetId assetId;             // Asset ID (for Asset nodes: self, for Person/Contact: parent asset)
+        std::optional<PersonId> personId;     // Person ID (for Person and ContactDetail nodes)
         QString displayText;
         TreeNode* parent = nullptr;
         QList<TreeNode*> children;

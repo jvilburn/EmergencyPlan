@@ -46,14 +46,7 @@ NeedsModel::TreeNode* NeedsModel::nodeFromIndex(const QModelIndex& index) const
 
 bool NeedsModel::shouldRebuild(const DocumentChange& change) const
 {
-    switch (change.scope)
-    {
-    case ChangeScope::Full:
-    case ChangeScope::Family:  // Persons are in families
-        return true;
-    default:
-        return false;
-    }
+    return change.action == ChangeAction::Full || change.familyId.has_value();
 }
 
 void NeedsModel::onDocumentChanged(const DocumentChange& change)
@@ -231,43 +224,30 @@ QVariant NeedsModel::data(const QModelIndex& index, int role) const
     case Qt::DisplayRole:
         return node->displayText;
     case PersonIdRole:
-        return node->personId;
+        return node->personId.toString();
     case FamilyIdRole:
-        return node->familyId;
+        return node->familyId.toString();
     default:
         return QVariant();
     }
 }
 
-QString NeedsModel::idAt(const QModelIndex& index) const
+SelectionKey NeedsModel::selectionKeyAt(const QModelIndex& index) const
 {
     TreeNode* node = nodeFromIndex(index);
     if (!node)
     {
-        return QString();
-    }
-    return node->personId;
-}
-
-QString NeedsModel::selectionKeyAt(const QModelIndex& index) const
-{
-    TreeNode* node = nodeFromIndex(index);
-    if (!node)
-    {
-        return QString();
+        return SelectionKey::from(QString());
     }
 
     switch (node->type)
     {
     case ItemType::Person:
-        // Currently one need per person (stored as Person.specialNeedNote).
-        // If multiple needs per person is added later, this would need a needId.
-        return node->personId;
+        return SelectionKey::from(node->personId);
     case ItemType::ContactDetail:
-        // Delegate to parent (selecting detail row selects parent)
         return selectionKeyAt(index.parent());
     default:
-        return QString();
+        return SelectionKey::from(QString());
     }
 }
 
@@ -279,34 +259,49 @@ FamilyAssociation NeedsModel::relatedFamiliesAt(const QModelIndex& index) const
         return assoc;
     }
 
-    const Document& doc = m_documentManager->document();
-    ItemType type = itemTypeAt(index);
-    QString id = idAt(index);
-
-    if (type == ItemType::Person)
+    TreeNode* node = nodeFromIndex(index);
+    if (!node)
     {
-        QString familyId = doc.familyIdForPerson(id);
-        if (!familyId.isEmpty())
+        return assoc;
+    }
+
+    if (node->type == ItemType::Person || node->type == ItemType::ContactDetail)
+    {
+        const TreeNode* personNode = (node->type == ItemType::ContactDetail && node->parent)
+                                         ? node->parent
+                                         : node;
+        const Document& doc = m_documentManager->document();
+        std::optional<FamilyId> familyId = doc.familyIdForPerson(personNode->personId);
+        if (familyId)
         {
-            assoc.relatedFamilyIds.insert(familyId);
+            assoc.relatedFamilyIds.insert(*familyId);
         }
     }
 
-    // No contact points in needs view
     return assoc;
 }
 
-QString NeedsModel::familyIdAt(const QModelIndex& index) const
+PersonId NeedsModel::personIdAt(const QModelIndex& index) const
 {
     TreeNode* node = nodeFromIndex(index);
     if (!node)
     {
-        return QString();
+        return PersonId::from(QString());
+    }
+    return node->personId;
+}
+
+FamilyId NeedsModel::familyIdAt(const QModelIndex& index) const
+{
+    TreeNode* node = nodeFromIndex(index);
+    if (!node)
+    {
+        return FamilyId::from(QString());
     }
     return node->familyId;
 }
 
-QModelIndex NeedsModel::indexForPersonId(const QString& personId) const
+QModelIndex NeedsModel::indexForPersonId(const PersonId& personId) const
 {
     for (int i = 0; i < m_personNodes.size(); ++i)
     {
@@ -350,9 +345,9 @@ void NeedsModel::loadContactDetails(const QModelIndex& index)
     }
 
     // Check for address availability
-    const QHash<QString, Family>& families = doc.families();
+    const QHash<FamilyId, Family>& families = doc.families();
     bool hasAddress = false;
-    if (!node->familyId.isEmpty() && families.contains(node->familyId))
+    if (!node->familyId.toString().isEmpty() && families.contains(node->familyId))
     {
         hasAddress = !families[node->familyId].address().isEmpty();
     }

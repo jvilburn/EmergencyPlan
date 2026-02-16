@@ -36,8 +36,7 @@ public:
 
     enum Roles
     {
-        IdRole = Qt::UserRole + 1,
-        RowTypeRole,
+        RowTypeRole = Qt::UserRole + 1,
         FamilyIdRole,
         MemberIndexRole,
         DetailTypeRole
@@ -71,16 +70,16 @@ public:
 
     // BaseTreeModel interface
     ItemType itemTypeAt(const QModelIndex& index) const override;
-    QString selectionKeyAt(const QModelIndex& index) const override;
-    QString idAt(const QModelIndex& index) const override;
+    SelectionKey selectionKeyAt(const QModelIndex& index) const override;
 
     // Lookup helpers
-    QString familyIdAt(const QModelIndex& index) const;
-    QModelIndex indexForFamilyId(const QString& id) const;
+    FamilyId familyIdAt(const QModelIndex& index) const;
+    std::optional<PersonId> personIdAt(const QModelIndex& index) const;
+    QModelIndex indexForFamilyId(const FamilyId& id) const;
     RowType rowTypeAt(const QModelIndex& index) const;
 
     // Access to visible family IDs (for map integration)
-    QStringList familyIds() const;
+    QList<FamilyId> familyIds() const;
 
     DocumentManager* documentManager() const { return m_documentManager; }
 
@@ -93,9 +92,9 @@ private slots:
 
 private:
     // Surgical update methods
-    void updateFamilyRow(const QString& familyId);
-    void insertFamilyRow(const QString& familyId);
-    void removeFamilyRow(const QString& familyId);
+    void updateFamilyRow(const FamilyId& familyId);
+    void insertFamilyRow(const FamilyId& familyId);
+    void removeFamilyRow(const FamilyId& familyId);
 
     /// Internal tree node structure
     struct TreeNode
@@ -118,7 +117,7 @@ private:
     void buildFamilyNode(int familyIndex);
     TreeNode* nodeFromIndex(const QModelIndex& index) const;
 
-    QList<QString> m_familyIds;
+    QList<FamilyId> m_familyIds;
     QList<TreeNode*> m_familyNodes;  // Top-level nodes (owned)
     DocumentManager* m_documentManager;
     Filter* m_filter;

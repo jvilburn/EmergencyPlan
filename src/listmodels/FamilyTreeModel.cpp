@@ -36,17 +36,16 @@ void FamilyTreeModel::clearNodes()
 
 void FamilyTreeModel::onDocumentChanged(const DocumentChange& change)
 {
-    // Only care about Family scope
-    if (change.scope != ChangeScope::Full && change.scope != ChangeScope::Family)
+    // Full document reload
+    if (change.action == ChangeAction::Full)
     {
+        rebuild();
         return;
     }
 
-    // Full reload needed
-    if (change.scope == ChangeScope::Full
-        || change.action == ChangeAction::BatchModified)
+    // Only care about family scope
+    if (!change.familyId)
     {
-        rebuild();
         return;
     }
 
@@ -54,13 +53,13 @@ void FamilyTreeModel::onDocumentChanged(const DocumentChange& change)
     switch (change.action)
     {
         case ChangeAction::Updated:
-            updateFamilyRow(change.entityId);
+            updateFamilyRow(*change.familyId);
             break;
         case ChangeAction::Added:
-            insertFamilyRow(change.entityId);
+            insertFamilyRow(*change.familyId);
             break;
         case ChangeAction::Removed:
-            removeFamilyRow(change.entityId);
+            removeFamilyRow(*change.familyId);
             break;
         default:
             rebuild();
@@ -68,7 +67,7 @@ void FamilyTreeModel::onDocumentChanged(const DocumentChange& change)
     }
 }
 
-void FamilyTreeModel::updateFamilyRow(const QString& familyId)
+void FamilyTreeModel::updateFamilyRow(const FamilyId& familyId)
 {
     // Find the row index for this family
     int row = m_familyIds.indexOf(familyId);
@@ -256,7 +255,7 @@ void FamilyTreeModel::updateFamilyRow(const QString& familyId)
     emit dataChanged(familyIndex, familyIndex);
 }
 
-void FamilyTreeModel::insertFamilyRow(const QString& familyId)
+void FamilyTreeModel::insertFamilyRow(const FamilyId& familyId)
 {
     // Check if family exists and passes filter
     auto family = m_documentManager->document().findFamilyById(familyId);
@@ -320,7 +319,7 @@ void FamilyTreeModel::insertFamilyRow(const QString& familyId)
     emit familyListChanged();
 }
 
-void FamilyTreeModel::removeFamilyRow(const QString& familyId)
+void FamilyTreeModel::removeFamilyRow(const FamilyId& familyId)
 {
     int row = m_familyIds.indexOf(familyId);
     if (row < 0)
@@ -362,10 +361,10 @@ void FamilyTreeModel::rebuild()
     m_familyIds.clear();
 
     const Document& doc = m_documentManager->document();
-    const QHash<QString, Family>& families = doc.families();
+    const QHash<FamilyId, Family>& families = doc.families();
 
     // Collect and filter family IDs
-    QList<QString> ids;
+    QList<FamilyId> ids;
     ids.reserve(families.size());
 
     for (auto it = families.begin(); it != families.end(); ++it)
@@ -377,7 +376,7 @@ void FamilyTreeModel::rebuild()
     }
 
     // Sort by display name
-    std::sort(ids.begin(), ids.end(), [&families](const QString& a, const QString& b) {
+    std::sort(ids.begin(), ids.end(), [&families](const FamilyId& a, const FamilyId& b) {
         return families.value(a).displayName().toLower()
              < families.value(b).displayName().toLower();
     });
@@ -397,7 +396,7 @@ void FamilyTreeModel::rebuild()
 
 void FamilyTreeModel::buildFamilyNode(int familyIndex)
 {
-    const QString& familyId = m_familyIds.at(familyIndex);
+    const FamilyId& familyId = m_familyIds.at(familyIndex);
     std::optional<Family> opt = m_documentManager->document().findFamilyById(familyId);
     if (!opt)
     {
@@ -671,7 +670,7 @@ QVariant FamilyTreeModel::data(const QModelIndex& index, int role) const
         case FamilyIdRole:
             if (node->familyIndex >= 0 && node->familyIndex < m_familyIds.size())
             {
-                return m_familyIds.at(node->familyIndex);
+                return m_familyIds.at(node->familyIndex).toString();
             }
             return QVariant();
 
@@ -699,7 +698,6 @@ QVariant FamilyTreeModel::data(const QModelIndex& index, int role) const
 QHash<int, QByteArray> FamilyTreeModel::roleNames() const
 {
     QHash<int, QByteArray> roles;
-    roles[IdRole] = "id";
     roles[RowTypeRole] = "rowType";
     roles[FamilyIdRole] = "familyId";
     roles[MemberIndexRole] = "memberIndex";
@@ -707,22 +705,51 @@ QHash<int, QByteArray> FamilyTreeModel::roleNames() const
     return roles;
 }
 
-QStringList FamilyTreeModel::familyIds() const
+QList<FamilyId> FamilyTreeModel::familyIds() const
 {
     return m_familyIds;
 }
 
-QString FamilyTreeModel::familyIdAt(const QModelIndex& index) const
+FamilyId FamilyTreeModel::familyIdAt(const QModelIndex& index) const
 {
     TreeNode* node = nodeFromIndex(index);
     if (node && node->familyIndex >= 0 && node->familyIndex < m_familyIds.size())
     {
         return m_familyIds.at(node->familyIndex);
     }
-    return QString();
+    return FamilyId::from(QString());
 }
 
-QModelIndex FamilyTreeModel::indexForFamilyId(const QString& id) const
+std::optional<PersonId> FamilyTreeModel::personIdAt(const QModelIndex& index) const
+{
+    TreeNode* node = nodeFromIndex(index);
+    if (!node || node->type != RowType::Member)
+    {
+        return std::nullopt;
+    }
+
+    FamilyId famId = familyIdAt(index);
+    if (famId.toString().isEmpty())
+    {
+        return std::nullopt;
+    }
+
+    const auto& families = m_documentManager->document().families();
+    auto it = families.find(famId);
+    if (it == families.end())
+    {
+        return std::nullopt;
+    }
+
+    const Family& family = it.value();
+    if (node->memberIndex >= 0 && node->memberIndex < family.members().size())
+    {
+        return family.members().at(node->memberIndex).id();
+    }
+    return std::nullopt;
+}
+
+QModelIndex FamilyTreeModel::indexForFamilyId(const FamilyId& id) const
 {
     int idx = m_familyIds.indexOf(id);
     if (idx >= 0 && idx < m_familyNodes.size())
@@ -765,18 +792,26 @@ ItemType FamilyTreeModel::itemTypeAt(const QModelIndex& index) const
     }
 }
 
-QString FamilyTreeModel::selectionKeyAt(const QModelIndex& index) const
+SelectionKey FamilyTreeModel::selectionKeyAt(const QModelIndex& index) const
 {
     if (!index.isValid())
     {
-        return QString();
+        return SelectionKey::from(QString());
     }
 
     switch (rowTypeAt(index))
     {
     case RowType::Family:
+        return SelectionKey::from(familyIdAt(index));
     case RowType::Member:
-        return idAt(index);
+    {
+        auto personId = personIdAt(index);
+        if (personId)
+        {
+            return SelectionKey::from(*personId);
+        }
+        return SelectionKey::from(QString());
+    }
     case RowType::MemberDetail:
     case RowType::Address:
     case RowType::Phone:
@@ -784,52 +819,6 @@ QString FamilyTreeModel::selectionKeyAt(const QModelIndex& index) const
         // Delegate to parent
         return selectionKeyAt(index.parent());
     default:
-        return QString();
-    }
-}
-
-QString FamilyTreeModel::idAt(const QModelIndex& index) const
-{
-    if (!index.isValid())
-    {
-        return QString();
-    }
-
-    TreeNode* node = nodeFromIndex(index);
-    if (!node)
-    {
-        return QString();
-    }
-
-    switch (node->type)
-    {
-    case RowType::Family:
-        return familyIdAt(index);
-    case RowType::Member:
-    {
-        // Get family ID and member index
-        QString familyId = familyIdAt(index);
-        if (familyId.isEmpty() || node->memberIndex < 0)
-        {
-            return QString();
-        }
-
-        // Look up the person
-        const auto& families = m_documentManager->document().families();
-        if (!families.contains(familyId))
-        {
-            return QString();
-        }
-
-        const Family& family = families[familyId];
-        if (node->memberIndex >= family.members().size())
-        {
-            return QString();
-        }
-
-        return family.members().at(node->memberIndex).id();
-    }
-    default:
-        return QString();
+        return SelectionKey::from(QString());
     }
 }

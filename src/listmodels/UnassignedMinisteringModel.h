@@ -26,9 +26,7 @@ public:
     /// Custom roles for accessing item data
     enum Roles
     {
-        IdRole = Qt::UserRole + 1,
-        NodeTypeRole,
-        SecondaryIdRole
+        NodeTypeRole = Qt::UserRole + 1
     };
     Q_ENUM(Roles)
 
@@ -48,8 +46,7 @@ public:
 
     // BaseTreeModel interface
     ItemType itemTypeAt(const QModelIndex& index) const override;
-    QString selectionKeyAt(const QModelIndex& index) const override;
-    QString idAt(const QModelIndex& index) const override;
+    SelectionKey selectionKeyAt(const QModelIndex& index) const override;
 
     /// Returns family associations for the given index.
     FamilyAssociation relatedFamiliesAt(const QModelIndex& index) const;
@@ -66,16 +63,16 @@ private slots:
 
 private:
     void rebuild();
-    void refreshFamilyDisplayText(const QString& familyId);
+    void refreshFamilyDisplayText(const FamilyId& familyId);
     void clearNodes();
 
     /// Internal tree node structure
     struct TreeNode
     {
         ItemType type;
-        QString id;
+        std::optional<PersonId> personId;
+        std::optional<FamilyId> familyId;
         QString displayText;
-        QString secondaryId;
         TreeNode* parent = nullptr;
         QList<TreeNode*> children;
         bool contactsLoaded = false;
@@ -88,9 +85,9 @@ private:
 
     TreeNode* nodeFromIndex(const QModelIndex& index) const;
     bool isEQ() const { return m_org == MinisteringOrg::EldersQuorum; }
-    QSet<QString> familyIdsForPersons(const QSet<QString>& personIds) const;
-    QSet<QString> unassignedFamilyIds() const;
-    QSet<QString> unassignedSisterIds() const;
+    QSet<FamilyId> familyIdsForPersons(const QSet<PersonId>& personIds) const;
+    QSet<FamilyId> unassignedFamilyIds() const;
+    QSet<PersonId> unassignedSisterIds() const;
 
     TreeNode* m_headerNode = nullptr;  // Single top-level node (owned)
     DocumentManager* m_documentManager;

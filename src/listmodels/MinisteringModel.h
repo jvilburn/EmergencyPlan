@@ -28,9 +28,7 @@ public:
     /// Custom roles for accessing item data
     enum Roles
     {
-        IdRole = Qt::UserRole + 1,
-        NodeTypeRole,
-        SecondaryIdRole  // For ContactDetail: the parent person/family ID
+        NodeTypeRole = Qt::UserRole + 1
     };
     Q_ENUM(Roles)
 
@@ -50,15 +48,14 @@ public:
 
     // BaseTreeModel interface
     ItemType itemTypeAt(const QModelIndex& index) const override;
-    QString selectionKeyAt(const QModelIndex& index) const override;
-    QString idAt(const QModelIndex& index) const override;
+    SelectionKey selectionKeyAt(const QModelIndex& index) const override;
 
     /// Returns family associations for the given index.
     /// Used by views to compute map highlights.
     FamilyAssociation relatedFamiliesAt(const QModelIndex& index) const;
 
     // View-specific accessors
-    QString companionshipIdAt(const QModelIndex& index) const;
+    MinisteringGroupId companionshipIdAt(const QModelIndex& index) const;
 
     // Lazy loading for contact details
     void loadContactDetails(const QModelIndex& index);
@@ -69,16 +66,18 @@ private slots:
 
 private:
     void rebuild();
-    void refreshFamilyDisplayText(const QString& familyId);
+    void refreshFamilyDisplayText(const FamilyId& familyId);
     void clearNodes();
 
     /// Internal tree node structure
     struct TreeNode
     {
         ItemType type;
-        QString id;
+        std::optional<MinisteringDistrictId> districtId;
+        std::optional<MinisteringGroupId> groupId;
+        std::optional<PersonId> personId;
+        std::optional<FamilyId> familyId;
         QString displayText;
-        QString secondaryId;  // For ContactDetail: person/family ID
         TreeNode* parent = nullptr;
         QList<TreeNode*> children;
         bool contactsLoaded = false;
@@ -90,11 +89,11 @@ private:
     };
 
     TreeNode* nodeFromIndex(const QModelIndex& index) const;
-    void addMinistersSection(TreeNode* companionshipNode, const QString& groupId);
-    void addMinisteredSection(TreeNode* companionshipNode, const QString& groupId);
+    void addMinistersSection(TreeNode* companionshipNode, const MinisteringGroupId& groupId);
+    void addMinisteredSection(TreeNode* companionshipNode, const MinisteringGroupId& groupId);
     int countMinisteredChildren(TreeNode* companionshipNode) const;
     bool isEQ() const { return m_org == MinisteringOrg::EldersQuorum; }
-    QSet<QString> familyIdsForPersons(const QSet<QString>& personIds) const;
+    QSet<FamilyId> familyIdsForPersons(const QSet<PersonId>& personIds) const;
 
     QList<TreeNode*> m_districtNodes;  // Top-level nodes (owned)
     DocumentManager* m_documentManager;

@@ -42,34 +42,30 @@ void MinisteringModel::clearNodes()
 
 void MinisteringModel::onDocumentChanged(const DocumentChange& change)
 {
-    // Structural changes: full rebuild
-    if (change.scope == ChangeScope::Full
-        || change.action == ChangeAction::BatchModified)
+    // Full document reload
+    if (change.action == ChangeAction::Full)
     {
         rebuild();
         return;
     }
 
     // Ministering structure changes: full rebuild
-    if (change.scope == ChangeScope::EqDistrict
-        || change.scope == ChangeScope::EqGroup
-        || change.scope == ChangeScope::RsDistrict
-        || change.scope == ChangeScope::RsGroup)
+    if (change.eqDistrictId || change.eqGroupId
+        || change.rsDistrictId || change.rsGroupId)
     {
         rebuild();
         return;
     }
 
     // Family updated: refresh display text only
-    if (change.scope == ChangeScope::Family
-        && change.action == ChangeAction::Updated)
+    if (change.familyId && change.action == ChangeAction::Updated)
     {
-        refreshFamilyDisplayText(change.entityId);
+        refreshFamilyDisplayText(*change.familyId);
         return;
     }
 
-    // Family added/removed: rebuild (rare, structure might change)
-    if (change.scope == ChangeScope::Family)
+    // Family added/removed: rebuild
+    if (change.familyId)
     {
         rebuild();
     }
@@ -82,8 +78,8 @@ void MinisteringModel::rebuild()
     clearNodes();
 
     const Document& doc = m_documentManager->document();
-    const QHash<QString, MinisteringDistrict>& districts = isEQ() ? doc.eqDistricts() : doc.rsDistricts();
-    const QHash<QString, MinisteringGroup>& groups = isEQ() ? doc.eqGroups() : doc.rsGroups();
+    const QHash<MinisteringDistrictId, MinisteringDistrict>& districts = isEQ() ? doc.eqDistricts() : doc.rsDistricts();
+    const QHash<MinisteringGroupId, MinisteringGroup>& groups = isEQ() ? doc.eqGroups() : doc.rsGroups();
 
     // Sort districts by name
     QList<MinisteringDistrict> sortedDistricts = districts.values();
@@ -95,12 +91,12 @@ void MinisteringModel::rebuild()
     {
         TreeNode* districtNode = new TreeNode();
         districtNode->type = ItemType::District;
-        districtNode->id = district.id();
+        districtNode->districtId = district.id();
         // Display text will be updated after filtering
 
         // Collect companionships with minister names for sorting
-        QList<QPair<QString, QString>> sortedGroups;  // (minister names, group ID)
-        for (const QString& groupId : district.groupIds())
+        QList<QPair<QString, MinisteringGroupId>> sortedGroups;  // (minister names, group ID)
+        for (const MinisteringGroupId& groupId : district.groupIds())
         {
             if (!groups.contains(groupId))
             {
@@ -111,7 +107,7 @@ void MinisteringModel::rebuild()
 
             // Build minister names
             QStringList ministerNames;
-            for (const QString& ministerId : group.ministerIds())
+            for (const PersonId& ministerId : group.ministerIds())
             {
                 std::optional<Person> person = doc.findPersonById(ministerId);
                 if (person)
@@ -124,19 +120,19 @@ void MinisteringModel::rebuild()
         }
 
         std::sort(sortedGroups.begin(), sortedGroups.end(),
-                  [](const QPair<QString, QString>& a, const QPair<QString, QString>& b)
+                  [](const QPair<QString, MinisteringGroupId>& a, const QPair<QString, MinisteringGroupId>& b)
                   { return a.first.toLower() < b.first.toLower(); });
 
         // Add companionships under this district
         int districtCount = 0;
-        for (const QPair<QString, QString>& groupData : sortedGroups)
+        for (const QPair<QString, MinisteringGroupId>& groupData : sortedGroups)
         {
             const QString& ministerNames = groupData.first;
-            const QString& groupId = groupData.second;
+            const MinisteringGroupId& groupId = groupData.second;
 
             TreeNode* companionshipNode = new TreeNode();
             companionshipNode->type = ItemType::Companionship;
-            companionshipNode->id = groupId;
+            companionshipNode->groupId = groupId;
             // Display text will be updated after filtering
             companionshipNode->parent = districtNode;
             districtNode->children.append(companionshipNode);
@@ -166,10 +162,10 @@ void MinisteringModel::rebuild()
     endResetModel();
 }
 
-void MinisteringModel::addMinistersSection(TreeNode* companionshipNode, const QString& groupId)
+void MinisteringModel::addMinistersSection(TreeNode* companionshipNode, const MinisteringGroupId& groupId)
 {
     const Document& doc = m_documentManager->document();
-    const QHash<QString, MinisteringGroup>& groups = isEQ() ? doc.eqGroups() : doc.rsGroups();
+    const QHash<MinisteringGroupId, MinisteringGroup>& groups = isEQ() ? doc.eqGroups() : doc.rsGroups();
 
     if (!groups.contains(groupId))
     {
@@ -181,14 +177,14 @@ void MinisteringModel::addMinistersSection(TreeNode* companionshipNode, const QS
     // Create "Ministers" section header
     TreeNode* ministersHeader = new TreeNode();
     ministersHeader->type = ItemType::SectionHeader;
-    ministersHeader->id = groupId + ":ministers";
+    ministersHeader->groupId = groupId;
     ministersHeader->displayText = tr("Ministers");
     ministersHeader->parent = companionshipNode;
     companionshipNode->children.append(ministersHeader);
 
     // Collect and sort ministers by name
-    QList<QPair<QString, QString>> sortedMinisters;  // (display name, person ID)
-    for (const QString& ministerId : group.ministerIds())
+    QList<QPair<QString, PersonId>> sortedMinisters;  // (display name, person ID)
+    for (const PersonId& ministerId : group.ministerIds())
     {
         std::optional<Person> person = doc.findPersonById(ministerId);
         if (person)
@@ -198,25 +194,25 @@ void MinisteringModel::addMinistersSection(TreeNode* companionshipNode, const QS
     }
 
     std::sort(sortedMinisters.begin(), sortedMinisters.end(),
-              [](const QPair<QString, QString>& a, const QPair<QString, QString>& b)
+              [](const QPair<QString, PersonId>& a, const QPair<QString, PersonId>& b)
               { return a.first.toLower() < b.first.toLower(); });
 
     // Add individual ministers
-    for (const QPair<QString, QString>& ministerData : sortedMinisters)
+    for (const QPair<QString, PersonId>& ministerData : sortedMinisters)
     {
         TreeNode* ministerNode = new TreeNode();
         ministerNode->type = ItemType::Minister;
-        ministerNode->id = ministerData.second;
+        ministerNode->personId = ministerData.second;
         ministerNode->displayText = ministerData.first;
         ministerNode->parent = ministersHeader;
         ministersHeader->children.append(ministerNode);
     }
 }
 
-void MinisteringModel::addMinisteredSection(TreeNode* companionshipNode, const QString& groupId)
+void MinisteringModel::addMinisteredSection(TreeNode* companionshipNode, const MinisteringGroupId& groupId)
 {
     const Document& doc = m_documentManager->document();
-    const QHash<QString, MinisteringGroup>& groups = isEQ() ? doc.eqGroups() : doc.rsGroups();
+    const QHash<MinisteringGroupId, MinisteringGroup>& groups = isEQ() ? doc.eqGroups() : doc.rsGroups();
 
     if (!groups.contains(groupId))
     {
@@ -228,7 +224,7 @@ void MinisteringModel::addMinisteredSection(TreeNode* companionshipNode, const Q
     // Create section header - "Families" for EQ, "Sisters" for RS
     TreeNode* ministeredHeader = new TreeNode();
     ministeredHeader->type = ItemType::SectionHeader;
-    ministeredHeader->id = groupId + ":ministered";
+    ministeredHeader->groupId = groupId;
     ministeredHeader->displayText = isEQ() ? tr("Families") : tr("Sisters");
     ministeredHeader->parent = companionshipNode;
     companionshipNode->children.append(ministeredHeader);
@@ -236,11 +232,11 @@ void MinisteringModel::addMinisteredSection(TreeNode* companionshipNode, const Q
     if (isEQ())
     {
         // EQ: Add families
-        const QHash<QString, Family>& families = doc.families();
+        const QHash<FamilyId, Family>& families = doc.families();
 
         // Collect and sort families by name
-        QList<QPair<QString, QString>> sortedFamilies;  // (display name, family ID)
-        for (const QString& familyId : group.familyIds())
+        QList<QPair<QString, FamilyId>> sortedFamilies;  // (display name, family ID)
+        for (const FamilyId& familyId : group.familyIds())
         {
             if (families.contains(familyId))
             {
@@ -255,14 +251,14 @@ void MinisteringModel::addMinisteredSection(TreeNode* companionshipNode, const Q
         }
 
         std::sort(sortedFamilies.begin(), sortedFamilies.end(),
-                  [](const QPair<QString, QString>& a, const QPair<QString, QString>& b)
+                  [](const QPair<QString, FamilyId>& a, const QPair<QString, FamilyId>& b)
                   { return a.first.toLower() < b.first.toLower(); });
 
-        for (const QPair<QString, QString>& familyData : sortedFamilies)
+        for (const QPair<QString, FamilyId>& familyData : sortedFamilies)
         {
             TreeNode* familyNode = new TreeNode();
             familyNode->type = ItemType::MinisteredFamily;
-            familyNode->id = familyData.second;
+            familyNode->familyId = familyData.second;
             familyNode->displayText = familyData.first;
             familyNode->parent = ministeredHeader;
             ministeredHeader->children.append(familyNode);
@@ -271,8 +267,8 @@ void MinisteringModel::addMinisteredSection(TreeNode* companionshipNode, const Q
     else
     {
         // RS: Add sisters
-        QList<QPair<QString, QString>> sortedSisters;  // (display name, person ID)
-        for (const QString& personId : group.ministeredPersonIds())
+        QList<QPair<QString, PersonId>> sortedSisters;  // (display name, person ID)
+        for (const PersonId& personId : group.ministeredPersonIds())
         {
             std::optional<Person> person = doc.findPersonById(personId);
             if (person)
@@ -287,14 +283,14 @@ void MinisteringModel::addMinisteredSection(TreeNode* companionshipNode, const Q
         }
 
         std::sort(sortedSisters.begin(), sortedSisters.end(),
-                  [](const QPair<QString, QString>& a, const QPair<QString, QString>& b)
+                  [](const QPair<QString, PersonId>& a, const QPair<QString, PersonId>& b)
                   { return a.first.toLower() < b.first.toLower(); });
 
-        for (const QPair<QString, QString>& sisterData : sortedSisters)
+        for (const QPair<QString, PersonId>& sisterData : sortedSisters)
         {
             TreeNode* sisterNode = new TreeNode();
             sisterNode->type = ItemType::MinisteredSister;
-            sisterNode->id = sisterData.second;
+            sisterNode->personId = sisterData.second;
             sisterNode->displayText = sisterData.first;
             sisterNode->parent = ministeredHeader;
             ministeredHeader->children.append(sisterNode);
@@ -457,70 +453,92 @@ QVariant MinisteringModel::data(const QModelIndex& index, int role) const
         }
         return QVariant();
 
-    case IdRole:
-        return node->id;
-
     case NodeTypeRole:
         return QVariant::fromValue(node->type);
-
-    case SecondaryIdRole:
-        return node->secondaryId;
 
     default:
         return QVariant();
     }
 }
 
-QString MinisteringModel::idAt(const QModelIndex& index) const
-{
-    TreeNode* node = nodeFromIndex(index);
-    if (node)
-    {
-        return node->id;
-    }
-    return QString();
-}
-
-QString MinisteringModel::selectionKeyAt(const QModelIndex& index) const
+SelectionKey MinisteringModel::selectionKeyAt(const QModelIndex& index) const
 {
     TreeNode* node = nodeFromIndex(index);
     if (!node)
     {
-        return QString();
+        return SelectionKey::from(QString());
     }
 
     switch (node->type)
     {
     case ItemType::District:
-        return node->id;
+        if (node->districtId)
+        {
+            return SelectionKey::from(*node->districtId);
+        }
+        return SelectionKey::from(QString());
     case ItemType::Companionship:
-        return node->id;  // groupId stored in node->id
+        if (node->groupId)
+        {
+            return SelectionKey::from(*node->groupId);
+        }
+        return SelectionKey::from(QString());
     case ItemType::SectionHeader:
-        return node->id;  // Already formatted as "{groupId}:ministers" etc.
+    {
+        // Determine if this is the ministers or ministered section
+        // Ministers section is always first child of companionship
+        if (node->groupId && node->parent && node->parent->type == ItemType::Companionship)
+        {
+            bool isMinistersSection = (node->parent->children.indexOf(const_cast<TreeNode*>(node)) == 0);
+            QString suffix = isMinistersSection ? "ministers" : "ministered";
+            return SelectionKey::literal(node->groupId->toString() + ":" + suffix);
+        }
+        return SelectionKey::from(QString());
+    }
     case ItemType::Minister:
-        return QString("%1:minister:%2").arg(companionshipIdAt(index), node->id);
+    {
+        MinisteringGroupId compId = companionshipIdAt(index);
+        if (node->personId)
+        {
+            return SelectionKey::literal(compId.toString() + ":minister:" + node->personId->toString());
+        }
+        return SelectionKey::from(QString());
+    }
     case ItemType::MinisteredFamily:
-        return QString("%1:family:%2").arg(companionshipIdAt(index), node->id);
+    {
+        MinisteringGroupId compId = companionshipIdAt(index);
+        if (node->familyId)
+        {
+            return SelectionKey::literal(compId.toString() + ":family:" + node->familyId->toString());
+        }
+        return SelectionKey::from(QString());
+    }
     case ItemType::MinisteredSister:
-        return QString("%1:sister:%2").arg(companionshipIdAt(index), node->id);
+    {
+        MinisteringGroupId compId = companionshipIdAt(index);
+        if (node->personId)
+        {
+            return SelectionKey::literal(compId.toString() + ":sister:" + node->personId->toString());
+        }
+        return SelectionKey::from(QString());
+    }
     case ItemType::ContactDetail:
-        // Delegate to parent (selecting detail row selects parent)
         return selectionKeyAt(index.parent());
     default:
-        return QString();
+        return SelectionKey::from(QString());
     }
 }
 
-QSet<QString> MinisteringModel::familyIdsForPersons(const QSet<QString>& personIds) const
+QSet<FamilyId> MinisteringModel::familyIdsForPersons(const QSet<PersonId>& personIds) const
 {
-    QSet<QString> familyIds;
+    QSet<FamilyId> familyIds;
     const Document& doc = m_documentManager->document();
-    for (const QString& personId : personIds)
+    for (const PersonId& personId : personIds)
     {
-        QString familyId = doc.familyIdForPerson(personId);
-        if (!familyId.isEmpty())
+        std::optional<FamilyId> familyId = doc.familyIdForPerson(personId);
+        if (familyId)
         {
-            familyIds.insert(familyId);
+            familyIds.insert(*familyId);
         }
     }
     return familyIds;
@@ -528,10 +546,11 @@ QSet<QString> MinisteringModel::familyIdsForPersons(const QSet<QString>& personI
 
 int MinisteringModel::countMinisteredChildren(TreeNode* companionshipNode) const
 {
-    for (TreeNode* section : companionshipNode->children)
+    // Ministered section is always the second child of companionship
+    if (companionshipNode->children.size() >= 2)
     {
-        if (section->type == ItemType::SectionHeader
-            && section->id.endsWith(":ministered"))
+        TreeNode* section = companionshipNode->children[1];
+        if (section->type == ItemType::SectionHeader)
         {
             return section->children.size();
         }
@@ -547,20 +566,23 @@ FamilyAssociation MinisteringModel::relatedFamiliesAt(const QModelIndex& index) 
         return assoc;
     }
 
-    ItemType type = itemTypeAt(index);
-    QString id = idAt(index);
+    TreeNode* node = nodeFromIndex(index);
+    if (!node)
+    {
+        return assoc;
+    }
 
     const Document& doc = m_documentManager->document();
     const auto& districts = isEQ() ? doc.eqDistricts() : doc.rsDistricts();
     const auto& groups = isEQ() ? doc.eqGroups() : doc.rsGroups();
 
-    switch (type)
+    switch (node->type)
     {
     case ItemType::District:
-        if (districts.contains(id))
+        if (node->districtId && districts.contains(*node->districtId))
         {
-            const MinisteringDistrict& district = districts[id];
-            for (const QString& groupId : district.groupIds())
+            const MinisteringDistrict& district = districts[*node->districtId];
+            for (const MinisteringGroupId& groupId : district.groupIds())
             {
                 if (groups.contains(groupId))
                 {
@@ -580,9 +602,9 @@ FamilyAssociation MinisteringModel::relatedFamiliesAt(const QModelIndex& index) 
         break;
 
     case ItemType::Companionship:
-        if (groups.contains(id))
+        if (node->groupId && groups.contains(*node->groupId))
         {
-            const MinisteringGroup& group = groups[id];
+            const MinisteringGroup& group = groups[*node->groupId];
             if (isEQ())
             {
                 assoc.relatedFamilyIds = group.familyIds();
@@ -597,31 +619,27 @@ FamilyAssociation MinisteringModel::relatedFamiliesAt(const QModelIndex& index) 
 
     case ItemType::SectionHeader:
     {
-        int colonPos = id.lastIndexOf(':');
-        if (colonPos > 0)
+        if (node->groupId && groups.contains(*node->groupId))
         {
-            QString compId = id.left(colonPos);
-            QString sectionType = id.mid(colonPos + 1);
-
-            if (groups.contains(compId))
+            const MinisteringGroup& group = groups[*node->groupId];
+            bool isMinistersSection = (node->parent
+                                       && node->parent->type == ItemType::Companionship
+                                       && node->parent->children.indexOf(const_cast<TreeNode*>(node)) == 0);
+            if (isMinistersSection)
             {
-                const MinisteringGroup& group = groups[compId];
-                if (sectionType == "ministers")
+                QSet<FamilyId> ministerFamilies = familyIdsForPersons(group.ministerIds());
+                assoc.relatedFamilyIds = ministerFamilies;
+                assoc.contactPointFamilyIds = ministerFamilies;
+            }
+            else
+            {
+                if (isEQ())
                 {
-                    QSet<QString> ministerFamilies = familyIdsForPersons(group.ministerIds());
-                    assoc.relatedFamilyIds = ministerFamilies;
-                    assoc.contactPointFamilyIds = ministerFamilies;
+                    assoc.relatedFamilyIds = group.familyIds();
                 }
                 else
                 {
-                    if (isEQ())
-                    {
-                        assoc.relatedFamilyIds = group.familyIds();
-                    }
-                    else
-                    {
-                        assoc.relatedFamilyIds = familyIdsForPersons(group.ministeredPersonIds());
-                    }
+                    assoc.relatedFamilyIds = familyIdsForPersons(group.ministeredPersonIds());
                 }
             }
         }
@@ -630,25 +648,34 @@ FamilyAssociation MinisteringModel::relatedFamiliesAt(const QModelIndex& index) 
 
     case ItemType::Minister:
     {
-        QString familyId = doc.familyIdForPerson(id);
-        if (!familyId.isEmpty())
+        if (node->personId)
         {
-            assoc.relatedFamilyIds.insert(familyId);
-            assoc.contactPointFamilyIds.insert(familyId);
+            std::optional<FamilyId> fid = doc.familyIdForPerson(*node->personId);
+            if (fid)
+            {
+                assoc.relatedFamilyIds.insert(*fid);
+                assoc.contactPointFamilyIds.insert(*fid);
+            }
         }
         break;
     }
 
     case ItemType::MinisteredFamily:
-        assoc.relatedFamilyIds.insert(id);
+        if (node->familyId)
+        {
+            assoc.relatedFamilyIds.insert(*node->familyId);
+        }
         break;
 
     case ItemType::MinisteredSister:
     {
-        QString familyId = doc.familyIdForPerson(id);
-        if (!familyId.isEmpty())
+        if (node->personId)
         {
-            assoc.relatedFamilyIds.insert(familyId);
+            std::optional<FamilyId> fid = doc.familyIdForPerson(*node->personId);
+            if (fid)
+            {
+                assoc.relatedFamilyIds.insert(*fid);
+            }
         }
         break;
     }
@@ -670,24 +697,24 @@ ItemType MinisteringModel::itemTypeAt(const QModelIndex& index) const
     return ItemType::Invalid;
 }
 
-QString MinisteringModel::companionshipIdAt(const QModelIndex& index) const
+MinisteringGroupId MinisteringModel::companionshipIdAt(const QModelIndex& index) const
 {
     TreeNode* node = nodeFromIndex(index);
     if (!node)
     {
-        return QString();
+        return MinisteringGroupId::from(QString());
     }
 
     // Walk up to find the companionship
     while (node)
     {
-        if (node->type == ItemType::Companionship)
+        if (node->type == ItemType::Companionship && node->groupId)
         {
-            return node->id;
+            return *node->groupId;
         }
         node = node->parent;
     }
-    return QString();
+    return MinisteringGroupId::from(QString());
 }
 
 // Note: Similar logic exists in UnassignedMinisteringModel::loadContactDetails().
@@ -714,7 +741,13 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
     if (node->type == ItemType::Minister || node->type == ItemType::MinisteredSister)
     {
         // Person contact info
-        std::optional<Person> person = doc.findPersonById(node->id);
+        if (!node->personId)
+        {
+            node->contactsLoaded = true;
+            return;
+        }
+
+        std::optional<Person> person = doc.findPersonById(*node->personId);
         if (!person)
         {
             node->contactsLoaded = true;
@@ -722,12 +755,12 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
         }
 
         // Check for address availability
-        QString familyId = doc.familyIdForPerson(node->id);
-        const QHash<QString, Family>& families = doc.families();
+        std::optional<FamilyId> familyId = doc.familyIdForPerson(*node->personId);
+        const QHash<FamilyId, Family>& families = doc.families();
         bool hasAddress = false;
-        if (!familyId.isEmpty() && families.contains(familyId))
+        if (familyId && families.contains(*familyId))
         {
-            hasAddress = !families[familyId].address().isEmpty();
+            hasAddress = !families[*familyId].address().isEmpty();
         }
 
         // Count actual items to insert
@@ -763,7 +796,7 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
             TreeNode* phoneNode = new TreeNode();
             phoneNode->type = ItemType::ContactDetail;
             phoneNode->displayText = ContactIcons::Phone + person->phone();
-            phoneNode->secondaryId = node->id;
+            phoneNode->personId = node->personId;
             phoneNode->parent = node;
             node->children.append(phoneNode);
         }
@@ -774,7 +807,7 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
             TreeNode* altPhoneNode = new TreeNode();
             altPhoneNode->type = ItemType::ContactDetail;
             altPhoneNode->displayText = ContactIcons::Phone + person->altPhone() + tr(" (alt)");
-            altPhoneNode->secondaryId = node->id;
+            altPhoneNode->personId = node->personId;
             altPhoneNode->parent = node;
             node->children.append(altPhoneNode);
         }
@@ -785,7 +818,7 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
             TreeNode* emailNode = new TreeNode();
             emailNode->type = ItemType::ContactDetail;
             emailNode->displayText = ContactIcons::Email + person->email();
-            emailNode->secondaryId = node->id;
+            emailNode->personId = node->personId;
             emailNode->parent = node;
             node->children.append(emailNode);
         }
@@ -793,11 +826,11 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
         // Address (from family)
         if (hasAddress)
         {
-            const Family& family = families[familyId];
+            const Family& family = families[*familyId];
             TreeNode* addrNode = new TreeNode();
             addrNode->type = ItemType::ContactDetail;
             addrNode->displayText = ContactIcons::Address + family.address().full();
-            addrNode->secondaryId = node->id;
+            addrNode->personId = node->personId;
             addrNode->parent = node;
             node->children.append(addrNode);
         }
@@ -807,14 +840,14 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
     else if (node->type == ItemType::MinisteredFamily)
     {
         // Family contact info
-        const QHash<QString, Family>& families = doc.families();
-        if (!families.contains(node->id))
+        const QHash<FamilyId, Family>& families = doc.families();
+        if (!node->familyId || !families.contains(*node->familyId))
         {
             node->contactsLoaded = true;
             return;
         }
 
-        const Family& family = families[node->id];
+        const Family& family = families[*node->familyId];
 
         // Count actual items to insert
         int itemCount = 0;
@@ -851,7 +884,7 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
                     TreeNode* phoneNode = new TreeNode();
                     phoneNode->type = ItemType::ContactDetail;
                     phoneNode->displayText = ContactIcons::Phone + member.phone();
-                    phoneNode->secondaryId = node->id;
+                    phoneNode->familyId = node->familyId;
                     phoneNode->parent = node;
                     node->children.append(phoneNode);
                     break;
@@ -865,7 +898,7 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
             TreeNode* addrNode = new TreeNode();
             addrNode->type = ItemType::ContactDetail;
             addrNode->displayText = ContactIcons::Address + family.address().full();
-            addrNode->secondaryId = node->id;
+            addrNode->familyId = node->familyId;
             addrNode->parent = node;
             node->children.append(addrNode);
         }
@@ -886,7 +919,7 @@ bool MinisteringModel::hasContactsLoaded(const QModelIndex& index) const
     return false;
 }
 
-void MinisteringModel::refreshFamilyDisplayText(const QString& familyId)
+void MinisteringModel::refreshFamilyDisplayText(const FamilyId& familyId)
 {
     const Document& doc = m_documentManager->document();
     const auto& families = doc.families();
@@ -899,7 +932,7 @@ void MinisteringModel::refreshFamilyDisplayText(const QString& familyId)
     const Family& family = families[familyId];
 
     // Build set of person IDs in this family for quick lookup
-    QSet<QString> personIds;
+    QSet<PersonId> personIds;
     for (const Person& member : family.members())
     {
         personIds.insert(member.id());
@@ -937,9 +970,9 @@ void MinisteringModel::refreshFamilyDisplayText(const QString& familyId)
                         || itemNode->type == ItemType::MinisteredSister)
                     {
                         // Person node - check if person is in updated family
-                        if (personIds.contains(itemNode->id))
+                        if (itemNode->personId && personIds.contains(*itemNode->personId))
                         {
-                            std::optional<Person> person = doc.findPersonById(itemNode->id);
+                            std::optional<Person> person = doc.findPersonById(*itemNode->personId);
                             if (person)
                             {
                                 itemNode->displayText = person->displayName();
@@ -954,7 +987,7 @@ void MinisteringModel::refreshFamilyDisplayText(const QString& familyId)
                     else if (itemNode->type == ItemType::MinisteredFamily)
                     {
                         // Family node - check if this is the updated family
-                        if (itemNode->id == familyId)
+                        if (itemNode->familyId && *itemNode->familyId == familyId)
                         {
                             itemNode->displayText = family.displayName();
                             needsUpdate = true;
@@ -974,14 +1007,14 @@ void MinisteringModel::refreshFamilyDisplayText(const QString& familyId)
             if (companionshipAffected)
             {
                 // Rebuild companionship display text from current minister names
-                const QHash<QString, MinisteringGroup>& groups =
+                const QHash<MinisteringGroupId, MinisteringGroup>& groups =
                     isEQ() ? doc.eqGroups() : doc.rsGroups();
 
-                if (groups.contains(compNode->id))
+                if (compNode->groupId && groups.contains(*compNode->groupId))
                 {
-                    const MinisteringGroup& group = groups[compNode->id];
+                    const MinisteringGroup& group = groups[*compNode->groupId];
                     QStringList ministerNames;
-                    for (const QString& ministerId : group.ministerIds())
+                    for (const PersonId& ministerId : group.ministerIds())
                     {
                         std::optional<Person> person = doc.findPersonById(ministerId);
                         if (person)
@@ -1013,10 +1046,10 @@ void MinisteringModel::refreshFamilyDisplayText(const QString& familyId)
         }
 
         const auto& districts = isEQ() ? doc.eqDistricts() : doc.rsDistricts();
-        if (districts.contains(districtNode->id))
+        if (districtNode->districtId && districts.contains(*districtNode->districtId))
         {
             districtNode->displayText = QString("%1 (%2 %3)")
-                .arg(districts[districtNode->id].name())
+                .arg(districts[*districtNode->districtId].name())
                 .arg(districtCount)
                 .arg(isEQ() ? tr("families") : tr("sisters"));
 
