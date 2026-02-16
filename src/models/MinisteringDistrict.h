@@ -4,8 +4,9 @@
 #include <QSet>
 #include <QJsonObject>
 #include <QJsonArray>
-#include <QUuid>
 #include <optional>
+
+#include "Id.h"
 
 class MinisteringDistrict
 {
@@ -15,24 +16,24 @@ public:
     // Factory method for creating new districts
     static MinisteringDistrict create(
         const QString& name,
-        const std::optional<QString>& presidencyMemberId = std::nullopt,
-        const QSet<QString>& groupIds = {});
+        std::optional<PersonId> presidencyMemberId = std::nullopt,
+        const QSet<MinisteringGroupId>& groupIds = {});
 
     // Getters
-    const QString& id() const { return m_id; }
+    const MinisteringDistrictId& id() const { return m_id; }
     const QString& name() const { return m_name; }
-    std::optional<QString> presidencyMemberId() const { return m_presidencyMemberId; }
-    const QSet<QString>& groupIds() const { return m_groupIds; }
+    std::optional<PersonId> presidencyMemberId() const { return m_presidencyMemberId; }
+    const QSet<MinisteringGroupId>& groupIds() const { return m_groupIds; }
 
     // Setters
     void setName(const QString& name) { m_name = name; }
-    void setPresidencyMemberId(std::optional<QString> presidencyMemberId) { m_presidencyMemberId = presidencyMemberId; }
-    void setGroupIds(const QSet<QString>& groupIds) { m_groupIds = groupIds; }
-    void addGroup(const QString& groupId) { m_groupIds.insert(groupId); }
-    void removeGroup(const QString& groupId) { m_groupIds.remove(groupId); }
+    void setPresidencyMemberId(std::optional<PersonId> presidencyMemberId) { m_presidencyMemberId = presidencyMemberId; }
+    void setGroupIds(const QSet<MinisteringGroupId>& groupIds) { m_groupIds = groupIds; }
+    void addGroup(const MinisteringGroupId& groupId) { m_groupIds.insert(groupId); }
+    void removeGroup(const MinisteringGroupId& groupId) { m_groupIds.remove(groupId); }
 
     // Computed properties
-    bool hasPresidencyMember() const { return m_presidencyMemberId.has_value() && !m_presidencyMemberId->isEmpty(); }
+    bool hasPresidencyMember() const { return m_presidencyMemberId.has_value(); }
     bool hasGroups() const { return !m_groupIds.isEmpty(); }
     int groupCount() const { return m_groupIds.size(); }
 
@@ -45,8 +46,8 @@ public:
     bool operator!=(const MinisteringDistrict& other) const { return !(*this == other); }
 
 private:
-    QString m_id;
+    MinisteringDistrictId m_id;
     QString m_name;
-    std::optional<QString> m_presidencyMemberId;
-    QSet<QString> m_groupIds;
+    std::optional<PersonId> m_presidencyMemberId;
+    QSet<MinisteringGroupId> m_groupIds;
 };

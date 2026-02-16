@@ -5,8 +5,9 @@
 #include <QDate>
 #include <QJsonObject>
 #include <QJsonArray>
-#include <QUuid>
 #include <optional>
+
+#include "Id.h"
 
 /// Unified ministering group for both EQ and RS.
 /// EQ groups: minister families (familyIds)
@@ -18,35 +19,35 @@ public:
 
     /// Factory method for EQ groups (ministers to families)
     static MinisteringGroup createEQ(
-        const QSet<QString>& ministerIds = {},
-        const QSet<QString>& familyIds = {});
+        const QSet<PersonId>& ministerIds = {},
+        const QSet<FamilyId>& familyIds = {});
 
     /// Factory method for RS groups (ministers to persons)
     static MinisteringGroup createRS(
-        const QSet<QString>& ministerIds = {},
-        const QSet<QString>& ministeredPersonIds = {});
+        const QSet<PersonId>& ministerIds = {},
+        const QSet<PersonId>& ministeredPersonIds = {});
 
     // Getters
-    const QString& id() const { return m_id; }
-    const QSet<QString>& ministerIds() const { return m_ministerIds; }
-    const QSet<QString>& familyIds() const { return m_familyIds; }
-    const QSet<QString>& ministeredPersonIds() const { return m_ministeredPersonIds; }
+    const MinisteringGroupId& id() const { return m_id; }
+    const QSet<PersonId>& ministerIds() const { return m_ministerIds; }
+    const QSet<FamilyId>& familyIds() const { return m_familyIds; }
+    const QSet<PersonId>& ministeredPersonIds() const { return m_ministeredPersonIds; }
     std::optional<QDate> interviewedDate() const { return m_interviewedDate; }
-    std::optional<QString> presidencyMemberId() const { return m_presidencyMemberId; }
+    std::optional<PersonId> presidencyMemberId() const { return m_presidencyMemberId; }
 
     // Setters
-    void setMinisterIds(const QSet<QString>& ministerIds) { m_ministerIds = ministerIds; }
-    void setFamilyIds(const QSet<QString>& familyIds) { m_familyIds = familyIds; }
-    void setMinisteredPersonIds(const QSet<QString>& ids) { m_ministeredPersonIds = ids; }
+    void setMinisterIds(const QSet<PersonId>& ministerIds) { m_ministerIds = ministerIds; }
+    void setFamilyIds(const QSet<FamilyId>& familyIds) { m_familyIds = familyIds; }
+    void setMinisteredPersonIds(const QSet<PersonId>& ids) { m_ministeredPersonIds = ids; }
     void setInterviewedDate(std::optional<QDate> date) { m_interviewedDate = date; }
-    void setPresidencyMemberId(std::optional<QString> id) { m_presidencyMemberId = id; }
+    void setPresidencyMemberId(std::optional<PersonId> id) { m_presidencyMemberId = id; }
     void setIsRSGroup(bool isRS) { m_isRSFormat = isRS; }
-    void addMinister(const QString& personId) { m_ministerIds.insert(personId); }
-    void removeMinister(const QString& personId) { m_ministerIds.remove(personId); }
-    void addFamily(const QString& familyId) { m_familyIds.insert(familyId); }
-    void removeFamily(const QString& familyId) { m_familyIds.remove(familyId); }
-    void addMinisteredPerson(const QString& personId) { m_ministeredPersonIds.insert(personId); }
-    void removeMinisteredPerson(const QString& personId) { m_ministeredPersonIds.remove(personId); }
+    void addMinister(const PersonId& personId) { m_ministerIds.insert(personId); }
+    void removeMinister(const PersonId& personId) { m_ministerIds.remove(personId); }
+    void addFamily(const FamilyId& familyId) { m_familyIds.insert(familyId); }
+    void removeFamily(const FamilyId& familyId) { m_familyIds.remove(familyId); }
+    void addMinisteredPerson(const PersonId& personId) { m_ministeredPersonIds.insert(personId); }
+    void removeMinisteredPerson(const PersonId& personId) { m_ministeredPersonIds.remove(personId); }
 
     // Computed properties
     bool hasMinisters() const { return !m_ministerIds.isEmpty(); }
@@ -68,11 +69,11 @@ public:
     bool operator!=(const MinisteringGroup& other) const { return !(*this == other); }
 
 private:
-    QString m_id;
+    MinisteringGroupId m_id;
     bool m_isRSFormat = false;
-    QSet<QString> m_ministerIds;
-    QSet<QString> m_familyIds;             // EQ: populated
-    QSet<QString> m_ministeredPersonIds;   // RS: populated
+    QSet<PersonId> m_ministerIds;
+    QSet<FamilyId> m_familyIds;             // EQ: populated
+    QSet<PersonId> m_ministeredPersonIds;   // RS: populated
     std::optional<QDate> m_interviewedDate;
-    std::optional<QString> m_presidencyMemberId;
+    std::optional<PersonId> m_presidencyMemberId;
 };

@@ -1,11 +1,11 @@
 #include "MinisteringGroup.h"
 
 MinisteringGroup MinisteringGroup::createEQ(
-    const QSet<QString>& ministerIds,
-    const QSet<QString>& familyIds)
+    const QSet<PersonId>& ministerIds,
+    const QSet<FamilyId>& familyIds)
 {
     MinisteringGroup group;
-    group.m_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    group.m_id = MinisteringGroupId::generate();
     group.m_isRSFormat = false;
     group.m_ministerIds = ministerIds;
     group.m_familyIds = familyIds;
@@ -13,11 +13,11 @@ MinisteringGroup MinisteringGroup::createEQ(
 }
 
 MinisteringGroup MinisteringGroup::createRS(
-    const QSet<QString>& ministerIds,
-    const QSet<QString>& ministeredPersonIds)
+    const QSet<PersonId>& ministerIds,
+    const QSet<PersonId>& ministeredPersonIds)
 {
     MinisteringGroup group;
-    group.m_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    group.m_id = MinisteringGroupId::generate();
     group.m_isRSFormat = true;
     group.m_ministerIds = ministerIds;
     group.m_ministeredPersonIds = ministeredPersonIds;
@@ -27,15 +27,15 @@ MinisteringGroup MinisteringGroup::createRS(
 QJsonObject MinisteringGroup::toJson() const
 {
     QJsonObject json;
-    json["id"] = m_id;
+    json["id"] = m_id.toString();
     json["isRSFormat"] = m_isRSFormat;
 
     if (!m_ministerIds.isEmpty())
     {
         QJsonArray ministerIdsArray;
-        for (const QString& id : m_ministerIds)
+        for (const PersonId& id : m_ministerIds)
         {
-            ministerIdsArray.append(id);
+            ministerIdsArray.append(id.toString());
         }
         json["ministerIds"] = ministerIdsArray;
     }
@@ -43,9 +43,9 @@ QJsonObject MinisteringGroup::toJson() const
     if (!m_familyIds.isEmpty())
     {
         QJsonArray familyIdsArray;
-        for (const QString& id : m_familyIds)
+        for (const FamilyId& id : m_familyIds)
         {
-            familyIdsArray.append(id);
+            familyIdsArray.append(id.toString());
         }
         json["familyIds"] = familyIdsArray;
     }
@@ -53,9 +53,9 @@ QJsonObject MinisteringGroup::toJson() const
     if (!m_ministeredPersonIds.isEmpty())
     {
         QJsonArray ministeredPersonIdsArray;
-        for (const QString& id : m_ministeredPersonIds)
+        for (const PersonId& id : m_ministeredPersonIds)
         {
-            ministeredPersonIdsArray.append(id);
+            ministeredPersonIdsArray.append(id.toString());
         }
         json["ministeredPersonIds"] = ministeredPersonIdsArray;
     }
@@ -67,7 +67,7 @@ QJsonObject MinisteringGroup::toJson() const
 
     if (m_presidencyMemberId.has_value())
     {
-        json["presidencyMemberId"] = *m_presidencyMemberId;
+        json["presidencyMemberId"] = m_presidencyMemberId->toString();
     }
 
     return json;
@@ -76,7 +76,7 @@ QJsonObject MinisteringGroup::toJson() const
 MinisteringGroup MinisteringGroup::fromJson(const QJsonObject& json)
 {
     MinisteringGroup group;
-    group.m_id = json["id"].toString();
+    group.m_id = MinisteringGroupId::fromString(json["id"].toString());
     group.m_isRSFormat = json["isRSFormat"].toBool();
 
     if (json.contains("ministerIds"))
@@ -84,7 +84,7 @@ MinisteringGroup MinisteringGroup::fromJson(const QJsonObject& json)
         QJsonArray ministerIdsArray = json["ministerIds"].toArray();
         for (const QJsonValue& value : ministerIdsArray)
         {
-            group.m_ministerIds.insert(value.toString());
+            group.m_ministerIds.insert(PersonId::fromString(value.toString()));
         }
     }
 
@@ -93,7 +93,7 @@ MinisteringGroup MinisteringGroup::fromJson(const QJsonObject& json)
         QJsonArray familyIdsArray = json["familyIds"].toArray();
         for (const QJsonValue& value : familyIdsArray)
         {
-            group.m_familyIds.insert(value.toString());
+            group.m_familyIds.insert(FamilyId::fromString(value.toString()));
         }
     }
 
@@ -102,7 +102,7 @@ MinisteringGroup MinisteringGroup::fromJson(const QJsonObject& json)
         QJsonArray ministeredPersonIdsArray = json["ministeredPersonIds"].toArray();
         for (const QJsonValue& value : ministeredPersonIdsArray)
         {
-            group.m_ministeredPersonIds.insert(value.toString());
+            group.m_ministeredPersonIds.insert(PersonId::fromString(value.toString()));
         }
     }
 
@@ -113,7 +113,11 @@ MinisteringGroup MinisteringGroup::fromJson(const QJsonObject& json)
 
     if (json.contains("presidencyMemberId") && !json["presidencyMemberId"].isNull())
     {
-        group.m_presidencyMemberId = json["presidencyMemberId"].toString();
+        QString pmStr = json["presidencyMemberId"].toString();
+        if (!pmStr.isEmpty())
+        {
+            group.m_presidencyMemberId = PersonId::fromString(pmStr);
+        }
     }
 
     return group;
