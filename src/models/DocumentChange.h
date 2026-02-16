@@ -101,7 +101,7 @@ struct DocumentChange
     std::optional<MinisteringDistrictId> rsDistrictId;
     std::optional<MinisteringGroupId> eqGroupId;
     std::optional<MinisteringGroupId> rsGroupId;
-    QString metadataValue;
+    QString metadataValue;  // ward/stake unit numbers (external identifiers)
 
     // Full document change (no ID fields set)
     static DocumentChange full();
