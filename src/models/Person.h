@@ -13,6 +13,7 @@
 #include "Birthday.h"
 #include "Email.h"
 #include "Gender.h"
+#include "Id.h"
 #include "Name.h"
 #include "Phone.h"
 
@@ -33,7 +34,7 @@ public:
 
     // Factory method for creating persons with a specific ID (used for ID preservation)
     static Person createWithId(
-        const QString& id,
+        const PersonId& id,
         const Name& name,
         std::optional<Gender> gender = std::nullopt,
         const Birthday& birthday = Birthday(),
@@ -46,7 +47,7 @@ public:
         const QString& stakeUnitNumber = QString());
 
     // Getters
-    const QString& id() const { return m_id; }
+    const PersonId& id() const { return m_id; }
     const Name& name() const { return m_name; }
     QString givenNames() const { return m_name.givenNames(); }
     QString surname() const { return m_name.surname(); }
@@ -102,7 +103,7 @@ public:
     bool operator!=(const Person& other) const { return !(*this == other); }
 
 private:
-    QString m_id;
+    PersonId m_id;
     Name m_name;
     Phone m_phone;
     Phone m_altPhone;

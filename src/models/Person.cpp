@@ -10,7 +10,7 @@ Person Person::create(const Name& name,
                       const QStringList& callings)
 {
     Person person;
-    person.m_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    person.m_id = PersonId::generate();
     person.m_name = name;
     person.m_isParent = isParent;
     person.m_phone = phone;
@@ -23,7 +23,7 @@ Person Person::create(const Name& name,
 }
 
 Person Person::createWithId(
-    const QString& id,
+    const PersonId& id,
     const Name& name,
     std::optional<Gender> gender,
     const Birthday& birthday,
@@ -76,7 +76,7 @@ QList<Phone> Person::allPhoneNumbers() const
 QJsonObject Person::toJson() const
 {
     QJsonObject json;
-    json["id"] = m_id;
+    json["id"] = m_id.toString();
     json["name"] = m_name;
 
     if (!m_phone.isEmpty())
@@ -131,7 +131,7 @@ QJsonObject Person::toJson() const
 Person Person::fromJson(const QJsonObject& json)
 {
     Person person;
-    person.m_id = json["id"].toString();
+    person.m_id = PersonId::fromString(json["id"].toString());
     person.m_name = Name(json["name"].toString());
     person.m_phone = Phone(json["phone"].toString());
     person.m_altPhone = Phone(json["altPhone"].toString());

@@ -10,6 +10,7 @@
 #include <optional>
 
 #include "Address.h"
+#include "Id.h"
 #include "Person.h"
 
 class Family
@@ -25,14 +26,14 @@ public:
 
     // Factory method for creating families with a specific ID (used for ID preservation)
     static Family createWithId(
-        const QString& id,
+        const FamilyId& id,
         std::optional<double> latitude = std::nullopt,
         std::optional<double> longitude = std::nullopt,
         const Address& address = Address(),
         const QList<Person>& members = QList<Person>());
 
     // Getters
-    const QString& id() const { return m_id; }
+    const FamilyId& id() const { return m_id; }
     std::optional<double> latitude() const { return m_latitude; }
     std::optional<double> longitude() const { return m_longitude; }
     const Address& address() const { return m_address; }
@@ -72,7 +73,7 @@ public:
     bool operator!=(const Family& other) const { return !(*this == other); }
 
 private:
-    QString m_id;
+    FamilyId m_id;
     std::optional<double> m_latitude;
     std::optional<double> m_longitude;
     Address m_address;

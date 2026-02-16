@@ -6,7 +6,7 @@ Family Family::create(std::optional<double> latitude,
                       const QList<Person>& members)
 {
     Family family;
-    family.m_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    family.m_id = FamilyId::generate();
     family.m_latitude = latitude;
     family.m_longitude = longitude;
     family.m_address = address;
@@ -15,7 +15,7 @@ Family Family::create(std::optional<double> latitude,
 }
 
 Family Family::createWithId(
-    const QString& id,
+    const FamilyId& id,
     std::optional<double> latitude,
     std::optional<double> longitude,
     const Address& address,
@@ -213,7 +213,7 @@ bool Family::hasCallings() const
 QJsonObject Family::toJson() const
 {
     QJsonObject json;
-    json["id"] = m_id;
+    json["id"] = m_id.toString();
 
     if (m_latitude.has_value())
     {
@@ -249,7 +249,7 @@ QJsonObject Family::toJson() const
 Family Family::fromJson(const QJsonObject& json)
 {
     Family family;
-    family.m_id = json["id"].toString();
+    family.m_id = FamilyId::fromString(json["id"].toString());
 
     if (json.contains("latitude"))
     {
