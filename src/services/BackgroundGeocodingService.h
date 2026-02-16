@@ -2,6 +2,7 @@
 
 #include "GeocodingService.h"
 #include "Family.h"
+#include "Id.h"
 #include "DocumentChange.h"
 
 #include <QObject>
@@ -49,7 +50,7 @@ signals:
     void progressUpdated(int completed, int total);
 
     /// Emitted when a family is successfully geocoded.
-    void familyGeocoded(const QString& id, double latitude, double longitude);
+    void familyGeocoded(const FamilyId& id, double latitude, double longitude);
 
     /// Emitted when all queued families have been processed.
     void finished();
@@ -70,13 +71,13 @@ private:
     QHash<QString, QPointF> m_geocodeCache;
 
     /// Tracks each family's last known address for change detection.
-    QHash<QString, QString> m_familyAddresses;
+    QHash<FamilyId, QString> m_familyAddresses;
 
     /// Map from address to family ID (for matching API results)
-    QHash<QString, QString> m_addressToFamilyId;
+    QHash<QString, FamilyId> m_addressToFamilyId;
 
     /// Tracks families by ID to handle duplicates in queue
-    QSet<QString> m_queuedIds;
+    QSet<FamilyId> m_queuedIds;
 
     int m_completed = 0;
     int m_total = 0;

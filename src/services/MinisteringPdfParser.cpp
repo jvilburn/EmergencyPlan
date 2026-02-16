@@ -439,7 +439,7 @@ namespace
     /// Process pending minister fields, adding to collections.
     void processPendingMinister(
         QList<PdfTextField>& pending,
-        QHash<QString, Family>& ministerFamilies,
+        QHash<FamilyId, Family>& ministerFamilies,
         QList<Person>& ministers)
     {
         if (pending.isEmpty())
@@ -459,7 +459,7 @@ namespace
     /// Also inserts minister families into the provided hash.
     QList<Person> parseMinistersFromFields(
         const QList<PdfTextField>& fields,
-        QHash<QString, Family>& ministerFamilies)
+        QHash<FamilyId, Family>& ministerFamilies)
     {
         QList<Person> companionshipMinisters;
         QList<PdfTextField> currentMinisterFields;
@@ -554,8 +554,8 @@ namespace
     /// Result of parsing a single family's fields
     struct ParsedFamily
     {
-        Family family;
-        std::optional<QString> ministeredPersonId;  // For RS format
+        std::optional<Family> family;
+        std::optional<PersonId> ministeredPersonId;  // For RS format
         QString error;
         bool isRSFormat = false;  // Detected format (only meaningful for first family)
     };
@@ -589,7 +589,7 @@ namespace
         if (headerFields.isEmpty())
         {
             // No family header found - skip this group
-            return result;  // family.id() will be empty, caller should skip
+            return result;  // family will be nullopt, caller should skip
         }
 
         // Concatenate bold fields at family X position (handles wrapped names)
@@ -662,10 +662,10 @@ namespace
         // Apply contact info: phone/email to target member, address to family
         if (!members.isEmpty())
         {
-            parseContactInfo(headerFields, members[targetIndex], result.family);
+            parseContactInfo(headerFields, members[targetIndex], *result.family);
         }
 
-        result.family.setMembers(members);
+        result.family->setMembers(members);
 
         return result;
     }
@@ -697,47 +697,45 @@ namespace
     }
 
     /// Parse families from fields, creating Family and Person objects.
-    /// Returns ministered IDs: family IDs for EQ format, person IDs for RS format.
-    /// Inserts families into ministeredFamilies hash.
-    /// Sets errorOut on failure (returns empty set).
-    QSet<QString> parseFamiliesFromFields(
+    /// Parses families from fields, inserting into ministeredFamilies hash.
+    /// Populates ministeredFamilyIds (EQ format) or ministeredPersonIds (RS format).
+    /// Sets errorOut on failure.
+    void parseFamiliesFromFields(
         const QList<PdfTextField>& fields,
         const ColumnPositions& cols,
         const QDate& documentDate,
-        QHash<QString, Family>& ministeredFamilies,
+        QHash<FamilyId, Family>& ministeredFamilies,
+        QSet<FamilyId>& ministeredFamilyIds,
+        QSet<PersonId>& ministeredPersonIds,
         QString& errorOut)
     {
-        QSet<QString> ministeredIds;
-
         for (const QList<PdfTextField>& group : splitByFamilyHeader(fields, cols))
         {
             ParsedFamily parsed = parseOneFamily(group, cols, documentDate);
             if (!parsed.error.isEmpty())
             {
                 errorOut = parsed.error;
-                return {};
+                return;
             }
 
             // Skip invalid families (e.g., empty header groups)
-            if (parsed.family.id().isEmpty())
+            if (!parsed.family.has_value())
             {
                 continue;
             }
 
-            ministeredFamilies.insert(parsed.family.id(), parsed.family);
+            ministeredFamilies.insert(parsed.family->id(), *parsed.family);
 
             // EQ: track family IDs; RS: track ministered person IDs
             if (parsed.ministeredPersonId.has_value())
             {
-                ministeredIds.insert(*parsed.ministeredPersonId);
+                ministeredPersonIds.insert(*parsed.ministeredPersonId);
             }
             else
             {
-                ministeredIds.insert(parsed.family.id());
+                ministeredFamilyIds.insert(parsed.family->id());
             }
         }
-
-        return ministeredIds;
     }
 
     // ============================================================================
@@ -750,10 +748,10 @@ namespace
     QString parseCompanionship(
         QList<PdfTextField>& companionshipFields,
         QString& presidencyName,
-        const QString& currentDistrictId,
+        const std::optional<MinisteringDistrictId>& currentDistrictId,
         MinisteringPdfParser::ParseResult& result)
     {
-        if (companionshipFields.isEmpty() || currentDistrictId.isEmpty())
+        if (companionshipFields.isEmpty() || !currentDistrictId.has_value())
         {
             return QString();
         }
@@ -814,7 +812,7 @@ namespace
             {
                 if (district.presidencyMemberId().has_value())
                 {
-                    QString personId = *district.presidencyMemberId();
+                    PersonId personId = *district.presidencyMemberId();
                     // Find the family containing this person
                     for (auto& family : result.ministerFamilies)
                     {
@@ -850,13 +848,15 @@ namespace
             mergeWrappedBoldFields(familyFields, *cols.familyX);
         }
 
-        // Parse families - returns family IDs (EQ) or ministered person IDs (RS)
-        QSet<QString> ministeredIds;
+        // Parse families - populates family IDs (EQ) or ministered person IDs (RS)
+        QSet<FamilyId> ministeredFamilyIds;
+        QSet<PersonId> ministeredPersonIds;
         if (!familyFields.isEmpty())
         {
             QString familyError;
-            ministeredIds = parseFamiliesFromFields(
-                familyFields, cols, result.documentDate, result.ministeredFamilies, familyError);
+            parseFamiliesFromFields(
+                familyFields, cols, result.documentDate, result.ministeredFamilies,
+                ministeredFamilyIds, ministeredPersonIds, familyError);
 
             if (!familyError.isEmpty())
             {
@@ -865,8 +865,8 @@ namespace
         }
 
         // Build minister ID set and find presidency member if specified
-        QSet<QString> ministerIds;
-        std::optional<QString> presidencyMemberId;
+        QSet<PersonId> ministerIds;
+        std::optional<PersonId> presidencyMemberId;
         for (const Person& minister : ministers)
         {
             ministerIds.insert(minister.id());
@@ -880,13 +880,13 @@ namespace
 
         // Create group: EQ uses familyIds, RS uses ministeredPersonIds
         MinisteringGroup group = result.isRSFormat
-            ? MinisteringGroup::createRS(ministerIds, ministeredIds)
-            : MinisteringGroup::createEQ(ministerIds, ministeredIds);
+            ? MinisteringGroup::createRS(ministerIds, ministeredPersonIds)
+            : MinisteringGroup::createEQ(ministerIds, ministeredFamilyIds);
         group.setPresidencyMemberId(presidencyMemberId);
         result.groups.insert(group.id(), group);
 
         // Add group to current district
-        result.districts[currentDistrictId].addGroup(group.id());
+        result.districts[*currentDistrictId].addGroup(group.id());
 
         companionshipFields.clear();
         presidencyName.clear();
@@ -1037,7 +1037,7 @@ MinisteringPdfParser::ParseResult MinisteringPdfParser::parse(const QString& pdf
     // Parsing state
     QList<PdfTextField> currentCompanionshipFields;
     QString currentPresidencyName;
-    QString currentDistrictId;
+    std::optional<MinisteringDistrictId> currentDistrictId;
 
     for (const QList<PdfTextField>& row : fieldRows)
     {
@@ -1079,7 +1079,7 @@ MinisteringPdfParser::ParseResult MinisteringPdfParser::parse(const QString& pdf
             // Create new district
             MinisteringDistrict district = MinisteringDistrict::create(districtName);
             currentDistrictId = district.id();
-            result.districts.insert(currentDistrictId, district);
+            result.districts.insert(*currentDistrictId, district);
             continue;
         }
 
@@ -1099,7 +1099,7 @@ MinisteringPdfParser::ParseResult MinisteringPdfParser::parse(const QString& pdf
                         // Use positional context: if no companionship fields accumulated yet,
                         // this is the district-level presidency member (appears right after
                         // district title). Otherwise it's companionship-level.
-                        if (!currentDistrictId.isEmpty() && currentCompanionshipFields.isEmpty())
+                        if (currentDistrictId.has_value() && currentCompanionshipFields.isEmpty())
                         {
                             // District-level presidency member - create Family with Person
                             Name name(presidencyMemberName);
@@ -1121,7 +1121,7 @@ MinisteringPdfParser::ParseResult MinisteringPdfParser::parse(const QString& pdf
                             );
 
                             result.ministerFamilies.insert(family.id(), family);
-                            result.districts[currentDistrictId].setPresidencyMemberId(presidencyMember.id());
+                            result.districts[*currentDistrictId].setPresidencyMemberId(presidencyMember.id());
                         }
                         else
                         {
@@ -1139,7 +1139,7 @@ MinisteringPdfParser::ParseResult MinisteringPdfParser::parse(const QString& pdf
         }
 
         // Accumulate fields for current companionship
-        if (!currentDistrictId.isEmpty())
+        if (currentDistrictId.has_value())
         {
             for (const PdfTextField& field : row)
             {

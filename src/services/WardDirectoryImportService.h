@@ -15,8 +15,8 @@
 struct WardDirectoryImportResult
 {
     bool success = false;
-    QHash<QString, Family> families;
-    QSet<QString> removedFamilyIds;  // Families in existing but not in PDF
+    QHash<FamilyId, Family> families;
+    QSet<FamilyId> removedFamilyIds;  // Families in existing but not in PDF
     QStringList errors;
     QString wardName;
     QString wardUnitNumber;
@@ -36,13 +36,13 @@ public:
     /// Preserves IDs for families/persons that match existing data.
     WardDirectoryImportResult importFromPdf(
         const QString& pdfPath,
-        const QHash<QString, Family>& existingFamilies,
+        const QHash<FamilyId, Family>& existingFamilies,
         std::optional<QDate> ministeringPdfDate = std::nullopt);
 
 private:
     std::optional<Family> findMatchingFamily(
         const Family& pdfFamily,
-        const QHash<QString, Family>& families);
+        const QHash<FamilyId, Family>& families);
 
     std::optional<Person> findMatchingPerson(
         const Person& person,

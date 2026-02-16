@@ -5,10 +5,11 @@
 namespace
 {
     // Helper to remap a set of IDs using a mapping
-    QSet<QString> remapIds(const QSet<QString>& ids, const QHash<QString, QString>& mapping)
+    template<typename Id>
+    QSet<Id> remapIds(const QSet<Id>& ids, const QHash<Id, Id>& mapping)
     {
-        QSet<QString> result;
-        for (const QString& id : ids)
+        QSet<Id> result;
+        for (const Id& id : ids)
         {
             result.insert(mapping.value(id, id));
         }
@@ -16,8 +17,9 @@ namespace
     }
 
     // Helper to remap a single optional ID
-    std::optional<QString> remapId(const std::optional<QString>& id,
-                                   const QHash<QString, QString>& mapping)
+    template<typename Id>
+    std::optional<Id> remapId(const std::optional<Id>& id,
+                              const QHash<Id, Id>& mapping)
     {
         if (!id.has_value())
         {
@@ -46,7 +48,7 @@ MinisteringImportService::~MinisteringImportService()
 
 MinisteringImportResult MinisteringImportService::importFromPdf(
     const QString& pdfPath,
-    const QHash<QString, Family>& existingFamilies,
+    const QHash<FamilyId, Family>& existingFamilies,
     std::optional<QDate> wardDirectoryDate)
 {
     MinisteringImportResult result;
@@ -114,14 +116,14 @@ MinisteringImportResult MinisteringImportService::importFromPdf(
 // ============================================================================
 
 void MinisteringImportService::mergeFamilies(
-    QHash<QString, Family>& targetFamilies,
-    const QHash<QString, Family>& sourceFamilies,
-    QHash<QString, MinisteringDistrict>& districts,
-    QHash<QString, MinisteringGroup>& groups,
+    QHash<FamilyId, Family>& targetFamilies,
+    const QHash<FamilyId, Family>& sourceFamilies,
+    QHash<MinisteringDistrictId, MinisteringDistrict>& districts,
+    QHash<MinisteringGroupId, MinisteringGroup>& groups,
     bool isAuthoritative)
 {
-    QHash<QString, QString> familyIdMapping;
-    QHash<QString, QString> personIdMapping;
+    QHash<FamilyId, FamilyId> familyIdMapping;
+    QHash<PersonId, PersonId> personIdMapping;
 
     // Merge each source family into target
     for (const Family& sourceFamily : sourceFamilies)
@@ -138,7 +140,6 @@ void MinisteringImportService::mergeFamilies(
 
             if (updated.has_value())
             {
-                // Replace the matched family in targetFamilies with updated version
                 targetFamilies[match->id()] = *updated;
             }
         }
@@ -185,24 +186,24 @@ void MinisteringImportService::mergeFamilies(
 
 std::optional<Family> MinisteringImportService::findMatchingFamily(
     const Family& pdfFamily,
-    const QHash<QString, Family>& families)
+    const QHash<FamilyId, Family>& families)
 {
     // Try member-based matching first (by surname)
     PersonMatching::FamilyMemberMatchResult match =
         PersonMatching::findFamilyByMembers(pdfFamily, families);
 
-    if (!match.familyId.isEmpty())
+    if (match.familyId.has_value())
     {
-        return families.value(match.familyId);
+        return families.value(*match.familyId);
     }
 
     // Fallback: try replacement detection (for surname changes)
     PersonMatching::FamilyReplacementResult replacement =
         PersonMatching::findReplacedFamily(pdfFamily, families);
 
-    if (!replacement.replacedFamilyId.isEmpty())
+    if (replacement.replacedFamilyId.has_value())
     {
-        return families.value(replacement.replacedFamilyId);
+        return families.value(*replacement.replacedFamilyId);
     }
 
     return std::nullopt;
@@ -251,7 +252,7 @@ std::optional<Person> MinisteringImportService::findMatchingPerson(
 std::optional<Family> MinisteringImportService::mergeFamilyMembers(
     const Family& sourceFamily,
     Family targetFamily,
-    QHash<QString, QString>& personIdMapping,
+    QHash<PersonId, PersonId>& personIdMapping,
     bool isAuthoritative)
 {
     bool anyChanges = false;

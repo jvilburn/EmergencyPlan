@@ -15,7 +15,7 @@ namespace WardDirectoryPdfParser
         bool success = false;
 
         // All families from the directory
-        QHash<QString, Family> families;
+        QHash<FamilyId, Family> families;
 
         // Metadata from PDF header
         QString wardName;

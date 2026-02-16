@@ -19,26 +19,26 @@ namespace PersonMatching
     /// Score for a person match
     struct PersonMatchScore
     {
-        QString personId;
+        PersonId personId;
         int score = 0;
     };
 
     /// Result of family matching with member-based scoring
     struct FamilyMemberMatchResult
     {
-        QString familyId;           // Empty if no match
+        std::optional<FamilyId> familyId;  // nullopt if no match
         int matchedMembers = 0;     // How many members matched
         int totalSourceMembers = 0; // How many members in source family
-        QHash<QString, QString> personIdMapping;  // source person ID -> target person ID
+        QHash<PersonId, PersonId> personIdMapping;  // source person ID -> target person ID
     };
 
     /// Result of searching for family members across all families
     struct FamilyReplacementResult
     {
-        QString replacedFamilyId;   // The family being replaced (empty if truly new)
+        std::optional<FamilyId> replacedFamilyId;  // nullopt if truly new
         int matchedMembers = 0;     // How many source members found in that family
         int totalSourceMembers = 0;
-        QHash<QString, QString> personIdMapping;  // source person ID -> existing person ID
+        QHash<PersonId, PersonId> personIdMapping;  // source person ID -> existing person ID
     };
 
     /// Score how well two persons match.
@@ -71,12 +71,12 @@ namespace PersonMatching
     /// Returns empty familyId if no match with majority.
     FamilyMemberMatchResult findFamilyByMembers(
         const Family& sourceFamily,
-        const QHash<QString, Family>& targetFamilies);
+        const QHash<FamilyId, Family>& targetFamilies);
 
     /// Search all families for members of the source family (ignoring surname).
     /// Used as fallback when surname-based matching fails.
     /// Returns the family that contains at least half of source members, if any.
     FamilyReplacementResult findReplacedFamily(
         const Family& sourceFamily,
-        const QHash<QString, Family>& targetFamilies);
+        const QHash<FamilyId, Family>& targetFamilies);
 }

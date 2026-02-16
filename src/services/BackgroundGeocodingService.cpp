@@ -65,12 +65,14 @@ bool BackgroundGeocodingService::isRunning() const
 void BackgroundGeocodingService::onGeocodingComplete(const GeocodingResult& result)
 {
     // Find the family ID for this address
-    QString familyId = m_addressToFamilyId.take(result.address);
-    if (familyId.isEmpty())
+    auto it = m_addressToFamilyId.find(result.address);
+    if (it == m_addressToFamilyId.end())
     {
         // Address not in our map - was stopped or duplicate
         return;
     }
+    FamilyId familyId = *it;
+    m_addressToFamilyId.erase(it);
 
     m_queuedIds.remove(familyId);
     m_completed++;
@@ -99,18 +101,16 @@ void BackgroundGeocodingService::onGeocodingComplete(const GeocodingResult& resu
 void BackgroundGeocodingService::onDocumentChanged(const DocumentChange& change)
 {
     // Full document change or batch family change - process all families
-    if (change.scope == ChangeScope::Full
-        || (change.scope == ChangeScope::Family
-            && change.action == ChangeAction::BatchModified))
+    if (change.action == ChangeAction::Full)
     {
         processAllFamilies();
         return;
     }
 
     // Single family change - check that family
-    if (change.scope == ChangeScope::Family)
+    if (change.familyId.has_value())
     {
-        auto family = m_documentManager->document().findFamilyById(change.entityId);
+        auto family = m_documentManager->document().findFamilyById(*change.familyId);
         if (family.has_value())
         {
             checkFamily(*family);

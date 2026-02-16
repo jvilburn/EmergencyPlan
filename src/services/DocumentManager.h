@@ -69,7 +69,7 @@ private slots:
     void onLookupFailed(const QString& unitNumber, const QString& error);
 
     // Geocoding
-    void onFamilyGeocoded(const QString& id, double latitude, double longitude);
+    void onFamilyGeocoded(const FamilyId& id, double latitude, double longitude);
     void onGeocodingFinished();
 
 private:

@@ -16,9 +16,9 @@ struct MinisteringImportResult
     bool success = false;
     bool isRSFormat = false;  // Auto-detected: true for RS, false for EQ
 
-    QHash<QString, MinisteringDistrict> districts;
-    QHash<QString, MinisteringGroup> groups;
-    QHash<QString, Family> families;  // Final merged family list
+    QHash<MinisteringDistrictId, MinisteringDistrict> districts;
+    QHash<MinisteringGroupId, MinisteringGroup> groups;
+    QHash<FamilyId, Family> families;  // Final merged family list
 
     QStringList errors;
     QString wardName;
@@ -43,7 +43,7 @@ public:
     /// family data from the PDF is treated as stale (only fills empty fields).
     MinisteringImportResult importFromPdf(
         const QString& pdfPath,
-        const QHash<QString, Family>& existingFamilies,
+        const QHash<FamilyId, Family>& existingFamilies,
         std::optional<QDate> wardDirectoryDate = std::nullopt);
 
 private:
@@ -54,10 +54,10 @@ private:
     /// - When isAuthoritative: unmatched families are added, names can be updated
     /// - When not authoritative: only fills empty fields, no new families added
     void mergeFamilies(
-        QHash<QString, Family>& targetFamilies,
-        const QHash<QString, Family>& sourceFamilies,
-        QHash<QString, MinisteringDistrict>& districts,
-        QHash<QString, MinisteringGroup>& groups,
+        QHash<FamilyId, Family>& targetFamilies,
+        const QHash<FamilyId, Family>& sourceFamilies,
+        QHash<MinisteringDistrictId, MinisteringDistrict>& districts,
+        QHash<MinisteringGroupId, MinisteringGroup>& groups,
         bool isAuthoritative);
 
     /// Find existing family by surname, display name, address, and phone.
@@ -65,7 +65,7 @@ private:
     /// then by address, then by phone if still ambiguous.
     std::optional<Family> findMatchingFamily(
         const Family& pdfFamily,
-        const QHash<QString, Family>& families);
+        const QHash<FamilyId, Family>& families);
 
     /// Find matching person in family by first name and isParent.
     std::optional<Person> findMatchingPerson(
@@ -79,7 +79,7 @@ private:
     std::optional<Family> mergeFamilyMembers(
         const Family& sourceFamily,
         Family targetFamily,
-        QHash<QString, QString>& personIdMapping,
+        QHash<PersonId, PersonId>& personIdMapping,
         bool isAuthoritative);
 
     /// Determine if ministering PDF is authoritative for family data.

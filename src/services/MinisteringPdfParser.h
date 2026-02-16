@@ -20,12 +20,12 @@ namespace MinisteringPdfParser
         bool isRSFormat = false;             // Final format: true for RS, false for EQ
         std::optional<bool> detectedFormat;  // Set when first family header detected
 
-        QHash<QString, MinisteringDistrict> districts;
-        QHash<QString, MinisteringGroup> groups;
+        QHash<MinisteringDistrictId, MinisteringDistrict> districts;
+        QHash<MinisteringGroupId, MinisteringGroup> groups;
 
         // Families separated for deduplication during import
-        QHash<QString, Family> ministerFamilies;     // Families of ministers
-        QHash<QString, Family> ministeredFamilies;   // Families being ministered to
+        QHash<FamilyId, Family> ministerFamilies;     // Families of ministers
+        QHash<FamilyId, Family> ministeredFamilies;   // Families being ministered to
 
         // Metadata from PDF header/footer
         QString wardName;

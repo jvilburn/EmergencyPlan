@@ -131,7 +131,7 @@ PersonMatchScore findBestPersonMatch(const Person& source, const Family& family)
 
 FamilyMemberMatchResult findFamilyByMembers(
     const Family& sourceFamily,
-    const QHash<QString, Family>& targetFamilies)
+    const QHash<FamilyId, Family>& targetFamilies)
 {
     FamilyMemberMatchResult bestResult;
     bestResult.totalSourceMembers = sourceFamily.members().size();
@@ -176,21 +176,21 @@ FamilyMemberMatchResult findFamilyByMembers(
     }
 
     // No majority match
-    bestResult.familyId.clear();
+    bestResult.familyId = std::nullopt;
     bestResult.personIdMapping.clear();
     return bestResult;
 }
 
 FamilyReplacementResult findReplacedFamily(
     const Family& sourceFamily,
-    const QHash<QString, Family>& targetFamilies)
+    const QHash<FamilyId, Family>& targetFamilies)
 {
     FamilyReplacementResult bestResult;
     bestResult.totalSourceMembers = sourceFamily.members().size();
 
     // For each source member, find which target family they might be in
-    QHash<QString, int> familyMatchCounts;  // familyId -> count of matched members
-    QHash<QString, QHash<QString, QString>> familyPersonMappings;  // familyId -> (source -> target)
+    QHash<FamilyId, int> familyMatchCounts;  // familyId -> count of matched members
+    QHash<FamilyId, QHash<PersonId, PersonId>> familyPersonMappings;  // familyId -> (source -> target)
 
     for (const Person& sourceMember : sourceFamily.members())
     {
@@ -228,7 +228,7 @@ FamilyReplacementResult findReplacedFamily(
     }
 
     // No majority match - truly new family
-    bestResult.replacedFamilyId.clear();
+    bestResult.replacedFamilyId = std::nullopt;
     bestResult.personIdMapping.clear();
     return bestResult;
 }

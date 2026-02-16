@@ -21,7 +21,7 @@ WardDirectoryImportService::~WardDirectoryImportService()
 
 WardDirectoryImportResult WardDirectoryImportService::importFromPdf(
     const QString& pdfPath,
-    const QHash<QString, Family>& existingFamilies,
+    const QHash<FamilyId, Family>& existingFamilies,
     std::optional<QDate> ministeringPdfDate)
 {
     WardDirectoryImportResult result;
@@ -43,7 +43,7 @@ WardDirectoryImportResult WardDirectoryImportService::importFromPdf(
     result.pdfDate = fileInfo.lastModified().date();
 
     // Track which existing families were matched
-    QSet<QString> matchedExistingIds;
+    QSet<FamilyId> matchedExistingIds;
 
     // Process each parsed family with ID preservation
     for (const auto& [parsedId, parsedFamily] : parseResult.families.asKeyValueRange())
@@ -88,7 +88,7 @@ WardDirectoryImportResult WardDirectoryImportService::importFromPdf(
 
 std::optional<Family> WardDirectoryImportService::findMatchingFamily(
     const Family& pdfFamily,
-    const QHash<QString, Family>& families)
+    const QHash<FamilyId, Family>& families)
 {
     for (const Family& family : families)
     {
