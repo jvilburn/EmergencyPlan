@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Id.h"
 #include "ItemType.h"
 
 #include <QAbstractItemModel>
@@ -55,18 +56,13 @@ public:
     /// Keys must be unique within the model - use contextual format
     /// when the same entity can appear multiple times.
     /// Detail rows should return their parent's selection key.
-    virtual QString selectionKeyAt(const QModelIndex& index) const = 0;
-
-    /// Returns the entity ID for the given index.
-    /// Used by views for highlights and commands.
-    /// Returns empty string for invalid indices.
-    virtual QString idAt(const QModelIndex& index) const = 0;
+    virtual SelectionKey selectionKeyAt(const QModelIndex& index) const = 0;
 };
 
 /// Domain data returned by models for family associations.
 /// Views adapt this to HighlightInfo for the map.
 struct FamilyAssociation
 {
-    QSet<QString> relatedFamilyIds;       // Families connected to this item
-    QSet<QString> contactPointFamilyIds;  // Families of contact points (ministers, etc.)
+    QSet<FamilyId> relatedFamilyIds;       // Families connected to this item
+    QSet<FamilyId> contactPointFamilyIds;  // Families of contact points (ministers, etc.)
 };

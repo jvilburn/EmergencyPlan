@@ -20,7 +20,7 @@ void Filter::setSearchText(const QString& text)
     }
 }
 
-void Filter::setTagIds(const QSet<QString>& ids)
+void Filter::setTagIds(const QSet<TagId>& ids)
 {
     if (m_tagIds != ids)
     {
@@ -29,7 +29,7 @@ void Filter::setTagIds(const QSet<QString>& ids)
     }
 }
 
-void Filter::setTeamIds(const QSet<QString>& ids)
+void Filter::setTeamIds(const QSet<TeamId>& ids)
 {
     if (m_teamIds != ids)
     {
@@ -38,7 +38,7 @@ void Filter::setTeamIds(const QSet<QString>& ids)
     }
 }
 
-void Filter::setAssetTypeIds(const QSet<QString>& ids)
+void Filter::setAssetTypeIds(const QSet<EmergencyAssetId>& ids)
 {
     if (m_assetTypeIds != ids)
     {
@@ -309,12 +309,12 @@ bool Filter::familyContainsWord(const Family& family, const QString& word)
         || family.displayEmail().toLower().contains(word);
 }
 
-bool Filter::hasFamilyLevelTag(const Document& document, const QString& familyId) const
+bool Filter::hasFamilyLevelTag(const Document& document, const FamilyId& familyId) const
 {
-    for (const QString& tagId : m_tagIds)
+    for (const TagId& tagId : m_tagIds)
     {
         std::optional<Tag> tagOpt = document.findTagById(tagId);
-        if (tagOpt && tagOpt->isFamilyLevel() && tagOpt->hasEntity(familyId))
+        if (tagOpt && tagOpt->isFamilyLevel() && tagOpt->hasFamily(familyId))
         {
             return true;
         }
@@ -322,12 +322,12 @@ bool Filter::hasFamilyLevelTag(const Document& document, const QString& familyId
     return false;
 }
 
-bool Filter::hasPersonLevelTag(const Document& document, const QString& personId) const
+bool Filter::hasPersonLevelTag(const Document& document, const PersonId& personId) const
 {
-    for (const QString& tagId : m_tagIds)
+    for (const TagId& tagId : m_tagIds)
     {
         std::optional<Tag> tagOpt = document.findTagById(tagId);
-        if (tagOpt && !tagOpt->isFamilyLevel() && tagOpt->hasEntity(personId))
+        if (tagOpt && !tagOpt->isFamilyLevel() && tagOpt->hasPerson(personId))
         {
             return true;
         }
@@ -335,9 +335,9 @@ bool Filter::hasPersonLevelTag(const Document& document, const QString& personId
     return false;
 }
 
-bool Filter::isOnTeam(const Document& document, const QString& personId) const
+bool Filter::isOnTeam(const Document& document, const PersonId& personId) const
 {
-    for (const QString& teamId : m_teamIds)
+    for (const TeamId& teamId : m_teamIds)
     {
         std::optional<Team> teamOpt = document.findTeamById(teamId);
         if (teamOpt && teamOpt->hasMember(personId))
@@ -348,12 +348,12 @@ bool Filter::isOnTeam(const Document& document, const QString& personId) const
     return false;
 }
 
-bool Filter::hasResponseArea(const Document& document, const QString& personId) const
+bool Filter::hasResponseArea(const Document& document, const PersonId& personId) const
 {
     // Case 1: Only assetTypeIds set (no response areas) - check specific assets
     if (m_responseAreas.isEmpty() && !m_assetTypeIds.isEmpty())
     {
-        for (const QString& assetId : m_assetTypeIds)
+        for (const EmergencyAssetId& assetId : m_assetTypeIds)
         {
             std::optional<EmergencyAsset> asset = document.findEmergencyAssetById(assetId);
             if (asset && asset->hasPerson(personId))
@@ -375,7 +375,7 @@ bool Filter::hasResponseArea(const Document& document, const QString& personId) 
             if (!m_assetTypeIds.isEmpty())
             {
                 // Check if person has any of the specific assets in this area
-                for (const QString& assetId : m_assetTypeIds)
+                for (const EmergencyAssetId& assetId : m_assetTypeIds)
                 {
                     std::optional<EmergencyAsset> asset = document.findEmergencyAssetById(assetId);
                     if (asset && asset->responseArea() == area
@@ -482,18 +482,21 @@ bool Filter::passes(const Document& document, const Family& family) const
 bool Filter::passes(const Document& document, const Person& person) const
 {
     // Look up person's family
-    QString familyId = document.familyIdForPerson(person.id());
-    std::optional<Family> familyOpt = document.findFamilyById(familyId);
+    std::optional<FamilyId> familyId = document.familyIdForPerson(person.id());
+    std::optional<Family> family;
+    if (familyId.has_value())
+    {
+        family = document.findFamilyById(*familyId);
+    }
 
     // Family-level criteria: mapped
-    if (familyOpt.has_value())
+    if (family)
     {
-        const Family& family = familyOpt.value();
-        if (m_mappedFilter == MappedFilter::Mapped && !family.isMapped())
+        if (m_mappedFilter == MappedFilter::Mapped && !family->isMapped())
         {
             return false;
         }
-        if (m_mappedFilter == MappedFilter::Unmapped && family.isMapped())
+        if (m_mappedFilter == MappedFilter::Unmapped && family->isMapped())
         {
             return false;
         }
@@ -518,9 +521,9 @@ bool Filter::passes(const Document& document, const Person& person) const
         for (const QString& word : words)
         {
             bool found = personContainsWord(person, word);
-            if (!found && familyOpt.has_value())
+            if (!found && family)
             {
-                found = familyContainsWord(familyOpt.value(), word);
+                found = familyContainsWord(*family, word);
             }
             if (!found)
             {
@@ -533,9 +536,9 @@ bool Filter::passes(const Document& document, const Person& person) const
     if (!m_tagIds.isEmpty())
     {
         bool found = hasPersonLevelTag(document, person.id());
-        if (!found && familyOpt.has_value())
+        if (!found && familyId)
         {
-            found = hasFamilyLevelTag(document, familyId);
+            found = hasFamilyLevelTag(document, *familyId);
         }
         if (!found)
         {

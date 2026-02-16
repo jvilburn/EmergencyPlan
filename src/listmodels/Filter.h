@@ -7,6 +7,7 @@
 #include <optional>
 
 #include "Gender.h"
+#include "Id.h"
 #include "ResponseArea.h"
 
 class Document;
@@ -40,9 +41,9 @@ public:
 
     // Getters
     QString searchText() const { return m_searchText; }
-    QSet<QString> tagIds() const { return m_tagIds; }
-    QSet<QString> teamIds() const { return m_teamIds; }
-    QSet<QString> assetTypeIds() const { return m_assetTypeIds; }
+    QSet<TagId> tagIds() const { return m_tagIds; }
+    QSet<TeamId> teamIds() const { return m_teamIds; }
+    QSet<EmergencyAssetId> assetTypeIds() const { return m_assetTypeIds; }
     QSet<QString> callings() const { return m_callings; }
     std::optional<Gender> gender() const { return m_gender; }
     AgeFilter ageFilter() const { return m_ageFilter; }
@@ -55,9 +56,9 @@ public:
 
     // Setters (emit changed() signal)
     void setSearchText(const QString& text);
-    void setTagIds(const QSet<QString>& ids);
-    void setTeamIds(const QSet<QString>& ids);
-    void setAssetTypeIds(const QSet<QString>& ids);
+    void setTagIds(const QSet<TagId>& ids);
+    void setTeamIds(const QSet<TeamId>& ids);
+    void setAssetTypeIds(const QSet<EmergencyAssetId>& ids);
     void setCallings(const QSet<QString>& callings);
     void setGender(std::optional<Gender> gender);
     void setAgeFilter(AgeFilter filter);
@@ -95,15 +96,15 @@ private:
     static bool familyContainsWord(const Family& family, const QString& word);
 
     // Tag/asset helpers (separate family-level and person-level)
-    bool hasFamilyLevelTag(const Document& document, const QString& familyId) const;
-    bool hasPersonLevelTag(const Document& document, const QString& personId) const;
-    bool isOnTeam(const Document& document, const QString& personId) const;
-    bool hasResponseArea(const Document& document, const QString& personId) const;
+    bool hasFamilyLevelTag(const Document& document, const FamilyId& familyId) const;
+    bool hasPersonLevelTag(const Document& document, const PersonId& personId) const;
+    bool isOnTeam(const Document& document, const PersonId& personId) const;
+    bool hasResponseArea(const Document& document, const PersonId& personId) const;
 
     QString m_searchText;
-    QSet<QString> m_tagIds;
-    QSet<QString> m_teamIds;
-    QSet<QString> m_assetTypeIds;
+    QSet<TagId> m_tagIds;
+    QSet<TeamId> m_teamIds;
+    QSet<EmergencyAssetId> m_assetTypeIds;
     QSet<QString> m_callings;
     std::optional<Gender> m_gender;
     AgeFilter m_ageFilter = AgeFilter::All;

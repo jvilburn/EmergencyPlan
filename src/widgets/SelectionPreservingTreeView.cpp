@@ -48,16 +48,16 @@ void SelectionPreservingTreeView::onModelAboutToBeReset()
     }
     else
     {
-        m_savedKey.clear();
+        m_savedKey = std::nullopt;
     }
 }
 
 void SelectionPreservingTreeView::onModelReset()
 {
     // Try to restore selection after model rebuild
-    if (!m_savedKey.isEmpty())
+    if (m_savedKey.has_value())
     {
-        QModelIndex index = findIndex(m_savedKey);
+        QModelIndex index = findIndex(*m_savedKey);
         if (index.isValid())
         {
             setCurrentIndex(index);
@@ -65,19 +65,19 @@ void SelectionPreservingTreeView::onModelReset()
     }
 
     // Clear saved state
-    m_savedKey.clear();
+    m_savedKey = std::nullopt;
 }
 
-QModelIndex SelectionPreservingTreeView::findIndex(const QString& key) const
+QModelIndex SelectionPreservingTreeView::findIndex(const SelectionKey& key) const
 {
-    if (!model() || key.isEmpty())
+    if (!model())
     {
         return QModelIndex();
     }
     return findIndexRecursive(QModelIndex(), key);
 }
 
-QModelIndex SelectionPreservingTreeView::findIndexRecursive(const QModelIndex& parent, const QString& key) const
+QModelIndex SelectionPreservingTreeView::findIndexRecursive(const QModelIndex& parent, const SelectionKey& key) const
 {
     int rowCount = model()->rowCount(parent);
     for (int row = 0; row < rowCount; ++row)

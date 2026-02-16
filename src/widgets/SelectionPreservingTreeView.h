@@ -1,6 +1,9 @@
 #pragma once
 
+#include "Id.h"
+
 #include <QTreeView>
+#include <optional>
 
 class BaseTreeModel;
 
@@ -33,13 +36,13 @@ private slots:
 
 private:
     /// Find index matching selection key, or invalid index if not found
-    QModelIndex findIndex(const QString& key) const;
+    QModelIndex findIndex(const SelectionKey& key) const;
 
     /// Recursively search for matching index
-    QModelIndex findIndexRecursive(const QModelIndex& parent, const QString& key) const;
+    QModelIndex findIndexRecursive(const QModelIndex& parent, const SelectionKey& key) const;
 
     BaseTreeModel* m_typedModel;
 
     // Saved selection for restoration after model reset
-    QString m_savedKey;
+    std::optional<SelectionKey> m_savedKey;
 };
