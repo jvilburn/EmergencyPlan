@@ -27,7 +27,7 @@ namespace
 {
 
 /// Helper to update a person within their family
-void updatePersonInFamily(DocumentManager* docMgr, const QString& familyId, const Person& updatedPerson)
+void updatePersonInFamily(DocumentManager* docMgr, const FamilyId& familyId, const Person& updatedPerson)
 {
     const Document& doc = docMgr->document();
     std::optional<Family> familyOpt = doc.findFamilyById(familyId);
@@ -117,15 +117,19 @@ void NeedsSubView::onContextMenu(const QPoint& pos)
         return;  // No context menu on empty space (use the Add button instead)
     }
 
-    QString personId = m_model->idAt(index);
-    QString familyId = m_model->familyIdAt(index);
+    auto personId = m_model->personIdAt(index);
+    auto familyId = m_model->familyIdAt(index);
+    if (!personId || !familyId)
+    {
+        return;
+    }
 
     QMenu menu;
 
     const Document& doc = m_documentManager->document();
 
     // Show contact info (disabled) if available
-    std::optional<Person> person = doc.findPersonById(personId);
+    std::optional<Person> person = doc.findPersonById(*personId);
     if (person)
     {
         const Phone& phone = person->phone();
@@ -146,13 +150,15 @@ void NeedsSubView::onContextMenu(const QPoint& pos)
         }
     }
 
-    menu.addAction(tr("Edit..."), this, [this, personId, familyId]()
+    PersonId pid = *personId;
+    FamilyId fid = *familyId;
+    menu.addAction(tr("Edit..."), this, [this, pid, fid]()
     {
-        showEditNeedDialog(personId, familyId);
+        showEditNeedDialog(pid, fid);
     });
-    menu.addAction(tr("Delete"), this, [this, personId, familyId]()
+    menu.addAction(tr("Delete"), this, [this, pid, fid]()
     {
-        deleteNeed(personId, familyId);
+        deleteNeed(pid, fid);
     });
 
     if (!menu.isEmpty())
@@ -167,7 +173,7 @@ HighlightInfo NeedsSubView::highlightInfo() const
     return {assoc.relatedFamilyIds, assoc.contactPointFamilyIds};
 }
 
-QSet<QString> NeedsSubView::visibleFamilyIds() const
+QSet<FamilyId> NeedsSubView::visibleFamilyIds() const
 {
     // Show all families
     return {};
@@ -198,18 +204,18 @@ void NeedsSubView::showAddNeedDialog()
     formLayout->addRow(buttonBox);
 
     // Track selected person
-    QString selectedPersonId;
-    QString selectedFamilyId;
+    std::optional<PersonId> selectedPersonId;
+    std::optional<FamilyId> selectedFamilyId;
 
     // Connect select button
     connect(selectButton, &QPushButton::clicked, &dialog, [&]()
     {
-        QString id = WardListDialog::selectPerson(m_documentManager, selectedPersonId, &dialog);
-        if (!id.isEmpty())
+        auto id = WardListDialog::selectPerson(m_documentManager, selectedPersonId, &dialog);
+        if (id)
         {
             selectedPersonId = id;
             const Document& doc = m_documentManager->document();
-            std::optional<Person> person = doc.findPersonById(id);
+            std::optional<Person> person = doc.findPersonById(*id);
             if (person)
             {
                 selectionLabel->setText(person->displayName());
@@ -218,7 +224,7 @@ void NeedsSubView::showAddNeedDialog()
                 {
                     noteEdit->setText(person->specialNeedNote());
                 }
-                selectedFamilyId = doc.familyIdForPerson(id);
+                selectedFamilyId = doc.familyIdForPerson(*id);
             }
         }
     });
@@ -228,7 +234,7 @@ void NeedsSubView::showAddNeedDialog()
 
     if (dialog.exec() == QDialog::Accepted)
     {
-        if (selectedPersonId.isEmpty())
+        if (!selectedPersonId)
         {
             QMessageBox::warning(this, tr("Add Special Need"),
                                  tr("Please select a person."));
@@ -239,17 +245,17 @@ void NeedsSubView::showAddNeedDialog()
 
         // Update person's special need note
         const Document& doc = m_documentManager->document();
-        std::optional<Person> personOpt = doc.findPersonById(selectedPersonId);
-        if (personOpt)
+        std::optional<Person> personOpt = doc.findPersonById(*selectedPersonId);
+        if (personOpt && selectedFamilyId)
         {
             Person updatedPerson = *personOpt;
             updatedPerson.setSpecialNeedNote(note);
-            updatePersonInFamily(m_documentManager, selectedFamilyId, updatedPerson);
+            updatePersonInFamily(m_documentManager, *selectedFamilyId, updatedPerson);
         }
     }
 }
 
-void NeedsSubView::showEditNeedDialog(const QString& personId, const QString& familyId)
+void NeedsSubView::showEditNeedDialog(const PersonId& personId, const FamilyId& familyId)
 {
     const Document& doc = m_documentManager->document();
 
@@ -271,7 +277,7 @@ void NeedsSubView::showEditNeedDialog(const QString& personId, const QString& fa
     }
 }
 
-void NeedsSubView::deleteNeed(const QString& personId, const QString& familyId)
+void NeedsSubView::deleteNeed(const PersonId& personId, const FamilyId& familyId)
 {
     const Document& doc = m_documentManager->document();
 

@@ -4,6 +4,7 @@
 #include <QSplitter>
 
 #include "DocumentChange.h"
+#include "Id.h"
 
 class QLabel;
 class QProgressBar;
@@ -52,8 +53,8 @@ private slots:
     void onSidebarTabChanged(int index);
 
     // Family editing
-    void onEditFamilyRequested(const QString& familyId);
-    void onDeleteFamilyRequested(const QString& familyId);
+    void onEditFamilyRequested(const FamilyId& familyId);
+    void onDeleteFamilyRequested(const FamilyId& familyId);
     void onSaveFamily();
     void onCancelEdit();
     void onCloseEditPanel();
@@ -64,7 +65,7 @@ private:
     void setupConnections();
     void initializeDefaultLocation();
     bool maybeSave();
-    void openEditPanel(const QString& familyId);
+    void openEditPanel(const FamilyId& familyId);
     void closeEditPanelInternal();
 
     // Settings helpers

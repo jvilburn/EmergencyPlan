@@ -22,7 +22,7 @@ public:
 
     // FamilyMarkerProvider interface
     HighlightInfo highlightInfo() const override;
-    QSet<QString> visibleFamilyIds() const override;
+    QSet<FamilyId> visibleFamilyIds() const override;
 
 signals:
     void highlightChanged();
@@ -34,8 +34,8 @@ private slots:
 
 private:
     void showAddNeedDialog();
-    void showEditNeedDialog(const QString& personId, const QString& familyId);
-    void deleteNeed(const QString& personId, const QString& familyId);
+    void showEditNeedDialog(const PersonId& personId, const FamilyId& familyId);
+    void deleteNeed(const PersonId& personId, const FamilyId& familyId);
 
     DocumentManager* m_documentManager;
     FilterBar* m_filterBar;

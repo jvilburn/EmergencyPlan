@@ -19,7 +19,7 @@ public:
     explicit MinisteringView(DocumentManager* docManager, QWidget* parent = nullptr);
 
     HighlightInfo highlightInfo() const override;
-    QSet<QString> visibleFamilyIds() const override;
+    QSet<FamilyId> visibleFamilyIds() const override;
 
 signals:
     void highlightChanged();

@@ -3,6 +3,8 @@
 #include <QWidget>
 #include <QString>
 #include <QList>
+#include "Id.h"
+#include <optional>
 
 class DocumentManager;
 class FamilyTreeModel;
@@ -36,7 +38,7 @@ public:
 
 signals:
     /// Emitted when a family marker is clicked
-    void familyClicked(const QString& familyId);
+    void familyClicked(const FamilyId& familyId);
 
     /// Emitted when the header is clicked (for expand/collapse toggle)
     void headerClicked();
@@ -52,14 +54,14 @@ private slots:
 private:
     struct MarkerLayout
     {
-        QString familyId;
+        FamilyId familyId;
         QString name;
         QPointF markerPos;
         QRectF labelRect;
     };
 
     void recalculateLayout();
-    QString markerAtPoint(const QPoint& pos) const;
+    std::optional<FamilyId> markerAtPoint(const QPoint& pos) const;
 
     MapViewModel* m_viewModel;
     Filter* m_filter;

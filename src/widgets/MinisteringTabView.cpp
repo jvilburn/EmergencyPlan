@@ -97,7 +97,7 @@ HighlightInfo MinisteringTabView::highlightInfo() const
     return {};
 }
 
-QSet<QString> MinisteringTabView::visibleFamilyIds() const
+QSet<FamilyId> MinisteringTabView::visibleFamilyIds() const
 {
     return {};  // Show all
 }

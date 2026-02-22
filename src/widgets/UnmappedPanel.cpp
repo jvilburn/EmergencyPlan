@@ -90,7 +90,12 @@ void UnmappedPanel::recalculateLayout()
 
         MarkerLayout item;
         QModelIndex idx = m_model->index(i, 0);
-        item.familyId = m_model->familyIdAt(idx);
+        auto fid = m_model->familyIdAt(idx);
+        if (!fid)
+        {
+            continue;
+        }
+        item.familyId = *fid;
         item.name = m_model->data(idx, Qt::DisplayRole).toString();
 
         // Position: columns from left to right for natural reading order
@@ -196,7 +201,7 @@ void UnmappedPanel::paintEvent(QPaintEvent* /*event*/)
         state.scale = 0.5;
         state.isHighlighted = highlight.allHighlightedIds().contains(item.familyId);
         state.showPip = highlight.contactPointFamilyIds.contains(item.familyId);
-        state.icons = m_viewModel->familyIcons(item.familyId);
+        state.icons = m_viewModel->familyIcons(item.familyId.toString());
 
         MarkerRenderer::draw(painter, item.markerPos, QVariantMap(), state);
 
@@ -226,7 +231,11 @@ void UnmappedPanel::mousePressEvent(QMouseEvent* event)
         // If expanded, handle marker clicks
         if (m_isExpanded)
         {
-            emit familyClicked(markerAtPoint(event->pos()));
+            auto clickedId = markerAtPoint(event->pos());
+            if (clickedId)
+            {
+                emit familyClicked(*clickedId);
+            }
         }
     }
 }
@@ -237,7 +246,7 @@ void UnmappedPanel::mouseReleaseEvent(QMouseEvent* event)
     event->accept();
 }
 
-QString UnmappedPanel::markerAtPoint(const QPoint& pos) const
+std::optional<FamilyId> UnmappedPanel::markerAtPoint(const QPoint& pos) const
 {
     // Check in reverse order (topmost last)
     for (int i = m_layout.size() - 1; i >= 0; --i)
@@ -259,5 +268,5 @@ QString UnmappedPanel::markerAtPoint(const QPoint& pos) const
         }
     }
 
-    return QString();
+    return std::nullopt;
 }

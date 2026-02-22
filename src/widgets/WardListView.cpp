@@ -59,19 +59,23 @@ WardListView::WardListView(DocumentManager* documentManager,
     emit visibleFamiliesChanged(visibleFamilyIdsList());
 }
 
-QString WardListView::selectedFamilyId() const
+std::optional<FamilyId> WardListView::selectedFamilyId() const
 {
     QModelIndex current = m_treeView->currentIndex();
     if (!current.isValid())
     {
-        return QString();
+        return std::nullopt;
     }
     return m_model->familyIdAt(current);
 }
 
-void WardListView::setSelectedFamilyId(const QString& id)
+void WardListView::setSelectedFamilyId(const std::optional<FamilyId>& id)
 {
-    QModelIndex familyIndex = m_model->indexForFamilyId(id);
+    if (!id)
+    {
+        return;
+    }
+    QModelIndex familyIndex = m_model->indexForFamilyId(*id);
     if (familyIndex.isValid())
     {
         m_treeView->setCurrentIndex(familyIndex);
@@ -79,7 +83,7 @@ void WardListView::setSelectedFamilyId(const QString& id)
     }
 }
 
-QStringList WardListView::visibleFamilyIdsList() const
+QList<FamilyId> WardListView::visibleFamilyIdsList() const
 {
     return m_model->familyIds();
 }
@@ -87,24 +91,24 @@ QStringList WardListView::visibleFamilyIdsList() const
 HighlightInfo WardListView::highlightInfo() const
 {
     HighlightInfo info;
-    QString selected = selectedFamilyId();
-    if (!selected.isEmpty())
+    auto selected = selectedFamilyId();
+    if (selected)
     {
-        info.highlightedFamilyIds.insert(selected);
+        info.highlightedFamilyIds.insert(*selected);
     }
     return info;
 }
 
-QSet<QString> WardListView::visibleFamilyIds() const
+QSet<FamilyId> WardListView::visibleFamilyIds() const
 {
-    QStringList list = visibleFamilyIdsList();
-    return QSet<QString>(list.begin(), list.end());
+    QList<FamilyId> list = visibleFamilyIdsList();
+    return QSet<FamilyId>(list.begin(), list.end());
 }
 
 void WardListView::onSelectionChanged()
 {
-    QString id = selectedFamilyId();
-    if (!id.isEmpty())
+    auto id = selectedFamilyId();
+    if (id)
     {
         emit highlightChanged();
 
@@ -145,8 +149,11 @@ void WardListView::onRowsRemoved(const QModelIndex& parent, int first, int last)
         FamilyTreeModel::RowType type = m_model->rowTypeAt(parent);
         if (type == FamilyTreeModel::RowType::Family)
         {
-            QString familyId = m_model->familyIdAt(parent);
-            m_actionWidgets.remove(familyId);
+            auto familyId = m_model->familyIdAt(parent);
+            if (familyId)
+            {
+                m_actionWidgets.remove(*familyId);
+            }
         }
     }
 }
@@ -181,21 +188,24 @@ void WardListView::onItemCollapsed(const QModelIndex& index)
     FamilyTreeModel::RowType type = m_model->rowTypeAt(index);
     if (type == FamilyTreeModel::RowType::Family)
     {
-        QString familyId = m_model->familyIdAt(index);
-        detachActionButtons(familyId);
+        auto familyId = m_model->familyIdAt(index);
+        if (familyId)
+        {
+            detachActionButtons(*familyId);
+        }
     }
 }
 
 void WardListView::attachActionButtons(const QModelIndex& familyIndex)
 {
-    QString familyId = m_model->familyIdAt(familyIndex);
-    if (familyId.isEmpty())
+    auto familyId = m_model->familyIdAt(familyIndex);
+    if (!familyId)
     {
         return;
     }
 
     // Already have buttons for this family?
-    if (m_actionWidgets.contains(familyId))
+    if (m_actionWidgets.contains(*familyId))
     {
         return;
     }
@@ -209,7 +219,7 @@ void WardListView::attachActionButtons(const QModelIndex& familyIndex)
 
         if (childType == FamilyTreeModel::RowType::Actions)
         {
-            ActionButtonsWidget* widget = new ActionButtonsWidget(familyId, m_treeView);
+            ActionButtonsWidget* widget = new ActionButtonsWidget(*familyId, m_treeView);
 
             connect(widget, &ActionButtonsWidget::editRequested,
                     this, &WardListView::editFamilyRequested);
@@ -217,13 +227,13 @@ void WardListView::attachActionButtons(const QModelIndex& familyIndex)
                     this, &WardListView::deleteFamilyRequested);
 
             m_treeView->setIndexWidget(childIndex, widget);
-            m_actionWidgets[familyId] = widget;
+            m_actionWidgets[*familyId] = widget;
             break;
         }
     }
 }
 
-void WardListView::detachActionButtons(const QString& familyId)
+void WardListView::detachActionButtons(const FamilyId& familyId)
 {
     if (!m_actionWidgets.contains(familyId))
     {

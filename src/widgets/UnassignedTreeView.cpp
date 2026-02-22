@@ -93,7 +93,7 @@ HighlightInfo UnassignedTreeView::highlightInfo() const
     return {assoc.relatedFamilyIds, assoc.contactPointFamilyIds};
 }
 
-QSet<QString> UnassignedTreeView::visibleFamilyIds() const
+QSet<FamilyId> UnassignedTreeView::visibleFamilyIds() const
 {
     return {};  // Show all
 }

@@ -56,7 +56,7 @@ HighlightInfo MinisteringView::highlightInfo() const
     return currentTabView()->highlightInfo();
 }
 
-QSet<QString> MinisteringView::visibleFamilyIds() const
+QSet<FamilyId> MinisteringView::visibleFamilyIds() const
 {
     return {};  // Show all
 }

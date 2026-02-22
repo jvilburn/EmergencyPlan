@@ -18,7 +18,7 @@ public:
     explicit MinisteringTreeView(MinisteringModel* model, QWidget* parent = nullptr);
 
     HighlightInfo highlightInfo() const override;
-    QSet<QString> visibleFamilyIds() const override;
+    QSet<FamilyId> visibleFamilyIds() const override;
 
     void expandDistricts();
 

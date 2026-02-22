@@ -109,28 +109,18 @@ void WardListDialog::setSelectionMode(SelectionMode mode)
     }
 }
 
-void WardListDialog::setPreselectedIds(const QStringList& ids)
+void WardListDialog::setPreselectedFamilyIds(const QList<FamilyId>& ids)
 {
     QItemSelectionModel* selModel = m_treeView->selectionModel();
     selModel->clearSelection();
 
     bool scrolledToFirst = false;
-    for (const QString& id : ids)
+    for (const FamilyId& id : ids)
     {
-        QModelIndex index;
-        if (m_mode == FamilyMode && m_familyModel)
-        {
-            index = m_familyModel->indexForFamilyId(id);
-        }
-        else if (m_mode == PersonMode && m_personModel)
-        {
-            index = m_personModel->indexForPersonId(id);
-        }
-
+        QModelIndex index = m_familyModel->indexForFamilyId(id);
         if (index.isValid())
         {
             selModel->select(index, QItemSelectionModel::Select);
-            // Scroll to first selected item
             if (!scrolledToFirst)
             {
                 m_treeView->scrollTo(index);
@@ -140,38 +130,42 @@ void WardListDialog::setPreselectedIds(const QStringList& ids)
     }
 }
 
-QStringList WardListDialog::selectedIds() const
+void WardListDialog::setPreselectedPersonIds(const QList<PersonId>& ids)
 {
-    QStringList ids;
-    QSet<QString> seen;
+    QItemSelectionModel* selModel = m_treeView->selectionModel();
+    selModel->clearSelection();
+
+    bool scrolledToFirst = false;
+    for (const PersonId& id : ids)
+    {
+        QModelIndex index = m_personModel->indexForPersonId(id);
+        if (index.isValid())
+        {
+            selModel->select(index, QItemSelectionModel::Select);
+            if (!scrolledToFirst)
+            {
+                m_treeView->scrollTo(index);
+                scrolledToFirst = true;
+            }
+        }
+    }
+}
+
+QList<FamilyId> WardListDialog::selectedFamilyIds() const
+{
+    QList<FamilyId> ids;
+    QSet<FamilyId> seen;
     QModelIndexList selected = m_treeView->selectionModel()->selectedIndexes();
 
     for (const QModelIndex& index : selected)
     {
-        if (m_mode == FamilyMode && m_familyModel)
+        if (m_familyModel && m_familyModel->itemTypeAt(index) == ItemType::Family)
         {
-            // Only include Family-type rows (not members or details)
-            if (m_familyModel->itemTypeAt(index) == ItemType::Family)
+            auto id = m_familyModel->familyIdAt(index);
+            if (id && !seen.contains(*id))
             {
-                QString id = m_familyModel->familyIdAt(index);
-                if (!id.isEmpty() && !seen.contains(id))
-                {
-                    seen.insert(id);
-                    ids.append(id);
-                }
-            }
-        }
-        else if (m_mode == PersonMode && m_personModel)
-        {
-            // Only include Person-type rows (not contact details)
-            if (m_personModel->itemTypeAt(index) == ItemType::Person)
-            {
-                QString id = m_personModel->personIdAt(index);
-                if (!id.isEmpty() && !seen.contains(id))
-                {
-                    seen.insert(id);
-                    ids.append(id);
-                }
+                seen.insert(*id);
+                ids.append(*id);
             }
         }
     }
@@ -179,7 +173,29 @@ QStringList WardListDialog::selectedIds() const
     return ids;
 }
 
-void WardListDialog::onMapFamilyClicked(const QString& familyId)
+QList<PersonId> WardListDialog::selectedPersonIds() const
+{
+    QList<PersonId> ids;
+    QSet<PersonId> seen;
+    QModelIndexList selected = m_treeView->selectionModel()->selectedIndexes();
+
+    for (const QModelIndex& index : selected)
+    {
+        if (m_personModel && m_personModel->itemTypeAt(index) == ItemType::Person)
+        {
+            auto id = m_personModel->personIdAt(index);
+            if (id && !seen.contains(*id))
+            {
+                seen.insert(*id);
+                ids.append(*id);
+            }
+        }
+    }
+
+    return ids;
+}
+
+void WardListDialog::onMapFamilyClicked(const FamilyId& familyId)
 {
     if (m_mode == FamilyMode && m_familyModel)
     {
@@ -199,7 +215,7 @@ void WardListDialog::onMapFamilyClicked(const QString& familyId)
             m_documentManager->document().findFamilyById(familyId);
         if (familyOpt && !familyOpt->members().isEmpty())
         {
-            QString personId = familyOpt->members().first().id();
+            PersonId personId = familyOpt->members().first().id();
             QModelIndex index = m_personModel->indexForPersonId(personId);
             if (index.isValid())
             {
@@ -217,12 +233,12 @@ void WardListDialog::onSelectionChanged()
     m_mapWidget->updateHighlights();
 }
 
-QString WardListDialog::familyIdForCurrentSelection() const
+std::optional<FamilyId> WardListDialog::familyIdForCurrentSelection() const
 {
     QModelIndex current = m_treeView->currentIndex();
     if (!current.isValid())
     {
-        return QString();
+        return std::nullopt;
     }
 
     if (m_mode == FamilyMode && m_familyModel)
@@ -232,27 +248,27 @@ QString WardListDialog::familyIdForCurrentSelection() const
     else if (m_personModel)
     {
         // Look up family for selected person
-        QString personId = m_personModel->personIdAt(current);
-        if (!personId.isEmpty())
+        auto personId = m_personModel->personIdAt(current);
+        if (personId)
         {
-            return m_documentManager->document().familyIdForPerson(personId);
+            return m_documentManager->document().familyIdForPerson(*personId);
         }
     }
-    return QString();
+    return std::nullopt;
 }
 
 HighlightInfo WardListDialog::highlightInfo() const
 {
     HighlightInfo info;
-    QString familyId = familyIdForCurrentSelection();
-    if (!familyId.isEmpty())
+    auto familyId = familyIdForCurrentSelection();
+    if (familyId)
     {
-        info.highlightedFamilyIds.insert(familyId);
+        info.highlightedFamilyIds.insert(*familyId);
     }
     return info;
 }
 
-QSet<QString> WardListDialog::visibleFamilyIds() const
+QSet<FamilyId> WardListDialog::visibleFamilyIds() const
 {
     // Show all families in the dialog
     return {};
@@ -260,76 +276,76 @@ QSet<QString> WardListDialog::visibleFamilyIds() const
 
 // Static convenience methods
 
-QString WardListDialog::selectFamily(DocumentManager* documentManager,
-                                     const QString& initialId,
+std::optional<FamilyId> WardListDialog::selectFamily(DocumentManager* documentManager,
+                                     const std::optional<FamilyId>& initialId,
                                      QWidget* parent)
 {
     WardListDialog dialog(documentManager, FamilyMode, parent);
     dialog.setSelectionMode(SingleSelect);
-    if (!initialId.isEmpty())
+    if (initialId)
     {
-        dialog.setPreselectedIds({initialId});
+        dialog.setPreselectedFamilyIds({*initialId});
     }
 
     if (dialog.exec() == QDialog::Accepted)
     {
-        QStringList ids = dialog.selectedIds();
-        return ids.isEmpty() ? QString() : ids.first();
+        QList<FamilyId> ids = dialog.selectedFamilyIds();
+        return ids.isEmpty() ? std::nullopt : std::optional<FamilyId>(ids.first());
     }
-    return QString();
+    return std::nullopt;
 }
 
-QStringList WardListDialog::selectFamilies(DocumentManager* documentManager,
-                                           const QStringList& initialIds,
+QList<FamilyId> WardListDialog::selectFamilies(DocumentManager* documentManager,
+                                           const QList<FamilyId>& initialIds,
                                            QWidget* parent)
 {
     WardListDialog dialog(documentManager, FamilyMode, parent);
     dialog.setSelectionMode(MultiSelect);
     if (!initialIds.isEmpty())
     {
-        dialog.setPreselectedIds(initialIds);
+        dialog.setPreselectedFamilyIds(initialIds);
     }
 
     if (dialog.exec() == QDialog::Accepted)
     {
-        return dialog.selectedIds();
+        return dialog.selectedFamilyIds();
     }
     return {};
 }
 
-QString WardListDialog::selectPerson(DocumentManager* documentManager,
-                                     const QString& initialId,
+std::optional<PersonId> WardListDialog::selectPerson(DocumentManager* documentManager,
+                                     const std::optional<PersonId>& initialId,
                                      QWidget* parent)
 {
     WardListDialog dialog(documentManager, PersonMode, parent);
     dialog.setSelectionMode(SingleSelect);
-    if (!initialId.isEmpty())
+    if (initialId)
     {
-        dialog.setPreselectedIds({initialId});
+        dialog.setPreselectedPersonIds({*initialId});
     }
 
     if (dialog.exec() == QDialog::Accepted)
     {
-        QStringList ids = dialog.selectedIds();
-        return ids.isEmpty() ? QString() : ids.first();
+        QList<PersonId> ids = dialog.selectedPersonIds();
+        return ids.isEmpty() ? std::nullopt : std::optional<PersonId>(ids.first());
     }
-    return QString();
+    return std::nullopt;
 }
 
-QStringList WardListDialog::selectPersons(DocumentManager* documentManager,
-                                          const QStringList& initialIds,
+QList<PersonId> WardListDialog::selectPersons(DocumentManager* documentManager,
+                                          const QList<PersonId>& initialIds,
                                           QWidget* parent)
 {
     WardListDialog dialog(documentManager, PersonMode, parent);
     dialog.setSelectionMode(MultiSelect);
     if (!initialIds.isEmpty())
     {
-        dialog.setPreselectedIds(initialIds);
+        dialog.setPreselectedPersonIds(initialIds);
     }
 
     if (dialog.exec() == QDialog::Accepted)
     {
-        return dialog.selectedIds();
+        return dialog.selectedPersonIds();
     }
     return {};
 }

@@ -5,6 +5,7 @@
 #include <QWidget>
 #include <QModelIndex>
 #include <QHash>
+#include <optional>
 
 class ActionButtonsWidget;
 class DocumentManager;
@@ -25,19 +26,19 @@ public:
 
     // FamilyMarkerProvider interface
     HighlightInfo highlightInfo() const override;
-    QSet<QString> visibleFamilyIds() const override;
+    QSet<FamilyId> visibleFamilyIds() const override;
 
-    QString selectedFamilyId() const;
-    void setSelectedFamilyId(const QString& id);
-    QStringList visibleFamilyIdsList() const;
+    std::optional<FamilyId> selectedFamilyId() const;
+    void setSelectedFamilyId(const std::optional<FamilyId>& id);
+    QList<FamilyId> visibleFamilyIdsList() const;
 
     Filter* filter() const;
 
 signals:
     void highlightChanged();
-    void visibleFamiliesChanged(const QStringList& familyIds);
-    void editFamilyRequested(const QString& familyId);
-    void deleteFamilyRequested(const QString& familyId);
+    void visibleFamiliesChanged(const QList<FamilyId>& familyIds);
+    void editFamilyRequested(const FamilyId& familyId);
+    void deleteFamilyRequested(const FamilyId& familyId);
 
 private slots:
     void onSelectionChanged();
@@ -49,11 +50,11 @@ private slots:
 
 private:
     void attachActionButtons(const QModelIndex& familyIndex);
-    void detachActionButtons(const QString& familyId);
+    void detachActionButtons(const FamilyId& familyId);
 
     DocumentManager* m_documentManager;
     FilterBar* m_filterBar;
     FamilyTreeModel* m_model;
     SelectionPreservingTreeView* m_treeView;
-    QHash<QString, ActionButtonsWidget*> m_actionWidgets;
+    QHash<FamilyId, ActionButtonsWidget*> m_actionWidgets;
 };

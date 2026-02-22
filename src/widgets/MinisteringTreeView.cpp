@@ -70,7 +70,7 @@ HighlightInfo MinisteringTreeView::highlightInfo() const
     return {assoc.relatedFamilyIds, assoc.contactPointFamilyIds};
 }
 
-QSet<QString> MinisteringTreeView::visibleFamilyIds() const
+QSet<FamilyId> MinisteringTreeView::visibleFamilyIds() const
 {
     return {};  // Show all
 }

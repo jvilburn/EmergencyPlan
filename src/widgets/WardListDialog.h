@@ -1,9 +1,10 @@
 #pragma once
 
 #include "FamilyMarkerProvider.h"
+#include "Id.h"
 
 #include <QDialog>
-#include <QStringList>
+#include <optional>
 
 class DocumentManager;
 class FilterBar;
@@ -44,44 +45,46 @@ public:
     void setSelectionMode(SelectionMode mode);
 
     /// Pre-select items by ID.
-    void setPreselectedIds(const QStringList& ids);
+    void setPreselectedFamilyIds(const QList<FamilyId>& ids);
+    void setPreselectedPersonIds(const QList<PersonId>& ids);
 
     /// Get selected IDs after dialog is accepted.
-    QStringList selectedIds() const;
+    QList<FamilyId> selectedFamilyIds() const;
+    QList<PersonId> selectedPersonIds() const;
 
     // FamilyMarkerProvider interface
     HighlightInfo highlightInfo() const override;
-    QSet<QString> visibleFamilyIds() const override;
+    QSet<FamilyId> visibleFamilyIds() const override;
 
     // Static convenience methods for common use cases
 
-    /// Show dialog to select a single family. Returns empty string if cancelled.
-    static QString selectFamily(DocumentManager* documentManager,
-                                const QString& initialId = QString(),
+    /// Show dialog to select a single family. Returns nullopt if cancelled.
+    static std::optional<FamilyId> selectFamily(DocumentManager* documentManager,
+                                const std::optional<FamilyId>& initialId = std::nullopt,
                                 QWidget* parent = nullptr);
 
     /// Show dialog to select multiple families. Returns empty list if cancelled.
-    static QStringList selectFamilies(DocumentManager* documentManager,
-                                      const QStringList& initialIds = {},
+    static QList<FamilyId> selectFamilies(DocumentManager* documentManager,
+                                      const QList<FamilyId>& initialIds = {},
                                       QWidget* parent = nullptr);
 
-    /// Show dialog to select a single person. Returns empty string if cancelled.
-    static QString selectPerson(DocumentManager* documentManager,
-                                const QString& initialId = QString(),
+    /// Show dialog to select a single person. Returns nullopt if cancelled.
+    static std::optional<PersonId> selectPerson(DocumentManager* documentManager,
+                                const std::optional<PersonId>& initialId = std::nullopt,
                                 QWidget* parent = nullptr);
 
     /// Show dialog to select multiple persons. Returns empty list if cancelled.
-    static QStringList selectPersons(DocumentManager* documentManager,
-                                     const QStringList& initialIds = {},
+    static QList<PersonId> selectPersons(DocumentManager* documentManager,
+                                     const QList<PersonId>& initialIds = {},
                                      QWidget* parent = nullptr);
 
 private slots:
-    void onMapFamilyClicked(const QString& id);
+    void onMapFamilyClicked(const FamilyId& id);
     void onSelectionChanged();
 
 private:
     void setupUi();
-    QString familyIdForCurrentSelection() const;
+    std::optional<FamilyId> familyIdForCurrentSelection() const;
 
     Mode m_mode;
     DocumentManager* m_documentManager;

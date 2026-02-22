@@ -5,6 +5,8 @@
 
 #include <QWidget>
 
+#include <optional>
+
 class DocumentManager;
 class EmergencyAssetModel;
 class FilterBar;
@@ -26,7 +28,7 @@ public:
 
     // FamilyMarkerProvider interface
     HighlightInfo highlightInfo() const override;
-    QSet<QString> visibleFamilyIds() const override;
+    QSet<FamilyId> visibleFamilyIds() const override;
 
 signals:
     void highlightChanged();
@@ -46,10 +48,10 @@ private:
     void addAsset();
     void editAsset();
     void deleteAsset();
-    void showSelectPeopleDialog(const QString& assetId);
-    void removePersonFromAsset(const QString& assetId, const QString& personId);
+    void showSelectPeopleDialog(const EmergencyAssetId& assetId);
+    void removePersonFromAsset(const EmergencyAssetId& assetId, const PersonId& personId);
 
-    QString selectedAssetId() const;
+    std::optional<EmergencyAssetId> selectedAssetId() const;
 
     DocumentManager* m_documentManager;
     FilterBar* m_filterBar;
@@ -60,6 +62,6 @@ private:
     QPushButton* m_editButton;
     QPushButton* m_deleteButton;
 
-    QString m_contextAssetId;
-    QString m_contextPersonId;
+    std::optional<EmergencyAssetId> m_contextAssetId;
+    std::optional<PersonId> m_contextPersonId;
 };

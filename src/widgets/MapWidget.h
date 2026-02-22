@@ -7,6 +7,7 @@
 #include <QVariantMap>
 #include <QSet>
 #include <optional>
+#include "Id.h"
 
 class QTimer;
 
@@ -53,7 +54,7 @@ public slots:
 
 signals:
     /// Emitted when a family marker is clicked
-    void familyClicked(const QString& familyId);
+    void familyClicked(const FamilyId& familyId);
 
     /// Emitted after highlight processing completes
     void highlightChanged();
@@ -95,7 +96,7 @@ private:
     void drawAttribution(QPainter& painter);
 
     // Hit testing
-    QString markerAtPoint(const QPoint& pos) const;
+    std::optional<FamilyId> markerAtPoint(const QPoint& pos) const;
 
     // Unmapped panel visibility
     void updateUnmappedPanelVisibility();
@@ -103,7 +104,7 @@ private:
 
     // Bounds fitting
     void updateZoomForBounds();
-    void ensureVisible(const QSet<QString>& familyIds);
+    void ensureVisible(const QSet<FamilyId>& familyIds);
 
     // Marker info for adaptive zoom calculation
     struct MarkerInfo

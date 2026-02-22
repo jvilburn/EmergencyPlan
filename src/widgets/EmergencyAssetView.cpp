@@ -135,13 +135,12 @@ void EmergencyAssetView::onContextMenu(const QPoint& pos)
     else
     {
         ItemType type = m_model->itemTypeAt(index);
-        QString id = m_model->idAt(index);
 
         switch (type)
         {
         case ItemType::Asset:
             {
-                m_contextAssetId = id;
+                m_contextAssetId = m_model->assetIdAt(index);
                 menu.addAction(tr("Select People..."), this, &EmergencyAssetView::selectPeopleFromContextMenu);
                 menu.addSeparator();
                 menu.addAction(tr("Rename..."), this, &EmergencyAssetView::editAsset);
@@ -153,7 +152,8 @@ void EmergencyAssetView::onContextMenu(const QPoint& pos)
             {
                 // Show contact info (disabled) if available
                 const Document& doc = m_documentManager->document();
-                std::optional<Person> personOpt = doc.findPersonById(id);
+                PersonId personId = PersonId::fromString(m_model->idAt(index));
+                std::optional<Person> personOpt = doc.findPersonById(personId);
                 if (personOpt)
                 {
                     const Phone& phone = personOpt->phone();
@@ -175,7 +175,7 @@ void EmergencyAssetView::onContextMenu(const QPoint& pos)
                 }
 
                 m_contextAssetId = m_model->assetIdAt(index);
-                m_contextPersonId = id;
+                m_contextPersonId = personId;
                 menu.addAction(tr("Remove"), this, &EmergencyAssetView::removePersonFromContextMenu);
             }
             break;
@@ -195,8 +195,8 @@ void EmergencyAssetView::onContextMenu(const QPoint& pos)
     }
 
     // Clear context after menu closes (whether action taken or dismissed)
-    m_contextAssetId.clear();
-    m_contextPersonId.clear();
+    m_contextAssetId = std::nullopt;
+    m_contextPersonId = std::nullopt;
 }
 
 void EmergencyAssetView::expandAssets()
@@ -206,35 +206,40 @@ void EmergencyAssetView::expandAssets()
 
 void EmergencyAssetView::selectPeopleFromContextMenu()
 {
-    QString assetId = m_contextAssetId;
-    m_contextAssetId.clear();
-    m_contextPersonId.clear();
-    showSelectPeopleDialog(assetId);
+    auto assetId = m_contextAssetId;
+    m_contextAssetId = std::nullopt;
+    m_contextPersonId = std::nullopt;
+    if (assetId)
+    {
+        showSelectPeopleDialog(*assetId);
+    }
 }
 
 void EmergencyAssetView::removePersonFromContextMenu()
 {
-    QString assetId = m_contextAssetId;
-    QString personId = m_contextPersonId;
-    m_contextAssetId.clear();
-    m_contextPersonId.clear();
-    removePersonFromAsset(assetId, personId);
+    auto assetId = m_contextAssetId;
+    auto personId = m_contextPersonId;
+    m_contextAssetId = std::nullopt;
+    m_contextPersonId = std::nullopt;
+    if (assetId && personId)
+    {
+        removePersonFromAsset(*assetId, *personId);
+    }
 }
 
 void EmergencyAssetView::updateButtonStates()
 {
-    QString assetId = selectedAssetId();
-    bool hasAssetSelected = !assetId.isEmpty();
+    bool hasAssetSelected = selectedAssetId().has_value();
     m_editButton->setEnabled(hasAssetSelected);
     m_deleteButton->setEnabled(hasAssetSelected);
 }
 
-QString EmergencyAssetView::selectedAssetId() const
+std::optional<EmergencyAssetId> EmergencyAssetView::selectedAssetId() const
 {
     QModelIndex current = m_tree->currentIndex();
     if (!current.isValid())
     {
-        return QString();
+        return std::nullopt;
     }
 
     // For both Asset and Person items, assetIdAt returns the asset ID
@@ -247,7 +252,7 @@ HighlightInfo EmergencyAssetView::highlightInfo() const
     return {assoc.relatedFamilyIds, assoc.contactPointFamilyIds};
 }
 
-QSet<QString> EmergencyAssetView::visibleFamilyIds() const
+QSet<FamilyId> EmergencyAssetView::visibleFamilyIds() const
 {
     // Show all families
     return {};
@@ -269,14 +274,14 @@ void EmergencyAssetView::addAsset()
 
 void EmergencyAssetView::editAsset()
 {
-    QString assetId = selectedAssetId();
-    if (assetId.isEmpty())
+    auto assetId = selectedAssetId();
+    if (!assetId)
     {
         return;
     }
 
     const Document& doc = m_documentManager->document();
-    std::optional<EmergencyAsset> assetOpt = doc.findEmergencyAssetById(assetId);
+    std::optional<EmergencyAsset> assetOpt = doc.findEmergencyAssetById(*assetId);
     if (!assetOpt)
     {
         return;
@@ -297,14 +302,14 @@ void EmergencyAssetView::editAsset()
 
 void EmergencyAssetView::deleteAsset()
 {
-    QString assetId = selectedAssetId();
-    if (assetId.isEmpty())
+    auto assetId = selectedAssetId();
+    if (!assetId)
     {
         return;
     }
 
     const Document& doc = m_documentManager->document();
-    std::optional<EmergencyAsset> assetOpt = doc.findEmergencyAssetById(assetId);
+    std::optional<EmergencyAsset> assetOpt = doc.findEmergencyAssetById(*assetId);
     if (!assetOpt)
     {
         return;
@@ -318,7 +323,7 @@ void EmergencyAssetView::deleteAsset()
     }
 }
 
-void EmergencyAssetView::showSelectPeopleDialog(const QString& assetId)
+void EmergencyAssetView::showSelectPeopleDialog(const EmergencyAssetId& assetId)
 {
     const Document& doc = m_documentManager->document();
     std::optional<EmergencyAsset> assetOpt = doc.findEmergencyAssetById(assetId);
@@ -328,13 +333,13 @@ void EmergencyAssetView::showSelectPeopleDialog(const QString& assetId)
     }
 
     // Get current person IDs as a list
-    QStringList currentIds = assetOpt->personIds().values();
+    QList<PersonId> currentIds = assetOpt->personIds().values();
 
     // Show dialog to select persons
-    QStringList selectedIds = WardListDialog::selectPersons(m_documentManager, currentIds, this);
+    QList<PersonId> selectedIds = WardListDialog::selectPersons(m_documentManager, currentIds, this);
 
     // Check if selection changed
-    QSet<QString> newSet(selectedIds.begin(), selectedIds.end());
+    QSet<PersonId> newSet(selectedIds.begin(), selectedIds.end());
     if (newSet == assetOpt->personIds())
     {
         return;  // No change
@@ -347,7 +352,7 @@ void EmergencyAssetView::showSelectPeopleDialog(const QString& assetId)
         std::make_unique<UpdateEmergencyAssetCommand>(*assetOpt, updated));
 }
 
-void EmergencyAssetView::removePersonFromAsset(const QString& assetId, const QString& personId)
+void EmergencyAssetView::removePersonFromAsset(const EmergencyAssetId& assetId, const PersonId& personId)
 {
     m_documentManager->executeCommand(
         std::make_unique<UnassignEmergencyAssetFromPersonCommand>(assetId, personId));

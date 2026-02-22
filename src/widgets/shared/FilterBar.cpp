@@ -113,13 +113,13 @@ void FilterBar::rebuildChips()
     const Document& doc = m_documentManager->document();
 
     // Tags
-    for (const QString& tagId : m_filter->tagIds())
+    for (const TagId& tagId : m_filter->tagIds())
     {
         std::optional<Tag> tag = doc.findTagById(tagId);
         if (tag)
         {
             addChip(tr("Tag"), tag->name(), [this, tagId]() {
-                QSet<QString> ids = m_filter->tagIds();
+                QSet<TagId> ids = m_filter->tagIds();
                 ids.remove(tagId);
                 m_filter->setTagIds(ids);
             });
@@ -127,13 +127,13 @@ void FilterBar::rebuildChips()
     }
 
     // Teams
-    for (const QString& teamId : m_filter->teamIds())
+    for (const TeamId& teamId : m_filter->teamIds())
     {
         std::optional<Team> team = doc.findTeamById(teamId);
         if (team)
         {
             addChip(tr("Team"), team->name(), [this, teamId]() {
-                QSet<QString> ids = m_filter->teamIds();
+                QSet<TeamId> ids = m_filter->teamIds();
                 ids.remove(teamId);
                 m_filter->setTeamIds(ids);
             });
@@ -213,13 +213,13 @@ void FilterBar::rebuildChips()
     }
 
     // Asset IDs
-    for (const QString& assetId : m_filter->assetTypeIds())
+    for (const EmergencyAssetId& assetId : m_filter->assetTypeIds())
     {
         std::optional<EmergencyAsset> asset = doc.findEmergencyAssetById(assetId);
         if (asset)
         {
             addChip(tr("Asset"), asset->name(), [this, assetId]() {
-                QSet<QString> ids = m_filter->assetTypeIds();
+                QSet<EmergencyAssetId> ids = m_filter->assetTypeIds();
                 ids.remove(assetId);
                 m_filter->setAssetTypeIds(ids);
             });
@@ -315,7 +315,7 @@ void FilterBar::addTagSubmenu(QMenu* menu)
         action->setCheckable(true);
         action->setChecked(m_filter->tagIds().contains(tag.id()));
         connect(action, &QAction::triggered, this, [this, tagId = tag.id()](bool checked) {
-            QSet<QString> ids = m_filter->tagIds();
+            QSet<TagId> ids = m_filter->tagIds();
             if (checked)
             {
                 ids.insert(tagId);
@@ -351,7 +351,7 @@ void FilterBar::addTeamSubmenu(QMenu* menu)
         action->setCheckable(true);
         action->setChecked(m_filter->teamIds().contains(team.id()));
         connect(action, &QAction::triggered, this, [this, teamId = team.id()](bool checked) {
-            QSet<QString> ids = m_filter->teamIds();
+            QSet<TeamId> ids = m_filter->teamIds();
             if (checked)
             {
                 ids.insert(teamId);
@@ -577,7 +577,7 @@ void FilterBar::addResponseAreaItems(QMenu* menu, ResponseArea area)
         action->setChecked(m_filter->assetTypeIds().contains(asset.id()));
         connect(action, &QAction::triggered,
                 this, [this, assetId = asset.id()](bool checked) {
-            QSet<QString> ids = m_filter->assetTypeIds();
+            QSet<EmergencyAssetId> ids = m_filter->assetTypeIds();
             if (checked)
             {
                 ids.insert(assetId);

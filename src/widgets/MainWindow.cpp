@@ -49,7 +49,7 @@ public:
     }
 
     HighlightInfo highlightInfo() const override { return {}; }
-    QSet<QString> visibleFamilyIds() const override { return {}; }
+    QSet<FamilyId> visibleFamilyIds() const override { return {}; }
 };
 
 MainWindow::MainWindow(QWidget* parent)
@@ -702,7 +702,7 @@ void MainWindow::onSidebarTabChanged(int index)
 // Family Editing
 // ============================================================================
 
-void MainWindow::onEditFamilyRequested(const QString& familyId)
+void MainWindow::onEditFamilyRequested(const FamilyId& familyId)
 {
     // If editing a different family, check for unsaved changes
     if (m_editPanel->isVisible() && m_editPanel->familyId() != familyId)
@@ -729,7 +729,7 @@ void MainWindow::onEditFamilyRequested(const QString& familyId)
     openEditPanel(familyId);
 }
 
-void MainWindow::onDeleteFamilyRequested(const QString& familyId)
+void MainWindow::onDeleteFamilyRequested(const FamilyId& familyId)
 {
     const auto& families = m_documentManager->document().families();
     auto it = families.find(familyId);
@@ -766,7 +766,7 @@ void MainWindow::onSaveFamily()
     }
 
     Family editedFamily = m_editPanel->family();
-    QString familyId = m_editPanel->familyId();
+    FamilyId familyId = m_editPanel->familyId();
 
     // Get original family for command
     const auto& families = m_documentManager->document().families();
@@ -839,7 +839,7 @@ void MainWindow::onCloseEditPanel()
     closeEditPanelInternal();
 }
 
-void MainWindow::openEditPanel(const QString& familyId)
+void MainWindow::openEditPanel(const FamilyId& familyId)
 {
     const auto& families = m_documentManager->document().families();
     auto it = families.find(familyId);

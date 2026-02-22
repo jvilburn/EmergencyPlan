@@ -199,10 +199,10 @@ bool MapWidget::hasUnmappedSelection() const
         return false;
     }
 
-    QSet<QString> highlighted = m_markerProvider->highlightInfo().allHighlightedIds();
+    QSet<FamilyId> highlighted = m_markerProvider->highlightInfo().allHighlightedIds();
     const Document& doc = m_docManager->document();
 
-    for (const QString& id : highlighted)
+    for (const FamilyId& id : highlighted)
     {
         std::optional<Family> family = doc.findFamilyById(id);
         if (family && !family->isMapped())
@@ -523,12 +523,12 @@ void MapWidget::drawMarkers(QPainter& painter)
     // If we have a highlight provider, use it for all highlighting decisions
     if (m_markerProvider)
     {
-        QSet<QString> visibleIds = m_markerProvider->visibleFamilyIds();
+        QSet<FamilyId> visibleIds = m_markerProvider->visibleFamilyIds();
         bool hasVisibleFilter = !visibleIds.isEmpty();
 
         // Get highlight info once (semantic data from provider)
         HighlightInfo info = m_markerProvider->highlightInfo();
-        QSet<QString> allHighlighted = info.allHighlightedIds();
+        QSet<FamilyId> allHighlighted = info.allHighlightedIds();
         bool hasHighlighting = info.hasHighlighting();
 
         // Collect markers with their draw order (low opacity first, high opacity on top)
@@ -544,7 +544,7 @@ void MapWidget::drawMarkers(QPainter& painter)
         for (const QVariant& var : families)
         {
             QVariantMap hh = var.toMap();
-            QString id = hh["id"].toString();
+            FamilyId id = FamilyId::fromString(hh["id"].toString());
 
             // Skip if not in visible set (when filtering is active)
             if (hasVisibleFilter && !visibleIds.contains(id))
@@ -575,7 +575,7 @@ void MapWidget::drawMarkers(QPainter& painter)
             state.showPip = isContactPoint;
             state.opacity = opacity;
             state.statusIcon = statusIcon;
-            state.icons = m_viewModel->familyIcons(id);  // Use cached icons
+            state.icons = m_viewModel->familyIcons(id.toString());  // Use cached icons
 
             markers.append({pos, hh, state, opacity});
         }
@@ -721,7 +721,11 @@ void MapWidget::mouseReleaseEvent(QMouseEvent* event)
         // Empty string means clicked on empty map (providers can use to deselect)
         if (!m_wasDragging)
         {
-            emit familyClicked(markerAtPoint(event->pos()));
+            auto clickedId = markerAtPoint(event->pos());
+            if (clickedId)
+            {
+                emit familyClicked(*clickedId);
+            }
         }
         else
         {
@@ -788,7 +792,7 @@ void MapWidget::wheelEvent(QWheelEvent* event)
     event->accept();
 }
 
-QString MapWidget::markerAtPoint(const QPoint& pos) const
+std::optional<FamilyId> MapWidget::markerAtPoint(const QPoint& pos) const
 {
     const QVariantList& families = m_viewModel->families();
     double clampedZoom = qBound(static_cast<double>(MIN_ZOOM), m_zoom, static_cast<double>(MAX_ZOOM));
@@ -806,11 +810,11 @@ QString MapWidget::markerAtPoint(const QPoint& pos) const
         MarkerRenderer::State state;  // Default state for hit testing
         if (MarkerRenderer::hitTest(markerPos, pos, hh, state))
         {
-            return hh["id"].toString();
+            return FamilyId::fromString(hh["id"].toString());
         }
     }
 
-    return QString();
+    return std::nullopt;
 }
 
 // ============================================================================
@@ -852,7 +856,7 @@ void MapWidget::onTileReady()
 // Public API
 // ============================================================================
 
-void MapWidget::ensureVisible(const QSet<QString>& familyIds)
+void MapWidget::ensureVisible(const QSet<FamilyId>& familyIds)
 {
     if (familyIds.isEmpty())
     {
@@ -865,7 +869,7 @@ void MapWidget::ensureVisible(const QSet<QString>& familyIds)
     double minLng = 180.0, maxLng = -180.0;
     bool anyMapped = false;
 
-    for (const QString& id : familyIds)
+    for (const FamilyId& id : familyIds)
     {
         std::optional<Family> family = doc.findFamilyById(id);
         if (family && family->isMapped())
@@ -901,7 +905,7 @@ void MapWidget::ensureVisible(const QSet<QString>& familyIds)
 
     // Collect visible markers + target markers
     QVector<MarkerInfo> markers;
-    QSet<QString> addedIds;
+    QSet<FamilyId> addedIds;
 
     // Add currently visible family markers
     const QVariantList& allFamilies = m_viewModel->families();
@@ -914,14 +918,14 @@ void MapWidget::ensureVisible(const QSet<QString>& familyIds)
         if (lat >= currentViewport.minLat && lat <= currentViewport.maxLat
             && lng >= currentViewport.minLng && lng <= currentViewport.maxLng)
         {
-            QString id = fam["id"].toString();
-            markers.append({lat, lng, MarkerRenderer::familyBounds(m_viewModel->familyIcons(id))});
+            FamilyId id = FamilyId::fromString(fam["id"].toString());
+            markers.append({lat, lng, MarkerRenderer::familyBounds(m_viewModel->familyIcons(id.toString()))});
             addedIds.insert(id);
         }
     }
 
     // Add target families (if not already added)
-    for (const QString& id : familyIds)
+    for (const FamilyId& id : familyIds)
     {
         if (addedIds.contains(id))
         {
@@ -933,7 +937,7 @@ void MapWidget::ensureVisible(const QSet<QString>& familyIds)
             markers.append({
                 family->latitude().value(),
                 family->longitude().value(),
-                MarkerRenderer::familyBounds(m_viewModel->familyIcons(id))
+                MarkerRenderer::familyBounds(m_viewModel->familyIcons(id.toString()))
             });
         }
     }
