@@ -151,8 +151,13 @@ void EmergencyAssetView::onContextMenu(const QPoint& pos)
         case ItemType::Person:
             {
                 // Show contact info (disabled) if available
+                auto personIdOpt = m_model->personIdAt(index);
+                if (!personIdOpt)
+                {
+                    break;
+                }
                 const Document& doc = m_documentManager->document();
-                PersonId personId = PersonId::fromString(m_model->idAt(index));
+                PersonId personId = *personIdOpt;
                 std::optional<Person> personOpt = doc.findPersonById(personId);
                 if (personOpt)
                 {

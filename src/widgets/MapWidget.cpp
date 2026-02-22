@@ -54,7 +54,12 @@ MapWidget::MapWidget(DocumentManager* docManager, QWidget* parent)
     connect(m_viewModel, &MapViewModel::highlightingChanged,
             this, QOverload<>::of(&QWidget::update));
     connect(m_viewModel, &MapViewModel::familyClicked,
-            this, &MapWidget::familyClicked);
+            this, [this](const QString& id) {
+                if (!id.isEmpty())
+                {
+                    emit familyClicked(FamilyId::fromString(id));
+                }
+            });
 
     // Update button positions when document changes (affects unmapped panel)
     connect(m_docManager, &DocumentManager::documentChanged,
