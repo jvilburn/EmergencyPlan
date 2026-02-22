@@ -55,7 +55,7 @@ public:
     FamilyAssociation relatedFamiliesAt(const QModelIndex& index) const;
 
     // View-specific accessors
-    MinisteringGroupId companionshipIdAt(const QModelIndex& index) const;
+    std::optional<MinisteringGroupId> companionshipIdAt(const QModelIndex& index) const;
 
     // Lazy loading for contact details
     void loadContactDetails(const QModelIndex& index);

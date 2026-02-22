@@ -56,7 +56,7 @@ public:
     FamilyAssociation relatedFamiliesAt(const QModelIndex& index) const;
 
     // View-specific accessors
-    EmergencyAssetId assetIdAt(const QModelIndex& index) const;
+    std::optional<EmergencyAssetId> assetIdAt(const QModelIndex& index) const;
     std::optional<PersonId> personIdAt(const QModelIndex& index) const;
     ResponseArea area() const { return m_area; }
 

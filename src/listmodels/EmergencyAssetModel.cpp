@@ -346,12 +346,12 @@ ItemType EmergencyAssetModel::itemTypeAt(const QModelIndex& index) const
     return ItemType::Invalid;
 }
 
-EmergencyAssetId EmergencyAssetModel::assetIdAt(const QModelIndex& index) const
+std::optional<EmergencyAssetId> EmergencyAssetModel::assetIdAt(const QModelIndex& index) const
 {
     TreeNode* node = nodeFromIndex(index);
     if (!node)
     {
-        return EmergencyAssetId::fromString(QString());
+        return std::nullopt;
     }
     return node->assetId;
 }

@@ -496,28 +496,28 @@ SelectionKey MinisteringModel::selectionKeyAt(const QModelIndex& index) const
     }
     case ItemType::Minister:
     {
-        MinisteringGroupId compId = companionshipIdAt(index);
-        if (node->personId)
+        auto compId = companionshipIdAt(index);
+        if (compId && node->personId)
         {
-            return SelectionKey::literal(compId.toString() + ":minister:" + node->personId->toString());
+            return SelectionKey::literal(compId->toString() + ":minister:" + node->personId->toString());
         }
         return SelectionKey::literal(QString());
     }
     case ItemType::MinisteredFamily:
     {
-        MinisteringGroupId compId = companionshipIdAt(index);
-        if (node->familyId)
+        auto compId = companionshipIdAt(index);
+        if (compId && node->familyId)
         {
-            return SelectionKey::literal(compId.toString() + ":family:" + node->familyId->toString());
+            return SelectionKey::literal(compId->toString() + ":family:" + node->familyId->toString());
         }
         return SelectionKey::literal(QString());
     }
     case ItemType::MinisteredSister:
     {
-        MinisteringGroupId compId = companionshipIdAt(index);
-        if (node->personId)
+        auto compId = companionshipIdAt(index);
+        if (compId && node->personId)
         {
-            return SelectionKey::literal(compId.toString() + ":sister:" + node->personId->toString());
+            return SelectionKey::literal(compId->toString() + ":sister:" + node->personId->toString());
         }
         return SelectionKey::literal(QString());
     }
@@ -701,13 +701,9 @@ ItemType MinisteringModel::itemTypeAt(const QModelIndex& index) const
     return ItemType::Invalid;
 }
 
-MinisteringGroupId MinisteringModel::companionshipIdAt(const QModelIndex& index) const
+std::optional<MinisteringGroupId> MinisteringModel::companionshipIdAt(const QModelIndex& index) const
 {
     TreeNode* node = nodeFromIndex(index);
-    if (!node)
-    {
-        return MinisteringGroupId::fromString(QString());
-    }
 
     // Walk up to find the companionship
     while (node)
@@ -718,7 +714,7 @@ MinisteringGroupId MinisteringModel::companionshipIdAt(const QModelIndex& index)
         }
         node = node->parent;
     }
-    return MinisteringGroupId::fromString(QString());
+    return std::nullopt;
 }
 
 // Note: Similar logic exists in UnassignedMinisteringModel::loadContactDetails().

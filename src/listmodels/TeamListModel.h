@@ -40,7 +40,7 @@ public:
     const QList<TeamId>& teamIds() const { return m_teamIds; }
 
     // Lookup
-    TeamId teamIdAt(int row) const;
+    std::optional<TeamId> teamIdAt(int row) const;
     int rowForId(const TeamId& id) const;
 
 private:

@@ -87,13 +87,13 @@ void TagListModel::setTagIds(const QList<TagId>& ids)
     endResetModel();
 }
 
-TagId TagListModel::tagIdAt(int row) const
+std::optional<TagId> TagListModel::tagIdAt(int row) const
 {
     if (row >= 0 && row < m_tagIds.size())
     {
         return m_tagIds.at(row);
     }
-    return TagId::fromString(QString());
+    return std::nullopt;
 }
 
 int TagListModel::rowForId(const TagId& id) const

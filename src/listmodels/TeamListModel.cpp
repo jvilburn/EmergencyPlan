@@ -90,13 +90,13 @@ void TeamListModel::setTeamIds(const QList<TeamId>& ids)
     endResetModel();
 }
 
-TeamId TeamListModel::teamIdAt(int row) const
+std::optional<TeamId> TeamListModel::teamIdAt(int row) const
 {
     if (row >= 0 && row < m_teamIds.size())
     {
         return m_teamIds.at(row);
     }
-    return TeamId::fromString(QString());
+    return std::nullopt;
 }
 
 int TeamListModel::rowForId(const TeamId& id) const

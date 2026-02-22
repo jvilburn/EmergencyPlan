@@ -39,7 +39,7 @@ public:
     const QList<TagId>& tagIds() const { return m_tagIds; }
 
     // Lookup
-    TagId tagIdAt(int row) const;
+    std::optional<TagId> tagIdAt(int row) const;
     int rowForId(const TagId& id) const;
 
 private:
