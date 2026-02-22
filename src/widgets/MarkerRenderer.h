@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Id.h"
+
 #include <QColor>
 #include <QMarginsF>
 #include <QPainter>
@@ -33,7 +35,7 @@ namespace MarkerRenderer
     };
 
     /// Compute marker icons for a family based on skills, equipment, and special needs.
-    MarkerIcons computeFamilyIcons(const QString& familyId, const Document& doc);
+    MarkerIcons computeFamilyIcons(const FamilyId& familyId, const Document& doc);
 
     /// Draw a family marker at the given position.
     void draw(QPainter& painter, const QPointF& pos,

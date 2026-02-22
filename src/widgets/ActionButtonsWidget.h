@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Id.h"
+
 #include <QWidget>
 
 class QPushButton;
@@ -11,16 +13,16 @@ class ActionButtonsWidget : public QWidget
     Q_OBJECT
 
 public:
-    explicit ActionButtonsWidget(const QString& familyId, QWidget* parent = nullptr);
+    explicit ActionButtonsWidget(const FamilyId& familyId, QWidget* parent = nullptr);
 
-    QString familyId() const { return m_familyId; }
+    const FamilyId& familyId() const { return m_familyId; }
 
 signals:
-    void editRequested(const QString& familyId);
-    void deleteRequested(const QString& familyId);
+    void editRequested(const FamilyId& familyId);
+    void deleteRequested(const FamilyId& familyId);
 
 private:
-    QString m_familyId;
+    FamilyId m_familyId;
     QPushButton* m_editButton = nullptr;
     QPushButton* m_deleteButton = nullptr;
 };

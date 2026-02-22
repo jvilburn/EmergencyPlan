@@ -21,7 +21,7 @@ public:
     Person person() const;
 
     /// Returns the original person ID (preserved across edits).
-    QString personId() const { return m_personId; }
+    const PersonId& personId() const { return m_personId; }
 
 signals:
     void dataChanged();
@@ -30,7 +30,7 @@ signals:
 private:
     void setupUi();
 
-    QString m_personId;
+    PersonId m_personId;
 
     // Name
     QLineEdit* m_surnameEdit;

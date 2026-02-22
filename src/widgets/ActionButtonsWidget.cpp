@@ -4,7 +4,7 @@
 #include <QPushButton>
 #include <QSizePolicy>
 
-ActionButtonsWidget::ActionButtonsWidget(const QString& familyId, QWidget* parent)
+ActionButtonsWidget::ActionButtonsWidget(const FamilyId& familyId, QWidget* parent)
     : QWidget(parent)
     , m_familyId(familyId)
 {

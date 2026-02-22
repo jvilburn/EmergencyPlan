@@ -117,7 +117,7 @@ static QIcon* selectBaseIcon(const QSet<ResponseArea>& decorations)
     return &homeIcon();
 }
 
-MarkerIcons computeFamilyIcons(const QString& familyId, const Document& doc)
+MarkerIcons computeFamilyIcons(const FamilyId& familyId, const Document& doc)
 {
     QSet<ResponseArea> decorations;
     const Family& family = doc.families().value(familyId);

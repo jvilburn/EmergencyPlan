@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Id.h"
+
 #include <QSet>
 #include <QString>
 
@@ -7,8 +9,8 @@
 /// MapWidget decides HOW to render it.
 struct HighlightInfo
 {
-    QSet<QString> highlightedFamilyIds;   // Families to highlight (glow + ring)
-    QSet<QString> contactPointFamilyIds;  // Families to highlight AND show pip (e.g., ministers)
+    QSet<FamilyId> highlightedFamilyIds;   // Families to highlight (glow + ring)
+    QSet<FamilyId> contactPointFamilyIds;  // Families to highlight AND show pip (e.g., ministers)
 
     /// Returns true if any highlighting is active
     bool hasHighlighting() const
@@ -17,7 +19,7 @@ struct HighlightInfo
     }
 
     /// Returns all families that should be highlighted (union of both sets)
-    QSet<QString> allHighlightedIds() const
+    QSet<FamilyId> allHighlightedIds() const
     {
         return highlightedFamilyIds | contactPointFamilyIds;
     }
@@ -34,11 +36,11 @@ public:
     virtual HighlightInfo highlightInfo() const = 0;
 
     /// Set of family IDs to show (empty = show all)
-    virtual QSet<QString> visibleFamilyIds() const = 0;
+    virtual QSet<FamilyId> visibleFamilyIds() const = 0;
 
     /// Optional status icon overlay (empty = no icon)
     /// Response Mode uses this for welfare status icons
-    virtual QString familyStatusIcon(const QString& familyId) const
+    virtual QString familyStatusIcon(const FamilyId& familyId) const
     {
         Q_UNUSED(familyId);
         return {};

@@ -22,7 +22,7 @@ public:
     void setFamily(const Family& family);
     Family family() const;
 
-    QString familyId() const { return m_familyId; }
+    const FamilyId& familyId() const { return m_familyId; }
     bool isDirty() const;
 
 signals:
@@ -44,7 +44,7 @@ private:
     void updateTitle();
 
     DocumentManager* m_docManager;
-    QString m_familyId;
+    FamilyId m_familyId;
     Family m_originalFamily;
     Family m_editedFamily;
 
