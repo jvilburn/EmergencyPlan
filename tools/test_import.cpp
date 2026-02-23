@@ -7,6 +7,7 @@
 #include "MinisteringImportService.h"
 #include "MinisteringPdfParser.h"
 #include "MinisteringGroup.h"
+#include "Id.h"
 #include <QCoreApplication>
 #include <QDebug>
 #include <QTextStream>
@@ -44,7 +45,7 @@ void usage(const char* progName)
 
 void dumpPerson(const Person& p, QTextStream& out, const QString& indent)
 {
-    out << indent << "ID: " << p.id() << "\n";
+    out << indent << "ID: " << p.id().toString() << "\n";
     out << indent << "Name: " << p.displayName() << "\n";
     out << indent << "Given Names: " << p.givenNames() << "\n";
     out << indent << "Surname: " << p.surname() << "\n";
@@ -76,7 +77,7 @@ void dumpPerson(const Person& p, QTextStream& out, const QString& indent)
 
 void dumpFamily(const Family& f, QTextStream& out, const QString& indent)
 {
-    out << indent << "ID: " << f.id() << "\n";
+    out << indent << "ID: " << f.id().toString() << "\n";
     out << indent << "Display Name: " << f.displayName() << "\n";
     if (!f.address().isEmpty())
     {
@@ -105,7 +106,7 @@ int importWardDirectory(const QString& pdfPath, const QString& filter, QTextStre
     out << "Importing ward directory (service): " << pdfPath << "\n\n";
     out.flush();
 
-    WardDirectoryImportResult result = service.importFromPdf(pdfPath, QHash<QString, Family>());
+    WardDirectoryImportResult result = service.importFromPdf(pdfPath, QHash<FamilyId, Family>());
 
     if (!result.success)
     {
@@ -184,7 +185,7 @@ int importEQMinistering(const QString& pdfPath, QTextStream& out, QTextStream& e
     out.flush();
 
     MinisteringImportService service;
-    QHash<QString, Family> existing;
+    QHash<FamilyId, Family> existing;
     MinisteringImportResult result = service.importFromPdf(pdfPath, existing);
 
     if (!result.success)
@@ -208,7 +209,7 @@ int importEQMinistering(const QString& pdfPath, QTextStream& out, QTextStream& e
     out << "Families: " << result.families.size() << "\n\n";
 
     // Build lookup maps
-    QHash<QString, QString> personToFamilyMap;  // personId -> familyId
+    QHash<PersonId, FamilyId> personToFamilyMap;  // personId -> familyId
     for (auto it = result.families.constBegin(); it != result.families.constEnd(); ++it)
     {
         for (const Person& p : it.value().members())
@@ -222,26 +223,26 @@ int importEQMinistering(const QString& pdfPath, QTextStream& out, QTextStream& e
     {
         out << "################################################################################\n";
         out << "DISTRICT: " << district.name() << "\n";
-        out << "ID: " << district.id() << "\n";
+        out << "ID: " << district.id().toString() << "\n";
         if (district.presidencyMemberId().has_value())
         {
-            out << "Presidency Member ID: " << district.presidencyMemberId().value() << "\n";
+            out << "Presidency Member ID: " << district.presidencyMemberId().value().toString() << "\n";
         }
         out << "################################################################################\n\n";
 
         // Dump each group in this district
-        for (const QString& groupId : district.groupIds())
+        for (const MinisteringGroupId& groupId : district.groupIds())
         {
             auto groupIt = result.groups.find(groupId);
             if (groupIt == result.groups.end())
             {
-                out << "  [Group " << groupId << " not found!]\n\n";
+                out << "  [Group " << groupId.toString() << " not found!]\n\n";
                 continue;
             }
 
             const MinisteringGroup& group = *groupIt;
             out << "  ========================================\n";
-            out << "  " << orgType << " GROUP ID: " << group.id() << "\n";
+            out << "  " << orgType << " GROUP ID: " << group.id().toString() << "\n";
             if (group.interviewedDate().has_value())
             {
                 out << "  Interviewed: " << group.interviewedDate()->toString("yyyy-MM-dd") << "\n";
@@ -249,10 +250,10 @@ int importEQMinistering(const QString& pdfPath, QTextStream& out, QTextStream& e
             out << "  ========================================\n";
 
             out << "  MINISTERS (" << group.ministerIds().size() << "):\n";
-            for (const QString& ministerId : group.ministerIds())
+            for (const PersonId& ministerId : group.ministerIds())
             {
                 out << "    ----------------------------------------\n";
-                out << "    Person ID: " << ministerId << "\n";
+                out << "    Person ID: " << ministerId.toString() << "\n";
                 auto famIdIt = personToFamilyMap.find(ministerId);
                 if (famIdIt != personToFamilyMap.end())
                 {
@@ -271,15 +272,15 @@ int importEQMinistering(const QString& pdfPath, QTextStream& out, QTextStream& e
             if (result.isRSFormat)
             {
                 out << "  MINISTERED PERSONS (" << group.ministeredPersonIds().size() << "):\n";
-                for (const QString& personId : group.ministeredPersonIds())
+                for (const PersonId& personId : group.ministeredPersonIds())
                 {
-                    out << "    Person ID: " << personId << "\n";
+                    out << "    Person ID: " << personId.toString() << "\n";
                 }
             }
             else
             {
                 out << "  MINISTERED FAMILIES (" << group.familyIds().size() << "):\n";
-                for (const QString& famId : group.familyIds())
+                for (const FamilyId& famId : group.familyIds())
                 {
                     out << "    ----------------------------------------\n";
                     auto famIt = result.families.find(famId);
@@ -289,7 +290,7 @@ int importEQMinistering(const QString& pdfPath, QTextStream& out, QTextStream& e
                     }
                     else
                     {
-                        out << "    Family ID: " << famId << " [NOT FOUND]\n";
+                        out << "    Family ID: " << famId.toString() << " [NOT FOUND]\n";
                     }
                 }
             }
@@ -343,8 +344,8 @@ int parseEQMinistering(const QString& pdfPath, QTextStream& out, QTextStream& er
     out << "Total Families: " << totalFamilies << "\n\n";
 
     // Build lookup maps (combining minister and ministered families)
-    QHash<QString, Family> familyMap;
-    QHash<QString, QString> personToFamilyMap;
+    QHash<FamilyId, Family> familyMap;
+    QHash<PersonId, FamilyId> personToFamilyMap;
     for (auto it = parseResult.ministerFamilies.constBegin(); it != parseResult.ministerFamilies.constEnd(); ++it)
     {
         familyMap.insert(it.key(), it.value());
@@ -367,16 +368,16 @@ int parseEQMinistering(const QString& pdfPath, QTextStream& out, QTextStream& er
         const MinisteringDistrict& district = it.value();
         out << "========================================\n";
         out << "DISTRICT: " << district.name() << "\n";
-        out << "ID: " << district.id() << "\n";
+        out << "ID: " << district.id().toString() << "\n";
         if (district.presidencyMemberId().has_value())
         {
-            out << "Presidency Member ID: " << district.presidencyMemberId().value() << "\n";
+            out << "Presidency Member ID: " << district.presidencyMemberId().value().toString() << "\n";
         }
         out << "Groups: " << district.groupIds().size() << "\n";
         out << "========================================\n\n";
 
         int groupNum = 1;
-        for (const QString& groupId : district.groupIds())
+        for (const MinisteringGroupId& groupId : district.groupIds())
         {
             out << "--- Group " << groupNum++ << " ---\n";
 
@@ -389,7 +390,7 @@ int parseEQMinistering(const QString& pdfPath, QTextStream& out, QTextStream& er
             const MinisteringGroup& group = *groupIt;
 
             out << "Ministers:\n";
-            for (const QString& ministerId : group.ministerIds())
+            for (const PersonId& ministerId : group.ministerIds())
             {
                 auto famId = personToFamilyMap.value(ministerId);
                 auto family = familyMap.value(famId);
@@ -414,7 +415,7 @@ int parseEQMinistering(const QString& pdfPath, QTextStream& out, QTextStream& er
             if (parseResult.isRSFormat)
             {
                 out << "Ministered Persons:\n";
-                for (const QString& personId : group.ministeredPersonIds())
+                for (const PersonId& personId : group.ministeredPersonIds())
                 {
                     auto famId = personToFamilyMap.value(personId);
                     auto family = familyMap.value(famId);
@@ -431,7 +432,7 @@ int parseEQMinistering(const QString& pdfPath, QTextStream& out, QTextStream& er
             else if (!group.familyIds().isEmpty())
             {
                 out << "Ministered Families:\n";
-                for (const QString& famId : group.familyIds())
+                for (const FamilyId& famId : group.familyIds())
                 {
                     auto family = familyMap.value(famId);
                     out << "  " << family.displayName() << "\n";
