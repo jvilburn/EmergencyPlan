@@ -56,6 +56,9 @@ signals:
     /// Emitted when a family marker is clicked
     void familyClicked(const FamilyId& familyId);
 
+    /// Emitted when empty map space is clicked (for deselection)
+    void mapDeselected();
+
     /// Emitted after highlight processing completes
     void highlightChanged();
 

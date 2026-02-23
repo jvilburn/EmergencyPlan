@@ -73,6 +73,7 @@ void WardListView::setSelectedFamilyId(const std::optional<FamilyId>& id)
 {
     if (!id)
     {
+        clearSelection();
         return;
     }
     QModelIndex familyIndex = m_model->indexForFamilyId(*id);
@@ -81,6 +82,11 @@ void WardListView::setSelectedFamilyId(const std::optional<FamilyId>& id)
         m_treeView->setCurrentIndex(familyIndex);
         m_treeView->scrollTo(familyIndex);
     }
+}
+
+void WardListView::clearSelection()
+{
+    m_treeView->clearSelection();
 }
 
 QList<FamilyId> WardListView::visibleFamilyIdsList() const

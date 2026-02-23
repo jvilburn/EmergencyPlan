@@ -715,14 +715,17 @@ void MapWidget::mouseReleaseEvent(QMouseEvent* event)
         m_isDragging = false;
         setCursor(Qt::ArrowCursor);
 
-        // If it was a click (not a drag), emit click signal
-        // Empty string means clicked on empty map (providers can use to deselect)
+        // If it was a click (not a drag), check for marker hit
         if (!m_wasDragging)
         {
             auto clickedId = markerAtPoint(event->pos());
             if (clickedId)
             {
                 emit familyClicked(*clickedId);
+            }
+            else
+            {
+                emit mapDeselected();
             }
         }
         else

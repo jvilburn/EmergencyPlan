@@ -23,6 +23,23 @@ SelectionPreservingTreeView::SelectionPreservingTreeView(BaseTreeModel* model, Q
             this, &SelectionPreservingTreeView::onCurrentChanged);
 }
 
+void SelectionPreservingTreeView::clearSelection()
+{
+    QTreeView::clearSelection();
+    setCurrentIndex(QModelIndex());
+    emit selectionChanged();
+}
+
+void SelectionPreservingTreeView::keyPressEvent(QKeyEvent* event)
+{
+    if (event->key() == Qt::Key_Escape)
+    {
+        clearSelection();
+        return;
+    }
+    QTreeView::keyPressEvent(event);
+}
+
 void SelectionPreservingTreeView::onCurrentChanged(const QModelIndex& current, const QModelIndex& /*previous*/)
 {
     if (current.isValid()

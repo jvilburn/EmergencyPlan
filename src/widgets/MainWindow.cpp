@@ -194,6 +194,8 @@ void MainWindow::setupConnections()
     // Map <-> WardListView selection sync
     connect(m_mapWidget, &MapWidget::familyClicked,
             m_wardListView, &WardListView::setSelectedFamilyId);
+    connect(m_mapWidget, &MapWidget::mapDeselected,
+            m_wardListView, &WardListView::clearSelection);
 
     // Highlight and visibility changes from sidebar views
     connect(m_wardListView, &WardListView::highlightChanged,
