@@ -48,4 +48,7 @@ public:
 
     /// Clear any selection in this view (e.g., when map empty space is clicked)
     virtual void clearSelection() {}
+
+    /// Select a family in this view (e.g., when a map marker is clicked)
+    virtual void selectFamily(const FamilyId& familyId) { Q_UNUSED(familyId); }
 };
