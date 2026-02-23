@@ -313,6 +313,18 @@ QModelIndex NeedsModel::indexForPersonId(const PersonId& personId) const
     return QModelIndex();
 }
 
+QModelIndex NeedsModel::indexForFamilyId(const FamilyId& familyId) const
+{
+    for (int i = 0; i < m_personNodes.size(); ++i)
+    {
+        if (m_personNodes.at(i)->familyId == familyId)
+        {
+            return createIndex(i, 0, m_personNodes.at(i));
+        }
+    }
+    return {};
+}
+
 ItemType NeedsModel::itemTypeAt(const QModelIndex& index) const
 {
     TreeNode* node = nodeFromIndex(index);

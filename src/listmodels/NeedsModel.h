@@ -55,6 +55,7 @@ public:
     std::optional<PersonId> personIdAt(const QModelIndex& index) const;
     std::optional<FamilyId> familyIdAt(const QModelIndex& index) const;
     QModelIndex indexForPersonId(const PersonId& personId) const;
+    QModelIndex indexForFamilyId(const FamilyId& familyId) const;
 
 private slots:
     void onDocumentChanged(const DocumentChange& change);

@@ -701,6 +701,82 @@ ItemType MinisteringModel::itemTypeAt(const QModelIndex& index) const
     return ItemType::Invalid;
 }
 
+QModelIndex MinisteringModel::indexForFamilyId(const FamilyId& familyId) const
+{
+    const Document& doc = m_documentManager->document();
+
+    for (int d = 0; d < m_districtNodes.size(); ++d)
+    {
+        TreeNode* districtNode = m_districtNodes[d];
+        for (int c = 0; c < districtNode->children.size(); ++c)
+        {
+            TreeNode* compNode = districtNode->children[c];
+            for (int s = 0; s < compNode->children.size(); ++s)
+            {
+                TreeNode* sectionNode = compNode->children[s];
+                if (isMinistersSection(sectionNode))
+                {
+                    continue;
+                }
+                for (int i = 0; i < sectionNode->children.size(); ++i)
+                {
+                    TreeNode* itemNode = sectionNode->children[i];
+                    if (itemNode->type == ItemType::MinisteredFamily
+                        && itemNode->familyId && *itemNode->familyId == familyId)
+                    {
+                        return createIndex(i, 0, itemNode);
+                    }
+                    if (itemNode->type == ItemType::MinisteredSister
+                        && itemNode->personId)
+                    {
+                        std::optional<FamilyId> fid = doc.familyIdForPerson(*itemNode->personId);
+                        if (fid && *fid == familyId)
+                        {
+                            return createIndex(i, 0, itemNode);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return {};
+}
+
+QModelIndex MinisteringModel::indexForMinisterByFamilyId(const FamilyId& familyId) const
+{
+    const Document& doc = m_documentManager->document();
+
+    for (int d = 0; d < m_districtNodes.size(); ++d)
+    {
+        TreeNode* districtNode = m_districtNodes[d];
+        for (int c = 0; c < districtNode->children.size(); ++c)
+        {
+            TreeNode* compNode = districtNode->children[c];
+            for (int s = 0; s < compNode->children.size(); ++s)
+            {
+                TreeNode* sectionNode = compNode->children[s];
+                if (!isMinistersSection(sectionNode))
+                {
+                    continue;
+                }
+                for (int i = 0; i < sectionNode->children.size(); ++i)
+                {
+                    TreeNode* itemNode = sectionNode->children[i];
+                    if (itemNode->type == ItemType::Minister && itemNode->personId)
+                    {
+                        std::optional<FamilyId> fid = doc.familyIdForPerson(*itemNode->personId);
+                        if (fid && *fid == familyId)
+                        {
+                            return createIndex(i, 0, itemNode);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return {};
+}
+
 std::optional<MinisteringGroupId> MinisteringModel::companionshipIdAt(const QModelIndex& index) const
 {
     TreeNode* node = nodeFromIndex(index);

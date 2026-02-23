@@ -57,6 +57,12 @@ public:
     // View-specific accessors
     std::optional<MinisteringGroupId> companionshipIdAt(const QModelIndex& index) const;
 
+    /// Find the first ministered-to node (MinisteredFamily or MinisteredSister) matching familyId.
+    QModelIndex indexForFamilyId(const FamilyId& familyId) const;
+
+    /// Find the first Minister node whose person belongs to the given family.
+    QModelIndex indexForMinisterByFamilyId(const FamilyId& familyId) const;
+
     // Lazy loading for contact details
     void loadContactDetails(const QModelIndex& index);
     bool hasContactsLoaded(const QModelIndex& index) const;

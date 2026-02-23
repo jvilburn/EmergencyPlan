@@ -416,6 +416,35 @@ QSet<PersonId> UnassignedMinisteringModel::unassignedSisterIds() const
     return personIds;
 }
 
+QModelIndex UnassignedMinisteringModel::indexForFamilyId(const FamilyId& familyId) const
+{
+    if (!m_headerNode)
+    {
+        return {};
+    }
+
+    const Document& doc = m_documentManager->document();
+
+    for (int i = 0; i < m_headerNode->children.size(); ++i)
+    {
+        TreeNode* node = m_headerNode->children[i];
+        if (node->type == ItemType::MinisteredFamily
+            && node->familyId && *node->familyId == familyId)
+        {
+            return createIndex(i, 0, node);
+        }
+        if (node->type == ItemType::MinisteredSister && node->personId)
+        {
+            std::optional<FamilyId> fid = doc.familyIdForPerson(*node->personId);
+            if (fid && *fid == familyId)
+            {
+                return createIndex(i, 0, node);
+            }
+        }
+    }
+    return {};
+}
+
 FamilyAssociation UnassignedMinisteringModel::relatedFamiliesAt(const QModelIndex& index) const
 {
     FamilyAssociation assoc;

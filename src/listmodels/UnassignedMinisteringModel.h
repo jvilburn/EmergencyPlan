@@ -51,6 +51,9 @@ public:
     /// Returns family associations for the given index.
     FamilyAssociation relatedFamiliesAt(const QModelIndex& index) const;
 
+    /// Find the first MinisteredFamily or MinisteredSister node matching familyId.
+    QModelIndex indexForFamilyId(const FamilyId& familyId) const;
+
     // Lazy loading for contact details
     void loadContactDetails(const QModelIndex& index);
     bool hasContactsLoaded(const QModelIndex& index) const;

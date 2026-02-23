@@ -356,6 +356,29 @@ std::optional<EmergencyAssetId> EmergencyAssetModel::assetIdAt(const QModelIndex
     return node->assetId;
 }
 
+QModelIndex EmergencyAssetModel::indexForFamilyId(const FamilyId& familyId) const
+{
+    const Document& doc = m_documentManager->document();
+
+    for (int a = 0; a < m_assetNodes.size(); ++a)
+    {
+        TreeNode* assetNode = m_assetNodes[a];
+        for (int p = 0; p < assetNode->children.size(); ++p)
+        {
+            TreeNode* personNode = assetNode->children[p];
+            if (personNode->type == ItemType::Person && personNode->personId)
+            {
+                std::optional<FamilyId> fid = doc.familyIdForPerson(*personNode->personId);
+                if (fid && *fid == familyId)
+                {
+                    return createIndex(p, 0, personNode);
+                }
+            }
+        }
+    }
+    return {};
+}
+
 std::optional<PersonId> EmergencyAssetModel::personIdAt(const QModelIndex& index) const
 {
     TreeNode* node = nodeFromIndex(index);
