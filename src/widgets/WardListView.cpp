@@ -113,20 +113,16 @@ QSet<FamilyId> WardListView::visibleFamilyIds() const
 
 void WardListView::onSelectionChanged()
 {
-    auto id = selectedFamilyId();
-    if (id)
-    {
-        emit highlightChanged();
+    emit highlightChanged();
 
-        // Expand the selected family if it's a family row
-        QModelIndex current = m_treeView->currentIndex();
-        if (current.isValid())
+    // Expand the selected family if it's a family row
+    QModelIndex current = m_treeView->currentIndex();
+    if (current.isValid())
+    {
+        FamilyTreeModel::RowType type = m_model->rowTypeAt(current);
+        if (type == FamilyTreeModel::RowType::Family && !m_treeView->isExpanded(current))
         {
-            FamilyTreeModel::RowType type = m_model->rowTypeAt(current);
-            if (type == FamilyTreeModel::RowType::Family && !m_treeView->isExpanded(current))
-            {
-                m_treeView->expand(current);
-            }
+            m_treeView->expand(current);
         }
     }
 }
