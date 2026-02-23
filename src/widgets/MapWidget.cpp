@@ -54,12 +54,7 @@ MapWidget::MapWidget(DocumentManager* docManager, QWidget* parent)
     connect(m_viewModel, &MapViewModel::highlightingChanged,
             this, QOverload<>::of(&QWidget::update));
     connect(m_viewModel, &MapViewModel::familyClicked,
-            this, [this](const QString& id) {
-                if (!id.isEmpty())
-                {
-                    emit familyClicked(FamilyId::fromString(id));
-                }
-            });
+            this, &MapWidget::familyClicked);
 
     // Update button positions when document changes (affects unmapped panel)
     connect(m_docManager, &DocumentManager::documentChanged,
@@ -580,7 +575,7 @@ void MapWidget::drawMarkers(QPainter& painter)
             state.showPip = isContactPoint;
             state.opacity = opacity;
             state.statusIcon = statusIcon;
-            state.icons = m_viewModel->familyIcons(id.toString());  // Use cached icons
+            state.icons = m_viewModel->familyIcons(id);  // Use cached icons
 
             markers.append({pos, hh, state, opacity});
         }
@@ -924,7 +919,7 @@ void MapWidget::ensureVisible(const QSet<FamilyId>& familyIds)
             && lng >= currentViewport.minLng && lng <= currentViewport.maxLng)
         {
             FamilyId id = FamilyId::fromString(fam["id"].toString());
-            markers.append({lat, lng, MarkerRenderer::familyBounds(m_viewModel->familyIcons(id.toString()))});
+            markers.append({lat, lng, MarkerRenderer::familyBounds(m_viewModel->familyIcons(id))});
             addedIds.insert(id);
         }
     }
@@ -942,7 +937,7 @@ void MapWidget::ensureVisible(const QSet<FamilyId>& familyIds)
             markers.append({
                 family->latitude().value(),
                 family->longitude().value(),
-                MarkerRenderer::familyBounds(m_viewModel->familyIcons(id.toString()))
+                MarkerRenderer::familyBounds(m_viewModel->familyIcons(id))
             });
         }
     }
@@ -978,7 +973,7 @@ void MapWidget::fitAllFamilies()
     for (const QVariant& var : families)
     {
         QVariantMap fam = var.toMap();
-        QString id = fam["id"].toString();
+        FamilyId id = FamilyId::fromString(fam["id"].toString());
         markers.append({
             fam["latitude"].toDouble(),
             fam["longitude"].toDouble(),

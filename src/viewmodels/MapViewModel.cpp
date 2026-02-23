@@ -2,6 +2,7 @@
 #include "DocumentManager.h"
 #include "Family.h"
 #include "Document.h"
+#include "Id.h"
 
 #include <algorithm>
 #include <cmath>
@@ -30,7 +31,7 @@ void MapViewModel::updateFamilies()
     m_familyIcons.clear();
 
     const Document& doc = m_docManager->document();
-    const QHash<QString, Family>& familyMap = doc.families();
+    const QHash<FamilyId, Family>& familyMap = doc.families();
 
     for (auto it = familyMap.begin(); it != familyMap.end(); ++it)
     {
@@ -52,7 +53,7 @@ void MapViewModel::updateFamilies()
 QVariantMap MapViewModel::familyToVariant(const Family& family) const
 {
     QVariantMap map;
-    map["id"] = family.id();
+    map["id"] = family.id().toString();
     map["name"] = family.displayName();
     map["latitude"] = family.latitude().value_or(0.0);
     map["longitude"] = family.longitude().value_or(0.0);
@@ -110,7 +111,7 @@ void MapViewModel::setZoom(double zoom)
     }
 }
 
-void MapViewModel::setSelectedFamilyId(const QString& id)
+void MapViewModel::setSelectedFamilyId(const std::optional<FamilyId>& id)
 {
     if (m_selectedId != id)
     {
@@ -119,16 +120,16 @@ void MapViewModel::setSelectedFamilyId(const QString& id)
     }
 }
 
-void MapViewModel::selectFamily(const QString& id)
+void MapViewModel::selectFamily(const FamilyId& id)
 {
     setSelectedFamilyId(id);
     emit familyClicked(id);
 }
 
-void MapViewModel::centerOnFamily(const QString& id)
+void MapViewModel::centerOnFamily(const FamilyId& id)
 {
     const Document& doc = m_docManager->document();
-    const QHash<QString, Family>& familyMap = doc.families();
+    const QHash<FamilyId, Family>& familyMap = doc.families();
 
     auto it = familyMap.find(id);
     if (it != familyMap.end())
@@ -177,34 +178,16 @@ void MapViewModel::fitAllFamilies()
                    maxLat + latPadding, maxLng + lngPadding);
 }
 
-void MapViewModel::setHighlighting(const QVariantMap& ids)
-{
-    if (m_highlightedIds != ids)
-    {
-        m_highlightedIds = ids;
-        emit highlightingChanged();
-    }
-}
-
-void MapViewModel::clearHighlighting()
-{
-    if (!m_highlightedIds.isEmpty())
-    {
-        m_highlightedIds.clear();
-        emit highlightingChanged();
-    }
-}
-
 void MapViewModel::mapClicked(double /*lat*/, double /*lng*/)
 {
     // Deselect when clicking on empty map area
-    if (!m_selectedId.isEmpty())
+    if (m_selectedId.has_value())
     {
-        setSelectedFamilyId(QString());
+        setSelectedFamilyId(std::nullopt);
     }
 }
 
-MarkerRenderer::MarkerIcons MapViewModel::familyIcons(const QString& familyId) const
+MarkerRenderer::MarkerIcons MapViewModel::familyIcons(const FamilyId& familyId) const
 {
     return m_familyIcons.value(familyId);
 }
