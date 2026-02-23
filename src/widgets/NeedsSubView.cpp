@@ -179,6 +179,11 @@ QSet<FamilyId> NeedsSubView::visibleFamilyIds() const
     return {};
 }
 
+void NeedsSubView::clearSelection()
+{
+    m_tree->clearSelection();
+}
+
 void NeedsSubView::showAddNeedDialog()
 {
     QDialog dialog(this);

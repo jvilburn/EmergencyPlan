@@ -74,3 +74,8 @@ QSet<FamilyId> MinisteringTreeView::visibleFamilyIds() const
 {
     return {};  // Show all
 }
+
+void MinisteringTreeView::clearSelection()
+{
+    m_tree->clearSelection();
+}

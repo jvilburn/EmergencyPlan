@@ -725,7 +725,10 @@ void MapWidget::mouseReleaseEvent(QMouseEvent* event)
             }
             else
             {
-                emit mapDeselected();
+                if (m_markerProvider)
+                {
+                    m_markerProvider->clearSelection();
+                }
             }
         }
         else

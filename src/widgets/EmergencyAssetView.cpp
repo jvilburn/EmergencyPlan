@@ -263,6 +263,11 @@ QSet<FamilyId> EmergencyAssetView::visibleFamilyIds() const
     return {};
 }
 
+void EmergencyAssetView::clearSelection()
+{
+    m_tree->clearSelection();
+}
+
 void EmergencyAssetView::addAsset()
 {
     bool ok;

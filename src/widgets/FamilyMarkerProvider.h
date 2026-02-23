@@ -45,4 +45,7 @@ public:
         Q_UNUSED(familyId);
         return {};
     }
+
+    /// Clear any selection in this view (e.g., when map empty space is clicked)
+    virtual void clearSelection() {}
 };

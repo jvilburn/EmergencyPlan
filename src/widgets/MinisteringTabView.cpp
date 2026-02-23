@@ -102,6 +102,12 @@ QSet<FamilyId> MinisteringTabView::visibleFamilyIds() const
     return {};  // Show all
 }
 
+void MinisteringTabView::clearSelection()
+{
+    m_mainView->clearSelection();
+    m_unassignedView->clearSelection();
+}
+
 void MinisteringTabView::expandDistricts()
 {
     m_mainView->expandDistricts();

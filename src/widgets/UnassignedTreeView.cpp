@@ -97,3 +97,8 @@ QSet<FamilyId> UnassignedTreeView::visibleFamilyIds() const
 {
     return {};  // Show all
 }
+
+void UnassignedTreeView::clearSelection()
+{
+    m_tree->clearSelection();
+}

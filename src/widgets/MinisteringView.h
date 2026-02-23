@@ -20,6 +20,7 @@ public:
 
     HighlightInfo highlightInfo() const override;
     QSet<FamilyId> visibleFamilyIds() const override;
+    void clearSelection() override;
 
 signals:
     void highlightChanged();

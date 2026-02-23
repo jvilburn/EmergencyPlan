@@ -61,6 +61,11 @@ QSet<FamilyId> MinisteringView::visibleFamilyIds() const
     return {};  // Show all
 }
 
+void MinisteringView::clearSelection()
+{
+    currentTabView()->clearSelection();
+}
+
 MinisteringTabView* MinisteringView::currentTabView() const
 {
     return (m_currentOrg == MinisteringOrg::EldersQuorum) ? m_eqView : m_rsView;

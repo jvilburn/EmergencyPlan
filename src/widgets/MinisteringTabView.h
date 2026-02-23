@@ -26,6 +26,7 @@ public:
 
     HighlightInfo highlightInfo() const override;
     QSet<FamilyId> visibleFamilyIds() const override;
+    void clearSelection() override;
 
     void expandDistricts();
 
