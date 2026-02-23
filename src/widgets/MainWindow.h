@@ -51,6 +51,7 @@ private slots:
 
     // Sidebar tabs
     void onSidebarTabChanged(int index);
+    void onMapDeselected();
 
     // Family editing
     void onEditFamilyRequested(const FamilyId& familyId);

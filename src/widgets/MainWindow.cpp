@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "SelectionPreservingTreeView.h"
 #include "WardListView.h"
 #include "MinisteringView.h"
 #include "NeedsSubView.h"
@@ -195,7 +196,7 @@ void MainWindow::setupConnections()
     connect(m_mapWidget, &MapWidget::familyClicked,
             m_wardListView, &WardListView::setSelectedFamilyId);
     connect(m_mapWidget, &MapWidget::mapDeselected,
-            m_wardListView, &WardListView::clearSelection);
+            this, &MainWindow::onMapDeselected);
 
     // Highlight and visibility changes from sidebar views
     connect(m_wardListView, &WardListView::highlightChanged,
@@ -697,6 +698,19 @@ void MainWindow::onSidebarTabChanged(int index)
     else
     {
         m_mapWidget->setMarkerProvider(nullptr);
+    }
+}
+
+void MainWindow::onMapDeselected()
+{
+    // Clear tree selections on the current sidebar tab
+    QWidget* currentTab = m_sidebarTabs->currentWidget();
+    if (currentTab)
+    {
+        for (auto* tree : currentTab->findChildren<SelectionPreservingTreeView*>())
+        {
+            tree->clearSelection();
+        }
     }
 }
 
