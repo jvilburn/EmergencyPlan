@@ -14,8 +14,8 @@
 
 class DocumentManager;
 
-/// ViewModel for the map, bridging DocumentManager and QML MapView.
-/// Exposes family data and map state as Q_PROPERTY values for QML binding.
+/// ViewModel for the map widget. Manages family data caching and map view
+/// state for MapWidget, reacting to document changes via DocumentManager.
 class MapViewModel : public QObject
 {
     Q_OBJECT
@@ -59,7 +59,6 @@ public:
 
 signals:
     void familiesChanged();
-    void highlightingChanged();
     void satelliteViewChanged();
     void centerChanged();
     void zoomChanged();

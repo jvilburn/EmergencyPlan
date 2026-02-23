@@ -51,8 +51,6 @@ MapWidget::MapWidget(DocumentManager* docManager, QWidget* parent)
     // Connect viewmodel signals
     connect(m_viewModel, &MapViewModel::familiesChanged,
             this, QOverload<>::of(&QWidget::update));
-    connect(m_viewModel, &MapViewModel::highlightingChanged,
-            this, QOverload<>::of(&QWidget::update));
     connect(m_viewModel, &MapViewModel::familyClicked,
             this, &MapWidget::familyClicked);
 
