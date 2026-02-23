@@ -201,7 +201,7 @@ void UnmappedPanel::paintEvent(QPaintEvent* /*event*/)
         state.scale = 0.5;
         state.isHighlighted = highlight.allHighlightedIds().contains(item.familyId);
         state.showPip = highlight.contactPointFamilyIds.contains(item.familyId);
-        state.icons = m_viewModel->familyIcons(item.familyId.toString());
+        state.icons = m_viewModel->familyIcons(item.familyId);
 
         MarkerRenderer::draw(painter, item.markerPos, QVariantMap(), state);
 
