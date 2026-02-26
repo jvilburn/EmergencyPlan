@@ -117,6 +117,15 @@ void MinisteringTabView::selectFamily(const FamilyId& familyId)
         HighlightInfo info = m_activeProvider->highlightInfo();
         if (info.allHighlightedIds().contains(familyId))
         {
+            // Clear the opposite view to avoid dual-selection
+            if (m_activeProvider == m_mainView)
+            {
+                m_unassignedView->clearSelection();
+            }
+            else
+            {
+                m_mainView->clearSelection();
+            }
             m_activeProvider->selectFamily(familyId);
             return;
         }
