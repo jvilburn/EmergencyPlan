@@ -191,10 +191,6 @@ void MainWindow::setupConnections()
     connect(m_sidebarTabs, &SidebarWidget::currentChanged,
             this, &MainWindow::onSidebarTabChanged);
 
-    // Map <-> WardListView selection sync
-    connect(m_mapWidget, &MapWidget::familyClicked,
-            m_wardListView, &WardListView::setSelectedFamilyId);
-
     // Highlight and visibility changes from sidebar views
     connect(m_wardListView, &WardListView::highlightChanged,
             m_mapWidget, &MapWidget::updateHighlights);

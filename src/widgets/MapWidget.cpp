@@ -51,9 +51,6 @@ MapWidget::MapWidget(DocumentManager* docManager, QWidget* parent)
     // Connect viewmodel signals
     connect(m_viewModel, &MapViewModel::familiesChanged,
             this, QOverload<>::of(&QWidget::update));
-    connect(m_viewModel, &MapViewModel::familyClicked,
-            this, &MapWidget::familyClicked);
-
     // Update button positions when document changes (affects unmapped panel)
     connect(m_docManager, &DocumentManager::documentChanged,
             this, [this](const DocumentChange&) { updateButtonPositions(); });
@@ -123,7 +120,13 @@ void MapWidget::setupUi()
     // Unmapped families panel
     m_unmappedPanel = new UnmappedPanel(m_docManager, m_viewModel, this);
     connect(m_unmappedPanel, &UnmappedPanel::familyClicked,
-            this, &MapWidget::familyClicked);
+            this, [this](const FamilyId& familyId)
+            {
+                if (m_markerProvider)
+                {
+                    m_markerProvider->selectFamily(familyId);
+                }
+            });
     connect(this, &MapWidget::highlightChanged,
             m_unmappedPanel, QOverload<>::of(&QWidget::update));
     connect(m_unmappedPanel, &UnmappedPanel::headerClicked,
@@ -721,7 +724,10 @@ void MapWidget::mouseReleaseEvent(QMouseEvent* event)
             auto clickedId = markerAtPoint(event->pos());
             if (clickedId)
             {
-                emit familyClicked(*clickedId);
+                if (m_markerProvider)
+                {
+                    m_markerProvider->selectFamily(*clickedId);
+                }
             }
             else
             {

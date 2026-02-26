@@ -53,9 +53,6 @@ public slots:
     void updateHighlights();
 
 signals:
-    /// Emitted when a family marker is clicked
-    void familyClicked(const FamilyId& familyId);
-
     /// Emitted after highlight processing completes
     void highlightChanged();
 
