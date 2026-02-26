@@ -184,6 +184,16 @@ void NeedsSubView::clearSelection()
     m_tree->clearSelection();
 }
 
+void NeedsSubView::selectFamily(const FamilyId& familyId)
+{
+    QModelIndex idx = m_model->indexForFamilyId(familyId);
+    if (idx.isValid())
+    {
+        m_tree->setCurrentIndex(idx);
+        m_tree->scrollTo(idx);
+    }
+}
+
 void NeedsSubView::showAddNeedDialog()
 {
     QDialog dialog(this);

@@ -268,6 +268,16 @@ void EmergencyAssetView::clearSelection()
     m_tree->clearSelection();
 }
 
+void EmergencyAssetView::selectFamily(const FamilyId& familyId)
+{
+    QModelIndex idx = m_model->indexForFamilyId(familyId);
+    if (idx.isValid())
+    {
+        m_tree->setCurrentIndex(idx);
+        m_tree->scrollTo(idx);
+    }
+}
+
 void EmergencyAssetView::addAsset()
 {
     bool ok;
