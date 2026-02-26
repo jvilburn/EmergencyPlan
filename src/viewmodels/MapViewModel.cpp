@@ -4,8 +4,6 @@
 #include "Document.h"
 #include "Id.h"
 
-#include <algorithm>
-#include <cmath>
 
 MapViewModel::MapViewModel(DocumentManager* docManager, QObject* parent)
     : QObject(parent)
@@ -108,82 +106,6 @@ void MapViewModel::setZoom(double zoom)
     {
         m_zoom = zoom;
         emit zoomChanged();
-    }
-}
-
-void MapViewModel::setSelectedFamilyId(const std::optional<FamilyId>& id)
-{
-    if (m_selectedId != id)
-    {
-        m_selectedId = id;
-        emit selectionChanged();
-    }
-}
-
-void MapViewModel::selectFamily(const FamilyId& id)
-{
-    setSelectedFamilyId(id);
-    emit familyClicked(id);
-}
-
-void MapViewModel::centerOnFamily(const FamilyId& id)
-{
-    const Document& doc = m_docManager->document();
-    const QHash<FamilyId, Family>& familyMap = doc.families();
-
-    auto it = familyMap.find(id);
-    if (it != familyMap.end())
-    {
-        const Family& family = it.value();
-        if (family.isMapped())
-        {
-            emit centerOnLocation(family.latitude().value(),
-                                  family.longitude().value(),
-                                  15.0);
-        }
-    }
-}
-
-void MapViewModel::fitAllFamilies()
-{
-    if (m_families.isEmpty())
-    {
-        return;
-    }
-
-    double minLat = 90.0;
-    double maxLat = -90.0;
-    double minLng = 180.0;
-    double maxLng = -180.0;
-
-    for (const QVariant& var : m_families)
-    {
-        QVariantMap map = var.toMap();
-        double lat = map["latitude"].toDouble();
-        double lng = map["longitude"].toDouble();
-
-        minLat = std::min(minLat, lat);
-        maxLat = std::max(maxLat, lat);
-        minLng = std::min(minLng, lng);
-        maxLng = std::max(maxLng, lng);
-    }
-
-    // Add 10% padding
-    double latRange = maxLat - minLat;
-    double lngRange = maxLng - minLng;
-    double latPadding = latRange * 0.1;
-    double lngPadding = lngRange * 0.1;
-
-    emit fitBounds(minLat - latPadding, minLng - lngPadding,
-                   maxLat + latPadding, maxLng + lngPadding);
-}
-
-void MapViewModel::mapClicked(double /*lat*/, double /*lng*/)
-{
-    // Deselect when clicking on empty map area
-    if (m_selectedId.has_value())
-    {
-        setSelectedFamilyId(std::nullopt);
     }
 }
 

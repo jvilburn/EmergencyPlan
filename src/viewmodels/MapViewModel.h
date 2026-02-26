@@ -1,7 +1,5 @@
 #pragma once
 
-#include <optional>
-
 #include <QHash>
 #include <QObject>
 #include <QString>
@@ -38,21 +36,12 @@ public:
     double centerLat() const { return m_centerLat; }
     double centerLng() const { return m_centerLng; }
     double zoom() const { return m_zoom; }
-    std::optional<FamilyId> selectedFamilyId() const { return m_selectedId; }
 
     // Property setters
     void setUseSatelliteView(bool satellite);
     void setCenterLat(double lat);
     void setCenterLng(double lng);
     void setZoom(double zoom);
-    void setSelectedFamilyId(const std::optional<FamilyId>& id);
-
-    void selectFamily(const FamilyId& id);
-    void centerOnFamily(const FamilyId& id);
-    void fitAllFamilies();
-
-    // Called when map is clicked (for deselection)
-    void mapClicked(double lat, double lng);
 
     /// Get pre-computed marker icons for a family (computed when document changes)
     MarkerRenderer::MarkerIcons familyIcons(const FamilyId& familyId) const;
@@ -62,14 +51,6 @@ signals:
     void satelliteViewChanged();
     void centerChanged();
     void zoomChanged();
-    void selectionChanged();
-
-    // Signal to C++ when a family marker is clicked
-    void familyClicked(const FamilyId& id);
-
-    // Request to center map (handled by QML)
-    void centerOnLocation(double lat, double lng, double zoomLevel);
-    void fitBounds(double minLat, double minLng, double maxLat, double maxLng);
 
 private slots:
     void onDocumentChanged(const DocumentChange& change);
@@ -85,5 +66,4 @@ private:
     double m_centerLat = 40.0;
     double m_centerLng = -111.0;
     double m_zoom = 10.0;
-    std::optional<FamilyId> m_selectedId;
 };
