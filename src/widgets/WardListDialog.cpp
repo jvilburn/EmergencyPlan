@@ -86,8 +86,6 @@ void WardListDialog::setupUi()
     // Connections
     connect(m_treeView, &SelectionPreservingTreeView::selectionChanged,
             this, &WardListDialog::onSelectionChanged);
-    connect(m_mapWidget, &MapWidget::familyClicked,
-            this, &WardListDialog::onMapFamilyClicked);
     connect(m_buttonBox, &QDialogButtonBox::accepted,
             this, &QDialog::accept);
     connect(m_buttonBox, &QDialogButtonBox::rejected,
@@ -195,11 +193,10 @@ QList<PersonId> WardListDialog::selectedPersonIds() const
     return ids;
 }
 
-void WardListDialog::onMapFamilyClicked(const FamilyId& familyId)
+void WardListDialog::selectFamily(const FamilyId& familyId)
 {
     if (m_mode == FamilyMode && m_familyModel)
     {
-        // Direct selection
         QModelIndex index = m_familyModel->indexForFamilyId(familyId);
         if (index.isValid())
         {

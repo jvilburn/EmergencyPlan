@@ -55,6 +55,7 @@ public:
     // FamilyMarkerProvider interface
     HighlightInfo highlightInfo() const override;
     QSet<FamilyId> visibleFamilyIds() const override;
+    void selectFamily(const FamilyId& familyId) override;
 
     // Static convenience methods for common use cases
 
@@ -79,7 +80,6 @@ public:
                                      QWidget* parent = nullptr);
 
 private slots:
-    void onMapFamilyClicked(const FamilyId& id);
     void onSelectionChanged();
 
 private:
