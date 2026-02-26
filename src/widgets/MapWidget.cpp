@@ -120,13 +120,7 @@ void MapWidget::setupUi()
     // Unmapped families panel
     m_unmappedPanel = new UnmappedPanel(m_docManager, m_viewModel, this);
     connect(m_unmappedPanel, &UnmappedPanel::familyClicked,
-            this, [this](const FamilyId& familyId)
-            {
-                if (m_markerProvider)
-                {
-                    m_markerProvider->selectFamily(familyId);
-                }
-            });
+            this, &MapWidget::onUnmappedFamilyClicked);
     connect(this, &MapWidget::highlightChanged,
             m_unmappedPanel, QOverload<>::of(&QWidget::update));
     connect(m_unmappedPanel, &UnmappedPanel::headerClicked,
@@ -225,6 +219,14 @@ void MapWidget::onGeocodingFinished()
 {
     m_isGeocoding = false;
     updateUnmappedPanelVisibility();
+}
+
+void MapWidget::onUnmappedFamilyClicked(const FamilyId& familyId)
+{
+    if (m_markerProvider)
+    {
+        m_markerProvider->selectFamily(familyId);
+    }
 }
 
 void MapWidget::onUnmappedPanelHeaderClicked()

@@ -72,6 +72,7 @@ private slots:
     void onAnimationTick();
     void onGeocodingStarted();
     void onGeocodingFinished();
+    void onUnmappedFamilyClicked(const FamilyId& familyId);
     void onUnmappedPanelHeaderClicked();
 
 private:
