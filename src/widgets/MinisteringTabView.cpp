@@ -108,6 +108,44 @@ void MinisteringTabView::clearSelection()
     m_unassignedView->clearSelection();
 }
 
+void MinisteringTabView::selectFamily(const FamilyId& familyId)
+{
+    // 1. Narrow within current selection: if the family is already highlighted,
+    //    select that specific row in the active tree
+    if (m_activeProvider)
+    {
+        HighlightInfo info = m_activeProvider->highlightInfo();
+        if (info.allHighlightedIds().contains(familyId))
+        {
+            m_activeProvider->selectFamily(familyId);
+            return;
+        }
+    }
+
+    // 2. Ministered-to family/sister in main tree
+    if (m_mainModel->indexForFamilyId(familyId).isValid())
+    {
+        m_unassignedView->clearSelection();
+        m_mainView->selectFamily(familyId);
+        return;
+    }
+
+    // 3. Minister in main tree
+    if (m_mainModel->indexForMinisterByFamilyId(familyId).isValid())
+    {
+        m_unassignedView->clearSelection();
+        m_mainView->selectFamily(familyId);
+        return;
+    }
+
+    // 4. Unassigned
+    if (m_unassignedView->hasFamily(familyId))
+    {
+        m_mainView->clearSelection();
+        m_unassignedView->selectFamily(familyId);
+    }
+}
+
 void MinisteringTabView::expandDistricts()
 {
     m_mainView->expandDistricts();

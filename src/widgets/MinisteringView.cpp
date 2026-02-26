@@ -66,6 +66,11 @@ void MinisteringView::clearSelection()
     currentTabView()->clearSelection();
 }
 
+void MinisteringView::selectFamily(const FamilyId& familyId)
+{
+    currentTabView()->selectFamily(familyId);
+}
+
 MinisteringTabView* MinisteringView::currentTabView() const
 {
     return (m_currentOrg == MinisteringOrg::EldersQuorum) ? m_eqView : m_rsView;
