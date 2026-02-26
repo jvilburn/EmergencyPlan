@@ -79,3 +79,17 @@ void MinisteringTreeView::clearSelection()
 {
     m_tree->clearSelection();
 }
+
+void MinisteringTreeView::selectFamily(const FamilyId& familyId)
+{
+    QModelIndex idx = m_model->indexForFamilyId(familyId);
+    if (!idx.isValid())
+    {
+        idx = m_model->indexForMinisterByFamilyId(familyId);
+    }
+    if (idx.isValid())
+    {
+        m_tree->setCurrentIndex(idx);
+        m_tree->scrollTo(idx);
+    }
+}

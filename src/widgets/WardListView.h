@@ -31,6 +31,7 @@ public:
     std::optional<FamilyId> selectedFamilyId() const;
     void setSelectedFamilyId(const std::optional<FamilyId>& id);
     void clearSelection() override;
+    void selectFamily(const FamilyId& familyId) override;
     QList<FamilyId> visibleFamilyIdsList() const;
 
     Filter* filter() const;

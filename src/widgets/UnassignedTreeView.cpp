@@ -102,3 +102,27 @@ void UnassignedTreeView::clearSelection()
 {
     m_tree->clearSelection();
 }
+
+void UnassignedTreeView::selectFamily(const FamilyId& familyId)
+{
+    QModelIndex idx = m_model->indexForFamilyId(familyId);
+    if (!idx.isValid())
+    {
+        return;
+    }
+
+    // Ensure header is expanded so the item is visible
+    QModelIndex headerIndex = m_model->index(0, 0);
+    if (headerIndex.isValid() && !m_tree->isExpanded(headerIndex))
+    {
+        m_tree->expand(headerIndex);
+    }
+
+    m_tree->setCurrentIndex(idx);
+    m_tree->scrollTo(idx);
+}
+
+bool UnassignedTreeView::hasFamily(const FamilyId& familyId) const
+{
+    return m_model->indexForFamilyId(familyId).isValid();
+}

@@ -22,8 +22,10 @@ public:
     HighlightInfo highlightInfo() const override;
     QSet<FamilyId> visibleFamilyIds() const override;
     void clearSelection() override;
+    void selectFamily(const FamilyId& familyId) override;
 
     bool hasUnassigned() const;
+    bool hasFamily(const FamilyId& familyId) const;
 
 signals:
     void highlightChanged();

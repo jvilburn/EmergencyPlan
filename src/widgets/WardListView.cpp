@@ -89,6 +89,11 @@ void WardListView::clearSelection()
     m_treeView->clearSelection();
 }
 
+void WardListView::selectFamily(const FamilyId& familyId)
+{
+    setSelectedFamilyId(familyId);
+}
+
 QList<FamilyId> WardListView::visibleFamilyIdsList() const
 {
     return m_model->familyIds();
