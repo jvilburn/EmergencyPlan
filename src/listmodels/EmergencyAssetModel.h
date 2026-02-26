@@ -58,6 +58,8 @@ public:
     // View-specific accessors
     std::optional<EmergencyAssetId> assetIdAt(const QModelIndex& index) const;
     std::optional<PersonId> personIdAt(const QModelIndex& index) const;
+
+    /// Find the first person node belonging to the given family.
     QModelIndex indexForFamilyId(const FamilyId& familyId) const;
     ResponseArea area() const { return m_area; }
 

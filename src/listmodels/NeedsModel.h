@@ -55,6 +55,8 @@ public:
     std::optional<PersonId> personIdAt(const QModelIndex& index) const;
     std::optional<FamilyId> familyIdAt(const QModelIndex& index) const;
     QModelIndex indexForPersonId(const PersonId& personId) const;
+
+    /// Find the first person node belonging to the given family.
     QModelIndex indexForFamilyId(const FamilyId& familyId) const;
 
 private slots:

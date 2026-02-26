@@ -310,7 +310,7 @@ QModelIndex NeedsModel::indexForPersonId(const PersonId& personId) const
             return createIndex(i, 0, m_personNodes.at(i));
         }
     }
-    return QModelIndex();
+    return {};
 }
 
 QModelIndex NeedsModel::indexForFamilyId(const FamilyId& familyId) const
