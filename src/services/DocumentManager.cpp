@@ -7,7 +7,6 @@
 #include <QStandardPaths>
 #include <QFile>
 #include <QFileInfo>
-#include <QDir>
 
 static QString buildUniquePath(const QString& dir, const QString& basename, const QString& extension)
 {
