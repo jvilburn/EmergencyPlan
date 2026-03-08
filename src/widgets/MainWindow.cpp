@@ -178,8 +178,6 @@ void MainWindow::setupConnections()
 {
     connect(m_documentManager, &DocumentManager::documentChanged,
             this, &MainWindow::onDocumentChanged);
-    connect(m_documentManager, &DocumentManager::dirtyChanged,
-            this, &MainWindow::updateWindowTitle);
     connect(m_documentManager, &DocumentManager::filePathChanged,
             this, &MainWindow::updateWindowTitle);
     connect(m_documentManager, &DocumentManager::canUndoChanged,
@@ -555,11 +553,6 @@ void MainWindow::updateWindowTitle()
         {
             title = "Untitled - " + title;
         }
-    }
-
-    if (m_documentManager->isDirty())
-    {
-        title = "* " + title;
     }
 
     setWindowTitle(title);
