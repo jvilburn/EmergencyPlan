@@ -224,6 +224,10 @@ void MainWindow::setupConnections()
             this, &MainWindow::onGeocodingProgress);
     connect(m_documentManager, &DocumentManager::geocodingFinished,
             this, &MainWindow::onGeocodingFinished);
+
+    // Auto-save
+    connect(m_documentManager, &DocumentManager::autoSaveFailed,
+            this, &MainWindow::onAutoSaveFailed);
 }
 
 void MainWindow::closeEvent(QCloseEvent* event)
@@ -597,6 +601,11 @@ void MainWindow::onGeocodingFinished()
 {
     m_geocodingLabel->hide();
     m_geocodingProgress->hide();
+}
+
+void MainWindow::onAutoSaveFailed(const QString& errorMessage)
+{
+    statusBar()->showMessage(tr("Auto-save failed: %1 — use Save As to save manually").arg(errorMessage));
 }
 
 // ============================================================================

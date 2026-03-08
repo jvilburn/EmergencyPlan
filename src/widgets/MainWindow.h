@@ -46,6 +46,9 @@ private slots:
     void onGeocodingProgress(int completed, int total);
     void onGeocodingFinished();
 
+    // Auto-save
+    void onAutoSaveFailed(const QString& errorMessage);
+
     // GeoLocation
     void onLocationReady(double latitude, double longitude);
 
