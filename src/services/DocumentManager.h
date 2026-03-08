@@ -63,6 +63,9 @@ signals:
     void geocodingProgressChanged(int completed, int total);
     void geocodingFinished();
 
+    // Auto-save
+    void autoSaveFailed(const QString& errorMessage);
+
 private slots:
     void onWardLookupComplete(const QString& wardUnitNumber, const Ward& ward);
     void onStakeLookupComplete(const QString& stakeUnitNumber, const Stake& stake);
@@ -76,6 +79,9 @@ private:
     void setDocument(const Document& document);
     void setFilePath(const QString& filePath);
     void checkForIncompleteWards();
+    void autoSave();
+    void ensureFilePath();
+    void maybeRenameForWard();
 
     Document m_document;
     CommandHistory m_commandHistory;
