@@ -58,6 +58,7 @@ void DocumentManager::executeCommand(CommandPtr command)
     m_document.onDocumentChanged(change);
     emit documentChanged(change);
     checkForIncompleteWards();
+    autoSave();
 }
 
 void DocumentManager::undo()
@@ -69,6 +70,7 @@ void DocumentManager::undo()
     DocumentChange change = m_commandHistory.undo(m_document);
     m_document.onDocumentChanged(change);
     emit documentChanged(change);
+    autoSave();
 }
 
 void DocumentManager::redo()
@@ -80,6 +82,7 @@ void DocumentManager::redo()
     DocumentChange change = m_commandHistory.redo(m_document);
     m_document.onDocumentChanged(change);
     emit documentChanged(change);
+    autoSave();
 }
 
 void DocumentManager::newDocument()
@@ -225,6 +228,7 @@ void DocumentManager::onWardLookupComplete(const QString& wardUnitNumber, const 
 
     // Process next incomplete ward
     checkForIncompleteWards();
+    autoSave();
 }
 
 void DocumentManager::onStakeLookupComplete(const QString& stakeUnitNumber, const Stake& stakeInfo)
@@ -234,6 +238,7 @@ void DocumentManager::onStakeLookupComplete(const QString& stakeUnitNumber, cons
     // Add or update stake
     m_document.metadata().updateStake(stakeInfo);
     emit documentChanged(DocumentChange::metadata().updated(stakeUnitNumber));
+    autoSave();
 }
 
 void DocumentManager::onLookupFailed(const QString& unitNumber, const QString& error)
@@ -285,6 +290,7 @@ void DocumentManager::onFamilyGeocoded(const FamilyId& id, double latitude, doub
 void DocumentManager::onGeocodingFinished()
 {
     emit geocodingFinished();
+    autoSave();
 }
 
 // ============================================================================
