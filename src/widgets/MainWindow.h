@@ -26,9 +26,6 @@ public:
     explicit MainWindow(QWidget* parent = nullptr);
     ~MainWindow();
 
-protected:
-    void closeEvent(QCloseEvent* event) override;
-
 private slots:
     void onNewDocument();
     void onOpenDocument();
@@ -67,7 +64,6 @@ private:
     void setupMenus();
     void setupConnections();
     void initializeDefaultLocation();
-    bool maybeSave();
     void openEditPanel(const FamilyId& familyId);
     void closeEditPanelInternal();
 

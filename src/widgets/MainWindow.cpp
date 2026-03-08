@@ -25,7 +25,6 @@
 #include <QVBoxLayout>
 #include <QFileDialog>
 #include <QMessageBox>
-#include <QCloseEvent>
 #include <QLabel>
 #include <QProgressBar>
 #include <QStandardPaths>
@@ -228,62 +227,14 @@ void MainWindow::setupConnections()
             this, &MainWindow::onAutoSaveFailed);
 }
 
-void MainWindow::closeEvent(QCloseEvent* event)
-{
-    if (maybeSave())
-    {
-        event->accept();
-    }
-    else
-    {
-        event->ignore();
-    }
-}
-
-bool MainWindow::maybeSave()
-{
-    if (!m_documentManager->isDirty())
-    {
-        return true;
-    }
-
-    QMessageBox::StandardButton result = QMessageBox::question(
-        this,
-        tr("Unsaved Changes"),
-        tr("The document has been modified.\nDo you want to save your changes?"),
-        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
-
-    if (result == QMessageBox::Save)
-    {
-        onSaveDocument();
-        return !m_documentManager->isDirty();
-    }
-    else if (result == QMessageBox::Discard)
-    {
-        return true;
-    }
-
-    return false;
-}
-
 void MainWindow::onNewDocument()
 {
-    if (!maybeSave())
-    {
-        return;
-    }
-
     m_documentManager->newDocument();
     statusBar()->showMessage(tr("New document created"), 3000);
 }
 
 void MainWindow::onOpenDocument()
 {
-    if (!maybeSave())
-    {
-        return;
-    }
-
     QString filePath = QFileDialog::getOpenFileName(
         this,
         tr("Open Document"),
