@@ -263,17 +263,6 @@ void MainWindow::onSaveDocument()
     if (m_documentManager->filePath().isEmpty())
     {
         onSaveDocumentAs();
-        return;
-    }
-
-    QString errorMessage;
-    if (m_documentManager->saveDocument(&errorMessage))
-    {
-        statusBar()->showMessage(tr("Document saved"), 3000);
-    }
-    else
-    {
-        QMessageBox::warning(this, tr("Error"), errorMessage);
     }
 }
 
