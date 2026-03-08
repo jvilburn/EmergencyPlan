@@ -1,5 +1,6 @@
 #include "JsonService.h"
 #include <QFile>
+#include <QSaveFile>
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QDateTime>
@@ -23,7 +24,7 @@ JsonResult JsonService::loadDocument(const QString& filePath)
 
 bool JsonService::saveDocument(const QString& filePath, const Document& document, QString* errorMessage)
 {
-    QFile file(filePath);
+    QSaveFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
     {
         if (errorMessage)
@@ -42,11 +43,19 @@ bool JsonService::saveDocument(const QString& filePath, const Document& document
         {
             *errorMessage = QObject::tr("Failed to write data: %1").arg(file.errorString());
         }
-        file.close();
+        file.cancelWriting();
         return false;
     }
 
-    file.close();
+    if (!file.commit())
+    {
+        if (errorMessage)
+        {
+            *errorMessage = QObject::tr("Failed to commit file: %1").arg(file.errorString());
+        }
+        return false;
+    }
+
     return true;
 }
 
