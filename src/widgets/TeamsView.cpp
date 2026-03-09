@@ -1,0 +1,435 @@
+#include "TeamsView.h"
+#include "BaseTreeModel.h"
+#include "WardListDialog.h"
+#include "DocumentManager.h"
+#include "Document.h"
+#include "Team.h"
+#include "TeamsTreeModel.h"
+#include "FilterBar.h"
+#include "Person.h"
+#include "Phone.h"
+#include "TeamCommands.h"
+#include "SelectionPreservingTreeView.h"
+
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QPushButton>
+#include <QMenu>
+#include <QInputDialog>
+#include <QMessageBox>
+
+TeamsView::TeamsView(DocumentManager* documentManager,
+                     QWidget* parent)
+    : QWidget(parent)
+    , m_documentManager(documentManager)
+{
+    QVBoxLayout* layout = new QVBoxLayout(this);
+    layout->setContentsMargins(4, 4, 4, 4);
+    layout->setSpacing(4);
+
+    // FilterBar owns Filter
+    m_filterBar = new FilterBar(documentManager, this);
+    layout->addWidget(m_filterBar);
+
+    // Toolbar
+    QHBoxLayout* toolbar = new QHBoxLayout();
+    toolbar->setContentsMargins(0, 0, 0, 0);
+
+    m_addButton = new QPushButton(tr("Add"));
+    m_editButton = new QPushButton(tr("Edit"));
+    m_deleteButton = new QPushButton(tr("Delete"));
+
+    toolbar->addWidget(m_addButton);
+    toolbar->addWidget(m_editButton);
+    toolbar->addWidget(m_deleteButton);
+    toolbar->addStretch();
+
+    layout->addLayout(toolbar);
+
+    // Create model with filter from FilterBar
+    m_model = new TeamsTreeModel(documentManager, m_filterBar->filter(), this);
+
+    // Create tree view with model
+    m_tree = new SelectionPreservingTreeView(m_model, this);
+    m_tree->setHeaderHidden(true);
+    m_tree->setRootIsDecorated(true);
+    m_tree->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_tree->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_tree->setIndentation(16);
+    m_tree->expandToDepth(0);
+    layout->addWidget(m_tree);
+
+    // Connections
+    connect(m_addButton, &QPushButton::clicked, this, &TeamsView::addTeam);
+    connect(m_editButton, &QPushButton::clicked, this, &TeamsView::editTeam);
+    connect(m_deleteButton, &QPushButton::clicked, this, &TeamsView::deleteTeam);
+
+    connect(m_tree, &SelectionPreservingTreeView::selectionChanged,
+            this, &TeamsView::onSelectionChanged);
+    connect(m_tree, &QTreeView::doubleClicked,
+            this, &TeamsView::onTreeDoubleClicked);
+    connect(m_tree, &QTreeView::customContextMenuRequested,
+            this, &TeamsView::onContextMenu);
+
+    // Expand top-level items when model is reset
+    connect(m_model, &QAbstractItemModel::modelReset, this, &TeamsView::expandTeams);
+
+    // Load contact details when member node is expanded
+    connect(m_tree, &QTreeView::expanded,
+            this, &TeamsView::onTreeExpanded);
+
+    updateButtonStates();
+}
+
+void TeamsView::onSelectionChanged()
+{
+    updateButtonStates();
+    emit highlightChanged();
+}
+
+void TeamsView::onTreeDoubleClicked(const QModelIndex& index)
+{
+    ItemType type = m_model->itemTypeAt(index);
+
+    if (type == ItemType::Team)
+    {
+        editTeam();
+    }
+}
+
+void TeamsView::onTreeExpanded(const QModelIndex& index)
+{
+    ItemType type = m_model->itemTypeAt(index);
+
+    if (type == ItemType::TeamMember)
+    {
+        m_model->loadContactDetails(index);
+    }
+}
+
+void TeamsView::onContextMenu(const QPoint& pos)
+{
+    QModelIndex index = m_tree->indexAt(pos);
+
+    QMenu menu;
+
+    if (!index.isValid())
+    {
+        menu.addAction(tr("Add Team..."), this, &TeamsView::addTeam);
+    }
+    else
+    {
+        ItemType type = m_model->itemTypeAt(index);
+
+        if (type == ItemType::Team)
+        {
+            m_contextTeamId = m_model->teamIdAt(index);
+            if (m_contextTeamId)
+            {
+                menu.addAction(tr("Select Members..."), this, &TeamsView::selectMembersFromContextMenu);
+                menu.addSeparator();
+                menu.addAction(tr("Rename..."), this, &TeamsView::editTeam);
+                menu.addAction(tr("Delete"), this, &TeamsView::deleteTeam);
+            }
+        }
+        else if (type == ItemType::TeamMember)
+        {
+            // Show contact info (disabled) if available
+            std::optional<PersonId> personIdOpt = m_model->personIdAt(index);
+            if (personIdOpt)
+            {
+                const Document& doc = m_documentManager->document();
+                PersonId personId = *personIdOpt;
+                std::optional<Person> personOpt = doc.findPersonById(personId);
+                if (personOpt)
+                {
+                    const Phone& phone = personOpt->phone();
+                    if (!phone.isEmpty())
+                    {
+                        QAction* phoneAction = menu.addAction(phone);
+                        phoneAction->setEnabled(false);
+                    }
+                    const QString& email = personOpt->email();
+                    if (!email.isEmpty())
+                    {
+                        QAction* emailAction = menu.addAction(email);
+                        emailAction->setEnabled(false);
+                    }
+                    if (!phone.isEmpty() || !email.isEmpty())
+                    {
+                        menu.addSeparator();
+                    }
+                }
+
+                m_contextTeamId = m_model->teamIdAt(index);
+                m_contextPersonId = personId;
+                if (m_contextTeamId)
+                {
+                    // Leader actions
+                    std::optional<Team> teamOpt = doc.findTeamById(*m_contextTeamId);
+                    if (teamOpt)
+                    {
+                        bool isLeader = teamOpt->leaderId() && *teamOpt->leaderId() == personId;
+                        if (isLeader)
+                        {
+                            menu.addAction(tr("Clear Leader"), this, &TeamsView::clearLeaderFromContextMenu);
+                        }
+                        else
+                        {
+                            menu.addAction(tr("Set as Leader"), this, &TeamsView::setLeaderFromContextMenu);
+                        }
+                    }
+
+                    menu.addAction(tr("Remove from Team"), this, &TeamsView::removeMemberFromContextMenu);
+                }
+            }
+        }
+    }
+
+    if (!menu.isEmpty())
+    {
+        menu.exec(m_tree->viewport()->mapToGlobal(pos));
+    }
+
+    m_contextTeamId = std::nullopt;
+    m_contextPersonId = std::nullopt;
+}
+
+void TeamsView::expandTeams()
+{
+    m_tree->expandToDepth(0);
+}
+
+void TeamsView::selectMembersFromContextMenu()
+{
+    std::optional<TeamId> teamId = m_contextTeamId;
+    m_contextTeamId = std::nullopt;
+    m_contextPersonId = std::nullopt;
+    if (teamId)
+    {
+        showSelectMembersDialog(*teamId);
+    }
+}
+
+void TeamsView::setLeaderFromContextMenu()
+{
+    std::optional<TeamId> teamId = m_contextTeamId;
+    std::optional<PersonId> personId = m_contextPersonId;
+    m_contextTeamId = std::nullopt;
+    m_contextPersonId = std::nullopt;
+    if (teamId && personId)
+    {
+        setLeader(*teamId, *personId);
+    }
+}
+
+void TeamsView::clearLeaderFromContextMenu()
+{
+    std::optional<TeamId> teamId = m_contextTeamId;
+    m_contextTeamId = std::nullopt;
+    m_contextPersonId = std::nullopt;
+    if (teamId)
+    {
+        clearLeader(*teamId);
+    }
+}
+
+void TeamsView::removeMemberFromContextMenu()
+{
+    std::optional<TeamId> teamId = m_contextTeamId;
+    std::optional<PersonId> personId = m_contextPersonId;
+    m_contextTeamId = std::nullopt;
+    m_contextPersonId = std::nullopt;
+    if (teamId && personId)
+    {
+        removeMemberFromTeam(*teamId, *personId);
+    }
+}
+
+void TeamsView::updateButtonStates()
+{
+    bool hasTeamSelected = selectedTeamId().has_value();
+    m_editButton->setEnabled(hasTeamSelected);
+    m_deleteButton->setEnabled(hasTeamSelected);
+}
+
+std::optional<TeamId> TeamsView::selectedTeamId() const
+{
+    QModelIndex current = m_tree->currentIndex();
+    if (!current.isValid())
+    {
+        return std::nullopt;
+    }
+    return m_model->teamIdAt(current);
+}
+
+HighlightInfo TeamsView::highlightInfo() const
+{
+    FamilyAssociation assoc = m_model->relatedFamiliesAt(m_tree->currentIndex());
+    return {assoc.relatedFamilyIds, assoc.contactPointFamilyIds};
+}
+
+QSet<FamilyId> TeamsView::visibleFamilyIds() const
+{
+    return {};
+}
+
+void TeamsView::clearSelection()
+{
+    m_tree->clearSelection();
+}
+
+void TeamsView::selectFamily(const FamilyId& familyId)
+{
+    QModelIndex idx = m_model->indexForFamilyId(familyId);
+    if (idx.isValid())
+    {
+        m_tree->setCurrentIndex(idx);
+        m_tree->scrollTo(idx);
+    }
+}
+
+void TeamsView::addTeam()
+{
+    bool ok;
+    QString name = QInputDialog::getText(this, tr("Add Team"),
+                                          tr("Team name:"),
+                                          QLineEdit::Normal, QString(), &ok);
+    if (ok && !name.isEmpty())
+    {
+        Team team = Team::create(name.trimmed());
+        m_documentManager->executeCommand(
+            std::make_unique<AddTeamCommand>(team));
+    }
+}
+
+void TeamsView::editTeam()
+{
+    std::optional<TeamId> teamId = selectedTeamId();
+    if (!teamId)
+    {
+        return;
+    }
+
+    const Document& doc = m_documentManager->document();
+    std::optional<Team> teamOpt = doc.findTeamById(*teamId);
+    if (!teamOpt)
+    {
+        return;
+    }
+
+    bool ok;
+    QString name = QInputDialog::getText(this, tr("Rename Team"),
+                                          tr("Team name:"),
+                                          QLineEdit::Normal, teamOpt->name(), &ok);
+    if (ok && !name.isEmpty() && name.trimmed() != teamOpt->name())
+    {
+        Team updated = *teamOpt;
+        updated.setName(name.trimmed());
+        m_documentManager->executeCommand(
+            std::make_unique<UpdateTeamCommand>(*teamOpt, updated));
+    }
+}
+
+void TeamsView::deleteTeam()
+{
+    std::optional<TeamId> teamId = selectedTeamId();
+    if (!teamId)
+    {
+        return;
+    }
+
+    const Document& doc = m_documentManager->document();
+    std::optional<Team> teamOpt = doc.findTeamById(*teamId);
+    if (!teamOpt)
+    {
+        return;
+    }
+
+    QString message = tr("Delete team \"%1\"?").arg(teamOpt->name());
+    if (QMessageBox::question(this, tr("Delete Team"), message) == QMessageBox::Yes)
+    {
+        m_documentManager->executeCommand(
+            std::make_unique<DeleteTeamCommand>(*teamOpt));
+    }
+}
+
+void TeamsView::showSelectMembersDialog(const TeamId& teamId)
+{
+    const Document& doc = m_documentManager->document();
+    std::optional<Team> teamOpt = doc.findTeamById(teamId);
+    if (!teamOpt)
+    {
+        return;
+    }
+
+    QList<PersonId> currentIds = teamOpt->memberIds().values();
+
+    // Use dialog directly to distinguish cancel from empty selection
+    WardListDialog dialog(m_documentManager, WardListDialog::PersonMode, this);
+    dialog.setSelectionMode(WardListDialog::MultiSelect);
+    if (!currentIds.isEmpty())
+    {
+        dialog.setPreselectedPersonIds(currentIds);
+    }
+
+    if (dialog.exec() != QDialog::Accepted)
+    {
+        return;
+    }
+
+    QList<PersonId> selectedIds = dialog.selectedPersonIds();
+    QSet<PersonId> newSet(selectedIds.begin(), selectedIds.end());
+    if (newSet == teamOpt->memberIds())
+    {
+        return;
+    }
+
+    Team updated = *teamOpt;
+    updated.setMemberIds(newSet);
+
+    // Clear leader if they were removed
+    if (updated.leaderId() && !newSet.contains(*updated.leaderId()))
+    {
+        updated.setLeaderId(std::nullopt);
+    }
+
+    m_documentManager->executeCommand(
+        std::make_unique<UpdateTeamCommand>(*teamOpt, updated));
+}
+
+void TeamsView::setLeader(const TeamId& teamId, const PersonId& personId)
+{
+    const Document& doc = m_documentManager->document();
+    std::optional<Team> teamOpt = doc.findTeamById(teamId);
+    if (!teamOpt)
+    {
+        return;
+    }
+
+    Team updated = *teamOpt;
+    updated.setLeaderId(personId);
+    m_documentManager->executeCommand(
+        std::make_unique<UpdateTeamCommand>(*teamOpt, updated));
+}
+
+void TeamsView::clearLeader(const TeamId& teamId)
+{
+    const Document& doc = m_documentManager->document();
+    std::optional<Team> teamOpt = doc.findTeamById(teamId);
+    if (!teamOpt)
+    {
+        return;
+    }
+
+    Team updated = *teamOpt;
+    updated.setLeaderId(std::nullopt);
+    m_documentManager->executeCommand(
+        std::make_unique<UpdateTeamCommand>(*teamOpt, updated));
+}
+
+void TeamsView::removeMemberFromTeam(const TeamId& teamId, const PersonId& personId)
+{
+    m_documentManager->executeCommand(
+        std::make_unique<RemoveTeamMemberCommand>(teamId, personId));
+}

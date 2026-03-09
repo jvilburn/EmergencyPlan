@@ -236,7 +236,7 @@ set(WIDGET_SOURCES
     # src/widgets/MinisteringSidebar.cpp
     # src/widgets/ResourceView.cpp
     # src/widgets/TagsView.cpp
-    # src/widgets/TeamsView.cpp
+    src/widgets/TeamsView.cpp
     # src/widgets/SelectionView.cpp
     # src/widgets/shared/FilterChips.cpp
     # src/widgets/shared/FamilyTile.cpp
@@ -278,7 +278,7 @@ set(WIDGET_HEADERS
     # src/widgets/MinisteringSidebar.h
     # src/widgets/ResourceView.h
     # src/widgets/TagsView.h
-    # src/widgets/TeamsView.h
+    src/widgets/TeamsView.h
     # src/widgets/SelectionView.h
     # src/widgets/shared/FilterChips.h
     # src/widgets/shared/FamilyTile.h
