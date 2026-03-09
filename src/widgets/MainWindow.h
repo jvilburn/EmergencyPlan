@@ -16,6 +16,7 @@ class WardListView;
 class MinisteringView;
 class NeedsSubView;
 class SidebarWidget;
+class TeamsView;
 class GeoLocation;
 
 class MainWindow : public QMainWindow
@@ -84,6 +85,7 @@ private:
     WardListView* m_wardListView;
     MinisteringView* m_ministeringView;
     NeedsSubView* m_needsView;
+    TeamsView* m_teamsView;
     EmergencyAssetView* m_medicalView;
     EmergencyAssetView* m_commsView;
     EmergencyAssetView* m_recoveryView;
