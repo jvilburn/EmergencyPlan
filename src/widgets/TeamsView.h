@@ -48,9 +48,9 @@ private:
     void updateButtonStates();
 
     void addTeam();
-    void editTeam();
+    void editSelectedTeam();
     void deleteTeam();
-    void showSelectMembersDialog(const TeamId& teamId);
+    void showTeamDialog(const std::optional<TeamId>& teamId);
     void setLeader(const TeamId& teamId, const PersonId& personId);
     void clearLeader(const TeamId& teamId);
     void removeMemberFromTeam(const TeamId& teamId, const PersonId& personId);

@@ -15,7 +15,6 @@
 #include <QHBoxLayout>
 #include <QPushButton>
 #include <QMenu>
-#include <QInputDialog>
 #include <QMessageBox>
 
 TeamsView::TeamsView(DocumentManager* documentManager,
@@ -61,7 +60,7 @@ TeamsView::TeamsView(DocumentManager* documentManager,
 
     // Connections
     connect(m_addButton, &QPushButton::clicked, this, &TeamsView::addTeam);
-    connect(m_editButton, &QPushButton::clicked, this, &TeamsView::editTeam);
+    connect(m_editButton, &QPushButton::clicked, this, &TeamsView::editSelectedTeam);
     connect(m_deleteButton, &QPushButton::clicked, this, &TeamsView::deleteTeam);
 
     connect(m_tree, &SelectionPreservingTreeView::selectionChanged,
@@ -94,7 +93,7 @@ void TeamsView::onTreeDoubleClicked(const QModelIndex& index)
     switch (type)
     {
     case ItemType::Team:
-        editTeam();
+        editSelectedTeam();
         break;
 
     case ItemType::TeamMember:
@@ -135,9 +134,8 @@ void TeamsView::onContextMenu(const QPoint& pos)
             m_contextTeamId = m_model->teamIdAt(index);
             if (m_contextTeamId)
             {
-                menu.addAction(tr("Select Members..."), this, &TeamsView::selectMembersFromContextMenu);
+                menu.addAction(tr("Edit..."), this, &TeamsView::selectMembersFromContextMenu);
                 menu.addSeparator();
-                menu.addAction(tr("Rename..."), this, &TeamsView::editTeam);
                 menu.addAction(tr("Delete"), this, &TeamsView::deleteTeam);
             }
             break;
@@ -225,7 +223,7 @@ void TeamsView::selectMembersFromContextMenu()
     m_contextPersonId = std::nullopt;
     if (teamId)
     {
-        showSelectMembersDialog(*teamId);
+        showTeamDialog(teamId);
     }
 }
 
@@ -309,43 +307,15 @@ void TeamsView::selectFamily(const FamilyId& familyId)
 
 void TeamsView::addTeam()
 {
-    bool ok;
-    QString name = QInputDialog::getText(this, tr("Add Team"),
-                                          tr("Team name:"),
-                                          QLineEdit::Normal, QString(), &ok);
-    if (ok && !name.isEmpty())
-    {
-        Team team = Team::create(name.trimmed());
-        m_documentManager->executeCommand(
-            std::make_unique<AddTeamCommand>(team));
-    }
+    showTeamDialog(std::nullopt);
 }
 
-void TeamsView::editTeam()
+void TeamsView::editSelectedTeam()
 {
     std::optional<TeamId> teamId = selectedTeamId();
-    if (!teamId)
+    if (teamId)
     {
-        return;
-    }
-
-    const Document& doc = m_documentManager->document();
-    std::optional<Team> teamOpt = doc.findTeamById(*teamId);
-    if (!teamOpt)
-    {
-        return;
-    }
-
-    bool ok;
-    QString name = QInputDialog::getText(this, tr("Rename Team"),
-                                          tr("Team name:"),
-                                          QLineEdit::Normal, teamOpt->name(), &ok);
-    if (ok && !name.isEmpty() && name.trimmed() != teamOpt->name())
-    {
-        Team updated = *teamOpt;
-        updated.setName(name.trimmed());
-        m_documentManager->executeCommand(
-            std::make_unique<UpdateTeamCommand>(*teamOpt, updated));
+        showTeamDialog(teamId);
     }
 }
 
@@ -372,42 +342,67 @@ void TeamsView::deleteTeam()
     }
 }
 
-void TeamsView::showSelectMembersDialog(const TeamId& teamId)
+void TeamsView::showTeamDialog(const std::optional<TeamId>& teamId)
 {
-    const Document& doc = m_documentManager->document();
-    std::optional<Team> teamOpt = doc.findTeamById(teamId);
-    if (!teamOpt)
+    QString initialName;
+    QList<PersonId> initialIds;
+
+    if (teamId)
+    {
+        const Document& doc = m_documentManager->document();
+        std::optional<Team> teamOpt = doc.findTeamById(*teamId);
+        if (!teamOpt)
+        {
+            return;
+        }
+        initialName = teamOpt->name();
+        initialIds = teamOpt->memberIds().values();
+    }
+
+    std::optional<PersonSelectionResult> result = WardListDialog::selectPersons(
+        m_documentManager, tr("Team"), initialName, initialIds, this);
+
+    if (!result || result->name.isEmpty())
     {
         return;
     }
 
-    QList<PersonId> currentIds = teamOpt->memberIds().values();
+    QSet<PersonId> newMembers(result->personIds.begin(), result->personIds.end());
 
-    std::optional<QList<PersonId>> result = WardListDialog::selectPersons(
-        m_documentManager, teamOpt->name(), currentIds, this);
-
-    if (!result)
+    if (teamId)
     {
-        return;  // Cancelled
-    }
+        // Edit existing team
+        const Document& doc = m_documentManager->document();
+        std::optional<Team> teamOpt = doc.findTeamById(*teamId);
+        if (!teamOpt)
+        {
+            return;
+        }
 
-    QSet<PersonId> newSet(result->begin(), result->end());
-    if (newSet == teamOpt->memberIds())
+        Team updated = *teamOpt;
+        updated.setName(result->name);
+        updated.setMemberIds(newMembers);
+
+        // Clear leader if they were removed
+        if (updated.leaderId() && !newMembers.contains(*updated.leaderId()))
+        {
+            updated.setLeaderId(std::nullopt);
+        }
+
+        if (updated != *teamOpt)
+        {
+            m_documentManager->executeCommand(
+                std::make_unique<UpdateTeamCommand>(*teamOpt, updated));
+        }
+    }
+    else
     {
-        return;  // No change
+        // Create new team
+        Team team = Team::create(result->name);
+        team.setMemberIds(newMembers);
+        m_documentManager->executeCommand(
+            std::make_unique<AddTeamCommand>(team));
     }
-
-    Team updated = *teamOpt;
-    updated.setMemberIds(newSet);
-
-    // Clear leader if they were removed
-    if (updated.leaderId() && !newSet.contains(*updated.leaderId()))
-    {
-        updated.setLeaderId(std::nullopt);
-    }
-
-    m_documentManager->executeCommand(
-        std::make_unique<UpdateTeamCommand>(*teamOpt, updated));
 }
 
 void TeamsView::setLeader(const TeamId& teamId, const PersonId& personId)
