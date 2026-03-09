@@ -9,6 +9,24 @@
 
 #include <algorithm>
 
+namespace
+{
+
+bool leaderFirstThenAlpha(const QPair<PersonId, QString>& a,
+                          const QPair<PersonId, QString>& b,
+                          const std::optional<PersonId>& leaderId)
+{
+    bool aIsLeader = leaderId && *leaderId == a.first;
+    bool bIsLeader = leaderId && *leaderId == b.first;
+    if (aIsLeader != bIsLeader)
+    {
+        return aIsLeader;
+    }
+    return a.second.toLower() < b.second.toLower();
+}
+
+}  // namespace
+
 TeamsTreeModel::TeamsTreeModel(DocumentManager* documentManager,
                                Filter* filter,
                                QObject* parent)
@@ -100,15 +118,7 @@ void TeamsTreeModel::rebuild()
         // Sort: leader first, then alphabetically
         std::sort(members.begin(), members.end(),
                   [&leaderId](const QPair<PersonId, QString>& a, const QPair<PersonId, QString>& b)
-                  {
-                      bool aIsLeader = leaderId && *leaderId == a.first;
-                      bool bIsLeader = leaderId && *leaderId == b.first;
-                      if (aIsLeader != bIsLeader)
-                      {
-                          return aIsLeader;
-                      }
-                      return a.second.toLower() < b.second.toLower();
-                  });
+                  { return leaderFirstThenAlpha(a, b, leaderId); });
 
         // Create team node
         TreeNode* teamNode = new TreeNode();
@@ -245,7 +255,11 @@ bool TeamsTreeModel::hasChildren(const QModelIndex& parent) const
     // Member nodes can have contact children (lazy loaded)
     if (node->type == ItemType::TeamMember)
     {
-        return true;
+        if (node->contactsLoaded)
+        {
+            return !node->children.isEmpty();
+        }
+        return true;  // Not yet loaded, assume yes
     }
 
     return !node->children.isEmpty();

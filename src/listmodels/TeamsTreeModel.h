@@ -54,7 +54,7 @@ public:
     /// Returns family associations for the given index.
     FamilyAssociation relatedFamiliesAt(const QModelIndex& index) const;
 
-    // View-specific accessors
+    // View-specific accessors (return parent's IDs for ContactDetail nodes)
     std::optional<TeamId> teamIdAt(const QModelIndex& index) const;
     std::optional<PersonId> personIdAt(const QModelIndex& index) const;
 
@@ -79,10 +79,7 @@ private:
         QList<TreeNode*> children;
         bool contactsLoaded = false;
 
-        ~TreeNode()
-        {
-            qDeleteAll(children);
-        }
+        ~TreeNode() { qDeleteAll(children); }
     };
 
     TreeNode* nodeFromIndex(const QModelIndex& index) const;
