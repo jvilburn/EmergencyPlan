@@ -383,7 +383,7 @@ void TeamsView::showSelectMembersDialog(const TeamId& teamId)
 
     QList<PersonId> currentIds = teamOpt->memberIds().values();
 
-    auto result = WardListDialog::selectPersons(
+    std::optional<QList<PersonId>> result = WardListDialog::selectPersons(
         m_documentManager, teamOpt->name(), currentIds, this);
 
     if (!result)

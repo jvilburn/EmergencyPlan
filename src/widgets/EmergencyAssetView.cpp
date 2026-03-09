@@ -354,7 +354,7 @@ void EmergencyAssetView::showSelectPeopleDialog(const EmergencyAssetId& assetId)
 
     QList<PersonId> currentIds = assetOpt->personIds().values();
 
-    auto result = WardListDialog::selectPersons(
+    std::optional<QList<PersonId>> result = WardListDialog::selectPersons(
         m_documentManager, assetOpt->name(), currentIds, this);
 
     if (!result)
