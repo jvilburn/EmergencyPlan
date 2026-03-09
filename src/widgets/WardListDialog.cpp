@@ -8,6 +8,9 @@
 #include "Document.h"
 #include "SelectionPreservingTreeView.h"
 
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QLineEdit>
 #include <QVBoxLayout>
 #include <QSplitter>
 #include <QDialogButtonBox>
@@ -16,12 +19,19 @@
 
 WardListDialog::WardListDialog(DocumentManager* documentManager,
                                Mode mode,
+                               bool checkable,
                                QWidget* parent)
     : QDialog(parent)
     , m_mode(mode)
     , m_documentManager(documentManager)
+    , m_checkable(checkable)
 {
     setupUi();
+}
+
+QString WardListDialog::name() const
+{
+    return m_nameEdit->text().trimmed();
 }
 
 void WardListDialog::setupUi()
@@ -29,6 +39,14 @@ void WardListDialog::setupUi()
     resize(1000, 700);
 
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
+
+    // Name field row
+    QHBoxLayout* nameLayout = new QHBoxLayout();
+    m_nameLabel = new QLabel(this);
+    m_nameEdit = new QLineEdit(this);
+    nameLayout->addWidget(m_nameLabel);
+    nameLayout->addWidget(m_nameEdit, 1);
+    mainLayout->addLayout(nameLayout);
 
     // Create FilterBar (owns Filter internally)
     m_filterBar = new FilterBar(m_documentManager, this);
@@ -40,12 +58,12 @@ void WardListDialog::setupUi()
     // Create appropriate model based on mode, then tree view with model
     if (m_mode == FamilyMode)
     {
-        m_familyModel = new FamilyTreeModel(m_documentManager, m_filterBar->filter(), this);
+        m_familyModel = new FamilyTreeModel(m_documentManager, m_filterBar->filter(), m_checkable, this);
         m_treeView = new SelectionPreservingTreeView(m_familyModel, this);
     }
     else
     {
-        m_personModel = new PersonTreeModel(m_documentManager, m_filterBar->filter(), this);
+        m_personModel = new PersonTreeModel(m_documentManager, m_filterBar->filter(), m_checkable, this);
         m_treeView = new SelectionPreservingTreeView(m_personModel, this);
     }
     m_treeView->setHeaderHidden(true);
@@ -303,10 +321,8 @@ std::optional<QList<FamilyId>> WardListDialog::selectFamilies(
     const QList<FamilyId>& initialIds,
     QWidget* parent)
 {
-    WardListDialog dialog(documentManager, FamilyMode, parent);
+    WardListDialog dialog(documentManager, FamilyMode, true, parent);
     dialog.setWindowTitle(tr("Select Families") + QString::fromUtf8(" \u2014 ") + title);
-    dialog.m_checkable = true;
-    dialog.m_familyModel->setCheckable(true);
     connect(dialog.m_familyModel, &FamilyTreeModel::dataChanged,
             dialog.m_mapWidget, &MapWidget::updateHighlights);
     if (!initialIds.isEmpty())
@@ -356,10 +372,8 @@ std::optional<QList<PersonId>> WardListDialog::selectPersons(
     const QList<PersonId>& initialIds,
     QWidget* parent)
 {
-    WardListDialog dialog(documentManager, PersonMode, parent);
+    WardListDialog dialog(documentManager, PersonMode, true, parent);
     dialog.setWindowTitle(tr("Select People") + QString::fromUtf8(" \u2014 ") + title);
-    dialog.m_checkable = true;
-    dialog.m_personModel->setCheckable(true);
     connect(dialog.m_personModel, &PersonTreeModel::dataChanged,
             dialog.m_mapWidget, &MapWidget::updateHighlights);
     if (!initialIds.isEmpty())

@@ -11,6 +11,8 @@ class FilterBar;
 class FamilyTreeModel;
 class PersonTreeModel;
 class MapWidget;
+class QLabel;
+class QLineEdit;
 class QSplitter;
 class QDialogButtonBox;
 class SelectionPreservingTreeView;
@@ -32,7 +34,11 @@ public:
 
     explicit WardListDialog(DocumentManager* documentManager,
                             Mode mode,
+                            bool checkable = false,
                             QWidget* parent = nullptr);
+
+    /// Get the name field text (trimmed).
+    QString name() const;
 
     /// Pre-select items by ID.
     void setPreselectedFamilyIds(const QList<FamilyId>& ids);
@@ -88,6 +94,8 @@ private:
     QDialogButtonBox* m_buttonBox = nullptr;
     QSplitter* m_splitter = nullptr;
     bool m_checkable = false;
+    QLabel* m_nameLabel = nullptr;
+    QLineEdit* m_nameEdit = nullptr;
 
     // Model - only one is non-null depending on mode
     FamilyTreeModel* m_familyModel = nullptr;
