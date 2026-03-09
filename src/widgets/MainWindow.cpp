@@ -63,8 +63,14 @@ MainWindow::MainWindow(QWidget* parent)
     QString lastPath = loadLastDocumentPath();
     if (!lastPath.isEmpty() && QFile::exists(lastPath))
     {
-        m_documentManager->openDocument(lastPath);
-        m_mapWidget->fitAllFamilies();
+        if (m_documentManager->openDocument(lastPath))
+        {
+            m_mapWidget->fitAllFamilies();
+        }
+        else
+        {
+            saveLastDocumentPath(QString());
+        }
     }
 
     initializeDefaultLocation();
