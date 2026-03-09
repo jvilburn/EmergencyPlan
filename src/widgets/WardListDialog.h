@@ -93,7 +93,7 @@ private:
     MapWidget* m_mapWidget = nullptr;
     QDialogButtonBox* m_buttonBox = nullptr;
     QSplitter* m_splitter = nullptr;
-    bool m_checkable = false;
+    bool m_checkable;
     QLabel* m_nameLabel = nullptr;
     QLineEdit* m_nameEdit = nullptr;
 
