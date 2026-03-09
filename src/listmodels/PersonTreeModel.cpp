@@ -382,7 +382,19 @@ QModelIndex PersonTreeModel::indexForPersonId(const PersonId& personId) const
 
 void PersonTreeModel::setCheckable(bool checkable)
 {
+    if (m_checkable == checkable)
+    {
+        return;
+    }
     m_checkable = checkable;
+    // Notify view to re-query flags and check state for all person rows
+    if (!m_personNodes.isEmpty())
+    {
+        emit dataChanged(
+            index(0, 0),
+            index(m_personNodes.size() - 1, 0),
+            {Qt::CheckStateRole});
+    }
 }
 
 void PersonTreeModel::setCheckedPersonIds(const QSet<PersonId>& ids)
