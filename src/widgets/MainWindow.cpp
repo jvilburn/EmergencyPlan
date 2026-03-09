@@ -195,9 +195,9 @@ void MainWindow::setupConnections()
             m_mapWidget, &MapWidget::updateHighlights);
     connect(m_ministeringView, &MinisteringView::highlightChanged,
             m_mapWidget, &MapWidget::updateHighlights);
-    connect(m_needsView, &NeedsSubView::highlightChanged,
-            m_mapWidget, &MapWidget::updateHighlights);
     connect(m_teamsView, &TeamsView::highlightChanged,
+            m_mapWidget, &MapWidget::updateHighlights);
+    connect(m_needsView, &NeedsSubView::highlightChanged,
             m_mapWidget, &MapWidget::updateHighlights);
     connect(m_medicalView, &EmergencyAssetView::highlightChanged,
             m_mapWidget, &MapWidget::updateHighlights);
