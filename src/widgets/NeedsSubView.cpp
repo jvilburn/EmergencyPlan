@@ -14,14 +14,8 @@
 
 #include <QVBoxLayout>
 #include <QMenu>
-#include <QInputDialog>
 #include <QMessageBox>
-#include <QDialog>
-#include <QFormLayout>
 #include <QPushButton>
-#include <QLineEdit>
-#include <QDialogButtonBox>
-#include <QLabel>
 
 namespace
 {
@@ -71,7 +65,7 @@ NeedsSubView::NeedsSubView(DocumentManager* documentManager,
 
     // Add button
     QPushButton* addButton = new QPushButton(tr("Add Special Need..."));
-    connect(addButton, &QPushButton::clicked, this, &NeedsSubView::showAddNeedDialog);
+    connect(addButton, &QPushButton::clicked, this, &NeedsSubView::addNeed);
     layout->addWidget(addButton);
 
     // Create model with filter from FilterBar
@@ -150,21 +144,18 @@ void NeedsSubView::onContextMenu(const QPoint& pos)
         }
     }
 
-    PersonId pid = *personId;
-    FamilyId fid = *familyId;
-    menu.addAction(tr("Edit..."), this, [this, pid, fid]()
-    {
-        showEditNeedDialog(pid, fid);
-    });
-    menu.addAction(tr("Delete"), this, [this, pid, fid]()
-    {
-        deleteNeed(pid, fid);
-    });
+    m_contextPersonId = *personId;
+    m_contextFamilyId = *familyId;
+    menu.addAction(tr("Edit..."), this, &NeedsSubView::editNeedFromContextMenu);
+    menu.addAction(tr("Delete"), this, &NeedsSubView::deleteNeedFromContextMenu);
 
     if (!menu.isEmpty())
     {
         menu.exec(m_tree->viewport()->mapToGlobal(pos));
     }
+
+    m_contextPersonId = std::nullopt;
+    m_contextFamilyId = std::nullopt;
 }
 
 HighlightInfo NeedsSubView::highlightInfo() const
@@ -194,101 +185,67 @@ void NeedsSubView::selectFamily(const FamilyId& familyId)
     }
 }
 
-void NeedsSubView::showAddNeedDialog()
+void NeedsSubView::addNeed()
 {
-    QDialog dialog(this);
-    dialog.setWindowTitle(tr("Add Special Need"));
-    dialog.setMinimumWidth(400);
+    showNeedDialog(std::nullopt);
+}
 
-    QFormLayout* formLayout = new QFormLayout(&dialog);
-
-    // Selection button and label
-    QHBoxLayout* selectionLayout = new QHBoxLayout();
-    QLabel* selectionLabel = new QLabel(tr("(none selected)"));
-    QPushButton* selectButton = new QPushButton(tr("Select..."));
-    selectionLayout->addWidget(selectionLabel, 1);
-    selectionLayout->addWidget(selectButton);
-    formLayout->addRow(tr("Person:"), selectionLayout);
-
-    // Note field
-    QLineEdit* noteEdit = new QLineEdit();
-    formLayout->addRow(tr("Note:"), noteEdit);
-
-    // Dialog buttons
-    QDialogButtonBox* buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-    formLayout->addRow(buttonBox);
-
-    // Track selected person
-    std::optional<PersonId> selectedPersonId;
-    std::optional<FamilyId> selectedFamilyId;
-
-    // Connect select button
-    connect(selectButton, &QPushButton::clicked, &dialog, [&]()
+void NeedsSubView::editNeedFromContextMenu()
+{
+    std::optional<PersonId> personId = m_contextPersonId;
+    m_contextPersonId = std::nullopt;
+    m_contextFamilyId = std::nullopt;
+    if (personId)
     {
-        auto id = WardListDialog::selectPerson(m_documentManager, selectedPersonId, &dialog);
-        if (id)
-        {
-            selectedPersonId = id;
-            const Document& doc = m_documentManager->document();
-            std::optional<Person> person = doc.findPersonById(*id);
-            if (person)
-            {
-                selectionLabel->setText(person->displayName());
-                // Pre-fill note if person already has a special need
-                if (person->hasSpecialNeed())
-                {
-                    noteEdit->setText(person->specialNeedNote());
-                }
-                selectedFamilyId = doc.familyIdForPerson(*id);
-            }
-        }
-    });
-
-    connect(buttonBox, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-    connect(buttonBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-
-    if (dialog.exec() == QDialog::Accepted)
-    {
-        if (!selectedPersonId)
-        {
-            QMessageBox::warning(this, tr("Add Special Need"),
-                                 tr("Please select a person."));
-            return;
-        }
-
-        QString note = noteEdit->text().trimmed();
-
-        // Update person's special need note
-        const Document& doc = m_documentManager->document();
-        std::optional<Person> personOpt = doc.findPersonById(*selectedPersonId);
-        if (personOpt && selectedFamilyId)
-        {
-            Person updatedPerson = *personOpt;
-            updatedPerson.setSpecialNeedNote(note);
-            updatePersonInFamily(m_documentManager, *selectedFamilyId, updatedPerson);
-        }
+        showNeedDialog(personId);
     }
 }
 
-void NeedsSubView::showEditNeedDialog(const PersonId& personId, const FamilyId& familyId)
+void NeedsSubView::deleteNeedFromContextMenu()
 {
-    const Document& doc = m_documentManager->document();
+    std::optional<PersonId> personId = m_contextPersonId;
+    std::optional<FamilyId> familyId = m_contextFamilyId;
+    m_contextPersonId = std::nullopt;
+    m_contextFamilyId = std::nullopt;
+    if (personId && familyId)
+    {
+        deleteNeed(*personId, *familyId);
+    }
+}
 
-    std::optional<Person> personOpt = doc.findPersonById(personId);
-    if (!personOpt || !personOpt->hasSpecialNeed())
+void NeedsSubView::showNeedDialog(const std::optional<PersonId>& personId)
+{
+    QString initialName;
+    std::optional<PersonId> initialPersonId = personId;
+
+    if (personId)
+    {
+        const Document& doc = m_documentManager->document();
+        std::optional<Person> personOpt = doc.findPersonById(*personId);
+        if (personOpt)
+        {
+            initialName = personOpt->specialNeedNote();
+        }
+    }
+
+    std::optional<PersonSelectionResult> result = WardListDialog::selectPersonWithName(
+        m_documentManager, tr("Need"), initialName, initialPersonId, this);
+
+    // Note: empty name is intentional for needs — it clears the special need note
+    if (!result || result->personIds.isEmpty())
     {
         return;
     }
 
-    bool ok;
-    QString note = QInputDialog::getText(this, tr("Edit Special Need"),
-                                          tr("Note for %1:").arg(personOpt->displayName()),
-                                          QLineEdit::Normal, personOpt->specialNeedNote(), &ok);
-    if (ok)
+    PersonId selectedPersonId = result->personIds.first();
+    const Document& doc = m_documentManager->document();
+    std::optional<FamilyId> familyId = doc.familyIdForPerson(selectedPersonId);
+    std::optional<Person> personOpt = doc.findPersonById(selectedPersonId);
+    if (personOpt && familyId)
     {
         Person updatedPerson = *personOpt;
-        updatedPerson.setSpecialNeedNote(note);
-        updatePersonInFamily(m_documentManager, familyId, updatedPerson);
+        updatedPerson.setSpecialNeedNote(result->name);
+        updatePersonInFamily(m_documentManager, *familyId, updatedPerson);
     }
 }
 

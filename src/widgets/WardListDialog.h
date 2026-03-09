@@ -87,6 +87,15 @@ public:
                                 const std::optional<PersonId>& initialId = std::nullopt,
                                 QWidget* parent = nullptr);
 
+    /// Show dialog to select a single person with a name field.
+    /// Returns nullopt if cancelled.
+    static std::optional<PersonSelectionResult> selectPersonWithName(
+        DocumentManager* documentManager,
+        const QString& nameLabel,
+        const QString& initialName = {},
+        const std::optional<PersonId>& initialId = std::nullopt,
+        QWidget* parent = nullptr);
+
     /// Show dialog to select multiple persons. Returns nullopt if cancelled.
     static std::optional<PersonSelectionResult> selectPersons(
         DocumentManager* documentManager,

@@ -372,6 +372,34 @@ std::optional<PersonId> WardListDialog::selectPerson(DocumentManager* documentMa
     return std::nullopt;
 }
 
+std::optional<PersonSelectionResult> WardListDialog::selectPersonWithName(
+    DocumentManager* documentManager,
+    const QString& nameLabel,
+    const QString& initialName,
+    const std::optional<PersonId>& initialId,
+    QWidget* parent)
+{
+    WardListDialog dialog(documentManager, PersonMode, false, parent);
+    dialog.setWindowTitle(tr("Select Person") + QString::fromUtf8(" \u2014 ") + nameLabel);
+    dialog.m_nameLabel->setText(nameLabel + tr(":"));
+    dialog.m_nameEdit->setText(initialName);
+    if (initialId)
+    {
+        dialog.setPreselectedPersonIds({*initialId});
+    }
+
+    if (dialog.exec() != QDialog::Accepted)
+    {
+        return std::nullopt;
+    }
+
+    PersonSelectionResult result;
+    result.name = dialog.name();
+    // Single-select: get from current selection
+    result.personIds = dialog.selectedPersonIds();
+    return result;
+}
+
 std::optional<PersonSelectionResult> WardListDialog::selectPersons(
     DocumentManager* documentManager,
     const QString& nameLabel,

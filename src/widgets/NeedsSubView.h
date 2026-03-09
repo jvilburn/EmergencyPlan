@@ -33,14 +33,20 @@ private slots:
     void onSelectionChanged();
     void onTreeExpanded(const QModelIndex& index);
     void onContextMenu(const QPoint& pos);
+    void editNeedFromContextMenu();
+    void deleteNeedFromContextMenu();
 
 private:
-    void showAddNeedDialog();
-    void showEditNeedDialog(const PersonId& personId, const FamilyId& familyId);
+    void addNeed();
+    void showNeedDialog(const std::optional<PersonId>& personId);
     void deleteNeed(const PersonId& personId, const FamilyId& familyId);
 
     DocumentManager* m_documentManager;
     FilterBar* m_filterBar;
     NeedsModel* m_model;
     SelectionPreservingTreeView* m_tree;
+
+    // Context menu state
+    std::optional<PersonId> m_contextPersonId;
+    std::optional<FamilyId> m_contextFamilyId;
 };
