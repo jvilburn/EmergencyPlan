@@ -17,6 +17,20 @@ class QSplitter;
 class QDialogButtonBox;
 class SelectionPreservingTreeView;
 
+/// Result from multi-select person dialog.
+struct PersonSelectionResult
+{
+    QString name;
+    QList<PersonId> personIds;
+};
+
+/// Result from multi-select family dialog.
+struct FamilySelectionResult
+{
+    QString name;
+    QList<FamilyId> familyIds;
+};
+
 /// Modal dialog for selecting families or persons from the ward list.
 /// Features a split view with tree on left and map on right.
 /// Uses FilterBar for search/filtering and tree models for display.
@@ -61,9 +75,10 @@ public:
                                 QWidget* parent = nullptr);
 
     /// Show dialog to select multiple families. Returns nullopt if cancelled.
-    static std::optional<QList<FamilyId>> selectFamilies(
+    static std::optional<FamilySelectionResult> selectFamilies(
         DocumentManager* documentManager,
-        const QString& title,
+        const QString& nameLabel,
+        const QString& initialName,
         const QList<FamilyId>& initialIds = {},
         QWidget* parent = nullptr);
 
@@ -73,9 +88,10 @@ public:
                                 QWidget* parent = nullptr);
 
     /// Show dialog to select multiple persons. Returns nullopt if cancelled.
-    static std::optional<QList<PersonId>> selectPersons(
+    static std::optional<PersonSelectionResult> selectPersons(
         DocumentManager* documentManager,
-        const QString& title,
+        const QString& nameLabel,
+        const QString& initialName,
         const QList<PersonId>& initialIds = {},
         QWidget* parent = nullptr);
 

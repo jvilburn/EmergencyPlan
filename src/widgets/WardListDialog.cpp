@@ -315,14 +315,17 @@ std::optional<FamilyId> WardListDialog::selectFamily(DocumentManager* documentMa
     return std::nullopt;
 }
 
-std::optional<QList<FamilyId>> WardListDialog::selectFamilies(
+std::optional<FamilySelectionResult> WardListDialog::selectFamilies(
     DocumentManager* documentManager,
-    const QString& title,
+    const QString& nameLabel,
+    const QString& initialName,
     const QList<FamilyId>& initialIds,
     QWidget* parent)
 {
     WardListDialog dialog(documentManager, FamilyMode, true, parent);
-    dialog.setWindowTitle(tr("Select Families") + QString::fromUtf8(" \u2014 ") + title);
+    dialog.setWindowTitle(tr("Select Families") + QString::fromUtf8(" \u2014 ") + nameLabel);
+    dialog.m_nameLabel->setText(nameLabel + tr(":"));
+    dialog.m_nameEdit->setText(initialName);
     connect(dialog.m_familyModel, &FamilyTreeModel::dataChanged,
             dialog.m_mapWidget, &MapWidget::updateHighlights);
     if (!initialIds.isEmpty())
@@ -344,7 +347,10 @@ std::optional<QList<FamilyId>> WardListDialog::selectFamilies(
     }
 
     QSet<FamilyId> checked = dialog.m_familyModel->checkedFamilyIds();
-    return QList<FamilyId>(checked.begin(), checked.end());
+    FamilySelectionResult result;
+    result.name = dialog.name();
+    result.familyIds = QList<FamilyId>(checked.begin(), checked.end());
+    return result;
 }
 
 std::optional<PersonId> WardListDialog::selectPerson(DocumentManager* documentManager,
@@ -366,14 +372,17 @@ std::optional<PersonId> WardListDialog::selectPerson(DocumentManager* documentMa
     return std::nullopt;
 }
 
-std::optional<QList<PersonId>> WardListDialog::selectPersons(
+std::optional<PersonSelectionResult> WardListDialog::selectPersons(
     DocumentManager* documentManager,
-    const QString& title,
+    const QString& nameLabel,
+    const QString& initialName,
     const QList<PersonId>& initialIds,
     QWidget* parent)
 {
     WardListDialog dialog(documentManager, PersonMode, true, parent);
-    dialog.setWindowTitle(tr("Select People") + QString::fromUtf8(" \u2014 ") + title);
+    dialog.setWindowTitle(tr("Select People") + QString::fromUtf8(" \u2014 ") + nameLabel);
+    dialog.m_nameLabel->setText(nameLabel + tr(":"));
+    dialog.m_nameEdit->setText(initialName);
     connect(dialog.m_personModel, &PersonTreeModel::dataChanged,
             dialog.m_mapWidget, &MapWidget::updateHighlights);
     if (!initialIds.isEmpty())
@@ -395,5 +404,8 @@ std::optional<QList<PersonId>> WardListDialog::selectPersons(
     }
 
     QSet<PersonId> checked = dialog.m_personModel->checkedPersonIds();
-    return QList<PersonId>(checked.begin(), checked.end());
+    PersonSelectionResult result;
+    result.name = dialog.name();
+    result.personIds = QList<PersonId>(checked.begin(), checked.end());
+    return result;
 }
