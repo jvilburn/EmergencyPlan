@@ -45,6 +45,7 @@ private slots:
 
     // Auto-save
     void onAutoSaveFailed(const QString& errorMessage);
+    void onFilePathChanged();
 
     // GeoLocation
     void onLocationReady(double latitude, double longitude);

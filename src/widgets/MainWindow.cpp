@@ -180,7 +180,7 @@ void MainWindow::setupConnections()
     connect(m_documentManager, &DocumentManager::filePathChanged,
             this, &MainWindow::updateWindowTitle);
     connect(m_documentManager, &DocumentManager::filePathChanged,
-            this, [this]() { saveLastDocumentPath(m_documentManager->filePath()); });
+            this, &MainWindow::onFilePathChanged);
     connect(m_documentManager, &DocumentManager::canUndoChanged,
             this, &MainWindow::updateUndoRedoActions);
     connect(m_documentManager, &DocumentManager::canRedoChanged,
@@ -543,6 +543,11 @@ void MainWindow::onAutoSaveFailed(const QString& errorMessage)
     statusBar()->showMessage(tr("Auto-save failed: %1 — use Save As to save manually").arg(errorMessage));
 }
 
+void MainWindow::onFilePathChanged()
+{
+    saveLastDocumentPath(m_documentManager->filePath());
+}
+
 // ============================================================================
 // Default Location / Settings
 // ============================================================================
@@ -578,19 +583,7 @@ QString MainWindow::settingsFilePath()
 
 bool MainWindow::loadDefaultLocation(double& lat, double& lng)
 {
-    QFile file(settingsFilePath());
-    if (!file.open(QIODevice::ReadOnly))
-    {
-        return false;
-    }
-
-    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-    if (!doc.isObject())
-    {
-        return false;
-    }
-
-    QJsonObject json = doc.object();
+    QJsonObject json = loadSettingsJson(settingsFilePath());
     if (!json.contains("defaultLat") || !json.contains("defaultLng"))
     {
         return false;
