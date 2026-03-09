@@ -30,19 +30,9 @@ public:
     };
     Q_ENUM(Mode)
 
-    enum SelectionMode
-    {
-        SingleSelect,
-        MultiSelect
-    };
-    Q_ENUM(SelectionMode)
-
     explicit WardListDialog(DocumentManager* documentManager,
                             Mode mode,
                             QWidget* parent = nullptr);
-
-    /// Set selection mode (single vs multi-select).
-    void setSelectionMode(SelectionMode mode);
 
     /// Pre-select items by ID.
     void setPreselectedFamilyIds(const QList<FamilyId>& ids);
@@ -64,27 +54,31 @@ public:
                                 const std::optional<FamilyId>& initialId = std::nullopt,
                                 QWidget* parent = nullptr);
 
-    /// Show dialog to select multiple families. Returns empty list if cancelled.
-    static QList<FamilyId> selectFamilies(DocumentManager* documentManager,
-                                      const QList<FamilyId>& initialIds = {},
-                                      QWidget* parent = nullptr);
+    /// Show dialog to select multiple families. Returns nullopt if cancelled.
+    static std::optional<QList<FamilyId>> selectFamilies(
+        DocumentManager* documentManager,
+        const QString& title,
+        const QList<FamilyId>& initialIds = {},
+        QWidget* parent = nullptr);
 
     /// Show dialog to select a single person. Returns nullopt if cancelled.
     static std::optional<PersonId> selectPerson(DocumentManager* documentManager,
                                 const std::optional<PersonId>& initialId = std::nullopt,
                                 QWidget* parent = nullptr);
 
-    /// Show dialog to select multiple persons. Returns empty list if cancelled.
-    static QList<PersonId> selectPersons(DocumentManager* documentManager,
-                                     const QList<PersonId>& initialIds = {},
-                                     QWidget* parent = nullptr);
+    /// Show dialog to select multiple persons. Returns nullopt if cancelled.
+    static std::optional<QList<PersonId>> selectPersons(
+        DocumentManager* documentManager,
+        const QString& title,
+        const QList<PersonId>& initialIds = {},
+        QWidget* parent = nullptr);
 
 private slots:
     void onSelectionChanged();
 
 private:
     void setupUi();
-    std::optional<FamilyId> familyIdForCurrentSelection() const;
+    QSet<FamilyId> highlightedFamilyIds() const;
 
     Mode m_mode;
     DocumentManager* m_documentManager;
@@ -93,6 +87,7 @@ private:
     MapWidget* m_mapWidget = nullptr;
     QDialogButtonBox* m_buttonBox = nullptr;
     QSplitter* m_splitter = nullptr;
+    bool m_checkable = false;
 
     // Model - only one is non-null depending on mode
     FamilyTreeModel* m_familyModel = nullptr;

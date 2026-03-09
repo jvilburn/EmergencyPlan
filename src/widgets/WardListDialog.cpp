@@ -26,16 +26,6 @@ WardListDialog::WardListDialog(DocumentManager* documentManager,
 
 void WardListDialog::setupUi()
 {
-    // Set dialog title based on mode
-    if (m_mode == FamilyMode)
-    {
-        setWindowTitle(tr("Select Family"));
-    }
-    else
-    {
-        setWindowTitle(tr("Select Person"));
-    }
-
     resize(1000, 700);
 
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
@@ -93,18 +83,6 @@ void WardListDialog::setupUi()
 
     // Fit map to show all families
     m_mapWidget->fitAllFamilies();
-}
-
-void WardListDialog::setSelectionMode(SelectionMode mode)
-{
-    if (mode == MultiSelect)
-    {
-        m_treeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
-    }
-    else
-    {
-        m_treeView->setSelectionMode(QAbstractItemView::SingleSelection);
-    }
 }
 
 void WardListDialog::setPreselectedFamilyIds(const QList<FamilyId>& ids)
@@ -230,38 +208,65 @@ void WardListDialog::onSelectionChanged()
     m_mapWidget->updateHighlights();
 }
 
-std::optional<FamilyId> WardListDialog::familyIdForCurrentSelection() const
+QSet<FamilyId> WardListDialog::highlightedFamilyIds() const
 {
+    if (m_checkable)
+    {
+        // In checkbox mode, highlight all checked items' families
+        QSet<FamilyId> familyIds;
+        if (m_mode == FamilyMode && m_familyModel)
+        {
+            familyIds = m_familyModel->checkedFamilyIds();
+        }
+        else if (m_personModel)
+        {
+            const Document& doc = m_documentManager->document();
+            for (const PersonId& personId : m_personModel->checkedPersonIds())
+            {
+                auto familyId = doc.familyIdForPerson(personId);
+                if (familyId)
+                {
+                    familyIds.insert(*familyId);
+                }
+            }
+        }
+        return familyIds;
+    }
+
+    // Single-select: highlight current selection
     QModelIndex current = m_treeView->currentIndex();
     if (!current.isValid())
     {
-        return std::nullopt;
+        return {};
     }
 
     if (m_mode == FamilyMode && m_familyModel)
     {
-        return m_familyModel->familyIdAt(current);
+        auto id = m_familyModel->familyIdAt(current);
+        if (id)
+        {
+            return {*id};
+        }
     }
     else if (m_personModel)
     {
-        // Look up family for selected person
         auto personId = m_personModel->personIdAt(current);
         if (personId)
         {
-            return m_documentManager->document().familyIdForPerson(*personId);
+            auto familyId = m_documentManager->document().familyIdForPerson(*personId);
+            if (familyId)
+            {
+                return {*familyId};
+            }
         }
     }
-    return std::nullopt;
+    return {};
 }
 
 HighlightInfo WardListDialog::highlightInfo() const
 {
     HighlightInfo info;
-    auto familyId = familyIdForCurrentSelection();
-    if (familyId)
-    {
-        info.highlightedFamilyIds.insert(*familyId);
-    }
+    info.highlightedFamilyIds = highlightedFamilyIds();
     return info;
 }
 
@@ -278,7 +283,7 @@ std::optional<FamilyId> WardListDialog::selectFamily(DocumentManager* documentMa
                                      QWidget* parent)
 {
     WardListDialog dialog(documentManager, FamilyMode, parent);
-    dialog.setSelectionMode(SingleSelect);
+    dialog.setWindowTitle(tr("Select Family"));
     if (initialId)
     {
         dialog.setPreselectedFamilyIds({*initialId});
@@ -292,22 +297,38 @@ std::optional<FamilyId> WardListDialog::selectFamily(DocumentManager* documentMa
     return std::nullopt;
 }
 
-QList<FamilyId> WardListDialog::selectFamilies(DocumentManager* documentManager,
-                                           const QList<FamilyId>& initialIds,
-                                           QWidget* parent)
+std::optional<QList<FamilyId>> WardListDialog::selectFamilies(
+    DocumentManager* documentManager,
+    const QString& title,
+    const QList<FamilyId>& initialIds,
+    QWidget* parent)
 {
     WardListDialog dialog(documentManager, FamilyMode, parent);
-    dialog.setSelectionMode(MultiSelect);
+    dialog.setWindowTitle(tr("Select Families") + QString::fromUtf8(" \u2014 ") + title);
+    dialog.m_checkable = true;
+    dialog.m_familyModel->setCheckable(true);
+    connect(dialog.m_familyModel, &FamilyTreeModel::dataChanged,
+            dialog.m_mapWidget, &MapWidget::updateHighlights);
     if (!initialIds.isEmpty())
     {
-        dialog.setPreselectedFamilyIds(initialIds);
+        QSet<FamilyId> idSet(initialIds.begin(), initialIds.end());
+        dialog.m_familyModel->setCheckedFamilyIds(idSet);
+
+        // Scroll to first checked family
+        QModelIndex firstIndex = dialog.m_familyModel->indexForFamilyId(initialIds.first());
+        if (firstIndex.isValid())
+        {
+            dialog.m_treeView->scrollTo(firstIndex);
+        }
     }
 
-    if (dialog.exec() == QDialog::Accepted)
+    if (dialog.exec() != QDialog::Accepted)
     {
-        return dialog.selectedFamilyIds();
+        return std::nullopt;
     }
-    return {};
+
+    QSet<FamilyId> checked = dialog.m_familyModel->checkedFamilyIds();
+    return QList<FamilyId>(checked.begin(), checked.end());
 }
 
 std::optional<PersonId> WardListDialog::selectPerson(DocumentManager* documentManager,
@@ -315,7 +336,7 @@ std::optional<PersonId> WardListDialog::selectPerson(DocumentManager* documentMa
                                      QWidget* parent)
 {
     WardListDialog dialog(documentManager, PersonMode, parent);
-    dialog.setSelectionMode(SingleSelect);
+    dialog.setWindowTitle(tr("Select Person"));
     if (initialId)
     {
         dialog.setPreselectedPersonIds({*initialId});
@@ -329,20 +350,36 @@ std::optional<PersonId> WardListDialog::selectPerson(DocumentManager* documentMa
     return std::nullopt;
 }
 
-QList<PersonId> WardListDialog::selectPersons(DocumentManager* documentManager,
-                                          const QList<PersonId>& initialIds,
-                                          QWidget* parent)
+std::optional<QList<PersonId>> WardListDialog::selectPersons(
+    DocumentManager* documentManager,
+    const QString& title,
+    const QList<PersonId>& initialIds,
+    QWidget* parent)
 {
     WardListDialog dialog(documentManager, PersonMode, parent);
-    dialog.setSelectionMode(MultiSelect);
+    dialog.setWindowTitle(tr("Select People") + QString::fromUtf8(" \u2014 ") + title);
+    dialog.m_checkable = true;
+    dialog.m_personModel->setCheckable(true);
+    connect(dialog.m_personModel, &PersonTreeModel::dataChanged,
+            dialog.m_mapWidget, &MapWidget::updateHighlights);
     if (!initialIds.isEmpty())
     {
-        dialog.setPreselectedPersonIds(initialIds);
+        QSet<PersonId> idSet(initialIds.begin(), initialIds.end());
+        dialog.m_personModel->setCheckedPersonIds(idSet);
+
+        // Scroll to first checked person
+        QModelIndex firstIndex = dialog.m_personModel->indexForPersonId(initialIds.first());
+        if (firstIndex.isValid())
+        {
+            dialog.m_treeView->scrollTo(firstIndex);
+        }
     }
 
-    if (dialog.exec() == QDialog::Accepted)
+    if (dialog.exec() != QDialog::Accepted)
     {
-        return dialog.selectedPersonIds();
+        return std::nullopt;
     }
-    return {};
+
+    QSet<PersonId> checked = dialog.m_personModel->checkedPersonIds();
+    return QList<PersonId>(checked.begin(), checked.end());
 }
