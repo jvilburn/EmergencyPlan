@@ -134,7 +134,7 @@ void TeamsView::onContextMenu(const QPoint& pos)
             m_contextTeamId = m_model->teamIdAt(index);
             if (m_contextTeamId)
             {
-                menu.addAction(tr("Edit..."), this, &TeamsView::selectMembersFromContextMenu);
+                menu.addAction(tr("Edit..."), this, &TeamsView::editTeamFromContextMenu);
                 menu.addSeparator();
                 menu.addAction(tr("Delete"), this, &TeamsView::deleteTeam);
             }
@@ -216,7 +216,7 @@ void TeamsView::expandTeams()
     m_tree->expandToDepth(0);
 }
 
-void TeamsView::selectMembersFromContextMenu()
+void TeamsView::editTeamFromContextMenu()
 {
     std::optional<TeamId> teamId = m_contextTeamId;
     m_contextTeamId = std::nullopt;
