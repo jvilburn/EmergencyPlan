@@ -4,6 +4,7 @@
 #include "DocumentChange.h"
 
 #include <QList>
+#include <QSet>
 #include <QString>
 
 class DocumentManager;
@@ -83,6 +84,17 @@ public:
 
     DocumentManager* documentManager() const { return m_documentManager; }
 
+    /// Enable checkbox mode for multi-select dialogs.
+    void setCheckable(bool checkable);
+
+    /// Set/get checked family IDs (only meaningful when checkable).
+    void setCheckedFamilyIds(const QSet<FamilyId>& ids);
+    QSet<FamilyId> checkedFamilyIds() const;
+
+    // QAbstractItemModel overrides for checkboxes
+    Qt::ItemFlags flags(const QModelIndex& index) const override;
+    bool setData(const QModelIndex& index, const QVariant& value, int role = Qt::EditRole) override;
+
 signals:
     void familyListChanged();
 
@@ -121,4 +133,6 @@ private:
     QList<TreeNode*> m_familyNodes;  // Top-level nodes (owned)
     DocumentManager* m_documentManager;
     Filter* m_filter;
+    bool m_checkable = false;
+    QSet<FamilyId> m_checkedIds;
 };

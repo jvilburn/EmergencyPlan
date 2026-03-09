@@ -664,6 +664,15 @@ QVariant FamilyTreeModel::data(const QModelIndex& index, int role) const
             }
             return node->displayText;
 
+        case Qt::CheckStateRole:
+            if (m_checkable && node->type == RowType::Family)
+            {
+                FamilyId familyId = m_familyIds.at(node->familyIndex);
+                return m_checkedIds.contains(familyId)
+                    ? Qt::Checked : Qt::Unchecked;
+            }
+            return QVariant();
+
         case RowTypeRole:
             return QVariant::fromValue(node->type);
 
@@ -828,4 +837,68 @@ SelectionKey FamilyTreeModel::selectionKeyAt(const QModelIndex& index) const
     default:
         return SelectionKey::literal(QString());
     }
+}
+
+void FamilyTreeModel::setCheckable(bool checkable)
+{
+    m_checkable = checkable;
+}
+
+void FamilyTreeModel::setCheckedFamilyIds(const QSet<FamilyId>& ids)
+{
+    m_checkedIds = ids;
+    if (!m_familyNodes.isEmpty())
+    {
+        emit dataChanged(
+            index(0, 0),
+            index(m_familyNodes.size() - 1, 0),
+            {Qt::CheckStateRole});
+    }
+}
+
+QSet<FamilyId> FamilyTreeModel::checkedFamilyIds() const
+{
+    return m_checkedIds;
+}
+
+Qt::ItemFlags FamilyTreeModel::flags(const QModelIndex& index) const
+{
+    Qt::ItemFlags f = BaseTreeModel::flags(index);
+    if (m_checkable && index.isValid())
+    {
+        TreeNode* node = nodeFromIndex(index);
+        if (node && node->type == RowType::Family)
+        {
+            f |= Qt::ItemIsUserCheckable;
+        }
+    }
+    return f;
+}
+
+bool FamilyTreeModel::setData(const QModelIndex& index, const QVariant& value, int role)
+{
+    if (!m_checkable || role != Qt::CheckStateRole || !index.isValid())
+    {
+        return false;
+    }
+
+    TreeNode* node = nodeFromIndex(index);
+    if (!node || node->type != RowType::Family)
+    {
+        return false;
+    }
+
+    Qt::CheckState state = static_cast<Qt::CheckState>(value.toInt());
+    FamilyId familyId = m_familyIds.at(node->familyIndex);
+    if (state == Qt::Checked)
+    {
+        m_checkedIds.insert(familyId);
+    }
+    else
+    {
+        m_checkedIds.remove(familyId);
+    }
+
+    emit dataChanged(index, index, {Qt::CheckStateRole});
+    return true;
 }
