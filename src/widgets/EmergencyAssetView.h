@@ -41,16 +41,17 @@ private slots:
     void onTreeExpanded(const QModelIndex& index);
     void onContextMenu(const QPoint& pos);
     void expandAssets();
-    void selectPeopleFromContextMenu();
+    void editAssetFromContextMenu();
     void removePersonFromContextMenu();
 
 private:
     void updateButtonStates();
 
     void addAsset();
-    void editAsset();
+    void editSelectedAsset();
     void deleteAsset();
-    void showSelectPeopleDialog(const EmergencyAssetId& assetId);
+    void showAssetDialog(const std::optional<EmergencyAssetId>& assetId);
+    QString nameLabel() const;
     void removePersonFromAsset(const EmergencyAssetId& assetId, const PersonId& personId);
 
     std::optional<EmergencyAssetId> selectedAssetId() const;
