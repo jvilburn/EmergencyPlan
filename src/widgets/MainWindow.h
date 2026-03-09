@@ -71,6 +71,8 @@ private:
     static QString settingsFilePath();
     static bool loadDefaultLocation(double& lat, double& lng);
     static void saveDefaultLocation(double lat, double lng);
+    static void saveLastDocumentPath(const QString& filePath);
+    static QString loadLastDocumentPath();
 
     // Core services
     DocumentManager* m_documentManager;

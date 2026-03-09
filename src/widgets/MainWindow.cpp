@@ -179,6 +179,8 @@ void MainWindow::setupConnections()
             this, &MainWindow::onDocumentChanged);
     connect(m_documentManager, &DocumentManager::filePathChanged,
             this, &MainWindow::updateWindowTitle);
+    connect(m_documentManager, &DocumentManager::filePathChanged,
+            this, [this]() { saveLastDocumentPath(m_documentManager->filePath()); });
     connect(m_documentManager, &DocumentManager::canUndoChanged,
             this, &MainWindow::updateUndoRedoActions);
     connect(m_documentManager, &DocumentManager::canRedoChanged,
@@ -545,6 +547,29 @@ void MainWindow::onAutoSaveFailed(const QString& errorMessage)
 // Default Location / Settings
 // ============================================================================
 
+static QJsonObject loadSettingsJson(const QString& path)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        return {};
+    }
+    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+    return doc.isObject() ? doc.object() : QJsonObject{};
+}
+
+static void saveSettingsJson(const QString& path, const QJsonObject& json)
+{
+    QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    QDir().mkpath(cacheDir);
+
+    QFile file(path);
+    if (file.open(QIODevice::WriteOnly))
+    {
+        file.write(QJsonDocument(json).toJson());
+    }
+}
+
 QString MainWindow::settingsFilePath()
 {
     QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
@@ -578,19 +603,23 @@ bool MainWindow::loadDefaultLocation(double& lat, double& lng)
 
 void MainWindow::saveDefaultLocation(double lat, double lng)
 {
-    // Ensure cache directory exists
-    QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
-    QDir().mkpath(cacheDir);
-
-    QJsonObject json;
+    QJsonObject json = loadSettingsJson(settingsFilePath());
     json["defaultLat"] = lat;
     json["defaultLng"] = lng;
+    saveSettingsJson(settingsFilePath(), json);
+}
 
-    QFile file(settingsFilePath());
-    if (file.open(QIODevice::WriteOnly))
-    {
-        file.write(QJsonDocument(json).toJson());
-    }
+void MainWindow::saveLastDocumentPath(const QString& filePath)
+{
+    QJsonObject json = loadSettingsJson(settingsFilePath());
+    json["lastDocumentPath"] = filePath;
+    saveSettingsJson(settingsFilePath(), json);
+}
+
+QString MainWindow::loadLastDocumentPath()
+{
+    QJsonObject json = loadSettingsJson(settingsFilePath());
+    return json["lastDocumentPath"].toString();
 }
 
 void MainWindow::initializeDefaultLocation()
