@@ -54,12 +54,10 @@ public:
     /// Get the name field text (trimmed).
     QString name() const;
 
-    /// Pre-select items by ID.
-    void setPreselectedFamilyIds(const QList<FamilyId>& ids);
+    /// Pre-select a person by ID (for single-select mode).
     void setPreselectedPersonIds(const QList<PersonId>& ids);
 
-    /// Get selected IDs after dialog is accepted.
-    QList<FamilyId> selectedFamilyIds() const;
+    /// Get selected person IDs after dialog is accepted (for single-select mode).
     QList<PersonId> selectedPersonIds() const;
 
     // FamilyMarkerProvider interface
@@ -69,11 +67,6 @@ public:
 
     // Static convenience methods for common use cases
 
-    /// Show dialog to select a single family. Returns nullopt if cancelled.
-    static std::optional<FamilyId> selectFamily(DocumentManager* documentManager,
-                                const std::optional<FamilyId>& initialId = std::nullopt,
-                                QWidget* parent = nullptr);
-
     /// Show dialog to select multiple families. Returns nullopt if cancelled.
     static std::optional<FamilySelectionResult> selectFamilies(
         DocumentManager* documentManager,
@@ -81,11 +74,6 @@ public:
         const QString& initialName,
         const QList<FamilyId>& initialIds = {},
         QWidget* parent = nullptr);
-
-    /// Show dialog to select a single person. Returns nullopt if cancelled.
-    static std::optional<PersonId> selectPerson(DocumentManager* documentManager,
-                                const std::optional<PersonId>& initialId = std::nullopt,
-                                QWidget* parent = nullptr);
 
     /// Show dialog to select a single person with a name field.
     /// Returns nullopt if cancelled.
