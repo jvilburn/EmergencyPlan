@@ -13,6 +13,10 @@ enum class ItemType
     // Emergency Asset types
     Asset,       // EmergencyAssetModel - asset group
 
+    // Team types
+    Team,           // TeamsTreeModel - team group
+    TeamMember,     // TeamsTreeModel - member of a team
+
     // Needs types
     Person,         // NeedsModel, EmergencyAssetModel - individual person
 

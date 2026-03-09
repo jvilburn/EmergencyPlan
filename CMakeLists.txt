@@ -304,6 +304,7 @@ set(LISTMODEL_SOURCES
     src/listmodels/UnassignedMinisteringModel.cpp
     src/listmodels/TeamListModel.cpp
     src/listmodels/TagListModel.cpp
+    src/listmodels/TeamsTreeModel.cpp
     # src/listmodels/DistrictTreeModel.cpp
     # src/listmodels/ResourceTreeModel.cpp
 )
@@ -319,6 +320,7 @@ set(LISTMODEL_HEADERS
     src/listmodels/UnassignedMinisteringModel.h
     src/listmodels/TeamListModel.h
     src/listmodels/TagListModel.h
+    src/listmodels/TeamsTreeModel.h
     # src/listmodels/DistrictTreeModel.h
     # src/listmodels/ResourceTreeModel.h
 )
