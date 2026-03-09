@@ -91,9 +91,16 @@ void TeamsView::onTreeDoubleClicked(const QModelIndex& index)
 {
     ItemType type = m_model->itemTypeAt(index);
 
-    if (type == ItemType::Team)
+    switch (type)
     {
+    case ItemType::Team:
         editTeam();
+        break;
+
+    case ItemType::TeamMember:
+    case ItemType::ContactDetail:
+    case ItemType::Invalid:
+        break;
     }
 }
 
@@ -121,7 +128,9 @@ void TeamsView::onContextMenu(const QPoint& pos)
     {
         ItemType type = m_model->itemTypeAt(index);
 
-        if (type == ItemType::Team)
+        switch (type)
+        {
+        case ItemType::Team:
         {
             m_contextTeamId = m_model->teamIdAt(index);
             if (m_contextTeamId)
@@ -131,58 +140,67 @@ void TeamsView::onContextMenu(const QPoint& pos)
                 menu.addAction(tr("Rename..."), this, &TeamsView::editTeam);
                 menu.addAction(tr("Delete"), this, &TeamsView::deleteTeam);
             }
+            break;
         }
-        else if (type == ItemType::TeamMember)
+
+        case ItemType::TeamMember:
         {
             // Show contact info (disabled) if available
             std::optional<PersonId> personIdOpt = m_model->personIdAt(index);
-            if (personIdOpt)
+            if (!personIdOpt)
             {
-                const Document& doc = m_documentManager->document();
-                PersonId personId = *personIdOpt;
-                std::optional<Person> personOpt = doc.findPersonById(personId);
-                if (personOpt)
+                break;
+            }
+            const Document& doc = m_documentManager->document();
+            PersonId personId = *personIdOpt;
+            std::optional<Person> personOpt = doc.findPersonById(personId);
+            if (personOpt)
+            {
+                const Phone& phone = personOpt->phone();
+                if (!phone.isEmpty())
                 {
-                    const Phone& phone = personOpt->phone();
-                    if (!phone.isEmpty())
-                    {
-                        QAction* phoneAction = menu.addAction(phone);
-                        phoneAction->setEnabled(false);
-                    }
-                    const QString& email = personOpt->email();
-                    if (!email.isEmpty())
-                    {
-                        QAction* emailAction = menu.addAction(email);
-                        emailAction->setEnabled(false);
-                    }
-                    if (!phone.isEmpty() || !email.isEmpty())
-                    {
-                        menu.addSeparator();
-                    }
+                    QAction* phoneAction = menu.addAction(phone);
+                    phoneAction->setEnabled(false);
                 }
-
-                m_contextTeamId = m_model->teamIdAt(index);
-                m_contextPersonId = personId;
-                if (m_contextTeamId)
+                const QString& email = personOpt->email();
+                if (!email.isEmpty())
                 {
-                    // Leader actions
-                    std::optional<Team> teamOpt = doc.findTeamById(*m_contextTeamId);
-                    if (teamOpt)
-                    {
-                        bool isLeader = teamOpt->leaderId() && *teamOpt->leaderId() == personId;
-                        if (isLeader)
-                        {
-                            menu.addAction(tr("Clear Leader"), this, &TeamsView::clearLeaderFromContextMenu);
-                        }
-                        else
-                        {
-                            menu.addAction(tr("Set as Leader"), this, &TeamsView::setLeaderFromContextMenu);
-                        }
-                    }
-
-                    menu.addAction(tr("Remove from Team"), this, &TeamsView::removeMemberFromContextMenu);
+                    QAction* emailAction = menu.addAction(email);
+                    emailAction->setEnabled(false);
+                }
+                if (!phone.isEmpty() || !email.isEmpty())
+                {
+                    menu.addSeparator();
                 }
             }
+
+            m_contextTeamId = m_model->teamIdAt(index);
+            m_contextPersonId = personId;
+            if (m_contextTeamId)
+            {
+                // Leader actions
+                std::optional<Team> teamOpt = doc.findTeamById(*m_contextTeamId);
+                if (teamOpt)
+                {
+                    bool isLeader = teamOpt->leaderId() && *teamOpt->leaderId() == personId;
+                    if (isLeader)
+                    {
+                        menu.addAction(tr("Clear Leader"), this, &TeamsView::clearLeaderFromContextMenu);
+                    }
+                    else
+                    {
+                        menu.addAction(tr("Set as Leader"), this, &TeamsView::setLeaderFromContextMenu);
+                    }
+                }
+
+                menu.addAction(tr("Remove from Team"), this, &TeamsView::removeMemberFromContextMenu);
+            }
+            break;
+        }
+
+        case ItemType::ContactDetail:
+        case ItemType::Invalid:
+            break;
         }
     }
 
