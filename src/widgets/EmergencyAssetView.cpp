@@ -352,20 +352,22 @@ void EmergencyAssetView::showSelectPeopleDialog(const EmergencyAssetId& assetId)
         return;
     }
 
-    // Get current person IDs as a list
     QList<PersonId> currentIds = assetOpt->personIds().values();
 
-    // Show dialog to select persons
-    QList<PersonId> selectedIds = WardListDialog::selectPersons(m_documentManager, currentIds, this);
+    auto result = WardListDialog::selectPersons(
+        m_documentManager, assetOpt->name(), currentIds, this);
 
-    // Check if selection changed
-    QSet<PersonId> newSet(selectedIds.begin(), selectedIds.end());
+    if (!result)
+    {
+        return;  // Cancelled
+    }
+
+    QSet<PersonId> newSet(result->begin(), result->end());
     if (newSet == assetOpt->personIds())
     {
         return;  // No change
     }
 
-    // Update asset with new person IDs (single undo operation)
     EmergencyAsset updated = *assetOpt;
     updated.setPersonIds(newSet);
     m_documentManager->executeCommand(

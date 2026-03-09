@@ -383,24 +383,18 @@ void TeamsView::showSelectMembersDialog(const TeamId& teamId)
 
     QList<PersonId> currentIds = teamOpt->memberIds().values();
 
-    // Use dialog directly to distinguish cancel from empty selection
-    WardListDialog dialog(m_documentManager, WardListDialog::PersonMode, this);
-    dialog.setSelectionMode(WardListDialog::MultiSelect);
-    if (!currentIds.isEmpty())
+    auto result = WardListDialog::selectPersons(
+        m_documentManager, teamOpt->name(), currentIds, this);
+
+    if (!result)
     {
-        dialog.setPreselectedPersonIds(currentIds);
+        return;  // Cancelled
     }
 
-    if (dialog.exec() != QDialog::Accepted)
-    {
-        return;
-    }
-
-    QList<PersonId> selectedIds = dialog.selectedPersonIds();
-    QSet<PersonId> newSet(selectedIds.begin(), selectedIds.end());
+    QSet<PersonId> newSet(result->begin(), result->end());
     if (newSet == teamOpt->memberIds())
     {
-        return;
+        return;  // No change
     }
 
     Team updated = *teamOpt;
