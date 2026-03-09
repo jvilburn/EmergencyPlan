@@ -295,6 +295,14 @@ QVariant PersonTreeModel::data(const QModelIndex& index, int role) const
     case Qt::DisplayRole:
         return node->displayText;
 
+    case Qt::CheckStateRole:
+        if (m_checkable && node->type == ItemType::Person)
+        {
+            return m_checkedIds.contains(node->personId)
+                ? Qt::Checked : Qt::Unchecked;
+        }
+        return QVariant();
+
     case PersonIdRole:
         return node->personId.toString();
 
@@ -370,4 +378,68 @@ QModelIndex PersonTreeModel::indexForPersonId(const PersonId& personId) const
         }
     }
     return QModelIndex();
+}
+
+void PersonTreeModel::setCheckable(bool checkable)
+{
+    m_checkable = checkable;
+}
+
+void PersonTreeModel::setCheckedPersonIds(const QSet<PersonId>& ids)
+{
+    m_checkedIds = ids;
+    // Refresh all check states
+    if (!m_personNodes.isEmpty())
+    {
+        emit dataChanged(
+            index(0, 0),
+            index(m_personNodes.size() - 1, 0),
+            {Qt::CheckStateRole});
+    }
+}
+
+QSet<PersonId> PersonTreeModel::checkedPersonIds() const
+{
+    return m_checkedIds;
+}
+
+Qt::ItemFlags PersonTreeModel::flags(const QModelIndex& index) const
+{
+    Qt::ItemFlags f = BaseTreeModel::flags(index);
+    if (m_checkable && index.isValid())
+    {
+        TreeNode* node = nodeFromIndex(index);
+        if (node && node->type == ItemType::Person)
+        {
+            f |= Qt::ItemIsUserCheckable;
+        }
+    }
+    return f;
+}
+
+bool PersonTreeModel::setData(const QModelIndex& index, const QVariant& value, int role)
+{
+    if (!m_checkable || role != Qt::CheckStateRole || !index.isValid())
+    {
+        return false;
+    }
+
+    TreeNode* node = nodeFromIndex(index);
+    if (!node || node->type != ItemType::Person)
+    {
+        return false;
+    }
+
+    Qt::CheckState state = static_cast<Qt::CheckState>(value.toInt());
+    if (state == Qt::Checked)
+    {
+        m_checkedIds.insert(node->personId);
+    }
+    else
+    {
+        m_checkedIds.remove(node->personId);
+    }
+
+    emit dataChanged(index, index, {Qt::CheckStateRole});
+    return true;
 }
