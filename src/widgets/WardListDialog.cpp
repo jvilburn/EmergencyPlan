@@ -323,7 +323,7 @@ std::optional<FamilySelectionResult> WardListDialog::selectFamilies(
     QWidget* parent)
 {
     WardListDialog dialog(documentManager, FamilyMode, true, parent);
-    dialog.setWindowTitle(tr("Select Families") + QString::fromUtf8(" \u2014 ") + nameLabel);
+    dialog.setWindowTitle(tr("Select Families \u2014 %1").arg(nameLabel));
     dialog.m_nameLabel->setText(nameLabel + tr(":"));
     dialog.m_nameEdit->setText(initialName);
     connect(dialog.m_familyModel, &FamilyTreeModel::dataChanged,
@@ -380,7 +380,7 @@ std::optional<PersonSelectionResult> WardListDialog::selectPersonWithName(
     QWidget* parent)
 {
     WardListDialog dialog(documentManager, PersonMode, false, parent);
-    dialog.setWindowTitle(tr("Select Person") + QString::fromUtf8(" \u2014 ") + nameLabel);
+    dialog.setWindowTitle(tr("Select Person \u2014 %1").arg(nameLabel));
     dialog.m_nameLabel->setText(nameLabel + tr(":"));
     dialog.m_nameEdit->setText(initialName);
     if (initialId)
@@ -408,7 +408,7 @@ std::optional<PersonSelectionResult> WardListDialog::selectPersons(
     QWidget* parent)
 {
     WardListDialog dialog(documentManager, PersonMode, true, parent);
-    dialog.setWindowTitle(tr("Select People") + QString::fromUtf8(" \u2014 ") + nameLabel);
+    dialog.setWindowTitle(tr("Select People \u2014 %1").arg(nameLabel));
     dialog.m_nameLabel->setText(nameLabel + tr(":"));
     dialog.m_nameEdit->setText(initialName);
     connect(dialog.m_personModel, &PersonTreeModel::dataChanged,

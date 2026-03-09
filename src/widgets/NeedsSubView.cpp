@@ -149,10 +149,7 @@ void NeedsSubView::onContextMenu(const QPoint& pos)
     menu.addAction(tr("Edit..."), this, &NeedsSubView::editNeedFromContextMenu);
     menu.addAction(tr("Delete"), this, &NeedsSubView::deleteNeedFromContextMenu);
 
-    if (!menu.isEmpty())
-    {
-        menu.exec(m_tree->viewport()->mapToGlobal(pos));
-    }
+    menu.exec(m_tree->viewport()->mapToGlobal(pos));
 
     m_contextPersonId = std::nullopt;
     m_contextFamilyId = std::nullopt;
