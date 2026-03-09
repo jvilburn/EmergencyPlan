@@ -58,6 +58,15 @@ MainWindow::MainWindow(QWidget* parent)
     setupUi();
     setupMenus();
     setupConnections();
+
+    // Auto-load last document
+    QString lastPath = loadLastDocumentPath();
+    if (!lastPath.isEmpty() && QFile::exists(lastPath))
+    {
+        m_documentManager->openDocument(lastPath);
+        m_mapWidget->fitAllFamilies();
+    }
+
     initializeDefaultLocation();
     updateWindowTitle();
     updateUndoRedoActions();
