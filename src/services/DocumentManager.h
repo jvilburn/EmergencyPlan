@@ -47,6 +47,10 @@ public:
     bool saveDocument(QString* errorMessage);
     bool saveDocumentAs(const QString& filePath, QString* errorMessage);
 
+    // Emergency response data (saves without affecting command history dirty state)
+    void setEmergencyResponse(const std::optional<EmergencyResponse>& response);
+    bool saveDocumentOnly();
+
     // Geocoding
     void startBatchGeocoding();
     void stopGeocoding();

@@ -294,6 +294,32 @@ void DocumentManager::onGeocodingFinished()
 }
 
 // ============================================================================
+// Emergency Response Data
+// ============================================================================
+
+void DocumentManager::setEmergencyResponse(const std::optional<EmergencyResponse>& response)
+{
+    m_document.setEmergencyResponse(response);
+    saveDocumentOnly();
+}
+
+bool DocumentManager::saveDocumentOnly()
+{
+    if (m_filePath.isEmpty())
+    {
+        return false;
+    }
+    QString errorMessage;
+    if (!JsonService::saveDocument(m_filePath, m_document, &errorMessage))
+    {
+        qWarning() << "Response data save failed:" << errorMessage;
+        emit autoSaveFailed(errorMessage);
+        return false;
+    }
+    return true;
+}
+
+// ============================================================================
 // Auto-Save
 // ============================================================================
 

@@ -14,6 +14,7 @@
 #include "MinisteringDistrict.h"
 #include "MinisteringGroup.h"
 #include "EmergencyAsset.h"
+#include "EmergencyResponse.h"
 #include "ResponseArea.h"
 #include <QSet>
 
@@ -140,6 +141,12 @@ public:
     void cleanupPersonReferences(const PersonId& personId);
 
     // ========================================================================
+    // Emergency response data (optional - only present during active emergency)
+    // ========================================================================
+    const std::optional<EmergencyResponse>& emergencyResponse() const { return m_emergencyResponse; }
+    void setEmergencyResponse(const std::optional<EmergencyResponse>& response);
+
+    // ========================================================================
     // Lookup helpers
     // ========================================================================
     std::optional<Family> findFamilyById(const FamilyId& id) const;
@@ -197,6 +204,9 @@ private:
     // Import dates (for conflict resolution)
     std::optional<QDate> m_wardDirectoryPdfDate;
     std::optional<QDate> m_ministeringPdfDate;
+
+    // Emergency response data (only present during active emergency)
+    std::optional<EmergencyResponse> m_emergencyResponse;
 
     // Decoration cache: personId -> set of response areas (rebuilt when emergency assets change)
     QHash<PersonId, QSet<ResponseArea>> m_personResponseAreas;

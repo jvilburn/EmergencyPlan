@@ -170,6 +170,7 @@ set(SERVICE_SOURCES
     src/services/GeocodingService.cpp
     src/services/BackgroundGeocodingService.cpp
     src/services/GeoLocation.cpp
+    src/services/EmergencyManager.cpp
     # src/services/StatisticsService.cpp
     # src/services/ResourceService.cpp
     # src/services/SearchService.cpp
@@ -194,6 +195,7 @@ set(SERVICE_HEADERS
     src/services/GeocodingService.h
     src/services/BackgroundGeocodingService.h
     src/services/GeoLocation.h
+    src/services/EmergencyManager.h
     # src/services/StatisticsService.h
     # src/services/ResourceService.h
     # src/services/SearchService.h

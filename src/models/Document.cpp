@@ -606,6 +606,12 @@ QJsonObject Document::toJson() const
         json["ministeringPdfDate"] = m_ministeringPdfDate->toString(Qt::ISODate);
     }
 
+    // Emergency response data
+    if (m_emergencyResponse.has_value())
+    {
+        json["responseData"] = m_emergencyResponse->toJson();
+    }
+
     return json;
 }
 
@@ -653,9 +659,20 @@ Document Document::fromJson(const QJsonObject& json)
         }
     }
 
+    // Emergency response data
+    if (json.contains("responseData"))
+    {
+        document.m_emergencyResponse = EmergencyResponse::fromJson(json["responseData"].toObject());
+    }
+
     // Note: lookup caches are built by DocumentManager::setDocument() via onDocumentChanged()
 
     return document;
+}
+
+void Document::setEmergencyResponse(const std::optional<EmergencyResponse>& response)
+{
+    m_emergencyResponse = response;
 }
 
 bool Document::operator==(const Document& other) const
@@ -670,5 +687,6 @@ bool Document::operator==(const Document& other) const
         && m_rsDistricts == other.m_rsDistricts
         && m_rsGroups == other.m_rsGroups
         && m_wardDirectoryPdfDate == other.m_wardDirectoryPdfDate
-        && m_ministeringPdfDate == other.m_ministeringPdfDate;
+        && m_ministeringPdfDate == other.m_ministeringPdfDate
+        && m_emergencyResponse == other.m_emergencyResponse;
 }
