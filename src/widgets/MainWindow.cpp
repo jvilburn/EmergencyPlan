@@ -10,6 +10,7 @@
 #include "MapWidget.h"
 #include "FamilyMarkerProvider.h"
 #include "DocumentManager.h"
+#include "EmergencyManager.h"
 #include "FamilyCommands.h"
 #include "ImportWardDirectoryCommand.h"
 #include "ImportEQMinisteringCommand.h"
@@ -25,6 +26,8 @@
 #include <QStatusBar>
 #include <QVBoxLayout>
 #include <QFileDialog>
+#include <QInputDialog>
+#include <QLineEdit>
 #include <QMessageBox>
 #include <QLabel>
 #include <QProgressBar>
@@ -37,6 +40,7 @@
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
     , m_documentManager(new DocumentManager(this))
+    , m_emergencyManager(new EmergencyManager(m_documentManager, this))
 {
     setupUi();
     setupMenus();
@@ -165,6 +169,12 @@ void MainWindow::setupMenus()
 
     fileMenu->addSeparator();
 
+    m_startEmergencyAction = fileMenu->addAction(tr("Start &Emergency..."), this, &MainWindow::onStartEmergency);
+    m_endEmergencyAction = fileMenu->addAction(tr("&End Emergency..."), this, &MainWindow::onEndEmergency);
+    m_endEmergencyAction->setEnabled(false);
+
+    fileMenu->addSeparator();
+
     m_exitAction = fileMenu->addAction(tr("E&xit"), this, &QMainWindow::close);
     m_exitAction->setShortcut(QKeySequence::Quit);
 
@@ -190,6 +200,12 @@ void MainWindow::setupConnections()
             this, &MainWindow::updateUndoRedoActions);
     connect(m_documentManager, &DocumentManager::canRedoChanged,
             this, &MainWindow::updateUndoRedoActions);
+
+    // Emergency lifecycle
+    connect(m_emergencyManager, &EmergencyManager::emergencyStarted,
+            this, &MainWindow::updateEmergencyActions);
+    connect(m_emergencyManager, &EmergencyManager::emergencyEnded,
+            this, &MainWindow::updateEmergencyActions);
 
     // Sidebar tab changes
     connect(m_sidebarTabs, &SidebarWidget::currentChanged,
@@ -858,3 +874,67 @@ void MainWindow::closeEditPanelInternal()
     m_splitter->setSizes(sizes);
 }
 
+// ============================================================================
+// Emergency Lifecycle
+// ============================================================================
+
+void MainWindow::onStartEmergency()
+{
+    bool ok;
+    QString name = QInputDialog::getText(
+        this,
+        tr("Start Emergency"),
+        tr("Emergency name:"),
+        QLineEdit::Normal,
+        QString(),
+        &ok);
+
+    if (!ok || name.trimmed().isEmpty())
+    {
+        return;
+    }
+
+    m_emergencyManager->startEmergency(name.trimmed());
+}
+
+void MainWindow::onEndEmergency()
+{
+    // Custom dialog with Archive & End, Discard & End, Cancel
+    QMessageBox dialog(this);
+    dialog.setWindowTitle(tr("End Emergency"));
+    dialog.setText(tr("End \"%1\"?").arg(m_emergencyManager->response().name()));
+    dialog.setIcon(QMessageBox::Question);
+
+    QPushButton* archiveButton = dialog.addButton(tr("Archive && End"), QMessageBox::AcceptRole);
+    QPushButton* discardButton = dialog.addButton(tr("Discard && End"), QMessageBox::DestructiveRole);
+    dialog.addButton(QMessageBox::Cancel);
+
+    dialog.exec();
+
+    QAbstractButton* clicked = dialog.clickedButton();
+    if (clicked == archiveButton)
+    {
+        m_emergencyManager->endEmergency(true);
+    }
+    else if (clicked == discardButton)
+    {
+        QMessageBox::StandardButton confirm = QMessageBox::warning(
+            this,
+            tr("Discard Response Data"),
+            tr("This will permanently delete all response data for this emergency. Continue?"),
+            QMessageBox::Yes | QMessageBox::No,
+            QMessageBox::No);
+
+        if (confirm == QMessageBox::Yes)
+        {
+            m_emergencyManager->endEmergency(false);
+        }
+    }
+}
+
+void MainWindow::updateEmergencyActions()
+{
+    bool active = m_emergencyManager->isActive();
+    m_startEmergencyAction->setEnabled(!active);
+    m_endEmergencyAction->setEnabled(active);
+}

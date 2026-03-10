@@ -17,6 +17,7 @@ class MinisteringView;
 class NeedsSubView;
 class SidebarWidget;
 class TeamsView;
+class EmergencyManager;
 class GeoLocation;
 
 class MainWindow : public QMainWindow
@@ -51,6 +52,11 @@ private slots:
     // GeoLocation
     void onLocationReady(double latitude, double longitude);
 
+    // Emergency lifecycle
+    void onStartEmergency();
+    void onEndEmergency();
+    void updateEmergencyActions();
+
     // Sidebar tabs
     void onSidebarTabChanged(int index);
 
@@ -78,6 +84,7 @@ private:
 
     // Core services
     DocumentManager* m_documentManager;
+    EmergencyManager* m_emergencyManager;
 
     // Widgets
     QSplitter* m_splitter;
@@ -99,6 +106,8 @@ private:
     QAction* m_saveAsAction;
     QAction* m_importPdfAction;
     QAction* m_importMinisteringPdfAction;
+    QAction* m_startEmergencyAction;
+    QAction* m_endEmergencyAction;
     QAction* m_exitAction;
     QAction* m_undoAction;
     QAction* m_redoAction;
