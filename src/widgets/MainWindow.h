@@ -17,6 +17,7 @@ class MinisteringView;
 class NeedsSubView;
 class SidebarWidget;
 class TeamsView;
+class EmergencyBanner;
 class EmergencyManager;
 class GeoLocation;
 
@@ -55,6 +56,8 @@ private slots:
     // Emergency lifecycle
     void onStartEmergency();
     void onEndEmergency();
+    void onEmergencyStarted();
+    void onEmergencyEnded();
     void updateEmergencyActions();
 
     // Sidebar tabs
@@ -88,6 +91,7 @@ private:
 
     // Widgets
     QSplitter* m_splitter;
+    EmergencyBanner* m_emergencyBanner;
     SidebarWidget* m_sidebarTabs;
     WardListView* m_wardListView;
     MinisteringView* m_ministeringView;

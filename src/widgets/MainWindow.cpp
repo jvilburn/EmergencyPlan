@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "EmergencyBanner.h"
 #include "WardListView.h"
 #include "MinisteringView.h"
 #include "NeedsSubView.h"
@@ -81,9 +82,18 @@ void MainWindow::setupUi()
 {
     resize(1400, 900);
 
-    // Central widget with splitter
-    m_splitter = new QSplitter(Qt::Horizontal, this);
-    setCentralWidget(m_splitter);
+    // Central widget with banner and splitter
+    QWidget* centralContainer = new QWidget(this);
+    QVBoxLayout* centralLayout = new QVBoxLayout(centralContainer);
+    centralLayout->setContentsMargins(0, 0, 0, 0);
+    centralLayout->setSpacing(0);
+
+    m_emergencyBanner = new EmergencyBanner(centralContainer);
+    m_splitter = new QSplitter(Qt::Horizontal, centralContainer);
+
+    centralLayout->addWidget(m_emergencyBanner);
+    centralLayout->addWidget(m_splitter, 1);
+    setCentralWidget(centralContainer);
 
     // Sidebar navigation (two-row button bar)
     m_sidebarTabs = new SidebarWidget(4, m_splitter);
@@ -204,9 +214,9 @@ void MainWindow::setupConnections()
 
     // Emergency lifecycle
     connect(m_emergencyManager, &EmergencyManager::emergencyStarted,
-            this, &MainWindow::updateEmergencyActions);
+            this, &MainWindow::onEmergencyStarted);
     connect(m_emergencyManager, &EmergencyManager::emergencyEnded,
-            this, &MainWindow::updateEmergencyActions);
+            this, &MainWindow::onEmergencyEnded);
 
     // Sidebar tab changes
     connect(m_sidebarTabs, &SidebarWidget::currentChanged,
@@ -942,6 +952,18 @@ void MainWindow::onEndEmergency()
             statusBar()->showMessage(tr("Emergency \"%1\" ended").arg(emergencyName), 5000);
         }
     }
+}
+
+void MainWindow::onEmergencyStarted()
+{
+    m_emergencyBanner->setEmergencyName(m_emergencyManager->response().name());
+    updateEmergencyActions();
+}
+
+void MainWindow::onEmergencyEnded()
+{
+    m_emergencyBanner->hide();
+    updateEmergencyActions();
 }
 
 void MainWindow::updateEmergencyActions()
