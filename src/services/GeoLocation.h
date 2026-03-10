@@ -6,7 +6,7 @@
 class GeoLocation : public QObject {
     Q_OBJECT
 public:
-    explicit GeoLocation(QObject *parent = nullptr);
+    explicit GeoLocation(QObject *parent);
     void requestLocation();
 
 signals:

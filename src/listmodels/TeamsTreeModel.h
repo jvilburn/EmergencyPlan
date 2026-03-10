@@ -33,7 +33,7 @@ public:
 
     explicit TeamsTreeModel(DocumentManager* documentManager,
                             Filter* filter,
-                            QObject* parent = nullptr);
+                            QObject* parent);
     ~TeamsTreeModel() override;
 
     // QAbstractItemModel interface

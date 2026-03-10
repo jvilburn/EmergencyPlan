@@ -20,7 +20,7 @@ class UnmappedPanel : public QWidget
 
 public:
     explicit UnmappedPanel(DocumentManager* docManager, MapViewModel* viewModel,
-                           QWidget* parent = nullptr);
+                           QWidget* parent);
 
     /// Returns true if there are unmapped families to show
     bool hasUnmappedFamilies() const;

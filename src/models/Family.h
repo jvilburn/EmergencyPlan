@@ -18,18 +18,18 @@ public:
     Family() = default;
 
     // Factory method for creating new families
-    static Family create(std::optional<double> latitude = std::nullopt,
-                         std::optional<double> longitude = std::nullopt,
-                         const Address& address = Address(),
-                         const QList<Person>& members = QList<Person>());
+    static Family create(std::optional<double> latitude,
+                         std::optional<double> longitude,
+                         const Address& address,
+                         const QList<Person>& members);
 
     // Factory method for creating families with a specific ID (used for ID preservation)
     static Family createWithId(
         const FamilyId& id,
-        std::optional<double> latitude = std::nullopt,
-        std::optional<double> longitude = std::nullopt,
-        const Address& address = Address(),
-        const QList<Person>& members = QList<Person>());
+        std::optional<double> latitude,
+        std::optional<double> longitude,
+        const Address& address,
+        const QList<Person>& members);
 
     // Getters
     const FamilyId& id() const { return m_id; }

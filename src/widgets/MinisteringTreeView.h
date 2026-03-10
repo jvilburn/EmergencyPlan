@@ -15,7 +15,7 @@ class MinisteringTreeView : public QWidget, public FamilyMarkerProvider
     Q_OBJECT
 
 public:
-    explicit MinisteringTreeView(MinisteringModel* model, QWidget* parent = nullptr);
+    explicit MinisteringTreeView(MinisteringModel* model, QWidget* parent);
 
     HighlightInfo highlightInfo() const override;
     QSet<FamilyId> visibleFamilyIds() const override;

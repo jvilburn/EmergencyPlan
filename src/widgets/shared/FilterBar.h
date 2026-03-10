@@ -19,7 +19,7 @@ class FilterBar : public QWidget
     Q_OBJECT
 
 public:
-    explicit FilterBar(DocumentManager* docMgr, QWidget* parent = nullptr);
+    explicit FilterBar(DocumentManager* docMgr, QWidget* parent);
 
     /// Get the Filter object for connecting to models.
     Filter* filter() const { return m_filter; }

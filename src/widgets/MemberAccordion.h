@@ -16,7 +16,7 @@ class MemberAccordion : public QWidget
     Q_OBJECT
 
 public:
-    explicit MemberAccordion(QWidget* parent = nullptr);
+    explicit MemberAccordion(QWidget* parent);
 
     void setMembers(const QList<Person>& members);
     QList<Person> members() const;
@@ -37,7 +37,7 @@ private:
         bool expanded;
     };
 
-    void addMemberRow(const Person& person, bool expanded = false);
+    void addMemberRow(const Person& person, bool expanded);
     void toggleRow(int index);
     void updateHeaderText(int index);
 

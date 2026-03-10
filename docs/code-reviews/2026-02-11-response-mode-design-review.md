@@ -22,25 +22,25 @@ Review of [2026-01-07-response-mode-design.md](../plans/2026-01-07-response-mode
 
 **Resolution:** Two optional fields: `std::optional<TeamId> assignedTeamId` + `std::optional<PersonId> assignedPersonId`, at most one populated. Uses strong ID types (`StrongId<Tag>` template) — a prerequisite refactor to convert existing `QString` IDs to `FamilyId`, `PersonId`, `TeamId`, etc. will be designed and planned separately before response mode implementation begins. Design doc updated.
 
-### 3. "Who" Field on Contact Attempts
+### 3. ~~"Who" Field on Contact Attempts~~ (Resolved)
 
-The contact attempt `who` field is described as "person ID or free text name." This dual-mode field is tricky — is the intent that any ward member can log an attempt, or that the leader records who made the call? If it's selecting from ward members, a person ID is fine. If it's free text for external helpers (neighbors, stake members), that changes the data model. The combo box description suggests both, but the storage format should clarify whether this is `std::optional<QString> personId` + `QString displayName`, or just a single `QString`.
+**Resolution:** Limit `who` to a `PersonId` — only ward members can be recorded as making contact attempts. External helpers don't need to be tracked by the app; if a leader wants to note that a neighbor checked on a family, they can put that in the notes field. This keeps the data model clean and avoids the dual-mode string problem. Design doc updated.
 
-### 4. Auto-Save for Response Data
+### 4. ~~Auto-Save for Response Data~~ (Resolved)
 
-The design says response data "auto-saves periodically." The main document doesn't auto-save — the user explicitly saves. Having different save semantics for response vs. preparation data could be confusing. On the other hand, losing response data during an emergency is much worse than losing a prep edit. This seems intentional and reasonable, but worth noting the asymmetry.
+**Resolution:** Auto-save for everything — both preparation and response data. This eliminates the asymmetry entirely. Every action is a discrete, intentional operation, so there's no need for manual save-as-commit. The undo/redo stack is preserved across saves (current behavior of clearing on save will need to change). Undo stack clears on app close, which is the real session boundary. Design doc updated.
 
-### 5. Notification Model
+### 5. ~~Notification Model~~ (Resolved)
 
-The task has a single `notification` field — one notification record. What if the assignee doesn't respond and you need to notify again? A single notification slot means overwriting the previous one. Should this be a list, like contact attempts?
+**Resolution:** Keep as a single notification record. The `assignmentNotes` field handles the narrative of re-notification attempts ("Called 2pm no answer, texted 4pm"). The single record answers the key UI question — "has the assignee been told?" — and if repeated failures occur, reassigning the task is the better action. No design doc change needed.
 
-### 6. Archive File Management
+### 6. ~~Archive File Management~~ (Resolved)
 
-The design says archives are "JSON files in designated archive directory" but doesn't specify where that directory is or how it's discovered. Is it relative to the main document? A user-configured path? An app-data directory? This affects portability — if someone shares their ward document, do archives travel with it?
+**Resolution:** Derive the archive directory from the main document path — if the document is `MyWard.json`, archives go in `MyWard_archives/`. This is portable (archives travel with the document), zero-configuration, and discoverable. No settings UI needed; a configurable path could be added later if requested. Design doc updated.
 
-### 7. Emergency Banner and Sidebar Layout
+### 7. ~~Emergency Banner and Sidebar Layout~~ (Resolved)
 
-The ASCII mockup shows the banner above sidebar navigation, with two rows of buttons. Currently the sidebar has a single column of buttons. The mockup implies adding a second row (Medical, Comms, Recovery) — are these the existing resource view tabs becoming sidebar-level navigation, or new entries? This seems like a layout change that should be explicit.
+**Resolution:** Not an issue — the app already has two rows of tabs (Families/Ministering/Teams/Needs + Medical/Communications/Skills & Gear). The design mockup was reflecting the existing layout, not proposing a change. No design doc change needed.
 
 ### 8. ~~Map Marker Conflict~~ (Resolved)
 
@@ -54,4 +54,4 @@ The ASCII mockup shows the banner above sidebar navigation, with two rows of but
 
 ## Summary
 
-The design is well-structured and the core decisions (augment-not-replace, derived status, data separation) are strong. The main area needing clarification before implementation is the notification/re-notification model. Everything else is resolvable during Phase 1 implementation.
+The design is well-structured and the core decisions (augment-not-replace, derived status, data separation) are strong. All issues have been resolved.

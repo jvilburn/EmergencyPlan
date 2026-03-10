@@ -18,11 +18,11 @@ int main(int argc, char *argv[])
     }
 
     // Initialize tile service for map rendering
-    TileService tileService;
+    TileService tileService(nullptr);
     TileService::setInstance(&tileService);
     tileService.initialize();
 
-    MainWindow window;
+    MainWindow window(nullptr);
     window.show();
 
     return app.exec();

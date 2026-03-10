@@ -14,7 +14,7 @@ class SidebarWidget : public QWidget
     Q_OBJECT
 
 public:
-    explicit SidebarWidget(int firstRowCount = 4, QWidget* parent = nullptr);
+    explicit SidebarWidget(int firstRowCount, QWidget* parent);
 
     void addPage(QWidget* page, const QString& label);
     QWidget* widget(int index) const;

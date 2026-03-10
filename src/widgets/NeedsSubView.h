@@ -18,7 +18,7 @@ class NeedsSubView : public QWidget, public FamilyMarkerProvider
 
 public:
     explicit NeedsSubView(DocumentManager* documentManager,
-                          QWidget* parent = nullptr);
+                          QWidget* parent);
 
     // FamilyMarkerProvider interface
     HighlightInfo highlightInfo() const override;

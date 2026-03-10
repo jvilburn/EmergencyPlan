@@ -160,6 +160,24 @@
   #include "../listmodels/FamilyListModel.h"
   ```
 
+## Default Parameters
+
+- **Do not use default parameters.** Require all arguments at every call site.
+- Default parameters hide implicit conversions (e.g., pointer silently converting to `bool`) and make call sites ambiguous.
+  ```cpp
+  // Good - all parameters required
+  explicit FamilyTreeModel(DocumentManager* documentManager,
+                           Filter* filter,
+                           bool checkable,
+                           QObject* parent);
+
+  // Bad - defaults allow silent misuse
+  explicit FamilyTreeModel(DocumentManager* documentManager,
+                           Filter* filter,
+                           bool checkable = false,
+                           QObject* parent = nullptr);
+  ```
+
 ## Data Structures
 
 - **Embedded child objects** should be sorted by date where applicable (most recent first).

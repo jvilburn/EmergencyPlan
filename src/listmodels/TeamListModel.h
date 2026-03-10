@@ -25,7 +25,7 @@ public:
     };
     Q_ENUM(Roles)
 
-    explicit TeamListModel(QObject* parent = nullptr);
+    explicit TeamListModel(QObject* parent);
 
     // Setup
     void setDocumentManager(DocumentManager* documentManager);

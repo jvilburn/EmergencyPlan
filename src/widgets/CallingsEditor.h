@@ -13,7 +13,7 @@ class CallingsEditor : public QWidget
     Q_OBJECT
 
 public:
-    explicit CallingsEditor(QWidget* parent = nullptr);
+    explicit CallingsEditor(QWidget* parent);
 
     void setCallings(const QStringList& callings);
     QStringList callings() const;
@@ -27,7 +27,7 @@ private slots:
     void onCallingTextChanged();
 
 private:
-    void addCallingRow(const QString& text = QString());
+    void addCallingRow(const QString& text);
 
     QVBoxLayout* m_layout;
     QList<QLineEdit*> m_callingEdits;

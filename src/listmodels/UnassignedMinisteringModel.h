@@ -33,7 +33,7 @@ public:
     explicit UnassignedMinisteringModel(DocumentManager* documentManager,
                                          Filter* filter,
                                          MinisteringOrg org,
-                                         QObject* parent = nullptr);
+                                         QObject* parent);
     ~UnassignedMinisteringModel() override;
 
     // QAbstractItemModel interface

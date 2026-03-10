@@ -20,8 +20,8 @@ public:
         const QSet<FamilyId>& removedFamilyIds,
         const QString& wardUnitNumber,
         const QString& wardName,
-        std::optional<QDate> pdfDate = std::nullopt,
-        const QString& description = QString());
+        std::optional<QDate> pdfDate,
+        const QString& description);
 
     void execute(Document& document) override;
     void undo(Document& document) override;

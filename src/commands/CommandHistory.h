@@ -15,7 +15,7 @@ class CommandHistory : public QObject
     Q_PROPERTY(bool isDirty READ isDirty NOTIFY dirtyChanged)
 
 public:
-    explicit CommandHistory(QObject* parent = nullptr);
+    explicit CommandHistory(QObject* parent);
 
     // Execute a command and add to history
     void execute(CommandPtr command, Document& document);

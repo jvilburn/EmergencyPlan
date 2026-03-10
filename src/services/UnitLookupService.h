@@ -25,7 +25,7 @@ class UnitLookupService : public QObject
     Q_OBJECT
 
 public:
-    explicit UnitLookupService(QObject* parent = nullptr);
+    explicit UnitLookupService(QObject* parent);
     ~UnitLookupService() override;
 
     /// Initiate async lookup for ward metadata.

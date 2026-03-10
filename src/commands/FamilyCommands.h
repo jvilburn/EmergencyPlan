@@ -50,7 +50,7 @@ class SetFamiliesCommand : public Command
 {
 public:
     explicit SetFamiliesCommand(const QHash<FamilyId, Family>& families,
-                                const QString& description = QString());
+                                const QString& description);
 
     void execute(Document& document) override;
     void undo(Document& document) override;

@@ -33,7 +33,7 @@ class MapWidget : public QWidget
     Q_OBJECT
 
 public:
-    explicit MapWidget(DocumentManager* docManager, QWidget* parent = nullptr);
+    explicit MapWidget(DocumentManager* docManager, QWidget* parent);
     ~MapWidget() override;
 
     /// Access the map viewmodel

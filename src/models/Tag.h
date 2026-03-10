@@ -58,7 +58,7 @@ public:
 
     // Factory method for creating new tags
     static Tag create(const QString& name, TagLevel level,
-                      const QString& color = QString());
+                      const QString& color);
 
     // Getters
     const TagId& id() const { return m_id; }

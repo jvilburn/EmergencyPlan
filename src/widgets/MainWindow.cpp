@@ -46,7 +46,7 @@ MainWindow::MainWindow(QWidget* parent)
     QString lastPath = loadLastDocumentPath();
     if (!lastPath.isEmpty() && QFile::exists(lastPath))
     {
-        if (m_documentManager->openDocument(lastPath))
+        if (m_documentManager->openDocument(lastPath, nullptr))
         {
             m_mapWidget->fitAllFamilies();
         }
@@ -323,7 +323,7 @@ void MainWindow::onImportPdf()
     statusBar()->showMessage(tr("Importing from PDF..."));
 
     // Parse PDF with ID preservation
-    WardDirectoryImportService importService;
+    WardDirectoryImportService importService(nullptr);
     WardDirectoryImportResult result = importService.importFromPdf(
         filePath,
         m_documentManager->document().families(),
@@ -392,7 +392,7 @@ void MainWindow::onImportMinisteringPdf()
 
     statusBar()->showMessage(tr("Importing ministering assignments..."));
 
-    MinisteringImportService importService;
+    MinisteringImportService importService(nullptr);
     MinisteringImportResult result = importService.importFromPdf(
         filePath,
         m_documentManager->document().families(),

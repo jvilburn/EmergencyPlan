@@ -30,7 +30,7 @@ public:
 
     explicit NeedsModel(DocumentManager* documentManager,
                         Filter* filter,
-                        QObject* parent = nullptr);
+                        QObject* parent);
     ~NeedsModel() override;
 
     // QAbstractItemModel interface

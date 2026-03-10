@@ -22,7 +22,7 @@ class TeamsView : public QWidget, public FamilyMarkerProvider
 
 public:
     explicit TeamsView(DocumentManager* documentManager,
-                       QWidget* parent = nullptr);
+                       QWidget* parent);
 
     // FamilyMarkerProvider interface
     HighlightInfo highlightInfo() const override;

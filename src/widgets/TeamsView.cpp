@@ -398,7 +398,7 @@ void TeamsView::showTeamDialog(const std::optional<TeamId>& teamId)
     else
     {
         // Create new team
-        Team team = Team::create(result->name);
+        Team team = Team::create(result->name, QColor(), std::nullopt);
         team.setMemberIds(newMembers);
         m_documentManager->executeCommand(
             std::make_unique<AddTeamCommand>(team));

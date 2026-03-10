@@ -13,7 +13,7 @@ class ActionButtonsWidget : public QWidget
     Q_OBJECT
 
 public:
-    explicit ActionButtonsWidget(const FamilyId& familyId, QWidget* parent = nullptr);
+    explicit ActionButtonsWidget(const FamilyId& familyId, QWidget* parent);
 
     const FamilyId& familyId() const { return m_familyId; }
 

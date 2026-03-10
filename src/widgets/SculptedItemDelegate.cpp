@@ -3,6 +3,7 @@
 #include "ItemType.h"
 
 #include <QPainter>
+#include <QApplication>
 #include <QLinearGradient>
 
 SculptedItemDelegate::SculptedItemDelegate(BaseTreeModel* model, QWidget* parent)
@@ -78,9 +79,32 @@ void SculptedItemDelegate::paintSculpted(QPainter* painter, const QStyleOptionVi
     painter->setBrush(gradient);
     painter->drawRoundedRect(rect, 2, 2);
 
+    // Draw checkbox if item is checkable
+    QRect textRect = rect.adjusted(4, 0, -4, 0);
+    Qt::ItemFlags itemFlags = index.flags();
+    if (itemFlags & Qt::ItemIsUserCheckable)
+    {
+        QStyleOptionButton checkOpt;
+        checkOpt.rect = QRect(textRect.left(), textRect.top(),
+                              textRect.height(), textRect.height());
+        checkOpt.rect = QStyle::alignedRect(Qt::LeftToRight, Qt::AlignCenter,
+                                            QSize(16, 16), checkOpt.rect);
+        QVariant checkData = index.data(Qt::CheckStateRole);
+        checkOpt.state = QStyle::State_Enabled;
+        if (checkData.isValid() && checkData.toInt() == Qt::Checked)
+        {
+            checkOpt.state |= QStyle::State_On;
+        }
+        else
+        {
+            checkOpt.state |= QStyle::State_Off;
+        }
+        QApplication::style()->drawControl(QStyle::CE_CheckBox, &checkOpt, painter);
+        textRect.setLeft(textRect.left() + textRect.height() + 2);
+    }
+
     // Draw text
     QString text = index.data(Qt::DisplayRole).toString();
-    QRect textRect = rect.adjusted(4, 0, -4, 0);
     painter->setPen(textColor);
     painter->drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, text);
 

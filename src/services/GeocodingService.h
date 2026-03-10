@@ -31,7 +31,7 @@ class GeocodingService : public QObject
     Q_OBJECT
 
 public:
-    explicit GeocodingService(QObject* parent = nullptr);
+    explicit GeocodingService(QObject* parent);
     ~GeocodingService() override;
 
     /// Queue an address for geocoding.

@@ -11,10 +11,12 @@
 
 FamilyTreeModel::FamilyTreeModel(DocumentManager* documentManager,
                                  Filter* filter,
+                                 bool checkable,
                                  QObject* parent)
     : BaseTreeModel(parent)
     , m_documentManager(documentManager)
     , m_filter(filter)
+    , m_checkable(checkable)
 {
     connect(m_documentManager, &DocumentManager::documentChanged,
             this, &FamilyTreeModel::onDocumentChanged);
@@ -841,19 +843,7 @@ SelectionKey FamilyTreeModel::selectionKeyAt(const QModelIndex& index) const
 
 void FamilyTreeModel::setCheckable(bool checkable)
 {
-    if (m_checkable == checkable)
-    {
-        return;
-    }
     m_checkable = checkable;
-    // Notify view to re-query flags and check state for all family rows
-    if (!m_familyNodes.isEmpty())
-    {
-        emit dataChanged(
-            index(0, 0),
-            index(m_familyNodes.size() - 1, 0),
-            {Qt::CheckStateRole});
-    }
 }
 
 void FamilyTreeModel::setCheckedFamilyIds(const QSet<FamilyId>& ids)

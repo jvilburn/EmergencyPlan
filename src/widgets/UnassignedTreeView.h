@@ -17,7 +17,7 @@ class UnassignedTreeView : public QWidget, public FamilyMarkerProvider
     Q_OBJECT
 
 public:
-    explicit UnassignedTreeView(UnassignedMinisteringModel* model, QWidget* parent = nullptr);
+    explicit UnassignedTreeView(UnassignedMinisteringModel* model, QWidget* parent);
 
     HighlightInfo highlightInfo() const override;
     QSet<FamilyId> visibleFamilyIds() const override;

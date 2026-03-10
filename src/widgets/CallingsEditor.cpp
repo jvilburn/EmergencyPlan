@@ -56,7 +56,7 @@ QStringList CallingsEditor::callings() const
 
 void CallingsEditor::onAddCalling()
 {
-    addCallingRow();
+    addCallingRow(QString());
     if (!m_callingEdits.isEmpty())
     {
         m_callingEdits.last()->setFocus();

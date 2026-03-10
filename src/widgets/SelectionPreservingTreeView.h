@@ -3,6 +3,7 @@
 #include "Id.h"
 
 #include <QKeyEvent>
+#include <QMouseEvent>
 #include <QTreeView>
 #include <optional>
 
@@ -24,12 +25,13 @@ class SelectionPreservingTreeView : public QTreeView
 public:
     /// Construct with a model implementing BaseTreeModel.
     /// The model must also inherit from QAbstractItemModel.
-    explicit SelectionPreservingTreeView(BaseTreeModel* model, QWidget* parent = nullptr);
+    explicit SelectionPreservingTreeView(BaseTreeModel* model, QWidget* parent);
 
     /// Clear tree selection and emit selectionChanged
     void clearSelection();
 
 protected:
+    void mousePressEvent(QMouseEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
 
 signals:

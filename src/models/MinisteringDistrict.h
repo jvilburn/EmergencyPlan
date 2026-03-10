@@ -16,8 +16,8 @@ public:
     // Factory method for creating new districts
     static MinisteringDistrict create(
         const QString& name,
-        std::optional<PersonId> presidencyMemberId = std::nullopt,
-        const QSet<MinisteringGroupId>& groupIds = {});
+        std::optional<PersonId> presidencyMemberId,
+        const QSet<MinisteringGroupId>& groupIds);
 
     // Getters
     const MinisteringDistrictId& id() const { return m_id; }

@@ -19,13 +19,13 @@ public:
 
     /// Factory method for EQ groups (ministers to families)
     static MinisteringGroup createEQ(
-        const QSet<PersonId>& ministerIds = {},
-        const QSet<FamilyId>& familyIds = {});
+        const QSet<PersonId>& ministerIds,
+        const QSet<FamilyId>& familyIds);
 
     /// Factory method for RS groups (ministers to persons)
     static MinisteringGroup createRS(
-        const QSet<PersonId>& ministerIds = {},
-        const QSet<PersonId>& ministeredPersonIds = {});
+        const QSet<PersonId>& ministerIds,
+        const QSet<PersonId>& ministeredPersonIds);
 
     // Getters
     const MinisteringGroupId& id() const { return m_id; }

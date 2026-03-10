@@ -11,7 +11,7 @@ class SearchField : public QLineEdit
     Q_OBJECT
 
 public:
-    explicit SearchField(QWidget* parent = nullptr);
+    explicit SearchField(QWidget* parent);
 
     /// Set the debounce delay in milliseconds (default 300ms).
     void setDebounceDelay(int msec);

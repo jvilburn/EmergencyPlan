@@ -24,7 +24,7 @@ public:
     };
     Q_ENUM(Roles)
 
-    explicit TagListModel(QObject* parent = nullptr);
+    explicit TagListModel(QObject* parent);
 
     // Setup
     void setDocumentManager(DocumentManager* documentManager);

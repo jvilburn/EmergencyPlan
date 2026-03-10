@@ -42,13 +42,13 @@ class TileFetchService : public QObject
     Q_OBJECT
 
 public:
-    explicit TileFetchService(QObject* parent = nullptr);
+    explicit TileFetchService(QObject* parent);
     ~TileFetchService() override;
 
     /// Initiate async fetch for a tile.
     /// Deduplicates requests - safe to call multiple times for same tile.
     /// @param currentMeta Optional metadata for conditional request (ETag/If-None-Match)
-    void fetch(TileId id, const TileMetadata& currentMeta = {});
+    void fetch(TileId id, const TileMetadata& currentMeta);
 
     /// Get attribution text for a specific provider ID.
     QString providerAttribution(const QString& providerId) const;

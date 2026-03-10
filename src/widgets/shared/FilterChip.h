@@ -14,7 +14,7 @@ class FilterChip : public QFrame
 public:
     explicit FilterChip(const QString& label,
                         const QString& value,
-                        QWidget* parent = nullptr);
+                        QWidget* parent);
 
     QString label() const { return m_label; }
     QString value() const { return m_value; }

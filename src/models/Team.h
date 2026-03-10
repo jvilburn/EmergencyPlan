@@ -16,8 +16,8 @@ public:
 
     // Factory method for creating new teams
     static Team create(const QString& name,
-                       const QColor& color = QColor(),
-                       std::optional<PersonId> leaderId = std::nullopt);
+                       const QColor& color,
+                       std::optional<PersonId> leaderId);
 
     // Getters
     const TeamId& id() const { return m_id; }

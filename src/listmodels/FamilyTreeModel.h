@@ -57,7 +57,8 @@ public:
 
     explicit FamilyTreeModel(DocumentManager* documentManager,
                              Filter* filter,
-                             QObject* parent = nullptr);
+                             bool checkable,
+                             QObject* parent);
     ~FamilyTreeModel() override;
 
     // QAbstractItemModel interface

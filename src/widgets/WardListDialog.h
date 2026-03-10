@@ -48,8 +48,8 @@ public:
 
     explicit WardListDialog(DocumentManager* documentManager,
                             Mode mode,
-                            bool checkable = false,
-                            QWidget* parent = nullptr);
+                            bool checkable,
+                            QWidget* parent);
 
     /// Get the name field text (trimmed).
     QString name() const;
@@ -72,25 +72,25 @@ public:
         DocumentManager* documentManager,
         const QString& nameLabel,
         const QString& initialName,
-        const QList<FamilyId>& initialIds = {},
-        QWidget* parent = nullptr);
+        const QList<FamilyId>& initialIds,
+        QWidget* parent);
 
     /// Show dialog to select a single person with a name field.
     /// Returns nullopt if cancelled.
     static std::optional<PersonSelectionResult> selectPersonWithName(
         DocumentManager* documentManager,
         const QString& nameLabel,
-        const QString& initialName = {},
-        const std::optional<PersonId>& initialId = std::nullopt,
-        QWidget* parent = nullptr);
+        const QString& initialName,
+        const std::optional<PersonId>& initialId,
+        QWidget* parent);
 
     /// Show dialog to select multiple persons. Returns nullopt if cancelled.
     static std::optional<PersonSelectionResult> selectPersons(
         DocumentManager* documentManager,
         const QString& nameLabel,
         const QString& initialName,
-        const QList<PersonId>& initialIds = {},
-        QWidget* parent = nullptr);
+        const QList<PersonId>& initialIds,
+        QWidget* parent);
 
 private slots:
     void onSelectionChanged();

@@ -22,7 +22,7 @@ public:
     static JsonResult loadDocument(const QString& filePath);
 
     // Save document to file
-    static bool saveDocument(const QString& filePath, const Document& document, QString* errorMessage = nullptr);
+    static bool saveDocument(const QString& filePath, const Document& document, QString* errorMessage);
 
     // Parse JSON string to document
     static JsonResult parseJson(const QString& jsonString);

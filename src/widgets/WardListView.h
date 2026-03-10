@@ -22,7 +22,7 @@ class WardListView : public QWidget, public FamilyMarkerProvider
 
 public:
     explicit WardListView(DocumentManager* documentManager,
-                          QWidget* parent = nullptr);
+                          QWidget* parent);
 
     // FamilyMarkerProvider interface
     HighlightInfo highlightInfo() const override;

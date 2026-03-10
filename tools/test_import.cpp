@@ -101,12 +101,12 @@ void dumpFamily(const Family& f, QTextStream& out, const QString& indent)
 
 int importWardDirectory(const QString& pdfPath, const QString& filter, QTextStream& out, QTextStream& err)
 {
-    WardDirectoryImportService service;
+    WardDirectoryImportService service(nullptr);
 
     out << "Importing ward directory (service): " << pdfPath << "\n\n";
     out.flush();
 
-    WardDirectoryImportResult result = service.importFromPdf(pdfPath, QHash<FamilyId, Family>());
+    WardDirectoryImportResult result = service.importFromPdf(pdfPath, QHash<FamilyId, Family>(), std::nullopt);
 
     if (!result.success)
     {
@@ -184,9 +184,9 @@ int importEQMinistering(const QString& pdfPath, QTextStream& out, QTextStream& e
     out << "Importing ministering (service): " << pdfPath << "\n\n";
     out.flush();
 
-    MinisteringImportService service;
+    MinisteringImportService service(nullptr);
     QHash<FamilyId, Family> existing;
-    MinisteringImportResult result = service.importFromPdf(pdfPath, existing);
+    MinisteringImportResult result = service.importFromPdf(pdfPath, existing, std::nullopt);
 
     if (!result.success)
     {

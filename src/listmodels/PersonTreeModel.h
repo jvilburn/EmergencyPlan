@@ -31,7 +31,8 @@ public:
 
     explicit PersonTreeModel(DocumentManager* documentManager,
                              Filter* filter,
-                             QObject* parent = nullptr);
+                             bool checkable,
+                             QObject* parent);
     ~PersonTreeModel() override;
 
     // QAbstractItemModel interface

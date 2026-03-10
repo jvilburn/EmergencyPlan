@@ -26,5 +26,5 @@ std::pair<int, int> findContentBounds(
     const QList<PdfTextField>& fields,
     const std::function<bool(const QString&)>& isHeaderMarker,
     const std::function<bool(const QString&)>& isFooterMarker,
-    int headerFieldsAfterMarker = 0,
-    int footerFieldsBeforeMarker = 0);
+    int headerFieldsAfterMarker,
+    int footerFieldsBeforeMarker);

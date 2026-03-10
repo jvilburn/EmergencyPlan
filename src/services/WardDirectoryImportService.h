@@ -29,7 +29,7 @@ class WardDirectoryImportService : public QObject
     Q_OBJECT
 
 public:
-    explicit WardDirectoryImportService(QObject* parent = nullptr);
+    explicit WardDirectoryImportService(QObject* parent);
     ~WardDirectoryImportService();
 
     /// Import families from a PDF file.
@@ -37,7 +37,7 @@ public:
     WardDirectoryImportResult importFromPdf(
         const QString& pdfPath,
         const QHash<FamilyId, Family>& existingFamilies,
-        std::optional<QDate> ministeringPdfDate = std::nullopt);
+        std::optional<QDate> ministeringPdfDate);
 
 private:
     std::optional<Family> findMatchingFamily(

@@ -35,7 +35,7 @@ public:
     explicit MinisteringModel(DocumentManager* documentManager,
                                Filter* filter,
                                MinisteringOrg org,
-                               QObject* parent = nullptr);
+                               QObject* parent);
     ~MinisteringModel() override;
 
     // QAbstractItemModel interface

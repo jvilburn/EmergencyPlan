@@ -42,7 +42,7 @@ class TileService : public QObject
     Q_OBJECT
 
 public:
-    explicit TileService(QObject* parent = nullptr);
+    explicit TileService(QObject* parent);
     ~TileService() override;
 
     /// Singleton-like accessor (set by MainWindow)

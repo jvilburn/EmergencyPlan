@@ -19,7 +19,7 @@ class DocumentManager : public QObject
     Q_PROPERTY(QString filePath READ filePath NOTIFY filePathChanged)
 
 public:
-    explicit DocumentManager(QObject* parent = nullptr);
+    explicit DocumentManager(QObject* parent);
 
     // Document access
     const Document& document() const { return m_document; }
@@ -43,9 +43,9 @@ public:
 
     // File operations
     void newDocument();
-    bool openDocument(const QString& filePath, QString* errorMessage = nullptr);
-    bool saveDocument(QString* errorMessage = nullptr);
-    bool saveDocumentAs(const QString& filePath, QString* errorMessage = nullptr);
+    bool openDocument(const QString& filePath, QString* errorMessage);
+    bool saveDocument(QString* errorMessage);
+    bool saveDocumentAs(const QString& filePath, QString* errorMessage);
 
     // Geocoding
     void startBatchGeocoding();

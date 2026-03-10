@@ -15,7 +15,7 @@ class TileDiskCacheService : public QObject
     Q_OBJECT
 
 public:
-    explicit TileDiskCacheService(const QString& cacheDir, QObject* parent = nullptr);
+    explicit TileDiskCacheService(const QString& cacheDir, QObject* parent);
     ~TileDiskCacheService() override;
 
     /// Initialize the cache service (scans directories, builds index).

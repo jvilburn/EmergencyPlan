@@ -24,7 +24,7 @@ class EmergencyAssetView : public QWidget, public FamilyMarkerProvider
 public:
     explicit EmergencyAssetView(DocumentManager* documentManager,
                                     ResponseArea area,
-                                    QWidget* parent = nullptr);
+                                    QWidget* parent);
 
     // FamilyMarkerProvider interface
     HighlightInfo highlightInfo() const override;

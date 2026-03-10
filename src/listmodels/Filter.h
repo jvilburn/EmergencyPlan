@@ -37,7 +37,7 @@ class Filter : public QObject
     Q_OBJECT
 
 public:
-    explicit Filter(QObject* parent = nullptr);
+    explicit Filter(QObject* parent);
 
     // Getters
     QString searchText() const { return m_searchText; }

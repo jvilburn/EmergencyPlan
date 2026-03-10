@@ -16,7 +16,7 @@ class MinisteringView : public QWidget, public FamilyMarkerProvider
     Q_OBJECT
 
 public:
-    explicit MinisteringView(DocumentManager* docManager, QWidget* parent = nullptr);
+    explicit MinisteringView(DocumentManager* docManager, QWidget* parent);
 
     HighlightInfo highlightInfo() const override;
     QSet<FamilyId> visibleFamilyIds() const override;

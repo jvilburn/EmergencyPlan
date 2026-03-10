@@ -10,8 +10,8 @@ TileService* TileService::s_instance = nullptr;
 
 TileService::TileService(QObject* parent)
     : QObject(parent)
-    , m_diskCache(std::make_unique<TileDiskCacheService>(getCacheDir()))
-    , m_fetchService(std::make_unique<TileFetchService>())
+    , m_diskCache(std::make_unique<TileDiskCacheService>(getCacheDir(), this))
+    , m_fetchService(std::make_unique<TileFetchService>(this))
 {
     connect(m_fetchService.get(), &TileFetchService::tileFetched,
             this, &TileService::onTileFetched);

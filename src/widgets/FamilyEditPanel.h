@@ -17,7 +17,7 @@ class FamilyEditPanel : public QFrame
     Q_OBJECT
 
 public:
-    explicit FamilyEditPanel(DocumentManager* docManager, QWidget* parent = nullptr);
+    explicit FamilyEditPanel(DocumentManager* docManager, QWidget* parent);
 
     void setFamily(const Family& family);
     Family family() const;

@@ -113,7 +113,7 @@ void TileFetchService::flushOfflineQueue()
 
     for (TileId id : queue)
     {
-        fetch(id);
+        fetch(id, TileMetadata{});
     }
 }
 

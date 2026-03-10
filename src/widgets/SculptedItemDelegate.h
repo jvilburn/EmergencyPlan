@@ -12,7 +12,7 @@ class SculptedItemDelegate : public QStyledItemDelegate
     Q_OBJECT
 
 public:
-    explicit SculptedItemDelegate(BaseTreeModel* model, QWidget* parent = nullptr);
+    explicit SculptedItemDelegate(BaseTreeModel* model, QWidget* parent);
 
     void paint(QPainter* painter, const QStyleOptionViewItem& option,
                const QModelIndex& index) const override;

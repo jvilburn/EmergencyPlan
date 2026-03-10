@@ -44,8 +44,8 @@ public:
     /// Creates/updates Ward and optionally its Stake.
     /// Returns the stake unit number where ward was placed.
     QString addOrUpdateWard(const QString& wardUnitNumber, const QString& wardName,
-                            const QString& stakeUnitNumber = QString(),
-                            const QString& stakeName = QString());
+                            const QString& stakeUnitNumber,
+                            const QString& stakeName);
 
     /// Removes a ward by unit number (for undo).
     void removeWardByUnit(const QString& wardUnitNumber);

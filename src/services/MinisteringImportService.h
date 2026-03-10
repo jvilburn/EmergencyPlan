@@ -35,7 +35,7 @@ class MinisteringImportService : public QObject
     Q_OBJECT
 
 public:
-    explicit MinisteringImportService(QObject* parent = nullptr);
+    explicit MinisteringImportService(QObject* parent);
     ~MinisteringImportService();
 
     /// Import ministering assignments from a PDF file (auto-detects EQ or RS).
@@ -44,7 +44,7 @@ public:
     MinisteringImportResult importFromPdf(
         const QString& pdfPath,
         const QHash<FamilyId, Family>& existingFamilies,
-        std::optional<QDate> wardDirectoryDate = std::nullopt);
+        std::optional<QDate> wardDirectoryDate);
 
 private:
     /// Merge source families into target, remapping IDs in groups and districts.

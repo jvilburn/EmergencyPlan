@@ -15,7 +15,7 @@ class MemberEditor : public QWidget
     Q_OBJECT
 
 public:
-    explicit MemberEditor(QWidget* parent = nullptr);
+    explicit MemberEditor(QWidget* parent);
 
     void setPerson(const Person& person);
     Person person() const;

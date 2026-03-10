@@ -222,7 +222,9 @@ Person MemberEditor::person() const
         Phone(m_altPhoneEdit->text().trimmed()),
         m_emailEdit->text().trimmed(),
         m_callingsEditor->callings(),
-        m_parentCheck->isChecked()
+        m_parentCheck->isChecked(),
+        QString(), // wardUnitNumber
+        QString()  // stakeUnitNumber
     );
 
     return p;

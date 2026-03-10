@@ -101,13 +101,13 @@ Attempts accumulate as a list per family:
 ```
 ContactAttempt {
     method: enum (phone, text, email, visit, other)
-    who: string (person ID or free text name)
+    who: PersonId (ward member who made the attempt)
     timestamp: datetime
     notes: string (optional, required if method is "other")
 }
 ```
 
-Method is selected via radio control for quick entry. "Who" is a combo box allowing selection from ward members or free text entry.
+Method is selected via radio control for quick entry. "Who" selects from ward members only — external helpers can be noted in the notes field.
 
 ---
 
@@ -399,7 +399,7 @@ Training Exercise - Nov 15, 2025 - 47 families, 0 tasks
 
 ## During Emergency
 
-- Response data auto-saves periodically (separate from main document)
+- All data auto-saves (both preparation and response data). Undo/redo stack is preserved across saves and clears on app close.
 - No undo/redo for response actions — these are event logs (contact attempts, status changes, tasks), not document edits. Mistakes are corrected by deleting the wrong entry or changing the status back. The preparation document's undo stack is unaffected by emergency lifecycle.
 - Summary report viewable anytime for briefings or handoffs
 
@@ -438,5 +438,5 @@ Training Exercise - Nov 15, 2025 - 47 families, 0 tasks
 ### File Format
 
 - Response data: JSON, separate from main document
-- Archives: JSON files in designated archive directory
+- Archives: JSON files in `<DocumentName>_archives/` directory (sibling to main document)
 - Reports: PDF generated on demand

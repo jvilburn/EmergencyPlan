@@ -421,13 +421,15 @@ namespace
             Phone(),      // altPhone
             Email(),      // email (filled by parseContactInfo)
             std::nullopt, // gender (filled by merge with explicit data)
-            Birthday()
+            Birthday(),
+            QStringList() // callings
         );
 
         Family family = Family::create(
-            std::nullopt,  // latitude
-            std::nullopt   // longitude
-            // address filled by parseContactInfo, members set after
+            std::nullopt,   // latitude
+            std::nullopt,   // longitude
+            Address(),      // address (filled by parseContactInfo)
+            QList<Person>() // members (set after)
         );
 
         parseContactInfo(ministerFields, minister, family);
@@ -535,11 +537,12 @@ namespace
             Person member = Person::create(
                 name,
                 isInParentNameRange(nameX, cols),
-                Phone(),   // phone
-                Phone(),   // altPhone
-                Email(),   // email
+                Phone(),      // phone
+                Phone(),      // altPhone
+                Email(),      // email
                 gender,
-                birthday
+                birthday,
+                QStringList() // callings
             );
             members.append(member);
         }
@@ -655,8 +658,10 @@ namespace
 
         // Create family (address will be set by parseContactInfo)
         result.family = Family::create(
-            std::nullopt,  // latitude
-            std::nullopt   // longitude
+            std::nullopt,   // latitude
+            std::nullopt,   // longitude
+            Address(),      // address
+            QList<Person>() // members
         );
 
         // Apply contact info: phone/email to target member, address to family
@@ -1076,7 +1081,7 @@ MinisteringPdfParser::ParseResult MinisteringPdfParser::parse(const QString& pdf
             QString districtName = concatenateMatchingFields(row, [](const PdfTextField&) { return true; });
 
             // Create new district
-            MinisteringDistrict district = MinisteringDistrict::create(districtName);
+            MinisteringDistrict district = MinisteringDistrict::create(districtName, std::nullopt, {});
             currentDistrictId = district.id();
             result.districts.insert(*currentDistrictId, district);
             continue;
@@ -1109,7 +1114,8 @@ MinisteringPdfParser::ParseResult MinisteringPdfParser::parse(const QString& pdf
                                 Phone(),      // altPhone
                                 Email(),      // email
                                 std::nullopt, // gender (set by backfill once format detected)
-                                Birthday()
+                                Birthday(),
+                                QStringList() // callings
                             );
 
                             Family family = Family::create(

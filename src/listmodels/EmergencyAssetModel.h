@@ -34,7 +34,7 @@ public:
     explicit EmergencyAssetModel(DocumentManager* documentManager,
                                      Filter* filter,
                                      ResponseArea area,
-                                     QObject* parent = nullptr);
+                                     QObject* parent);
     ~EmergencyAssetModel() override;
 
     // QAbstractItemModel interface

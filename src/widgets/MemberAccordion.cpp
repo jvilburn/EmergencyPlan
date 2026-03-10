@@ -67,7 +67,8 @@ void MemberAccordion::onAddMember()
         Phone(),
         Email(),
         std::nullopt,
-        Birthday()
+        Birthday(),
+        QStringList()
     );
     addMemberRow(newPerson, true);
     emit membersChanged();

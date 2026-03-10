@@ -28,7 +28,7 @@ class MapViewModel : public QObject
     Q_PROPERTY(double zoom READ zoom WRITE setZoom NOTIFY zoomChanged)
 
 public:
-    explicit MapViewModel(DocumentManager* docManager, QObject* parent = nullptr);
+    explicit MapViewModel(DocumentManager* docManager, QObject* parent);
 
     // Property getters
     QVariantList families() const;

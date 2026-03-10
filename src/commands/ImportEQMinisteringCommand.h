@@ -18,8 +18,8 @@ public:
         const QHash<MinisteringDistrictId, MinisteringDistrict>& districts,
         const QHash<MinisteringGroupId, MinisteringGroup>& groups,
         const QHash<FamilyId, Family>& families,
-        std::optional<QDate> pdfDate = std::nullopt,
-        const QString& description = QString());
+        std::optional<QDate> pdfDate,
+        const QString& description);
 
     void execute(Document& document) override;
     void undo(Document& document) override;

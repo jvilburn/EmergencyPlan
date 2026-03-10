@@ -12,9 +12,9 @@ public:
     Birthday() = default;
 
     // Factory method for creating birthdays
-    static Birthday create(std::optional<int> year = std::nullopt,
-                           std::optional<int> month = std::nullopt,
-                           std::optional<int> day = std::nullopt);
+    static Birthday create(std::optional<int> year,
+                           std::optional<int> month,
+                           std::optional<int> day);
 
     // Getters
     std::optional<int> year() const { return m_year; }

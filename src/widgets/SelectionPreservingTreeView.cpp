@@ -30,6 +30,43 @@ void SelectionPreservingTreeView::clearSelection()
     emit selectionChanged();
 }
 
+void SelectionPreservingTreeView::mousePressEvent(QMouseEvent* event)
+{
+    QModelIndex clicked = indexAt(event->pos());
+    if (clicked.isValid() && (clicked.flags() & Qt::ItemIsUserCheckable))
+    {
+        // Toggle the clicked item's checkbox
+        QVariant checkData = clicked.data(Qt::CheckStateRole);
+        Qt::CheckState newState = (checkData.toInt() == Qt::Checked)
+            ? Qt::Unchecked : Qt::Checked;
+
+        if ((event->modifiers() & Qt::ShiftModifier) && currentIndex().isValid())
+        {
+            // Shift+click: toggle range from current to clicked
+            int start = qMin(currentIndex().row(), clicked.row());
+            int end = qMax(currentIndex().row(), clicked.row());
+            for (int row = start; row <= end; ++row)
+            {
+                QModelIndex rowIndex = model()->index(row, 0);
+                if (rowIndex.flags() & Qt::ItemIsUserCheckable)
+                {
+                    model()->setData(rowIndex, newState, Qt::CheckStateRole);
+                }
+            }
+        }
+        else
+        {
+            // Plain click or Ctrl+click: toggle single item
+            model()->setData(clicked, newState, Qt::CheckStateRole);
+        }
+
+        setCurrentIndex(clicked);
+        return;
+    }
+
+    QTreeView::mousePressEvent(event);
+}
+
 void SelectionPreservingTreeView::keyPressEvent(QKeyEvent* event)
 {
     if (event->key() == Qt::Key_Escape)

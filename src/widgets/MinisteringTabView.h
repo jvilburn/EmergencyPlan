@@ -22,7 +22,7 @@ class MinisteringTabView : public QWidget, public FamilyMarkerProvider
 public:
     explicit MinisteringTabView(DocumentManager* documentManager,
                                  MinisteringOrg org,
-                                 QWidget* parent = nullptr);
+                                 QWidget* parent);
 
     HighlightInfo highlightInfo() const override;
     QSet<FamilyId> visibleFamilyIds() const override;

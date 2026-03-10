@@ -24,26 +24,26 @@ public:
     // Factory method for creating new persons
     static Person create(const Name& name,
                          bool isParent,
-                         const Phone& phone = Phone(),
-                         const Phone& altPhone = Phone(),
-                         const Email& email = Email(),
-                         std::optional<Gender> gender = std::nullopt,
-                         const Birthday& birthday = Birthday(),
-                         const QStringList& callings = QStringList());
+                         const Phone& phone,
+                         const Phone& altPhone,
+                         const Email& email,
+                         std::optional<Gender> gender,
+                         const Birthday& birthday,
+                         const QStringList& callings);
 
     // Factory method for creating persons with a specific ID (used for ID preservation)
     static Person createWithId(
         const PersonId& id,
         const Name& name,
-        std::optional<Gender> gender = std::nullopt,
-        const Birthday& birthday = Birthday(),
-        const Phone& phone = Phone(),
-        const Phone& altPhone = Phone(),
-        const QString& email = QString(),
-        const QStringList& callings = QStringList(),
-        bool isParent = false,
-        const QString& wardUnitNumber = QString(),
-        const QString& stakeUnitNumber = QString());
+        std::optional<Gender> gender,
+        const Birthday& birthday,
+        const Phone& phone,
+        const Phone& altPhone,
+        const QString& email,
+        const QStringList& callings,
+        bool isParent,
+        const QString& wardUnitNumber,
+        const QString& stakeUnitNumber);
 
     // Getters
     const PersonId& id() const { return m_id; }
