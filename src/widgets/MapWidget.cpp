@@ -322,7 +322,16 @@ void MapWidget::resizeEvent(QResizeEvent* event)
 {
     QWidget::resizeEvent(event);
     updateButtonPositions();
-    updateZoomForBounds();
+
+    if (m_pendingFitAll)
+    {
+        m_pendingFitAll = false;
+        fitAllFamilies();
+    }
+    else
+    {
+        updateZoomForBounds();
+    }
 }
 
 void MapWidget::updateZoomForBounds()

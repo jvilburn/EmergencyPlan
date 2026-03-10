@@ -42,6 +42,9 @@ public:
     /// Fit map to show all families
     void fitAllFamilies();
 
+    /// Request fit on next resize (for use before widget is shown)
+    void requestFitAllFamilies() { m_pendingFitAll = true; }
+
     /// Set the map center location
     void setCenter(double lat, double lng);
 
@@ -122,6 +125,9 @@ private:
 
     // Calculate zoom and center that fits markers without UI collisions.
     AdaptiveZoomResult calculateAdaptiveZoom(const QVector<MarkerInfo>& markers) const;
+
+    // Deferred fit (widget has no size during construction)
+    bool m_pendingFitAll = false;
 
     // Core state
     DocumentManager* m_docManager;

@@ -43,12 +43,24 @@ MainWindow::MainWindow(QWidget* parent)
     setupConnections();
 
     // Auto-load last document
+    bool documentLoaded = false;
     QString lastPath = loadLastDocumentPath();
     if (!lastPath.isEmpty() && QFile::exists(lastPath))
     {
         if (m_documentManager->openDocument(lastPath, nullptr))
         {
-            m_mapWidget->fitAllFamilies();
+            // Center on chapel immediately; defer fitAllFamilies until widget has size
+            const auto& wards = m_documentManager->document().wards();
+            for (const auto& ward : wards)
+            {
+                if (ward.chapelLat() && ward.chapelLng())
+                {
+                    m_mapWidget->setCenter(*ward.chapelLat(), *ward.chapelLng());
+                    break;
+                }
+            }
+            m_mapWidget->requestFitAllFamilies();
+            documentLoaded = true;
         }
         else
         {
@@ -56,7 +68,10 @@ MainWindow::MainWindow(QWidget* parent)
         }
     }
 
-    initializeDefaultLocation();
+    if (!documentLoaded)
+    {
+        initializeDefaultLocation();
+    }
     updateWindowTitle();
     updateUndoRedoActions();
 }
