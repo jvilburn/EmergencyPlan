@@ -404,6 +404,7 @@ target_compile_definitions(EmergencyPlanLib PUBLIC HAVE_MUPDF)
 # ============================================================================
 qt_add_executable(EmergencyPlan
     src/main.cpp
+    src/resources/app_icon.rc
 )
 
 target_link_libraries(EmergencyPlan PRIVATE
