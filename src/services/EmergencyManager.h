@@ -65,6 +65,7 @@ private slots:
 
 private:
     void persistResponseData();
+    bool saveArchive();
     void syncFromDocument();
     void syncFamilies();  // add records for new families, called on document changes
 

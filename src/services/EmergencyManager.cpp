@@ -1,6 +1,13 @@
 #include "EmergencyManager.h"
 #include "DocumentManager.h"
 #include "DocumentChange.h"
+#include "JsonService.h"
+
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QMessageBox>
+#include <QRegularExpression>
 
 EmergencyManager::EmergencyManager(DocumentManager* documentManager, QObject* parent)
     : QObject(parent)
@@ -67,9 +74,15 @@ void EmergencyManager::endEmergency(bool archive)
     if (archive)
     {
         m_response->setEndedAt(QDateTime::currentDateTimeUtc());
-        // Update document with final response data before archiving
+        // Update document with final response data before snapshotting
         m_documentManager->setEmergencyResponse(m_response);
-        // Archive save is handled by Task 1.5 — for now just fall through
+
+        if (!saveArchive())
+        {
+            // Archive save failed — do NOT clear response data
+            // User is notified by saveArchive() and can retry
+            return;
+        }
     }
 
     // Clear response data from main document
@@ -392,6 +405,55 @@ int EmergencyManager::countByStatus(EffectiveContactStatus status) const
 void EmergencyManager::persistResponseData()
 {
     m_documentManager->setEmergencyResponse(m_response);
+}
+
+bool EmergencyManager::saveArchive()
+{
+    QString docPath = m_documentManager->filePath();
+    if (docPath.isEmpty())
+    {
+        QMessageBox::critical(
+            nullptr,
+            tr("Archive Failed"),
+            tr("Cannot archive: document has not been saved yet."));
+        return false;
+    }
+
+    QFileInfo docInfo(docPath);
+    QString archiveDir = docInfo.absolutePath() + "/" + docInfo.completeBaseName() + "_archives";
+
+    QDir().mkpath(archiveDir);
+
+    QString slug = m_response->name().toLower().replace(QRegularExpression("[^a-z0-9]+"), "-");
+    QString date = m_response->startedAt().toString("yyyy-MM-dd");
+    QString archivePath = archiveDir + "/" + date + "-" + slug + ".emergencyplan";
+
+    // Avoid overwriting existing archive — append counter if needed
+    if (QFile::exists(archivePath))
+    {
+        int counter = 2;
+        QString basePath = archiveDir + "/" + date + "-" + slug;
+        while (QFile::exists(basePath + "-" + QString::number(counter) + ".emergencyplan"))
+        {
+            ++counter;
+        }
+        archivePath = basePath + "-" + QString::number(counter) + ".emergencyplan";
+    }
+
+    // Snapshot the entire current document (prep + response)
+    QString errorMessage;
+    JsonService::saveDocument(archivePath, m_documentManager->document(), &errorMessage);
+    if (!errorMessage.isEmpty())
+    {
+        qWarning() << "Archive save failed:" << errorMessage;
+        QMessageBox::critical(
+            nullptr,
+            tr("Archive Failed"),
+            tr("Could not save emergency archive:\n%1\n\nResponse data has been preserved.")
+                .arg(errorMessage));
+        return false;
+    }
+    return true;
 }
 
 void EmergencyManager::syncFromDocument()
