@@ -5,20 +5,25 @@
 #include "Filter.h"
 #include "Person.h"
 
+#include <QApplication>
 #include <QColor>
 #include <QDebug>
+#include <QFont>
 #include <QIcon>
 #include <QPainter>
 #include <QPixmap>
-
-#include <QFont>
+#include <QScreen>
 
 #include <algorithm>
 
-static QIcon statusIcon(EffectiveContactStatus status)
+static QIcon createStatusIcon(EffectiveContactStatus status)
 {
     constexpr int SIZE = 16;
-    QPixmap pixmap(SIZE, SIZE);
+    double dpr = qApp->devicePixelRatio();
+    int pixelSize = static_cast<int>(SIZE * dpr);
+
+    QPixmap pixmap(pixelSize, pixelSize);
+    pixmap.setDevicePixelRatio(dpr);
     pixmap.fill(Qt::transparent);
 
     QPainter painter(&pixmap);
@@ -62,6 +67,16 @@ static QIcon statusIcon(EffectiveContactStatus status)
     return QIcon(pixmap);
 }
 
+static QIcon statusIcon(EffectiveContactStatus status)
+{
+    static QHash<EffectiveContactStatus, QIcon> cache;
+    if (!cache.contains(status))
+    {
+        cache.insert(status, createStatusIcon(status));
+    }
+    return cache.value(status);
+}
+
 FamilyTreeModel::FamilyTreeModel(DocumentManager* documentManager,
                                  EmergencyManager* emergencyManager,
                                  Filter* filter,
@@ -82,6 +97,10 @@ FamilyTreeModel::FamilyTreeModel(DocumentManager* documentManager,
     {
         connect(m_emergencyManager, &EmergencyManager::familyStatusChanged,
                 this, &FamilyTreeModel::onFamilyStatusChanged);
+        connect(m_emergencyManager, &EmergencyManager::emergencyStarted,
+                this, &FamilyTreeModel::onEmergencyStateChanged);
+        connect(m_emergencyManager, &EmergencyManager::emergencyEnded,
+                this, &FamilyTreeModel::onEmergencyStateChanged);
     }
 
     rebuild();
@@ -140,6 +159,17 @@ void FamilyTreeModel::onFamilyStatusChanged(const FamilyId& familyId)
     }
     QModelIndex idx = index(row, 0);
     emit dataChanged(idx, idx, {Qt::DecorationRole, ResponseStatusRole});
+}
+
+void FamilyTreeModel::onEmergencyStateChanged()
+{
+    if (m_familyNodes.isEmpty())
+    {
+        return;
+    }
+    QModelIndex first = index(0, 0);
+    QModelIndex last = index(m_familyNodes.size() - 1, 0);
+    emit dataChanged(first, last, {Qt::DecorationRole, ResponseStatusRole});
 }
 
 void FamilyTreeModel::updateFamilyRow(const FamilyId& familyId)

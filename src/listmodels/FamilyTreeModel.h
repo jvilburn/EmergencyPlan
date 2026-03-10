@@ -105,6 +105,7 @@ signals:
 private slots:
     void onDocumentChanged(const DocumentChange& change);
     void onFamilyStatusChanged(const FamilyId& familyId);
+    void onEmergencyStateChanged();
     void rebuild();
 
 private:
