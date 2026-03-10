@@ -360,6 +360,18 @@ void FamilyResponseRecord::updateTask(const ResponseTask& task)
     }
 }
 
+ResponseTask* FamilyResponseRecord::mutableTask(const TaskId& id)
+{
+    for (int i = 0; i < m_tasks.size(); ++i)
+    {
+        if (m_tasks[i].id() == id)
+        {
+            return &m_tasks[i];
+        }
+    }
+    return nullptr;
+}
+
 void FamilyResponseRecord::removeTask(const TaskId& id)
 {
     for (int i = 0; i < m_tasks.size(); ++i)

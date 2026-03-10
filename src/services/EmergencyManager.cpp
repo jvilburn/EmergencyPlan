@@ -7,17 +7,19 @@ EmergencyManager::EmergencyManager(DocumentManager* documentManager, QObject* pa
     , m_documentManager(documentManager)
 {
     connect(m_documentManager, &DocumentManager::documentChanged,
-            this, [this](const DocumentChange& change)
+            this, &EmergencyManager::onDocumentChanged);
+}
+
+void EmergencyManager::onDocumentChanged(const DocumentChange& change)
+{
+    if (change.action == ChangeAction::Full)
     {
-        if (change.action == ChangeAction::Full)
-        {
-            syncFromDocument();
-        }
-        else if (m_response.has_value())
-        {
-            syncFamilies();
-        }
-    });
+        syncFromDocument();
+    }
+    else if (m_response.has_value())
+    {
+        syncFamilies();
+    }
 }
 
 // ============================================================================
@@ -235,15 +237,12 @@ void EmergencyManager::resolveTask(const FamilyId& familyId, const TaskId& taskI
     {
         return;
     }
-    QList<ResponseTask>& tasks = const_cast<QList<ResponseTask>&>(record->tasks());
-    for (int i = 0; i < tasks.size(); ++i)
+    ResponseTask* task = record->mutableTask(taskId);
+    if (!task)
     {
-        if (tasks[i].id() == taskId)
-        {
-            tasks[i].resolve(notes);
-            break;
-        }
+        return;
     }
+    task->resolve(notes);
     persistResponseData();
     emit familyStatusChanged(familyId);
     emit responseDataChanged();
@@ -253,7 +252,7 @@ void EmergencyManager::resolveTask(const FamilyId& familyId, const TaskId& taskI
 // Task assignment
 // ============================================================================
 
-void EmergencyManager::assignTaskToTeam(const FamilyId& familyId, const TaskId& taskId, const TeamId& teamId)
+void EmergencyManager::assignTaskToTeam(const FamilyId& familyId, const TaskId& taskId, const TeamId& teamId, const QString& notes)
 {
     if (!m_response.has_value())
     {
@@ -264,20 +263,17 @@ void EmergencyManager::assignTaskToTeam(const FamilyId& familyId, const TaskId& 
     {
         return;
     }
-    QList<ResponseTask>& tasks = const_cast<QList<ResponseTask>&>(record->tasks());
-    for (int i = 0; i < tasks.size(); ++i)
+    ResponseTask* task = record->mutableTask(taskId);
+    if (!task)
     {
-        if (tasks[i].id() == taskId)
-        {
-            tasks[i].assignToTeam(teamId, QString());
-            break;
-        }
+        return;
     }
+    task->assignToTeam(teamId, notes);
     persistResponseData();
     emit responseDataChanged();
 }
 
-void EmergencyManager::assignTaskToPerson(const FamilyId& familyId, const TaskId& taskId, const PersonId& personId)
+void EmergencyManager::assignTaskToPerson(const FamilyId& familyId, const TaskId& taskId, const PersonId& personId, const QString& notes)
 {
     if (!m_response.has_value())
     {
@@ -288,15 +284,12 @@ void EmergencyManager::assignTaskToPerson(const FamilyId& familyId, const TaskId
     {
         return;
     }
-    QList<ResponseTask>& tasks = const_cast<QList<ResponseTask>&>(record->tasks());
-    for (int i = 0; i < tasks.size(); ++i)
+    ResponseTask* task = record->mutableTask(taskId);
+    if (!task)
     {
-        if (tasks[i].id() == taskId)
-        {
-            tasks[i].assignToPerson(personId, QString());
-            break;
-        }
+        return;
     }
+    task->assignToPerson(personId, notes);
     persistResponseData();
     emit responseDataChanged();
 }
@@ -312,15 +305,12 @@ void EmergencyManager::unassignTask(const FamilyId& familyId, const TaskId& task
     {
         return;
     }
-    QList<ResponseTask>& tasks = const_cast<QList<ResponseTask>&>(record->tasks());
-    for (int i = 0; i < tasks.size(); ++i)
+    ResponseTask* task = record->mutableTask(taskId);
+    if (!task)
     {
-        if (tasks[i].id() == taskId)
-        {
-            tasks[i].clearAssignment();
-            break;
-        }
+        return;
     }
+    task->clearAssignment();
     persistResponseData();
     emit responseDataChanged();
 }
@@ -340,15 +330,12 @@ void EmergencyManager::notifyAssignee(const FamilyId& familyId, const TaskId& ta
     {
         return;
     }
-    QList<ResponseTask>& tasks = const_cast<QList<ResponseTask>&>(record->tasks());
-    for (int i = 0; i < tasks.size(); ++i)
+    ResponseTask* task = record->mutableTask(taskId);
+    if (!task)
     {
-        if (tasks[i].id() == taskId)
-        {
-            tasks[i].setNotification(notification);
-            break;
-        }
+        return;
     }
+    task->setNotification(notification);
     persistResponseData();
     emit responseDataChanged();
 }
@@ -412,14 +399,20 @@ void EmergencyManager::syncFromDocument()
     const std::optional<EmergencyResponse>& response = m_documentManager->document().emergencyResponse();
     if (response.has_value())
     {
+        bool wasActive = m_response.has_value();
         m_response = response;
         syncFamilies();
-        emit emergencyStarted();
+        if (!wasActive)
+        {
+            emit emergencyStarted();
+        }
+        emit responseDataChanged();
     }
     else if (m_response.has_value())
     {
         m_response.reset();
         emit emergencyEnded();
+        emit responseDataChanged();
     }
 }
 
@@ -434,6 +427,7 @@ void EmergencyManager::syncFamilies()
     const QHash<FamilyId, FamilyResponseRecord>& records = m_response->familyRecords();
 
     // Add records for families that don't have one yet
+    bool added = false;
     for (auto it = families.constBegin(); it != families.constEnd(); ++it)
     {
         if (!records.contains(it.key()))
@@ -444,7 +438,13 @@ void EmergencyManager::syncFamilies()
                 family.displayName(),
                 family.address().full());
             m_response->addFamilyRecord(record);
+            added = true;
         }
     }
     // Removed families: leave their records (snapshot data useful for current emergency)
+
+    if (added)
+    {
+        persistResponseData();
+    }
 }

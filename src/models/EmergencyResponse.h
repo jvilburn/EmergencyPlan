@@ -173,6 +173,7 @@ public:
     void addTask(const ResponseTask& task);
     void updateTask(const ResponseTask& task);
     void removeTask(const TaskId& id);
+    ResponseTask* mutableTask(const TaskId& id);
 
     // Derived status: NeedsHelp when contacted but has unresolved tasks
     bool needsHelp() const;

@@ -6,6 +6,7 @@
 #include "EmergencyResponse.h"
 
 class DocumentManager;
+struct DocumentChange;
 
 class EmergencyManager : public QObject
 {
@@ -38,8 +39,8 @@ public:
     void resolveTask(const FamilyId& familyId, const TaskId& taskId, const QString& notes);
 
     // Task assignment
-    void assignTaskToTeam(const FamilyId& familyId, const TaskId& taskId, const TeamId& teamId);
-    void assignTaskToPerson(const FamilyId& familyId, const TaskId& taskId, const PersonId& personId);
+    void assignTaskToTeam(const FamilyId& familyId, const TaskId& taskId, const TeamId& teamId, const QString& notes);
+    void assignTaskToPerson(const FamilyId& familyId, const TaskId& taskId, const PersonId& personId, const QString& notes);
     void unassignTask(const FamilyId& familyId, const TaskId& taskId);
 
     // Task notification
@@ -58,6 +59,9 @@ signals:
     void emergencyEnded();
     void familyStatusChanged(const FamilyId& familyId);
     void responseDataChanged();  // generic "something changed" for progress bars, counts
+
+private slots:
+    void onDocumentChanged(const DocumentChange& change);
 
 private:
     void persistResponseData();
