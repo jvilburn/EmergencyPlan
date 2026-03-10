@@ -97,6 +97,7 @@ set(MODEL_SOURCES
     src/models/MinisteringDistrict.cpp
     src/models/EmergencyAsset.cpp
     src/models/DocumentChange.cpp
+    src/models/EmergencyResponse.cpp
 )
 
 set(MODEL_HEADERS
@@ -122,6 +123,7 @@ set(MODEL_HEADERS
     src/models/ResponseArea.h
     src/models/DocumentChange.h
     src/models/Id.h
+    src/models/EmergencyResponse.h
 )
 
 set(COMMAND_SOURCES

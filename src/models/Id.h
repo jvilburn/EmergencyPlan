@@ -111,6 +111,22 @@ public:
     static constexpr const char* typeName() { return "MinisteringDistrictId"; }
 };
 
+class TaskId : public IdBase<TaskId>
+{
+    friend class IdBase<TaskId>;
+    using IdBase::IdBase;
+public:
+    static constexpr const char* typeName() { return "TaskId"; }
+};
+
+class ContactAttemptId : public IdBase<ContactAttemptId>
+{
+    friend class IdBase<ContactAttemptId>;
+    using IdBase::IdBase;
+public:
+    static constexpr const char* typeName() { return "ContactAttemptId"; }
+};
+
 // === SelectionKey ===
 
 class SelectionKey
@@ -139,3 +155,5 @@ Q_DECLARE_METATYPE(TagId)
 Q_DECLARE_METATYPE(EmergencyAssetId)
 Q_DECLARE_METATYPE(MinisteringGroupId)
 Q_DECLARE_METATYPE(MinisteringDistrictId)
+Q_DECLARE_METATYPE(TaskId)
+Q_DECLARE_METATYPE(ContactAttemptId)
