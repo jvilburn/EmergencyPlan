@@ -26,6 +26,7 @@
 #include <QStatusBar>
 #include <QVBoxLayout>
 #include <QFileDialog>
+#include <QCheckBox>
 #include <QInputDialog>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -895,15 +896,24 @@ void MainWindow::onStartEmergency()
     }
 
     m_emergencyManager->startEmergency(name.trimmed());
+    statusBar()->showMessage(tr("Emergency \"%1\" started").arg(name.trimmed()), 5000);
 }
 
 void MainWindow::onEndEmergency()
 {
+    QString emergencyName = m_emergencyManager->response().name();
+
     // Custom dialog with Archive & End, Discard & End, Cancel
     QMessageBox dialog(this);
     dialog.setWindowTitle(tr("End Emergency"));
-    dialog.setText(tr("End \"%1\"?").arg(m_emergencyManager->response().name()));
+    dialog.setText(tr("End \"%1\"?").arg(emergencyName));
     dialog.setIcon(QMessageBox::Question);
+
+    // Phase 5 placeholder: disabled PDF report checkbox
+    QCheckBox* pdfCheckBox = new QCheckBox(tr("Generate summary report (PDF)"));
+    pdfCheckBox->setEnabled(false);
+    pdfCheckBox->setToolTip(tr("Coming soon"));
+    dialog.setCheckBox(pdfCheckBox);
 
     QPushButton* archiveButton = dialog.addButton(tr("Archive && End"), QMessageBox::AcceptRole);
     QPushButton* discardButton = dialog.addButton(tr("Discard && End"), QMessageBox::DestructiveRole);
@@ -915,6 +925,7 @@ void MainWindow::onEndEmergency()
     if (clicked == archiveButton)
     {
         m_emergencyManager->endEmergency(true);
+        statusBar()->showMessage(tr("Emergency \"%1\" archived").arg(emergencyName), 5000);
     }
     else if (clicked == discardButton)
     {
@@ -928,6 +939,7 @@ void MainWindow::onEndEmergency()
         if (confirm == QMessageBox::Yes)
         {
             m_emergencyManager->endEmergency(false);
+            statusBar()->showMessage(tr("Emergency \"%1\" ended").arg(emergencyName), 5000);
         }
     }
 }
