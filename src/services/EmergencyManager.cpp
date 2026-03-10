@@ -442,8 +442,8 @@ bool EmergencyManager::saveArchive()
 
     // Snapshot the entire current document (prep + response)
     QString errorMessage;
-    JsonService::saveDocument(archivePath, m_documentManager->document(), &errorMessage);
-    if (!errorMessage.isEmpty())
+    bool ok = JsonService::saveDocument(archivePath, m_documentManager->document(), &errorMessage);
+    if (!ok)
     {
         qWarning() << "Archive save failed:" << errorMessage;
         QMessageBox::critical(
