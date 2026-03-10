@@ -10,6 +10,7 @@
 #include <QVBoxLayout>
 
 WardListView::WardListView(DocumentManager* documentManager,
+                           EmergencyManager* emergencyManager,
                            QWidget* parent)
     : QWidget(parent)
     , m_documentManager(documentManager)
@@ -25,7 +26,7 @@ WardListView::WardListView(DocumentManager* documentManager,
     layout->addWidget(m_filterBar);
 
     // Create model with filter from FilterBar
-    m_model = new FamilyTreeModel(documentManager, m_filterBar->filter(), false, this);
+    m_model = new FamilyTreeModel(documentManager, emergencyManager, m_filterBar->filter(), false, this);
 
     // Tree view with selection preservation
     m_treeView = new SelectionPreservingTreeView(m_model, this);

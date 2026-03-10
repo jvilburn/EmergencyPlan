@@ -14,7 +14,7 @@ UnmappedPanel::UnmappedPanel(DocumentManager* docManager, MapViewModel* viewMode
     : QWidget(parent)
     , m_viewModel(viewModel)
     , m_filter(new Filter(this))
-    , m_model(new FamilyTreeModel(docManager, m_filter, false, this))
+    , m_model(new FamilyTreeModel(docManager, nullptr, m_filter, false, this))
 {
     // Set up filter for unmapped families only
     m_filter->setMappedFilter(MappedFilter::Unmapped);

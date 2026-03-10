@@ -1,20 +1,75 @@
 #include "FamilyTreeModel.h"
 #include "DocumentManager.h"
+#include "EmergencyManager.h"
 #include "Family.h"
 #include "Filter.h"
 #include "Person.h"
 
 #include <QColor>
 #include <QDebug>
+#include <QIcon>
+#include <QPainter>
+#include <QPixmap>
+
+#include <QFont>
 
 #include <algorithm>
 
+static QIcon statusIcon(EffectiveContactStatus status)
+{
+    constexpr int SIZE = 16;
+    QPixmap pixmap(SIZE, SIZE);
+    pixmap.fill(Qt::transparent);
+
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing);
+
+    QColor bgColor;
+    QString symbol;
+
+    switch (status)
+    {
+        case EffectiveContactStatus::OK:
+            bgColor = QColor(76, 175, 80);    // Green
+            symbol = QString::fromUtf8("\xe2\x9c\x93");  // ✓
+            break;
+        case EffectiveContactStatus::NeedsHelp:
+            bgColor = QColor(255, 152, 0);    // Orange
+            symbol = QString::fromUtf8("\xe2\x9a\x91");  // ⚑
+            break;
+        case EffectiveContactStatus::UnableToReach:
+            bgColor = QColor(255, 235, 59);   // Yellow
+            symbol = "?";
+            break;
+        case EffectiveContactStatus::NotContacted:
+            return QIcon();
+    }
+
+    // Draw colored circle
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(bgColor);
+    painter.drawEllipse(1, 1, SIZE - 2, SIZE - 2);
+
+    // Draw symbol
+    painter.setPen(Qt::white);
+    QFont font = painter.font();
+    font.setPixelSize(10);
+    font.setBold(true);
+    painter.setFont(font);
+    painter.drawText(QRect(0, 0, SIZE, SIZE), Qt::AlignCenter, symbol);
+
+    painter.end();
+    return QIcon(pixmap);
+}
+
 FamilyTreeModel::FamilyTreeModel(DocumentManager* documentManager,
+                                 EmergencyManager* emergencyManager,
                                  Filter* filter,
                                  bool checkable,
                                  QObject* parent)
     : BaseTreeModel(parent)
     , m_documentManager(documentManager)
+    , m_emergencyManager(emergencyManager)
     , m_filter(filter)
     , m_checkable(checkable)
 {
@@ -22,6 +77,13 @@ FamilyTreeModel::FamilyTreeModel(DocumentManager* documentManager,
             this, &FamilyTreeModel::onDocumentChanged);
     connect(m_filter, &Filter::changed,
             this, &FamilyTreeModel::rebuild);
+
+    if (m_emergencyManager)
+    {
+        connect(m_emergencyManager, &EmergencyManager::familyStatusChanged,
+                this, &FamilyTreeModel::onFamilyStatusChanged);
+    }
+
     rebuild();
 }
 
@@ -67,6 +129,17 @@ void FamilyTreeModel::onDocumentChanged(const DocumentChange& change)
             rebuild();
             break;
     }
+}
+
+void FamilyTreeModel::onFamilyStatusChanged(const FamilyId& familyId)
+{
+    int row = m_familyIds.indexOf(familyId);
+    if (row < 0)
+    {
+        return;
+    }
+    QModelIndex idx = index(row, 0);
+    emit dataChanged(idx, idx, {Qt::DecorationRole, ResponseStatusRole});
 }
 
 void FamilyTreeModel::updateFamilyRow(const FamilyId& familyId)
@@ -691,6 +764,29 @@ QVariant FamilyTreeModel::data(const QModelIndex& index, int role) const
         case DetailTypeRole:
             return QVariant::fromValue(node->detailType);
 
+        case Qt::DecorationRole:
+            if (node->type == RowType::Family && m_emergencyManager
+                && m_emergencyManager->isActive())
+            {
+                FamilyId familyId = m_familyIds.at(node->familyIndex);
+                EffectiveContactStatus status = m_emergencyManager->familyStatus(familyId);
+                if (status != EffectiveContactStatus::NotContacted)
+                {
+                    return statusIcon(status);
+                }
+            }
+            return QVariant();
+
+        case ResponseStatusRole:
+            if (node->type == RowType::Family && m_emergencyManager
+                && m_emergencyManager->isActive())
+            {
+                FamilyId familyId = m_familyIds.at(node->familyIndex);
+                return QVariant::fromValue(
+                    static_cast<int>(m_emergencyManager->familyStatus(familyId)));
+            }
+            return QVariant();
+
         case Qt::ForegroundRole:
             // Gray out placeholder text
             if (node->displayText == tr("No contact info")
@@ -713,6 +809,7 @@ QHash<int, QByteArray> FamilyTreeModel::roleNames() const
     roles[FamilyIdRole] = "familyId";
     roles[MemberIndexRole] = "memberIndex";
     roles[DetailTypeRole] = "detailType";
+    roles[ResponseStatusRole] = "responseStatus";
     return roles;
 }
 

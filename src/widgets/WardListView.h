@@ -9,6 +9,7 @@
 
 class ActionButtonsWidget;
 class DocumentManager;
+class EmergencyManager;
 class FamilyTreeModel;
 class Filter;
 class FilterBar;
@@ -22,6 +23,7 @@ class WardListView : public QWidget, public FamilyMarkerProvider
 
 public:
     explicit WardListView(DocumentManager* documentManager,
+                          EmergencyManager* emergencyManager,
                           QWidget* parent);
 
     // FamilyMarkerProvider interface

@@ -8,6 +8,7 @@
 #include <QString>
 
 class DocumentManager;
+class EmergencyManager;
 class Filter;
 
 /// Tree model exposing filtered, sorted families with full hierarchical structure.
@@ -40,7 +41,8 @@ public:
         RowTypeRole = Qt::UserRole + 1,
         FamilyIdRole,
         MemberIndexRole,
-        DetailTypeRole
+        DetailTypeRole,
+        ResponseStatusRole
     };
     Q_ENUM(Roles)
 
@@ -56,6 +58,7 @@ public:
     Q_ENUM(DetailType)
 
     explicit FamilyTreeModel(DocumentManager* documentManager,
+                             EmergencyManager* emergencyManager,
                              Filter* filter,
                              bool checkable,
                              QObject* parent);
@@ -101,6 +104,7 @@ signals:
 
 private slots:
     void onDocumentChanged(const DocumentChange& change);
+    void onFamilyStatusChanged(const FamilyId& familyId);
     void rebuild();
 
 private:
@@ -133,6 +137,7 @@ private:
     QList<FamilyId> m_familyIds;
     QList<TreeNode*> m_familyNodes;  // Top-level nodes (owned)
     DocumentManager* m_documentManager;
+    EmergencyManager* m_emergencyManager;
     Filter* m_filter;
     bool m_checkable = false;
     QSet<FamilyId> m_checkedIds;

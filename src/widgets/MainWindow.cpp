@@ -99,7 +99,7 @@ void MainWindow::setupUi()
     m_sidebarTabs = new SidebarWidget(4, m_splitter);
 
     // Row 1
-    m_wardListView = new WardListView(m_documentManager, this);
+    m_wardListView = new WardListView(m_documentManager, m_emergencyManager, this);
     m_sidebarTabs->addPage(m_wardListView, tr("Families"));
 
     m_ministeringView = new MinisteringView(m_documentManager, this);
