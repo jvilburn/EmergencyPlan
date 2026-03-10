@@ -13,5 +13,5 @@ public:
     void setEmergencyName(const QString& name);
 
 private:
-    QLabel* m_label;
+    QLabel* m_label = nullptr;
 };
