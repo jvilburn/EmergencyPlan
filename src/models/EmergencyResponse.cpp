@@ -113,6 +113,8 @@ bool TaskNotification::operator==(const TaskNotification& other) const
 
 ContactAttempt ContactAttempt::create(ContactMethod method, const PersonId& who, const QString& notes)
 {
+    Q_ASSERT(method != ContactMethod::Other || !notes.isEmpty());
+
     ContactAttempt attempt;
     attempt.m_id = ContactAttemptId::generate();
     attempt.m_method = method;
@@ -450,6 +452,7 @@ FamilyResponseRecord FamilyResponseRecord::fromJson(const QJsonObject& json)
     record.m_address = json["address"].toString();
     record.m_contactStatus = contactStatusFromString(json["contactStatus"].toString());
 
+    // append (not prepend) — JSON array is already in most-recent-first order from toJson()
     if (json.contains("contactAttempts"))
     {
         QJsonArray attemptsArray = json["contactAttempts"].toArray();
@@ -459,6 +462,7 @@ FamilyResponseRecord FamilyResponseRecord::fromJson(const QJsonObject& json)
         }
     }
 
+    // append (not prepend) — JSON array is already in most-recent-first order from toJson()
     if (json.contains("tasks"))
     {
         QJsonArray tasksArray = json["tasks"].toArray();
