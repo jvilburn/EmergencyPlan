@@ -45,6 +45,9 @@ public:
     /// Request fit on next resize (for use before widget is shown)
     void requestFitAllFamilies() { m_pendingFitAll = true; }
 
+    /// Center on the first ward's chapel coordinates (if available)
+    void centerOnChapel();
+
     /// Set the map center location
     void setCenter(double lat, double lng);
 

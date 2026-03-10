@@ -49,16 +49,8 @@ MainWindow::MainWindow(QWidget* parent)
     {
         if (m_documentManager->openDocument(lastPath, nullptr))
         {
-            // Center on chapel immediately; defer fitAllFamilies until widget has size
-            const auto& wards = m_documentManager->document().wards();
-            for (const auto& ward : wards)
-            {
-                if (ward.chapelLat() && ward.chapelLng())
-                {
-                    m_mapWidget->setCenter(*ward.chapelLat(), *ward.chapelLng());
-                    break;
-                }
-            }
+            // Center on chapel immediately; defer fit until widget has size
+            m_mapWidget->centerOnChapel();
             m_mapWidget->requestFitAllFamilies();
             documentLoaded = true;
         }

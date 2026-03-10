@@ -99,8 +99,9 @@ void WardListDialog::setupUi()
     connect(m_buttonBox, &QDialogButtonBox::rejected,
             this, &QDialog::reject);
 
-    // Fit map to show all families
-    m_mapWidget->fitAllFamilies();
+    // Center on chapel; defer fit until widget has size
+    m_mapWidget->centerOnChapel();
+    m_mapWidget->requestFitAllFamilies();
 }
 
 void WardListDialog::setPreselectedPersonIds(const QList<PersonId>& ids)

@@ -1026,6 +1026,19 @@ void MapWidget::fitAllFamilies()
 }
 
 
+void MapWidget::centerOnChapel()
+{
+    const auto& wards = m_docManager->document().wards();
+    for (const auto& ward : wards)
+    {
+        if (ward.chapelLat() && ward.chapelLng())
+        {
+            setCenter(*ward.chapelLat(), *ward.chapelLng());
+            return;
+        }
+    }
+}
+
 void MapWidget::setCenter(double lat, double lng)
 {
     m_centerLat = lat;
