@@ -1,5 +1,6 @@
 #include "WardListView.h"
 #include "ActionButtonsWidget.h"
+#include "Document.h"
 #include "DocumentManager.h"
 #include "Family.h"
 #include "FamilyTreeModel.h"
@@ -14,6 +15,7 @@ WardListView::WardListView(DocumentManager* documentManager,
                            QWidget* parent)
     : QWidget(parent)
     , m_documentManager(documentManager)
+    , m_emergencyManager(emergencyManager)
 {
     setMinimumWidth(250);
 
@@ -227,7 +229,17 @@ void WardListView::attachActionButtons(const QModelIndex& familyIndex)
 
         if (childType == FamilyTreeModel::RowType::Actions)
         {
-            ActionButtonsWidget* widget = new ActionButtonsWidget(*familyId, m_treeView);
+            // Look up phone number for emergency quick-call display
+            QString phoneNumber;
+            const auto& families = m_documentManager->document().families();
+            auto it = families.constFind(*familyId);
+            if (it != families.constEnd())
+            {
+                phoneNumber = it.value().displayPhone();
+            }
+
+            ActionButtonsWidget* widget = new ActionButtonsWidget(
+                *familyId, m_emergencyManager, phoneNumber, m_treeView);
 
             connect(widget, &ActionButtonsWidget::editRequested,
                     this, &WardListView::editFamilyRequested);

@@ -57,6 +57,7 @@ private:
     void detachActionButtons(const FamilyId& familyId);
 
     DocumentManager* m_documentManager;
+    EmergencyManager* m_emergencyManager;
     FilterBar* m_filterBar;
     FamilyTreeModel* m_model;
     SelectionPreservingTreeView* m_treeView;
