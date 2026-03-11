@@ -13,13 +13,14 @@ ActionButtonsWidget::ActionButtonsWidget(const FamilyId& familyId,
                                          QWidget* parent)
     : QWidget(parent)
     , m_familyId(familyId)
+    , m_emergencyManager(emergencyManager)
 {
     QHBoxLayout* layout = new QHBoxLayout(this);
     layout->setContentsMargins(0, 2, 0, 2);
     layout->setSpacing(8);
 
     // Emergency action buttons (only during active emergency)
-    if (emergencyManager && emergencyManager->isActive())
+    if (m_emergencyManager && m_emergencyManager->isActive())
     {
         // Phone number for quick calling
         if (!phoneNumber.isEmpty())
@@ -40,17 +41,12 @@ ActionButtonsWidget::ActionButtonsWidget(const FamilyId& familyId,
         QPushButton* addTaskButton = new QPushButton(tr("Add Task"), this);
         layout->addWidget(addTaskButton);
 
-        connect(okButton, &QPushButton::clicked, this, [this, emergencyManager]() {
-            emergencyManager->setContactStatus(m_familyId, ContactStatus::OK);
-        });
-
-        connect(unreachableButton, &QPushButton::clicked, this, [this, emergencyManager]() {
-            emergencyManager->setContactStatus(m_familyId, ContactStatus::UnableToReach);
-        });
-
-        connect(addTaskButton, &QPushButton::clicked, this, [this]() {
-            emit addTaskRequested(m_familyId);
-        });
+        connect(okButton, &QPushButton::clicked,
+                this, &ActionButtonsWidget::onOkClicked);
+        connect(unreachableButton, &QPushButton::clicked,
+                this, &ActionButtonsWidget::onUnableToReachClicked);
+        connect(addTaskButton, &QPushButton::clicked,
+                this, &ActionButtonsWidget::onAddTaskClicked);
 
         layout->addSpacing(16);
     }
@@ -65,11 +61,33 @@ ActionButtonsWidget::ActionButtonsWidget(const FamilyId& familyId,
     layout->addWidget(m_deleteButton);
     layout->addStretch();
 
-    connect(m_editButton, &QPushButton::clicked, this, [this]() {
-        emit editRequested(m_familyId);
-    });
+    connect(m_editButton, &QPushButton::clicked,
+            this, &ActionButtonsWidget::onEditClicked);
+    connect(m_deleteButton, &QPushButton::clicked,
+            this, &ActionButtonsWidget::onDeleteClicked);
+}
 
-    connect(m_deleteButton, &QPushButton::clicked, this, [this]() {
-        emit deleteRequested(m_familyId);
-    });
+void ActionButtonsWidget::onEditClicked()
+{
+    emit editRequested(m_familyId);
+}
+
+void ActionButtonsWidget::onDeleteClicked()
+{
+    emit deleteRequested(m_familyId);
+}
+
+void ActionButtonsWidget::onOkClicked()
+{
+    m_emergencyManager->setContactStatus(m_familyId, ContactStatus::OK);
+}
+
+void ActionButtonsWidget::onUnableToReachClicked()
+{
+    m_emergencyManager->setContactStatus(m_familyId, ContactStatus::UnableToReach);
+}
+
+void ActionButtonsWidget::onAddTaskClicked()
+{
+    emit addTaskRequested(m_familyId);
 }

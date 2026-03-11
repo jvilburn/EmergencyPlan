@@ -4,7 +4,6 @@
 
 #include <QWidget>
 
-class QLabel;
 class QPushButton;
 class EmergencyManager;
 
@@ -27,8 +26,16 @@ signals:
     void deleteRequested(const FamilyId& familyId);
     void addTaskRequested(const FamilyId& familyId);
 
+private slots:
+    void onEditClicked();
+    void onDeleteClicked();
+    void onOkClicked();
+    void onUnableToReachClicked();
+    void onAddTaskClicked();
+
 private:
     FamilyId m_familyId;
+    EmergencyManager* m_emergencyManager = nullptr;
     QPushButton* m_editButton = nullptr;
     QPushButton* m_deleteButton = nullptr;
 };
