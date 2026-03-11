@@ -54,6 +54,7 @@ private slots:
     void onItemExpanded(const QModelIndex& index);
     void onItemCollapsed(const QModelIndex& index);
     void onEmergencyStateChanged();
+    void onStatusFilterTabClicked();
     void onStatusFilterClicked(int statusIndex);
     void updateFilterTabCounts();
 
@@ -69,7 +70,7 @@ private:
     SelectionPreservingTreeView* m_treeView;
     QHash<FamilyId, ActionButtonsWidget*> m_actionWidgets;
 
-    // Emergency mode widgets (created on demand)
+    // Emergency mode widgets (initially hidden)
     QWidget* m_emergencyPanel = nullptr;
     EmergencyProgressBar* m_progressBar = nullptr;
     QList<QToolButton*> m_filterTabs;

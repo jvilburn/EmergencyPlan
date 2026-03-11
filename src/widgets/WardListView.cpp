@@ -15,6 +15,15 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 
+namespace StatusFilterIndex
+{
+    constexpr int All = 0;
+    constexpr int Remaining = 1;
+    constexpr int NeedsHelp = 2;
+    constexpr int OK = 3;
+    constexpr int UnableToReach = 4;
+}
+
 WardListView::WardListView(DocumentManager* documentManager,
                            EmergencyManager* emergencyManager,
                            QWidget* parent)
@@ -318,8 +327,7 @@ void WardListView::setupEmergencyWidgets()
     tabLayout->setContentsMargins(0, 0, 0, 0);
     tabLayout->setSpacing(2);
 
-    // Tab definitions: label prefix, status index
-    // 0=All, 1=Remaining(NotContacted), 2=NeedsHelp, 3=OK, 4=UnableToReach
+    // Tab definitions matching StatusFilterIndex constants
     QStringList tabLabels = {tr("All"), tr("Remaining"), tr("Needs Help"), tr("OK"), tr("Unable to Reach")};
 
     for (int i = 0; i < tabLabels.size(); ++i)
@@ -330,13 +338,12 @@ void WardListView::setupEmergencyWidgets()
         tab->setAutoExclusive(true);
         tab->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
         tab->setToolButtonStyle(Qt::ToolButtonTextOnly);
+        tab->setProperty("statusIndex", i);
         tabLayout->addWidget(tab);
         m_filterTabs.append(tab);
 
-        int statusIndex = i;
-        connect(tab, &QToolButton::clicked, this, [this, statusIndex]() {
-            onStatusFilterClicked(statusIndex);
-        });
+        connect(tab, &QToolButton::clicked,
+                this, &WardListView::onStatusFilterTabClicked);
     }
 
     // Default: "All" selected
@@ -368,25 +375,37 @@ void WardListView::onEmergencyStateChanged()
     }
 }
 
+void WardListView::onStatusFilterTabClicked()
+{
+    QToolButton* tab = qobject_cast<QToolButton*>(sender());
+    if (!tab)
+    {
+        return;
+    }
+
+    int statusIndex = tab->property("statusIndex").toInt();
+    onStatusFilterClicked(statusIndex);
+}
+
 void WardListView::onStatusFilterClicked(int statusIndex)
 {
     Filter* f = m_filterBar->filter();
 
     switch (statusIndex)
     {
-        case 0:  // All
+        case StatusFilterIndex::All:
             f->setContactStatusFilter(std::nullopt);
             break;
-        case 1:  // Remaining (NotContacted)
+        case StatusFilterIndex::Remaining:
             f->setContactStatusFilter(EffectiveContactStatus::NotContacted);
             break;
-        case 2:  // Needs Help
+        case StatusFilterIndex::NeedsHelp:
             f->setContactStatusFilter(EffectiveContactStatus::NeedsHelp);
             break;
-        case 3:  // OK
+        case StatusFilterIndex::OK:
             f->setContactStatusFilter(EffectiveContactStatus::OK);
             break;
-        case 4:  // Unable to Reach
+        case StatusFilterIndex::UnableToReach:
             f->setContactStatusFilter(EffectiveContactStatus::UnableToReach);
             break;
     }
@@ -405,9 +424,9 @@ void WardListView::updateFilterTabCounts()
     int unable = m_emergencyManager->countByStatus(EffectiveContactStatus::UnableToReach);
     int remaining = m_emergencyManager->countByStatus(EffectiveContactStatus::NotContacted);
 
-    m_filterTabs[0]->setText(tr("All (%1)").arg(total));
-    m_filterTabs[1]->setText(tr("Remaining (%1)").arg(remaining));
-    m_filterTabs[2]->setText(tr("Needs Help (%1)").arg(needsHelp));
-    m_filterTabs[3]->setText(tr("OK (%1)").arg(ok));
-    m_filterTabs[4]->setText(tr("Unable to Reach (%1)").arg(unable));
+    m_filterTabs[StatusFilterIndex::All]->setText(tr("All (%1)").arg(total));
+    m_filterTabs[StatusFilterIndex::Remaining]->setText(tr("Remaining (%1)").arg(remaining));
+    m_filterTabs[StatusFilterIndex::NeedsHelp]->setText(tr("Needs Help (%1)").arg(needsHelp));
+    m_filterTabs[StatusFilterIndex::OK]->setText(tr("OK (%1)").arg(ok));
+    m_filterTabs[StatusFilterIndex::UnableToReach]->setText(tr("Unable to Reach (%1)").arg(unable));
 }

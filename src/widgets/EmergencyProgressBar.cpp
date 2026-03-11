@@ -41,13 +41,13 @@ void EmergencyProgressBar::updateCounts()
 
     if (m_needsHelpCount > 0)
     {
-        summary += tr(" \xc2\xb7 %1 need help").arg(m_needsHelpCount);
+        summary += tr(" \u00B7 %1 need help").arg(m_needsHelpCount);
     }
     if (m_unableToReachCount > 0)
     {
-        summary += tr(" \xc2\xb7 %1 unable to reach").arg(m_unableToReachCount);
+        summary += tr(" \u00B7 %1 unable to reach").arg(m_unableToReachCount);
     }
-    summary += tr(" \xc2\xb7 %1 remaining").arg(m_notContactedCount);
+    summary += tr(" \u00B7 %1 remaining").arg(m_notContactedCount);
 
     m_summaryLabel->setText(summary);
     update();
@@ -74,29 +74,35 @@ void EmergencyProgressBar::paintEvent(QPaintEvent* event)
     double scale = static_cast<double>(barWidth) / m_totalCount;
 
     // Draw segments: OK (green), NeedsHelp (orange), UnableToReach (yellow), NotContacted (gray)
+    // Last non-zero segment fills remaining space to avoid pixel gaps from rounding.
     int x = barX;
+    int barRight = barX + barWidth;
 
+    // Build list of segments with non-zero counts
+    struct Segment { int count; QColor color; };
+    QList<Segment> segments;
     if (m_okCount > 0)
     {
-        int w = static_cast<int>(m_okCount * scale);
-        painter.fillRect(x, barY, w, barHeight, QColor(76, 175, 80));
-        x += w;
+        segments.append({m_okCount, QColor(76, 175, 80)});
     }
     if (m_needsHelpCount > 0)
     {
-        int w = static_cast<int>(m_needsHelpCount * scale);
-        painter.fillRect(x, barY, w, barHeight, QColor(255, 152, 0));
-        x += w;
+        segments.append({m_needsHelpCount, QColor(255, 152, 0)});
     }
     if (m_unableToReachCount > 0)
     {
-        int w = static_cast<int>(m_unableToReachCount * scale);
-        painter.fillRect(x, barY, w, barHeight, QColor(255, 235, 59));
-        x += w;
+        segments.append({m_unableToReachCount, QColor(255, 235, 59)});
     }
     if (m_notContactedCount > 0)
     {
-        // Fill remaining space for gray
-        painter.fillRect(x, barY, barX + barWidth - x, barHeight, QColor(200, 200, 200));
+        segments.append({m_notContactedCount, QColor(200, 200, 200)});
+    }
+
+    for (int i = 0; i < segments.size(); ++i)
+    {
+        bool isLast = (i == segments.size() - 1);
+        int w = isLast ? (barRight - x) : static_cast<int>(segments.at(i).count * scale);
+        painter.fillRect(x, barY, w, barHeight, segments.at(i).color);
+        x += w;
     }
 }
