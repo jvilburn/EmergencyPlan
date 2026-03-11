@@ -10,9 +10,11 @@
 class ActionButtonsWidget;
 class DocumentManager;
 class EmergencyManager;
+class EmergencyProgressBar;
 class FamilyTreeModel;
 class Filter;
 class FilterBar;
+class QToolButton;
 class SelectionPreservingTreeView;
 
 /// Tree view for ward family list.
@@ -51,10 +53,14 @@ private slots:
     void onRowsInserted(const QModelIndex& parent, int first, int last);
     void onItemExpanded(const QModelIndex& index);
     void onItemCollapsed(const QModelIndex& index);
+    void onEmergencyStateChanged();
+    void onStatusFilterClicked(int statusIndex);
+    void updateFilterTabCounts();
 
 private:
     void attachActionButtons(const QModelIndex& familyIndex);
     void detachActionButtons(const FamilyId& familyId);
+    void setupEmergencyWidgets();
 
     DocumentManager* m_documentManager;
     EmergencyManager* m_emergencyManager;
@@ -62,4 +68,9 @@ private:
     FamilyTreeModel* m_model;
     SelectionPreservingTreeView* m_treeView;
     QHash<FamilyId, ActionButtonsWidget*> m_actionWidgets;
+
+    // Emergency mode widgets (created on demand)
+    QWidget* m_emergencyPanel = nullptr;
+    EmergencyProgressBar* m_progressBar = nullptr;
+    QList<QToolButton*> m_filterTabs;
 };

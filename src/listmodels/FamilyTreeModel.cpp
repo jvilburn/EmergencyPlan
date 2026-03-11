@@ -472,12 +472,26 @@ void FamilyTreeModel::rebuild()
     QList<FamilyId> ids;
     ids.reserve(families.size());
 
+    std::optional<EffectiveContactStatus> statusFilter = m_filter->contactStatusFilter();
+
     for (auto it = families.begin(); it != families.end(); ++it)
     {
-        if (m_filter->passes(doc, it.value()))
+        if (!m_filter->passes(doc, it.value()))
         {
-            ids.append(it.key());
+            continue;
         }
+
+        // Apply contact status filter (requires EmergencyManager)
+        if (statusFilter.has_value() && m_emergencyManager)
+        {
+            EffectiveContactStatus familyStatus = m_emergencyManager->familyStatus(it.key());
+            if (familyStatus != *statusFilter)
+            {
+                continue;
+            }
+        }
+
+        ids.append(it.key());
     }
 
     // Sort by display name

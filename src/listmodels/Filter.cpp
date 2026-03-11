@@ -162,6 +162,15 @@ void Filter::removeResponseArea(ResponseArea area)
     }
 }
 
+void Filter::setContactStatusFilter(std::optional<EffectiveContactStatus> status)
+{
+    if (m_contactStatusFilter != status)
+    {
+        m_contactStatusFilter = status;
+        emit changed();
+    }
+}
+
 void Filter::clear()
 {
     bool wasEmpty = isEmpty();
@@ -179,6 +188,7 @@ void Filter::clear()
     m_specialNeeds.clear();
     m_hasAnySpecialNeed = false;
     m_responseAreas.clear();
+    m_contactStatusFilter = std::nullopt;
 
     if (!wasEmpty)
     {
@@ -200,7 +210,8 @@ bool Filter::isEmpty() const
         && !m_onlyWithContact
         && m_specialNeeds.isEmpty()
         && !m_hasAnySpecialNeed
-        && m_responseAreas.isEmpty();
+        && m_responseAreas.isEmpty()
+        && !m_contactStatusFilter.has_value();
 }
 
 bool Filter::passesFamilyCriteria(const Family& family) const

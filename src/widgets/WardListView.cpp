@@ -2,12 +2,17 @@
 #include "ActionButtonsWidget.h"
 #include "Document.h"
 #include "DocumentManager.h"
+#include "EmergencyManager.h"
+#include "EmergencyProgressBar.h"
 #include "Family.h"
 #include "FamilyTreeModel.h"
+#include "Filter.h"
 #include "FilterBar.h"
 #include "SelectionPreservingTreeView.h"
 
+#include <QHBoxLayout>
 #include <QHeaderView>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 WardListView::WardListView(DocumentManager* documentManager,
@@ -29,6 +34,10 @@ WardListView::WardListView(DocumentManager* documentManager,
 
     // Create model with filter from FilterBar
     m_model = new FamilyTreeModel(documentManager, emergencyManager, m_filterBar->filter(), false, this);
+
+    // Emergency progress bar and filter tabs (initially hidden)
+    setupEmergencyWidgets();
+    layout->addWidget(m_emergencyPanel);
 
     // Tree view with selection preservation
     m_treeView = new SelectionPreservingTreeView(m_model, this);
@@ -57,6 +66,17 @@ WardListView::WardListView(DocumentManager* documentManager,
             this, &WardListView::onRowsRemoved);
     connect(m_model, &QAbstractItemModel::rowsInserted,
             this, &WardListView::onRowsInserted);
+
+    // Emergency lifecycle
+    if (m_emergencyManager)
+    {
+        connect(m_emergencyManager, &EmergencyManager::emergencyStarted,
+                this, &WardListView::onEmergencyStateChanged);
+        connect(m_emergencyManager, &EmergencyManager::emergencyEnded,
+                this, &WardListView::onEmergencyStateChanged);
+        connect(m_emergencyManager, &EmergencyManager::responseDataChanged,
+                this, &WardListView::updateFilterTabCounts);
+    }
 
     // Emit initial visible families
     emit visibleFamiliesChanged(visibleFamilyIdsList());
@@ -279,4 +299,115 @@ void WardListView::detachActionButtons(const FamilyId& familyId)
     }
 
     m_actionWidgets.remove(familyId);
+}
+
+void WardListView::setupEmergencyWidgets()
+{
+    m_emergencyPanel = new QWidget(this);
+    QVBoxLayout* panelLayout = new QVBoxLayout(m_emergencyPanel);
+    panelLayout->setContentsMargins(0, 0, 0, 0);
+    panelLayout->setSpacing(2);
+
+    // Progress bar
+    m_progressBar = new EmergencyProgressBar(m_emergencyManager, m_emergencyPanel);
+    panelLayout->addWidget(m_progressBar);
+
+    // Filter tabs row
+    QWidget* tabRow = new QWidget(m_emergencyPanel);
+    QHBoxLayout* tabLayout = new QHBoxLayout(tabRow);
+    tabLayout->setContentsMargins(0, 0, 0, 0);
+    tabLayout->setSpacing(2);
+
+    // Tab definitions: label prefix, status index
+    // 0=All, 1=Remaining(NotContacted), 2=NeedsHelp, 3=OK, 4=UnableToReach
+    QStringList tabLabels = {tr("All"), tr("Remaining"), tr("Needs Help"), tr("OK"), tr("Unable to Reach")};
+
+    for (int i = 0; i < tabLabels.size(); ++i)
+    {
+        QToolButton* tab = new QToolButton(tabRow);
+        tab->setText(tabLabels.at(i));
+        tab->setCheckable(true);
+        tab->setAutoExclusive(true);
+        tab->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+        tab->setToolButtonStyle(Qt::ToolButtonTextOnly);
+        tabLayout->addWidget(tab);
+        m_filterTabs.append(tab);
+
+        int statusIndex = i;
+        connect(tab, &QToolButton::clicked, this, [this, statusIndex]() {
+            onStatusFilterClicked(statusIndex);
+        });
+    }
+
+    // Default: "All" selected
+    m_filterTabs.first()->setChecked(true);
+
+    panelLayout->addWidget(tabRow);
+
+    // Initially hidden
+    m_emergencyPanel->hide();
+}
+
+void WardListView::onEmergencyStateChanged()
+{
+    bool active = m_emergencyManager && m_emergencyManager->isActive();
+    m_emergencyPanel->setVisible(active);
+
+    if (!active)
+    {
+        // Clear contact status filter when emergency ends
+        m_filterBar->filter()->setContactStatusFilter(std::nullopt);
+        if (!m_filterTabs.isEmpty())
+        {
+            m_filterTabs.first()->setChecked(true);
+        }
+    }
+    else
+    {
+        updateFilterTabCounts();
+    }
+}
+
+void WardListView::onStatusFilterClicked(int statusIndex)
+{
+    Filter* f = m_filterBar->filter();
+
+    switch (statusIndex)
+    {
+        case 0:  // All
+            f->setContactStatusFilter(std::nullopt);
+            break;
+        case 1:  // Remaining (NotContacted)
+            f->setContactStatusFilter(EffectiveContactStatus::NotContacted);
+            break;
+        case 2:  // Needs Help
+            f->setContactStatusFilter(EffectiveContactStatus::NeedsHelp);
+            break;
+        case 3:  // OK
+            f->setContactStatusFilter(EffectiveContactStatus::OK);
+            break;
+        case 4:  // Unable to Reach
+            f->setContactStatusFilter(EffectiveContactStatus::UnableToReach);
+            break;
+    }
+}
+
+void WardListView::updateFilterTabCounts()
+{
+    if (!m_emergencyManager || !m_emergencyManager->isActive())
+    {
+        return;
+    }
+
+    int total = m_emergencyManager->totalFamilies();
+    int ok = m_emergencyManager->countByStatus(EffectiveContactStatus::OK);
+    int needsHelp = m_emergencyManager->countByStatus(EffectiveContactStatus::NeedsHelp);
+    int unable = m_emergencyManager->countByStatus(EffectiveContactStatus::UnableToReach);
+    int remaining = m_emergencyManager->countByStatus(EffectiveContactStatus::NotContacted);
+
+    m_filterTabs[0]->setText(tr("All (%1)").arg(total));
+    m_filterTabs[1]->setText(tr("Remaining (%1)").arg(remaining));
+    m_filterTabs[2]->setText(tr("Needs Help (%1)").arg(needsHelp));
+    m_filterTabs[3]->setText(tr("OK (%1)").arg(ok));
+    m_filterTabs[4]->setText(tr("Unable to Reach (%1)").arg(unable));
 }

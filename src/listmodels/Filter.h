@@ -6,6 +6,7 @@
 #include <QString>
 #include <optional>
 
+#include "EmergencyResponse.h"
 #include "Gender.h"
 #include "Id.h"
 #include "ResponseArea.h"
@@ -53,6 +54,7 @@ public:
     QSet<QString> specialNeeds() const { return m_specialNeeds; }
     bool hasAnySpecialNeed() const { return m_hasAnySpecialNeed; }
     QSet<ResponseArea> responseAreas() const { return m_responseAreas; }
+    std::optional<EffectiveContactStatus> contactStatusFilter() const { return m_contactStatusFilter; }
 
     // Setters (emit changed() signal)
     void setSearchText(const QString& text);
@@ -72,6 +74,7 @@ public:
     void setResponseAreas(const QSet<ResponseArea>& areas);
     void addResponseArea(ResponseArea area);
     void removeResponseArea(ResponseArea area);
+    void setContactStatusFilter(std::optional<EffectiveContactStatus> status);
 
     // Bulk operations
     void clear();
@@ -114,4 +117,5 @@ private:
     QSet<QString> m_specialNeeds;
     bool m_hasAnySpecialNeed = false;
     QSet<ResponseArea> m_responseAreas;
+    std::optional<EffectiveContactStatus> m_contactStatusFilter;
 };
