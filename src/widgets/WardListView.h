@@ -58,6 +58,11 @@ private slots:
     void onStatusFilterClicked(int statusIndex);
     void updateFilterTabCounts();
     void onLogContactRequested(const FamilyId& familyId);
+    void onAddTaskRequested(const FamilyId& familyId);
+    void onEditTaskRequested(const FamilyId& familyId, const TaskId& taskId);
+    void onNotifyTaskRequested(const FamilyId& familyId, const TaskId& taskId);
+    void onResolveTaskRequested(const FamilyId& familyId, const TaskId& taskId);
+    void onTreeContextMenu(const QPoint& pos);
 
 private:
     void attachActionButtons(const QModelIndex& familyIndex);

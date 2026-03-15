@@ -5,6 +5,7 @@
 #include "Family.h"
 #include "Filter.h"
 #include "Person.h"
+#include "Team.h"
 
 #include <QApplication>
 #include <QColor>
@@ -365,8 +366,10 @@ void FamilyTreeModel::updateFamilyRow(const FamilyId& familyId)
     phoneNode->displayText = familyPhone.isEmpty() ? tr("No phone") : QString(familyPhone);
     newChildren.append(phoneNode);
 
-    // Add contact attempt rows (only during active emergency)
-    appendContactAttemptNodes(oldNode, row, m_familyIds.at(row), newChildren);
+    // Add contact attempt and task rows (only during active emergency)
+    const FamilyId& updateFamilyId = m_familyIds.at(row);
+    appendContactAttemptNodes(oldNode, row, updateFamilyId, newChildren);
+    appendTaskNodes(oldNode, row, updateFamilyId, newChildren);
 
     // Add actions node
     TreeNode* actionsNode = new TreeNode();
@@ -682,8 +685,9 @@ void FamilyTreeModel::buildFamilyNode(int familyIndex)
     phoneNode->displayText = familyPhone.isEmpty() ? tr("No phone") : QString(familyPhone);
     familyNode->children.append(phoneNode);
 
-    // Add contact attempt rows (only during active emergency)
+    // Add contact attempt and task rows (only during active emergency)
     appendContactAttemptNodes(familyNode, familyIndex, familyId, familyNode->children);
+    appendTaskNodes(familyNode, familyIndex, familyId, familyNode->children);
 
     // Add actions node
     TreeNode* actionsNode = new TreeNode();
@@ -746,6 +750,88 @@ void FamilyTreeModel::appendContactAttemptNodes(TreeNode* parent, int familyInde
 
         attemptNode->displayText = display;
         children.append(attemptNode);
+    }
+}
+
+void FamilyTreeModel::appendTaskNodes(TreeNode* parent, int familyIndex,
+                                       const FamilyId& familyId,
+                                       QList<TreeNode*>& children)
+{
+    if (!m_emergencyManager || !m_emergencyManager->isActive())
+    {
+        return;
+    }
+
+    const FamilyResponseRecord* record = m_emergencyManager->recordForFamily(familyId);
+    if (!record || record->tasks().isEmpty())
+    {
+        return;
+    }
+
+    // Add "Tasks:" header
+    TreeNode* headerNode = new TreeNode();
+    headerNode->type = RowType::Task;
+    headerNode->familyIndex = familyIndex;
+    headerNode->parent = parent;
+    headerNode->displayText = tr("Tasks:");
+    children.append(headerNode);
+
+    const Document& doc = m_documentManager->document();
+    for (const ResponseTask& task : record->tasks())
+    {
+        // Line 1: "• Category - Description" or "✓ Category - Description" if resolved
+        TreeNode* taskNode = new TreeNode();
+        taskNode->type = RowType::Task;
+        taskNode->familyIndex = familyIndex;
+        taskNode->parent = parent;
+        taskNode->taskId = task.id();
+
+        QString prefix = task.isResolved()
+            ? QString::fromUtf8("\xe2\x9c\x93")   // ✓
+            : QString::fromUtf8("\xe2\x80\xa2");   // •
+        QString display = tr("  %1 %2 - \"%3\"").arg(prefix, task.category(), task.description());
+        taskNode->displayText = display;
+        children.append(taskNode);
+
+        // Line 2: assignment info (as child-like indented row)
+        QString assignmentText;
+        if (task.assignedTeamId())
+        {
+            const QHash<TeamId, Team>& teams = doc.teams();
+            auto it = teams.constFind(*task.assignedTeamId());
+            if (it != teams.constEnd())
+            {
+                assignmentText = tr("    Assigned to %1").arg(it.value().name());
+            }
+        }
+        else if (task.assignedPersonId())
+        {
+            std::optional<Person> person = doc.findPersonById(*task.assignedPersonId());
+            if (person)
+            {
+                assignmentText = tr("    Assigned to %1").arg(person->displayName());
+            }
+        }
+
+        if (!assignmentText.isEmpty())
+        {
+            if (task.isNotified())
+            {
+                assignmentText += tr(" \xe2\x9c\x93 notified");
+            }
+            else
+            {
+                assignmentText += tr(" \xe2\x97\x8b not notified");
+            }
+
+            TreeNode* assignNode = new TreeNode();
+            assignNode->type = RowType::Task;
+            assignNode->familyIndex = familyIndex;
+            assignNode->parent = parent;
+            assignNode->taskId = task.id();
+            assignNode->displayText = assignmentText;
+            children.append(assignNode);
+        }
     }
 }
 
@@ -917,6 +1003,13 @@ QVariant FamilyTreeModel::data(const QModelIndex& index, int role) const
             }
             return QVariant();
 
+        case TaskIdRole:
+            if (node->type == RowType::Task && node->taskId)
+            {
+                return node->taskId->toString();
+            }
+            return QVariant();
+
         case Qt::FontRole:
             if (node->type == RowType::ContactAttempt)
             {
@@ -924,12 +1017,34 @@ QVariant FamilyTreeModel::data(const QModelIndex& index, int role) const
                 font.setItalic(true);
                 return font;
             }
+            if (node->type == RowType::Task && node->taskId
+                && m_emergencyManager && m_emergencyManager->isActive())
+            {
+                FamilyId famId = m_familyIds.at(node->familyIndex);
+                const FamilyResponseRecord* rec = m_emergencyManager->recordForFamily(famId);
+                if (rec)
+                {
+                    for (const ResponseTask& t : rec->tasks())
+                    {
+                        if (t.id() == *node->taskId && t.isResolved())
+                        {
+                            QFont font;
+                            font.setStrikeOut(true);
+                            return font;
+                        }
+                    }
+                }
+            }
             return QVariant();
 
         case Qt::ForegroundRole:
             if (node->type == RowType::ContactAttempt)
             {
                 return QColor(100, 100, 100);
+            }
+            if (node->type == RowType::Task)
+            {
+                return QColor(80, 80, 80);
             }
             // Gray out placeholder text
             if (node->displayText == tr("No contact info")
@@ -953,6 +1068,7 @@ QHash<int, QByteArray> FamilyTreeModel::roleNames() const
     roles[MemberIndexRole] = "memberIndex";
     roles[DetailTypeRole] = "detailType";
     roles[ResponseStatusRole] = "responseStatus";
+    roles[TaskIdRole] = "taskId";
     return roles;
 }
 
@@ -1037,6 +1153,7 @@ ItemType FamilyTreeModel::itemTypeAt(const QModelIndex& index) const
     case RowType::Address:
     case RowType::Phone:
     case RowType::ContactAttempt:
+    case RowType::Task:
     case RowType::Actions:
         return ItemType::ContactDetail;
     default:
@@ -1075,6 +1192,7 @@ SelectionKey FamilyTreeModel::selectionKeyAt(const QModelIndex& index) const
     case RowType::Address:
     case RowType::Phone:
     case RowType::ContactAttempt:
+    case RowType::Task:
     case RowType::Actions:
         // Delegate to parent
         return selectionKeyAt(index.parent());

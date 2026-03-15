@@ -9,10 +9,15 @@
 #include "FamilyTreeModel.h"
 #include "Filter.h"
 #include "FilterBar.h"
+#include "NotifyDialog.h"
 #include "SelectionPreservingTreeView.h"
+#include "TaskDialog.h"
 
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QInputDialog>
+#include <QLineEdit>
+#include <QMenu>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -68,6 +73,11 @@ WardListView::WardListView(DocumentManager* documentManager,
             this, &WardListView::onItemExpanded);
     connect(m_treeView, &QTreeView::collapsed,
             this, &WardListView::onItemCollapsed);
+
+    // Context menu for task actions
+    m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_treeView, &QWidget::customContextMenuRequested,
+            this, &WardListView::onTreeContextMenu);
 
     // Connect model signals
     connect(m_model, &QAbstractItemModel::modelReset,
@@ -277,6 +287,8 @@ void WardListView::attachActionButtons(const QModelIndex& familyIndex)
                     this, &WardListView::deleteFamilyRequested);
             connect(widget, &ActionButtonsWidget::logContactRequested,
                     this, &WardListView::onLogContactRequested);
+            connect(widget, &ActionButtonsWidget::addTaskRequested,
+                    this, &WardListView::onAddTaskRequested);
 
             m_treeView->setIndexWidget(childIndex, widget);
             m_actionWidgets[*familyId] = widget;
@@ -446,5 +458,168 @@ void WardListView::onLogContactRequested(const FamilyId& familyId)
     if (attempt)
     {
         m_emergencyManager->addContactAttempt(familyId, *attempt);
+    }
+}
+
+void WardListView::onAddTaskRequested(const FamilyId& familyId)
+{
+    TaskDialog dialog(m_documentManager, m_emergencyManager, this);
+    if (dialog.exec() != QDialog::Accepted)
+    {
+        return;
+    }
+
+    std::optional<ResponseTask> task = dialog.result();
+    if (task)
+    {
+        m_emergencyManager->addTask(familyId, *task);
+    }
+}
+
+void WardListView::onEditTaskRequested(const FamilyId& familyId, const TaskId& taskId)
+{
+    const FamilyResponseRecord* record = m_emergencyManager->recordForFamily(familyId);
+    if (!record)
+    {
+        return;
+    }
+
+    // Find the existing task
+    const ResponseTask* existingTask = nullptr;
+    for (const ResponseTask& t : record->tasks())
+    {
+        if (t.id() == taskId)
+        {
+            existingTask = &t;
+            break;
+        }
+    }
+    if (!existingTask)
+    {
+        return;
+    }
+
+    TaskDialog dialog(m_documentManager, m_emergencyManager, this);
+    dialog.setTask(*existingTask);
+    if (dialog.exec() != QDialog::Accepted)
+    {
+        return;
+    }
+
+    std::optional<ResponseTask> updatedTask = dialog.result();
+    if (updatedTask)
+    {
+        m_emergencyManager->updateTask(familyId, *updatedTask);
+    }
+}
+
+void WardListView::onNotifyTaskRequested(const FamilyId& familyId, const TaskId& taskId)
+{
+    NotifyDialog dialog(this);
+    if (dialog.exec() != QDialog::Accepted)
+    {
+        return;
+    }
+
+    std::optional<TaskNotification> notification = dialog.result();
+    if (notification)
+    {
+        m_emergencyManager->notifyAssignee(familyId, taskId, *notification);
+    }
+}
+
+void WardListView::onResolveTaskRequested(const FamilyId& familyId, const TaskId& taskId)
+{
+    bool ok = false;
+    QString notes = QInputDialog::getText(
+        this, tr("Resolve Task"), tr("Resolution notes (optional):"),
+        QLineEdit::Normal, QString(), &ok);
+
+    if (!ok)
+    {
+        return;
+    }
+
+    m_emergencyManager->resolveTask(familyId, taskId, notes.trimmed());
+}
+
+void WardListView::onTreeContextMenu(const QPoint& pos)
+{
+    QModelIndex index = m_treeView->indexAt(pos);
+    if (!index.isValid())
+    {
+        return;
+    }
+
+    FamilyTreeModel::RowType rowType = m_model->rowTypeAt(index);
+    if (rowType != FamilyTreeModel::RowType::Task)
+    {
+        return;
+    }
+
+    // Get family and task IDs
+    std::optional<FamilyId> familyId = m_model->familyIdAt(index);
+    QString taskIdStr = index.data(FamilyTreeModel::TaskIdRole).toString();
+    if (!familyId || taskIdStr.isEmpty())
+    {
+        return;
+    }
+
+    TaskId taskId = TaskId::fromString(taskIdStr);
+
+    // Find the task to determine available actions
+    const FamilyResponseRecord* record = m_emergencyManager->recordForFamily(*familyId);
+    if (!record)
+    {
+        return;
+    }
+
+    const ResponseTask* task = nullptr;
+    for (const ResponseTask& t : record->tasks())
+    {
+        if (t.id() == taskId)
+        {
+            task = &t;
+            break;
+        }
+    }
+    if (!task)
+    {
+        return;
+    }
+
+    QMenu menu(this);
+
+    QAction* editAction = menu.addAction(tr("Edit Task"));
+    QAction* notifyAction = nullptr;
+    QAction* resolveAction = nullptr;
+
+    if (task->isAssigned() && !task->isNotified())
+    {
+        notifyAction = menu.addAction(tr("Notify Assignee"));
+    }
+
+    if (!task->isResolved())
+    {
+        resolveAction = menu.addAction(tr("Resolve"));
+    }
+
+    QAction* chosen = menu.exec(m_treeView->viewport()->mapToGlobal(pos));
+    if (!chosen)
+    {
+        return;
+    }
+
+    if (chosen == editAction)
+    {
+        onEditTaskRequested(*familyId, taskId);
+    }
+    else if (chosen == notifyAction)
+    {
+        onNotifyTaskRequested(*familyId, taskId);
+    }
+    else if (chosen == resolveAction)
+    {
+        onResolveTaskRequested(*familyId, taskId);
     }
 }

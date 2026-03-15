@@ -33,6 +33,7 @@ public:
         Address,          // Family address
         Phone,            // Family phone
         ContactAttempt,   // Emergency: contact attempt record
+        Task,             // Emergency: task record
         Actions           // Edit/Delete buttons
     };
     Q_ENUM(RowType)
@@ -43,7 +44,8 @@ public:
         FamilyIdRole,
         MemberIndexRole,
         DetailTypeRole,
-        ResponseStatusRole
+        ResponseStatusRole,
+        TaskIdRole
     };
     Q_ENUM(Roles)
 
@@ -122,6 +124,7 @@ private:
         int familyIndex = -1;   // Index into m_familyIds
         int memberIndex = -1;   // For Member/MemberDetail rows
         DetailType detailType = DetailType::Phone; // For MemberDetail rows
+        std::optional<TaskId> taskId;  // For Task rows
         QString displayText;    // Cached display text
         TreeNode* parent = nullptr;
         QList<TreeNode*> children;
@@ -136,6 +139,8 @@ private:
     void buildFamilyNode(int familyIndex);
     void appendContactAttemptNodes(TreeNode* parent, int familyIndex,
                                     const FamilyId& familyId, QList<TreeNode*>& children);
+    void appendTaskNodes(TreeNode* parent, int familyIndex,
+                          const FamilyId& familyId, QList<TreeNode*>& children);
     TreeNode* nodeFromIndex(const QModelIndex& index) const;
 
     QList<FamilyId> m_familyIds;
