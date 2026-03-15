@@ -217,6 +217,8 @@ void MainWindow::setupConnections()
             this, &MainWindow::onEmergencyStarted);
     connect(m_emergencyManager, &EmergencyManager::emergencyEnded,
             this, &MainWindow::onEmergencyEnded);
+    connect(m_emergencyManager, &EmergencyManager::responseDataChanged,
+            m_mapWidget, &MapWidget::updateHighlights);
 
     // Sidebar tab changes
     connect(m_sidebarTabs, &SidebarWidget::currentChanged,

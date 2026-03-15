@@ -159,6 +159,28 @@ QSet<FamilyId> WardListView::visibleFamilyIds() const
     return QSet<FamilyId>(list.begin(), list.end());
 }
 
+QString WardListView::familyStatusIcon(const FamilyId& familyId) const
+{
+    if (!m_emergencyManager || !m_emergencyManager->isActive())
+    {
+        return {};
+    }
+
+    EffectiveContactStatus status = m_emergencyManager->familyStatus(familyId);
+    switch (status)
+    {
+        case EffectiveContactStatus::OK:
+            return QString::fromUtf8("\xe2\x9c\x93");  // ✓
+        case EffectiveContactStatus::NeedsHelp:
+            return QString::fromUtf8("\xe2\x9a\x91");  // ⚑
+        case EffectiveContactStatus::UnableToReach:
+            return "?";
+        case EffectiveContactStatus::NotContacted:
+            return {};
+    }
+    return {};
+}
+
 void WardListView::onSelectionChanged()
 {
     emit highlightChanged();

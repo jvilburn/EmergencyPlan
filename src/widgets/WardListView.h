@@ -31,6 +31,7 @@ public:
     // FamilyMarkerProvider interface
     HighlightInfo highlightInfo() const override;
     QSet<FamilyId> visibleFamilyIds() const override;
+    QString familyStatusIcon(const FamilyId& familyId) const override;
 
     std::optional<FamilyId> selectedFamilyId() const;
     void setSelectedFamilyId(const std::optional<FamilyId>& id);

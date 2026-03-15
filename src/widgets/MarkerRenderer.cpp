@@ -16,6 +16,11 @@
 namespace MarkerRenderer
 {
 
+// Status icon string constants (matched by familyStatusIcon() return values)
+static const QString kStatusOK = QString::fromUtf8("\xe2\x9c\x93");           // ✓
+static const QString kStatusNeedsHelp = QString::fromUtf8("\xe2\x9a\x91");    // ⚑
+static const QString kStatusUnableToReach = "?";
+
 // Marker sizing constants
 constexpr double SVG_BASE_SIZE = 24.0;
 
@@ -256,6 +261,46 @@ void draw(QPainter& painter, const QPointF& pos,
         painter.setBrush(QColor("#2196F3"));
         painter.setPen(QPen(Qt::white, 1.0 * state.scale));
         painter.drawEllipse(pipPos, pipRadius, pipRadius);
+    }
+
+    // Draw welfare status badge (bottom-right corner)
+    if (!state.statusIcon.isEmpty())
+    {
+        double badgeRadius = 5.0 * state.scale;
+        double badgeOffset = (size / 2.0) * 0.6;
+        QPointF badgePos(pos.x() + badgeOffset, pos.y() + badgeOffset);
+
+        QColor badgeBg;
+        if (state.statusIcon == kStatusOK)
+        {
+            badgeBg = QColor(76, 175, 80);    // Green
+        }
+        else if (state.statusIcon == kStatusNeedsHelp)
+        {
+            badgeBg = QColor(255, 152, 0);    // Orange
+        }
+        else if (state.statusIcon == kStatusUnableToReach)
+        {
+            badgeBg = QColor(255, 235, 59);   // Yellow
+        }
+
+        if (badgeBg.isValid())
+        {
+            // Draw badge circle with white outline
+            painter.setBrush(badgeBg);
+            painter.setPen(QPen(Qt::white, 1.5 * state.scale));
+            painter.drawEllipse(badgePos, badgeRadius, badgeRadius);
+
+            // Draw symbol
+            painter.setPen(Qt::white);
+            QFont font = painter.font();
+            font.setPixelSize(static_cast<int>(8.0 * state.scale));
+            font.setBold(true);
+            painter.setFont(font);
+            painter.drawText(QRectF(badgePos.x() - badgeRadius, badgePos.y() - badgeRadius,
+                                     badgeRadius * 2, badgeRadius * 2),
+                              Qt::AlignCenter, state.statusIcon);
+        }
     }
 
     painter.setOpacity(1.0);
