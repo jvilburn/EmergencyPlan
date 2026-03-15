@@ -9,6 +9,7 @@
 #include <QVBoxLayout>
 
 MinisteringTabView::MinisteringTabView(DocumentManager* documentManager,
+                                         EmergencyManager* emergencyManager,
                                          MinisteringOrg org,
                                          QWidget* parent)
     : QWidget(parent)
@@ -22,7 +23,7 @@ MinisteringTabView::MinisteringTabView(DocumentManager* documentManager,
     layout->addWidget(m_filterBar);
 
     // Create models with filter from FilterBar
-    m_mainModel = new MinisteringModel(documentManager, m_filterBar->filter(), org, this);
+    m_mainModel = new MinisteringModel(documentManager, emergencyManager, m_filterBar->filter(), org, this);
     m_unassignedModel = new UnassignedMinisteringModel(documentManager, m_filterBar->filter(), org, this);
 
     // Pass models to tree views - views don't need org

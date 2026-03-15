@@ -5,7 +5,9 @@
 #include <QTabBar>
 #include <QVBoxLayout>
 
-MinisteringView::MinisteringView(DocumentManager* docManager, QWidget* parent)
+MinisteringView::MinisteringView(DocumentManager* docManager,
+                                   EmergencyManager* emergencyManager,
+                                   QWidget* parent)
     : QWidget(parent)
 {
     setMinimumWidth(250);
@@ -21,8 +23,8 @@ MinisteringView::MinisteringView(DocumentManager* docManager, QWidget* parent)
     layout->addWidget(m_tabBar);
 
     // Tab views
-    m_eqView = new MinisteringTabView(docManager, MinisteringOrg::EldersQuorum, this);
-    m_rsView = new MinisteringTabView(docManager, MinisteringOrg::ReliefSociety, this);
+    m_eqView = new MinisteringTabView(docManager, emergencyManager, MinisteringOrg::EldersQuorum, this);
+    m_rsView = new MinisteringTabView(docManager, emergencyManager, MinisteringOrg::ReliefSociety, this);
 
     // Stack for switching
     m_stack = new QStackedWidget();

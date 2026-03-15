@@ -7,6 +7,7 @@
 #include <QString>
 
 class DocumentManager;
+class EmergencyManager;
 class Filter;
 
 /// Model for ministering tree (multi-level: District → Companionship → Section → Person).
@@ -33,6 +34,7 @@ public:
     Q_ENUM(Roles)
 
     explicit MinisteringModel(DocumentManager* documentManager,
+                               EmergencyManager* emergencyManager,
                                Filter* filter,
                                MinisteringOrg org,
                                QObject* parent);
@@ -69,6 +71,8 @@ public:
 
 private slots:
     void onDocumentChanged(const DocumentChange& change);
+    void onFamilyStatusChanged(const FamilyId& familyId);
+    void onEmergencyStateChanged();
 
 private:
     void rebuild();
@@ -102,8 +106,14 @@ private:
     bool isEQ() const { return m_org == MinisteringOrg::EldersQuorum; }
     QSet<FamilyId> familyIdsForPersons(const QSet<PersonId>& personIds) const;
 
+    FamilyId familyIdForNode(const TreeNode* node) const;
+    QString compactStatusSummary(TreeNode* companionshipNode) const;
+    QString districtProgressText(TreeNode* districtNode) const;
+    QString districtLeaderPhone(const MinisteringDistrict& district) const;
+
     QList<TreeNode*> m_districtNodes;  // Top-level nodes (owned)
     DocumentManager* m_documentManager;
+    EmergencyManager* m_emergencyManager;
     Filter* m_filter;
     MinisteringOrg m_org;
 };

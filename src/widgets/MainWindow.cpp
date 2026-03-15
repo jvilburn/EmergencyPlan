@@ -102,7 +102,7 @@ void MainWindow::setupUi()
     m_wardListView = new WardListView(m_documentManager, m_emergencyManager, this);
     m_sidebarTabs->addPage(m_wardListView, tr("Families"));
 
-    m_ministeringView = new MinisteringView(m_documentManager, this);
+    m_ministeringView = new MinisteringView(m_documentManager, m_emergencyManager, this);
     m_sidebarTabs->addPage(m_ministeringView, tr("Ministering"));
 
     m_teamsView = new TeamsView(m_documentManager, this);
