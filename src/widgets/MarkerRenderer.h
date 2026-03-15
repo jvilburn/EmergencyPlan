@@ -61,4 +61,10 @@ namespace MarkerRenderer
 
     /// Size of the church marker icon (for bounding calculations).
     constexpr double CHURCH_MARKER_SIZE = 24.0;
+
+    /// Status icon strings for welfare check badges.
+    /// Used by FamilyMarkerProvider::familyStatusIcon() and badge rendering.
+    inline const QString STATUS_OK = QString::fromUtf8("\xe2\x9c\x93");           // ✓
+    inline const QString STATUS_NEEDS_HELP = QString::fromUtf8("\xe2\x9a\x91");   // ⚑
+    inline const QString STATUS_UNABLE_TO_REACH = "?";
 }

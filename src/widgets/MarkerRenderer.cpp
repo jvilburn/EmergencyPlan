@@ -16,11 +16,6 @@
 namespace MarkerRenderer
 {
 
-// Status icon string constants (matched by familyStatusIcon() return values)
-static const QString kStatusOK = QString::fromUtf8("\xe2\x9c\x93");           // ✓
-static const QString kStatusNeedsHelp = QString::fromUtf8("\xe2\x9a\x91");    // ⚑
-static const QString kStatusUnableToReach = "?";
-
 // Marker sizing constants
 constexpr double SVG_BASE_SIZE = 24.0;
 
@@ -271,15 +266,15 @@ void draw(QPainter& painter, const QPointF& pos,
         QPointF badgePos(pos.x() + badgeOffset, pos.y() + badgeOffset);
 
         QColor badgeBg;
-        if (state.statusIcon == kStatusOK)
+        if (state.statusIcon == STATUS_OK)
         {
             badgeBg = QColor(76, 175, 80);    // Green
         }
-        else if (state.statusIcon == kStatusNeedsHelp)
+        else if (state.statusIcon == STATUS_NEEDS_HELP)
         {
             badgeBg = QColor(255, 152, 0);    // Orange
         }
-        else if (state.statusIcon == kStatusUnableToReach)
+        else if (state.statusIcon == STATUS_UNABLE_TO_REACH)
         {
             badgeBg = QColor(255, 235, 59);   // Yellow
         }
@@ -291,15 +286,18 @@ void draw(QPainter& painter, const QPointF& pos,
             painter.setPen(QPen(Qt::white, 1.5 * state.scale));
             painter.drawEllipse(badgePos, badgeRadius, badgeRadius);
 
-            // Draw symbol
-            painter.setPen(Qt::white);
-            QFont font = painter.font();
-            font.setPixelSize(static_cast<int>(8.0 * state.scale));
-            font.setBold(true);
-            painter.setFont(font);
+            // Draw symbol (dark text on yellow for contrast)
+            bool isYellow = (state.statusIcon == STATUS_UNABLE_TO_REACH);
+            painter.setPen(isYellow ? QColor(50, 50, 50) : QColor(Qt::white));
+            QFont origFont = painter.font();
+            QFont badgeFont = origFont;
+            badgeFont.setPixelSize(static_cast<int>(8.0 * state.scale));
+            badgeFont.setBold(true);
+            painter.setFont(badgeFont);
             painter.drawText(QRectF(badgePos.x() - badgeRadius, badgePos.y() - badgeRadius,
                                      badgeRadius * 2, badgeRadius * 2),
                               Qt::AlignCenter, state.statusIcon);
+            painter.setFont(origFont);
         }
     }
 

@@ -9,6 +9,7 @@
 #include "FamilyTreeModel.h"
 #include "Filter.h"
 #include "FilterBar.h"
+#include "MarkerRenderer.h"
 #include "NotifyDialog.h"
 #include "SelectionPreservingTreeView.h"
 #include "TaskDialog.h"
@@ -170,11 +171,11 @@ QString WardListView::familyStatusIcon(const FamilyId& familyId) const
     switch (status)
     {
         case EffectiveContactStatus::OK:
-            return QString::fromUtf8("\xe2\x9c\x93");  // ✓
+            return MarkerRenderer::STATUS_OK;
         case EffectiveContactStatus::NeedsHelp:
-            return QString::fromUtf8("\xe2\x9a\x91");  // ⚑
+            return MarkerRenderer::STATUS_NEEDS_HELP;
         case EffectiveContactStatus::UnableToReach:
-            return "?";
+            return MarkerRenderer::STATUS_UNABLE_TO_REACH;
         case EffectiveContactStatus::NotContacted:
             return {};
     }
