@@ -21,11 +21,16 @@ static QString contactMethodDisplayName(ContactMethod method)
 {
     switch (method)
     {
-        case ContactMethod::Phone: return QObject::tr("Phone");
-        case ContactMethod::Text:  return QObject::tr("Text");
-        case ContactMethod::Email: return QObject::tr("Email");
-        case ContactMethod::Visit: return QObject::tr("Visit");
-        case ContactMethod::Other: return QObject::tr("Other");
+        case ContactMethod::Phone:
+            return QObject::tr("Phone");
+        case ContactMethod::Text:
+            return QObject::tr("Text");
+        case ContactMethod::Email:
+            return QObject::tr("Email");
+        case ContactMethod::Visit:
+            return QObject::tr("Visit");
+        case ContactMethod::Other:
+            return QObject::tr("Other");
     }
     return QObject::tr("Phone");
 }
@@ -361,44 +366,7 @@ void FamilyTreeModel::updateFamilyRow(const FamilyId& familyId)
     newChildren.append(phoneNode);
 
     // Add contact attempt rows (only during active emergency)
-    if (m_emergencyManager && m_emergencyManager->isActive())
-    {
-        const FamilyId& familyId = m_familyIds.at(row);
-        const FamilyResponseRecord* record = m_emergencyManager->recordForFamily(familyId);
-        if (record)
-        {
-            const Document& doc = m_documentManager->document();
-            for (const ContactAttempt& attempt : record->contactAttempts())
-            {
-                TreeNode* attemptNode = new TreeNode();
-                attemptNode->type = RowType::ContactAttempt;
-                attemptNode->familyIndex = row;
-                attemptNode->parent = oldNode;
-
-                QString methodStr = contactMethodDisplayName(attempt.method());
-                QString whoName;
-                std::optional<Person> person = doc.findPersonById(attempt.who());
-                if (person)
-                {
-                    whoName = person->displayName();
-                }
-                else
-                {
-                    whoName = tr("Unknown");
-                }
-
-                QString timeStr = attempt.timestamp().toLocalTime().toString(tr("MMM d, h:mm AP"));
-                QString display = tr("%1 - %2 - %3").arg(methodStr, whoName, timeStr);
-                if (!attempt.notes().isEmpty())
-                {
-                    display += tr(" - \"%1\"").arg(attempt.notes());
-                }
-
-                attemptNode->displayText = display;
-                newChildren.append(attemptNode);
-            }
-        }
-    }
+    appendContactAttemptNodes(oldNode, row, m_familyIds.at(row), newChildren);
 
     // Add actions node
     TreeNode* actionsNode = new TreeNode();
@@ -715,44 +683,7 @@ void FamilyTreeModel::buildFamilyNode(int familyIndex)
     familyNode->children.append(phoneNode);
 
     // Add contact attempt rows (only during active emergency)
-    if (m_emergencyManager && m_emergencyManager->isActive())
-    {
-        const FamilyResponseRecord* record = m_emergencyManager->recordForFamily(familyId);
-        if (record)
-        {
-            const Document& doc = m_documentManager->document();
-            for (const ContactAttempt& attempt : record->contactAttempts())
-            {
-                TreeNode* attemptNode = new TreeNode();
-                attemptNode->type = RowType::ContactAttempt;
-                attemptNode->familyIndex = familyIndex;
-                attemptNode->parent = familyNode;
-
-                // Format: "Phone - John Smith - Jan 4, 2:15 PM - notes"
-                QString methodStr = contactMethodDisplayName(attempt.method());
-                QString whoName;
-                std::optional<Person> person = doc.findPersonById(attempt.who());
-                if (person)
-                {
-                    whoName = person->displayName();
-                }
-                else
-                {
-                    whoName = tr("Unknown");
-                }
-
-                QString timeStr = attempt.timestamp().toLocalTime().toString(tr("MMM d, h:mm AP"));
-                QString display = tr("%1 - %2 - %3").arg(methodStr, whoName, timeStr);
-                if (!attempt.notes().isEmpty())
-                {
-                    display += tr(" - \"%1\"").arg(attempt.notes());
-                }
-
-                attemptNode->displayText = display;
-                familyNode->children.append(attemptNode);
-            }
-        }
-    }
+    appendContactAttemptNodes(familyNode, familyIndex, familyId, familyNode->children);
 
     // Add actions node
     TreeNode* actionsNode = new TreeNode();
@@ -760,6 +691,62 @@ void FamilyTreeModel::buildFamilyNode(int familyIndex)
     actionsNode->familyIndex = familyIndex;
     actionsNode->parent = familyNode;
     familyNode->children.append(actionsNode);
+}
+
+void FamilyTreeModel::appendContactAttemptNodes(TreeNode* parent, int familyIndex,
+                                                 const FamilyId& familyId,
+                                                 QList<TreeNode*>& children)
+{
+    if (!m_emergencyManager || !m_emergencyManager->isActive())
+    {
+        return;
+    }
+
+    const FamilyResponseRecord* record = m_emergencyManager->recordForFamily(familyId);
+    if (!record || record->contactAttempts().isEmpty())
+    {
+        return;
+    }
+
+    // Add "Contact Attempts:" header
+    TreeNode* headerNode = new TreeNode();
+    headerNode->type = RowType::ContactAttempt;
+    headerNode->familyIndex = familyIndex;
+    headerNode->parent = parent;
+    headerNode->displayText = tr("Contact Attempts:");
+    children.append(headerNode);
+
+    const Document& doc = m_documentManager->document();
+    for (const ContactAttempt& attempt : record->contactAttempts())
+    {
+        TreeNode* attemptNode = new TreeNode();
+        attemptNode->type = RowType::ContactAttempt;
+        attemptNode->familyIndex = familyIndex;
+        attemptNode->parent = parent;
+
+        // Format: "Phone - John Smith - Jan 4, 2:15 PM - notes"
+        QString methodStr = contactMethodDisplayName(attempt.method());
+        QString whoName;
+        std::optional<Person> person = doc.findPersonById(attempt.who());
+        if (person)
+        {
+            whoName = person->displayName();
+        }
+        else
+        {
+            whoName = tr("Unknown");
+        }
+
+        QString timeStr = attempt.timestamp().toLocalTime().toString(tr("MMM d, h:mm AP"));
+        QString display = tr("  %1 - %2 - %3").arg(methodStr, whoName, timeStr);
+        if (!attempt.notes().isEmpty())
+        {
+            display += tr(" - \"%1\"").arg(attempt.notes());
+        }
+
+        attemptNode->displayText = display;
+        children.append(attemptNode);
+    }
 }
 
 FamilyTreeModel::TreeNode* FamilyTreeModel::nodeFromIndex(const QModelIndex& index) const

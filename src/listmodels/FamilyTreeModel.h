@@ -134,6 +134,8 @@ private:
 
     void clearNodes();
     void buildFamilyNode(int familyIndex);
+    void appendContactAttemptNodes(TreeNode* parent, int familyIndex,
+                                    const FamilyId& familyId, QList<TreeNode*>& children);
     TreeNode* nodeFromIndex(const QModelIndex& index) const;
 
     QList<FamilyId> m_familyIds;

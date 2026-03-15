@@ -69,7 +69,7 @@ ContactAttemptDialog::ContactAttemptDialog(DocumentManager* documentManager,
     };
     QList<PersonEntry> entries;
 
-    const auto& families = m_documentManager->document().families();
+    const QHash<FamilyId, Family>& families = m_documentManager->document().families();
     for (auto it = families.constBegin(); it != families.constEnd(); ++it)
     {
         for (const Person& person : it.value().members())
@@ -79,10 +79,7 @@ ContactAttemptDialog::ContactAttemptDialog(DocumentManager* documentManager,
     }
 
     std::sort(entries.begin(), entries.end(),
-              [](const PersonEntry& a, const PersonEntry& b)
-              {
-                  return a.displayName.toLower() < b.displayName.toLower();
-              });
+              [](const PersonEntry& a, const PersonEntry& b) { return a.displayName.toLower() < b.displayName.toLower(); });
 
     for (const PersonEntry& entry : entries)
     {
