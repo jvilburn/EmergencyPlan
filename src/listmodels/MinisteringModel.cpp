@@ -8,76 +8,10 @@
 #include "MinisteringGroup.h"
 #include "Family.h"
 #include "Person.h"
+#include "StatusIcons.h"
 
 #include <algorithm>
-#include <QApplication>
 #include <QFont>
-#include <QPainter>
-
-// Status icon creation (same pattern as FamilyTreeModel)
-static QIcon createStatusIcon(EffectiveContactStatus status)
-{
-    constexpr int SIZE = 16;
-    double dpr = qApp->devicePixelRatio();
-    int pixelSize = static_cast<int>(SIZE * dpr);
-
-    QPixmap pixmap(pixelSize, pixelSize);
-    pixmap.setDevicePixelRatio(dpr);
-    pixmap.fill(Qt::transparent);
-
-    QPainter painter(&pixmap);
-    painter.setRenderHint(QPainter::Antialiasing);
-
-    QColor bgColor;
-    QString symbol;
-
-    switch (status)
-    {
-    case EffectiveContactStatus::OK:
-        bgColor = QColor(76, 175, 80);
-        symbol = QString::fromUtf8("\xe2\x9c\x93");
-        break;
-    case EffectiveContactStatus::NeedsHelp:
-        bgColor = QColor(255, 152, 0);
-        symbol = QString::fromUtf8("\xe2\x9a\x91");
-        break;
-    case EffectiveContactStatus::UnableToReach:
-        bgColor = QColor(255, 235, 59);
-        symbol = "?";
-        break;
-    default:
-        return QIcon();
-    }
-
-    painter.setPen(Qt::NoPen);
-    painter.setBrush(bgColor);
-    painter.drawEllipse(1, 1, SIZE - 2, SIZE - 2);
-
-    painter.setPen(Qt::white);
-    QFont font = painter.font();
-    font.setPixelSize(10);
-    font.setBold(true);
-    painter.setFont(font);
-    painter.drawText(QRect(0, 0, SIZE, SIZE), Qt::AlignCenter, symbol);
-
-    painter.end();
-    return QIcon(pixmap);
-}
-
-static QIcon statusIcon(EffectiveContactStatus status)
-{
-    static QHash<EffectiveContactStatus, QIcon> cache;
-    if (!cache.contains(status))
-    {
-        cache.insert(status, createStatusIcon(status));
-    }
-    return cache.value(status);
-}
-
-// Named Unicode constants for compact status summary
-static const QString kCheckmark = QString::fromUtf8("\xe2\x9c\x93");  // ✓
-static const QString kFlag = QString::fromUtf8("\xe2\x9a\x91");       // ⚑
-static const QString kCircle = QString::fromUtf8("\xe2\x97\x8b");     // ○
 
 MinisteringModel::MinisteringModel(DocumentManager* documentManager,
                                      EmergencyManager* emergencyManager,
@@ -222,40 +156,13 @@ void MinisteringModel::rebuild()
 
             // Count filtered items and update companionship text
             int filteredCount = countMinisteredChildren(companionshipNode);
-            QString statusSummary = compactStatusSummary(companionshipNode);
-            if (statusSummary.isEmpty())
-            {
-                companionshipNode->displayText = QString("%1 (%2)")
-                    .arg(ministerNames)
-                    .arg(filteredCount);
-            }
-            else
-            {
-                companionshipNode->displayText = QString("%1 (%2) %3")
-                    .arg(ministerNames)
-                    .arg(filteredCount)
-                    .arg(statusSummary);
-            }
+            companionshipNode->displayText = formatCompanionshipText(
+                ministerNames, filteredCount, companionshipNode);
 
             districtCount += filteredCount;
         }
 
-        // Update district text with filtered count, progress, and leader phone
-        QString leaderPhone = districtLeaderPhone(district);
-        QString districtProgress = districtProgressText(districtNode);
-        QString baseText = QString("%1 (%2 %3)")
-            .arg(district.name())
-            .arg(districtCount)
-            .arg(isEQ() ? tr("families") : tr("sisters"));
-        if (!districtProgress.isEmpty())
-        {
-            baseText += " " + districtProgress;
-        }
-        if (!leaderPhone.isEmpty())
-        {
-            baseText += " " + ContactIcons::Phone + leaderPhone;
-        }
-        districtNode->displayText = baseText;
+        districtNode->displayText = formatDistrictText(district, districtCount, districtNode);
 
         m_districtNodes.append(districtNode);
     }
@@ -565,7 +472,7 @@ QVariant MinisteringModel::data(const QModelIndex& index, int role) const
                     EffectiveContactStatus status = m_emergencyManager->familyStatus(fid);
                     if (status != EffectiveContactStatus::NotContacted)
                     {
-                        return statusIcon(status);
+                        return StatusIcons::iconForStatus(status);
                     }
                 }
             }
@@ -686,14 +593,10 @@ QSet<FamilyId> MinisteringModel::familyIdsForPersons(const QSet<PersonId>& perso
 
 int MinisteringModel::countMinisteredChildren(TreeNode* companionshipNode) const
 {
-    // Ministered section is always the second child of companionship
-    if (companionshipNode->children.size() >= 2)
+    TreeNode* section = findMinisteredSection(companionshipNode);
+    if (section)
     {
-        TreeNode* section = companionshipNode->children[1];
-        if (section->type == ItemType::SectionHeader)
-        {
-            return section->children.size();
-        }
+        return section->children.size();
     }
     return 0;
 }
@@ -1184,8 +1087,6 @@ void MinisteringModel::onFamilyStatusChanged(const FamilyId& familyId)
             {
                 // Update companionship compact status
                 int filteredCount = countMinisteredChildren(compNode);
-                QString statusSummary = compactStatusSummary(compNode);
-
                 const QHash<MinisteringGroupId, MinisteringGroup>& groups =
                     isEQ() ? doc.eqGroups() : doc.rsGroups();
 
@@ -1202,19 +1103,8 @@ void MinisteringModel::onFamilyStatusChanged(const FamilyId& familyId)
                         }
                     }
 
-                    if (statusSummary.isEmpty())
-                    {
-                        compNode->displayText = QString("%1 (%2)")
-                            .arg(ministerNames.join(", "))
-                            .arg(filteredCount);
-                    }
-                    else
-                    {
-                        compNode->displayText = QString("%1 (%2) %3")
-                            .arg(ministerNames.join(", "))
-                            .arg(filteredCount)
-                            .arg(statusSummary);
-                    }
+                    compNode->displayText = formatCompanionshipText(
+                        ministerNames.join(", "), filteredCount, compNode);
 
                     QModelIndex districtIndex = createIndex(d, 0, districtNode);
                     QModelIndex compIndex = index(c, 0, districtIndex);
@@ -1227,6 +1117,21 @@ void MinisteringModel::onFamilyStatusChanged(const FamilyId& familyId)
 
         if (districtAffected)
         {
+            // Recalculate district display text with updated progress
+            const auto& districts = isEQ() ? doc.eqDistricts() : doc.rsDistricts();
+            if (districtNode->districtId && districts.contains(*districtNode->districtId))
+            {
+                const MinisteringDistrict& dist = districts[*districtNode->districtId];
+                int districtCount = 0;
+                for (TreeNode* cn : districtNode->children)
+                {
+                    if (cn->type == ItemType::Companionship)
+                    {
+                        districtCount += countMinisteredChildren(cn);
+                    }
+                }
+                districtNode->displayText = formatDistrictText(dist, districtCount, districtNode);
+            }
             QModelIndex districtIndex = createIndex(d, 0, districtNode);
             emit dataChanged(districtIndex, districtIndex);
         }
@@ -1236,6 +1141,18 @@ void MinisteringModel::onFamilyStatusChanged(const FamilyId& familyId)
 void MinisteringModel::onEmergencyStateChanged()
 {
     rebuild();
+}
+
+MinisteringModel::TreeNode* MinisteringModel::findMinisteredSection(TreeNode* companionshipNode) const
+{
+    for (TreeNode* child : companionshipNode->children)
+    {
+        if (child->type == ItemType::SectionHeader && !isMinistersSection(child))
+        {
+            return child;
+        }
+    }
+    return nullptr;
 }
 
 FamilyId MinisteringModel::familyIdForNode(const TreeNode* node) const
@@ -1263,15 +1180,8 @@ QString MinisteringModel::compactStatusSummary(TreeNode* companionshipNode) cons
         return QString();
     }
 
-    // Find the ministered section (second child)
-    if (companionshipNode->children.size() < 2)
-    {
-        return QString();
-    }
-
-    TreeNode* ministeredSection = companionshipNode->children[1];
-    if (ministeredSection->type != ItemType::SectionHeader
-        || ministeredSection->children.isEmpty())
+    TreeNode* ministeredSection = findMinisteredSection(companionshipNode);
+    if (!ministeredSection || ministeredSection->children.isEmpty())
     {
         return QString();
     }
@@ -1282,7 +1192,7 @@ QString MinisteringModel::compactStatusSummary(TreeNode* companionshipNode) cons
         FamilyId fid = familyIdForNode(child);
         if (fid.isNull())
         {
-            symbols += kCircle;
+            symbols += StatusIcons::Circle;
             continue;
         }
 
@@ -1290,16 +1200,16 @@ QString MinisteringModel::compactStatusSummary(TreeNode* companionshipNode) cons
         switch (status)
         {
         case EffectiveContactStatus::OK:
-            symbols += kCheckmark;
+            symbols += StatusIcons::Checkmark;
             break;
         case EffectiveContactStatus::NeedsHelp:
-            symbols += kFlag;
+            symbols += StatusIcons::Flag;
             break;
         case EffectiveContactStatus::UnableToReach:
             symbols += "?";
             break;
         case EffectiveContactStatus::NotContacted:
-            symbols += kCircle;
+            symbols += StatusIcons::Circle;
             break;
         }
     }
@@ -1319,13 +1229,13 @@ QString MinisteringModel::districtProgressText(TreeNode* districtNode) const
 
     for (TreeNode* compNode : districtNode->children)
     {
-        if (compNode->type != ItemType::Companionship || compNode->children.size() < 2)
+        if (compNode->type != ItemType::Companionship)
         {
             continue;
         }
 
-        TreeNode* ministeredSection = compNode->children[1];
-        if (ministeredSection->type != ItemType::SectionHeader)
+        TreeNode* ministeredSection = findMinisteredSection(compNode);
+        if (!ministeredSection)
         {
             continue;
         }
@@ -1375,6 +1285,40 @@ QString MinisteringModel::districtLeaderPhone(const MinisteringDistrict& distric
         return leader->phone();
     }
     return QString();
+}
+
+QString MinisteringModel::formatCompanionshipText(const QString& ministerNames, int filteredCount,
+                                                    TreeNode* companionshipNode) const
+{
+    QString statusSummary = compactStatusSummary(companionshipNode);
+    if (statusSummary.isEmpty())
+    {
+        return QString("%1 (%2)").arg(ministerNames).arg(filteredCount);
+    }
+    return QString("%1 (%2) %3").arg(ministerNames).arg(filteredCount).arg(statusSummary);
+}
+
+QString MinisteringModel::formatDistrictText(const MinisteringDistrict& district, int districtCount,
+                                               TreeNode* districtNode) const
+{
+    QString baseText = QString("%1 (%2 %3)")
+        .arg(district.name())
+        .arg(districtCount)
+        .arg(isEQ() ? tr("families") : tr("sisters"));
+
+    QString progress = districtProgressText(districtNode);
+    if (!progress.isEmpty())
+    {
+        baseText += " " + progress;
+    }
+
+    QString leaderPhone = districtLeaderPhone(district);
+    if (!leaderPhone.isEmpty())
+    {
+        baseText += " " + ContactIcons::Phone + leaderPhone;
+    }
+
+    return baseText;
 }
 
 void MinisteringModel::refreshFamilyDisplayText(const FamilyId& familyId)
@@ -1464,7 +1408,6 @@ void MinisteringModel::refreshFamilyDisplayText(const FamilyId& familyId)
             // Update companionship text if any minister was affected
             if (companionshipAffected)
             {
-                // Rebuild companionship display text from current minister names
                 const QHash<MinisteringGroupId, MinisteringGroup>& groups =
                     isEQ() ? doc.eqGroups() : doc.rsGroups();
 
@@ -1480,22 +1423,9 @@ void MinisteringModel::refreshFamilyDisplayText(const FamilyId& familyId)
                             ministerNames.append(person->displayName());
                         }
                     }
-                    // Use filtered count from actual children
                     int filteredCount = countMinisteredChildren(compNode);
-                    QString statusSummary = compactStatusSummary(compNode);
-                    if (statusSummary.isEmpty())
-                    {
-                        compNode->displayText = QString("%1 (%2)")
-                            .arg(ministerNames.join(", "))
-                            .arg(filteredCount);
-                    }
-                    else
-                    {
-                        compNode->displayText = QString("%1 (%2) %3")
-                            .arg(ministerNames.join(", "))
-                            .arg(filteredCount)
-                            .arg(statusSummary);
-                    }
+                    compNode->displayText = formatCompanionshipText(
+                        ministerNames.join(", "), filteredCount, compNode);
 
                     QModelIndex districtIndex = createIndex(districtRow, 0, districtNode);
                     QModelIndex compIndex = index(compRow, 0, districtIndex);
@@ -1518,21 +1448,7 @@ void MinisteringModel::refreshFamilyDisplayText(const FamilyId& familyId)
         if (districtNode->districtId && districts.contains(*districtNode->districtId))
         {
             const MinisteringDistrict& district = districts[*districtNode->districtId];
-            QString leaderPhone = districtLeaderPhone(district);
-            QString progress = districtProgressText(districtNode);
-            QString baseText = QString("%1 (%2 %3)")
-                .arg(district.name())
-                .arg(districtCount)
-                .arg(isEQ() ? tr("families") : tr("sisters"));
-            if (!progress.isEmpty())
-            {
-                baseText += " " + progress;
-            }
-            if (!leaderPhone.isEmpty())
-            {
-                baseText += " " + ContactIcons::Phone + leaderPhone;
-            }
-            districtNode->displayText = baseText;
+            districtNode->displayText = formatDistrictText(district, districtCount, districtNode);
 
             QModelIndex districtIndex = createIndex(districtRow, 0, districtNode);
             emit dataChanged(districtIndex, districtIndex);

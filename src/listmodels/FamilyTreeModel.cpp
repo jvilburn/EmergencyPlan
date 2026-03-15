@@ -5,24 +5,15 @@
 #include "Family.h"
 #include "Filter.h"
 #include "Person.h"
+#include "StatusIcons.h"
 #include "Team.h"
 
-#include <QApplication>
 #include <QColor>
 #include <QDebug>
 #include <QFont>
 #include <QIcon>
-#include <QPainter>
-#include <QPixmap>
-#include <QScreen>
 
 #include <algorithm>
-
-// Unicode symbol constants
-static const QString kCheckmark = QString::fromUtf8("\xe2\x9c\x93");  // ✓
-static const QString kBullet = QString::fromUtf8("\xe2\x80\xa2");     // •
-static const QString kFlag = QString::fromUtf8("\xe2\x9a\x91");       // ⚑
-static const QString kCircle = QString::fromUtf8("\xe2\x97\x8b");     // ○
 
 static QString contactMethodDisplayName(ContactMethod method)
 {
@@ -40,67 +31,6 @@ static QString contactMethodDisplayName(ContactMethod method)
             return QObject::tr("Other");
     }
     return QObject::tr("Phone");
-}
-
-static QIcon createStatusIcon(EffectiveContactStatus status)
-{
-    constexpr int SIZE = 16;
-    double dpr = qApp->devicePixelRatio();
-    int pixelSize = static_cast<int>(SIZE * dpr);
-
-    QPixmap pixmap(pixelSize, pixelSize);
-    pixmap.setDevicePixelRatio(dpr);
-    pixmap.fill(Qt::transparent);
-
-    QPainter painter(&pixmap);
-    painter.setRenderHint(QPainter::Antialiasing);
-
-    QColor bgColor;
-    QString symbol;
-
-    switch (status)
-    {
-        case EffectiveContactStatus::OK:
-            bgColor = QColor(76, 175, 80);    // Green
-            symbol = kCheckmark;
-            break;
-        case EffectiveContactStatus::NeedsHelp:
-            bgColor = QColor(255, 152, 0);    // Orange
-            symbol = kFlag;
-            break;
-        case EffectiveContactStatus::UnableToReach:
-            bgColor = QColor(255, 235, 59);   // Yellow
-            symbol = "?";
-            break;
-        case EffectiveContactStatus::NotContacted:
-            return QIcon();
-    }
-
-    // Draw colored circle
-    painter.setPen(Qt::NoPen);
-    painter.setBrush(bgColor);
-    painter.drawEllipse(1, 1, SIZE - 2, SIZE - 2);
-
-    // Draw symbol
-    painter.setPen(Qt::white);
-    QFont font = painter.font();
-    font.setPixelSize(10);
-    font.setBold(true);
-    painter.setFont(font);
-    painter.drawText(QRect(0, 0, SIZE, SIZE), Qt::AlignCenter, symbol);
-
-    painter.end();
-    return QIcon(pixmap);
-}
-
-static QIcon statusIcon(EffectiveContactStatus status)
-{
-    static QHash<EffectiveContactStatus, QIcon> cache;
-    if (!cache.contains(status))
-    {
-        cache.insert(status, createStatusIcon(status));
-    }
-    return cache.value(status);
 }
 
 FamilyTreeModel::FamilyTreeModel(DocumentManager* documentManager,
@@ -793,7 +723,7 @@ void FamilyTreeModel::appendTaskNodes(TreeNode* parent, int familyIndex,
         taskNode->taskId = task.id();
         taskNode->taskResolved = task.isResolved();
 
-        QString prefix = task.isResolved() ? kCheckmark : kBullet;
+        QString prefix = task.isResolved() ? StatusIcons::Checkmark : StatusIcons::Bullet;
         QString display = tr("  %1 %2 - \"%3\"").arg(prefix, task.category(), task.description());
         taskNode->displayText = display;
         children.append(taskNode);
@@ -822,11 +752,11 @@ void FamilyTreeModel::appendTaskNodes(TreeNode* parent, int familyIndex,
         {
             if (task.isNotified())
             {
-                assignmentText += " " + kCheckmark + " " + tr("notified");
+                assignmentText += " " + StatusIcons::Checkmark + " " + tr("notified");
             }
             else
             {
-                assignmentText += " " + kCircle + " " + tr("not notified");
+                assignmentText += " " + StatusIcons::Circle + " " + tr("not notified");
             }
 
             TreeNode* assignNode = new TreeNode();
@@ -994,7 +924,7 @@ QVariant FamilyTreeModel::data(const QModelIndex& index, int role) const
                 EffectiveContactStatus status = m_emergencyManager->familyStatus(familyId);
                 if (status != EffectiveContactStatus::NotContacted)
                 {
-                    return statusIcon(status);
+                    return StatusIcons::iconForStatus(status);
                 }
             }
             return QVariant();

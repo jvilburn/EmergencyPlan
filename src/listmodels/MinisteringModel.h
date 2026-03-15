@@ -106,10 +106,15 @@ private:
     bool isEQ() const { return m_org == MinisteringOrg::EldersQuorum; }
     QSet<FamilyId> familyIdsForPersons(const QSet<PersonId>& personIds) const;
 
+    TreeNode* findMinisteredSection(TreeNode* companionshipNode) const;
     FamilyId familyIdForNode(const TreeNode* node) const;
     QString compactStatusSummary(TreeNode* companionshipNode) const;
     QString districtProgressText(TreeNode* districtNode) const;
     QString districtLeaderPhone(const MinisteringDistrict& district) const;
+    QString formatCompanionshipText(const QString& ministerNames, int filteredCount,
+                                     TreeNode* companionshipNode) const;
+    QString formatDistrictText(const MinisteringDistrict& district, int districtCount,
+                                TreeNode* districtNode) const;
 
     QList<TreeNode*> m_districtNodes;  // Top-level nodes (owned)
     DocumentManager* m_documentManager;
