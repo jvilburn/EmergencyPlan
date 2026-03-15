@@ -45,5 +45,5 @@ private:
     QComboBox* m_teamCombo = nullptr;
     QComboBox* m_personCombo = nullptr;
     std::optional<ResponseTask> m_result;
-    std::optional<TaskId> m_editingTaskId;
+    std::optional<ResponseTask> m_originalTask;
 };

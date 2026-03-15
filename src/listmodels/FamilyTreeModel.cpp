@@ -18,6 +18,12 @@
 
 #include <algorithm>
 
+// Unicode symbol constants
+static const QString kCheckmark = QString::fromUtf8("\xe2\x9c\x93");  // ✓
+static const QString kBullet = QString::fromUtf8("\xe2\x80\xa2");     // •
+static const QString kFlag = QString::fromUtf8("\xe2\x9a\x91");       // ⚑
+static const QString kCircle = QString::fromUtf8("\xe2\x97\x8b");     // ○
+
 static QString contactMethodDisplayName(ContactMethod method)
 {
     switch (method)
@@ -56,11 +62,11 @@ static QIcon createStatusIcon(EffectiveContactStatus status)
     {
         case EffectiveContactStatus::OK:
             bgColor = QColor(76, 175, 80);    // Green
-            symbol = QString::fromUtf8("\xe2\x9c\x93");  // ✓
+            symbol = kCheckmark;
             break;
         case EffectiveContactStatus::NeedsHelp:
             bgColor = QColor(255, 152, 0);    // Orange
-            symbol = QString::fromUtf8("\xe2\x9a\x91");  // ⚑
+            symbol = kFlag;
             break;
         case EffectiveContactStatus::UnableToReach:
             bgColor = QColor(255, 235, 59);   // Yellow
@@ -785,10 +791,9 @@ void FamilyTreeModel::appendTaskNodes(TreeNode* parent, int familyIndex,
         taskNode->familyIndex = familyIndex;
         taskNode->parent = parent;
         taskNode->taskId = task.id();
+        taskNode->taskResolved = task.isResolved();
 
-        QString prefix = task.isResolved()
-            ? QString::fromUtf8("\xe2\x9c\x93")   // ✓
-            : QString::fromUtf8("\xe2\x80\xa2");   // •
+        QString prefix = task.isResolved() ? kCheckmark : kBullet;
         QString display = tr("  %1 %2 - \"%3\"").arg(prefix, task.category(), task.description());
         taskNode->displayText = display;
         children.append(taskNode);
@@ -817,11 +822,11 @@ void FamilyTreeModel::appendTaskNodes(TreeNode* parent, int familyIndex,
         {
             if (task.isNotified())
             {
-                assignmentText += tr(" \xe2\x9c\x93 notified");
+                assignmentText += " " + kCheckmark + " " + tr("notified");
             }
             else
             {
-                assignmentText += tr(" \xe2\x97\x8b not notified");
+                assignmentText += " " + kCircle + " " + tr("not notified");
             }
 
             TreeNode* assignNode = new TreeNode();
@@ -829,6 +834,7 @@ void FamilyTreeModel::appendTaskNodes(TreeNode* parent, int familyIndex,
             assignNode->familyIndex = familyIndex;
             assignNode->parent = parent;
             assignNode->taskId = task.id();
+            assignNode->taskResolved = task.isResolved();
             assignNode->displayText = assignmentText;
             children.append(assignNode);
         }
@@ -1017,23 +1023,11 @@ QVariant FamilyTreeModel::data(const QModelIndex& index, int role) const
                 font.setItalic(true);
                 return font;
             }
-            if (node->type == RowType::Task && node->taskId
-                && m_emergencyManager && m_emergencyManager->isActive())
+            if (node->type == RowType::Task && node->taskResolved)
             {
-                FamilyId famId = m_familyIds.at(node->familyIndex);
-                const FamilyResponseRecord* rec = m_emergencyManager->recordForFamily(famId);
-                if (rec)
-                {
-                    for (const ResponseTask& t : rec->tasks())
-                    {
-                        if (t.id() == *node->taskId && t.isResolved())
-                        {
-                            QFont font;
-                            font.setStrikeOut(true);
-                            return font;
-                        }
-                    }
-                }
+                QFont font;
+                font.setStrikeOut(true);
+                return font;
             }
             return QVariant();
 

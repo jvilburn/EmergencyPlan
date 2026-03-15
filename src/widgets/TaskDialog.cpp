@@ -140,7 +140,7 @@ TaskDialog::TaskDialog(DocumentManager* documentManager,
 void TaskDialog::setTask(const ResponseTask& task)
 {
     setWindowTitle(tr("Edit Task"));
-    m_editingTaskId = task.id();
+    m_originalTask = task;
 
     // Set category
     int catIndex = m_categoryCombo->findText(task.category());
@@ -204,7 +204,16 @@ void TaskDialog::onAccepted()
         return;
     }
 
-    ResponseTask task = ResponseTask::create(category, description);
+    // When editing, mutate the original task to preserve ID, notification, and resolution state
+    ResponseTask task = m_originalTask
+        ? *m_originalTask
+        : ResponseTask::create(category, description);
+
+    if (m_originalTask)
+    {
+        task.setCategory(category);
+        task.setDescription(description);
+    }
 
     // Apply assignment
     if (m_teamRadio->isChecked() && m_teamCombo->currentIndex() >= 0)
@@ -216,6 +225,10 @@ void TaskDialog::onAccepted()
     {
         PersonId personId = PersonId::fromString(m_personCombo->currentData().toString());
         task.assignToPerson(personId, QString());
+    }
+    else
+    {
+        task.clearAssignment();
     }
 
     m_result = task;

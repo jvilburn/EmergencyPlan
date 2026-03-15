@@ -106,6 +106,9 @@ public:
     const QString& description() const { return m_description; }
     const QDateTime& createdAt() const { return m_createdAt; }
 
+    void setCategory(const QString& category) { m_category = category; }
+    void setDescription(const QString& description) { m_description = description; }
+
     // Assignment - at most one set
     const std::optional<TeamId>& assignedTeamId() const { return m_assignedTeamId; }
     const std::optional<PersonId>& assignedPersonId() const { return m_assignedPersonId; }

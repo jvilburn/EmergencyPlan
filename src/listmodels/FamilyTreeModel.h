@@ -125,6 +125,7 @@ private:
         int memberIndex = -1;   // For Member/MemberDetail rows
         DetailType detailType = DetailType::Phone; // For MemberDetail rows
         std::optional<TaskId> taskId;  // For Task rows
+        bool taskResolved = false;     // For Task rows: cached resolved state
         QString displayText;    // Cached display text
         TreeNode* parent = nullptr;
         QList<TreeNode*> children;

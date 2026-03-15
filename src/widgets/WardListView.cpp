@@ -604,6 +604,9 @@ void WardListView::onTreeContextMenu(const QPoint& pos)
         resolveAction = menu.addAction(tr("Resolve"));
     }
 
+    menu.addSeparator();
+    QAction* deleteAction = menu.addAction(tr("Delete Task"));
+
     QAction* chosen = menu.exec(m_treeView->viewport()->mapToGlobal(pos));
     if (!chosen)
     {
@@ -621,5 +624,9 @@ void WardListView::onTreeContextMenu(const QPoint& pos)
     else if (chosen == resolveAction)
     {
         onResolveTaskRequested(*familyId, taskId);
+    }
+    else if (chosen == deleteAction)
+    {
+        m_emergencyManager->removeTask(*familyId, taskId);
     }
 }
