@@ -1,5 +1,6 @@
 #include "WardListView.h"
 #include "ActionButtonsWidget.h"
+#include "ContactAttemptDialog.h"
 #include "Document.h"
 #include "DocumentManager.h"
 #include "EmergencyManager.h"
@@ -274,6 +275,8 @@ void WardListView::attachActionButtons(const QModelIndex& familyIndex)
                     this, &WardListView::editFamilyRequested);
             connect(widget, &ActionButtonsWidget::deleteRequested,
                     this, &WardListView::deleteFamilyRequested);
+            connect(widget, &ActionButtonsWidget::logContactRequested,
+                    this, &WardListView::onLogContactRequested);
 
             m_treeView->setIndexWidget(childIndex, widget);
             m_actionWidgets[*familyId] = widget;
@@ -429,4 +432,19 @@ void WardListView::updateFilterTabCounts()
     m_filterTabs[StatusFilterIndex::NeedsHelp]->setText(tr("Needs Help (%1)").arg(needsHelp));
     m_filterTabs[StatusFilterIndex::OK]->setText(tr("OK (%1)").arg(ok));
     m_filterTabs[StatusFilterIndex::UnableToReach]->setText(tr("Unable to Reach (%1)").arg(unable));
+}
+
+void WardListView::onLogContactRequested(const FamilyId& familyId)
+{
+    ContactAttemptDialog dialog(m_documentManager, this);
+    if (dialog.exec() != QDialog::Accepted)
+    {
+        return;
+    }
+
+    std::optional<ContactAttempt> attempt = dialog.result();
+    if (attempt)
+    {
+        m_emergencyManager->addContactAttempt(familyId, *attempt);
+    }
 }

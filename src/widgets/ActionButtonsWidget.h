@@ -25,6 +25,7 @@ signals:
     void editRequested(const FamilyId& familyId);
     void deleteRequested(const FamilyId& familyId);
     void addTaskRequested(const FamilyId& familyId);
+    void logContactRequested(const FamilyId& familyId);
 
 private slots:
     void onEditClicked();
@@ -32,6 +33,7 @@ private slots:
     void onOkClicked();
     void onUnableToReachClicked();
     void onAddTaskClicked();
+    void onLogContactClicked();
 
 private:
     FamilyId m_familyId;

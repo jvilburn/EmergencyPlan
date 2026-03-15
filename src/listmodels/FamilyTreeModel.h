@@ -27,12 +27,13 @@ public:
     /// Row types in the tree
     enum class RowType
     {
-        Family,       // Top-level family row
-        Member,       // Family member (expandable)
-        MemberDetail, // Member's phone/email/callings/age
-        Address,      // Family address
-        Phone,        // Family phone
-        Actions       // Edit/Delete buttons
+        Family,           // Top-level family row
+        Member,           // Family member (expandable)
+        MemberDetail,     // Member's phone/email/callings/age
+        Address,          // Family address
+        Phone,            // Family phone
+        ContactAttempt,   // Emergency: contact attempt record
+        Actions           // Edit/Delete buttons
     };
     Q_ENUM(RowType)
 

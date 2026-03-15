@@ -41,12 +41,17 @@ ActionButtonsWidget::ActionButtonsWidget(const FamilyId& familyId,
         QPushButton* addTaskButton = new QPushButton(tr("Add Task"), this);
         layout->addWidget(addTaskButton);
 
+        QPushButton* logContactButton = new QPushButton(tr("Log Contact"), this);
+        layout->addWidget(logContactButton);
+
         connect(okButton, &QPushButton::clicked,
                 this, &ActionButtonsWidget::onOkClicked);
         connect(unreachableButton, &QPushButton::clicked,
                 this, &ActionButtonsWidget::onUnableToReachClicked);
         connect(addTaskButton, &QPushButton::clicked,
                 this, &ActionButtonsWidget::onAddTaskClicked);
+        connect(logContactButton, &QPushButton::clicked,
+                this, &ActionButtonsWidget::onLogContactClicked);
 
         layout->addSpacing(16);
     }
@@ -90,4 +95,9 @@ void ActionButtonsWidget::onUnableToReachClicked()
 void ActionButtonsWidget::onAddTaskClicked()
 {
     emit addTaskRequested(m_familyId);
+}
+
+void ActionButtonsWidget::onLogContactClicked()
+{
+    emit logContactRequested(m_familyId);
 }

@@ -213,6 +213,7 @@ set(VIEWMODEL_HEADERS
 
 set(WIDGET_SOURCES
     src/widgets/ActionButtonsWidget.cpp
+    src/widgets/ContactAttemptDialog.cpp
     src/widgets/CallingsEditor.cpp
     src/widgets/FamilyEditPanel.cpp
     src/widgets/MainWindow.cpp
@@ -259,6 +260,7 @@ set(WIDGET_SOURCES
 
 set(WIDGET_HEADERS
     src/widgets/ActionButtonsWidget.h
+    src/widgets/ContactAttemptDialog.h
     src/widgets/CallingsEditor.h
     src/widgets/FamilyEditPanel.h
     src/widgets/MainWindow.h

@@ -57,6 +57,7 @@ private slots:
     void onStatusFilterTabClicked();
     void onStatusFilterClicked(int statusIndex);
     void updateFilterTabCounts();
+    void onLogContactRequested(const FamilyId& familyId);
 
 private:
     void attachActionButtons(const QModelIndex& familyIndex);

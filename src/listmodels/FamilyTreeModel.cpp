@@ -1,4 +1,5 @@
 #include "FamilyTreeModel.h"
+#include "Document.h"
 #include "DocumentManager.h"
 #include "EmergencyManager.h"
 #include "Family.h"
@@ -15,6 +16,19 @@
 #include <QScreen>
 
 #include <algorithm>
+
+static QString contactMethodDisplayName(ContactMethod method)
+{
+    switch (method)
+    {
+        case ContactMethod::Phone: return QObject::tr("Phone");
+        case ContactMethod::Text:  return QObject::tr("Text");
+        case ContactMethod::Email: return QObject::tr("Email");
+        case ContactMethod::Visit: return QObject::tr("Visit");
+        case ContactMethod::Other: return QObject::tr("Other");
+    }
+    return QObject::tr("Phone");
+}
 
 static QIcon createStatusIcon(EffectiveContactStatus status)
 {
@@ -157,8 +171,13 @@ void FamilyTreeModel::onFamilyStatusChanged(const FamilyId& familyId)
     {
         return;
     }
+
+    // Update the family icon
     QModelIndex idx = index(row, 0);
     emit dataChanged(idx, idx, {Qt::DecorationRole, ResponseStatusRole});
+
+    // Rebuild children to reflect contact attempt changes
+    updateFamilyRow(familyId);
 }
 
 void FamilyTreeModel::onEmergencyStateChanged()
@@ -340,6 +359,46 @@ void FamilyTreeModel::updateFamilyRow(const FamilyId& familyId)
     Phone familyPhone = family->displayPhone();
     phoneNode->displayText = familyPhone.isEmpty() ? tr("No phone") : QString(familyPhone);
     newChildren.append(phoneNode);
+
+    // Add contact attempt rows (only during active emergency)
+    if (m_emergencyManager && m_emergencyManager->isActive())
+    {
+        const FamilyId& familyId = m_familyIds.at(row);
+        const FamilyResponseRecord* record = m_emergencyManager->recordForFamily(familyId);
+        if (record)
+        {
+            const Document& doc = m_documentManager->document();
+            for (const ContactAttempt& attempt : record->contactAttempts())
+            {
+                TreeNode* attemptNode = new TreeNode();
+                attemptNode->type = RowType::ContactAttempt;
+                attemptNode->familyIndex = row;
+                attemptNode->parent = oldNode;
+
+                QString methodStr = contactMethodDisplayName(attempt.method());
+                QString whoName;
+                std::optional<Person> person = doc.findPersonById(attempt.who());
+                if (person)
+                {
+                    whoName = person->displayName();
+                }
+                else
+                {
+                    whoName = tr("Unknown");
+                }
+
+                QString timeStr = attempt.timestamp().toLocalTime().toString(tr("MMM d, h:mm AP"));
+                QString display = tr("%1 - %2 - %3").arg(methodStr, whoName, timeStr);
+                if (!attempt.notes().isEmpty())
+                {
+                    display += tr(" - \"%1\"").arg(attempt.notes());
+                }
+
+                attemptNode->displayText = display;
+                newChildren.append(attemptNode);
+            }
+        }
+    }
 
     // Add actions node
     TreeNode* actionsNode = new TreeNode();
@@ -655,6 +714,46 @@ void FamilyTreeModel::buildFamilyNode(int familyIndex)
     phoneNode->displayText = familyPhone.isEmpty() ? tr("No phone") : QString(familyPhone);
     familyNode->children.append(phoneNode);
 
+    // Add contact attempt rows (only during active emergency)
+    if (m_emergencyManager && m_emergencyManager->isActive())
+    {
+        const FamilyResponseRecord* record = m_emergencyManager->recordForFamily(familyId);
+        if (record)
+        {
+            const Document& doc = m_documentManager->document();
+            for (const ContactAttempt& attempt : record->contactAttempts())
+            {
+                TreeNode* attemptNode = new TreeNode();
+                attemptNode->type = RowType::ContactAttempt;
+                attemptNode->familyIndex = familyIndex;
+                attemptNode->parent = familyNode;
+
+                // Format: "Phone - John Smith - Jan 4, 2:15 PM - notes"
+                QString methodStr = contactMethodDisplayName(attempt.method());
+                QString whoName;
+                std::optional<Person> person = doc.findPersonById(attempt.who());
+                if (person)
+                {
+                    whoName = person->displayName();
+                }
+                else
+                {
+                    whoName = tr("Unknown");
+                }
+
+                QString timeStr = attempt.timestamp().toLocalTime().toString(tr("MMM d, h:mm AP"));
+                QString display = tr("%1 - %2 - %3").arg(methodStr, whoName, timeStr);
+                if (!attempt.notes().isEmpty())
+                {
+                    display += tr(" - \"%1\"").arg(attempt.notes());
+                }
+
+                attemptNode->displayText = display;
+                familyNode->children.append(attemptNode);
+            }
+        }
+    }
+
     // Add actions node
     TreeNode* actionsNode = new TreeNode();
     actionsNode->type = RowType::Actions;
@@ -831,7 +930,20 @@ QVariant FamilyTreeModel::data(const QModelIndex& index, int role) const
             }
             return QVariant();
 
+        case Qt::FontRole:
+            if (node->type == RowType::ContactAttempt)
+            {
+                QFont font;
+                font.setItalic(true);
+                return font;
+            }
+            return QVariant();
+
         case Qt::ForegroundRole:
+            if (node->type == RowType::ContactAttempt)
+            {
+                return QColor(100, 100, 100);
+            }
             // Gray out placeholder text
             if (node->displayText == tr("No contact info")
                 || node->displayText == tr("No address")
@@ -937,6 +1049,7 @@ ItemType FamilyTreeModel::itemTypeAt(const QModelIndex& index) const
     case RowType::MemberDetail:
     case RowType::Address:
     case RowType::Phone:
+    case RowType::ContactAttempt:
     case RowType::Actions:
         return ItemType::ContactDetail;
     default:
@@ -974,6 +1087,7 @@ SelectionKey FamilyTreeModel::selectionKeyAt(const QModelIndex& index) const
     case RowType::MemberDetail:
     case RowType::Address:
     case RowType::Phone:
+    case RowType::ContactAttempt:
     case RowType::Actions:
         // Delegate to parent
         return selectionKeyAt(index.parent());
