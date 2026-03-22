@@ -12,6 +12,7 @@
 #include "FamilyMarkerProvider.h"
 #include "DocumentManager.h"
 #include "EmergencyManager.h"
+#include "ReportGenerator.h"
 #include "FamilyCommands.h"
 #include "ImportWardDirectoryCommand.h"
 #include "ImportEQMinisteringCommand.h"
@@ -183,6 +184,8 @@ void MainWindow::setupMenus()
     m_startEmergencyAction = fileMenu->addAction(tr("Start &Emergency..."), this, &MainWindow::onStartEmergency);
     m_endEmergencyAction = fileMenu->addAction(tr("&End Emergency..."), this, &MainWindow::onEndEmergency);
     m_endEmergencyAction->setEnabled(false);
+    m_generateReportAction = fileMenu->addAction(tr("&Generate Emergency Report..."), this, &MainWindow::generateEmergencyReport);
+    m_generateReportAction->setEnabled(false);
 
     fileMenu->addSeparator();
 
@@ -921,10 +924,8 @@ void MainWindow::onEndEmergency()
     dialog.setText(tr("End \"%1\"?").arg(emergencyName));
     dialog.setIcon(QMessageBox::Question);
 
-    // Phase 5 placeholder: disabled PDF report checkbox
     QCheckBox* pdfCheckBox = new QCheckBox(tr("Generate summary report (PDF)"));
-    pdfCheckBox->setEnabled(false);
-    pdfCheckBox->setToolTip(tr("Coming soon"));
+    pdfCheckBox->setChecked(true);
     dialog.setCheckBox(pdfCheckBox);
 
     QPushButton* archiveButton = dialog.addButton(tr("Archive && End"), QMessageBox::AcceptRole);
@@ -934,10 +935,13 @@ void MainWindow::onEndEmergency()
     dialog.exec();
 
     QAbstractButton* clicked = dialog.clickedButton();
+    bool shouldEnd = false;
+    bool archive = false;
+
     if (clicked == archiveButton)
     {
-        m_emergencyManager->endEmergency(true);
-        statusBar()->showMessage(tr("Emergency \"%1\" archived").arg(emergencyName), 5000);
+        shouldEnd = true;
+        archive = true;
     }
     else if (clicked == discardButton)
     {
@@ -950,9 +954,65 @@ void MainWindow::onEndEmergency()
 
         if (confirm == QMessageBox::Yes)
         {
-            m_emergencyManager->endEmergency(false);
-            statusBar()->showMessage(tr("Emergency \"%1\" ended").arg(emergencyName), 5000);
+            shouldEnd = true;
+            archive = false;
         }
+    }
+
+    if (!shouldEnd)
+    {
+        return;
+    }
+
+    // Generate PDF report before ending (data is cleared on end)
+    if (pdfCheckBox->isChecked())
+    {
+        generateEmergencyReport();
+    }
+
+    m_emergencyManager->endEmergency(archive);
+    if (archive)
+    {
+        statusBar()->showMessage(tr("Emergency \"%1\" archived").arg(emergencyName), 5000);
+    }
+    else
+    {
+        statusBar()->showMessage(tr("Emergency \"%1\" ended").arg(emergencyName), 5000);
+    }
+}
+
+void MainWindow::generateEmergencyReport()
+{
+    if (!m_emergencyManager->isActive())
+    {
+        return;
+    }
+
+    const EmergencyResponse& response = m_emergencyManager->response();
+
+    // Default filename based on emergency name and date
+    QString defaultName = response.name().simplified().replace(' ', '_')
+        + "_" + response.startedAt().toString("yyyy-MM-dd")
+        + ".pdf";
+
+    QString defaultDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    QString filePath = QFileDialog::getSaveFileName(
+        this, tr("Save Emergency Report"), defaultDir + "/" + defaultName,
+        tr("PDF Files (*.pdf)"));
+
+    if (filePath.isEmpty())
+    {
+        return;
+    }
+
+    if (ReportGenerator::generateReport(response, filePath))
+    {
+        statusBar()->showMessage(tr("Report saved to %1").arg(filePath), 5000);
+    }
+    else
+    {
+        QMessageBox::warning(this, tr("Report Error"),
+                             tr("Failed to generate the report."));
     }
 }
 
@@ -973,4 +1033,5 @@ void MainWindow::updateEmergencyActions()
     bool active = m_emergencyManager->isActive();
     m_startEmergencyAction->setEnabled(!active);
     m_endEmergencyAction->setEnabled(active);
+    m_generateReportAction->setEnabled(active);
 }

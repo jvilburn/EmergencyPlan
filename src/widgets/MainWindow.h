@@ -58,6 +58,7 @@ private slots:
     void onEndEmergency();
     void onEmergencyStarted();
     void onEmergencyEnded();
+    void generateEmergencyReport();
     void updateEmergencyActions();
 
     // Sidebar tabs
@@ -112,6 +113,7 @@ private:
     QAction* m_importMinisteringPdfAction;
     QAction* m_startEmergencyAction;
     QAction* m_endEmergencyAction;
+    QAction* m_generateReportAction;
     QAction* m_exitAction;
     QAction* m_undoAction;
     QAction* m_redoAction;

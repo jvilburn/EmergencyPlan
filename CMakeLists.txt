@@ -31,6 +31,7 @@ find_package(Qt6 REQUIRED COMPONENTS
     Svg
     Pdf
     Concurrent
+    PrintSupport
     Test
 )
 
@@ -171,6 +172,7 @@ set(SERVICE_SOURCES
     src/services/BackgroundGeocodingService.cpp
     src/services/GeoLocation.cpp
     src/services/EmergencyManager.cpp
+    src/services/ReportGenerator.cpp
     # src/services/StatisticsService.cpp
     # src/services/ResourceService.cpp
     # src/services/SearchService.cpp
@@ -196,6 +198,7 @@ set(SERVICE_HEADERS
     src/services/BackgroundGeocodingService.h
     src/services/GeoLocation.h
     src/services/EmergencyManager.h
+    src/services/ReportGenerator.h
     # src/services/StatisticsService.h
     # src/services/ResourceService.h
     # src/services/SearchService.h
@@ -385,6 +388,7 @@ target_link_libraries(EmergencyPlanLib PUBLIC
     Qt6::Svg
     Qt6::Pdf
     Qt6::Concurrent
+    Qt6::PrintSupport
     ${MUPDF_LIBRARY}
     ${FREETYPE_LIBRARY}
     ${JPEG_LIBRARY}
