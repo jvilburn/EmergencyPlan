@@ -1,16 +1,19 @@
 #include "ReportGenerator.h"
 #include "EmergencyResponse.h"
 
+#include <QFont>
+#include <QFontDatabase>
 #include <QPainter>
 #include <QPrinter>
 #include <QDateTime>
 #include <QHash>
 
+#include <algorithm>
+
 namespace
 {
 
 const int kPageMargin = 50;
-const int kLineSpacing = 18;
 const int kSectionSpacing = 12;
 const int kHeaderFontSize = 16;
 const int kSubheaderFontSize = 12;
@@ -23,7 +26,22 @@ struct ReportContext
     int pageWidth;
     int pageHeight;
     QPrinter* printer;
+    QString fontFamily;
 };
+
+QString selectFontFamily()
+{
+    QStringList preferred = {"Segoe UI", "Helvetica Neue", "Helvetica", "Arial"};
+    QStringList available = QFontDatabase::families();
+    for (const QString& name : preferred)
+    {
+        if (available.contains(name))
+        {
+            return name;
+        }
+    }
+    return QFont().family();
+}
 
 void ensureSpace(ReportContext& ctx, int needed)
 {
@@ -36,7 +54,7 @@ void ensureSpace(ReportContext& ctx, int needed)
 
 void drawText(ReportContext& ctx, const QString& text, int fontSize, bool bold)
 {
-    QFont font("Segoe UI", fontSize);
+    QFont font(ctx.fontFamily, fontSize);
     font.setBold(bold);
     ctx.painter->setFont(font);
 
@@ -62,7 +80,7 @@ void drawSpacer(ReportContext& ctx, int height)
 
 void drawKeyValue(ReportContext& ctx, const QString& key, const QString& value)
 {
-    QFont font("Segoe UI", kBodyFontSize);
+    QFont font(ctx.fontFamily, kBodyFontSize);
     ctx.painter->setFont(font);
 
     QFontMetrics fm(font);
@@ -71,6 +89,20 @@ void drawKeyValue(ReportContext& ctx, const QString& key, const QString& value)
 
     ctx.painter->drawText(kPageMargin + 20, ctx.y + fm.ascent(),
                           key + ": " + value);
+    ctx.y += textHeight + 2;
+}
+
+void drawBulletItem(ReportContext& ctx, const QString& text)
+{
+    QFont font(ctx.fontFamily, kBodyFontSize);
+    ctx.painter->setFont(font);
+
+    QFontMetrics fm(font);
+    int textHeight = fm.height();
+    ensureSpace(ctx, textHeight);
+
+    ctx.painter->drawText(kPageMargin + 20, ctx.y + fm.ascent(),
+                          "\u2022 " + text);
     ctx.y += textHeight + 2;
 }
 
@@ -102,9 +134,20 @@ QString contactMethodName(ContactMethod method)
     return QString();
 }
 
+// Fixed order for consistent reports
+const QList<ContactMethod> kMethodOrder =
+{
+    ContactMethod::Phone,
+    ContactMethod::Text,
+    ContactMethod::Email,
+    ContactMethod::Visit,
+    ContactMethod::Other
+};
+
 }  // namespace
 
 bool ReportGenerator::generateReport(const EmergencyResponse& response,
+                                     const QString& wardName,
                                      const QString& filePath)
 {
     QPrinter printer(QPrinter::HighResolution);
@@ -132,11 +175,17 @@ bool ReportGenerator::generateReport(const EmergencyResponse& response,
     ctx.pageWidth = pageWidth;
     ctx.pageHeight = pageHeight;
     ctx.printer = &printer;
+    ctx.fontFamily = selectFontFamily();
 
     // === 1. Header ===
     drawText(ctx, QObject::tr("Emergency Response Report"), kHeaderFontSize, true);
     drawSpacer(ctx, 4);
     drawText(ctx, response.name(), kSubheaderFontSize, false);
+
+    if (!wardName.isEmpty())
+    {
+        drawText(ctx, wardName, kBodyFontSize, false);
+    }
 
     QString dateRange = response.startedAt().toString("MMM d, yyyy h:mm AP");
     if (response.endedAt())
@@ -237,10 +286,10 @@ bool ReportGenerator::generateReport(const EmergencyResponse& response,
     drawText(ctx, QObject::tr("Response Activity"), kSubheaderFontSize, true);
     drawKeyValue(ctx, QObject::tr("Total contact attempts"), QString::number(totalAttempts));
 
-    if (!attemptsByMethod.isEmpty())
+    // List contact methods in fixed order for consistent reports
+    for (ContactMethod method : kMethodOrder)
     {
-        QList<ContactMethod> methods = attemptsByMethod.keys();
-        for (ContactMethod method : methods)
+        if (attemptsByMethod.contains(method))
         {
             drawKeyValue(ctx, contactMethodName(method),
                          QString::number(attemptsByMethod[method]));
@@ -280,7 +329,7 @@ bool ReportGenerator::generateReport(const EmergencyResponse& response,
                      kBodyFontSize, true);
             for (const QString& name : needsHelpFamilies)
             {
-                drawKeyValue(ctx, "\u2022", name);
+                drawBulletItem(ctx, name);
             }
             drawSpacer(ctx, 4);
         }
@@ -291,7 +340,7 @@ bool ReportGenerator::generateReport(const EmergencyResponse& response,
                      kBodyFontSize, true);
             for (const QString& name : notContactedFamilies)
             {
-                drawKeyValue(ctx, "\u2022", name);
+                drawBulletItem(ctx, name);
             }
         }
     }

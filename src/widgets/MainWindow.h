@@ -59,6 +59,7 @@ private slots:
     void onEmergencyStarted();
     void onEmergencyEnded();
     void generateEmergencyReport();
+    bool generateEmergencyReportWithConfirm();
     void updateEmergencyActions();
 
     // Sidebar tabs

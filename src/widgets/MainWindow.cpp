@@ -13,6 +13,7 @@
 #include "DocumentManager.h"
 #include "EmergencyManager.h"
 #include "ReportGenerator.h"
+#include "Ward.h"
 #include "FamilyCommands.h"
 #include "ImportWardDirectoryCommand.h"
 #include "ImportEQMinisteringCommand.h"
@@ -967,7 +968,10 @@ void MainWindow::onEndEmergency()
     // Generate PDF report before ending (data is cleared on end)
     if (pdfCheckBox->isChecked())
     {
-        generateEmergencyReport();
+        if (!generateEmergencyReportWithConfirm())
+        {
+            return;
+        }
     }
 
     m_emergencyManager->endEmergency(archive);
@@ -983,9 +987,14 @@ void MainWindow::onEndEmergency()
 
 void MainWindow::generateEmergencyReport()
 {
+    generateEmergencyReportWithConfirm();
+}
+
+bool MainWindow::generateEmergencyReportWithConfirm()
+{
     if (!m_emergencyManager->isActive())
     {
-        return;
+        return false;
     }
 
     const EmergencyResponse& response = m_emergencyManager->response();
@@ -1002,18 +1011,36 @@ void MainWindow::generateEmergencyReport()
 
     if (filePath.isEmpty())
     {
-        return;
+        // User cancelled — ask if they want to skip the report
+        QMessageBox::StandardButton answer = QMessageBox::question(
+            this, tr("Skip Report"),
+            tr("No report will be generated. Continue?"),
+            QMessageBox::Yes | QMessageBox::No,
+            QMessageBox::No);
+        return answer == QMessageBox::Yes;
     }
 
-    if (ReportGenerator::generateReport(response, filePath))
+    // Get ward name from document metadata
+    QString wardName;
+    const QHash<QString, Ward>& wards = m_documentManager->document().wards();
+    if (!wards.isEmpty())
+    {
+        wardName = wards.constBegin().value().name();
+        if (!wardName.isEmpty())
+        {
+            wardName += tr(" Ward");
+        }
+    }
+
+    if (ReportGenerator::generateReport(response, wardName, filePath))
     {
         statusBar()->showMessage(tr("Report saved to %1").arg(filePath), 5000);
+        return true;
     }
-    else
-    {
-        QMessageBox::warning(this, tr("Report Error"),
-                             tr("Failed to generate the report."));
-    }
+
+    QMessageBox::warning(this, tr("Report Error"),
+                         tr("Failed to generate the report."));
+    return false;
 }
 
 void MainWindow::onEmergencyStarted()
