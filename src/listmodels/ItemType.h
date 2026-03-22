@@ -27,8 +27,9 @@ enum class ItemType
     Minister,           // MinisteringModel - person who ministers
     MinisteredFamily,   // MinisteringModel, UnassignedModel - family being ministered
     MinisteredSister,   // MinisteringModel, UnassignedModel - sister being ministered (RS)
-    UnassignedHeader,   // UnassignedModel - "Unassigned (N)" header
-    TaskRow             // TeamsTreeModel - task assigned to team
+    UnassignedHeader,       // UnassignedModel - "Unassigned (N)" header
+    TaskRow,                // TeamsTreeModel - task assigned to team
+    UnassignedTasksHeader   // TeamsTreeModel - "Unassigned Tasks (N)" header
 };
 Q_DECLARE_METATYPE(ItemType)
 

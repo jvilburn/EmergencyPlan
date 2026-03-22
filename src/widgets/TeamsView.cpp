@@ -107,6 +107,7 @@ void TeamsView::onTreeDoubleClicked(const QModelIndex& index)
     case ItemType::TeamMember:
     case ItemType::ContactDetail:
     case ItemType::TaskRow:
+    case ItemType::UnassignedTasksHeader:
     case ItemType::Invalid:
         break;
 
@@ -219,6 +220,8 @@ void TeamsView::onContextMenu(const QPoint& pos)
 
             TaskId taskId = TaskId::fromString(taskIdStr);
             FamilyId familyId = FamilyId::fromString(familyIdStr);
+            m_contextFamilyId = familyId;
+            m_contextTaskId = taskId;
 
             // Check if task is assigned to a team
             std::optional<TeamId> taskTeamId = m_model->teamIdAt(index);
@@ -227,8 +230,7 @@ void TeamsView::onContextMenu(const QPoint& pos)
             {
                 // Unassigned task — offer Assign action
                 menu.addAction(tr("Assign to Team..."), this,
-                    [this, familyId, taskId]()
-                    { assignTaskToTeam(familyId, taskId); });
+                               &TeamsView::assignTaskFromContextMenu);
             }
 
             // Notify action (only if assigned and not yet notified)
@@ -242,14 +244,12 @@ void TeamsView::onContextMenu(const QPoint& pos)
                         if (task.isAssigned() && !task.isNotified())
                         {
                             menu.addAction(tr("Notify..."), this,
-                                [this, familyId, taskId]()
-                                { notifyTask(familyId, taskId); });
+                                           &TeamsView::notifyTaskFromContextMenu);
                         }
                         if (!task.isResolved())
                         {
                             menu.addAction(tr("Resolve..."), this,
-                                [this, familyId, taskId]()
-                                { resolveTask(familyId, taskId); });
+                                           &TeamsView::resolveTaskFromContextMenu);
                         }
                         break;
                     }
@@ -258,6 +258,7 @@ void TeamsView::onContextMenu(const QPoint& pos)
             break;
         }
 
+        case ItemType::UnassignedTasksHeader:
         case ItemType::ContactDetail:
         case ItemType::Invalid:
         default:
@@ -272,6 +273,8 @@ void TeamsView::onContextMenu(const QPoint& pos)
 
     m_contextTeamId = std::nullopt;
     m_contextPersonId = std::nullopt;
+    m_contextFamilyId = std::nullopt;
+    m_contextTaskId = std::nullopt;
 }
 
 void TeamsView::expandTeams()
@@ -502,6 +505,42 @@ void TeamsView::removeMemberFromTeam(const TeamId& teamId, const PersonId& perso
 {
     m_documentManager->executeCommand(
         std::make_unique<RemoveTeamMemberCommand>(teamId, personId));
+}
+
+void TeamsView::assignTaskFromContextMenu()
+{
+    std::optional<FamilyId> familyId = m_contextFamilyId;
+    std::optional<TaskId> taskId = m_contextTaskId;
+    m_contextFamilyId = std::nullopt;
+    m_contextTaskId = std::nullopt;
+    if (familyId && taskId)
+    {
+        assignTaskToTeam(*familyId, *taskId);
+    }
+}
+
+void TeamsView::notifyTaskFromContextMenu()
+{
+    std::optional<FamilyId> familyId = m_contextFamilyId;
+    std::optional<TaskId> taskId = m_contextTaskId;
+    m_contextFamilyId = std::nullopt;
+    m_contextTaskId = std::nullopt;
+    if (familyId && taskId)
+    {
+        notifyTask(*familyId, *taskId);
+    }
+}
+
+void TeamsView::resolveTaskFromContextMenu()
+{
+    std::optional<FamilyId> familyId = m_contextFamilyId;
+    std::optional<TaskId> taskId = m_contextTaskId;
+    m_contextFamilyId = std::nullopt;
+    m_contextTaskId = std::nullopt;
+    if (familyId && taskId)
+    {
+        resolveTask(*familyId, *taskId);
+    }
 }
 
 void TeamsView::assignTaskToTeam(const FamilyId& familyId, const TaskId& taskId)

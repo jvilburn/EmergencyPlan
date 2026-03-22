@@ -59,6 +59,11 @@ private:
     void clearLeader(const TeamId& teamId);
     void removeMemberFromTeam(const TeamId& teamId, const PersonId& personId);
 
+    // Task context menu slots
+    void assignTaskFromContextMenu();
+    void notifyTaskFromContextMenu();
+    void resolveTaskFromContextMenu();
+
     // Task actions
     void assignTaskToTeam(const FamilyId& familyId, const TaskId& taskId);
     void notifyTask(const FamilyId& familyId, const TaskId& taskId);
@@ -79,4 +84,6 @@ private:
     // Context menu state
     std::optional<TeamId> m_contextTeamId;
     std::optional<PersonId> m_contextPersonId;
+    std::optional<FamilyId> m_contextFamilyId;
+    std::optional<TaskId> m_contextTaskId;
 };

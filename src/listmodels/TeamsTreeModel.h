@@ -82,7 +82,7 @@ private:
     struct TreeNode
     {
         ItemType type = ItemType::Invalid;
-        TeamId teamId;
+        std::optional<TeamId> teamId;
         std::optional<PersonId> personId;
         std::optional<TaskId> taskId;
         std::optional<FamilyId> familyId;

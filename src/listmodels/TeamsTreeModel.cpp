@@ -14,8 +14,8 @@
 namespace
 {
 
-const QString kCheckmark = QStringLiteral("\u2713");
-const QString kBullet = QStringLiteral("\u2022");
+const QString kCheckmark = "\u2713";
+const QString kBullet = "\u2022";
 
 bool leaderFirstThenAlpha(const QPair<PersonId, QString>& a,
                           const QPair<PersonId, QString>& b,
@@ -113,9 +113,6 @@ void TeamsTreeModel::rebuild()
               [](const Team& a, const Team& b)
               { return a.name().toLower() < b.name().toLower(); });
 
-    // Collect all team-assigned task IDs so we can find unassigned tasks later
-    QSet<TaskId> assignedTaskIds;
-
     for (const Team& team : teams)
     {
         // Collect and sort members (with filtering)
@@ -182,8 +179,6 @@ void TeamsTreeModel::rebuild()
                 {
                     if (task.assignedTeamId() && *task.assignedTeamId() == team.id())
                     {
-                        assignedTaskIds.insert(task.id());
-
                         TreeNode* taskNode = new TreeNode();
                         taskNode->type = ItemType::TaskRow;
                         taskNode->teamId = team.id();
@@ -263,7 +258,7 @@ void TeamsTreeModel::rebuild()
         if (!unassignedNodes.isEmpty())
         {
             TreeNode* unassignedHeader = new TreeNode();
-            unassignedHeader->type = ItemType::Team;  // reuse Team type for top-level grouping
+            unassignedHeader->type = ItemType::UnassignedTasksHeader;
             unassignedHeader->displayText = tr("Unassigned Tasks (%1)").arg(unassignedNodes.size());
 
             for (TreeNode* taskNode : unassignedNodes)
@@ -433,7 +428,13 @@ QVariant TeamsTreeModel::data(const QModelIndex& index, int role) const
         return QVariant::fromValue(node->type);
 
     case TeamIdRole:
-        return node->teamId.toString();
+    {
+        if (node->teamId)
+        {
+            return node->teamId->toString();
+        }
+        return QVariant();
+    }
 
     case TaskIdRole:
     {
@@ -469,13 +470,22 @@ SelectionKey TeamsTreeModel::selectionKeyAt(const QModelIndex& index) const
     switch (node->type)
     {
     case ItemType::Team:
-        return SelectionKey::from(node->teamId);
-    case ItemType::TeamMember:
-        if (node->personId)
+    case ItemType::UnassignedTasksHeader:
+        if (node->teamId)
         {
-            return SelectionKey::literal(node->teamId.toString() + ":" + node->personId->toString());
+            return SelectionKey::from(*node->teamId);
         }
-        return SelectionKey::from(node->teamId);
+        return SelectionKey::literal("unassigned-tasks");
+    case ItemType::TeamMember:
+        if (node->personId && node->teamId)
+        {
+            return SelectionKey::literal(node->teamId->toString() + ":" + node->personId->toString());
+        }
+        if (node->teamId)
+        {
+            return SelectionKey::from(*node->teamId);
+        }
+        return SelectionKey::literal(QString());
     case ItemType::TaskRow:
         if (node->taskId)
         {
@@ -508,7 +518,11 @@ FamilyAssociation TeamsTreeModel::relatedFamiliesAt(const QModelIndex& index) co
     {
     case ItemType::Team:
     {
-        std::optional<Team> teamOpt = doc.findTeamById(node->teamId);
+        if (!node->teamId)
+        {
+            break;
+        }
+        std::optional<Team> teamOpt = doc.findTeamById(*node->teamId);
         if (teamOpt)
         {
             for (const PersonId& personId : teamOpt->memberIds())
@@ -572,11 +586,6 @@ std::optional<TeamId> TeamsTreeModel::teamIdAt(const QModelIndex& index) const
 {
     TreeNode* node = nodeFromIndex(index);
     if (!node)
-    {
-        return std::nullopt;
-    }
-    // Return nullopt for nodes without a real team (e.g. unassigned header)
-    if (node->teamId.toString().isEmpty())
     {
         return std::nullopt;
     }
@@ -763,7 +772,9 @@ void TeamsTreeModel::refreshFamilyDisplayText(const FamilyId& familyId)
                 if (person)
                 {
                     QString displayName = person->displayName();
-                    std::optional<Team> teamOpt = doc.findTeamById(teamNode->teamId);
+                    std::optional<Team> teamOpt = teamNode->teamId
+                        ? doc.findTeamById(*teamNode->teamId)
+                        : std::nullopt;
                     if (teamOpt && teamOpt->leaderId() && *teamOpt->leaderId() == *memberNode->personId)
                     {
                         displayName += tr(" (leader)");
