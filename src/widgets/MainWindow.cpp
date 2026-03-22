@@ -105,7 +105,7 @@ void MainWindow::setupUi()
     m_ministeringView = new MinisteringView(m_documentManager, m_emergencyManager, this);
     m_sidebarTabs->addPage(m_ministeringView, tr("Ministering"));
 
-    m_teamsView = new TeamsView(m_documentManager, this);
+    m_teamsView = new TeamsView(m_documentManager, m_emergencyManager, this);
     m_sidebarTabs->addPage(m_teamsView, tr("Teams"));
 
     m_needsView = new NeedsSubView(m_documentManager, this);

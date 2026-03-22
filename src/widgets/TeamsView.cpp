@@ -3,6 +3,9 @@
 #include "WardListDialog.h"
 #include "DocumentManager.h"
 #include "Document.h"
+#include "EmergencyManager.h"
+#include "EmergencyResponse.h"
+#include "NotifyDialog.h"
 #include "Team.h"
 #include "TeamsTreeModel.h"
 #include "FilterBar.h"
@@ -16,11 +19,15 @@
 #include <QPushButton>
 #include <QMenu>
 #include <QMessageBox>
+#include <QInputDialog>
+#include <QLineEdit>
 
 TeamsView::TeamsView(DocumentManager* documentManager,
+                     EmergencyManager* emergencyManager,
                      QWidget* parent)
     : QWidget(parent)
     , m_documentManager(documentManager)
+    , m_emergencyManager(emergencyManager)
 {
     QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(4, 4, 4, 4);
@@ -46,7 +53,8 @@ TeamsView::TeamsView(DocumentManager* documentManager,
     layout->addLayout(toolbar);
 
     // Create model with filter from FilterBar
-    m_model = new TeamsTreeModel(documentManager, m_filterBar->filter(), this);
+    m_model = new TeamsTreeModel(documentManager, emergencyManager,
+                                 m_filterBar->filter(), this);
 
     // Create tree view with model
     m_tree = new SelectionPreservingTreeView(m_model, this);
@@ -98,7 +106,11 @@ void TeamsView::onTreeDoubleClicked(const QModelIndex& index)
 
     case ItemType::TeamMember:
     case ItemType::ContactDetail:
+    case ItemType::TaskRow:
     case ItemType::Invalid:
+        break;
+
+    default:
         break;
     }
 }
@@ -196,8 +208,59 @@ void TeamsView::onContextMenu(const QPoint& pos)
             break;
         }
 
+        case ItemType::TaskRow:
+        {
+            QString taskIdStr = index.data(TeamsTreeModel::TaskIdRole).toString();
+            QString familyIdStr = index.data(TeamsTreeModel::FamilyIdRole).toString();
+            if (taskIdStr.isEmpty() || familyIdStr.isEmpty())
+            {
+                break;
+            }
+
+            TaskId taskId = TaskId::fromString(taskIdStr);
+            FamilyId familyId = FamilyId::fromString(familyIdStr);
+
+            // Check if task is assigned to a team
+            std::optional<TeamId> taskTeamId = m_model->teamIdAt(index);
+
+            if (!taskTeamId)
+            {
+                // Unassigned task — offer Assign action
+                menu.addAction(tr("Assign to Team..."), this,
+                    [this, familyId, taskId]()
+                    { assignTaskToTeam(familyId, taskId); });
+            }
+
+            // Notify action (only if assigned and not yet notified)
+            const FamilyResponseRecord* record = m_emergencyManager->recordForFamily(familyId);
+            if (record)
+            {
+                for (const ResponseTask& task : record->tasks())
+                {
+                    if (task.id() == taskId)
+                    {
+                        if (task.isAssigned() && !task.isNotified())
+                        {
+                            menu.addAction(tr("Notify..."), this,
+                                [this, familyId, taskId]()
+                                { notifyTask(familyId, taskId); });
+                        }
+                        if (!task.isResolved())
+                        {
+                            menu.addAction(tr("Resolve..."), this,
+                                [this, familyId, taskId]()
+                                { resolveTask(familyId, taskId); });
+                        }
+                        break;
+                    }
+                }
+            }
+            break;
+        }
+
         case ItemType::ContactDetail:
         case ItemType::Invalid:
+        default:
             break;
         }
     }
@@ -439,4 +502,77 @@ void TeamsView::removeMemberFromTeam(const TeamId& teamId, const PersonId& perso
 {
     m_documentManager->executeCommand(
         std::make_unique<RemoveTeamMemberCommand>(teamId, personId));
+}
+
+void TeamsView::assignTaskToTeam(const FamilyId& familyId, const TaskId& taskId)
+{
+    const Document& doc = m_documentManager->document();
+    QList<Team> teams = doc.teams().values();
+
+    if (teams.isEmpty())
+    {
+        QMessageBox::information(this, tr("Assign Task"), tr("No teams available."));
+        return;
+    }
+
+    // Build team name list
+    std::sort(teams.begin(), teams.end(),
+              [](const Team& a, const Team& b)
+              { return a.name().toLower() < b.name().toLower(); });
+
+    QStringList teamNames;
+    for (const Team& team : teams)
+    {
+        teamNames.append(team.name());
+    }
+
+    bool ok = false;
+    QString selected = QInputDialog::getItem(
+        this, tr("Assign Task"), tr("Select team:"),
+        teamNames, 0, false, &ok);
+
+    if (!ok || selected.isEmpty())
+    {
+        return;
+    }
+
+    // Find selected team
+    for (const Team& team : teams)
+    {
+        if (team.name() == selected)
+        {
+            m_emergencyManager->assignTaskToTeam(familyId, taskId, team.id(), QString());
+            return;
+        }
+    }
+}
+
+void TeamsView::notifyTask(const FamilyId& familyId, const TaskId& taskId)
+{
+    NotifyDialog dialog(this);
+    if (dialog.exec() != QDialog::Accepted)
+    {
+        return;
+    }
+
+    std::optional<TaskNotification> notification = dialog.result();
+    if (notification)
+    {
+        m_emergencyManager->notifyAssignee(familyId, taskId, *notification);
+    }
+}
+
+void TeamsView::resolveTask(const FamilyId& familyId, const TaskId& taskId)
+{
+    bool ok = false;
+    QString notes = QInputDialog::getText(
+        this, tr("Resolve Task"), tr("Resolution notes (optional):"),
+        QLineEdit::Normal, QString(), &ok);
+
+    if (!ok)
+    {
+        return;
+    }
+
+    m_emergencyManager->resolveTask(familyId, taskId, notes.trimmed());
 }

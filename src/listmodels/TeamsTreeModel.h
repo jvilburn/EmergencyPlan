@@ -2,22 +2,28 @@
 
 #include "BaseTreeModel.h"
 #include "DocumentChange.h"
+#include "Id.h"
 
 #include <QList>
 #include <QString>
+#include <optional>
 
 class DocumentManager;
+class EmergencyManager;
 class Filter;
 
 /// Model for teams tree (2-level: Team → Member → ContactDetail).
+/// During emergencies, adds task rows under each team and an "Unassigned Tasks" section.
 ///
 /// Level 0: Teams sorted by name, displayed as "Name (N)" where N = member count
 /// Level 1: Members in each team, sorted by display name. Leader shown first with "(leader)" suffix.
+///          During emergencies: task rows appended after members.
 /// Level 2: Contact details (phone, email, address) - lazy loaded on expand
 ///
 /// Selection key formats:
 ///   Team         -> {teamId}
 ///   TeamMember   -> {teamId}:{personId}
+///   TaskRow      -> task:{taskId}
 ///   ContactDetail-> parent's key
 class TeamsTreeModel : public BaseTreeModel
 {
@@ -27,11 +33,14 @@ public:
     enum Roles
     {
         ItemTypeRole = Qt::UserRole + 1,
-        TeamIdRole
+        TeamIdRole,
+        TaskIdRole,
+        FamilyIdRole
     };
     Q_ENUM(Roles)
 
     explicit TeamsTreeModel(DocumentManager* documentManager,
+                            EmergencyManager* emergencyManager,
                             Filter* filter,
                             QObject* parent);
     ~TeamsTreeModel() override;
@@ -63,6 +72,7 @@ public:
 
 private slots:
     void onDocumentChanged(const DocumentChange& change);
+    void onEmergencyStateChanged();
 
 private:
     void rebuild();
@@ -74,10 +84,13 @@ private:
         ItemType type = ItemType::Invalid;
         TeamId teamId;
         std::optional<PersonId> personId;
+        std::optional<TaskId> taskId;
+        std::optional<FamilyId> familyId;
         QString displayText;
         TreeNode* parent = nullptr;
         QList<TreeNode*> children;
         bool contactsLoaded = false;
+        bool taskResolved = false;
 
         ~TreeNode() { qDeleteAll(children); }
     };
@@ -86,5 +99,6 @@ private:
 
     QList<TreeNode*> m_teamNodes;  // Top-level team nodes (owned)
     DocumentManager* m_documentManager;
+    EmergencyManager* m_emergencyManager;
     Filter* m_filter;
 };

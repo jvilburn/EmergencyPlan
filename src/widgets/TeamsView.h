@@ -1,12 +1,14 @@
 #pragma once
 
 #include "FamilyMarkerProvider.h"
+#include "Id.h"
 
 #include <QWidget>
 
 #include <optional>
 
 class DocumentManager;
+class EmergencyManager;
 class FilterBar;
 class QPushButton;
 class QModelIndex;
@@ -16,12 +18,14 @@ class TeamsTreeModel;
 /// TeamsView displays a 2-level tree of teams and their members.
 /// Owns FilterBar (which owns Filter) and TeamsTreeModel internally.
 /// Includes a toolbar with Add, Edit, Delete buttons.
+/// During emergencies, shows task rows under each team with context menu actions.
 class TeamsView : public QWidget, public FamilyMarkerProvider
 {
     Q_OBJECT
 
 public:
     explicit TeamsView(DocumentManager* documentManager,
+                       EmergencyManager* emergencyManager,
                        QWidget* parent);
 
     // FamilyMarkerProvider interface
@@ -55,9 +59,15 @@ private:
     void clearLeader(const TeamId& teamId);
     void removeMemberFromTeam(const TeamId& teamId, const PersonId& personId);
 
+    // Task actions
+    void assignTaskToTeam(const FamilyId& familyId, const TaskId& taskId);
+    void notifyTask(const FamilyId& familyId, const TaskId& taskId);
+    void resolveTask(const FamilyId& familyId, const TaskId& taskId);
+
     std::optional<TeamId> selectedTeamId() const;
 
     DocumentManager* m_documentManager;
+    EmergencyManager* m_emergencyManager;
     FilterBar* m_filterBar;
     TeamsTreeModel* m_model;
     SelectionPreservingTreeView* m_tree;
