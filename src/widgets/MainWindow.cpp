@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "ArchiveBrowserDialog.h"
 #include "EmergencyBanner.h"
 #include "WardListView.h"
 #include "MinisteringView.h"
@@ -187,6 +188,7 @@ void MainWindow::setupMenus()
     m_endEmergencyAction->setEnabled(false);
     m_generateReportAction = fileMenu->addAction(tr("&Generate Emergency Report..."), this, &MainWindow::generateEmergencyReport);
     m_generateReportAction->setEnabled(false);
+    m_openArchiveAction = fileMenu->addAction(tr("Open Emergency &Archive..."), this, &MainWindow::onOpenArchive);
 
     fileMenu->addSeparator();
 
@@ -1053,6 +1055,56 @@ void MainWindow::onEmergencyEnded()
 {
     m_emergencyBanner->hide();
     updateEmergencyActions();
+}
+
+void MainWindow::onOpenArchive()
+{
+    QString docPath = m_documentManager->filePath();
+    if (docPath.isEmpty())
+    {
+        QMessageBox::information(
+            this,
+            tr("No Document"),
+            tr("Please save your document first to view archives."));
+        return;
+    }
+
+    QFileInfo docInfo(docPath);
+    QString archiveDir = docInfo.absolutePath() + "/" + docInfo.completeBaseName() + "_archives";
+
+    ArchiveBrowserDialog dialog(archiveDir, this);
+    if (dialog.exec() != QDialog::Accepted)
+    {
+        return;
+    }
+
+    QString selectedPath = dialog.selectedFilePath();
+    if (selectedPath.isEmpty())
+    {
+        return;
+    }
+
+    switch (dialog.selectedAction())
+    {
+    case ArchiveBrowserDialog::Action::View:
+        // TODO: Task 6.2 will implement read-only archive viewing
+        QMessageBox::information(
+            this,
+            tr("View Archive"),
+            tr("Archive viewing will be available in a future update."));
+        break;
+
+    case ArchiveBrowserDialog::Action::Reopen:
+        // TODO: Task 6.3 will implement reopening archived emergencies
+        QMessageBox::information(
+            this,
+            tr("Reopen Archive"),
+            tr("Reopening archives will be available in a future update."));
+        break;
+
+    case ArchiveBrowserDialog::Action::None:
+        break;
+    }
 }
 
 void MainWindow::updateEmergencyActions()

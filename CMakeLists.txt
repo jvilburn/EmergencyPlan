@@ -216,6 +216,7 @@ set(VIEWMODEL_HEADERS
 
 set(WIDGET_SOURCES
     src/widgets/ActionButtonsWidget.cpp
+    src/widgets/ArchiveBrowserDialog.cpp
     src/widgets/ContactAttemptDialog.cpp
     src/widgets/NotifyDialog.cpp
     src/widgets/TaskDialog.cpp
@@ -265,6 +266,7 @@ set(WIDGET_SOURCES
 
 set(WIDGET_HEADERS
     src/widgets/ActionButtonsWidget.h
+    src/widgets/ArchiveBrowserDialog.h
     src/widgets/ContactAttemptDialog.h
     src/widgets/NotifyDialog.h
     src/widgets/TaskDialog.h

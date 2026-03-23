@@ -60,6 +60,7 @@ private slots:
     void onEmergencyEnded();
     void generateEmergencyReport();
     bool generateEmergencyReportWithConfirm();
+    void onOpenArchive();
     void updateEmergencyActions();
 
     // Sidebar tabs
@@ -115,6 +116,7 @@ private:
     QAction* m_startEmergencyAction;
     QAction* m_endEmergencyAction;
     QAction* m_generateReportAction;
+    QAction* m_openArchiveAction;
     QAction* m_exitAction;
     QAction* m_undoAction;
     QAction* m_redoAction;
