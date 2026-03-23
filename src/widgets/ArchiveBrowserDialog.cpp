@@ -11,6 +11,8 @@
 #include <QMessageBox>
 #include <QPushButton>
 
+#include <QLocale>
+
 #include <algorithm>
 
 ArchiveBrowserDialog::ArchiveBrowserDialog(const QString& archiveDir, QWidget* parent)
@@ -63,17 +65,17 @@ ArchiveBrowserDialog::ArchiveBrowserDialog(const QString& archiveDir, QWidget* p
 
 QString ArchiveBrowserDialog::selectedFilePath() const
 {
-    int idx = currentIndex();
-    if (idx < 0 || idx >= m_entries.size())
+    std::optional<int> idx = currentIndex();
+    if (!idx.has_value())
     {
         return {};
     }
-    return m_entries[idx].filePath;
+    return m_entries[*idx].filePath;
 }
 
 void ArchiveBrowserDialog::onSelectionChanged()
 {
-    bool hasSelection = currentIndex() >= 0;
+    bool hasSelection = currentIndex().has_value();
     m_viewButton->setEnabled(hasSelection);
     m_reopenButton->setEnabled(hasSelection);
     m_deleteButton->setEnabled(hasSelection);
@@ -81,7 +83,7 @@ void ArchiveBrowserDialog::onSelectionChanged()
 
 void ArchiveBrowserDialog::onViewClicked()
 {
-    if (currentIndex() < 0)
+    if (!currentIndex().has_value())
     {
         return;
     }
@@ -91,12 +93,13 @@ void ArchiveBrowserDialog::onViewClicked()
 
 void ArchiveBrowserDialog::onReopenClicked()
 {
-    if (currentIndex() < 0)
+    std::optional<int> idx = currentIndex();
+    if (!idx.has_value())
     {
         return;
     }
 
-    const ArchiveEntry& entry = m_entries[currentIndex()];
+    const ArchiveEntry& entry = m_entries[*idx];
     int result = QMessageBox::question(
         this,
         tr("Reopen Emergency"),
@@ -114,13 +117,13 @@ void ArchiveBrowserDialog::onReopenClicked()
 
 void ArchiveBrowserDialog::onDeleteClicked()
 {
-    int idx = currentIndex();
-    if (idx < 0)
+    std::optional<int> idx = currentIndex();
+    if (!idx.has_value())
     {
         return;
     }
 
-    const ArchiveEntry& entry = m_entries[idx];
+    const ArchiveEntry& entry = m_entries[*idx];
     int result = QMessageBox::warning(
         this,
         tr("Delete Archive"),
@@ -133,7 +136,7 @@ void ArchiveBrowserDialog::onDeleteClicked()
     {
         if (QFile::remove(entry.filePath))
         {
-            m_entries.removeAt(idx);
+            m_entries.removeAt(*idx);
             refreshList();
         }
         else
@@ -163,6 +166,8 @@ void ArchiveBrowserDialog::loadArchives()
 
     QStringList files = dir.entryList({"*.emergencyplan"}, QDir::Files, QDir::Name);
 
+    // Each archive is a full document snapshot, so we load the entire file
+    // to extract emergency metadata. Could be slow with many large archives.
     for (const QString& fileName : files)
     {
         QString filePath = dir.absoluteFilePath(fileName);
@@ -207,6 +212,8 @@ void ArchiveBrowserDialog::refreshList()
 {
     m_listWidget->clear();
 
+    QLocale locale;
+
     for (const ArchiveEntry& entry : m_entries)
     {
         QString dateRange;
@@ -214,18 +221,18 @@ void ArchiveBrowserDialog::refreshList()
         {
             if (entry.startedAt.date() == entry.endedAt->date())
             {
-                dateRange = entry.startedAt.toString("MMM d, yyyy");
+                dateRange = locale.toString(entry.startedAt.date(), "MMM d, yyyy");
             }
             else
             {
-                dateRange = entry.startedAt.toString("MMM d")
+                dateRange = locale.toString(entry.startedAt.date(), "MMM d")
                             + " - "
-                            + entry.endedAt->toString("MMM d, yyyy");
+                            + locale.toString(entry.endedAt->date(), "MMM d, yyyy");
             }
         }
         else
         {
-            dateRange = entry.startedAt.toString("MMM d, yyyy");
+            dateRange = locale.toString(entry.startedAt.date(), "MMM d, yyyy");
         }
 
         QString line1 = entry.name + " - " + dateRange;
@@ -243,7 +250,16 @@ void ArchiveBrowserDialog::refreshList()
     }
 }
 
-int ArchiveBrowserDialog::currentIndex() const
+std::optional<int> ArchiveBrowserDialog::currentIndex() const
 {
-    return m_listWidget->currentRow();
+    if (m_entries.isEmpty())
+    {
+        return std::nullopt;
+    }
+    int row = m_listWidget->currentRow();
+    if (row < 0 || row >= m_entries.size())
+    {
+        return std::nullopt;
+    }
+    return row;
 }

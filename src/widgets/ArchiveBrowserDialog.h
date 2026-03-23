@@ -5,6 +5,8 @@
 #include <QString>
 #include <QDateTime>
 
+#include <optional>
+
 class QListWidget;
 class QPushButton;
 
@@ -48,7 +50,7 @@ private slots:
 private:
     void loadArchives();
     void refreshList();
-    int currentIndex() const;
+    std::optional<int> currentIndex() const;
 
     QString m_archiveDir;
     QList<ArchiveEntry> m_entries;

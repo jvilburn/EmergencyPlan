@@ -189,6 +189,7 @@ void MainWindow::setupMenus()
     m_generateReportAction = fileMenu->addAction(tr("&Generate Emergency Report..."), this, &MainWindow::generateEmergencyReport);
     m_generateReportAction->setEnabled(false);
     m_openArchiveAction = fileMenu->addAction(tr("Open Emergency &Archive..."), this, &MainWindow::onOpenArchive);
+    m_openArchiveAction->setEnabled(false);
 
     fileMenu->addSeparator();
 
@@ -588,6 +589,7 @@ void MainWindow::onAutoSaveFailed(const QString& errorMessage)
 void MainWindow::onFilePathChanged()
 {
     saveLastDocumentPath(m_documentManager->filePath());
+    updateEmergencyActions();
 }
 
 // ============================================================================
@@ -1110,7 +1112,9 @@ void MainWindow::onOpenArchive()
 void MainWindow::updateEmergencyActions()
 {
     bool active = m_emergencyManager->isActive();
+    bool hasDocument = !m_documentManager->filePath().isEmpty();
     m_startEmergencyAction->setEnabled(!active);
     m_endEmergencyAction->setEnabled(active);
     m_generateReportAction->setEnabled(active);
+    m_openArchiveAction->setEnabled(hasDocument);
 }
