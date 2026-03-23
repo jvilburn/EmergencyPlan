@@ -58,6 +58,8 @@ private slots:
     void onEndEmergency();
     void onEmergencyStarted();
     void onEmergencyEnded();
+    void onArchiveViewOpened();
+    void onArchiveViewClosed();
     void generateEmergencyReport();
     bool generateEmergencyReportWithConfirm();
     void onOpenArchive();

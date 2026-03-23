@@ -57,6 +57,10 @@ FamilyTreeModel::FamilyTreeModel(DocumentManager* documentManager,
                 this, &FamilyTreeModel::onEmergencyStateChanged);
         connect(m_emergencyManager, &EmergencyManager::emergencyEnded,
                 this, &FamilyTreeModel::onEmergencyStateChanged);
+        connect(m_emergencyManager, &EmergencyManager::archiveViewOpened,
+                this, &FamilyTreeModel::onEmergencyStateChanged);
+        connect(m_emergencyManager, &EmergencyManager::archiveViewClosed,
+                this, &FamilyTreeModel::onEmergencyStateChanged);
     }
 
     rebuild();

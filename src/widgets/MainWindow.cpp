@@ -224,8 +224,14 @@ void MainWindow::setupConnections()
             this, &MainWindow::onEmergencyStarted);
     connect(m_emergencyManager, &EmergencyManager::emergencyEnded,
             this, &MainWindow::onEmergencyEnded);
+    connect(m_emergencyManager, &EmergencyManager::archiveViewOpened,
+            this, &MainWindow::onArchiveViewOpened);
+    connect(m_emergencyManager, &EmergencyManager::archiveViewClosed,
+            this, &MainWindow::onArchiveViewClosed);
     connect(m_emergencyManager, &EmergencyManager::responseDataChanged,
             m_mapWidget, &MapWidget::updateHighlights);
+    connect(m_emergencyBanner, &EmergencyBanner::closeArchiveRequested,
+            m_emergencyManager, &EmergencyManager::closeArchive);
 
     // Sidebar tab changes
     connect(m_sidebarTabs, &SidebarWidget::currentChanged,
@@ -1055,7 +1061,26 @@ void MainWindow::onEmergencyStarted()
 
 void MainWindow::onEmergencyEnded()
 {
-    m_emergencyBanner->hide();
+    m_emergencyBanner->clearBanner();
+    updateEmergencyActions();
+}
+
+void MainWindow::onArchiveViewOpened()
+{
+    m_emergencyBanner->setArchiveName(m_emergencyManager->response().name());
+    updateEmergencyActions();
+}
+
+void MainWindow::onArchiveViewClosed()
+{
+    if (m_emergencyManager->isActive())
+    {
+        m_emergencyBanner->setEmergencyName(m_emergencyManager->response().name());
+    }
+    else
+    {
+        m_emergencyBanner->clearBanner();
+    }
     updateEmergencyActions();
 }
 
@@ -1089,11 +1114,7 @@ void MainWindow::onOpenArchive()
     switch (dialog.selectedAction())
     {
     case ArchiveBrowserDialog::Action::View:
-        // TODO: Task 6.2 will implement read-only archive viewing
-        QMessageBox::information(
-            this,
-            tr("View Archive"),
-            tr("Archive viewing will be available in a future update."));
+        m_emergencyManager->loadArchive(selectedPath);
         break;
 
     case ArchiveBrowserDialog::Action::Reopen:
@@ -1112,9 +1133,10 @@ void MainWindow::onOpenArchive()
 void MainWindow::updateEmergencyActions()
 {
     bool active = m_emergencyManager->isActive();
+    bool viewing = m_emergencyManager->isViewingArchive();
     bool hasDocument = !m_documentManager->filePath().isEmpty();
-    m_startEmergencyAction->setEnabled(!active);
-    m_endEmergencyAction->setEnabled(active);
-    m_generateReportAction->setEnabled(active);
-    m_openArchiveAction->setEnabled(hasDocument);
+    m_startEmergencyAction->setEnabled(!active && !viewing);
+    m_endEmergencyAction->setEnabled(active && !viewing);
+    m_generateReportAction->setEnabled(active && !viewing);
+    m_openArchiveAction->setEnabled(hasDocument && !viewing);
 }

@@ -95,6 +95,10 @@ WardListView::WardListView(DocumentManager* documentManager,
                 this, &WardListView::onEmergencyStateChanged);
         connect(m_emergencyManager, &EmergencyManager::emergencyEnded,
                 this, &WardListView::onEmergencyStateChanged);
+        connect(m_emergencyManager, &EmergencyManager::archiveViewOpened,
+                this, &WardListView::onEmergencyStateChanged);
+        connect(m_emergencyManager, &EmergencyManager::archiveViewClosed,
+                this, &WardListView::onEmergencyStateChanged);
         connect(m_emergencyManager, &EmergencyManager::responseDataChanged,
                 this, &WardListView::updateFilterTabCounts);
     }
@@ -568,6 +572,11 @@ void WardListView::onResolveTaskRequested(const FamilyId& familyId, const TaskId
 
 void WardListView::onTreeContextMenu(const QPoint& pos)
 {
+    if (m_emergencyManager && m_emergencyManager->isViewingArchive())
+    {
+        return;
+    }
+
     QModelIndex index = m_treeView->indexAt(pos);
     if (!index.isValid())
     {

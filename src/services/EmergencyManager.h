@@ -3,6 +3,7 @@
 #include <QObject>
 #include <optional>
 
+#include "Document.h"
 #include "EmergencyResponse.h"
 
 class DocumentManager;
@@ -19,6 +20,12 @@ public:
     bool isActive() const;
     void startEmergency(const QString& name);
     void endEmergency(bool archive);
+
+    // Archive viewing (read-only mode)
+    bool loadArchive(const QString& filePath);
+    void closeArchive();
+    bool isViewingArchive() const { return m_viewingArchive; }
+    const Document& archiveDocument() const { return m_archiveDocument; }
 
     // Read access
     const EmergencyResponse& response() const;
@@ -57,6 +64,8 @@ public:
 signals:
     void emergencyStarted();
     void emergencyEnded();
+    void archiveViewOpened();
+    void archiveViewClosed();
     void familyStatusChanged(const FamilyId& familyId);
     void responseDataChanged();  // generic "something changed" for progress bars, counts
 
@@ -71,4 +80,9 @@ private:
 
     DocumentManager* m_documentManager;
     std::optional<EmergencyResponse> m_response;
+
+    // Archive viewing state
+    bool m_viewingArchive = false;
+    Document m_archiveDocument;
+    std::optional<EmergencyResponse> m_savedResponse;  // stashed live response during archive view
 };

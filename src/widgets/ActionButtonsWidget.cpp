@@ -19,8 +19,8 @@ ActionButtonsWidget::ActionButtonsWidget(const FamilyId& familyId,
     layout->setContentsMargins(0, 2, 0, 2);
     layout->setSpacing(8);
 
-    // Emergency action buttons (only during active emergency)
-    if (m_emergencyManager && m_emergencyManager->isActive())
+    // Emergency action buttons (only during active emergency, not archive viewing)
+    if (m_emergencyManager && m_emergencyManager->isActive() && !m_emergencyManager->isViewingArchive())
     {
         // Phone number for quick calling
         if (!phoneNumber.isEmpty())

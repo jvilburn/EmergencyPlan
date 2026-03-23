@@ -53,6 +53,10 @@ TeamsTreeModel::TeamsTreeModel(DocumentManager* documentManager,
                 this, &TeamsTreeModel::onEmergencyStateChanged);
         connect(m_emergencyManager, &EmergencyManager::emergencyEnded,
                 this, &TeamsTreeModel::onEmergencyStateChanged);
+        connect(m_emergencyManager, &EmergencyManager::archiveViewOpened,
+                this, &TeamsTreeModel::onEmergencyStateChanged);
+        connect(m_emergencyManager, &EmergencyManager::archiveViewClosed,
+                this, &TeamsTreeModel::onEmergencyStateChanged);
         connect(m_emergencyManager, &EmergencyManager::responseDataChanged,
                 this, &TeamsTreeModel::rebuild);
     }

@@ -93,6 +93,59 @@ void EmergencyManager::endEmergency(bool archive)
 }
 
 // ============================================================================
+// Archive viewing
+// ============================================================================
+
+bool EmergencyManager::loadArchive(const QString& filePath)
+{
+    JsonResult result = JsonService::loadDocument(filePath);
+    if (!result.success)
+    {
+        QMessageBox::critical(
+            nullptr,
+            tr("Open Archive Failed"),
+            tr("Could not load archive:\n%1").arg(result.errorMessage));
+        return false;
+    }
+
+    const std::optional<EmergencyResponse>& archiveResponse = result.document.emergencyResponse();
+    if (!archiveResponse.has_value())
+    {
+        QMessageBox::critical(
+            nullptr,
+            tr("Open Archive Failed"),
+            tr("This file does not contain emergency response data."));
+        return false;
+    }
+
+    // Stash current live response (if any) and swap in archive data
+    m_savedResponse = m_response;
+    m_response = archiveResponse;
+    m_archiveDocument = std::move(result.document);
+    m_viewingArchive = true;
+
+    emit archiveViewOpened();
+    emit responseDataChanged();
+    return true;
+}
+
+void EmergencyManager::closeArchive()
+{
+    if (!m_viewingArchive)
+    {
+        return;
+    }
+
+    m_viewingArchive = false;
+    m_response = m_savedResponse;
+    m_savedResponse.reset();
+    m_archiveDocument = Document();
+
+    emit archiveViewClosed();
+    emit responseDataChanged();
+}
+
+// ============================================================================
 // Read access
 // ============================================================================
 

@@ -38,6 +38,10 @@ MinisteringModel::MinisteringModel(DocumentManager* documentManager,
                 this, &MinisteringModel::onEmergencyStateChanged);
         connect(m_emergencyManager, &EmergencyManager::emergencyEnded,
                 this, &MinisteringModel::onEmergencyStateChanged);
+        connect(m_emergencyManager, &EmergencyManager::archiveViewOpened,
+                this, &MinisteringModel::onEmergencyStateChanged);
+        connect(m_emergencyManager, &EmergencyManager::archiveViewClosed,
+                this, &MinisteringModel::onEmergencyStateChanged);
     }
     rebuild();
 }
