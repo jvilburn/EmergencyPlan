@@ -140,6 +140,51 @@ bool EmergencyManager::loadArchive(const QString& filePath, QString* errorMessag
     return true;
 }
 
+bool EmergencyManager::reopenArchive(const QString& filePath, QString* errorMessage)
+{
+    // Close any archive view first
+    if (isViewingArchive())
+    {
+        closeArchive();
+    }
+
+    JsonResult result = JsonService::loadDocument(filePath);
+    if (!result.success)
+    {
+        if (errorMessage)
+        {
+            *errorMessage = tr("Could not load archive:\n%1").arg(result.errorMessage);
+        }
+        return false;
+    }
+
+    const std::optional<EmergencyResponse>& archiveResponse = result.document.emergencyResponse();
+    if (!archiveResponse.has_value())
+    {
+        if (errorMessage)
+        {
+            *errorMessage = tr("This file does not contain emergency response data.");
+        }
+        return false;
+    }
+
+    // Set the archived response as the active emergency
+    m_response = archiveResponse;
+    m_response->clearEndedAt();
+
+    // Sync family records with current document (archive may have stale family data)
+    syncFamilies();
+
+    persistResponseData();
+
+    // Delete the archive file — it's now the active response
+    QFile::remove(filePath);
+
+    emit emergencyStarted();
+    emit responseDataChanged();
+    return true;
+}
+
 void EmergencyManager::closeArchive()
 {
     if (!isViewingArchive())

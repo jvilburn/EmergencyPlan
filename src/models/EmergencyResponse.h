@@ -215,6 +215,7 @@ public:
     const QStringList& taskCategories() const { return m_taskCategories; }
 
     void setEndedAt(const QDateTime& endedAt) { m_endedAt = endedAt; }
+    void clearEndedAt() { m_endedAt.reset(); }
 
     // Family record management (called by EmergencyManager)
     void addFamilyRecord(const FamilyResponseRecord& record);

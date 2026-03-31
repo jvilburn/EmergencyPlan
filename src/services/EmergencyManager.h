@@ -26,6 +26,9 @@ public:
     void closeArchive();
     bool isViewingArchive() const;
 
+    // Reopen archived emergency as active
+    bool reopenArchive(const QString& filePath, QString* errorMessage = nullptr);
+
     // Read access
     const EmergencyResponse& response() const;
     const FamilyResponseRecord* recordForFamily(const FamilyId& familyId) const;

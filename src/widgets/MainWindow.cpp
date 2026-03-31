@@ -1124,12 +1124,40 @@ void MainWindow::onOpenArchive()
     }
 
     case ArchiveBrowserDialog::Action::Reopen:
-        // TODO: Task 6.3 will implement reopening archived emergencies
-        QMessageBox::information(
+    {
+        QMessageBox::StandardButton confirm = QMessageBox::question(
             this,
-            tr("Reopen Archive"),
-            tr("Reopening archives will be available in a future update."));
+            tr("Reopen Emergency"),
+            tr("This will restore this emergency as active.\n\n"
+               "Any current emergency will be ended and archived first.\n\n"
+               "Continue?"),
+            QMessageBox::Yes | QMessageBox::No,
+            QMessageBox::No);
+
+        if (confirm != QMessageBox::Yes)
+        {
+            break;
+        }
+
+        // End current emergency first (with archive)
+        if (m_emergencyManager->isActive())
+        {
+            m_emergencyManager->endEmergency(true);
+        }
+
+        QString errorMessage;
+        if (!m_emergencyManager->reopenArchive(selectedPath, &errorMessage))
+        {
+            QMessageBox::critical(this, tr("Reopen Failed"), errorMessage);
+        }
+        else
+        {
+            statusBar()->showMessage(
+                tr("Emergency \"%1\" reopened").arg(m_emergencyManager->response().name()),
+                5000);
+        }
         break;
+    }
 
     case ArchiveBrowserDialog::Action::None:
         break;
