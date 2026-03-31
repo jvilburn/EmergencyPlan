@@ -87,6 +87,7 @@ void EmergencyManager::endEmergency(bool archive)
 
     // Clear response data from main document
     m_response.reset();
+    m_savedResponse.reset();
     m_documentManager->setEmergencyResponse(std::nullopt);
     emit emergencyEnded();
     emit responseDataChanged();
@@ -101,25 +102,31 @@ bool EmergencyManager::isViewingArchive() const
     return m_documentManager->isViewingArchive();
 }
 
-bool EmergencyManager::loadArchive(const QString& filePath)
+bool EmergencyManager::loadArchive(const QString& filePath, QString* errorMessage)
 {
+    // Close any existing archive view first
+    if (isViewingArchive())
+    {
+        closeArchive();
+    }
+
     JsonResult result = JsonService::loadDocument(filePath);
     if (!result.success)
     {
-        QMessageBox::critical(
-            nullptr,
-            tr("Open Archive Failed"),
-            tr("Could not load archive:\n%1").arg(result.errorMessage));
+        if (errorMessage)
+        {
+            *errorMessage = tr("Could not load archive:\n%1").arg(result.errorMessage);
+        }
         return false;
     }
 
     const std::optional<EmergencyResponse>& archiveResponse = result.document.emergencyResponse();
     if (!archiveResponse.has_value())
     {
-        QMessageBox::critical(
-            nullptr,
-            tr("Open Archive Failed"),
-            tr("This file does not contain emergency response data."));
+        if (errorMessage)
+        {
+            *errorMessage = tr("This file does not contain emergency response data.");
+        }
         return false;
     }
 

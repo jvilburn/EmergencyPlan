@@ -22,7 +22,7 @@ public:
     void endEmergency(bool archive);
 
     // Archive viewing (read-only mode)
-    bool loadArchive(const QString& filePath);
+    bool loadArchive(const QString& filePath, QString* errorMessage = nullptr);
     void closeArchive();
     bool isViewingArchive() const;
 

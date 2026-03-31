@@ -1114,8 +1114,14 @@ void MainWindow::onOpenArchive()
     switch (dialog.selectedAction())
     {
     case ArchiveBrowserDialog::Action::View:
-        m_emergencyManager->loadArchive(selectedPath);
+    {
+        QString errorMessage;
+        if (!m_emergencyManager->loadArchive(selectedPath, &errorMessage))
+        {
+            QMessageBox::critical(this, tr("Open Archive Failed"), errorMessage);
+        }
         break;
+    }
 
     case ArchiveBrowserDialog::Action::Reopen:
         // TODO: Task 6.3 will implement reopening archived emergencies

@@ -19,7 +19,9 @@ ActionButtonsWidget::ActionButtonsWidget(const FamilyId& familyId,
     layout->setContentsMargins(0, 2, 0, 2);
     layout->setSpacing(8);
 
-    // Emergency action buttons (only during active emergency, not archive viewing)
+    // Emergency action buttons (only during active emergency, not archive viewing).
+    // Note: isActive() returns true during archive view because m_response holds the archive's
+    // response data, so the isViewingArchive() check is needed to distinguish live vs. archive.
     if (m_emergencyManager && m_emergencyManager->isActive() && !m_emergencyManager->isViewingArchive())
     {
         // Phone number for quick calling
