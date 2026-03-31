@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QString>
 #include <QSet>
+#include <optional>
 #include "Document.h"
 #include "DocumentChange.h"
 #include "CommandHistory.h"
@@ -22,7 +23,12 @@ public:
     explicit DocumentManager(QObject* parent);
 
     // Document access
-    const Document& document() const { return m_document; }
+    const Document& document() const;
+
+    // Archive document overlay (read-only viewing)
+    void setArchiveDocument(Document archiveDoc);
+    void clearArchiveDocument();
+    bool isViewingArchive() const { return m_archiveDocument.has_value(); }
 
     // File path
     QString filePath() const { return m_filePath; }
@@ -88,6 +94,7 @@ private:
     void maybeRenameForWard();
 
     Document m_document;
+    std::optional<Document> m_archiveDocument;  // overlay for read-only archive viewing
     CommandHistory m_commandHistory;
     QString m_filePath;
 

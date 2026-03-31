@@ -24,8 +24,7 @@ public:
     // Archive viewing (read-only mode)
     bool loadArchive(const QString& filePath);
     void closeArchive();
-    bool isViewingArchive() const { return m_viewingArchive; }
-    const Document& archiveDocument() const { return m_archiveDocument; }
+    bool isViewingArchive() const;
 
     // Read access
     const EmergencyResponse& response() const;
@@ -82,7 +81,5 @@ private:
     std::optional<EmergencyResponse> m_response;
 
     // Archive viewing state
-    bool m_viewingArchive = false;
-    Document m_archiveDocument;
     std::optional<EmergencyResponse> m_savedResponse;  // stashed live response during archive view
 };

@@ -50,6 +50,27 @@ DocumentManager::DocumentManager(QObject* parent)
             this, &DocumentManager::onGeocodingFinished);
 }
 
+const Document& DocumentManager::document() const
+{
+    if (m_archiveDocument.has_value())
+    {
+        return *m_archiveDocument;
+    }
+    return m_document;
+}
+
+void DocumentManager::setArchiveDocument(Document archiveDoc)
+{
+    m_archiveDocument = std::move(archiveDoc);
+    emit documentChanged(DocumentChange::full());
+}
+
+void DocumentManager::clearArchiveDocument()
+{
+    m_archiveDocument.reset();
+    emit documentChanged(DocumentChange::full());
+}
+
 void DocumentManager::executeCommand(CommandPtr command)
 {
     DocumentChange change = command->documentChange();

@@ -96,6 +96,11 @@ void EmergencyManager::endEmergency(bool archive)
 // Archive viewing
 // ============================================================================
 
+bool EmergencyManager::isViewingArchive() const
+{
+    return m_documentManager->isViewingArchive();
+}
+
 bool EmergencyManager::loadArchive(const QString& filePath)
 {
     JsonResult result = JsonService::loadDocument(filePath);
@@ -121,8 +126,7 @@ bool EmergencyManager::loadArchive(const QString& filePath)
     // Stash current live response (if any) and swap in archive data
     m_savedResponse = m_response;
     m_response = archiveResponse;
-    m_archiveDocument = std::move(result.document);
-    m_viewingArchive = true;
+    m_documentManager->setArchiveDocument(std::move(result.document));
 
     emit archiveViewOpened();
     emit responseDataChanged();
@@ -131,15 +135,14 @@ bool EmergencyManager::loadArchive(const QString& filePath)
 
 void EmergencyManager::closeArchive()
 {
-    if (!m_viewingArchive)
+    if (!isViewingArchive())
     {
         return;
     }
 
-    m_viewingArchive = false;
     m_response = m_savedResponse;
     m_savedResponse.reset();
-    m_archiveDocument = Document();
+    m_documentManager->clearArchiveDocument();
 
     emit archiveViewClosed();
     emit responseDataChanged();
