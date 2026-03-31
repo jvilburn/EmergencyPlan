@@ -73,6 +73,12 @@ void DocumentManager::clearArchiveDocument()
 
 void DocumentManager::executeCommand(CommandPtr command)
 {
+    if (isViewingArchive())
+    {
+        qWarning() << "Command execution blocked while viewing archive";
+        return;
+    }
+
     DocumentChange change = command->documentChange();
 
     m_commandHistory.execute(std::move(command), m_document);
@@ -84,6 +90,10 @@ void DocumentManager::executeCommand(CommandPtr command)
 
 void DocumentManager::undo()
 {
+    if (isViewingArchive())
+    {
+        return;
+    }
     if (!canUndo())
     {
         return;
@@ -96,6 +106,10 @@ void DocumentManager::undo()
 
 void DocumentManager::redo()
 {
+    if (isViewingArchive())
+    {
+        return;
+    }
     if (!canRedo())
     {
         return;
