@@ -177,8 +177,18 @@ bool EmergencyManager::reopenArchive(const QString& filePath, QString* errorMess
 
     persistResponseData();
 
-    // Delete the archive file — it's now the active response
-    QFile::remove(filePath);
+    // Delete the archive file only after persistence succeeds
+    if (m_documentManager->saveDocumentOnly())
+    {
+        if (!QFile::remove(filePath))
+        {
+            qWarning() << "Could not delete archive file:" << filePath;
+        }
+    }
+    else
+    {
+        qWarning() << "Response data save failed — archive file preserved:" << filePath;
+    }
 
     emit emergencyStarted();
     emit responseDataChanged();

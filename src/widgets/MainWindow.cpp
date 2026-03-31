@@ -1139,10 +1139,16 @@ void MainWindow::onOpenArchive()
             break;
         }
 
-        // End current emergency first (with archive)
+        // End current emergency first (always archive to preserve data)
         if (m_emergencyManager->isActive())
         {
             m_emergencyManager->endEmergency(true);
+
+            // If still active, archive save failed — abort reopen
+            if (m_emergencyManager->isActive())
+            {
+                break;
+            }
         }
 
         QString errorMessage;
