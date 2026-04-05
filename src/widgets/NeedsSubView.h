@@ -33,15 +33,22 @@ private slots:
     void onContextMenu(const QPoint& pos);
     void editNeedFromContextMenu();
     void deleteNeedFromContextMenu();
+    void editSelectedNeed();
+    void deleteSelectedNeed();
 
 private:
     void addNeed();
     void showNeedDialog(const std::optional<PersonId>& personId);
     void deleteNeed(const PersonId& personId, const FamilyId& familyId);
+    void updateButtonStates();
 
     FilterBar* m_filterBar;
     NeedsModel* m_model;
     SelectionPreservingTreeView* m_tree;
+
+    QPushButton* m_addButton;
+    QPushButton* m_editButton;
+    QPushButton* m_deleteButton;
 
     // Context menu state
     std::optional<PersonId> m_contextPersonId;

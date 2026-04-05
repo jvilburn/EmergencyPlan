@@ -12,6 +12,7 @@
 #include "NeedsModel.h"
 #include "SelectionPreservingTreeView.h"
 
+#include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QMenu>
 #include <QMessageBox>
@@ -61,10 +62,28 @@ NeedsSubView::NeedsSubView(QWidget* parent)
     m_filterBar = new FilterBar(this);
     layout->addWidget(m_filterBar);
 
-    // Add button
-    QPushButton* addButton = new QPushButton(tr("Add Special Need..."));
-    connect(addButton, &QPushButton::clicked, this, &NeedsSubView::addNeed);
-    layout->addWidget(addButton);
+    // Toolbar
+    QHBoxLayout* toolbar = new QHBoxLayout();
+    toolbar->setContentsMargins(0, 0, 0, 0);
+
+    m_addButton = new QPushButton(tr("Add Special Need..."));
+    m_editButton = new QPushButton(tr("Edit"));
+    m_deleteButton = new QPushButton(tr("Delete"));
+    m_deleteButton->setStyleSheet("color: #c0392b;");
+
+    m_editButton->setEnabled(false);
+    m_deleteButton->setEnabled(false);
+
+    toolbar->addWidget(m_addButton);
+    toolbar->addWidget(m_editButton);
+    toolbar->addWidget(m_deleteButton);
+    toolbar->addStretch();
+
+    layout->addLayout(toolbar);
+
+    connect(m_addButton, &QPushButton::clicked, this, &NeedsSubView::addNeed);
+    connect(m_editButton, &QPushButton::clicked, this, &NeedsSubView::editSelectedNeed);
+    connect(m_deleteButton, &QPushButton::clicked, this, &NeedsSubView::deleteSelectedNeed);
 
     // Create model with filter from FilterBar
     m_model = new NeedsModel(m_filterBar->filter(), this);
@@ -88,6 +107,7 @@ NeedsSubView::NeedsSubView(QWidget* parent)
 
 void NeedsSubView::onSelectionChanged()
 {
+    updateButtonStates();
     emit highlightChanged();
 }
 
@@ -177,6 +197,49 @@ void NeedsSubView::selectFamily(const FamilyId& familyId)
     {
         m_tree->setCurrentIndex(idx);
         m_tree->scrollTo(idx);
+    }
+}
+
+void NeedsSubView::updateButtonStates()
+{
+    QModelIndex index = m_tree->currentIndex();
+    bool hasPersonSelected = false;
+    if (index.isValid())
+    {
+        hasPersonSelected = m_model->personIdAt(index).has_value();
+    }
+    m_editButton->setEnabled(hasPersonSelected);
+    m_deleteButton->setEnabled(hasPersonSelected);
+}
+
+void NeedsSubView::editSelectedNeed()
+{
+    QModelIndex index = m_tree->currentIndex();
+    if (!index.isValid())
+    {
+        return;
+    }
+
+    auto personId = m_model->personIdAt(index);
+    if (personId)
+    {
+        showNeedDialog(personId);
+    }
+}
+
+void NeedsSubView::deleteSelectedNeed()
+{
+    QModelIndex index = m_tree->currentIndex();
+    if (!index.isValid())
+    {
+        return;
+    }
+
+    auto personId = m_model->personIdAt(index);
+    auto familyId = m_model->familyIdAt(index);
+    if (personId && familyId)
+    {
+        deleteNeed(*personId, *familyId);
     }
 }
 
