@@ -386,8 +386,7 @@ void FamilyResponseRecord::removeTask(const TaskId& id)
 
 bool FamilyResponseRecord::needsHelp() const
 {
-    return m_contactStatus != ContactStatus::NotContacted
-        && unresolvedTaskCount() > 0;
+    return unresolvedTaskCount() > 0;
 }
 
 int FamilyResponseRecord::unresolvedTaskCount() const
