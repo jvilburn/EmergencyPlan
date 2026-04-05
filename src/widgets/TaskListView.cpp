@@ -71,6 +71,8 @@ TaskListView::TaskListView(DocumentManager* documentManager,
     connect(m_deleteButton, &QPushButton::clicked, this, &TaskListView::onDeleteTask);
     connect(m_treeView->selectionModel(), &QItemSelectionModel::selectionChanged,
             this, &TaskListView::onSelectionChanged);
+    connect(m_model, &QAbstractItemModel::modelReset,
+            this, &TaskListView::onSelectionChanged);
 }
 
 void TaskListView::rebuild()
@@ -88,7 +90,7 @@ void TaskListView::onAddTask()
         familyList.append({it.value().headOfHousehold(), it.key()});
     }
     std::sort(familyList.begin(), familyList.end(),
-              [](const auto& a, const auto& b) { return a.first.toLower() < b.first.toLower(); });
+              [](const QPair<QString, FamilyId>& a, const QPair<QString, FamilyId>& b) { return a.first.toLower() < b.first.toLower(); });
 
     QStringList names;
     for (const auto& entry : familyList)
