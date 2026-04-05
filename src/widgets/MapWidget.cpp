@@ -1048,8 +1048,23 @@ void MapWidget::setCenter(double lat, double lng)
 
 void MapWidget::setMarkerProvider(FamilyMarkerProvider* provider)
 {
+    // Disconnect old provider's highlightChanged signal
+    QWidget* oldWidget = dynamic_cast<QWidget*>(m_markerProvider);
+    if (oldWidget)
+    {
+        disconnect(oldWidget, SIGNAL(highlightChanged()), this, SLOT(updateHighlights()));
+    }
+
     m_markerProvider = provider;
     m_unmappedPanel->setMarkerProvider(provider);
+
+    // Connect new provider's highlightChanged signal
+    QWidget* newWidget = dynamic_cast<QWidget*>(provider);
+    if (newWidget)
+    {
+        connect(newWidget, SIGNAL(highlightChanged()), this, SLOT(updateHighlights()));
+    }
+
     update();
 }
 

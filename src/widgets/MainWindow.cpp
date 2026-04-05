@@ -245,23 +245,8 @@ void MainWindow::setupConnections()
             this, &MainWindow::onSidebarTabChanged);
 
     // Highlight and visibility changes from sidebar views
-    connect(m_wardListView, &WardListView::highlightChanged,
-            m_mapWidget, &MapWidget::updateHighlights);
+    // highlightChanged connections are handled automatically by MapWidget::setMarkerProvider
     connect(m_wardListView, &WardListView::visibleFamiliesChanged,
-            m_mapWidget, &MapWidget::updateHighlights);
-    connect(m_ministeringView, &MinisteringView::highlightChanged,
-            m_mapWidget, &MapWidget::updateHighlights);
-    connect(m_teamsView, &TeamsView::highlightChanged,
-            m_mapWidget, &MapWidget::updateHighlights);
-    connect(m_needsView, &NeedsSubView::highlightChanged,
-            m_mapWidget, &MapWidget::updateHighlights);
-    connect(m_medicalView, &EmergencyAssetView::highlightChanged,
-            m_mapWidget, &MapWidget::updateHighlights);
-    connect(m_commsView, &EmergencyAssetView::highlightChanged,
-            m_mapWidget, &MapWidget::updateHighlights);
-    connect(m_recoveryView, &EmergencyAssetView::highlightChanged,
-            m_mapWidget, &MapWidget::updateHighlights);
-    connect(m_taskListView, &TaskListView::highlightChanged,
             m_mapWidget, &MapWidget::updateHighlights);
 
     // Family editing
