@@ -51,6 +51,7 @@ private:
         bool resolved = false;
     };
 
+    static bool taskEntryLessThan(const TaskEntry& a, const TaskEntry& b);
     QString resolveAssignedName(const std::optional<TeamId>& teamId,
                                 const std::optional<PersonId>& personId) const;
 

@@ -183,38 +183,39 @@ void TaskListModel::rebuild()
         }
     }
 
-    // Sort: unresolved first, then assignedTo, then category, then family
-    std::sort(m_entries.begin(), m_entries.end(),
-              [](const TaskEntry& a, const TaskEntry& b)
-              {
-                  if (a.resolved != b.resolved)
-                  {
-                      return !a.resolved;  // unresolved first
-                  }
-                  // Assigned before unassigned, then alphabetical
-                  bool aAssigned = !a.assignedTo.isEmpty();
-                  bool bAssigned = !b.assignedTo.isEmpty();
-                  if (aAssigned != bAssigned)
-                  {
-                      return aAssigned;
-                  }
-                  if (aAssigned && bAssigned)
-                  {
-                      int cmp = a.assignedTo.compare(b.assignedTo, Qt::CaseInsensitive);
-                      if (cmp != 0)
-                      {
-                          return cmp < 0;
-                      }
-                  }
-                  int catCmp = a.category.compare(b.category, Qt::CaseInsensitive);
-                  if (catCmp != 0)
-                  {
-                      return catCmp < 0;
-                  }
-                  return a.familyName.compare(b.familyName, Qt::CaseInsensitive) < 0;
-              });
+    std::sort(m_entries.begin(), m_entries.end(), &TaskListModel::taskEntryLessThan);
 
     endResetModel();
+}
+
+// Sort: unresolved first, then assignedTo, then category, then family
+bool TaskListModel::taskEntryLessThan(const TaskEntry& a, const TaskEntry& b)
+{
+    if (a.resolved != b.resolved)
+    {
+        return !a.resolved;  // unresolved first
+    }
+    // Assigned before unassigned, then alphabetical
+    bool aAssigned = !a.assignedTo.isEmpty();
+    bool bAssigned = !b.assignedTo.isEmpty();
+    if (aAssigned != bAssigned)
+    {
+        return aAssigned;
+    }
+    if (aAssigned && bAssigned)
+    {
+        int cmp = a.assignedTo.compare(b.assignedTo, Qt::CaseInsensitive);
+        if (cmp != 0)
+        {
+            return cmp < 0;
+        }
+    }
+    int catCmp = a.category.compare(b.category, Qt::CaseInsensitive);
+    if (catCmp != 0)
+    {
+        return catCmp < 0;
+    }
+    return a.familyName.compare(b.familyName, Qt::CaseInsensitive) < 0;
 }
 
 QString TaskListModel::resolveAssignedName(const std::optional<TeamId>& teamId,
