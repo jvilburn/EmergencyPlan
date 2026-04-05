@@ -503,7 +503,7 @@ EmergencyResponse EmergencyResponse::create(const QString& name)
     EmergencyResponse response;
     response.m_name = name;
     response.m_startedAt = QDateTime::currentDateTimeUtc();
-    response.m_taskCategories = {"Tree removal", "Generator", "Medical", "Transport", "Shelter", "Other"};
+    response.m_taskCategories = {"Tree removal", "Flooding", "Generator", "Medical", "Transport", "Shelter", "Other"};
     return response;
 }
 
