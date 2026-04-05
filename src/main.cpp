@@ -21,10 +21,8 @@ int main(int argc, char *argv[])
         styleFile.close();
     }
 
-    // Initialize document manager (singleton)
+    // Initialize core services (singletons)
     DocumentManager documentManager(nullptr);
-
-    // Initialize emergency manager (singleton)
     EmergencyManager emergencyManager(nullptr);
 
     // Initialize tile service for map rendering
