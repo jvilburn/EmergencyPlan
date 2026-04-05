@@ -48,7 +48,7 @@ REM Only deploy if marker file doesn't exist
 if not exist "build\.deployed" (
     echo.
     echo === Deploying Qt DLLs ===
-    C:\Qt\6.10.1\msvc2022_64\bin\windeployqt.exe --qmldir src\qml build\bin\EmergencyPlan.exe
+    C:\Qt\6.11.0\msvc2022_64\bin\windeployqt.exe --qmldir src\qml build\bin\EmergencyPlan.exe
     if errorlevel 1 exit /b 1
     echo. > build\.deployed
 ) else (

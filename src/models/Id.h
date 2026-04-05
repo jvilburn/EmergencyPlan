@@ -33,6 +33,8 @@ public:
         return a.m_value == b.m_value;
     }
 
+    bool isNull() const { return m_value.isEmpty(); }
+
     friend bool operator!=(const Derived& a, const Derived& b) { return !(a == b); }
 
     friend bool operator<(const Derived& a, const Derived& b)

@@ -20,7 +20,7 @@ See [CODING_STYLE.md](CODING_STYLE.md) for complete details:
 - **IDE**: VS Code (no CMake Tools extension needed)
 - **Compiler**: MSVC 2022 (not MinGW - they're incompatible with Qt MSVC libs)
 - **Generator**: Ninja
-- **Qt Version**: 6.10.1 (msvc2022_64)
+- **Qt Version**: 6.11.0 (msvc2022_64)
 - **Build**: Use **Ctrl+Shift+B** in VS Code, or run `build.bat` directly
 - **Testing**: User builds and runs the app manually - do NOT attempt to build/run from Claude
 

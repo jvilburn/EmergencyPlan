@@ -9,6 +9,7 @@
 #include "Person.h"
 #include "Team.h"
 
+#include <QFont>
 #include <algorithm>
 
 namespace

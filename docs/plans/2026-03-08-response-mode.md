@@ -32,16 +32,16 @@ Create the core data structures for emergency response tracking.
 class TaskId : public IdBase<TaskId>
 {
     friend class IdBase<TaskId>;
-public:
     using IdBase::IdBase;
+public:
     static constexpr const char* typeName() { return "TaskId"; }
 };
 
 class ContactAttemptId : public IdBase<ContactAttemptId>
 {
     friend class IdBase<ContactAttemptId>;
-public:
     using IdBase::IdBase;
+public:
     static constexpr const char* typeName() { return "ContactAttemptId"; }
 };
 ```
@@ -67,22 +67,38 @@ enum class ContactStatus
 
 Note: A family's effective status is `NeedsHelp` when `contactStatus != NotContacted` and it has unresolved tasks. This is computed, not stored.
 
-**ContactAttempt struct:**
+**ContactAttempt class:**
 
 ```cpp
-struct ContactAttempt
+class ContactAttempt
 {
-    ContactAttemptId id;
-    ContactMethod method;    // enum: Phone, Text, Email, Visit, Other
-    PersonId who;            // ward member who made the attempt
-    QDateTime timestamp;
-    QString notes;           // optional; required if method is Other
+public:
+    static ContactAttempt create(ContactMethod method, const PersonId& who, const QString& notes);
+
+    const ContactAttemptId& id() const { return m_id; }
+    ContactMethod method() const { return m_method; }
+    const PersonId& who() const { return m_who; }
+    const QDateTime& timestamp() const { return m_timestamp; }
+    const QString& notes() const { return m_notes; }
+
+    void setMethod(ContactMethod method) { m_method = method; }
+    void setNotes(const QString& notes) { m_notes = notes; }
 
     QJsonObject toJson() const;
     static ContactAttempt fromJson(const QJsonObject& json);
     bool operator==(const ContactAttempt& other) const;
+    bool operator!=(const ContactAttempt& other) const;
+
+private:
+    ContactAttemptId m_id;
+    ContactMethod m_method = ContactMethod::Phone;
+    PersonId m_who;
+    QDateTime m_timestamp;
+    QString m_notes;
 };
 ```
+
+`create()` auto-sets `m_id` (generated) and `m_timestamp` (current UTC time). Notes are required if method is `Other`.
 
 **ContactMethod enum:**
 
@@ -97,76 +113,140 @@ enum class ContactMethod
 };
 ```
 
-**TaskNotification struct:**
+**TaskNotification class:**
 
 ```cpp
-struct TaskNotification
+class TaskNotification
 {
-    ContactMethod method;
-    QDateTime timestamp;
-    QString notes;
+public:
+    static TaskNotification create(ContactMethod method, const QString& notes);
+
+    ContactMethod method() const { return m_method; }
+    const QDateTime& timestamp() const { return m_timestamp; }
+    const QString& notes() const { return m_notes; }
 
     QJsonObject toJson() const;
     static TaskNotification fromJson(const QJsonObject& json);
     bool operator==(const TaskNotification& other) const;
+    bool operator!=(const TaskNotification& other) const;
+
+private:
+    ContactMethod m_method = ContactMethod::Phone;
+    QDateTime m_timestamp;
+    QString m_notes;
 };
 ```
 
-**ResponseTask struct:**
+`create()` auto-sets `m_timestamp` to current UTC time.
+
+**ResponseTask class:**
 
 ```cpp
-struct ResponseTask
+class ResponseTask
 {
-    TaskId id;
-    QString category;        // from configured list
-    QString description;
-    QDateTime createdAt;
+public:
+    static ResponseTask create(const QString& category, const QString& description);
+
+    const TaskId& id() const { return m_id; }
+    const QString& category() const { return m_category; }
+    const QString& description() const { return m_description; }
+    const QDateTime& createdAt() const { return m_createdAt; }
 
     // Assignment — at most one set
-    std::optional<TeamId> assignedTeamId;
-    std::optional<PersonId> assignedPersonId;
-    QString assignmentNotes;
-    std::optional<TaskNotification> notification;
+    const std::optional<TeamId>& assignedTeamId() const { return m_assignedTeamId; }
+    const std::optional<PersonId>& assignedPersonId() const { return m_assignedPersonId; }
+    const QString& assignmentNotes() const { return m_assignmentNotes; }
+    const std::optional<TaskNotification>& notification() const { return m_notification; }
+
+    void assignToTeam(const TeamId& teamId, const QString& notes);
+    void assignToPerson(const PersonId& personId, const QString& notes);
+    void clearAssignment();
+    void setNotification(const TaskNotification& notification);
 
     // Resolution
-    bool resolved = false;
-    QString resolutionNotes;
-    std::optional<QDateTime> resolvedAt;
+    bool isResolved() const { return m_resolved; }
+    const QString& resolutionNotes() const { return m_resolutionNotes; }
+    const std::optional<QDateTime>& resolvedAt() const { return m_resolvedAt; }
+
+    void resolve(const QString& notes);
+    void unresolve();
+
+    bool isAssigned() const;
+    bool isNotified() const;
 
     QJsonObject toJson() const;
     static ResponseTask fromJson(const QJsonObject& json);
     bool operator==(const ResponseTask& other) const;
+    bool operator!=(const ResponseTask& other) const;
 
-    bool isAssigned() const;
-    bool isNotified() const;
+private:
+    TaskId m_id;
+    QString m_category;
+    QString m_description;
+    QDateTime m_createdAt;
+
+    std::optional<TeamId> m_assignedTeamId;
+    std::optional<PersonId> m_assignedPersonId;
+    QString m_assignmentNotes;
+    std::optional<TaskNotification> m_notification;
+
+    bool m_resolved = false;
+    QString m_resolutionNotes;
+    std::optional<QDateTime> m_resolvedAt;
 };
 ```
 
-**FamilyResponseRecord struct** (per-family response data):
+`create()` auto-sets `m_id` (generated) and `m_createdAt` (current UTC time). `assignToTeam`/`assignToPerson` clear the other assignment type (at most one). `resolve()` sets `m_resolved = true` and `m_resolvedAt` to current UTC time.
+
+**FamilyResponseRecord class** (per-family response data):
 
 ```cpp
-struct FamilyResponseRecord
+class FamilyResponseRecord
 {
-    FamilyId familyId;
-    QString displayName;     // snapshot for archives
-    QString address;         // snapshot for archives
-    ContactStatus contactStatus = ContactStatus::NotContacted;
-    QList<ContactAttempt> contactAttempts;  // most recent first
-    QList<ResponseTask> tasks;             // most recent first
+public:
+    static FamilyResponseRecord create(const FamilyId& familyId,
+                                       const QString& displayName,
+                                       const QString& address);
 
-    QJsonObject toJson() const;
-    static FamilyResponseRecord fromJson(const QJsonObject& json);
-    bool operator==(const FamilyResponseRecord& other) const;
+    const FamilyId& familyId() const { return m_familyId; }
+    const QString& displayName() const { return m_displayName; }
+    const QString& address() const { return m_address; }
+    ContactStatus contactStatus() const { return m_contactStatus; }
+    const QList<ContactAttempt>& contactAttempts() const { return m_contactAttempts; }
+    const QList<ResponseTask>& tasks() const { return m_tasks; }
 
-    // Derived status: NeedsHelp when has unresolved tasks
+    void setContactStatus(ContactStatus status) { m_contactStatus = status; }
+    void addContactAttempt(const ContactAttempt& attempt);
+    void removeContactAttempt(const ContactAttemptId& id);
+    void addTask(const ResponseTask& task);
+    void updateTask(const ResponseTask& task);
+    void removeTask(const TaskId& id);
+
+    // Derived status: NeedsHelp when contacted but has unresolved tasks
     bool needsHelp() const;
     int unresolvedTaskCount() const;
 
     // Effective status for display (combines stored + derived)
-    // Returns NeedsHelp if has unresolved tasks, otherwise returns contactStatus
+    // Returns NeedsHelp if contactStatus != NotContacted and has unresolved tasks,
+    // otherwise returns contactStatus mapped to EffectiveContactStatus
     EffectiveContactStatus effectiveStatus() const;
+
+    QJsonObject toJson() const;
+    static FamilyResponseRecord fromJson(const QJsonObject& json);
+    bool operator==(const FamilyResponseRecord& other) const;
+    bool operator!=(const FamilyResponseRecord& other) const;
+
+private:
+    FamilyId m_familyId;
+    QString m_displayName;       // snapshot at emergency start, not updated
+    QString m_address;           // snapshot at emergency start, not updated
+    ContactStatus m_contactStatus = ContactStatus::NotContacted;
+    QList<ContactAttempt> m_contactAttempts;  // most recent first
+    QList<ResponseTask> m_tasks;             // most recent first
 };
 ```
+
+`displayName` and `address` are **set once at emergency start** from the family's current data. They are not updated if the family is edited during the emergency. This ensures archives preserve the name/address as they were when the emergency began.
 
 For `effectiveStatus()`, introduce a display enum:
 
@@ -186,29 +266,47 @@ enum class EffectiveContactStatus
 class EmergencyResponse
 {
 public:
-    QString name;                        // e.g., "January 2026 Ice Storm"
-    QDateTime startedAt;
-    QHash<FamilyId, FamilyResponseRecord> familyRecords;
-    QStringList taskCategories;          // configured list
+    static EmergencyResponse create(const QString& name);
 
-    QJsonObject toJson() const;
-    static EmergencyResponse fromJson(const QJsonObject& json);
-    bool operator==(const EmergencyResponse& other) const;
+    const QString& name() const { return m_name; }
+    const QDateTime& startedAt() const { return m_startedAt; }
+    const std::optional<QDateTime>& endedAt() const { return m_endedAt; }
+    const QHash<FamilyId, FamilyResponseRecord>& familyRecords() const { return m_familyRecords; }
+    const QStringList& taskCategories() const { return m_taskCategories; }
 
-    // Initialize with all families from the document
-    static EmergencyResponse create(const QString& name, const Document& document);
+    void setEndedAt(const QDateTime& endedAt) { m_endedAt = endedAt; }
 
-    // Lookup
-    FamilyResponseRecord& recordForFamily(const FamilyId& familyId);
+    // Family record management (called by EmergencyManager)
+    void addFamilyRecord(const FamilyResponseRecord& record);
+    FamilyResponseRecord* mutableRecord(const FamilyId& familyId);
     const FamilyResponseRecord* findRecord(const FamilyId& familyId) const;
+
+    // Task categories
+    void addTaskCategory(const QString& category);
 
     // Statistics
     int totalFamilies() const;
     int countByStatus(EffectiveContactStatus status) const;
+
+    QJsonObject toJson() const;
+    static EmergencyResponse fromJson(const QJsonObject& json);
+    bool operator==(const EmergencyResponse& other) const;
+    bool operator!=(const EmergencyResponse& other) const;
+
+private:
+    QString m_name;
+    QDateTime m_startedAt;
+    std::optional<QDateTime> m_endedAt;          // set when archived
+    QHash<FamilyId, FamilyResponseRecord> m_familyRecords;
+    QStringList m_taskCategories;
 };
 ```
 
-Default task categories: `{"Tree removal", "Generator", "Medical", "Transport", "Shelter", "Other"}`
+`create()` sets `m_startedAt` to current UTC time and populates `m_taskCategories` with defaults: `{"Tree removal", "Generator", "Medical", "Transport", "Shelter", "Other"}`.
+
+`mutableRecord()` is **only called by `EmergencyManager`** — views use `findRecord()` (const). This keeps mutation control in the manager while avoiding excessive copying of records on every update.
+
+Note: `EmergencyResponse::create()` does **not** take a `Document&` reference. Family records are added by `EmergencyManager::startEmergency()`, which iterates the document's families and calls `addFamilyRecord()` for each. This avoids coupling the model to `Document`.
 
 **Step: Build and verify** — Build the app. No behavioral changes yet, just new types.
 
@@ -236,7 +334,7 @@ class EmergencyManager : public QObject
     Q_OBJECT
 
 public:
-    explicit EmergencyManager(DocumentManager* documentManager, QObject* parent = nullptr);
+    explicit EmergencyManager(DocumentManager* documentManager, QObject* parent);
 
     // Lifecycle
     bool isActive() const;
@@ -284,8 +382,9 @@ signals:
     void responseDataChanged();  // generic "something changed" for progress bars, counts
 
 private:
-    void saveResponseData();
-    void loadResponseData();
+    void persistResponseData();
+    void syncFromDocument();
+    void syncFamilies();  // add records for new families, called on document changes
 
     DocumentManager* m_documentManager;
     std::optional<EmergencyResponse> m_response;
@@ -293,7 +392,7 @@ private:
 ```
 
 **Key design decisions:**
-- Every mutation method updates `m_response`, then calls `m_documentManager->setEmergencyResponse(m_response)` which updates the Document and triggers auto-save.
+- Every mutation method updates `m_response`, then calls `persistResponseData()` which saves to disk without disturbing command history dirty state.
 - `familyStatusChanged` is emitted for targeted view updates.
 - `responseDataChanged` is emitted for aggregate UI (progress bar, filter counts).
 - Response data is stored in the Document's JSON under a `"responseData"` key.
@@ -305,7 +404,7 @@ private:
 ```cpp
 // Response data (optional — only present during active emergency)
 const std::optional<EmergencyResponse>& emergencyResponse() const { return m_emergencyResponse; }
-void setEmergencyResponse(std::optional<EmergencyResponse> response);
+void setEmergencyResponse(const std::optional<EmergencyResponse>& response);
 ```
 
 Add serialization in `Document::toJson()` and `Document::fromJson()`.
@@ -322,7 +421,27 @@ Implementation in `DocumentManager.cpp`:
 void DocumentManager::setEmergencyResponse(const std::optional<EmergencyResponse>& response)
 {
     m_document.setEmergencyResponse(response);
-    autoSave();
+    saveDocumentOnly();  // save to disk WITHOUT calling m_commandHistory.markSaved()
+}
+```
+
+**New method `saveDocumentOnly()`** — saves the document to disk (using `JsonService::saveDocument`) but does **not** call `m_commandHistory.markSaved()`. This is critical: response data mutations must not reset the dirty-state tracking for preparation data. The existing `autoSave()` path calls `markSaved()`, which would incorrectly clear the undo-state awareness. `saveDocumentOnly()` bypasses that.
+
+```cpp
+bool DocumentManager::saveDocumentOnly()
+{
+    if (m_filePath.isEmpty())
+    {
+        return false;
+    }
+    QString errorMessage;
+    if (!JsonService::saveDocument(m_filePath, m_document, &errorMessage))
+    {
+        qWarning() << "Response data save failed:" << errorMessage;
+        emit autoSaveFailed(errorMessage);
+        return false;
+    }
+    return true;
 }
 ```
 
@@ -330,7 +449,33 @@ This preserves the const-document pattern — views read through `document()`, m
 
 **Step: Handle family additions/removals during active emergency**
 
-Connect `DocumentManager::documentChanged` in `EmergencyManager`. When a family is added, create a new `FamilyResponseRecord` with `NotContacted` status. When removed, leave the record (it has snapshot data useful for the current emergency).
+Connect `DocumentManager::documentChanged` in `EmergencyManager`. On each `documentChanged` signal, compare the document's current family IDs against `m_response->familyRecords()` keys:
+- **New families** (in document but not in response): create a `FamilyResponseRecord` with `NotContacted` status using the family's current `displayName()` and address.
+- **Removed families** (in response but not in document): leave the record — it has snapshot data useful for the current emergency and will be included in the archive.
+
+**Step: Load response data on document open**
+
+In the `EmergencyManager` constructor, connect to `DocumentManager::documentChanged`. When receiving a `ChangeAction::Full` signal (indicating a new document was loaded), call `syncFromDocument()`:
+
+```cpp
+void EmergencyManager::syncFromDocument()
+{
+    const std::optional<EmergencyResponse>& response = m_documentManager->document().emergencyResponse();
+    if (response.has_value())
+    {
+        m_response = response;
+        syncFamilies();  // ensure any families added since last save get records
+        emit emergencyStarted();
+    }
+    else if (m_response.has_value())
+    {
+        m_response.reset();
+        emit emergencyEnded();
+    }
+}
+```
+
+This handles crash recovery and document transfer — if a document is opened that contains active `responseData`, the emergency is automatically resumed.
 
 **Step: Build and verify**
 
@@ -436,28 +581,52 @@ Show a visual banner when an emergency is active.
 
 **Banner implementation:**
 
-A `QFrame` with a `QLabel` and icon, amber background, positioned above the tab bar. Shows the emergency name.
+Create a small `EmergencyBanner` widget class (`src/widgets/EmergencyBanner.h/cpp`) — a `QFrame` with a warning icon `QLabel` and text `QLabel`, amber background, positioned above the tab bar. Keeps banner logic out of `MainWindow` (same pattern as `EmergencyProgressBar`).
 
 ```cpp
-// In MainWindow constructor or setup method:
-m_emergencyBanner = new QFrame(this);
-QHBoxLayout* bannerLayout = new QHBoxLayout(m_emergencyBanner);
-bannerLayout->setContentsMargins(6, 4, 6, 4);
+// EmergencyBanner.h
+class EmergencyBanner : public QFrame
+{
+    Q_OBJECT
+public:
+    explicit EmergencyBanner(QWidget* parent);
+    void setEmergencyName(const QString& name);
 
-QLabel* bannerIcon = new QLabel(m_emergencyBanner);
-bannerIcon->setPixmap(style()->standardIcon(QStyle::SP_MessageBoxWarning).pixmap(16, 16));
-m_emergencyBannerLabel = new QLabel(m_emergencyBanner);
-m_emergencyBannerLabel->setAlignment(Qt::AlignCenter);
-bannerLayout->addWidget(bannerIcon);
-bannerLayout->addWidget(m_emergencyBannerLabel, 1);
+private:
+    QLabel* m_label;
+};
+```
 
-m_emergencyBanner->setStyleSheet(
-    "QFrame {"
-    "  background-color: #FFA726;"
-    "  color: #333;"
-    "  font-weight: bold;"
-    "}");
-m_emergencyBanner->hide();
+Construction and styling go in the `.cpp`:
+
+```cpp
+EmergencyBanner::EmergencyBanner(QWidget* parent)
+    : QFrame(parent)
+{
+    QHBoxLayout* layout = new QHBoxLayout(this);
+    layout->setContentsMargins(6, 4, 6, 4);
+
+    QLabel* icon = new QLabel(this);
+    icon->setPixmap(style()->standardIcon(QStyle::SP_MessageBoxWarning).pixmap(16, 16));
+    m_label = new QLabel(this);
+    m_label->setAlignment(Qt::AlignCenter);
+    layout->addWidget(icon);
+    layout->addWidget(m_label, 1);
+
+    setStyleSheet(
+        "QFrame {"
+        "  background-color: #FFA726;"
+        "  color: #333;"
+        "  font-weight: bold;"
+        "}");
+    hide();
+}
+
+void EmergencyBanner::setEmergencyName(const QString& name)
+{
+    m_label->setText(tr("EMERGENCY: %1").arg(name));
+    show();
+}
 ```
 
 **Show/hide on emergency lifecycle:**
@@ -465,8 +634,7 @@ m_emergencyBanner->hide();
 ```cpp
 void MainWindow::onEmergencyStarted()
 {
-    m_emergencyBannerLabel->setText(m_emergencyManager->response().name);
-    m_emergencyBanner->show();
+    m_emergencyBanner->setEmergencyName(m_emergencyManager->response().name());
     updateEmergencyActions();
 }
 
@@ -499,11 +667,7 @@ Implement archive save/load for completed emergencies. Archives are full documen
 
 **No separate EmergencyArchive model needed.** An archive is simply a `Document` serialized with its `responseData` present — the same format as the main document file. The archive metadata (emergency name, dates) is already in `EmergencyResponse`.
 
-Add `endedAt` field to `EmergencyResponse`:
-
-```cpp
-std::optional<QDateTime> endedAt;  // set when archived
-```
+(`endedAt` is already defined in `EmergencyResponse` from Task 1.1.)
 
 **Archive directory:** Derived from document path. If document is `/path/to/MyWard.emergencyplan`, archives go in `/path/to/MyWard_archives/`.
 
@@ -523,10 +687,16 @@ void EmergencyManager::endEmergency(bool archive)
 
     if (archive)
     {
-        m_response->endedAt = QDateTime::currentDateTimeUtc();
+        m_response->setEndedAt(QDateTime::currentDateTimeUtc());
         // Update document with final response data before snapshotting
         m_documentManager->setEmergencyResponse(m_response);
-        saveArchive();
+
+        if (!saveArchive())
+        {
+            // Archive save failed — do NOT clear response data
+            // User is notified by saveArchive() and can retry
+            return;
+        }
     }
 
     // Clear response data from main document
@@ -536,10 +706,10 @@ void EmergencyManager::endEmergency(bool archive)
 }
 ```
 
-**saveArchive():**
+**saveArchive()** — returns `true` on success, `false` on failure:
 
 ```cpp
-void EmergencyManager::saveArchive()
+bool EmergencyManager::saveArchive()
 {
     QString docPath = m_documentManager->filePath();
     QFileInfo docInfo(docPath);
@@ -547,9 +717,21 @@ void EmergencyManager::saveArchive()
 
     QDir().mkpath(archiveDir);
 
-    QString slug = m_response->name.toLower().replace(QRegularExpression("[^a-z0-9]+"), "-");
-    QString date = m_response->startedAt.toString("yyyy-MM-dd");
+    QString slug = m_response->name().toLower().replace(QRegularExpression("[^a-z0-9]+"), "-");
+    QString date = m_response->startedAt().toString("yyyy-MM-dd");
     QString archivePath = archiveDir + "/" + date + "-" + slug + ".emergencyplan";
+
+    // Avoid overwriting existing archive — append counter if needed
+    if (QFile::exists(archivePath))
+    {
+        int counter = 2;
+        QString basePath = archiveDir + "/" + date + "-" + slug;
+        while (QFile::exists(basePath + "-" + QString::number(counter) + ".emergencyplan"))
+        {
+            ++counter;
+        }
+        archivePath = basePath + "-" + QString::number(counter) + ".emergencyplan";
+    }
 
     // Snapshot the entire current document (prep + response)
     QString errorMessage;
@@ -557,7 +739,14 @@ void EmergencyManager::saveArchive()
     if (!errorMessage.isEmpty())
     {
         qWarning() << "Archive save failed:" << errorMessage;
+        QMessageBox::critical(
+            nullptr,
+            tr("Archive Failed"),
+            tr("Could not save emergency archive:\n%1\n\nResponse data has been preserved.")
+                .arg(errorMessage));
+        return false;
     }
+    return true;
 }
 ```
 
@@ -779,7 +968,7 @@ Records timestamp automatically.
 - Quick resolve (no dialog if no notes needed)
 - Or shows a small dialog for resolution notes
 
-When all tasks for a family are resolved, status automatically returns to OK (if it was NeedsHelp).
+When all tasks for a family are resolved, `effectiveStatus()` naturally changes from `NeedsHelp` back to the stored `contactStatus` (OK or UnableToReach), since NeedsHelp is a derived status — no explicit status reset is needed.
 
 **Task categories** — stored in `EmergencyResponse::taskCategories`. New categories added during an emergency persist in the response data. On next emergency, the default list is used again (emergency-scoped, not persisted to settings).
 
@@ -912,7 +1101,7 @@ Generate a PDF summary report of the emergency response.
 5. **Response activity:** Total contact attempts, by method, tasks assigned, resolution rate
 6. **Unresolved items:** Families still needing help, families not contacted
 
-**PDF generation:** Use MuPDF's PDF creation API (already a dependency), or `QPrinter` with `QPainter` for simpler layout. `QPrinter` is probably the simpler path since the report is straightforward text and tables.
+**PDF generation:** Use `QPrinter` with `QPainter`. The report is straightforward text and tables, so QPrinter is the right tool. (MuPDF is a reading library — its PDF creation API is low-level and not suitable here.)
 
 **Trigger:** The "Generate summary report" checkbox in the End Emergency dialog. Also available via a menu action during an active emergency (File → Generate Emergency Report).
 
@@ -1014,6 +1203,7 @@ feat: allow reopening archived emergencies
 | `src/models/EmergencyResponse.h/cpp` | Response data models (ContactAttempt, ResponseTask, FamilyResponseRecord, EmergencyResponse) |
 | `src/services/EmergencyManager.h/cpp` | Response data lifecycle and mutation methods |
 | `src/services/ReportGenerator.h/cpp` | PDF summary report generation |
+| `src/widgets/EmergencyBanner.h/cpp` | Amber emergency banner widget |
 | `src/widgets/EmergencyProgressBar.h/cpp` | Segmented progress bar widget |
 | `src/widgets/ArchiveBrowserDialog.h/cpp` | Archive list and actions dialog |
 
@@ -1025,7 +1215,7 @@ Note: Each task that creates new files implicitly updates `CMakeLists.txt`.
 |------|--------|
 | `src/models/Id.h` | Add `TaskId`, `ContactAttemptId`, `Q_DECLARE_METATYPE` |
 | `src/models/Document.h/cpp` | Add optional `EmergencyResponse`, serialization |
-| `src/services/DocumentManager.h/cpp` | Add `setEmergencyResponse()` method |
+| `src/services/DocumentManager.h/cpp` | Add `setEmergencyResponse()` and `saveDocumentOnly()` methods |
 | `src/widgets/MainWindow.h/cpp` | Menu actions, banner, EmergencyManager wiring |
 | `src/widgets/WardListView.h/cpp` | Status icons, action buttons, progress bar, filter tabs, contact/task dialogs |
 | `src/widgets/MapWidget.h/cpp` | Status badges on markers |
@@ -1035,7 +1225,7 @@ Note: Each task that creates new files implicitly updates `CMakeLists.txt`.
 
 ## Prerequisites
 
-- **Teams view**: Currently a `PlaceholderView`. A separate prerequisite plan (`docs/plans/2026-03-08-teams-view.md`) must be implemented before Phase 4.
+- **Teams view**: Implemented (was `PlaceholderView`, now complete). Phase 4 is unblocked.
 
 ## Resolved Items
 
@@ -1056,3 +1246,28 @@ Note: Each task that creates new files implicitly updates `CMakeLists.txt`.
 - **Map badges**: additive, bottom-right corner (issue #8)
 - **Task categories**: emergency-scoped, default list on each new emergency (minor note #2)
 - **Archive matching**: not needed — archives contain full document snapshot (minor note #3)
+
+## Review Fixes Applied (2026-03-09)
+
+- **C1: Model encapsulation** — All model types converted from `struct`/public-members to `class` with private `m_` members, getters, setters, and factory `create()` methods, matching `Team`/`Family`/`Person` pattern
+- **C2: Mutable reference removed** — `EmergencyResponse::recordForFamily()` replaced with `mutableRecord()` (called only by EmergencyManager) and const `findRecord()` (for views)
+- **C3: Consistent parameter passing** — `Document::setEmergencyResponse` and `DocumentManager::setEmergencyResponse` both use `const std::optional<EmergencyResponse>&`
+- **C4: Dirty-state preservation** — Added `DocumentManager::saveDocumentOnly()` that writes to disk without calling `m_commandHistory.markSaved()`, preventing response mutations from resetting preparation-data dirty tracking
+- **I1: Default parameter removed** — `EmergencyManager` constructor requires explicit `QObject* parent`
+- **I2: Family sync specified** — Explicit algorithm: compare document family IDs against response record keys on each `documentChanged` signal
+- **I3: Snapshot timing specified** — `displayName`/`address` set once at emergency start, never updated during the emergency
+- **I4: Document open loading** — `syncFromDocument()` handles `ChangeAction::Full` to auto-resume emergencies from saved response data (crash recovery, machine transfer)
+- **I5: Archive filename collisions** — Counter-based deduplication when archive file already exists
+- **I6: EmergencyResponse::create() decoupled from Document** — `create()` takes only the name; `EmergencyManager::startEmergency()` iterates families and calls `addFamilyRecord()`
+- **I7: NeedsHelp clarification** — Explicitly documented that NeedsHelp is derived and resolving all tasks naturally changes `effectiveStatus()` back to stored `contactStatus`
+- **I8: Archive failure handling** — `saveArchive()` returns bool; on failure, shows `QMessageBox::critical` and does NOT clear response data
+- **M1: Banner extracted to widget** — `EmergencyBanner` class in `src/widgets/EmergencyBanner.h/cpp`, consistent with `EmergencyProgressBar`
+- **M2: MuPDF mention removed** — Phase 5 now specifies QPrinter/QPainter only
+- **M3: endedAt in Task 1.1** — Field included in initial `EmergencyResponse` model definition
+- **S3: Banner text uses tr()** — `tr("EMERGENCY: %1").arg(name)` for localization
+
+## Review Fixes Applied (2026-03-10)
+
+- **S-NEW-3: ID type constructor accessibility** — Moved `using IdBase::IdBase;` before `public:` in `TaskId` and `ContactAttemptId` to match existing ID types (constructors stay private, only `generate()`/`fromString()` are public)
+- **I-NEW-1/2: `saveDocumentOnly()` error handling** — Now returns `bool`, checks `JsonService::saveDocument` return value (not just error message), and emits `autoSaveFailed` on failure so MainWindow can notify the user
+- **I-NEW-3: `syncFromDocument()` calls `syncFamilies()`** — On document open with active response data, ensures any families added since last save get response records

@@ -8,6 +8,7 @@
 
 class DocumentManager;
 class EmergencyManager;
+class MinisteringDistrict;
 class Filter;
 
 /// Model for ministering tree (multi-level: District → Companionship → Section → Person).
