@@ -220,7 +220,7 @@ void NeedsSubView::editSelectedNeed()
         return;
     }
 
-    auto personId = m_model->personIdAt(index);
+    std::optional<PersonId> personId = m_model->personIdAt(index);
     if (personId)
     {
         showNeedDialog(personId);
@@ -235,8 +235,8 @@ void NeedsSubView::deleteSelectedNeed()
         return;
     }
 
-    auto personId = m_model->personIdAt(index);
-    auto familyId = m_model->familyIdAt(index);
+    std::optional<PersonId> personId = m_model->personIdAt(index);
+    std::optional<FamilyId> familyId = m_model->familyIdAt(index);
     if (personId && familyId)
     {
         deleteNeed(*personId, *familyId);
