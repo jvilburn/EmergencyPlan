@@ -33,16 +33,14 @@ bool leaderFirstThenAlpha(const QPair<PersonId, QString>& a,
 
 }  // namespace
 
-TeamsTreeModel::TeamsTreeModel(DocumentManager* documentManager,
-                               EmergencyManager* emergencyManager,
+TeamsTreeModel::TeamsTreeModel(EmergencyManager* emergencyManager,
                                Filter* filter,
                                QObject* parent)
     : BaseTreeModel(parent)
-    , m_documentManager(documentManager)
     , m_emergencyManager(emergencyManager)
     , m_filter(filter)
 {
-    connect(m_documentManager, &DocumentManager::documentChanged,
+    connect(DocumentManager::instance(), &DocumentManager::documentChanged,
             this, &TeamsTreeModel::onDocumentChanged);
     if (m_filter)
     {
@@ -109,7 +107,7 @@ void TeamsTreeModel::rebuild()
 
     clearNodes();
 
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     QList<Team> teams = doc.teams().values();
     bool emergencyActive = m_emergencyManager && m_emergencyManager->isActive();
 
@@ -512,7 +510,7 @@ FamilyAssociation TeamsTreeModel::relatedFamiliesAt(const QModelIndex& index) co
         return assoc;
     }
 
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     TreeNode* node = nodeFromIndex(index);
     if (!node)
     {
@@ -609,7 +607,7 @@ std::optional<PersonId> TeamsTreeModel::personIdAt(const QModelIndex& index) con
 
 QModelIndex TeamsTreeModel::indexForFamilyId(const FamilyId& familyId) const
 {
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
 
     for (int t = 0; t < m_teamNodes.size(); ++t)
     {
@@ -643,7 +641,7 @@ void TeamsTreeModel::loadContactDetails(const QModelIndex& index)
         return;
     }
 
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     if (!node->personId)
     {
         node->contactsLoaded = true;
@@ -745,7 +743,7 @@ void TeamsTreeModel::loadContactDetails(const QModelIndex& index)
 
 void TeamsTreeModel::refreshFamilyDisplayText(const FamilyId& familyId)
 {
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     const QHash<FamilyId, Family>& families = doc.families();
 
     if (!families.contains(familyId))

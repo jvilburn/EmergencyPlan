@@ -1,15 +1,14 @@
 #include "BackgroundGeocodingService.h"
 #include "DocumentManager.h"
 
-BackgroundGeocodingService::BackgroundGeocodingService(DocumentManager* documentManager)
-    : QObject(documentManager)
-    , m_documentManager(documentManager)
+BackgroundGeocodingService::BackgroundGeocodingService(QObject* parent)
+    : QObject(parent)
     , m_geocodingService(new GeocodingService(this))
 {
     connect(m_geocodingService, &GeocodingService::geocodingComplete,
             this, &BackgroundGeocodingService::onGeocodingComplete);
 
-    connect(m_documentManager, &DocumentManager::documentChanged,
+    connect(DocumentManager::instance(), &DocumentManager::documentChanged,
             this, &BackgroundGeocodingService::onDocumentChanged);
 }
 
@@ -110,7 +109,7 @@ void BackgroundGeocodingService::onDocumentChanged(const DocumentChange& change)
     // Single family change - check that family
     if (change.familyId.has_value())
     {
-        auto family = m_documentManager->document().findFamilyById(*change.familyId);
+        auto family = DocumentManager::instance()->document().findFamilyById(*change.familyId);
         if (family.has_value())
         {
             checkFamily(*family);
@@ -178,7 +177,7 @@ void BackgroundGeocodingService::processAllFamilies()
 {
     m_geocodeCache.clear();
     m_familyAddresses.clear();
-    const auto& families = m_documentManager->document().families();
+    const auto& families = DocumentManager::instance()->document().families();
 
     // First pass: seed caches from document state.
     // - Address tracking: so we can detect changes later

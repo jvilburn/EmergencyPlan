@@ -33,18 +33,16 @@ static QString contactMethodDisplayName(ContactMethod method)
     return QObject::tr("Phone");
 }
 
-FamilyTreeModel::FamilyTreeModel(DocumentManager* documentManager,
-                                 EmergencyManager* emergencyManager,
+FamilyTreeModel::FamilyTreeModel(EmergencyManager* emergencyManager,
                                  Filter* filter,
                                  bool checkable,
                                  QObject* parent)
     : BaseTreeModel(parent)
-    , m_documentManager(documentManager)
     , m_emergencyManager(emergencyManager)
     , m_filter(filter)
     , m_checkable(checkable)
 {
-    connect(m_documentManager, &DocumentManager::documentChanged,
+    connect(DocumentManager::instance(), &DocumentManager::documentChanged,
             this, &FamilyTreeModel::onDocumentChanged);
     connect(m_filter, &Filter::changed,
             this, &FamilyTreeModel::rebuild);
@@ -145,8 +143,8 @@ void FamilyTreeModel::updateFamilyRow(const FamilyId& familyId)
     {
         // Family not currently shown (might be filtered out or new)
         // Check if family exists and passes filter
-        auto family = m_documentManager->document().findFamilyById(familyId);
-        if (family.has_value() && m_filter->passes(m_documentManager->document(), *family))
+        auto family = DocumentManager::instance()->document().findFamilyById(familyId);
+        if (family.has_value() && m_filter->passes(DocumentManager::instance()->document(), *family))
         {
             // Family should now be visible - insert it
             insertFamilyRow(familyId);
@@ -155,8 +153,8 @@ void FamilyTreeModel::updateFamilyRow(const FamilyId& familyId)
     }
 
     // Check if family still passes filter
-    auto family = m_documentManager->document().findFamilyById(familyId);
-    if (!family.has_value() || !m_filter->passes(m_documentManager->document(), *family))
+    auto family = DocumentManager::instance()->document().findFamilyById(familyId);
+    if (!family.has_value() || !m_filter->passes(DocumentManager::instance()->document(), *family))
     {
         // Family no longer passes filter - remove it
         removeFamilyRow(familyId);
@@ -333,8 +331,8 @@ void FamilyTreeModel::updateFamilyRow(const FamilyId& familyId)
 void FamilyTreeModel::insertFamilyRow(const FamilyId& familyId)
 {
     // Check if family exists and passes filter
-    auto family = m_documentManager->document().findFamilyById(familyId);
-    if (!family.has_value() || !m_filter->passes(m_documentManager->document(), *family))
+    auto family = DocumentManager::instance()->document().findFamilyById(familyId);
+    if (!family.has_value() || !m_filter->passes(DocumentManager::instance()->document(), *family))
     {
         return;
     }
@@ -351,7 +349,7 @@ void FamilyTreeModel::insertFamilyRow(const FamilyId& familyId)
     int insertRow = 0;
     for (int i = 0; i < m_familyIds.size(); ++i)
     {
-        auto existingFamily = m_documentManager->document().findFamilyById(m_familyIds.at(i));
+        auto existingFamily = DocumentManager::instance()->document().findFamilyById(m_familyIds.at(i));
         if (existingFamily.has_value()
             && existingFamily->displayName().toLower() > newName)
         {
@@ -435,7 +433,7 @@ void FamilyTreeModel::rebuild()
     clearNodes();
     m_familyIds.clear();
 
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     const QHash<FamilyId, Family>& families = doc.families();
 
     // Collect and filter family IDs
@@ -486,7 +484,7 @@ void FamilyTreeModel::rebuild()
 void FamilyTreeModel::buildFamilyNode(int familyIndex)
 {
     const FamilyId& familyId = m_familyIds.at(familyIndex);
-    std::optional<Family> opt = m_documentManager->document().findFamilyById(familyId);
+    std::optional<Family> opt = DocumentManager::instance()->document().findFamilyById(familyId);
     if (!opt)
     {
         return;
@@ -660,7 +658,7 @@ void FamilyTreeModel::appendContactAttemptNodes(TreeNode* parent, int familyInde
     headerNode->displayText = tr("Contact Attempts:");
     children.append(headerNode);
 
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     for (const ContactAttempt& attempt : record->contactAttempts())
     {
         TreeNode* attemptNode = new TreeNode();
@@ -716,7 +714,7 @@ void FamilyTreeModel::appendTaskNodes(TreeNode* parent, int familyIndex,
     headerNode->displayText = tr("Tasks:");
     children.append(headerNode);
 
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     for (const ResponseTask& task : record->tasks())
     {
         // Line 1: "• Category - Description" or "✓ Category - Description" if resolved
@@ -1029,7 +1027,7 @@ std::optional<PersonId> FamilyTreeModel::personIdAt(const QModelIndex& index) co
         return std::nullopt;
     }
 
-    const auto& families = m_documentManager->document().families();
+    const auto& families = DocumentManager::instance()->document().families();
     auto it = families.find(*famId);
     if (it == families.end())
     {

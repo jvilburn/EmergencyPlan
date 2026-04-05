@@ -9,11 +9,10 @@
 #include <QMessageBox>
 #include <QRegularExpression>
 
-EmergencyManager::EmergencyManager(DocumentManager* documentManager, QObject* parent)
+EmergencyManager::EmergencyManager(QObject* parent)
     : QObject(parent)
-    , m_documentManager(documentManager)
 {
-    connect(m_documentManager, &DocumentManager::documentChanged,
+    connect(DocumentManager::instance(), &DocumentManager::documentChanged,
             this, &EmergencyManager::onDocumentChanged);
 }
 
@@ -48,7 +47,7 @@ void EmergencyManager::startEmergency(const QString& name)
     m_response = EmergencyResponse::create(name);
 
     // Create FamilyResponseRecord for each family in the document
-    const QHash<FamilyId, Family>& families = m_documentManager->document().families();
+    const QHash<FamilyId, Family>& families = DocumentManager::instance()->document().families();
     for (auto it = families.constBegin(); it != families.constEnd(); ++it)
     {
         const Family& family = it.value();
@@ -75,7 +74,7 @@ void EmergencyManager::endEmergency(bool archive)
     {
         m_response->setEndedAt(QDateTime::currentDateTimeUtc());
         // Update document with final response data before snapshotting
-        m_documentManager->setEmergencyResponse(m_response);
+        DocumentManager::instance()->setEmergencyResponse(m_response);
 
         if (!saveArchive())
         {
@@ -88,7 +87,7 @@ void EmergencyManager::endEmergency(bool archive)
     // Clear response data from main document
     m_response.reset();
     m_savedResponse.reset();
-    m_documentManager->setEmergencyResponse(std::nullopt);
+    DocumentManager::instance()->setEmergencyResponse(std::nullopt);
     emit emergencyEnded();
     emit responseDataChanged();
 }
@@ -99,7 +98,7 @@ void EmergencyManager::endEmergency(bool archive)
 
 bool EmergencyManager::isViewingArchive() const
 {
-    return m_documentManager->isViewingArchive();
+    return DocumentManager::instance()->isViewingArchive();
 }
 
 bool EmergencyManager::loadArchive(const QString& filePath, QString* errorMessage)
@@ -133,7 +132,7 @@ bool EmergencyManager::loadArchive(const QString& filePath, QString* errorMessag
     // Stash current live response (if any) and swap in archive data
     m_savedResponse = m_response;
     m_response = archiveResponse;
-    m_documentManager->setArchiveDocument(std::move(result.document));
+    DocumentManager::instance()->setArchiveDocument(std::move(result.document));
 
     emit archiveViewOpened();
     emit responseDataChanged();
@@ -178,7 +177,7 @@ bool EmergencyManager::reopenArchive(const QString& filePath, QString* errorMess
     persistResponseData();
 
     // Delete the archive file only after persistence succeeds
-    if (m_documentManager->saveDocumentOnly())
+    if (DocumentManager::instance()->saveDocumentOnly())
     {
         if (!QFile::remove(filePath))
         {
@@ -204,7 +203,7 @@ void EmergencyManager::closeArchive()
 
     m_response = m_savedResponse;
     m_savedResponse.reset();
-    m_documentManager->clearArchiveDocument();
+    DocumentManager::instance()->clearArchiveDocument();
 
     emit archiveViewClosed();
     emit responseDataChanged();
@@ -544,12 +543,12 @@ int EmergencyManager::countByStatus(EffectiveContactStatus status) const
 
 void EmergencyManager::persistResponseData()
 {
-    m_documentManager->setEmergencyResponse(m_response);
+    DocumentManager::instance()->setEmergencyResponse(m_response);
 }
 
 bool EmergencyManager::saveArchive()
 {
-    QString docPath = m_documentManager->filePath();
+    QString docPath = DocumentManager::instance()->filePath();
     if (docPath.isEmpty())
     {
         QMessageBox::critical(
@@ -582,7 +581,7 @@ bool EmergencyManager::saveArchive()
 
     // Snapshot the entire current document (prep + response)
     QString errorMessage;
-    bool ok = JsonService::saveDocument(archivePath, m_documentManager->document(), &errorMessage);
+    bool ok = JsonService::saveDocument(archivePath, DocumentManager::instance()->document(), &errorMessage);
     if (!ok)
     {
         qWarning() << "Archive save failed:" << errorMessage;
@@ -598,7 +597,7 @@ bool EmergencyManager::saveArchive()
 
 void EmergencyManager::syncFromDocument()
 {
-    const std::optional<EmergencyResponse>& response = m_documentManager->document().emergencyResponse();
+    const std::optional<EmergencyResponse>& response = DocumentManager::instance()->document().emergencyResponse();
     if (response.has_value())
     {
         bool wasActive = m_response.has_value();
@@ -625,7 +624,7 @@ void EmergencyManager::syncFamilies()
         return;
     }
 
-    const QHash<FamilyId, Family>& families = m_documentManager->document().families();
+    const QHash<FamilyId, Family>& families = DocumentManager::instance()->document().families();
     const QHash<FamilyId, FamilyResponseRecord>& records = m_response->familyRecords();
 
     // Add records for families that don't have one yet

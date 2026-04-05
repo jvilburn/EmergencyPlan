@@ -8,7 +8,6 @@
 #include <optional>
 
 class ActionButtonsWidget;
-class DocumentManager;
 class EmergencyManager;
 class EmergencyProgressBar;
 class FamilyTreeModel;
@@ -24,8 +23,7 @@ class WardListView : public QWidget, public FamilyMarkerProvider
     Q_OBJECT
 
 public:
-    explicit WardListView(DocumentManager* documentManager,
-                          EmergencyManager* emergencyManager,
+    explicit WardListView(EmergencyManager* emergencyManager,
                           QWidget* parent);
 
     // FamilyMarkerProvider interface
@@ -70,7 +68,6 @@ private:
     void detachActionButtons(const FamilyId& familyId);
     void setupEmergencyWidgets();
 
-    DocumentManager* m_documentManager;
     EmergencyManager* m_emergencyManager;
     FilterBar* m_filterBar;
     FamilyTreeModel* m_model;

@@ -10,16 +10,14 @@
 #include <algorithm>
 #include <QSet>
 
-UnassignedMinisteringModel::UnassignedMinisteringModel(DocumentManager* documentManager,
-                                                         Filter* filter,
+UnassignedMinisteringModel::UnassignedMinisteringModel(Filter* filter,
                                                          MinisteringOrg org,
                                                          QObject* parent)
     : BaseTreeModel(parent)
-    , m_documentManager(documentManager)
     , m_filter(filter)
     , m_org(org)
 {
-    connect(m_documentManager, &DocumentManager::documentChanged,
+    connect(DocumentManager::instance(), &DocumentManager::documentChanged,
             this, &UnassignedMinisteringModel::onDocumentChanged);
     if (m_filter)
     {
@@ -75,7 +73,7 @@ void UnassignedMinisteringModel::rebuild()
 
     clearNodes();
 
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     const QHash<MinisteringGroupId, MinisteringGroup>& groups = isEQ() ? doc.eqGroups() : doc.rsGroups();
 
     if (isEQ())
@@ -370,7 +368,7 @@ SelectionKey UnassignedMinisteringModel::selectionKeyAt(const QModelIndex& index
 QSet<FamilyId> UnassignedMinisteringModel::familyIdsForPersons(const QSet<PersonId>& personIds) const
 {
     QSet<FamilyId> familyIds;
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     for (const PersonId& personId : personIds)
     {
         std::optional<FamilyId> familyId = doc.familyIdForPerson(personId);
@@ -423,7 +421,7 @@ QModelIndex UnassignedMinisteringModel::indexForFamilyId(const FamilyId& familyI
         return {};
     }
 
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
 
     for (int i = 0; i < m_headerNode->children.size(); ++i)
     {
@@ -481,7 +479,7 @@ FamilyAssociation UnassignedMinisteringModel::relatedFamiliesAt(const QModelInde
     {
         if (node->personId)
         {
-            std::optional<FamilyId> fid = m_documentManager->document().familyIdForPerson(*node->personId);
+            std::optional<FamilyId> fid = DocumentManager::instance()->document().familyIdForPerson(*node->personId);
             if (fid)
             {
                 assoc.relatedFamilyIds.insert(*fid);
@@ -522,7 +520,7 @@ void UnassignedMinisteringModel::loadContactDetails(const QModelIndex& index)
         return;
     }
 
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     int insertRow = node->children.size();
 
     if (node->type == ItemType::MinisteredSister)
@@ -718,7 +716,7 @@ void UnassignedMinisteringModel::refreshFamilyDisplayText(const FamilyId& family
         return;
     }
 
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     const QHash<FamilyId, Family>& families = doc.families();
 
     if (!families.contains(familyId))

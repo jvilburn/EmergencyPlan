@@ -10,8 +10,6 @@
 #include "Id.h"
 #include "MarkerRenderer.h"
 
-class DocumentManager;
-
 /// ViewModel for the map widget. Manages family data caching and map view
 /// state for MapWidget, reacting to document changes via DocumentManager.
 class MapViewModel : public QObject
@@ -28,7 +26,7 @@ class MapViewModel : public QObject
     Q_PROPERTY(double zoom READ zoom WRITE setZoom NOTIFY zoomChanged)
 
 public:
-    explicit MapViewModel(DocumentManager* docManager, QObject* parent);
+    explicit MapViewModel(QObject* parent);
 
     // Property getters
     QVariantList families() const;
@@ -59,7 +57,6 @@ private:
     void updateFamilies();
     QVariantMap familyToVariant(const class Family& family) const;
 
-    DocumentManager* m_docManager;
     QVariantList m_families;
     QHash<FamilyId, MarkerRenderer::MarkerIcons> m_familyIcons;  // Pre-computed marker icons
     bool m_useSatelliteView = false;

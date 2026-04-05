@@ -6,7 +6,6 @@
 #include <QList>
 #include <QString>
 
-class DocumentManager;
 class Filter;
 
 /// Model for special needs tree (2-level: Person → ContactDetail).
@@ -28,8 +27,7 @@ public:
     };
     Q_ENUM(Roles)
 
-    explicit NeedsModel(DocumentManager* documentManager,
-                        Filter* filter,
+    explicit NeedsModel(Filter* filter,
                         QObject* parent);
     ~NeedsModel() override;
 
@@ -86,6 +84,5 @@ private:
     void clearNodes();
 
     QList<TreeNode*> m_personNodes;  // Top-level person nodes (owned)
-    DocumentManager* m_documentManager;
     Filter* m_filter;
 };

@@ -6,8 +6,6 @@
 #include <QList>
 #include <QString>
 
-class DocumentManager;
-
 class TeamListModel : public QAbstractListModel
 {
     Q_OBJECT
@@ -27,8 +25,6 @@ public:
 
     explicit TeamListModel(QObject* parent);
 
-    // Setup
-    void setDocumentManager(DocumentManager* documentManager);
 
     // QAbstractListModel interface
     int rowCount(const QModelIndex& parent = QModelIndex()) const override;
@@ -45,5 +41,4 @@ public:
 
 private:
     QList<TeamId> m_teamIds;
-    DocumentManager* m_documentManager = nullptr;
 };

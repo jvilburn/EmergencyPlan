@@ -10,16 +10,14 @@
 #include <algorithm>
 #include <QSet>
 
-EmergencyAssetModel::EmergencyAssetModel(DocumentManager* documentManager,
-                                                 Filter* filter,
+EmergencyAssetModel::EmergencyAssetModel(Filter* filter,
                                                  ResponseArea area,
                                                  QObject* parent)
     : BaseTreeModel(parent)
-    , m_documentManager(documentManager)
     , m_filter(filter)
     , m_area(area)
 {
-    connect(m_documentManager, &DocumentManager::documentChanged,
+    connect(DocumentManager::instance(), &DocumentManager::documentChanged,
             this, &EmergencyAssetModel::onDocumentChanged);
     if (m_filter)
     {
@@ -68,7 +66,7 @@ void EmergencyAssetModel::rebuild()
 
     clearNodes();
 
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     QList<EmergencyAsset> assets = doc.emergencyAssetsByArea(m_area);
 
     // Sort assets by name
@@ -292,7 +290,7 @@ FamilyAssociation EmergencyAssetModel::relatedFamiliesAt(const QModelIndex& inde
         return assoc;
     }
 
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     TreeNode* node = nodeFromIndex(index);
     if (!node)
     {
@@ -358,7 +356,7 @@ std::optional<EmergencyAssetId> EmergencyAssetModel::assetIdAt(const QModelIndex
 
 QModelIndex EmergencyAssetModel::indexForFamilyId(const FamilyId& familyId) const
 {
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
 
     for (int a = 0; a < m_assetNodes.size(); ++a)
     {
@@ -403,7 +401,7 @@ void EmergencyAssetModel::loadContactDetails(const QModelIndex& index)
         return;
     }
 
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     if (!node->personId)
     {
         node->contactsLoaded = true;
@@ -509,7 +507,7 @@ void EmergencyAssetModel::loadContactDetails(const QModelIndex& index)
 
 void EmergencyAssetModel::refreshFamilyDisplayText(const FamilyId& familyId)
 {
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     const QHash<FamilyId, Family>& families = doc.families();
 
     if (!families.contains(familyId))

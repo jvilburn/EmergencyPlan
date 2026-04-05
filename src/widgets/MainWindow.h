@@ -8,7 +8,6 @@
 
 class QLabel;
 class QProgressBar;
-class DocumentManager;
 class EmergencyAssetView;
 class FamilyEditPanel;
 class MapWidget;
@@ -92,7 +91,6 @@ private:
     static QString loadLastDocumentPath();
 
     // Core services
-    DocumentManager* m_documentManager;
     EmergencyManager* m_emergencyManager;
 
     // Widgets

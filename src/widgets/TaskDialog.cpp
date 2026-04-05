@@ -16,11 +16,9 @@
 #include <QRadioButton>
 #include <QVBoxLayout>
 
-TaskDialog::TaskDialog(DocumentManager* documentManager,
-                       EmergencyManager* emergencyManager,
+TaskDialog::TaskDialog(EmergencyManager* emergencyManager,
                        QWidget* parent)
     : QDialog(parent)
-    , m_documentManager(documentManager)
     , m_emergencyManager(emergencyManager)
 {
     setWindowTitle(tr("Add Task"));
@@ -74,7 +72,7 @@ TaskDialog::TaskDialog(DocumentManager* documentManager,
     m_teamCombo = new QComboBox(this);
     m_teamCombo->setEnabled(false);
 
-    const QHash<TeamId, Team>& teams = m_documentManager->document().teams();
+    const QHash<TeamId, Team>& teams = DocumentManager::instance()->document().teams();
     QList<QPair<QString, TeamId>> teamList;
     for (auto it = teams.constBegin(); it != teams.constEnd(); ++it)
     {
@@ -105,7 +103,7 @@ TaskDialog::TaskDialog(DocumentManager* documentManager,
     };
     QList<PersonEntry> personEntries;
 
-    const QHash<FamilyId, Family>& families = m_documentManager->document().families();
+    const QHash<FamilyId, Family>& families = DocumentManager::instance()->document().families();
     for (auto it = families.constBegin(); it != families.constEnd(); ++it)
     {
         for (const Person& person : it.value().members())

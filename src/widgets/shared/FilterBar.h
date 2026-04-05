@@ -3,7 +3,6 @@
 #include <QWidget>
 #include <functional>
 
-class DocumentManager;
 class Filter;
 class FilterChip;
 class SearchField;
@@ -19,7 +18,7 @@ class FilterBar : public QWidget
     Q_OBJECT
 
 public:
-    explicit FilterBar(DocumentManager* docMgr, QWidget* parent);
+    explicit FilterBar(QWidget* parent);
 
     /// Get the Filter object for connecting to models.
     Filter* filter() const { return m_filter; }
@@ -49,7 +48,6 @@ private:
     void addChip(const QString& label, const QString& value,
                  std::function<void()> removeCallback);
 
-    DocumentManager* m_documentManager;
     Filter* m_filter;
     SearchField* m_searchField;
     QWidget* m_chipsContainer;

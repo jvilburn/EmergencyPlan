@@ -6,7 +6,6 @@
 #include "Document.h"
 #include "EmergencyResponse.h"
 
-class DocumentManager;
 struct DocumentChange;
 
 class EmergencyManager : public QObject
@@ -14,7 +13,7 @@ class EmergencyManager : public QObject
     Q_OBJECT
 
 public:
-    explicit EmergencyManager(DocumentManager* documentManager, QObject* parent);
+    explicit EmergencyManager(QObject* parent);
 
     // Lifecycle
     bool isActive() const;
@@ -81,7 +80,6 @@ private:
     void syncFromDocument();
     void syncFamilies();  // add records for new families, called on document changes
 
-    DocumentManager* m_documentManager;
     std::optional<EmergencyResponse> m_response;
 
     // Archive viewing state

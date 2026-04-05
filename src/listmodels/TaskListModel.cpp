@@ -7,11 +7,9 @@
 #include "Person.h"
 #include "Team.h"
 
-TaskListModel::TaskListModel(DocumentManager* documentManager,
-                             EmergencyManager* emergencyManager,
+TaskListModel::TaskListModel(EmergencyManager* emergencyManager,
                              QObject* parent)
     : QAbstractTableModel(parent)
-    , m_documentManager(documentManager)
     , m_emergencyManager(emergencyManager)
 {
     connect(m_emergencyManager, &EmergencyManager::responseDataChanged,
@@ -150,7 +148,7 @@ void TaskListModel::rebuild()
 
     const EmergencyResponse& response = m_emergencyManager->response();
     const QHash<FamilyId, FamilyResponseRecord>& records = response.familyRecords();
-    const QHash<FamilyId, Family>& families = m_documentManager->document().families();
+    const QHash<FamilyId, Family>& families = DocumentManager::instance()->document().families();
 
     for (auto it = records.constBegin(); it != records.constEnd(); ++it)
     {

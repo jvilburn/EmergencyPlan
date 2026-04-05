@@ -46,8 +46,7 @@
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
-    , m_documentManager(new DocumentManager(this))
-    , m_emergencyManager(new EmergencyManager(m_documentManager, this))
+    , m_emergencyManager(new EmergencyManager(this))
 {
     setupUi();
     setupMenus();
@@ -58,7 +57,7 @@ MainWindow::MainWindow(QWidget* parent)
     QString lastPath = loadLastDocumentPath();
     if (!lastPath.isEmpty() && QFile::exists(lastPath))
     {
-        if (m_documentManager->openDocument(lastPath, nullptr))
+        if (DocumentManager::instance()->openDocument(lastPath, nullptr))
         {
             // Center on chapel immediately; defer fit until widget has size
             m_mapWidget->centerOnChapel();
@@ -104,39 +103,39 @@ void MainWindow::setupUi()
     m_sidebarTabs = new SidebarWidget(5, m_splitter);
 
     // Row 1
-    m_wardListView = new WardListView(m_documentManager, m_emergencyManager, this);
+    m_wardListView = new WardListView(m_emergencyManager, this);
     m_sidebarTabs->addPage(m_wardListView, tr("Families"));
 
-    m_ministeringView = new MinisteringView(m_documentManager, m_emergencyManager, this);
+    m_ministeringView = new MinisteringView(m_emergencyManager, this);
     m_sidebarTabs->addPage(m_ministeringView, tr("Ministering"));
 
-    m_teamsView = new TeamsView(m_documentManager, m_emergencyManager, this);
+    m_teamsView = new TeamsView(m_emergencyManager, this);
     m_sidebarTabs->addPage(m_teamsView, tr("Teams"));
 
-    m_needsView = new NeedsSubView(m_documentManager, this);
+    m_needsView = new NeedsSubView(this);
     m_sidebarTabs->addPage(m_needsView, tr("Needs"));
 
-    m_taskListView = new TaskListView(m_documentManager, m_emergencyManager, this);
+    m_taskListView = new TaskListView(m_emergencyManager, this);
     m_taskListTabIndex = m_sidebarTabs->count();
     m_sidebarTabs->addPage(m_taskListView, tr("Tasks"));
     m_sidebarTabs->setPageVisible(m_taskListTabIndex, false);
 
     // Row 2
-    m_medicalView = new EmergencyAssetView(m_documentManager, ResponseArea::Medical, this);
+    m_medicalView = new EmergencyAssetView(ResponseArea::Medical, this);
     m_sidebarTabs->addPage(m_medicalView, tr("Medical"));
 
-    m_commsView = new EmergencyAssetView(m_documentManager, ResponseArea::Communications, this);
+    m_commsView = new EmergencyAssetView(ResponseArea::Communications, this);
     m_sidebarTabs->addPage(m_commsView, tr("Communications"));
 
-    m_recoveryView = new EmergencyAssetView(m_documentManager, ResponseArea::Recovery, this);
+    m_recoveryView = new EmergencyAssetView(ResponseArea::Recovery, this);
     m_sidebarTabs->addPage(m_recoveryView, tr("Skills && Gear"));
 
     // Edit panel (initially hidden)
-    m_editPanel = new FamilyEditPanel(m_documentManager, m_splitter);
+    m_editPanel = new FamilyEditPanel(m_splitter);
     m_editPanel->hide();
 
     // Map in the center
-    m_mapWidget = new MapWidget(m_documentManager, m_splitter);
+    m_mapWidget = new MapWidget(m_splitter);
 
     m_splitter->addWidget(m_sidebarTabs);
     m_splitter->addWidget(m_editPanel);
@@ -215,15 +214,15 @@ void MainWindow::setupMenus()
 
 void MainWindow::setupConnections()
 {
-    connect(m_documentManager, &DocumentManager::documentChanged,
+    connect(DocumentManager::instance(), &DocumentManager::documentChanged,
             this, &MainWindow::onDocumentChanged);
-    connect(m_documentManager, &DocumentManager::filePathChanged,
+    connect(DocumentManager::instance(), &DocumentManager::filePathChanged,
             this, &MainWindow::updateWindowTitle);
-    connect(m_documentManager, &DocumentManager::filePathChanged,
+    connect(DocumentManager::instance(), &DocumentManager::filePathChanged,
             this, &MainWindow::onFilePathChanged);
-    connect(m_documentManager, &DocumentManager::canUndoChanged,
+    connect(DocumentManager::instance(), &DocumentManager::canUndoChanged,
             this, &MainWindow::updateUndoRedoActions);
-    connect(m_documentManager, &DocumentManager::canRedoChanged,
+    connect(DocumentManager::instance(), &DocumentManager::canRedoChanged,
             this, &MainWindow::updateUndoRedoActions);
 
     // Emergency lifecycle
@@ -262,19 +261,19 @@ void MainWindow::setupConnections()
             this, &MainWindow::onCloseEditPanel);
 
     // Geocoding progress
-    connect(m_documentManager, &DocumentManager::geocodingProgressChanged,
+    connect(DocumentManager::instance(), &DocumentManager::geocodingProgressChanged,
             this, &MainWindow::onGeocodingProgress);
-    connect(m_documentManager, &DocumentManager::geocodingFinished,
+    connect(DocumentManager::instance(), &DocumentManager::geocodingFinished,
             this, &MainWindow::onGeocodingFinished);
 
     // Auto-save
-    connect(m_documentManager, &DocumentManager::autoSaveFailed,
+    connect(DocumentManager::instance(), &DocumentManager::autoSaveFailed,
             this, &MainWindow::onAutoSaveFailed);
 }
 
 void MainWindow::onNewDocument()
 {
-    m_documentManager->newDocument();
+    DocumentManager::instance()->newDocument();
     statusBar()->showMessage(tr("New document created"), 3000);
 }
 
@@ -292,7 +291,7 @@ void MainWindow::onOpenDocument()
     }
 
     QString errorMessage;
-    if (m_documentManager->openDocument(filePath, &errorMessage))
+    if (DocumentManager::instance()->openDocument(filePath, &errorMessage))
     {
         statusBar()->showMessage(tr("Document opened"), 3000);
         m_mapWidget->fitAllFamilies();
@@ -305,7 +304,7 @@ void MainWindow::onOpenDocument()
 
 void MainWindow::onSaveDocument()
 {
-    if (m_documentManager->filePath().isEmpty())
+    if (DocumentManager::instance()->filePath().isEmpty())
     {
         onSaveDocumentAs();
     }
@@ -315,13 +314,13 @@ void MainWindow::onSaveDocumentAs()
 {
     // Build suggested path: use existing path, or suggested filename
     QString suggestedPath;
-    if (!m_documentManager->filePath().isEmpty())
+    if (!DocumentManager::instance()->filePath().isEmpty())
     {
-        suggestedPath = m_documentManager->filePath();
+        suggestedPath = DocumentManager::instance()->filePath();
     }
     else
     {
-        QString suggested = m_documentManager->document().suggestedFilename();
+        QString suggested = DocumentManager::instance()->document().suggestedFilename();
         if (!suggested.isEmpty())
         {
             suggestedPath = suggested + ".emergencyplan";
@@ -340,7 +339,7 @@ void MainWindow::onSaveDocumentAs()
     }
 
     QString errorMessage;
-    if (m_documentManager->saveDocumentAs(filePath, &errorMessage))
+    if (DocumentManager::instance()->saveDocumentAs(filePath, &errorMessage))
     {
         statusBar()->showMessage(tr("Document saved"), 3000);
     }
@@ -369,8 +368,8 @@ void MainWindow::onImportPdf()
     WardDirectoryImportService importService(nullptr);
     WardDirectoryImportResult result = importService.importFromPdf(
         filePath,
-        m_documentManager->document().families(),
-        m_documentManager->document().ministeringPdfDate());
+        DocumentManager::instance()->document().families(),
+        DocumentManager::instance()->document().ministeringPdfDate());
 
     if (!result.success)
     {
@@ -391,7 +390,7 @@ void MainWindow::onImportPdf()
             .arg(result.wardName)
             .arg(result.families.size());
 
-    m_documentManager->executeCommand(std::make_unique<ImportWardDirectoryCommand>(
+    DocumentManager::instance()->executeCommand(std::make_unique<ImportWardDirectoryCommand>(
         result.families,
         result.removedFamilyIds,
         result.wardUnitNumber,
@@ -417,7 +416,7 @@ void MainWindow::onImportPdf()
     }
 
     // Start background geocoding for imported families
-    m_documentManager->startBatchGeocoding();
+    DocumentManager::instance()->startBatchGeocoding();
 }
 
 void MainWindow::onImportMinisteringPdf()
@@ -438,8 +437,8 @@ void MainWindow::onImportMinisteringPdf()
     MinisteringImportService importService(nullptr);
     MinisteringImportResult result = importService.importFromPdf(
         filePath,
-        m_documentManager->document().families(),
-        m_documentManager->document().wardDirectoryPdfDate());
+        DocumentManager::instance()->document().families(),
+        DocumentManager::instance()->document().wardDirectoryPdfDate());
 
     if (!result.success)
     {
@@ -466,7 +465,7 @@ void MainWindow::onImportMinisteringPdf()
 
     if (result.isRSFormat)
     {
-        m_documentManager->executeCommand(std::make_unique<ImportRSMinisteringCommand>(
+        DocumentManager::instance()->executeCommand(std::make_unique<ImportRSMinisteringCommand>(
             result.districts,
             result.groups,
             result.families,
@@ -475,7 +474,7 @@ void MainWindow::onImportMinisteringPdf()
     }
     else
     {
-        m_documentManager->executeCommand(std::make_unique<ImportEQMinisteringCommand>(
+        DocumentManager::instance()->executeCommand(std::make_unique<ImportEQMinisteringCommand>(
             result.districts,
             result.groups,
             result.families,
@@ -497,23 +496,23 @@ void MainWindow::onImportMinisteringPdf()
     }
 
     // Start background geocoding for any new families
-    m_documentManager->startBatchGeocoding();
+    DocumentManager::instance()->startBatchGeocoding();
 }
 
 void MainWindow::onUndo()
 {
-    m_documentManager->undo();
+    DocumentManager::instance()->undo();
 }
 
 void MainWindow::onRedo()
 {
-    m_documentManager->redo();
+    DocumentManager::instance()->redo();
 }
 
 void MainWindow::onDocumentChanged(const DocumentChange& change)
 {
     Q_UNUSED(change)
-    int count = m_documentManager->document().families().size();
+    int count = DocumentManager::instance()->document().families().size();
     statusBar()->showMessage(tr("%1 families").arg(count));
 }
 
@@ -521,7 +520,7 @@ void MainWindow::updateWindowTitle()
 {
     QString title = "Emergency Plan";
 
-    QString filePath = m_documentManager->filePath();
+    QString filePath = DocumentManager::instance()->filePath();
     if (!filePath.isEmpty())
     {
         QFileInfo fileInfo(filePath);
@@ -529,7 +528,7 @@ void MainWindow::updateWindowTitle()
     }
     else
     {
-        QString suggested = m_documentManager->document().suggestedFilename();
+        QString suggested = DocumentManager::instance()->document().suggestedFilename();
         if (!suggested.isEmpty())
         {
             title = suggested + " - " + title;
@@ -545,20 +544,20 @@ void MainWindow::updateWindowTitle()
 
 void MainWindow::updateUndoRedoActions()
 {
-    m_undoAction->setEnabled(m_documentManager->canUndo());
-    m_redoAction->setEnabled(m_documentManager->canRedo());
+    m_undoAction->setEnabled(DocumentManager::instance()->canUndo());
+    m_redoAction->setEnabled(DocumentManager::instance()->canRedo());
 
     QString undoText = tr("&Undo");
-    if (m_documentManager->canUndo())
+    if (DocumentManager::instance()->canUndo())
     {
-        undoText += " " + m_documentManager->undoDescription();
+        undoText += " " + DocumentManager::instance()->undoDescription();
     }
     m_undoAction->setText(undoText);
 
     QString redoText = tr("&Redo");
-    if (m_documentManager->canRedo())
+    if (DocumentManager::instance()->canRedo())
     {
-        redoText += " " + m_documentManager->redoDescription();
+        redoText += " " + DocumentManager::instance()->redoDescription();
     }
     m_redoAction->setText(redoText);
 }
@@ -588,7 +587,7 @@ void MainWindow::onAutoSaveFailed(const QString& errorMessage)
 
 void MainWindow::onFilePathChanged()
 {
-    saveLastDocumentPath(m_documentManager->filePath());
+    saveLastDocumentPath(DocumentManager::instance()->filePath());
     updateEmergencyActions();
 }
 
@@ -735,7 +734,7 @@ void MainWindow::onEditFamilyRequested(const FamilyId& familyId)
 
 void MainWindow::onDeleteFamilyRequested(const FamilyId& familyId)
 {
-    const auto& families = m_documentManager->document().families();
+    const auto& families = DocumentManager::instance()->document().families();
     auto it = families.find(familyId);
     if (it == families.end())
     {
@@ -773,7 +772,7 @@ void MainWindow::onSaveFamily()
     FamilyId familyId = m_editPanel->familyId();
 
     // Get original family for command
-    const auto& families = m_documentManager->document().families();
+    const auto& families = DocumentManager::instance()->document().families();
     auto it = families.find(familyId);
     if (it == families.end())
     {
@@ -783,7 +782,7 @@ void MainWindow::onSaveFamily()
     Family originalFamily = it.value();
 
     // Execute update command
-    m_documentManager->executeCommand(std::make_unique<UpdateFamilyCommand>(
+    DocumentManager::instance()->executeCommand(std::make_unique<UpdateFamilyCommand>(
         originalFamily,
         editedFamily));
 
@@ -845,7 +844,7 @@ void MainWindow::onCloseEditPanel()
 
 void MainWindow::openEditPanel(const FamilyId& familyId)
 {
-    const auto& families = m_documentManager->document().families();
+    const auto& families = DocumentManager::instance()->document().families();
     auto it = families.find(familyId);
     if (it == families.end())
     {
@@ -1026,7 +1025,7 @@ bool MainWindow::generateEmergencyReportWithConfirm()
 
     // Get ward name from document metadata
     QString wardName;
-    const QHash<QString, Ward>& wards = m_documentManager->document().wards();
+    const QHash<QString, Ward>& wards = DocumentManager::instance()->document().wards();
     if (!wards.isEmpty())
     {
         wardName = wards.constBegin().value().name();
@@ -1090,7 +1089,7 @@ void MainWindow::onArchiveViewClosed()
 
 void MainWindow::onOpenArchive()
 {
-    QString docPath = m_documentManager->filePath();
+    QString docPath = DocumentManager::instance()->filePath();
     if (docPath.isEmpty())
     {
         QMessageBox::information(
@@ -1178,7 +1177,7 @@ void MainWindow::updateEmergencyActions()
 {
     bool active = m_emergencyManager->isActive();
     bool viewing = m_emergencyManager->isViewingArchive();
-    bool hasDocument = !m_documentManager->filePath().isEmpty();
+    bool hasDocument = !DocumentManager::instance()->filePath().isEmpty();
     m_startEmergencyAction->setEnabled(!active && !viewing);
     m_endEmergencyAction->setEnabled(active && !viewing);
     m_generateReportAction->setEnabled(active && !viewing);

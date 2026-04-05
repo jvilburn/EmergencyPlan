@@ -16,11 +16,9 @@
 #include <QTreeView>
 #include <QVBoxLayout>
 
-TaskListView::TaskListView(DocumentManager* documentManager,
-                           EmergencyManager* emergencyManager,
+TaskListView::TaskListView(EmergencyManager* emergencyManager,
                            QWidget* parent)
     : QWidget(parent)
-    , m_documentManager(documentManager)
     , m_emergencyManager(emergencyManager)
 {
     QVBoxLayout* layout = new QVBoxLayout(this);
@@ -46,7 +44,7 @@ TaskListView::TaskListView(DocumentManager* documentManager,
     layout->addLayout(buttonBar);
 
     // Table
-    m_model = new TaskListModel(documentManager, emergencyManager, this);
+    m_model = new TaskListModel(emergencyManager, this);
 
     m_treeView = new QTreeView(this);
     m_treeView->setModel(m_model);
@@ -84,7 +82,7 @@ void TaskListView::rebuild()
 void TaskListView::onAddTask()
 {
     // Ask which family the task is for
-    const QHash<FamilyId, Family>& families = m_documentManager->document().families();
+    const QHash<FamilyId, Family>& families = DocumentManager::instance()->document().families();
     QList<QPair<QString, FamilyId>> familyList;
     for (auto it = families.constBegin(); it != families.constEnd(); ++it)
     {
@@ -115,7 +113,7 @@ void TaskListView::onAddTask()
 
     FamilyId familyId = familyList.at(selectedIndex).second;
 
-    TaskDialog dialog(m_documentManager, m_emergencyManager, this);
+    TaskDialog dialog(m_emergencyManager, this);
     if (dialog.exec() != QDialog::Accepted)
     {
         return;
@@ -159,7 +157,7 @@ void TaskListView::onEditTask()
         return;
     }
 
-    TaskDialog dialog(m_documentManager, m_emergencyManager, this);
+    TaskDialog dialog(m_emergencyManager, this);
     dialog.setTask(*existingTask);
     if (dialog.exec() != QDialog::Accepted)
     {
@@ -236,7 +234,7 @@ HighlightInfo TaskListView::highlightInfo() const
         return info;
     }
 
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
 
     if (task->assignedPersonId())
     {

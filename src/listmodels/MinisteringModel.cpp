@@ -13,18 +13,16 @@
 #include <algorithm>
 #include <QFont>
 
-MinisteringModel::MinisteringModel(DocumentManager* documentManager,
-                                     EmergencyManager* emergencyManager,
+MinisteringModel::MinisteringModel(EmergencyManager* emergencyManager,
                                      Filter* filter,
                                      MinisteringOrg org,
                                      QObject* parent)
     : BaseTreeModel(parent)
-    , m_documentManager(documentManager)
     , m_emergencyManager(emergencyManager)
     , m_filter(filter)
     , m_org(org)
 {
-    connect(m_documentManager, &DocumentManager::documentChanged,
+    connect(DocumentManager::instance(), &DocumentManager::documentChanged,
             this, &MinisteringModel::onDocumentChanged);
     if (m_filter)
     {
@@ -94,7 +92,7 @@ void MinisteringModel::rebuild()
 
     clearNodes();
 
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     const QHash<MinisteringDistrictId, MinisteringDistrict>& districts = isEQ() ? doc.eqDistricts() : doc.rsDistricts();
     const QHash<MinisteringGroupId, MinisteringGroup>& groups = isEQ() ? doc.eqGroups() : doc.rsGroups();
 
@@ -176,7 +174,7 @@ void MinisteringModel::rebuild()
 
 void MinisteringModel::addMinistersSection(TreeNode* companionshipNode, const MinisteringGroupId& groupId)
 {
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     const QHash<MinisteringGroupId, MinisteringGroup>& groups = isEQ() ? doc.eqGroups() : doc.rsGroups();
 
     if (!groups.contains(groupId))
@@ -244,7 +242,7 @@ void MinisteringModel::addMinistersSection(TreeNode* companionshipNode, const Mi
 
 void MinisteringModel::addMinisteredSection(TreeNode* companionshipNode, const MinisteringGroupId& groupId)
 {
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     const QHash<MinisteringGroupId, MinisteringGroup>& groups = isEQ() ? doc.eqGroups() : doc.rsGroups();
 
     if (!groups.contains(groupId))
@@ -583,7 +581,7 @@ SelectionKey MinisteringModel::selectionKeyAt(const QModelIndex& index) const
 QSet<FamilyId> MinisteringModel::familyIdsForPersons(const QSet<PersonId>& personIds) const
 {
     QSet<FamilyId> familyIds;
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     for (const PersonId& personId : personIds)
     {
         std::optional<FamilyId> familyId = doc.familyIdForPerson(personId);
@@ -627,7 +625,7 @@ FamilyAssociation MinisteringModel::relatedFamiliesAt(const QModelIndex& index) 
         return assoc;
     }
 
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     const auto& districts = isEQ() ? doc.eqDistricts() : doc.rsDistricts();
     const auto& groups = isEQ() ? doc.eqGroups() : doc.rsGroups();
 
@@ -751,7 +749,7 @@ ItemType MinisteringModel::itemTypeAt(const QModelIndex& index) const
 
 QModelIndex MinisteringModel::indexForFamilyId(const FamilyId& familyId) const
 {
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
 
     for (int d = 0; d < m_districtNodes.size(); ++d)
     {
@@ -792,7 +790,7 @@ QModelIndex MinisteringModel::indexForFamilyId(const FamilyId& familyId) const
 
 QModelIndex MinisteringModel::indexForMinisterByFamilyId(const FamilyId& familyId) const
 {
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
 
     for (int d = 0; d < m_districtNodes.size(); ++d)
     {
@@ -859,7 +857,7 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
         return;
     }
 
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     int insertRow = node->children.size();
 
     if (node->type == ItemType::Minister || node->type == ItemType::MinisteredSister)
@@ -1047,7 +1045,7 @@ void MinisteringModel::onFamilyStatusChanged(const FamilyId& familyId)
 {
     // Find nodes for this family and emit dataChanged for DecorationRole
     // Also update parent companionship/district display text
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
 
     for (int d = 0; d < m_districtNodes.size(); ++d)
     {
@@ -1167,7 +1165,7 @@ FamilyId MinisteringModel::familyIdForNode(const TreeNode* node) const
     }
     if (node->type == ItemType::MinisteredSister && node->personId)
     {
-        const Document& doc = m_documentManager->document();
+        const Document& doc = DocumentManager::instance()->document();
         std::optional<FamilyId> fid = doc.familyIdForPerson(*node->personId);
         if (fid)
         {
@@ -1282,7 +1280,7 @@ QString MinisteringModel::districtLeaderPhone(const MinisteringDistrict& distric
         return QString();
     }
 
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     std::optional<Person> leader = doc.findPersonById(*district.presidencyMemberId());
     if (leader && !leader->phone().isEmpty())
     {
@@ -1327,7 +1325,7 @@ QString MinisteringModel::formatDistrictText(const MinisteringDistrict& district
 
 void MinisteringModel::refreshFamilyDisplayText(const FamilyId& familyId)
 {
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     const auto& families = doc.families();
 
     if (!families.contains(familyId))

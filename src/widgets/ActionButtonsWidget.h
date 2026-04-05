@@ -16,7 +16,6 @@ class ActionButtonsWidget : public QWidget
 public:
     explicit ActionButtonsWidget(const FamilyId& familyId,
                                  EmergencyManager* emergencyManager,
-                                 const QString& phoneNumber,
                                  QWidget* parent);
 
     const FamilyId& familyId() const { return m_familyId; }

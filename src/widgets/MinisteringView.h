@@ -5,7 +5,6 @@
 
 #include <QWidget>
 
-class DocumentManager;
 class EmergencyManager;
 class MinisteringTabView;
 class QStackedWidget;
@@ -17,8 +16,7 @@ class MinisteringView : public QWidget, public FamilyMarkerProvider
     Q_OBJECT
 
 public:
-    explicit MinisteringView(DocumentManager* docManager,
-                             EmergencyManager* emergencyManager,
+    explicit MinisteringView(EmergencyManager* emergencyManager,
                              QWidget* parent);
 
     HighlightInfo highlightInfo() const override;

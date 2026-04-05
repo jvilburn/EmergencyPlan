@@ -4,7 +4,6 @@
 
 #include <QWidget>
 
-class DocumentManager;
 class FilterBar;
 class NeedsModel;
 class QModelIndex;
@@ -17,8 +16,7 @@ class NeedsSubView : public QWidget, public FamilyMarkerProvider
     Q_OBJECT
 
 public:
-    explicit NeedsSubView(DocumentManager* documentManager,
-                          QWidget* parent);
+    explicit NeedsSubView(QWidget* parent);
 
     // FamilyMarkerProvider interface
     HighlightInfo highlightInfo() const override;
@@ -41,7 +39,6 @@ private:
     void showNeedDialog(const std::optional<PersonId>& personId);
     void deleteNeed(const PersonId& personId, const FamilyId& familyId);
 
-    DocumentManager* m_documentManager;
     FilterBar* m_filterBar;
     NeedsModel* m_model;
     SelectionPreservingTreeView* m_tree;

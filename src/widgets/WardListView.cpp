@@ -31,11 +31,9 @@ namespace StatusFilterIndex
     constexpr int UnableToReach = 4;
 }
 
-WardListView::WardListView(DocumentManager* documentManager,
-                           EmergencyManager* emergencyManager,
+WardListView::WardListView(EmergencyManager* emergencyManager,
                            QWidget* parent)
     : QWidget(parent)
-    , m_documentManager(documentManager)
     , m_emergencyManager(emergencyManager)
 {
     setMinimumWidth(250);
@@ -45,11 +43,11 @@ WardListView::WardListView(DocumentManager* documentManager,
     layout->setSpacing(4);
 
     // FilterBar owns Filter
-    m_filterBar = new FilterBar(documentManager, this);
+    m_filterBar = new FilterBar(this);
     layout->addWidget(m_filterBar);
 
     // Create model with filter from FilterBar
-    m_model = new FamilyTreeModel(documentManager, emergencyManager, m_filterBar->filter(), false, this);
+    m_model = new FamilyTreeModel(emergencyManager, m_filterBar->filter(), false, this);
 
     // Emergency progress bar and filter tabs (initially hidden)
     setupEmergencyWidgets();
@@ -296,17 +294,8 @@ void WardListView::attachActionButtons(const QModelIndex& familyIndex)
 
         if (childType == FamilyTreeModel::RowType::Actions)
         {
-            // Look up phone number for emergency quick-call display
-            QString phoneNumber;
-            const auto& families = m_documentManager->document().families();
-            auto it = families.constFind(*familyId);
-            if (it != families.constEnd())
-            {
-                phoneNumber = it.value().displayPhone();
-            }
-
             ActionButtonsWidget* widget = new ActionButtonsWidget(
-                *familyId, m_emergencyManager, phoneNumber, m_treeView);
+                *familyId, m_emergencyManager, m_treeView);
 
             connect(widget, &ActionButtonsWidget::editRequested,
                     this, &WardListView::editFamilyRequested);
@@ -475,7 +464,7 @@ void WardListView::updateFilterTabCounts()
 
 void WardListView::onLogContactRequested(const FamilyId& familyId)
 {
-    ContactAttemptDialog dialog(m_documentManager, this);
+    ContactAttemptDialog dialog(this);
     if (dialog.exec() != QDialog::Accepted)
     {
         return;
@@ -490,7 +479,7 @@ void WardListView::onLogContactRequested(const FamilyId& familyId)
 
 void WardListView::onAddTaskRequested(const FamilyId& familyId)
 {
-    TaskDialog dialog(m_documentManager, m_emergencyManager, this);
+    TaskDialog dialog(m_emergencyManager, this);
     if (dialog.exec() != QDialog::Accepted)
     {
         return;
@@ -526,7 +515,7 @@ void WardListView::onEditTaskRequested(const FamilyId& familyId, const TaskId& t
         return;
     }
 
-    TaskDialog dialog(m_documentManager, m_emergencyManager, this);
+    TaskDialog dialog(m_emergencyManager, this);
     dialog.setTask(*existingTask);
     if (dialog.exec() != QDialog::Accepted)
     {

@@ -22,11 +22,9 @@
 #include <QInputDialog>
 #include <QLineEdit>
 
-TeamsView::TeamsView(DocumentManager* documentManager,
-                     EmergencyManager* emergencyManager,
+TeamsView::TeamsView(EmergencyManager* emergencyManager,
                      QWidget* parent)
     : QWidget(parent)
-    , m_documentManager(documentManager)
     , m_emergencyManager(emergencyManager)
 {
     QVBoxLayout* layout = new QVBoxLayout(this);
@@ -34,7 +32,7 @@ TeamsView::TeamsView(DocumentManager* documentManager,
     layout->setSpacing(4);
 
     // FilterBar owns Filter
-    m_filterBar = new FilterBar(documentManager, this);
+    m_filterBar = new FilterBar(this);
     layout->addWidget(m_filterBar);
 
     // Toolbar
@@ -53,7 +51,7 @@ TeamsView::TeamsView(DocumentManager* documentManager,
     layout->addLayout(toolbar);
 
     // Create model with filter from FilterBar
-    m_model = new TeamsTreeModel(documentManager, emergencyManager,
+    m_model = new TeamsTreeModel(emergencyManager,
                                  m_filterBar->filter(), this);
 
     // Create tree view with model
@@ -167,7 +165,7 @@ void TeamsView::onContextMenu(const QPoint& pos)
             {
                 break;
             }
-            const Document& doc = m_documentManager->document();
+            const Document& doc = DocumentManager::instance()->document();
             PersonId personId = *personIdOpt;
             std::optional<Person> personOpt = doc.findPersonById(personId);
             if (personOpt)
@@ -402,7 +400,7 @@ void TeamsView::deleteTeam()
         return;
     }
 
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     std::optional<Team> teamOpt = doc.findTeamById(*teamId);
     if (!teamOpt)
     {
@@ -412,7 +410,7 @@ void TeamsView::deleteTeam()
     QString message = tr("Delete team \"%1\"?").arg(teamOpt->name());
     if (QMessageBox::question(this, tr("Delete Team"), message) == QMessageBox::Yes)
     {
-        m_documentManager->executeCommand(
+        DocumentManager::instance()->executeCommand(
             std::make_unique<DeleteTeamCommand>(*teamOpt));
     }
 }
@@ -424,7 +422,7 @@ void TeamsView::showTeamDialog(const std::optional<TeamId>& teamId)
 
     if (teamId)
     {
-        const Document& doc = m_documentManager->document();
+        const Document& doc = DocumentManager::instance()->document();
         std::optional<Team> teamOpt = doc.findTeamById(*teamId);
         if (!teamOpt)
         {
@@ -435,7 +433,7 @@ void TeamsView::showTeamDialog(const std::optional<TeamId>& teamId)
     }
 
     std::optional<PersonSelectionResult> result = WardListDialog::selectPersons(
-        m_documentManager, tr("Team"), initialName, initialIds, this);
+        tr("Team"), initialName, initialIds, this);
 
     if (!result || result->name.isEmpty())
     {
@@ -447,7 +445,7 @@ void TeamsView::showTeamDialog(const std::optional<TeamId>& teamId)
     if (teamId)
     {
         // Edit existing team
-        const Document& doc = m_documentManager->document();
+        const Document& doc = DocumentManager::instance()->document();
         std::optional<Team> teamOpt = doc.findTeamById(*teamId);
         if (!teamOpt)
         {
@@ -466,7 +464,7 @@ void TeamsView::showTeamDialog(const std::optional<TeamId>& teamId)
 
         if (updated != *teamOpt)
         {
-            m_documentManager->executeCommand(
+            DocumentManager::instance()->executeCommand(
                 std::make_unique<UpdateTeamCommand>(*teamOpt, updated));
         }
     }
@@ -475,14 +473,14 @@ void TeamsView::showTeamDialog(const std::optional<TeamId>& teamId)
         // Create new team
         Team team = Team::create(result->name, QColor(), std::nullopt);
         team.setMemberIds(newMembers);
-        m_documentManager->executeCommand(
+        DocumentManager::instance()->executeCommand(
             std::make_unique<AddTeamCommand>(team));
     }
 }
 
 void TeamsView::setLeader(const TeamId& teamId, const PersonId& personId)
 {
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     std::optional<Team> teamOpt = doc.findTeamById(teamId);
     if (!teamOpt)
     {
@@ -491,13 +489,13 @@ void TeamsView::setLeader(const TeamId& teamId, const PersonId& personId)
 
     Team updated = *teamOpt;
     updated.setLeaderId(personId);
-    m_documentManager->executeCommand(
+    DocumentManager::instance()->executeCommand(
         std::make_unique<UpdateTeamCommand>(*teamOpt, updated));
 }
 
 void TeamsView::clearLeader(const TeamId& teamId)
 {
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     std::optional<Team> teamOpt = doc.findTeamById(teamId);
     if (!teamOpt)
     {
@@ -506,13 +504,13 @@ void TeamsView::clearLeader(const TeamId& teamId)
 
     Team updated = *teamOpt;
     updated.setLeaderId(std::nullopt);
-    m_documentManager->executeCommand(
+    DocumentManager::instance()->executeCommand(
         std::make_unique<UpdateTeamCommand>(*teamOpt, updated));
 }
 
 void TeamsView::removeMemberFromTeam(const TeamId& teamId, const PersonId& personId)
 {
-    m_documentManager->executeCommand(
+    DocumentManager::instance()->executeCommand(
         std::make_unique<RemoveTeamMemberCommand>(teamId, personId));
 }
 
@@ -554,7 +552,7 @@ void TeamsView::resolveTaskFromContextMenu()
 
 void TeamsView::assignTaskToTeam(const FamilyId& familyId, const TaskId& taskId)
 {
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     QList<Team> teams = doc.teams().values();
 
     if (teams.isEmpty())

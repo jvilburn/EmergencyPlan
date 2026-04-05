@@ -31,10 +31,14 @@ DocumentManager::DocumentManager(QObject* parent)
     , m_document(Document::empty())
     , m_commandHistory(this)
     , m_unitLookupService(new UnitLookupService(this))
-    , m_geocodingService(new BackgroundGeocodingService(this))
+    , m_geocodingService(nullptr)
 {
     Q_ASSERT(!s_instance);
     s_instance = this;
+
+    // Create after s_instance is set so BackgroundGeocodingService can use instance()
+    m_geocodingService = new BackgroundGeocodingService(this);
+
     connect(&m_commandHistory, &CommandHistory::canUndoChanged, this, &DocumentManager::canUndoChanged);
     connect(&m_commandHistory, &CommandHistory::canRedoChanged, this, &DocumentManager::canRedoChanged);
     connect(&m_commandHistory, &CommandHistory::dirtyChanged, this, &DocumentManager::dirtyChanged);

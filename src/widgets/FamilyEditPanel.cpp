@@ -15,9 +15,8 @@
 #include <QIcon>
 #include <QMessageBox>
 
-FamilyEditPanel::FamilyEditPanel(DocumentManager* docManager, QWidget* parent)
+FamilyEditPanel::FamilyEditPanel(QWidget* parent)
     : QFrame(parent)
-    , m_docManager(docManager)
 {
     setupUi();
 }

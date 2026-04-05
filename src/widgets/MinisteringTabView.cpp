@@ -8,8 +8,7 @@
 #include <QFontMetrics>
 #include <QVBoxLayout>
 
-MinisteringTabView::MinisteringTabView(DocumentManager* documentManager,
-                                         EmergencyManager* emergencyManager,
+MinisteringTabView::MinisteringTabView(EmergencyManager* emergencyManager,
                                          MinisteringOrg org,
                                          QWidget* parent)
     : QWidget(parent)
@@ -19,12 +18,12 @@ MinisteringTabView::MinisteringTabView(DocumentManager* documentManager,
     layout->setSpacing(8);
 
     // FilterBar shared between both trees
-    m_filterBar = new FilterBar(documentManager, this);
+    m_filterBar = new FilterBar(this);
     layout->addWidget(m_filterBar);
 
     // Create models with filter from FilterBar
-    m_mainModel = new MinisteringModel(documentManager, emergencyManager, m_filterBar->filter(), org, this);
-    m_unassignedModel = new UnassignedMinisteringModel(documentManager, m_filterBar->filter(), org, this);
+    m_mainModel = new MinisteringModel(emergencyManager, m_filterBar->filter(), org, this);
+    m_unassignedModel = new UnassignedMinisteringModel(m_filterBar->filter(), org, this);
 
     // Pass models to tree views - views don't need org
     m_mainView = new MinisteringTreeView(m_mainModel, this);

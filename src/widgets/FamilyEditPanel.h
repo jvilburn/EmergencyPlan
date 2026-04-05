@@ -8,7 +8,6 @@ class QLineEdit;
 class QPushButton;
 class QLabel;
 class MemberAccordion;
-class DocumentManager;
 struct GeocodingResult;
 
 /// Side panel for editing a family's address, location, and members.
@@ -17,7 +16,7 @@ class FamilyEditPanel : public QFrame
     Q_OBJECT
 
 public:
-    explicit FamilyEditPanel(DocumentManager* docManager, QWidget* parent);
+    explicit FamilyEditPanel(QWidget* parent);
 
     void setFamily(const Family& family);
     Family family() const;
@@ -43,7 +42,6 @@ private:
     void setupUi();
     void updateTitle();
 
-    DocumentManager* m_docManager;
     FamilyId m_familyId;
     Family m_originalFamily;
     Family m_editedFamily;

@@ -1,6 +1,7 @@
 #include <QApplication>
 #include <QFile>
 #include <QIcon>
+#include "DocumentManager.h"
 #include "MainWindow.h"
 #include "TileService.h"
 
@@ -18,6 +19,9 @@ int main(int argc, char *argv[])
         app.setStyleSheet(styleFile.readAll());
         styleFile.close();
     }
+
+    // Initialize document manager (singleton)
+    DocumentManager documentManager(nullptr);
 
     // Initialize tile service for map rendering
     TileService tileService(nullptr);

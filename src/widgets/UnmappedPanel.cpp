@@ -9,12 +9,12 @@
 #include <QMouseEvent>
 #include <QPainter>
 
-UnmappedPanel::UnmappedPanel(DocumentManager* docManager, MapViewModel* viewModel,
+UnmappedPanel::UnmappedPanel(MapViewModel* viewModel,
                              QWidget* parent)
     : QWidget(parent)
     , m_viewModel(viewModel)
     , m_filter(new Filter(this))
-    , m_model(new FamilyTreeModel(docManager, nullptr, m_filter, false, this))
+    , m_model(new FamilyTreeModel(nullptr, m_filter, false, this))
 {
     // Set up filter for unmapped families only
     m_filter->setMappedFilter(MappedFilter::Unmapped);

@@ -5,8 +5,7 @@
 #include <QTabBar>
 #include <QVBoxLayout>
 
-MinisteringView::MinisteringView(DocumentManager* docManager,
-                                   EmergencyManager* emergencyManager,
+MinisteringView::MinisteringView(EmergencyManager* emergencyManager,
                                    QWidget* parent)
     : QWidget(parent)
 {
@@ -23,8 +22,8 @@ MinisteringView::MinisteringView(DocumentManager* docManager,
     layout->addWidget(m_tabBar);
 
     // Tab views
-    m_eqView = new MinisteringTabView(docManager, emergencyManager, MinisteringOrg::EldersQuorum, this);
-    m_rsView = new MinisteringTabView(docManager, emergencyManager, MinisteringOrg::ReliefSociety, this);
+    m_eqView = new MinisteringTabView(emergencyManager, MinisteringOrg::EldersQuorum, this);
+    m_rsView = new MinisteringTabView(emergencyManager, MinisteringOrg::ReliefSociety, this);
 
     // Stack for switching
     m_stack = new QStackedWidget();

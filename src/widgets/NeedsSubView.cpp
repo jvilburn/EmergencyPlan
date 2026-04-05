@@ -50,17 +50,15 @@ void updatePersonInFamily(DocumentManager* docMgr, const FamilyId& familyId, con
 
 }  // namespace
 
-NeedsSubView::NeedsSubView(DocumentManager* documentManager,
-                           QWidget* parent)
+NeedsSubView::NeedsSubView(QWidget* parent)
     : QWidget(parent)
-    , m_documentManager(documentManager)
 {
     QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(4, 4, 4, 4);
     layout->setSpacing(4);
 
     // FilterBar owns Filter
-    m_filterBar = new FilterBar(documentManager, this);
+    m_filterBar = new FilterBar(this);
     layout->addWidget(m_filterBar);
 
     // Add button
@@ -69,7 +67,7 @@ NeedsSubView::NeedsSubView(DocumentManager* documentManager,
     layout->addWidget(addButton);
 
     // Create model with filter from FilterBar
-    m_model = new NeedsModel(documentManager, m_filterBar->filter(), this);
+    m_model = new NeedsModel(m_filterBar->filter(), this);
 
     // Create tree view with model
     m_tree = new SelectionPreservingTreeView(m_model, this);
@@ -120,7 +118,7 @@ void NeedsSubView::onContextMenu(const QPoint& pos)
 
     QMenu menu;
 
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
 
     // Show contact info (disabled) if available
     std::optional<Person> person = doc.findPersonById(*personId);
@@ -217,7 +215,7 @@ void NeedsSubView::showNeedDialog(const std::optional<PersonId>& personId)
 
     if (personId)
     {
-        const Document& doc = m_documentManager->document();
+        const Document& doc = DocumentManager::instance()->document();
         std::optional<Person> personOpt = doc.findPersonById(*personId);
         if (personOpt)
         {
@@ -226,7 +224,7 @@ void NeedsSubView::showNeedDialog(const std::optional<PersonId>& personId)
     }
 
     std::optional<PersonSelectionResult> result = WardListDialog::selectPersonWithName(
-        m_documentManager, tr("Need"), initialName, initialPersonId, this);
+        tr("Need"), initialName, initialPersonId, this);
 
     // Note: empty name is intentional for needs — it clears the special need note
     if (!result || result->personIds.isEmpty())
@@ -235,20 +233,20 @@ void NeedsSubView::showNeedDialog(const std::optional<PersonId>& personId)
     }
 
     PersonId selectedPersonId = result->personIds.first();
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     std::optional<FamilyId> familyId = doc.familyIdForPerson(selectedPersonId);
     std::optional<Person> personOpt = doc.findPersonById(selectedPersonId);
     if (personOpt && familyId)
     {
         Person updatedPerson = *personOpt;
         updatedPerson.setSpecialNeedNote(result->name);
-        updatePersonInFamily(m_documentManager, *familyId, updatedPerson);
+        updatePersonInFamily(DocumentManager::instance(), *familyId, updatedPerson);
     }
 }
 
 void NeedsSubView::deleteNeed(const PersonId& personId, const FamilyId& familyId)
 {
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
 
     std::optional<Person> personOpt = doc.findPersonById(personId);
     if (!personOpt)
@@ -261,6 +259,6 @@ void NeedsSubView::deleteNeed(const PersonId& personId, const FamilyId& familyId
     {
         Person updatedPerson = *personOpt;
         updatedPerson.setSpecialNeedNote(QString());  // Clear the note
-        updatePersonInFamily(m_documentManager, familyId, updatedPerson);
+        updatePersonInFamily(DocumentManager::instance(), familyId, updatedPerson);
     }
 }

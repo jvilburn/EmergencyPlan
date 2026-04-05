@@ -6,7 +6,6 @@
 #include <QDialog>
 #include <optional>
 
-class DocumentManager;
 class FilterBar;
 class FamilyTreeModel;
 class PersonTreeModel;
@@ -46,8 +45,7 @@ public:
     };
     Q_ENUM(Mode)
 
-    explicit WardListDialog(DocumentManager* documentManager,
-                            Mode mode,
+    explicit WardListDialog(Mode mode,
                             bool checkable,
                             QWidget* parent);
 
@@ -69,7 +67,6 @@ public:
 
     /// Show dialog to select multiple families. Returns nullopt if cancelled.
     static std::optional<FamilySelectionResult> selectFamilies(
-        DocumentManager* documentManager,
         const QString& nameLabel,
         const QString& initialName,
         const QList<FamilyId>& initialIds,
@@ -78,7 +75,6 @@ public:
     /// Show dialog to select a single person with a name field.
     /// Returns nullopt if cancelled.
     static std::optional<PersonSelectionResult> selectPersonWithName(
-        DocumentManager* documentManager,
         const QString& nameLabel,
         const QString& initialName,
         const std::optional<PersonId>& initialId,
@@ -86,7 +82,6 @@ public:
 
     /// Show dialog to select multiple persons. Returns nullopt if cancelled.
     static std::optional<PersonSelectionResult> selectPersons(
-        DocumentManager* documentManager,
         const QString& nameLabel,
         const QString& initialName,
         const QList<PersonId>& initialIds,
@@ -100,7 +95,6 @@ private:
     QSet<FamilyId> highlightedFamilyIds() const;
 
     Mode m_mode;
-    DocumentManager* m_documentManager;
     FilterBar* m_filterBar = nullptr;
     SelectionPreservingTreeView* m_treeView = nullptr;
     MapWidget* m_mapWidget = nullptr;

@@ -7,7 +7,6 @@
 #include <QList>
 #include <QString>
 
-class DocumentManager;
 class Filter;
 
 /// Model for emergency assets tree (3-level: Asset → Person → ContactDetail).
@@ -31,8 +30,7 @@ public:
     };
     Q_ENUM(Roles)
 
-    explicit EmergencyAssetModel(DocumentManager* documentManager,
-                                     Filter* filter,
+    explicit EmergencyAssetModel(Filter* filter,
                                      ResponseArea area,
                                      QObject* parent);
     ~EmergencyAssetModel() override;
@@ -91,7 +89,6 @@ private:
     TreeNode* nodeFromIndex(const QModelIndex& index) const;
 
     QList<TreeNode*> m_assetNodes;  // Top-level nodes (owned)
-    DocumentManager* m_documentManager;
     Filter* m_filter;
     ResponseArea m_area;
 };

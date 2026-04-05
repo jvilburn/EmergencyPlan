@@ -6,7 +6,6 @@
 #include <QList>
 #include <QString>
 
-class DocumentManager;
 class Filter;
 
 /// Model for unassigned ministering tree (2-level: Header → Person/Family).
@@ -30,8 +29,7 @@ public:
     };
     Q_ENUM(Roles)
 
-    explicit UnassignedMinisteringModel(DocumentManager* documentManager,
-                                         Filter* filter,
+    explicit UnassignedMinisteringModel(Filter* filter,
                                          MinisteringOrg org,
                                          QObject* parent);
     ~UnassignedMinisteringModel() override;
@@ -93,7 +91,6 @@ private:
     QSet<PersonId> unassignedSisterIds() const;
 
     TreeNode* m_headerNode = nullptr;  // Single top-level node (owned)
-    DocumentManager* m_documentManager;
     Filter* m_filter;
     MinisteringOrg m_org;
 };

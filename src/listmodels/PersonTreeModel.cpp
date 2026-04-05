@@ -10,16 +10,14 @@
 
 #include <algorithm>
 
-PersonTreeModel::PersonTreeModel(DocumentManager* documentManager,
-                                 Filter* filter,
+PersonTreeModel::PersonTreeModel(Filter* filter,
                                  bool checkable,
                                  QObject* parent)
     : BaseTreeModel(parent)
-    , m_documentManager(documentManager)
     , m_filter(filter)
     , m_checkable(checkable)
 {
-    connect(m_documentManager, &DocumentManager::documentChanged,
+    connect(DocumentManager::instance(), &DocumentManager::documentChanged,
             this, &PersonTreeModel::onDocumentChanged);
     if (m_filter)
     {
@@ -55,7 +53,7 @@ void PersonTreeModel::rebuild()
     clearNodes();
     m_personData.clear();
 
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     const QHash<FamilyId, Family>& families = doc.families();
 
     // Collect all persons with their family IDs
@@ -103,7 +101,7 @@ void PersonTreeModel::buildPersonNode(int personIndex)
     const PersonId& personId = data.first;
     const FamilyId& familyId = data.second;
 
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     std::optional<Person> personOpt = doc.findPersonById(personId);
     if (!personOpt)
     {

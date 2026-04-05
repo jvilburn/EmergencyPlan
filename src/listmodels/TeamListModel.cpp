@@ -6,11 +6,6 @@ TeamListModel::TeamListModel(QObject* parent)
 {
 }
 
-void TeamListModel::setDocumentManager(DocumentManager* documentManager)
-{
-    m_documentManager = documentManager;
-}
-
 int TeamListModel::rowCount(const QModelIndex& parent) const
 {
     if (parent.isValid())
@@ -27,13 +22,8 @@ QVariant TeamListModel::data(const QModelIndex& index, int role) const
         return QVariant();
     }
 
-    if (!m_documentManager)
-    {
-        return QVariant();
-    }
-
     const TeamId& id = m_teamIds.at(index.row());
-    std::optional<Team> opt = m_documentManager->document().findTeamById(id);
+    std::optional<Team> opt = DocumentManager::instance()->document().findTeamById(id);
     if (!opt)
     {
         return QVariant();

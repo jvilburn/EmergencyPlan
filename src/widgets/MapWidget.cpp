@@ -23,10 +23,9 @@
 #include <QIcon>
 #include <QtMath>
 
-MapWidget::MapWidget(DocumentManager* docManager, QWidget* parent)
+MapWidget::MapWidget(QWidget* parent)
     : QWidget(parent)
-    , m_docManager(docManager)
-    , m_viewModel(new MapViewModel(docManager, this))
+    , m_viewModel(new MapViewModel(this))
 {
     setObjectName("mapWidget");
     setMinimumWidth(400);
@@ -52,7 +51,7 @@ MapWidget::MapWidget(DocumentManager* docManager, QWidget* parent)
     connect(m_viewModel, &MapViewModel::familiesChanged,
             this, QOverload<>::of(&QWidget::update));
     // Update button positions when document changes (affects unmapped panel)
-    connect(m_docManager, &DocumentManager::documentChanged,
+    connect(DocumentManager::instance(), &DocumentManager::documentChanged,
             this, [this](const DocumentChange&) { updateButtonPositions(); });
 }
 
@@ -118,7 +117,7 @@ void MapWidget::setupUi()
     connect(m_layerButton, &QPushButton::clicked, this, &MapWidget::onToggleLayer);
 
     // Unmapped families panel
-    m_unmappedPanel = new UnmappedPanel(m_docManager, m_viewModel, this);
+    m_unmappedPanel = new UnmappedPanel(m_viewModel, this);
     connect(m_unmappedPanel, &UnmappedPanel::familyClicked,
             this, &MapWidget::onUnmappedFamilyClicked);
     connect(this, &MapWidget::highlightChanged,
@@ -127,9 +126,9 @@ void MapWidget::setupUi()
             this, &MapWidget::onUnmappedPanelHeaderClicked);
 
     // Geocoding state for unmapped panel visibility
-    connect(m_docManager, &DocumentManager::geocodingProgressChanged,
+    connect(DocumentManager::instance(), &DocumentManager::geocodingProgressChanged,
             this, &MapWidget::onGeocodingStarted);
-    connect(m_docManager, &DocumentManager::geocodingFinished,
+    connect(DocumentManager::instance(), &DocumentManager::geocodingFinished,
             this, &MapWidget::onGeocodingFinished);
 
     updateButtonPositions();
@@ -195,7 +194,7 @@ bool MapWidget::hasUnmappedSelection() const
     }
 
     QSet<FamilyId> highlighted = m_markerProvider->highlightInfo().allHighlightedIds();
-    const Document& doc = m_docManager->document();
+    const Document& doc = DocumentManager::instance()->document();
 
     for (const FamilyId& id : highlighted)
     {
@@ -455,7 +454,7 @@ void MapWidget::drawTiles(QPainter& painter)
 
 void MapWidget::drawChurchMarkers(QPainter& painter)
 {
-    const Document& doc = m_docManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     const QHash<QString, Ward>& wards = doc.wards();
     const QHash<QString, Stake>& stakes = doc.stakes();
 
@@ -885,7 +884,7 @@ void MapWidget::ensureVisible(const QSet<FamilyId>& familyIds)
     }
 
     // Compute bounds of all specified families
-    const Document& doc = m_docManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     double minLat = 90.0, maxLat = -90.0;
     double minLng = 180.0, maxLng = -180.0;
     bool anyMapped = false;
@@ -985,7 +984,7 @@ void MapWidget::ensureVisible(const QSet<FamilyId>& familyIds)
 
 void MapWidget::fitAllFamilies()
 {
-    const Document& doc = m_docManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     const QVariantList& families = m_viewModel->families();
 
     QVector<MarkerInfo> markers;
@@ -1028,7 +1027,7 @@ void MapWidget::fitAllFamilies()
 
 void MapWidget::centerOnChapel()
 {
-    const auto& wards = m_docManager->document().wards();
+    const auto& wards = DocumentManager::instance()->document().wards();
     for (const auto& ward : wards)
     {
         if (ward.chapelLat() && ward.chapelLng())

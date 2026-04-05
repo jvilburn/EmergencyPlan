@@ -6,8 +6,6 @@
 #include <QList>
 #include <QString>
 
-class DocumentManager;
-
 class TagListModel : public QAbstractListModel
 {
     Q_OBJECT
@@ -26,8 +24,6 @@ public:
 
     explicit TagListModel(QObject* parent);
 
-    // Setup
-    void setDocumentManager(DocumentManager* documentManager);
 
     // QAbstractListModel interface
     int rowCount(const QModelIndex& parent = QModelIndex()) const override;
@@ -44,5 +40,4 @@ public:
 
 private:
     QList<TagId> m_tagIds;
-    DocumentManager* m_documentManager = nullptr;
 };

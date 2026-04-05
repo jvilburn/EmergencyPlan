@@ -6,7 +6,6 @@
 #include "Id.h"
 #include <optional>
 
-class DocumentManager;
 class FamilyTreeModel;
 class Filter;
 class FamilyMarkerProvider;
@@ -19,7 +18,7 @@ class UnmappedPanel : public QWidget
     Q_OBJECT
 
 public:
-    explicit UnmappedPanel(DocumentManager* docManager, MapViewModel* viewModel,
+    explicit UnmappedPanel(MapViewModel* viewModel,
                            QWidget* parent);
 
     /// Returns true if there are unmapped families to show

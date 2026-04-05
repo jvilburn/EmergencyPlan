@@ -17,13 +17,11 @@
 #include <QItemSelectionModel>
 #include <QSet>
 
-WardListDialog::WardListDialog(DocumentManager* documentManager,
-                               Mode mode,
+WardListDialog::WardListDialog(Mode mode,
                                bool checkable,
                                QWidget* parent)
     : QDialog(parent)
     , m_mode(mode)
-    , m_documentManager(documentManager)
     , m_checkable(checkable)
 {
     setupUi();
@@ -49,7 +47,7 @@ void WardListDialog::setupUi()
     mainLayout->addLayout(nameLayout);
 
     // Create FilterBar (owns Filter internally)
-    m_filterBar = new FilterBar(m_documentManager, this);
+    m_filterBar = new FilterBar(this);
     mainLayout->addWidget(m_filterBar);
 
     // Create splitter with tree and map
@@ -58,12 +56,12 @@ void WardListDialog::setupUi()
     // Create appropriate model based on mode, then tree view with model
     if (m_mode == FamilyMode)
     {
-        m_familyModel = new FamilyTreeModel(m_documentManager, nullptr, m_filterBar->filter(), m_checkable, this);
+        m_familyModel = new FamilyTreeModel(nullptr, m_filterBar->filter(), m_checkable, this);
         m_treeView = new SelectionPreservingTreeView(m_familyModel, this);
     }
     else
     {
-        m_personModel = new PersonTreeModel(m_documentManager, m_filterBar->filter(), m_checkable, this);
+        m_personModel = new PersonTreeModel(m_filterBar->filter(), m_checkable, this);
         m_treeView = new SelectionPreservingTreeView(m_personModel, this);
     }
     m_treeView->setHeaderHidden(true);
@@ -71,7 +69,7 @@ void WardListDialog::setupUi()
     m_treeView->setIndentation(16);
 
     // Create map widget
-    m_mapWidget = new MapWidget(m_documentManager, this);
+    m_mapWidget = new MapWidget(this);
     m_mapWidget->setMinimumWidth(400);
 
     // Add to splitter
@@ -163,7 +161,7 @@ void WardListDialog::selectFamily(const FamilyId& familyId)
     {
         // In person mode, select the first person from this family
         std::optional<Family> familyOpt =
-            m_documentManager->document().findFamilyById(familyId);
+            DocumentManager::instance()->document().findFamilyById(familyId);
         if (familyOpt && !familyOpt->members().isEmpty())
         {
             PersonId personId = familyOpt->members().first().id();
@@ -196,7 +194,7 @@ QSet<FamilyId> WardListDialog::highlightedFamilyIds() const
         }
         else if (m_personModel)
         {
-            const Document& doc = m_documentManager->document();
+            const Document& doc = DocumentManager::instance()->document();
             for (const PersonId& personId : m_personModel->checkedPersonIds())
             {
                 auto familyId = doc.familyIdForPerson(personId);
@@ -229,7 +227,7 @@ QSet<FamilyId> WardListDialog::highlightedFamilyIds() const
         auto personId = m_personModel->personIdAt(current);
         if (personId)
         {
-            auto familyId = m_documentManager->document().familyIdForPerson(*personId);
+            auto familyId = DocumentManager::instance()->document().familyIdForPerson(*personId);
             if (familyId)
             {
                 return {*familyId};
@@ -255,13 +253,12 @@ QSet<FamilyId> WardListDialog::visibleFamilyIds() const
 // Static convenience methods
 
 std::optional<FamilySelectionResult> WardListDialog::selectFamilies(
-    DocumentManager* documentManager,
     const QString& nameLabel,
     const QString& initialName,
     const QList<FamilyId>& initialIds,
     QWidget* parent)
 {
-    WardListDialog dialog(documentManager, FamilyMode, true, parent);
+    WardListDialog dialog(FamilyMode, true, parent);
     dialog.setWindowTitle(tr("Select Families \u2014 %1").arg(nameLabel));
     dialog.m_nameLabel->setText(nameLabel + tr(":"));
     dialog.m_nameEdit->setText(initialName);
@@ -293,13 +290,12 @@ std::optional<FamilySelectionResult> WardListDialog::selectFamilies(
 }
 
 std::optional<PersonSelectionResult> WardListDialog::selectPersonWithName(
-    DocumentManager* documentManager,
     const QString& nameLabel,
     const QString& initialName,
     const std::optional<PersonId>& initialId,
     QWidget* parent)
 {
-    WardListDialog dialog(documentManager, PersonMode, false, parent);
+    WardListDialog dialog(PersonMode, false, parent);
     dialog.setWindowTitle(tr("Select Person \u2014 %1").arg(nameLabel));
     dialog.m_nameLabel->setText(nameLabel + tr(":"));
     dialog.m_nameEdit->setText(initialName);
@@ -321,13 +317,12 @@ std::optional<PersonSelectionResult> WardListDialog::selectPersonWithName(
 }
 
 std::optional<PersonSelectionResult> WardListDialog::selectPersons(
-    DocumentManager* documentManager,
     const QString& nameLabel,
     const QString& initialName,
     const QList<PersonId>& initialIds,
     QWidget* parent)
 {
-    WardListDialog dialog(documentManager, PersonMode, true, parent);
+    WardListDialog dialog(PersonMode, true, parent);
     dialog.setWindowTitle(tr("Select People \u2014 %1").arg(nameLabel));
     dialog.m_nameLabel->setText(nameLabel + tr(":"));
     dialog.m_nameEdit->setText(initialName);

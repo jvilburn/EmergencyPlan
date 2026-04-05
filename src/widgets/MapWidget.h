@@ -19,7 +19,6 @@ struct LatLngBounds
     double maxLng;
 };
 
-class DocumentManager;
 class MapViewModel;
 class TileService;
 class QPushButton;
@@ -33,7 +32,7 @@ class MapWidget : public QWidget
     Q_OBJECT
 
 public:
-    explicit MapWidget(DocumentManager* docManager, QWidget* parent);
+    explicit MapWidget(QWidget* parent);
     ~MapWidget() override;
 
     /// Access the map viewmodel
@@ -133,7 +132,6 @@ private:
     bool m_pendingFitAll = false;
 
     // Core state
-    DocumentManager* m_docManager;
     MapViewModel* m_viewModel;
 
     // Map view state

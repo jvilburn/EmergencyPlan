@@ -5,7 +5,6 @@
 
 #include <QWidget>
 
-class DocumentManager;
 class EmergencyManager;
 class FilterBar;
 class MinisteringModel;
@@ -21,8 +20,7 @@ class MinisteringTabView : public QWidget, public FamilyMarkerProvider
     Q_OBJECT
 
 public:
-    explicit MinisteringTabView(DocumentManager* documentManager,
-                                 EmergencyManager* emergencyManager,
+    explicit MinisteringTabView(EmergencyManager* emergencyManager,
                                  MinisteringOrg org,
                                  QWidget* parent);
 

@@ -6,7 +6,6 @@
 #include <QList>
 #include <QString>
 
-class DocumentManager;
 class EmergencyManager;
 class MinisteringDistrict;
 class Filter;
@@ -34,8 +33,7 @@ public:
     };
     Q_ENUM(Roles)
 
-    explicit MinisteringModel(DocumentManager* documentManager,
-                               EmergencyManager* emergencyManager,
+    explicit MinisteringModel(EmergencyManager* emergencyManager,
                                Filter* filter,
                                MinisteringOrg org,
                                QObject* parent);
@@ -118,7 +116,6 @@ private:
                                 TreeNode* districtNode) const;
 
     QList<TreeNode*> m_districtNodes;  // Top-level nodes (owned)
-    DocumentManager* m_documentManager;
     EmergencyManager* m_emergencyManager;
     Filter* m_filter;
     MinisteringOrg m_org;

@@ -19,9 +19,8 @@
 #include <QMenu>
 #include <QPushButton>
 
-FilterBar::FilterBar(DocumentManager* docMgr, QWidget* parent)
+FilterBar::FilterBar(QWidget* parent)
     : QWidget(parent)
-    , m_documentManager(docMgr)
     , m_filter(new Filter(this))
 {
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
@@ -110,7 +109,7 @@ void FilterBar::rebuildChips()
     }
     m_chips.clear();
 
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
 
     // Tags
     for (const TagId& tagId : m_filter->tagIds())
@@ -297,7 +296,7 @@ void FilterBar::addTagSubmenu(QMenu* menu)
 {
     QMenu* sub = menu->addMenu(tr("Tag"));
 
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     QList<Tag> tags = doc.tags().values();
     std::sort(tags.begin(), tags.end(), [](const Tag& a, const Tag& b) {
         return a.name().toLower() < b.name().toLower();
@@ -333,7 +332,7 @@ void FilterBar::addTeamSubmenu(QMenu* menu)
 {
     QMenu* sub = menu->addMenu(tr("Team"));
 
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     QList<Team> teams = doc.teams().values();
     std::sort(teams.begin(), teams.end(), [](const Team& a, const Team& b) {
         return a.name().toLower() < b.name().toLower();
@@ -370,7 +369,7 @@ void FilterBar::addCallingSubmenu(QMenu* menu)
     QMenu* sub = menu->addMenu(tr("Calling"));
 
     // Gather all unique callings from document
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     QSet<QString> allCallings;
     for (const Family& family : doc.families())
     {
@@ -472,7 +471,7 @@ void FilterBar::addSpecialNeedsSubmenu(QMenu* menu)
     sub->addSeparator();
 
     // Gather all unique special need notes
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     QSet<QString> allNeeds;
     for (const Family& family : doc.families())
     {
@@ -555,7 +554,7 @@ void FilterBar::addResponseAreaItems(QMenu* menu, ResponseArea area)
     menu->addSeparator();
 
     // Get assets in this area
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     QList<EmergencyAsset> assets;
     for (const EmergencyAsset& asset : doc.emergencyAssets())
     {

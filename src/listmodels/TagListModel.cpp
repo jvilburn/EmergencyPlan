@@ -7,11 +7,6 @@ TagListModel::TagListModel(QObject* parent)
 {
 }
 
-void TagListModel::setDocumentManager(DocumentManager* documentManager)
-{
-    m_documentManager = documentManager;
-}
-
 int TagListModel::rowCount(const QModelIndex& parent) const
 {
     if (parent.isValid())
@@ -28,13 +23,8 @@ QVariant TagListModel::data(const QModelIndex& index, int role) const
         return QVariant();
     }
 
-    if (!m_documentManager)
-    {
-        return QVariant();
-    }
-
     const TagId& id = m_tagIds.at(index.row());
-    std::optional<Tag> opt = m_documentManager->document().findTagById(id);
+    std::optional<Tag> opt = DocumentManager::instance()->document().findTagById(id);
     if (!opt)
     {
         return QVariant();

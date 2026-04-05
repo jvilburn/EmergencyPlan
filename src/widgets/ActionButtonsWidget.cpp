@@ -7,7 +7,6 @@
 
 ActionButtonsWidget::ActionButtonsWidget(const FamilyId& familyId,
                                          EmergencyManager* emergencyManager,
-                                         const QString& phoneNumber,
                                          QWidget* parent)
     : QWidget(parent)
     , m_familyId(familyId)

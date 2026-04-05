@@ -8,7 +8,6 @@
 #include <QString>
 #include <optional>
 
-class DocumentManager;
 class EmergencyManager;
 class Filter;
 
@@ -39,8 +38,7 @@ public:
     };
     Q_ENUM(Roles)
 
-    explicit TeamsTreeModel(DocumentManager* documentManager,
-                            EmergencyManager* emergencyManager,
+    explicit TeamsTreeModel(EmergencyManager* emergencyManager,
                             Filter* filter,
                             QObject* parent);
     ~TeamsTreeModel() override;
@@ -98,7 +96,6 @@ private:
     TreeNode* nodeFromIndex(const QModelIndex& index) const;
 
     QList<TreeNode*> m_teamNodes;  // Top-level team nodes (owned)
-    DocumentManager* m_documentManager;
     EmergencyManager* m_emergencyManager;
     Filter* m_filter;
 };

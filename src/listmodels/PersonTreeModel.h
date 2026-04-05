@@ -8,7 +8,6 @@
 #include <QSet>
 #include <QString>
 
-class DocumentManager;
 class Filter;
 
 /// Tree model showing persons with expandable contact details.
@@ -29,8 +28,7 @@ public:
     };
     Q_ENUM(Roles)
 
-    explicit PersonTreeModel(DocumentManager* documentManager,
-                             Filter* filter,
+    explicit PersonTreeModel(Filter* filter,
                              bool checkable,
                              QObject* parent);
     ~PersonTreeModel() override;
@@ -92,7 +90,6 @@ private:
     // Sorted list of (personId, familyId) pairs
     QList<QPair<PersonId, FamilyId>> m_personData;
     QList<TreeNode*> m_personNodes;  // Top-level nodes (owned)
-    DocumentManager* m_documentManager;
     Filter* m_filter;
     bool m_checkable = false;
     QSet<PersonId> m_checkedIds;

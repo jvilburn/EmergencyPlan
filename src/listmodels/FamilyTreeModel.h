@@ -2,12 +2,12 @@
 
 #include "BaseTreeModel.h"
 #include "DocumentChange.h"
+#include "DocumentManager.h"
 
 #include <QList>
 #include <QSet>
 #include <QString>
 
-class DocumentManager;
 class EmergencyManager;
 class Filter;
 
@@ -60,8 +60,7 @@ public:
     };
     Q_ENUM(DetailType)
 
-    explicit FamilyTreeModel(DocumentManager* documentManager,
-                             EmergencyManager* emergencyManager,
+    explicit FamilyTreeModel(EmergencyManager* emergencyManager,
                              Filter* filter,
                              bool checkable,
                              QObject* parent);
@@ -89,7 +88,7 @@ public:
     // Access to visible family IDs (for map integration)
     QList<FamilyId> familyIds() const;
 
-    DocumentManager* documentManager() const { return m_documentManager; }
+    DocumentManager* documentManager() const { return DocumentManager::instance(); }
 
     /// Enable checkbox mode for multi-select dialogs.
     void setCheckable(bool checkable);
@@ -146,7 +145,6 @@ private:
 
     QList<FamilyId> m_familyIds;
     QList<TreeNode*> m_familyNodes;  // Top-level nodes (owned)
-    DocumentManager* m_documentManager;
     EmergencyManager* m_emergencyManager;
     Filter* m_filter;
     bool m_checkable = false;

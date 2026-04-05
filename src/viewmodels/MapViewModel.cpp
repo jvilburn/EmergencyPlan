@@ -5,11 +5,10 @@
 #include "Id.h"
 
 
-MapViewModel::MapViewModel(DocumentManager* docManager, QObject* parent)
+MapViewModel::MapViewModel(QObject* parent)
     : QObject(parent)
-    , m_docManager(docManager)
 {
-    connect(m_docManager, &DocumentManager::documentChanged,
+    connect(DocumentManager::instance(), &DocumentManager::documentChanged,
             this, &MapViewModel::onDocumentChanged);
 
     // Initial load
@@ -28,7 +27,7 @@ void MapViewModel::updateFamilies()
     m_families.clear();
     m_familyIcons.clear();
 
-    const Document& doc = m_docManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     const QHash<FamilyId, Family>& familyMap = doc.families();
 
     for (auto it = familyMap.begin(); it != familyMap.end(); ++it)

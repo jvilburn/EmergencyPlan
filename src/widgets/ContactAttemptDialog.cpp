@@ -13,10 +13,8 @@
 #include <QRadioButton>
 #include <QVBoxLayout>
 
-ContactAttemptDialog::ContactAttemptDialog(DocumentManager* documentManager,
-                                           QWidget* parent)
+ContactAttemptDialog::ContactAttemptDialog(QWidget* parent)
     : QDialog(parent)
-    , m_documentManager(documentManager)
 {
     setWindowTitle(tr("Log Contact Attempt"));
     setMinimumWidth(400);
@@ -69,7 +67,7 @@ ContactAttemptDialog::ContactAttemptDialog(DocumentManager* documentManager,
     };
     QList<PersonEntry> entries;
 
-    const QHash<FamilyId, Family>& families = m_documentManager->document().families();
+    const QHash<FamilyId, Family>& families = DocumentManager::instance()->document().families();
     for (auto it = families.constBegin(); it != families.constEnd(); ++it)
     {
         for (const Person& person : it.value().members())

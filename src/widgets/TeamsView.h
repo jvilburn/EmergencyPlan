@@ -7,7 +7,6 @@
 
 #include <optional>
 
-class DocumentManager;
 class EmergencyManager;
 class FilterBar;
 class QPushButton;
@@ -24,8 +23,7 @@ class TeamsView : public QWidget, public FamilyMarkerProvider
     Q_OBJECT
 
 public:
-    explicit TeamsView(DocumentManager* documentManager,
-                       EmergencyManager* emergencyManager,
+    explicit TeamsView(EmergencyManager* emergencyManager,
                        QWidget* parent);
 
     // FamilyMarkerProvider interface
@@ -71,7 +69,6 @@ private:
 
     std::optional<TeamId> selectedTeamId() const;
 
-    DocumentManager* m_documentManager;
     EmergencyManager* m_emergencyManager;
     FilterBar* m_filterBar;
     TeamsTreeModel* m_model;

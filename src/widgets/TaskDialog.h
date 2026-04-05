@@ -9,7 +9,6 @@ class QButtonGroup;
 class QComboBox;
 class QLineEdit;
 class QRadioButton;
-class DocumentManager;
 class EmergencyManager;
 
 /// Dialog for adding or editing a response task during an emergency.
@@ -18,8 +17,7 @@ class TaskDialog : public QDialog
     Q_OBJECT
 
 public:
-    explicit TaskDialog(DocumentManager* documentManager,
-                        EmergencyManager* emergencyManager,
+    explicit TaskDialog(EmergencyManager* emergencyManager,
                         QWidget* parent);
 
     /// Pre-populate for editing an existing task.
@@ -34,7 +32,6 @@ private slots:
     void onAssignmentChanged();
 
 private:
-    DocumentManager* m_documentManager;
     EmergencyManager* m_emergencyManager;
     QComboBox* m_categoryCombo = nullptr;
     QLineEdit* m_descriptionEdit = nullptr;

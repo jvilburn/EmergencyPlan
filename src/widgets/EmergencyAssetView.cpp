@@ -17,18 +17,16 @@
 #include <QMenu>
 #include <QMessageBox>
 
-EmergencyAssetView::EmergencyAssetView(DocumentManager* documentManager,
-                                              ResponseArea area,
+EmergencyAssetView::EmergencyAssetView(ResponseArea area,
                                               QWidget* parent)
     : QWidget(parent)
-    , m_documentManager(documentManager)
 {
     QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(4, 4, 4, 4);
     layout->setSpacing(4);
 
     // FilterBar owns Filter
-    m_filterBar = new FilterBar(documentManager, this);
+    m_filterBar = new FilterBar(this);
     layout->addWidget(m_filterBar);
 
     // Toolbar
@@ -47,7 +45,7 @@ EmergencyAssetView::EmergencyAssetView(DocumentManager* documentManager,
     layout->addLayout(toolbar);
 
     // Create model with filter from FilterBar
-    m_model = new EmergencyAssetModel(documentManager, m_filterBar->filter(), area, this);
+    m_model = new EmergencyAssetModel(m_filterBar->filter(), area, this);
 
     // Create tree view with model
     m_tree = new SelectionPreservingTreeView(m_model, this);
@@ -154,7 +152,7 @@ void EmergencyAssetView::onContextMenu(const QPoint& pos)
                 {
                     break;
                 }
-                const Document& doc = m_documentManager->document();
+                const Document& doc = DocumentManager::instance()->document();
                 PersonId personId = *personIdOpt;
                 std::optional<Person> personOpt = doc.findPersonById(personId);
                 if (personOpt)
@@ -298,7 +296,7 @@ void EmergencyAssetView::deleteAsset()
         return;
     }
 
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     std::optional<EmergencyAsset> assetOpt = doc.findEmergencyAssetById(*assetId);
     if (!assetOpt)
     {
@@ -308,7 +306,7 @@ void EmergencyAssetView::deleteAsset()
     QString message = tr("Delete asset \"%1\"?").arg(assetOpt->name());
     if (QMessageBox::question(this, tr("Delete Asset"), message) == QMessageBox::Yes)
     {
-        m_documentManager->executeCommand(
+        DocumentManager::instance()->executeCommand(
             std::make_unique<DeleteEmergencyAssetCommand>(*assetOpt));
     }
 }
@@ -320,7 +318,7 @@ void EmergencyAssetView::showAssetDialog(const std::optional<EmergencyAssetId>& 
 
     if (assetId)
     {
-        const Document& doc = m_documentManager->document();
+        const Document& doc = DocumentManager::instance()->document();
         std::optional<EmergencyAsset> assetOpt = doc.findEmergencyAssetById(*assetId);
         if (!assetOpt)
         {
@@ -331,7 +329,7 @@ void EmergencyAssetView::showAssetDialog(const std::optional<EmergencyAssetId>& 
     }
 
     std::optional<PersonSelectionResult> result = WardListDialog::selectPersons(
-        m_documentManager, nameLabel(), initialName, initialIds, this);
+        nameLabel(), initialName, initialIds, this);
 
     if (!result || result->name.isEmpty())
     {
@@ -343,7 +341,7 @@ void EmergencyAssetView::showAssetDialog(const std::optional<EmergencyAssetId>& 
     if (assetId)
     {
         // Edit existing asset
-        const Document& doc = m_documentManager->document();
+        const Document& doc = DocumentManager::instance()->document();
         std::optional<EmergencyAsset> assetOpt = doc.findEmergencyAssetById(*assetId);
         if (!assetOpt)
         {
@@ -356,7 +354,7 @@ void EmergencyAssetView::showAssetDialog(const std::optional<EmergencyAssetId>& 
 
         if (updated != *assetOpt)
         {
-            m_documentManager->executeCommand(
+            DocumentManager::instance()->executeCommand(
                 std::make_unique<UpdateEmergencyAssetCommand>(*assetOpt, updated));
         }
     }
@@ -365,7 +363,7 @@ void EmergencyAssetView::showAssetDialog(const std::optional<EmergencyAssetId>& 
         // Create new asset
         EmergencyAsset asset = EmergencyAsset::create(result->name, m_model->area());
         asset.setPersonIds(newPersons);
-        m_documentManager->executeCommand(
+        DocumentManager::instance()->executeCommand(
             std::make_unique<AddEmergencyAssetCommand>(asset));
     }
 }
@@ -390,6 +388,6 @@ QString EmergencyAssetView::nameLabel() const
 
 void EmergencyAssetView::removePersonFromAsset(const EmergencyAssetId& assetId, const PersonId& personId)
 {
-    m_documentManager->executeCommand(
+    DocumentManager::instance()->executeCommand(
         std::make_unique<UnassignEmergencyAssetFromPersonCommand>(assetId, personId));
 }

@@ -9,8 +9,6 @@
 #include <QHash>
 #include <QPointF>
 
-class DocumentManager;
-
 /// Background geocoding service with reactive document change handling.
 ///
 /// Features:
@@ -29,7 +27,7 @@ class BackgroundGeocodingService : public QObject
     Q_OBJECT
 
 public:
-    explicit BackgroundGeocodingService(DocumentManager* documentManager);
+    explicit BackgroundGeocodingService(QObject* parent);
     ~BackgroundGeocodingService() override;
 
     /// Queue a family for geocoding.
@@ -63,7 +61,6 @@ private slots:
     void onGeocodingComplete(const GeocodingResult& result);
 
 private:
-    DocumentManager* m_documentManager;
     GeocodingService* m_geocodingService;
 
     /// Cache: address string → coordinates.

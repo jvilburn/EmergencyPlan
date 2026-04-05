@@ -8,14 +8,12 @@
 
 #include <algorithm>
 
-NeedsModel::NeedsModel(DocumentManager* documentManager,
-                       Filter* filter,
+NeedsModel::NeedsModel(Filter* filter,
                        QObject* parent)
     : BaseTreeModel(parent)
-    , m_documentManager(documentManager)
     , m_filter(filter)
 {
-    connect(m_documentManager, &DocumentManager::documentChanged,
+    connect(DocumentManager::instance(), &DocumentManager::documentChanged,
             this, &NeedsModel::onDocumentChanged);
     if (m_filter)
     {
@@ -63,7 +61,7 @@ void NeedsModel::rebuild()
 
     clearNodes();
 
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
 
     // Local struct for sorting - avoids storing sortKey in TreeNode after sort
     struct SortEntry
@@ -270,7 +268,7 @@ FamilyAssociation NeedsModel::relatedFamiliesAt(const QModelIndex& index) const
         const TreeNode* personNode = (node->type == ItemType::ContactDetail && node->parent)
                                          ? node->parent
                                          : node;
-        const Document& doc = m_documentManager->document();
+        const Document& doc = DocumentManager::instance()->document();
         std::optional<FamilyId> familyId = doc.familyIdForPerson(personNode->personId);
         if (familyId)
         {
@@ -348,7 +346,7 @@ void NeedsModel::loadContactDetails(const QModelIndex& index)
         return;
     }
 
-    const Document& doc = m_documentManager->document();
+    const Document& doc = DocumentManager::instance()->document();
     std::optional<Person> person = doc.findPersonById(node->personId);
     if (!person)
     {

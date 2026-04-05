@@ -7,7 +7,6 @@
 
 #include <optional>
 
-class DocumentManager;
 class EmergencyAssetModel;
 class FilterBar;
 class QModelIndex;
@@ -22,8 +21,7 @@ class EmergencyAssetView : public QWidget, public FamilyMarkerProvider
     Q_OBJECT
 
 public:
-    explicit EmergencyAssetView(DocumentManager* documentManager,
-                                    ResponseArea area,
+    explicit EmergencyAssetView(ResponseArea area,
                                     QWidget* parent);
 
     // FamilyMarkerProvider interface
@@ -56,7 +54,6 @@ private:
 
     std::optional<EmergencyAssetId> selectedAssetId() const;
 
-    DocumentManager* m_documentManager;
     FilterBar* m_filterBar;
     EmergencyAssetModel* m_model;
     SelectionPreservingTreeView* m_tree;
