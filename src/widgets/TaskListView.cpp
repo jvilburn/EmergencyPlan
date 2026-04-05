@@ -199,6 +199,7 @@ void TaskListView::onSelectionChanged()
     bool hasSelection = m_treeView->currentIndex().isValid();
     m_editButton->setEnabled(hasSelection);
     m_deleteButton->setEnabled(hasSelection);
+    emit highlightChanged();
 }
 
 HighlightInfo TaskListView::highlightInfo() const

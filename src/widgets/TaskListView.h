@@ -27,6 +27,9 @@ public:
     void clearSelection() override;
     void selectFamily(const FamilyId& familyId) override;
 
+signals:
+    void highlightChanged();
+
 private slots:
     void onAddTask();
     void onEditTask();

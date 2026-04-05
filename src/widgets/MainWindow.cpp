@@ -261,6 +261,8 @@ void MainWindow::setupConnections()
             m_mapWidget, &MapWidget::updateHighlights);
     connect(m_recoveryView, &EmergencyAssetView::highlightChanged,
             m_mapWidget, &MapWidget::updateHighlights);
+    connect(m_taskListView, &TaskListView::highlightChanged,
+            m_mapWidget, &MapWidget::updateHighlights);
 
     // Family editing
     connect(m_wardListView, &WardListView::editFamilyRequested,
