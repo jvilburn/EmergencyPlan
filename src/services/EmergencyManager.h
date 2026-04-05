@@ -46,6 +46,7 @@ public:
     void updateTask(const FamilyId& familyId, const ResponseTask& task);
     void removeTask(const FamilyId& familyId, const TaskId& taskId);
     void resolveTask(const FamilyId& familyId, const TaskId& taskId, const QString& notes);
+    void reopenTask(const FamilyId& familyId, const TaskId& taskId);
 
     // Task assignment
     void assignTaskToTeam(const FamilyId& familyId, const TaskId& taskId, const TeamId& teamId, const QString& notes);

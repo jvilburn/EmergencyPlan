@@ -379,6 +379,28 @@ void EmergencyManager::resolveTask(const FamilyId& familyId, const TaskId& taskI
     emit responseDataChanged();
 }
 
+void EmergencyManager::reopenTask(const FamilyId& familyId, const TaskId& taskId)
+{
+    if (!m_response.has_value())
+    {
+        return;
+    }
+    FamilyResponseRecord* record = m_response->mutableRecord(familyId);
+    if (!record)
+    {
+        return;
+    }
+    ResponseTask* task = record->mutableTask(taskId);
+    if (!task)
+    {
+        return;
+    }
+    task->reopen();
+    persistResponseData();
+    emit familyStatusChanged(familyId);
+    emit responseDataChanged();
+}
+
 // ============================================================================
 // Task assignment
 // ============================================================================
