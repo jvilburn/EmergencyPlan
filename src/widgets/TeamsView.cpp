@@ -41,9 +41,18 @@ TeamsView::TeamsView(QWidget* parent)
     m_editButton = new QPushButton(tr("Edit"));
     m_deleteButton = new QPushButton(tr("Delete"));
 
+    m_setLeaderButton = new QPushButton(tr("Set Leader"));
+    m_removeMemberButton = new QPushButton(tr("Remove"));
+    m_removeMemberButton->setStyleSheet("color: #c0392b;");
+
+    m_setLeaderButton->setEnabled(false);
+    m_removeMemberButton->setEnabled(false);
+
     toolbar->addWidget(m_addButton);
     toolbar->addWidget(m_editButton);
     toolbar->addWidget(m_deleteButton);
+    toolbar->addWidget(m_setLeaderButton);
+    toolbar->addWidget(m_removeMemberButton);
     toolbar->addStretch();
 
     layout->addLayout(toolbar);
@@ -65,6 +74,8 @@ TeamsView::TeamsView(QWidget* parent)
     connect(m_addButton, &QPushButton::clicked, this, &TeamsView::addTeam);
     connect(m_editButton, &QPushButton::clicked, this, &TeamsView::editSelectedTeam);
     connect(m_deleteButton, &QPushButton::clicked, this, &TeamsView::deleteTeam);
+    connect(m_setLeaderButton, &QPushButton::clicked, this, &TeamsView::onSetLeaderClicked);
+    connect(m_removeMemberButton, &QPushButton::clicked, this, &TeamsView::onRemoveMemberClicked);
 
     connect(m_tree, &SelectionPreservingTreeView::selectionChanged,
             this, &TeamsView::onSelectionChanged);
@@ -332,11 +343,109 @@ void TeamsView::removeMemberFromContextMenu()
     }
 }
 
+void TeamsView::onSetLeaderClicked()
+{
+    QModelIndex index = m_tree->currentIndex();
+    if (!index.isValid())
+    {
+        return;
+    }
+
+    ItemType type = m_model->itemTypeAt(index);
+    if (type != ItemType::TeamMember)
+    {
+        return;
+    }
+
+    std::optional<TeamId> teamId = m_model->teamIdAt(index);
+    std::optional<PersonId> personId = m_model->personIdAt(index);
+    if (!teamId || !personId)
+    {
+        return;
+    }
+
+    const Document& doc = DocumentManager::instance()->document();
+    std::optional<Team> teamOpt = doc.findTeamById(*teamId);
+    if (!teamOpt)
+    {
+        return;
+    }
+
+    bool isLeader = teamOpt->leaderId() && *teamOpt->leaderId() == *personId;
+    if (isLeader)
+    {
+        clearLeader(*teamId);
+    }
+    else
+    {
+        setLeader(*teamId, *personId);
+    }
+}
+
+void TeamsView::onRemoveMemberClicked()
+{
+    QModelIndex index = m_tree->currentIndex();
+    if (!index.isValid())
+    {
+        return;
+    }
+
+    ItemType type = m_model->itemTypeAt(index);
+    if (type != ItemType::TeamMember)
+    {
+        return;
+    }
+
+    std::optional<TeamId> teamId = m_model->teamIdAt(index);
+    std::optional<PersonId> personId = m_model->personIdAt(index);
+    if (teamId && personId)
+    {
+        removeMemberFromTeam(*teamId, *personId);
+    }
+}
+
 void TeamsView::updateButtonStates()
 {
-    bool hasTeamSelected = selectedTeamId().has_value();
+    QModelIndex index = m_tree->currentIndex();
+    ItemType type = ItemType::Invalid;
+    if (index.isValid())
+    {
+        type = m_model->itemTypeAt(index);
+    }
+
+    // Team-level buttons
+    bool hasTeamSelected = (type == ItemType::Team);
+    m_addButton->setEnabled(true);
     m_editButton->setEnabled(hasTeamSelected);
     m_deleteButton->setEnabled(hasTeamSelected);
+
+    // Member-level buttons
+    bool hasMemberSelected = (type == ItemType::TeamMember);
+    m_removeMemberButton->setEnabled(hasMemberSelected);
+
+    if (hasMemberSelected)
+    {
+        // Toggle label between Set Leader / Clear Leader
+        std::optional<TeamId> teamId = m_model->teamIdAt(index);
+        std::optional<PersonId> personId = m_model->personIdAt(index);
+        if (teamId && personId)
+        {
+            const Document& doc = DocumentManager::instance()->document();
+            std::optional<Team> teamOpt = doc.findTeamById(*teamId);
+            bool isLeader = teamOpt && teamOpt->leaderId() && *teamOpt->leaderId() == *personId;
+            m_setLeaderButton->setText(isLeader ? tr("Clear Leader") : tr("Set Leader"));
+            m_setLeaderButton->setEnabled(true);
+        }
+        else
+        {
+            m_setLeaderButton->setEnabled(false);
+        }
+    }
+    else
+    {
+        m_setLeaderButton->setText(tr("Set Leader"));
+        m_setLeaderButton->setEnabled(false);
+    }
 }
 
 std::optional<TeamId> TeamsView::selectedTeamId() const

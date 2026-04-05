@@ -43,6 +43,8 @@ private slots:
     void setLeaderFromContextMenu();
     void clearLeaderFromContextMenu();
     void removeMemberFromContextMenu();
+    void onSetLeaderClicked();
+    void onRemoveMemberClicked();
 
 private:
     void updateButtonStates();
@@ -74,6 +76,8 @@ private:
     QPushButton* m_addButton;
     QPushButton* m_editButton;
     QPushButton* m_deleteButton;
+    QPushButton* m_setLeaderButton;
+    QPushButton* m_removeMemberButton;
 
     // Context menu state
     std::optional<TeamId> m_contextTeamId;
