@@ -350,35 +350,51 @@ void WardListView::setupEmergencyWidgets()
     m_progressBar = new EmergencyProgressBar(m_emergencyPanel);
     panelLayout->addWidget(m_progressBar);
 
-    // Filter tabs row
-    QWidget* tabRow = new QWidget(m_emergencyPanel);
-    QHBoxLayout* tabLayout = new QHBoxLayout(tabRow);
-    tabLayout->setContentsMargins(0, 0, 0, 0);
-    tabLayout->setSpacing(2);
-
+    // Filter tabs in two rows
     // Tab definitions matching StatusFilterIndex constants
     QStringList tabLabels = {tr("All"), tr("Remaining"), tr("Needs Help"), tr("OK"), tr("Unable to Reach")};
 
+    QWidget* tabRow1 = new QWidget(m_emergencyPanel);
+    QHBoxLayout* tabLayout1 = new QHBoxLayout(tabRow1);
+    tabLayout1->setContentsMargins(0, 0, 0, 0);
+    tabLayout1->setSpacing(2);
+
+    QWidget* tabRow2 = new QWidget(m_emergencyPanel);
+    QHBoxLayout* tabLayout2 = new QHBoxLayout(tabRow2);
+    tabLayout2->setContentsMargins(0, 0, 0, 0);
+    tabLayout2->setSpacing(2);
+
     for (int i = 0; i < tabLabels.size(); ++i)
     {
-        QToolButton* tab = new QToolButton(tabRow);
+        QToolButton* tab = new QToolButton(m_emergencyPanel);
         tab->setText(tabLabels.at(i));
         tab->setCheckable(true);
         tab->setAutoExclusive(true);
         tab->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
         tab->setToolButtonStyle(Qt::ToolButtonTextOnly);
         tab->setProperty("statusIndex", i);
-        tabLayout->addWidget(tab);
         m_filterTabs.append(tab);
 
         connect(tab, &QToolButton::clicked,
                 this, &WardListView::onStatusFilterTabClicked);
+
+        // Row 1: All, Remaining, OK
+        // Row 2: Needs Help, Unable to Reach
+        if (i == StatusFilterIndex::NeedsHelp || i == StatusFilterIndex::UnableToReach)
+        {
+            tabLayout2->addWidget(tab);
+        }
+        else
+        {
+            tabLayout1->addWidget(tab);
+        }
     }
 
     // Default: "All" selected
     m_filterTabs.first()->setChecked(true);
 
-    panelLayout->addWidget(tabRow);
+    panelLayout->addWidget(tabRow1);
+    panelLayout->addWidget(tabRow2);
 
     // Initially hidden
     m_emergencyPanel->hide();
