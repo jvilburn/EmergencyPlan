@@ -611,7 +611,7 @@ void MapWidget::drawMarkers(QPainter& painter)
         return;
     }
 
-    Q_ASSERT_X(false, "MapWidget::drawMarkers", "No highlight provider set");
+    // No marker provider set (e.g., Tasks tab) — nothing to draw
 }
 
 void MapWidget::drawControls(QPainter& /*painter*/)
