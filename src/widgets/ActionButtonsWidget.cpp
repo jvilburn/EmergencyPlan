@@ -2,10 +2,8 @@
 #include "EmergencyManager.h"
 #include "EmergencyResponse.h"
 
-#include <QHBoxLayout>
-#include <QLabel>
+#include <QGridLayout>
 #include <QPushButton>
-#include <QSizePolicy>
 
 ActionButtonsWidget::ActionButtonsWidget(const FamilyId& familyId,
                                          EmergencyManager* emergencyManager,
@@ -15,36 +13,33 @@ ActionButtonsWidget::ActionButtonsWidget(const FamilyId& familyId,
     , m_familyId(familyId)
     , m_emergencyManager(emergencyManager)
 {
-    QHBoxLayout* layout = new QHBoxLayout(this);
-    layout->setContentsMargins(0, 2, 0, 2);
-    layout->setSpacing(8);
+    QGridLayout* layout = new QGridLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(4);
+
+    int row = 0;
 
     // Emergency action buttons (only during active emergency, not archive viewing).
     // Note: isActive() returns true during archive view because m_response holds the archive's
     // response data, so the isViewingArchive() check is needed to distinguish live vs. archive.
     if (m_emergencyManager && m_emergencyManager->isActive() && !m_emergencyManager->isViewingArchive())
     {
-        // Phone number for quick calling
-        if (!phoneNumber.isEmpty())
-        {
-            QLabel* phoneLabel = new QLabel(phoneNumber, this);
-            phoneLabel->setStyleSheet("color: #1976D2; font-weight: bold;");
-            layout->addWidget(phoneLabel);
-        }
-
         QPushButton* okButton = new QPushButton(tr("OK"), this);
         okButton->setStyleSheet("color: #4CAF50; font-weight: bold;");
-        layout->addWidget(okButton);
 
         QPushButton* unreachableButton = new QPushButton(tr("Unable to Reach"), this);
-        unreachableButton->setStyleSheet("color: #FFC107;");
-        layout->addWidget(unreachableButton);
+        unreachableButton->setStyleSheet("color: #E65100;");
+
+        layout->addWidget(okButton, row, 0);
+        layout->addWidget(unreachableButton, row, 1);
+        ++row;
 
         QPushButton* addTaskButton = new QPushButton(tr("Add Task"), this);
-        layout->addWidget(addTaskButton);
-
         QPushButton* logContactButton = new QPushButton(tr("Log Contact"), this);
-        layout->addWidget(logContactButton);
+
+        layout->addWidget(addTaskButton, row, 0);
+        layout->addWidget(logContactButton, row, 1);
+        ++row;
 
         connect(okButton, &QPushButton::clicked,
                 this, &ActionButtonsWidget::onOkClicked);
@@ -54,19 +49,14 @@ ActionButtonsWidget::ActionButtonsWidget(const FamilyId& familyId,
                 this, &ActionButtonsWidget::onAddTaskClicked);
         connect(logContactButton, &QPushButton::clicked,
                 this, &ActionButtonsWidget::onLogContactClicked);
-
-        layout->addSpacing(16);
     }
 
     m_editButton = new QPushButton(tr("Edit"), this);
     m_deleteButton = new QPushButton(tr("Delete"), this);
-
-    // Style delete button to indicate destructive action
     m_deleteButton->setStyleSheet("color: #c0392b;");
 
-    layout->addWidget(m_editButton);
-    layout->addWidget(m_deleteButton);
-    layout->addStretch();
+    layout->addWidget(m_editButton, row, 0);
+    layout->addWidget(m_deleteButton, row, 1);
 
     connect(m_editButton, &QPushButton::clicked,
             this, &ActionButtonsWidget::onEditClicked);
