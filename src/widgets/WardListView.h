@@ -12,7 +12,7 @@ class EmergencyProgressBar;
 class FamilyTreeModel;
 class Filter;
 class FilterBar;
-class QToolButton;
+class QPushButton;
 class SelectionPreservingTreeView;
 
 /// Tree view for ward family list.
@@ -74,5 +74,5 @@ private:
     // Emergency mode widgets (initially hidden)
     QWidget* m_emergencyPanel = nullptr;
     EmergencyProgressBar* m_progressBar = nullptr;
-    QList<QToolButton*> m_filterTabs;
+    QList<QPushButton*> m_filterTabs;
 };

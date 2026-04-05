@@ -19,7 +19,7 @@
 #include <QInputDialog>
 #include <QLineEdit>
 #include <QMenu>
-#include <QToolButton>
+#include <QPushButton>
 #include <QVBoxLayout>
 
 namespace StatusFilterIndex
@@ -366,16 +366,15 @@ void WardListView::setupEmergencyWidgets()
 
     for (int i = 0; i < tabLabels.size(); ++i)
     {
-        QToolButton* tab = new QToolButton(m_emergencyPanel);
+        QPushButton* tab = new QPushButton(m_emergencyPanel);
         tab->setText(tabLabels.at(i));
         tab->setCheckable(true);
         tab->setAutoExclusive(true);
         tab->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-        tab->setToolButtonStyle(Qt::ToolButtonTextOnly);
         tab->setProperty("statusIndex", i);
         m_filterTabs.append(tab);
 
-        connect(tab, &QToolButton::clicked,
+        connect(tab, &QPushButton::clicked,
                 this, &WardListView::onStatusFilterTabClicked);
 
         // Row 1: All, Remaining, OK
@@ -422,7 +421,7 @@ void WardListView::onEmergencyStateChanged()
 
 void WardListView::onStatusFilterTabClicked()
 {
-    QToolButton* tab = qobject_cast<QToolButton*>(sender());
+    QPushButton* tab = qobject_cast<QPushButton*>(sender());
     if (!tab)
     {
         return;
