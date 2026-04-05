@@ -47,13 +47,14 @@ private:
         TaskId taskId;
         QString category;
         QString description;
-        QString assignedTo;
+        std::optional<TeamId> assignedTeamId;
+        std::optional<PersonId> assignedPersonId;
         bool resolved = false;
     };
 
     static bool taskEntryLessThan(const TaskEntry& a, const TaskEntry& b);
-    QString resolveAssignedName(const std::optional<TeamId>& teamId,
-                                const std::optional<PersonId>& personId) const;
+    static QString resolveAssignedName(const std::optional<TeamId>& teamId,
+                                      const std::optional<PersonId>& personId);
 
     DocumentManager* m_documentManager;
     EmergencyManager* m_emergencyManager;

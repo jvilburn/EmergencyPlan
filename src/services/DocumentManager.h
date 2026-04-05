@@ -22,6 +22,9 @@ class DocumentManager : public QObject
 public:
     explicit DocumentManager(QObject* parent);
 
+    /// Global accessor. Valid after construction.
+    static DocumentManager* instance();
+
     // Document access
     const Document& document() const;
 
@@ -105,4 +108,6 @@ private:
 
     // Geocoding
     BackgroundGeocodingService* m_geocodingService;
+
+    static DocumentManager* s_instance;
 };

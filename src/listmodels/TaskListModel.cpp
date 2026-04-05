@@ -55,7 +55,7 @@ QVariant TaskListModel::data(const QModelIndex& index, int role) const
         switch (index.column())
         {
         case AssignedToCol:
-            return entry.assignedTo;
+            return resolveAssignedName(entry.assignedTeamId, entry.assignedPersonId);
         case CategoryCol:
             return entry.category;
         case FamilyCol:
@@ -177,7 +177,8 @@ void TaskListModel::rebuild()
             entry.taskId = task.id();
             entry.category = task.category();
             entry.description = task.description();
-            entry.assignedTo = resolveAssignedName(task.assignedTeamId(), task.assignedPersonId());
+            entry.assignedTeamId = task.assignedTeamId();
+            entry.assignedPersonId = task.assignedPersonId();
             entry.resolved = task.isResolved();
             m_entries.append(entry);
         }
@@ -196,15 +197,17 @@ bool TaskListModel::taskEntryLessThan(const TaskEntry& a, const TaskEntry& b)
         return !a.resolved;  // unresolved first
     }
     // Assigned before unassigned, then alphabetical
-    bool aAssigned = !a.assignedTo.isEmpty();
-    bool bAssigned = !b.assignedTo.isEmpty();
+    QString aName = resolveAssignedName(a.assignedTeamId, a.assignedPersonId);
+    QString bName = resolveAssignedName(b.assignedTeamId, b.assignedPersonId);
+    bool aAssigned = !aName.isEmpty();
+    bool bAssigned = !bName.isEmpty();
     if (aAssigned != bAssigned)
     {
         return aAssigned;
     }
     if (aAssigned && bAssigned)
     {
-        int cmp = a.assignedTo.compare(b.assignedTo, Qt::CaseInsensitive);
+        int cmp = aName.compare(bName, Qt::CaseInsensitive);
         if (cmp != 0)
         {
             return cmp < 0;
@@ -219,19 +222,20 @@ bool TaskListModel::taskEntryLessThan(const TaskEntry& a, const TaskEntry& b)
 }
 
 QString TaskListModel::resolveAssignedName(const std::optional<TeamId>& teamId,
-                                           const std::optional<PersonId>& personId) const
+                                           const std::optional<PersonId>& personId)
 {
+    const Document& doc = DocumentManager::instance()->document();
     if (teamId)
     {
-        auto it = m_documentManager->document().teams().constFind(*teamId);
-        if (it != m_documentManager->document().teams().constEnd())
+        auto it = doc.teams().constFind(*teamId);
+        if (it != doc.teams().constEnd())
         {
             return it.value().name();
         }
     }
     if (personId)
     {
-        const QHash<FamilyId, Family>& families = m_documentManager->document().families();
+        const QHash<FamilyId, Family>& families = doc.families();
         for (auto it = families.constBegin(); it != families.constEnd(); ++it)
         {
             for (const Person& person : it.value().members())

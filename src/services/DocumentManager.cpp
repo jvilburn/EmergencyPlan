@@ -24,6 +24,8 @@ static QString buildUniquePath(const QString& dir, const QString& basename, cons
     return dir + "/" + basename + " (" + QString::number(counter) + ")" + extension;
 }
 
+DocumentManager* DocumentManager::s_instance = nullptr;
+
 DocumentManager::DocumentManager(QObject* parent)
     : QObject(parent)
     , m_document(Document::empty())
@@ -31,6 +33,8 @@ DocumentManager::DocumentManager(QObject* parent)
     , m_unitLookupService(new UnitLookupService(this))
     , m_geocodingService(new BackgroundGeocodingService(this))
 {
+    Q_ASSERT(!s_instance);
+    s_instance = this;
     connect(&m_commandHistory, &CommandHistory::canUndoChanged, this, &DocumentManager::canUndoChanged);
     connect(&m_commandHistory, &CommandHistory::canRedoChanged, this, &DocumentManager::canRedoChanged);
     connect(&m_commandHistory, &CommandHistory::dirtyChanged, this, &DocumentManager::dirtyChanged);
@@ -48,6 +52,11 @@ DocumentManager::DocumentManager(QObject* parent)
             this, &DocumentManager::onFamilyGeocoded);
     connect(m_geocodingService, &BackgroundGeocodingService::finished,
             this, &DocumentManager::onGeocodingFinished);
+}
+
+DocumentManager* DocumentManager::instance()
+{
+    return s_instance;
 }
 
 const Document& DocumentManager::document() const

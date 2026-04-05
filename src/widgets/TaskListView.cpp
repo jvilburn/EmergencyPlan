@@ -6,6 +6,7 @@
 #include "EmergencyResponse.h"
 #include "Family.h"
 #include "TaskDialog.h"
+#include "Team.h"
 
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -198,4 +199,90 @@ void TaskListView::onSelectionChanged()
     bool hasSelection = m_treeView->currentIndex().isValid();
     m_editButton->setEnabled(hasSelection);
     m_deleteButton->setEnabled(hasSelection);
+}
+
+HighlightInfo TaskListView::highlightInfo() const
+{
+    HighlightInfo info;
+    QModelIndex index = m_treeView->currentIndex();
+    if (!index.isValid())
+    {
+        return info;
+    }
+
+    int row = index.row();
+    FamilyId familyId = m_model->familyIdForRow(row);
+    info.highlightedFamilyIds.insert(familyId);
+
+    const FamilyResponseRecord* record = m_emergencyManager->recordForFamily(familyId);
+    if (!record)
+    {
+        return info;
+    }
+
+    TaskId taskId = m_model->taskIdForRow(row);
+    const ResponseTask* task = nullptr;
+    for (const ResponseTask& t : record->tasks())
+    {
+        if (t.id() == taskId)
+        {
+            task = &t;
+            break;
+        }
+    }
+    if (!task)
+    {
+        return info;
+    }
+
+    const Document& doc = m_documentManager->document();
+
+    if (task->assignedPersonId())
+    {
+        std::optional<FamilyId> assigneeFamilyId = doc.familyIdForPerson(*task->assignedPersonId());
+        if (assigneeFamilyId)
+        {
+            info.contactPointFamilyIds.insert(*assigneeFamilyId);
+        }
+    }
+    else if (task->assignedTeamId())
+    {
+        std::optional<Team> team = doc.findTeamById(*task->assignedTeamId());
+        if (team)
+        {
+            for (const PersonId& personId : team->memberIds())
+            {
+                std::optional<FamilyId> memberFamilyId = doc.familyIdForPerson(personId);
+                if (memberFamilyId)
+                {
+                    info.contactPointFamilyIds.insert(*memberFamilyId);
+                }
+            }
+        }
+    }
+
+    return info;
+}
+
+QSet<FamilyId> TaskListView::visibleFamilyIds() const
+{
+    return {};  // show all families
+}
+
+void TaskListView::clearSelection()
+{
+    m_treeView->clearSelection();
+}
+
+void TaskListView::selectFamily(const FamilyId& familyId)
+{
+    // Find the first task row for this family and select it
+    for (int row = 0; row < m_model->rowCount(); ++row)
+    {
+        if (m_model->familyIdForRow(row) == familyId)
+        {
+            m_treeView->setCurrentIndex(m_model->index(row, 0));
+            return;
+        }
+    }
 }

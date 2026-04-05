@@ -1,5 +1,7 @@
 #pragma once
 
+#include "FamilyMarkerProvider.h"
+
 #include <QWidget>
 
 class QTreeView;
@@ -8,7 +10,7 @@ class DocumentManager;
 class EmergencyManager;
 class TaskListModel;
 
-class TaskListView : public QWidget
+class TaskListView : public QWidget, public FamilyMarkerProvider
 {
     Q_OBJECT
 
@@ -18,6 +20,12 @@ public:
                           QWidget* parent);
 
     void rebuild();
+
+    // FamilyMarkerProvider
+    HighlightInfo highlightInfo() const override;
+    QSet<FamilyId> visibleFamilyIds() const override;
+    void clearSelection() override;
+    void selectFamily(const FamilyId& familyId) override;
 
 private slots:
     void onAddTask();
