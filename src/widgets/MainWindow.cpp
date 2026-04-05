@@ -1050,7 +1050,7 @@ void MainWindow::onEmergencyStarted()
     m_emergencyBanner->setEmergencyName(EmergencyManager::instance()->response().name());
     m_taskListView->rebuild();
     m_sidebarTabs->setPageVisible(m_taskListTabIndex, true);
-    m_splitter->setSizes({500, 0, 1100});
+    m_splitter->setSizes({600, 0, 1100});
     updateEmergencyActions();
 }
 
@@ -1067,7 +1067,7 @@ void MainWindow::onArchiveViewOpened()
     m_emergencyBanner->setArchiveName(EmergencyManager::instance()->response().name());
     m_taskListView->rebuild();
     m_sidebarTabs->setPageVisible(m_taskListTabIndex, true);
-    m_splitter->setSizes({500, 0, 1100});
+    m_splitter->setSizes({600, 0, 1100});
     updateEmergencyActions();
 }
 
