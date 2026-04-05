@@ -126,7 +126,7 @@ public:
     const std::optional<QDateTime>& resolvedAt() const { return m_resolvedAt; }
 
     void resolve(const QString& notes);
-    void unresolve();
+    void reopen();
 
     bool isAssigned() const;
     bool isNotified() const;

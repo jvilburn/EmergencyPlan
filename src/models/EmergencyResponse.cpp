@@ -204,7 +204,7 @@ void ResponseTask::resolve(const QString& notes)
     m_resolvedAt = QDateTime::currentDateTimeUtc();
 }
 
-void ResponseTask::unresolve()
+void ResponseTask::reopen()
 {
     m_resolved = false;
     m_resolutionNotes.clear();
