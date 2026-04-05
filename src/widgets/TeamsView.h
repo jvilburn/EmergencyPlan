@@ -7,7 +7,6 @@
 
 #include <optional>
 
-class EmergencyManager;
 class FilterBar;
 class QPushButton;
 class QModelIndex;
@@ -23,8 +22,7 @@ class TeamsView : public QWidget, public FamilyMarkerProvider
     Q_OBJECT
 
 public:
-    explicit TeamsView(EmergencyManager* emergencyManager,
-                       QWidget* parent);
+    explicit TeamsView(QWidget* parent);
 
     // FamilyMarkerProvider interface
     HighlightInfo highlightInfo() const override;
@@ -69,7 +67,6 @@ private:
 
     std::optional<TeamId> selectedTeamId() const;
 
-    EmergencyManager* m_emergencyManager;
     FilterBar* m_filterBar;
     TeamsTreeModel* m_model;
     SelectionPreservingTreeView* m_tree;

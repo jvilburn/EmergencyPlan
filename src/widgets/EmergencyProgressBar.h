@@ -2,7 +2,6 @@
 
 #include <QWidget>
 
-class EmergencyManager;
 class QLabel;
 
 /// Segmented progress bar showing emergency contact status counts.
@@ -12,7 +11,7 @@ class EmergencyProgressBar : public QWidget
     Q_OBJECT
 
 public:
-    explicit EmergencyProgressBar(EmergencyManager* emergencyManager, QWidget* parent);
+    explicit EmergencyProgressBar(QWidget* parent);
 
 public slots:
     void updateCounts();
@@ -21,7 +20,6 @@ protected:
     void paintEvent(QPaintEvent* event) override;
 
 private:
-    EmergencyManager* m_emergencyManager;
     QLabel* m_summaryLabel = nullptr;
 
     int m_okCount = 0;

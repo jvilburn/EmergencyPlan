@@ -6,7 +6,6 @@
 #include <QList>
 #include <QString>
 
-class EmergencyManager;
 class MinisteringDistrict;
 class Filter;
 
@@ -33,8 +32,7 @@ public:
     };
     Q_ENUM(Roles)
 
-    explicit MinisteringModel(EmergencyManager* emergencyManager,
-                               Filter* filter,
+    explicit MinisteringModel(Filter* filter,
                                MinisteringOrg org,
                                QObject* parent);
     ~MinisteringModel() override;
@@ -116,7 +114,6 @@ private:
                                 TreeNode* districtNode) const;
 
     QList<TreeNode*> m_districtNodes;  // Top-level nodes (owned)
-    EmergencyManager* m_emergencyManager;
     Filter* m_filter;
     MinisteringOrg m_org;
 };

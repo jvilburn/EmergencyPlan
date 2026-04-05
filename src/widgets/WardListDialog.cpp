@@ -56,7 +56,7 @@ void WardListDialog::setupUi()
     // Create appropriate model based on mode, then tree view with model
     if (m_mode == FamilyMode)
     {
-        m_familyModel = new FamilyTreeModel(nullptr, m_filterBar->filter(), m_checkable, this);
+        m_familyModel = new FamilyTreeModel(m_filterBar->filter(), m_checkable, this);
         m_treeView = new SelectionPreservingTreeView(m_familyModel, this);
     }
     else

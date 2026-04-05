@@ -5,7 +5,6 @@
 
 #include <QWidget>
 
-class EmergencyManager;
 class FilterBar;
 class MinisteringModel;
 class UnassignedMinisteringModel;
@@ -20,8 +19,7 @@ class MinisteringTabView : public QWidget, public FamilyMarkerProvider
     Q_OBJECT
 
 public:
-    explicit MinisteringTabView(EmergencyManager* emergencyManager,
-                                 MinisteringOrg org,
+    explicit MinisteringTabView(MinisteringOrg org,
                                  QWidget* parent);
 
     HighlightInfo highlightInfo() const override;

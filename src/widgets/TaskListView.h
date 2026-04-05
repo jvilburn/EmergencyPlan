@@ -6,7 +6,6 @@
 
 class QTreeView;
 class QPushButton;
-class EmergencyManager;
 class TaskListModel;
 
 class TaskListView : public QWidget, public FamilyMarkerProvider
@@ -14,8 +13,7 @@ class TaskListView : public QWidget, public FamilyMarkerProvider
     Q_OBJECT
 
 public:
-    explicit TaskListView(EmergencyManager* emergencyManager,
-                          QWidget* parent);
+    explicit TaskListView(QWidget* parent);
 
     void rebuild();
 
@@ -35,7 +33,6 @@ private slots:
     void onSelectionChanged();
 
 private:
-    EmergencyManager* m_emergencyManager;
     TaskListModel* m_model;
     QTreeView* m_treeView;
     QPushButton* m_addButton;

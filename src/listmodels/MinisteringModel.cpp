@@ -13,12 +13,10 @@
 #include <algorithm>
 #include <QFont>
 
-MinisteringModel::MinisteringModel(EmergencyManager* emergencyManager,
-                                     Filter* filter,
+MinisteringModel::MinisteringModel(Filter* filter,
                                      MinisteringOrg org,
                                      QObject* parent)
     : BaseTreeModel(parent)
-    , m_emergencyManager(emergencyManager)
     , m_filter(filter)
     , m_org(org)
 {
@@ -28,19 +26,16 @@ MinisteringModel::MinisteringModel(EmergencyManager* emergencyManager,
     {
         connect(m_filter, &Filter::changed, this, &MinisteringModel::rebuild);
     }
-    if (m_emergencyManager)
-    {
-        connect(m_emergencyManager, &EmergencyManager::familyStatusChanged,
-                this, &MinisteringModel::onFamilyStatusChanged);
-        connect(m_emergencyManager, &EmergencyManager::emergencyStarted,
-                this, &MinisteringModel::onEmergencyStateChanged);
-        connect(m_emergencyManager, &EmergencyManager::emergencyEnded,
-                this, &MinisteringModel::onEmergencyStateChanged);
-        connect(m_emergencyManager, &EmergencyManager::archiveViewOpened,
-                this, &MinisteringModel::onEmergencyStateChanged);
-        connect(m_emergencyManager, &EmergencyManager::archiveViewClosed,
-                this, &MinisteringModel::onEmergencyStateChanged);
-    }
+    connect(EmergencyManager::instance(), &EmergencyManager::familyStatusChanged,
+            this, &MinisteringModel::onFamilyStatusChanged);
+    connect(EmergencyManager::instance(), &EmergencyManager::emergencyStarted,
+            this, &MinisteringModel::onEmergencyStateChanged);
+    connect(EmergencyManager::instance(), &EmergencyManager::emergencyEnded,
+            this, &MinisteringModel::onEmergencyStateChanged);
+    connect(EmergencyManager::instance(), &EmergencyManager::archiveViewOpened,
+            this, &MinisteringModel::onEmergencyStateChanged);
+    connect(EmergencyManager::instance(), &EmergencyManager::archiveViewClosed,
+            this, &MinisteringModel::onEmergencyStateChanged);
     rebuild();
 }
 
@@ -215,7 +210,7 @@ void MinisteringModel::addMinistersSection(TreeNode* companionshipNode, const Mi
         ministerNode->personId = ministerData.second;
 
         // Append phone number during emergency
-        if (m_emergencyManager && m_emergencyManager->isActive())
+        if (EmergencyManager::instance() && EmergencyManager::instance()->isActive())
         {
             std::optional<Person> p = doc.findPersonById(ministerData.second);
             if (p && !p->phone().isEmpty())
@@ -463,7 +458,7 @@ QVariant MinisteringModel::data(const QModelIndex& index, int role) const
         return node->displayText;
 
     case Qt::DecorationRole:
-        if (m_emergencyManager && m_emergencyManager->isActive())
+        if (EmergencyManager::instance() && EmergencyManager::instance()->isActive())
         {
             if (node->type == ItemType::MinisteredFamily
                 || node->type == ItemType::MinisteredSister)
@@ -471,7 +466,7 @@ QVariant MinisteringModel::data(const QModelIndex& index, int role) const
                 FamilyId fid = familyIdForNode(node);
                 if (!fid.isNull())
                 {
-                    EffectiveContactStatus status = m_emergencyManager->familyStatus(fid);
+                    EffectiveContactStatus status = EmergencyManager::instance()->familyStatus(fid);
                     if (status != EffectiveContactStatus::NotContacted)
                     {
                         return StatusIcons::iconForStatus(status);
@@ -1177,7 +1172,7 @@ FamilyId MinisteringModel::familyIdForNode(const TreeNode* node) const
 
 QString MinisteringModel::compactStatusSummary(TreeNode* companionshipNode) const
 {
-    if (!m_emergencyManager || !m_emergencyManager->isActive())
+    if (!EmergencyManager::instance() || !EmergencyManager::instance()->isActive())
     {
         return QString();
     }
@@ -1198,7 +1193,7 @@ QString MinisteringModel::compactStatusSummary(TreeNode* companionshipNode) cons
             continue;
         }
 
-        EffectiveContactStatus status = m_emergencyManager->familyStatus(fid);
+        EffectiveContactStatus status = EmergencyManager::instance()->familyStatus(fid);
         switch (status)
         {
         case EffectiveContactStatus::OK:
@@ -1221,7 +1216,7 @@ QString MinisteringModel::compactStatusSummary(TreeNode* companionshipNode) cons
 
 QString MinisteringModel::districtProgressText(TreeNode* districtNode) const
 {
-    if (!m_emergencyManager || !m_emergencyManager->isActive())
+    if (!EmergencyManager::instance() || !EmergencyManager::instance()->isActive())
     {
         return QString();
     }
@@ -1252,7 +1247,7 @@ QString MinisteringModel::districtProgressText(TreeNode* districtNode) const
             }
 
             total++;
-            EffectiveContactStatus status = m_emergencyManager->familyStatus(fid);
+            EffectiveContactStatus status = EmergencyManager::instance()->familyStatus(fid);
             if (status != EffectiveContactStatus::NotContacted)
             {
                 contacted++;
@@ -1270,7 +1265,7 @@ QString MinisteringModel::districtProgressText(TreeNode* districtNode) const
 
 QString MinisteringModel::districtLeaderPhone(const MinisteringDistrict& district) const
 {
-    if (!m_emergencyManager || !m_emergencyManager->isActive())
+    if (!EmergencyManager::instance() || !EmergencyManager::instance()->isActive())
     {
         return QString();
     }

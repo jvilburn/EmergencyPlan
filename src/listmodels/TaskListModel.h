@@ -5,8 +5,6 @@
 #include <QAbstractTableModel>
 #include <optional>
 
-class EmergencyManager;
-
 class TaskListModel : public QAbstractTableModel
 {
     Q_OBJECT
@@ -22,8 +20,7 @@ public:
         ColumnCount
     };
 
-    explicit TaskListModel(EmergencyManager* emergencyManager,
-                           QObject* parent);
+    explicit TaskListModel(QObject* parent);
 
     int rowCount(const QModelIndex& parent = QModelIndex()) const override;
     int columnCount(const QModelIndex& parent = QModelIndex()) const override;
@@ -54,6 +51,5 @@ private:
     static QString resolveAssignedName(const std::optional<TeamId>& teamId,
                                       const std::optional<PersonId>& personId);
 
-    EmergencyManager* m_emergencyManager;
     QList<TaskEntry> m_entries;
 };

@@ -7,12 +7,10 @@
 #include "Person.h"
 #include "Team.h"
 
-TaskListModel::TaskListModel(EmergencyManager* emergencyManager,
-                             QObject* parent)
+TaskListModel::TaskListModel(QObject* parent)
     : QAbstractTableModel(parent)
-    , m_emergencyManager(emergencyManager)
 {
-    connect(m_emergencyManager, &EmergencyManager::responseDataChanged,
+    connect(EmergencyManager::instance(), &EmergencyManager::responseDataChanged,
             this, &TaskListModel::rebuild);
 }
 
@@ -114,11 +112,11 @@ bool TaskListModel::setData(const QModelIndex& index, const QVariant& value, int
 
     if (checked)
     {
-        m_emergencyManager->resolveTask(entry.familyId, entry.taskId, QString());
+        EmergencyManager::instance()->resolveTask(entry.familyId, entry.taskId, QString());
     }
     else
     {
-        m_emergencyManager->reopenTask(entry.familyId, entry.taskId);
+        EmergencyManager::instance()->reopenTask(entry.familyId, entry.taskId);
     }
 
     // rebuild() will be triggered by responseDataChanged signal
@@ -140,13 +138,13 @@ void TaskListModel::rebuild()
     beginResetModel();
     m_entries.clear();
 
-    if (!m_emergencyManager->isActive())
+    if (!EmergencyManager::instance()->isActive())
     {
         endResetModel();
         return;
     }
 
-    const EmergencyResponse& response = m_emergencyManager->response();
+    const EmergencyResponse& response = EmergencyManager::instance()->response();
     const QHash<FamilyId, FamilyResponseRecord>& records = response.familyRecords();
     const QHash<FamilyId, Family>& families = DocumentManager::instance()->document().families();
 

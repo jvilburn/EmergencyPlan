@@ -18,7 +18,6 @@ class SidebarWidget;
 class TaskListView;
 class TeamsView;
 class EmergencyBanner;
-class EmergencyManager;
 class GeoLocation;
 
 class MainWindow : public QMainWindow
@@ -89,9 +88,6 @@ private:
     static void saveDefaultLocation(double lat, double lng);
     static void saveLastDocumentPath(const QString& filePath);
     static QString loadLastDocumentPath();
-
-    // Core services
-    EmergencyManager* m_emergencyManager;
 
     // Widgets
     QSplitter* m_splitter;

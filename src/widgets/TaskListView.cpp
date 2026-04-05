@@ -16,10 +16,8 @@
 #include <QTreeView>
 #include <QVBoxLayout>
 
-TaskListView::TaskListView(EmergencyManager* emergencyManager,
-                           QWidget* parent)
+TaskListView::TaskListView(QWidget* parent)
     : QWidget(parent)
-    , m_emergencyManager(emergencyManager)
 {
     QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -44,7 +42,7 @@ TaskListView::TaskListView(EmergencyManager* emergencyManager,
     layout->addLayout(buttonBar);
 
     // Table
-    m_model = new TaskListModel(emergencyManager, this);
+    m_model = new TaskListModel(this);
 
     m_treeView = new QTreeView(this);
     m_treeView->setModel(m_model);
@@ -113,7 +111,7 @@ void TaskListView::onAddTask()
 
     FamilyId familyId = familyList.at(selectedIndex).second;
 
-    TaskDialog dialog(m_emergencyManager, this);
+    TaskDialog dialog(this);
     if (dialog.exec() != QDialog::Accepted)
     {
         return;
@@ -122,7 +120,7 @@ void TaskListView::onAddTask()
     std::optional<ResponseTask> task = dialog.result();
     if (task)
     {
-        m_emergencyManager->addTask(familyId, *task);
+        EmergencyManager::instance()->addTask(familyId, *task);
     }
 }
 
@@ -137,7 +135,7 @@ void TaskListView::onEditTask()
     FamilyId familyId = m_model->familyIdForRow(index.row());
     TaskId taskId = m_model->taskIdForRow(index.row());
 
-    const FamilyResponseRecord* record = m_emergencyManager->recordForFamily(familyId);
+    const FamilyResponseRecord* record = EmergencyManager::instance()->recordForFamily(familyId);
     if (!record)
     {
         return;
@@ -157,7 +155,7 @@ void TaskListView::onEditTask()
         return;
     }
 
-    TaskDialog dialog(m_emergencyManager, this);
+    TaskDialog dialog(this);
     dialog.setTask(*existingTask);
     if (dialog.exec() != QDialog::Accepted)
     {
@@ -167,7 +165,7 @@ void TaskListView::onEditTask()
     std::optional<ResponseTask> updatedTask = dialog.result();
     if (updatedTask)
     {
-        m_emergencyManager->updateTask(familyId, *updatedTask);
+        EmergencyManager::instance()->updateTask(familyId, *updatedTask);
     }
 }
 
@@ -188,7 +186,7 @@ void TaskListView::onDeleteTask()
 
     if (result == QMessageBox::Yes)
     {
-        m_emergencyManager->removeTask(familyId, taskId);
+        EmergencyManager::instance()->removeTask(familyId, taskId);
     }
 }
 
@@ -213,7 +211,7 @@ HighlightInfo TaskListView::highlightInfo() const
     FamilyId familyId = m_model->familyIdForRow(row);
     info.highlightedFamilyIds.insert(familyId);
 
-    const FamilyResponseRecord* record = m_emergencyManager->recordForFamily(familyId);
+    const FamilyResponseRecord* record = EmergencyManager::instance()->recordForFamily(familyId);
     if (!record)
     {
         return info;

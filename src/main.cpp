@@ -2,6 +2,7 @@
 #include <QFile>
 #include <QIcon>
 #include "DocumentManager.h"
+#include "EmergencyManager.h"
 #include "MainWindow.h"
 #include "TileService.h"
 
@@ -22,6 +23,9 @@ int main(int argc, char *argv[])
 
     // Initialize document manager (singleton)
     DocumentManager documentManager(nullptr);
+
+    // Initialize emergency manager (singleton)
+    EmergencyManager emergencyManager(nullptr);
 
     // Initialize tile service for map rendering
     TileService tileService(nullptr);

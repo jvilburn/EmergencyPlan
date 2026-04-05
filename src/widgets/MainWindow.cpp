@@ -46,7 +46,6 @@
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
-    , m_emergencyManager(new EmergencyManager(this))
 {
     setupUi();
     setupMenus();
@@ -103,19 +102,19 @@ void MainWindow::setupUi()
     m_sidebarTabs = new SidebarWidget(5, m_splitter);
 
     // Row 1
-    m_wardListView = new WardListView(m_emergencyManager, this);
+    m_wardListView = new WardListView(this);
     m_sidebarTabs->addPage(m_wardListView, tr("Families"));
 
-    m_ministeringView = new MinisteringView(m_emergencyManager, this);
+    m_ministeringView = new MinisteringView(this);
     m_sidebarTabs->addPage(m_ministeringView, tr("Ministering"));
 
-    m_teamsView = new TeamsView(m_emergencyManager, this);
+    m_teamsView = new TeamsView(this);
     m_sidebarTabs->addPage(m_teamsView, tr("Teams"));
 
     m_needsView = new NeedsSubView(this);
     m_sidebarTabs->addPage(m_needsView, tr("Needs"));
 
-    m_taskListView = new TaskListView(m_emergencyManager, this);
+    m_taskListView = new TaskListView(this);
     m_taskListTabIndex = m_sidebarTabs->count();
     m_sidebarTabs->addPage(m_taskListView, tr("Tasks"));
     m_sidebarTabs->setPageVisible(m_taskListTabIndex, false);
@@ -226,18 +225,18 @@ void MainWindow::setupConnections()
             this, &MainWindow::updateUndoRedoActions);
 
     // Emergency lifecycle
-    connect(m_emergencyManager, &EmergencyManager::emergencyStarted,
+    connect(EmergencyManager::instance(), &EmergencyManager::emergencyStarted,
             this, &MainWindow::onEmergencyStarted);
-    connect(m_emergencyManager, &EmergencyManager::emergencyEnded,
+    connect(EmergencyManager::instance(), &EmergencyManager::emergencyEnded,
             this, &MainWindow::onEmergencyEnded);
-    connect(m_emergencyManager, &EmergencyManager::archiveViewOpened,
+    connect(EmergencyManager::instance(), &EmergencyManager::archiveViewOpened,
             this, &MainWindow::onArchiveViewOpened);
-    connect(m_emergencyManager, &EmergencyManager::archiveViewClosed,
+    connect(EmergencyManager::instance(), &EmergencyManager::archiveViewClosed,
             this, &MainWindow::onArchiveViewClosed);
-    connect(m_emergencyManager, &EmergencyManager::responseDataChanged,
+    connect(EmergencyManager::instance(), &EmergencyManager::responseDataChanged,
             m_mapWidget, &MapWidget::updateHighlights);
     connect(m_emergencyBanner, &EmergencyBanner::closeArchiveRequested,
-            m_emergencyManager, &EmergencyManager::closeArchive);
+            EmergencyManager::instance(), &EmergencyManager::closeArchive);
 
     // Sidebar tab changes
     connect(m_sidebarTabs, &SidebarWidget::currentChanged,
@@ -914,13 +913,13 @@ void MainWindow::onStartEmergency()
         return;
     }
 
-    m_emergencyManager->startEmergency(name.trimmed());
+    EmergencyManager::instance()->startEmergency(name.trimmed());
     statusBar()->showMessage(tr("Emergency \"%1\" started").arg(name.trimmed()), 5000);
 }
 
 void MainWindow::onEndEmergency()
 {
-    QString emergencyName = m_emergencyManager->response().name();
+    QString emergencyName = EmergencyManager::instance()->response().name();
 
     // Custom dialog with Archive & End, Discard & End, Cancel
     QMessageBox dialog(this);
@@ -977,7 +976,7 @@ void MainWindow::onEndEmergency()
         }
     }
 
-    m_emergencyManager->endEmergency(archive);
+    EmergencyManager::instance()->endEmergency(archive);
     if (archive)
     {
         statusBar()->showMessage(tr("Emergency \"%1\" archived").arg(emergencyName), 5000);
@@ -995,12 +994,12 @@ void MainWindow::generateEmergencyReport()
 
 bool MainWindow::generateEmergencyReportWithConfirm()
 {
-    if (!m_emergencyManager->isActive())
+    if (!EmergencyManager::instance()->isActive())
     {
         return false;
     }
 
-    const EmergencyResponse& response = m_emergencyManager->response();
+    const EmergencyResponse& response = EmergencyManager::instance()->response();
 
     // Default filename based on emergency name and date
     QString defaultName = response.name().simplified().replace(' ', '_')
@@ -1048,7 +1047,7 @@ bool MainWindow::generateEmergencyReportWithConfirm()
 
 void MainWindow::onEmergencyStarted()
 {
-    m_emergencyBanner->setEmergencyName(m_emergencyManager->response().name());
+    m_emergencyBanner->setEmergencyName(EmergencyManager::instance()->response().name());
     m_taskListView->rebuild();
     m_sidebarTabs->setPageVisible(m_taskListTabIndex, true);
     updateEmergencyActions();
@@ -1063,7 +1062,7 @@ void MainWindow::onEmergencyEnded()
 
 void MainWindow::onArchiveViewOpened()
 {
-    m_emergencyBanner->setArchiveName(m_emergencyManager->response().name());
+    m_emergencyBanner->setArchiveName(EmergencyManager::instance()->response().name());
     m_taskListView->rebuild();
     m_sidebarTabs->setPageVisible(m_taskListTabIndex, true);
     updateEmergencyActions();
@@ -1071,16 +1070,16 @@ void MainWindow::onArchiveViewOpened()
 
 void MainWindow::onArchiveViewClosed()
 {
-    if (m_emergencyManager->isActive())
+    if (EmergencyManager::instance()->isActive())
     {
-        m_emergencyBanner->setEmergencyName(m_emergencyManager->response().name());
+        m_emergencyBanner->setEmergencyName(EmergencyManager::instance()->response().name());
     }
     else
     {
         m_emergencyBanner->clearBanner();
     }
-    m_sidebarTabs->setPageVisible(m_taskListTabIndex, m_emergencyManager->isActive());
-    if (m_emergencyManager->isActive())
+    m_sidebarTabs->setPageVisible(m_taskListTabIndex, EmergencyManager::instance()->isActive());
+    if (EmergencyManager::instance()->isActive())
     {
         m_taskListView->rebuild();
     }
@@ -1119,7 +1118,7 @@ void MainWindow::onOpenArchive()
     case ArchiveBrowserDialog::Action::View:
     {
         QString errorMessage;
-        if (!m_emergencyManager->loadArchive(selectedPath, &errorMessage))
+        if (!EmergencyManager::instance()->loadArchive(selectedPath, &errorMessage))
         {
             QMessageBox::critical(this, tr("Open Archive Failed"), errorMessage);
         }
@@ -1143,26 +1142,26 @@ void MainWindow::onOpenArchive()
         }
 
         // End current emergency first (always archive to preserve data)
-        if (m_emergencyManager->isActive())
+        if (EmergencyManager::instance()->isActive())
         {
-            m_emergencyManager->endEmergency(true);
+            EmergencyManager::instance()->endEmergency(true);
 
             // If still active, archive save failed — abort reopen
-            if (m_emergencyManager->isActive())
+            if (EmergencyManager::instance()->isActive())
             {
                 break;
             }
         }
 
         QString errorMessage;
-        if (!m_emergencyManager->reopenArchive(selectedPath, &errorMessage))
+        if (!EmergencyManager::instance()->reopenArchive(selectedPath, &errorMessage))
         {
             QMessageBox::critical(this, tr("Reopen Failed"), errorMessage);
         }
         else
         {
             statusBar()->showMessage(
-                tr("Emergency \"%1\" reopened").arg(m_emergencyManager->response().name()),
+                tr("Emergency \"%1\" reopened").arg(EmergencyManager::instance()->response().name()),
                 5000);
         }
         break;
@@ -1175,8 +1174,8 @@ void MainWindow::onOpenArchive()
 
 void MainWindow::updateEmergencyActions()
 {
-    bool active = m_emergencyManager->isActive();
-    bool viewing = m_emergencyManager->isViewingArchive();
+    bool active = EmergencyManager::instance()->isActive();
+    bool viewing = EmergencyManager::instance()->isViewingArchive();
     bool hasDocument = !DocumentManager::instance()->filePath().isEmpty();
     m_startEmergencyAction->setEnabled(!active && !viewing);
     m_endEmergencyAction->setEnabled(active && !viewing);

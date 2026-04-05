@@ -16,10 +16,8 @@
 #include <QRadioButton>
 #include <QVBoxLayout>
 
-TaskDialog::TaskDialog(EmergencyManager* emergencyManager,
-                       QWidget* parent)
+TaskDialog::TaskDialog(QWidget* parent)
     : QDialog(parent)
-    , m_emergencyManager(emergencyManager)
 {
     setWindowTitle(tr("Add Task"));
     setMinimumWidth(400);
@@ -31,7 +29,7 @@ TaskDialog::TaskDialog(EmergencyManager* emergencyManager,
     layout->addWidget(categoryLabel);
 
     m_categoryCombo = new QComboBox(this);
-    QStringList categories = m_emergencyManager->taskCategories();
+    QStringList categories = EmergencyManager::instance()->taskCategories();
     for (const QString& cat : categories)
     {
         m_categoryCombo->addItem(cat);
@@ -257,7 +255,7 @@ void TaskDialog::onCategoryActivated(int index)
     }
 
     name = name.trimmed();
-    m_emergencyManager->addTaskCategory(name);
+    EmergencyManager::instance()->addTaskCategory(name);
 
     // Insert before the "+ Add new..." item
     int insertIndex = m_categoryCombo->count() - 1;

@@ -5,7 +5,6 @@
 #include <QWidget>
 
 class QPushButton;
-class EmergencyManager;
 
 /// Widget with Edit/Delete buttons and optional emergency action buttons.
 /// Used in the tree view via setIndexWidget().
@@ -15,7 +14,6 @@ class ActionButtonsWidget : public QWidget
 
 public:
     explicit ActionButtonsWidget(const FamilyId& familyId,
-                                 EmergencyManager* emergencyManager,
                                  QWidget* parent);
 
     const FamilyId& familyId() const { return m_familyId; }
@@ -36,7 +34,6 @@ private slots:
 
 private:
     FamilyId m_familyId;
-    EmergencyManager* m_emergencyManager = nullptr;
     QPushButton* m_editButton = nullptr;
     QPushButton* m_deleteButton = nullptr;
 };

@@ -5,9 +5,8 @@
 #include <QPainter>
 #include <QVBoxLayout>
 
-EmergencyProgressBar::EmergencyProgressBar(EmergencyManager* emergencyManager, QWidget* parent)
+EmergencyProgressBar::EmergencyProgressBar(QWidget* parent)
     : QWidget(parent)
-    , m_emergencyManager(emergencyManager)
 {
     QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 2, 0, 2);
@@ -21,7 +20,7 @@ EmergencyProgressBar::EmergencyProgressBar(EmergencyManager* emergencyManager, Q
     setMinimumHeight(30);
     setMaximumHeight(40);
 
-    connect(m_emergencyManager, &EmergencyManager::responseDataChanged,
+    connect(EmergencyManager::instance(), &EmergencyManager::responseDataChanged,
             this, &EmergencyProgressBar::updateCounts);
 
     updateCounts();
@@ -29,11 +28,11 @@ EmergencyProgressBar::EmergencyProgressBar(EmergencyManager* emergencyManager, Q
 
 void EmergencyProgressBar::updateCounts()
 {
-    m_totalCount = m_emergencyManager->totalFamilies();
-    m_okCount = m_emergencyManager->countByStatus(EffectiveContactStatus::OK);
-    m_needsHelpCount = m_emergencyManager->countByStatus(EffectiveContactStatus::NeedsHelp);
-    m_unableToReachCount = m_emergencyManager->countByStatus(EffectiveContactStatus::UnableToReach);
-    m_notContactedCount = m_emergencyManager->countByStatus(EffectiveContactStatus::NotContacted);
+    m_totalCount = EmergencyManager::instance()->totalFamilies();
+    m_okCount = EmergencyManager::instance()->countByStatus(EffectiveContactStatus::OK);
+    m_needsHelpCount = EmergencyManager::instance()->countByStatus(EffectiveContactStatus::NeedsHelp);
+    m_unableToReachCount = EmergencyManager::instance()->countByStatus(EffectiveContactStatus::UnableToReach);
+    m_notContactedCount = EmergencyManager::instance()->countByStatus(EffectiveContactStatus::NotContacted);
 
     QString summary = tr("%1 families: %2 OK")
         .arg(m_totalCount)

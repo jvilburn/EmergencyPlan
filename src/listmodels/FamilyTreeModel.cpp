@@ -33,12 +33,10 @@ static QString contactMethodDisplayName(ContactMethod method)
     return QObject::tr("Phone");
 }
 
-FamilyTreeModel::FamilyTreeModel(EmergencyManager* emergencyManager,
-                                 Filter* filter,
+FamilyTreeModel::FamilyTreeModel(Filter* filter,
                                  bool checkable,
                                  QObject* parent)
     : BaseTreeModel(parent)
-    , m_emergencyManager(emergencyManager)
     , m_filter(filter)
     , m_checkable(checkable)
 {
@@ -47,19 +45,16 @@ FamilyTreeModel::FamilyTreeModel(EmergencyManager* emergencyManager,
     connect(m_filter, &Filter::changed,
             this, &FamilyTreeModel::rebuild);
 
-    if (m_emergencyManager)
-    {
-        connect(m_emergencyManager, &EmergencyManager::familyStatusChanged,
-                this, &FamilyTreeModel::onFamilyStatusChanged);
-        connect(m_emergencyManager, &EmergencyManager::emergencyStarted,
-                this, &FamilyTreeModel::onEmergencyStateChanged);
-        connect(m_emergencyManager, &EmergencyManager::emergencyEnded,
-                this, &FamilyTreeModel::onEmergencyStateChanged);
-        connect(m_emergencyManager, &EmergencyManager::archiveViewOpened,
-                this, &FamilyTreeModel::onEmergencyStateChanged);
-        connect(m_emergencyManager, &EmergencyManager::archiveViewClosed,
-                this, &FamilyTreeModel::onEmergencyStateChanged);
-    }
+    connect(EmergencyManager::instance(), &EmergencyManager::familyStatusChanged,
+            this, &FamilyTreeModel::onFamilyStatusChanged);
+    connect(EmergencyManager::instance(), &EmergencyManager::emergencyStarted,
+            this, &FamilyTreeModel::onEmergencyStateChanged);
+    connect(EmergencyManager::instance(), &EmergencyManager::emergencyEnded,
+            this, &FamilyTreeModel::onEmergencyStateChanged);
+    connect(EmergencyManager::instance(), &EmergencyManager::archiveViewOpened,
+            this, &FamilyTreeModel::onEmergencyStateChanged);
+    connect(EmergencyManager::instance(), &EmergencyManager::archiveViewClosed,
+            this, &FamilyTreeModel::onEmergencyStateChanged);
 
     rebuild();
 }
@@ -450,9 +445,9 @@ void FamilyTreeModel::rebuild()
         }
 
         // Apply contact status filter (requires EmergencyManager)
-        if (statusFilter.has_value() && m_emergencyManager)
+        if (statusFilter.has_value() && EmergencyManager::instance())
         {
-            EffectiveContactStatus familyStatus = m_emergencyManager->familyStatus(it.key());
+            EffectiveContactStatus familyStatus = EmergencyManager::instance()->familyStatus(it.key());
             if (familyStatus != *statusFilter)
             {
                 continue;
@@ -639,12 +634,12 @@ void FamilyTreeModel::appendContactAttemptNodes(TreeNode* parent, int familyInde
                                                  const FamilyId& familyId,
                                                  QList<TreeNode*>& children)
 {
-    if (!m_emergencyManager || !m_emergencyManager->isActive())
+    if (!EmergencyManager::instance() || !EmergencyManager::instance()->isActive())
     {
         return;
     }
 
-    const FamilyResponseRecord* record = m_emergencyManager->recordForFamily(familyId);
+    const FamilyResponseRecord* record = EmergencyManager::instance()->recordForFamily(familyId);
     if (!record || record->contactAttempts().isEmpty())
     {
         return;
@@ -695,12 +690,12 @@ void FamilyTreeModel::appendTaskNodes(TreeNode* parent, int familyIndex,
                                        const FamilyId& familyId,
                                        QList<TreeNode*>& children)
 {
-    if (!m_emergencyManager || !m_emergencyManager->isActive())
+    if (!EmergencyManager::instance() || !EmergencyManager::instance()->isActive())
     {
         return;
     }
 
-    const FamilyResponseRecord* record = m_emergencyManager->recordForFamily(familyId);
+    const FamilyResponseRecord* record = EmergencyManager::instance()->recordForFamily(familyId);
     if (!record || record->tasks().isEmpty())
     {
         return;
@@ -919,11 +914,11 @@ QVariant FamilyTreeModel::data(const QModelIndex& index, int role) const
             return QVariant::fromValue(node->detailType);
 
         case Qt::DecorationRole:
-            if (node->type == RowType::Family && m_emergencyManager
-                && m_emergencyManager->isActive())
+            if (node->type == RowType::Family && EmergencyManager::instance()
+                && EmergencyManager::instance()->isActive())
             {
                 FamilyId familyId = m_familyIds.at(node->familyIndex);
-                EffectiveContactStatus status = m_emergencyManager->familyStatus(familyId);
+                EffectiveContactStatus status = EmergencyManager::instance()->familyStatus(familyId);
                 if (status != EffectiveContactStatus::NotContacted)
                 {
                     return StatusIcons::iconForStatus(status);
@@ -932,12 +927,12 @@ QVariant FamilyTreeModel::data(const QModelIndex& index, int role) const
             return QVariant();
 
         case ResponseStatusRole:
-            if (node->type == RowType::Family && m_emergencyManager
-                && m_emergencyManager->isActive())
+            if (node->type == RowType::Family && EmergencyManager::instance()
+                && EmergencyManager::instance()->isActive())
             {
                 FamilyId familyId = m_familyIds.at(node->familyIndex);
                 return QVariant::fromValue(
-                    static_cast<int>(m_emergencyManager->familyStatus(familyId)));
+                    static_cast<int>(EmergencyManager::instance()->familyStatus(familyId)));
             }
             return QVariant();
 

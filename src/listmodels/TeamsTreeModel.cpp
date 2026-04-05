@@ -33,11 +33,9 @@ bool leaderFirstThenAlpha(const QPair<PersonId, QString>& a,
 
 }  // namespace
 
-TeamsTreeModel::TeamsTreeModel(EmergencyManager* emergencyManager,
-                               Filter* filter,
+TeamsTreeModel::TeamsTreeModel(Filter* filter,
                                QObject* parent)
     : BaseTreeModel(parent)
-    , m_emergencyManager(emergencyManager)
     , m_filter(filter)
 {
     connect(DocumentManager::instance(), &DocumentManager::documentChanged,
@@ -46,19 +44,16 @@ TeamsTreeModel::TeamsTreeModel(EmergencyManager* emergencyManager,
     {
         connect(m_filter, &Filter::changed, this, &TeamsTreeModel::rebuild);
     }
-    if (m_emergencyManager)
-    {
-        connect(m_emergencyManager, &EmergencyManager::emergencyStarted,
-                this, &TeamsTreeModel::onEmergencyStateChanged);
-        connect(m_emergencyManager, &EmergencyManager::emergencyEnded,
-                this, &TeamsTreeModel::onEmergencyStateChanged);
-        connect(m_emergencyManager, &EmergencyManager::archiveViewOpened,
-                this, &TeamsTreeModel::onEmergencyStateChanged);
-        connect(m_emergencyManager, &EmergencyManager::archiveViewClosed,
-                this, &TeamsTreeModel::onEmergencyStateChanged);
-        connect(m_emergencyManager, &EmergencyManager::responseDataChanged,
-                this, &TeamsTreeModel::rebuild);
-    }
+    connect(EmergencyManager::instance(), &EmergencyManager::emergencyStarted,
+            this, &TeamsTreeModel::onEmergencyStateChanged);
+    connect(EmergencyManager::instance(), &EmergencyManager::emergencyEnded,
+            this, &TeamsTreeModel::onEmergencyStateChanged);
+    connect(EmergencyManager::instance(), &EmergencyManager::archiveViewOpened,
+            this, &TeamsTreeModel::onEmergencyStateChanged);
+    connect(EmergencyManager::instance(), &EmergencyManager::archiveViewClosed,
+            this, &TeamsTreeModel::onEmergencyStateChanged);
+    connect(EmergencyManager::instance(), &EmergencyManager::responseDataChanged,
+            this, &TeamsTreeModel::rebuild);
     rebuild();
 }
 
@@ -109,7 +104,7 @@ void TeamsTreeModel::rebuild()
 
     const Document& doc = DocumentManager::instance()->document();
     QList<Team> teams = doc.teams().values();
-    bool emergencyActive = m_emergencyManager && m_emergencyManager->isActive();
+    bool emergencyActive = EmergencyManager::instance() && EmergencyManager::instance()->isActive();
 
     // Sort teams by name
     std::sort(teams.begin(), teams.end(),
@@ -170,7 +165,7 @@ void TeamsTreeModel::rebuild()
         // During emergencies, add task rows assigned to this team
         if (emergencyActive)
         {
-            const EmergencyResponse& response = m_emergencyManager->response();
+            const EmergencyResponse& response = EmergencyManager::instance()->response();
             const QHash<FamilyId, FamilyResponseRecord>& records = response.familyRecords();
 
             for (auto it = records.constBegin(); it != records.constEnd(); ++it)
@@ -222,7 +217,7 @@ void TeamsTreeModel::rebuild()
     // During emergencies, add "Unassigned Tasks" section
     if (emergencyActive)
     {
-        const EmergencyResponse& response = m_emergencyManager->response();
+        const EmergencyResponse& response = EmergencyManager::instance()->response();
         const QHash<FamilyId, FamilyResponseRecord>& records = response.familyRecords();
 
         // Collect unassigned tasks (not assigned to any team)

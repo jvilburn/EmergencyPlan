@@ -6,11 +6,9 @@
 #include <QPushButton>
 
 ActionButtonsWidget::ActionButtonsWidget(const FamilyId& familyId,
-                                         EmergencyManager* emergencyManager,
                                          QWidget* parent)
     : QWidget(parent)
     , m_familyId(familyId)
-    , m_emergencyManager(emergencyManager)
 {
     QGridLayout* layout = new QGridLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -21,7 +19,7 @@ ActionButtonsWidget::ActionButtonsWidget(const FamilyId& familyId,
     // Emergency action buttons (only during active emergency, not archive viewing).
     // Note: isActive() returns true during archive view because m_response holds the archive's
     // response data, so the isViewingArchive() check is needed to distinguish live vs. archive.
-    if (m_emergencyManager && m_emergencyManager->isActive() && !m_emergencyManager->isViewingArchive())
+    if (EmergencyManager::instance() && EmergencyManager::instance()->isActive() && !EmergencyManager::instance()->isViewingArchive())
     {
         QPushButton* okButton = new QPushButton(tr("OK"), this);
         okButton->setStyleSheet("color: #4CAF50; font-weight: bold;");
@@ -75,12 +73,12 @@ void ActionButtonsWidget::onDeleteClicked()
 
 void ActionButtonsWidget::onOkClicked()
 {
-    m_emergencyManager->setContactStatus(m_familyId, ContactStatus::OK);
+    EmergencyManager::instance()->setContactStatus(m_familyId, ContactStatus::OK);
 }
 
 void ActionButtonsWidget::onUnableToReachClicked()
 {
-    m_emergencyManager->setContactStatus(m_familyId, ContactStatus::UnableToReach);
+    EmergencyManager::instance()->setContactStatus(m_familyId, ContactStatus::UnableToReach);
 }
 
 void ActionButtonsWidget::onAddTaskClicked()

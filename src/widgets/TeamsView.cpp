@@ -22,10 +22,8 @@
 #include <QInputDialog>
 #include <QLineEdit>
 
-TeamsView::TeamsView(EmergencyManager* emergencyManager,
-                     QWidget* parent)
+TeamsView::TeamsView(QWidget* parent)
     : QWidget(parent)
-    , m_emergencyManager(emergencyManager)
 {
     QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(4, 4, 4, 4);
@@ -51,8 +49,7 @@ TeamsView::TeamsView(EmergencyManager* emergencyManager,
     layout->addLayout(toolbar);
 
     // Create model with filter from FilterBar
-    m_model = new TeamsTreeModel(emergencyManager,
-                                 m_filterBar->filter(), this);
+    m_model = new TeamsTreeModel(m_filterBar->filter(), this);
 
     // Create tree view with model
     m_tree = new SelectionPreservingTreeView(m_model, this);
@@ -130,7 +127,7 @@ void TeamsView::onContextMenu(const QPoint& pos)
 
     QMenu menu;
 
-    bool archiveView = m_emergencyManager && m_emergencyManager->isViewingArchive();
+    bool archiveView = EmergencyManager::instance() && EmergencyManager::instance()->isViewingArchive();
 
     if (!index.isValid())
     {
@@ -214,7 +211,7 @@ void TeamsView::onContextMenu(const QPoint& pos)
 
         case ItemType::TaskRow:
         {
-            if (m_emergencyManager && m_emergencyManager->isViewingArchive())
+            if (EmergencyManager::instance() && EmergencyManager::instance()->isViewingArchive())
             {
                 break;
             }
@@ -241,7 +238,7 @@ void TeamsView::onContextMenu(const QPoint& pos)
             }
 
             // Notify action (only if assigned and not yet notified)
-            const FamilyResponseRecord* record = m_emergencyManager->recordForFamily(familyId);
+            const FamilyResponseRecord* record = EmergencyManager::instance()->recordForFamily(familyId);
             if (record)
             {
                 for (const ResponseTask& task : record->tasks())
@@ -587,7 +584,7 @@ void TeamsView::assignTaskToTeam(const FamilyId& familyId, const TaskId& taskId)
     {
         if (team.name() == selected)
         {
-            m_emergencyManager->assignTaskToTeam(familyId, taskId, team.id(), QString());
+            EmergencyManager::instance()->assignTaskToTeam(familyId, taskId, team.id(), QString());
             return;
         }
     }
@@ -604,7 +601,7 @@ void TeamsView::notifyTask(const FamilyId& familyId, const TaskId& taskId)
     std::optional<TaskNotification> notification = dialog.result();
     if (notification)
     {
-        m_emergencyManager->notifyAssignee(familyId, taskId, *notification);
+        EmergencyManager::instance()->notifyAssignee(familyId, taskId, *notification);
     }
 }
 
@@ -620,5 +617,5 @@ void TeamsView::resolveTask(const FamilyId& familyId, const TaskId& taskId)
         return;
     }
 
-    m_emergencyManager->resolveTask(familyId, taskId, notes.trimmed());
+    EmergencyManager::instance()->resolveTask(familyId, taskId, notes.trimmed());
 }

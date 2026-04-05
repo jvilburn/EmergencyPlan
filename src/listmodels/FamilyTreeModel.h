@@ -8,7 +8,6 @@
 #include <QSet>
 #include <QString>
 
-class EmergencyManager;
 class Filter;
 
 /// Tree model exposing filtered, sorted families with full hierarchical structure.
@@ -60,8 +59,7 @@ public:
     };
     Q_ENUM(DetailType)
 
-    explicit FamilyTreeModel(EmergencyManager* emergencyManager,
-                             Filter* filter,
+    explicit FamilyTreeModel(Filter* filter,
                              bool checkable,
                              QObject* parent);
     ~FamilyTreeModel() override;
@@ -145,7 +143,6 @@ private:
 
     QList<FamilyId> m_familyIds;
     QList<TreeNode*> m_familyNodes;  // Top-level nodes (owned)
-    EmergencyManager* m_emergencyManager;
     Filter* m_filter;
     bool m_checkable = false;
     QSet<FamilyId> m_checkedIds;

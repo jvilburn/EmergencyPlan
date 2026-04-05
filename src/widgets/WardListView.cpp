@@ -31,10 +31,8 @@ namespace StatusFilterIndex
     constexpr int UnableToReach = 4;
 }
 
-WardListView::WardListView(EmergencyManager* emergencyManager,
-                           QWidget* parent)
+WardListView::WardListView(QWidget* parent)
     : QWidget(parent)
-    , m_emergencyManager(emergencyManager)
 {
     setMinimumWidth(250);
 
@@ -47,7 +45,7 @@ WardListView::WardListView(EmergencyManager* emergencyManager,
     layout->addWidget(m_filterBar);
 
     // Create model with filter from FilterBar
-    m_model = new FamilyTreeModel(emergencyManager, m_filterBar->filter(), false, this);
+    m_model = new FamilyTreeModel(m_filterBar->filter(), false, this);
 
     // Emergency progress bar and filter tabs (initially hidden)
     setupEmergencyWidgets();
@@ -87,17 +85,17 @@ WardListView::WardListView(EmergencyManager* emergencyManager,
             this, &WardListView::onRowsInserted);
 
     // Emergency lifecycle
-    if (m_emergencyManager)
+    if (EmergencyManager::instance())
     {
-        connect(m_emergencyManager, &EmergencyManager::emergencyStarted,
+        connect(EmergencyManager::instance(), &EmergencyManager::emergencyStarted,
                 this, &WardListView::onEmergencyStateChanged);
-        connect(m_emergencyManager, &EmergencyManager::emergencyEnded,
+        connect(EmergencyManager::instance(), &EmergencyManager::emergencyEnded,
                 this, &WardListView::onEmergencyStateChanged);
-        connect(m_emergencyManager, &EmergencyManager::archiveViewOpened,
+        connect(EmergencyManager::instance(), &EmergencyManager::archiveViewOpened,
                 this, &WardListView::onEmergencyStateChanged);
-        connect(m_emergencyManager, &EmergencyManager::archiveViewClosed,
+        connect(EmergencyManager::instance(), &EmergencyManager::archiveViewClosed,
                 this, &WardListView::onEmergencyStateChanged);
-        connect(m_emergencyManager, &EmergencyManager::responseDataChanged,
+        connect(EmergencyManager::instance(), &EmergencyManager::responseDataChanged,
                 this, &WardListView::updateFilterTabCounts);
     }
 
@@ -164,12 +162,12 @@ QSet<FamilyId> WardListView::visibleFamilyIds() const
 
 QString WardListView::familyStatusIcon(const FamilyId& familyId) const
 {
-    if (!m_emergencyManager || !m_emergencyManager->isActive())
+    if (!EmergencyManager::instance() || !EmergencyManager::instance()->isActive())
     {
         return {};
     }
 
-    EffectiveContactStatus status = m_emergencyManager->familyStatus(familyId);
+    EffectiveContactStatus status = EmergencyManager::instance()->familyStatus(familyId);
     switch (status)
     {
         case EffectiveContactStatus::OK:
@@ -295,7 +293,7 @@ void WardListView::attachActionButtons(const QModelIndex& familyIndex)
         if (childType == FamilyTreeModel::RowType::Actions)
         {
             ActionButtonsWidget* widget = new ActionButtonsWidget(
-                *familyId, m_emergencyManager, m_treeView);
+                *familyId, m_treeView);
 
             connect(widget, &ActionButtonsWidget::editRequested,
                     this, &WardListView::editFamilyRequested);
@@ -349,7 +347,7 @@ void WardListView::setupEmergencyWidgets()
     panelLayout->setSpacing(2);
 
     // Progress bar
-    m_progressBar = new EmergencyProgressBar(m_emergencyManager, m_emergencyPanel);
+    m_progressBar = new EmergencyProgressBar(m_emergencyPanel);
     panelLayout->addWidget(m_progressBar);
 
     // Filter tabs row
@@ -388,7 +386,7 @@ void WardListView::setupEmergencyWidgets()
 
 void WardListView::onEmergencyStateChanged()
 {
-    bool active = m_emergencyManager && m_emergencyManager->isActive();
+    bool active = EmergencyManager::instance() && EmergencyManager::instance()->isActive();
     m_emergencyPanel->setVisible(active);
 
     if (!active)
@@ -444,16 +442,16 @@ void WardListView::onStatusFilterClicked(int statusIndex)
 
 void WardListView::updateFilterTabCounts()
 {
-    if (!m_emergencyManager || !m_emergencyManager->isActive())
+    if (!EmergencyManager::instance() || !EmergencyManager::instance()->isActive())
     {
         return;
     }
 
-    int total = m_emergencyManager->totalFamilies();
-    int ok = m_emergencyManager->countByStatus(EffectiveContactStatus::OK);
-    int needsHelp = m_emergencyManager->countByStatus(EffectiveContactStatus::NeedsHelp);
-    int unable = m_emergencyManager->countByStatus(EffectiveContactStatus::UnableToReach);
-    int remaining = m_emergencyManager->countByStatus(EffectiveContactStatus::NotContacted);
+    int total = EmergencyManager::instance()->totalFamilies();
+    int ok = EmergencyManager::instance()->countByStatus(EffectiveContactStatus::OK);
+    int needsHelp = EmergencyManager::instance()->countByStatus(EffectiveContactStatus::NeedsHelp);
+    int unable = EmergencyManager::instance()->countByStatus(EffectiveContactStatus::UnableToReach);
+    int remaining = EmergencyManager::instance()->countByStatus(EffectiveContactStatus::NotContacted);
 
     m_filterTabs[StatusFilterIndex::All]->setText(tr("All (%1)").arg(total));
     m_filterTabs[StatusFilterIndex::Remaining]->setText(tr("Remaining (%1)").arg(remaining));
@@ -473,13 +471,13 @@ void WardListView::onLogContactRequested(const FamilyId& familyId)
     std::optional<ContactAttempt> attempt = dialog.result();
     if (attempt)
     {
-        m_emergencyManager->addContactAttempt(familyId, *attempt);
+        EmergencyManager::instance()->addContactAttempt(familyId, *attempt);
     }
 }
 
 void WardListView::onAddTaskRequested(const FamilyId& familyId)
 {
-    TaskDialog dialog(m_emergencyManager, this);
+    TaskDialog dialog(this);
     if (dialog.exec() != QDialog::Accepted)
     {
         return;
@@ -488,13 +486,13 @@ void WardListView::onAddTaskRequested(const FamilyId& familyId)
     std::optional<ResponseTask> task = dialog.result();
     if (task)
     {
-        m_emergencyManager->addTask(familyId, *task);
+        EmergencyManager::instance()->addTask(familyId, *task);
     }
 }
 
 void WardListView::onEditTaskRequested(const FamilyId& familyId, const TaskId& taskId)
 {
-    const FamilyResponseRecord* record = m_emergencyManager->recordForFamily(familyId);
+    const FamilyResponseRecord* record = EmergencyManager::instance()->recordForFamily(familyId);
     if (!record)
     {
         return;
@@ -515,7 +513,7 @@ void WardListView::onEditTaskRequested(const FamilyId& familyId, const TaskId& t
         return;
     }
 
-    TaskDialog dialog(m_emergencyManager, this);
+    TaskDialog dialog(this);
     dialog.setTask(*existingTask);
     if (dialog.exec() != QDialog::Accepted)
     {
@@ -525,7 +523,7 @@ void WardListView::onEditTaskRequested(const FamilyId& familyId, const TaskId& t
     std::optional<ResponseTask> updatedTask = dialog.result();
     if (updatedTask)
     {
-        m_emergencyManager->updateTask(familyId, *updatedTask);
+        EmergencyManager::instance()->updateTask(familyId, *updatedTask);
     }
 }
 
@@ -540,7 +538,7 @@ void WardListView::onNotifyTaskRequested(const FamilyId& familyId, const TaskId&
     std::optional<TaskNotification> notification = dialog.result();
     if (notification)
     {
-        m_emergencyManager->notifyAssignee(familyId, taskId, *notification);
+        EmergencyManager::instance()->notifyAssignee(familyId, taskId, *notification);
     }
 }
 
@@ -556,12 +554,12 @@ void WardListView::onResolveTaskRequested(const FamilyId& familyId, const TaskId
         return;
     }
 
-    m_emergencyManager->resolveTask(familyId, taskId, notes.trimmed());
+    EmergencyManager::instance()->resolveTask(familyId, taskId, notes.trimmed());
 }
 
 void WardListView::onTreeContextMenu(const QPoint& pos)
 {
-    if (m_emergencyManager && m_emergencyManager->isViewingArchive())
+    if (EmergencyManager::instance() && EmergencyManager::instance()->isViewingArchive())
     {
         return;
     }
@@ -589,7 +587,7 @@ void WardListView::onTreeContextMenu(const QPoint& pos)
     TaskId taskId = TaskId::fromString(taskIdStr);
 
     // Find the task to determine available actions
-    const FamilyResponseRecord* record = m_emergencyManager->recordForFamily(*familyId);
+    const FamilyResponseRecord* record = EmergencyManager::instance()->recordForFamily(*familyId);
     if (!record)
     {
         return;
@@ -648,6 +646,6 @@ void WardListView::onTreeContextMenu(const QPoint& pos)
     }
     else if (chosen == deleteAction)
     {
-        m_emergencyManager->removeTask(*familyId, taskId);
+        EmergencyManager::instance()->removeTask(*familyId, taskId);
     }
 }
