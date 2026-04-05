@@ -20,6 +20,7 @@ public:
     QWidget* widget(int index) const;
     int currentIndex() const;
     void setCurrentIndex(int index);
+    void setPageVisible(int index, bool visible);
     int count() const;
 
 signals:

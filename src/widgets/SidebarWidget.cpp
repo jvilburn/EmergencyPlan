@@ -97,6 +97,31 @@ void SidebarWidget::setCurrentIndex(int index)
     }
 }
 
+void SidebarWidget::setPageVisible(int index, bool visible)
+{
+    QAbstractButton* button = m_buttonGroup->button(index);
+    if (!button)
+    {
+        return;
+    }
+
+    button->setVisible(visible);
+
+    // If hiding the currently selected page, switch to first visible page
+    if (!visible && m_stack->currentIndex() == index)
+    {
+        for (int i = 0; i < m_stack->count(); ++i)
+        {
+            QAbstractButton* other = m_buttonGroup->button(i);
+            if (other && other->isVisible())
+            {
+                setCurrentIndex(i);
+                return;
+            }
+        }
+    }
+}
+
 int SidebarWidget::count() const
 {
     return m_stack->count();
