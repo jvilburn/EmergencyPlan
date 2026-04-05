@@ -1050,6 +1050,7 @@ void MainWindow::onEmergencyStarted()
     m_emergencyBanner->setEmergencyName(EmergencyManager::instance()->response().name());
     m_taskListView->rebuild();
     m_sidebarTabs->setPageVisible(m_taskListTabIndex, true);
+    m_splitter->setSizes({500, 0, m_splitter->width() - 500});
     updateEmergencyActions();
 }
 
@@ -1057,6 +1058,7 @@ void MainWindow::onEmergencyEnded()
 {
     m_emergencyBanner->clearBanner();
     m_sidebarTabs->setPageVisible(m_taskListTabIndex, false);
+    m_splitter->setSizes({300, 0, m_splitter->width() - 300});
     updateEmergencyActions();
 }
 
@@ -1065,6 +1067,7 @@ void MainWindow::onArchiveViewOpened()
     m_emergencyBanner->setArchiveName(EmergencyManager::instance()->response().name());
     m_taskListView->rebuild();
     m_sidebarTabs->setPageVisible(m_taskListTabIndex, true);
+    m_splitter->setSizes({500, 0, m_splitter->width() - 500});
     updateEmergencyActions();
 }
 
@@ -1078,11 +1081,13 @@ void MainWindow::onArchiveViewClosed()
     {
         m_emergencyBanner->clearBanner();
     }
-    m_sidebarTabs->setPageVisible(m_taskListTabIndex, EmergencyManager::instance()->isActive());
-    if (EmergencyManager::instance()->isActive())
+    bool active = EmergencyManager::instance()->isActive();
+    m_sidebarTabs->setPageVisible(m_taskListTabIndex, active);
+    if (active)
     {
         m_taskListView->rebuild();
     }
+    m_splitter->setSizes({active ? 500 : 300, 0, m_splitter->width() - (active ? 500 : 300)});
     updateEmergencyActions();
 }
 
