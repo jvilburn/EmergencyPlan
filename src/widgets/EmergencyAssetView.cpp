@@ -382,8 +382,7 @@ QString EmergencyAssetView::nameLabel() const
         return tr("Skill or Gear");
     case ResponseArea::None:
     case ResponseArea::SpecialNeeds:
-        Q_UNREACHABLE();
-        return tr("Name");
+        break;
     }
     Q_UNREACHABLE();
     return tr("Name");
