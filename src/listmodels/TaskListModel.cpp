@@ -166,7 +166,7 @@ void TaskListModel::rebuild()
         auto famIt = families.constFind(familyId);
         if (famIt != families.constEnd())
         {
-            familyName = famIt.value().headOfHousehold();
+            familyName = famIt.value().displayName();
         }
 
         for (const ResponseTask& task : record.tasks())

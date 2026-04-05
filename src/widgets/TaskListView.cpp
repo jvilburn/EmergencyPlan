@@ -87,7 +87,7 @@ void TaskListView::onAddTask()
     QList<QPair<QString, FamilyId>> familyList;
     for (auto it = families.constBegin(); it != families.constEnd(); ++it)
     {
-        familyList.append({it.value().headOfHousehold(), it.key()});
+        familyList.append(QPair<QString, FamilyId>(it.value().displayName(), it.key()));
     }
     std::sort(familyList.begin(), familyList.end(),
               [](const QPair<QString, FamilyId>& a, const QPair<QString, FamilyId>& b) { return a.first.toLower() < b.first.toLower(); });
