@@ -26,8 +26,8 @@ namespace StatusFilterIndex
 {
     constexpr int All = 0;
     constexpr int Remaining = 1;
-    constexpr int NeedsHelp = 2;
-    constexpr int OK = 3;
+    constexpr int OK = 2;
+    constexpr int NeedsHelp = 3;
     constexpr int UnableToReach = 4;
 }
 
@@ -352,7 +352,7 @@ void WardListView::setupEmergencyWidgets()
 
     // Filter tabs
     // Tab definitions matching StatusFilterIndex constants
-    QStringList tabLabels = {tr("All"), tr("Remaining"), tr("Needs Help"), tr("OK"), tr("Unable to Reach")};
+    QStringList tabLabels = {tr("All"), tr("Remaining"), tr("OK"), tr("Needs Help"), tr("Unable to Reach")};
 
     QWidget* tabRow = new QWidget(m_emergencyPanel);
     QHBoxLayout* tabLayout = new QHBoxLayout(tabRow);
