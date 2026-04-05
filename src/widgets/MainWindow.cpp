@@ -6,6 +6,7 @@
 #include "NeedsSubView.h"
 #include "SidebarWidget.h"
 #include "EmergencyAssetView.h"
+#include "TaskListView.h"
 #include "TeamsView.h"
 #include "ResponseArea.h"
 #include "FamilyEditPanel.h"
@@ -34,6 +35,7 @@
 #include <QInputDialog>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QLabel>
 #include <QProgressBar>
 #include <QStandardPaths>
@@ -99,7 +101,7 @@ void MainWindow::setupUi()
     setCentralWidget(centralContainer);
 
     // Sidebar navigation (two-row button bar)
-    m_sidebarTabs = new SidebarWidget(4, m_splitter);
+    m_sidebarTabs = new SidebarWidget(5, m_splitter);
 
     // Row 1
     m_wardListView = new WardListView(m_documentManager, m_emergencyManager, this);
@@ -113,6 +115,11 @@ void MainWindow::setupUi()
 
     m_needsView = new NeedsSubView(m_documentManager, this);
     m_sidebarTabs->addPage(m_needsView, tr("Needs"));
+
+    m_taskListView = new TaskListView(m_documentManager, m_emergencyManager, this);
+    m_taskListTabIndex = m_sidebarTabs->count();
+    m_sidebarTabs->addPage(m_taskListView, tr("Tasks"));
+    m_sidebarTabs->setPageVisible(m_taskListTabIndex, false);
 
     // Row 2
     m_medicalView = new EmergencyAssetView(m_documentManager, ResponseArea::Medical, this);
@@ -1056,18 +1063,23 @@ bool MainWindow::generateEmergencyReportWithConfirm()
 void MainWindow::onEmergencyStarted()
 {
     m_emergencyBanner->setEmergencyName(m_emergencyManager->response().name());
+    m_taskListView->rebuild();
+    m_sidebarTabs->setPageVisible(m_taskListTabIndex, true);
     updateEmergencyActions();
 }
 
 void MainWindow::onEmergencyEnded()
 {
     m_emergencyBanner->clearBanner();
+    m_sidebarTabs->setPageVisible(m_taskListTabIndex, false);
     updateEmergencyActions();
 }
 
 void MainWindow::onArchiveViewOpened()
 {
     m_emergencyBanner->setArchiveName(m_emergencyManager->response().name());
+    m_taskListView->rebuild();
+    m_sidebarTabs->setPageVisible(m_taskListTabIndex, true);
     updateEmergencyActions();
 }
 
@@ -1080,6 +1092,11 @@ void MainWindow::onArchiveViewClosed()
     else
     {
         m_emergencyBanner->clearBanner();
+    }
+    m_sidebarTabs->setPageVisible(m_taskListTabIndex, m_emergencyManager->isActive());
+    if (m_emergencyManager->isActive())
+    {
+        m_taskListView->rebuild();
     }
     updateEmergencyActions();
 }

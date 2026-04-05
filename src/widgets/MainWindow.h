@@ -16,6 +16,7 @@ class WardListView;
 class MinisteringView;
 class NeedsSubView;
 class SidebarWidget;
+class TaskListView;
 class TeamsView;
 class EmergencyBanner;
 class EmergencyManager;
@@ -102,6 +103,8 @@ private:
     MinisteringView* m_ministeringView;
     NeedsSubView* m_needsView;
     TeamsView* m_teamsView;
+    TaskListView* m_taskListView;
+    int m_taskListTabIndex = -1;
     EmergencyAssetView* m_medicalView;
     EmergencyAssetView* m_commsView;
     EmergencyAssetView* m_recoveryView;
