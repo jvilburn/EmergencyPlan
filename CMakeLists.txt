@@ -233,6 +233,7 @@ set(WIDGET_SOURCES
     src/widgets/WardListDialog.cpp
     src/widgets/WardListView.cpp
     src/widgets/shared/FilterBar.cpp
+    src/widgets/shared/FlowLayout.cpp
     src/widgets/shared/FilterChip.cpp
     src/widgets/shared/SearchField.cpp
     src/widgets/NeedsSubView.cpp
@@ -284,6 +285,7 @@ set(WIDGET_HEADERS
     src/widgets/WardListDialog.h
     src/widgets/WardListView.h
     src/widgets/shared/FilterBar.h
+    src/widgets/shared/FlowLayout.h
     src/widgets/shared/FilterChip.h
     src/widgets/shared/SearchField.h
     src/widgets/NeedsSubView.h
@@ -324,6 +326,7 @@ set(LISTMODEL_SOURCES
     src/listmodels/UnassignedMinisteringModel.cpp
     src/listmodels/TeamListModel.cpp
     src/listmodels/TagListModel.cpp
+    src/listmodels/TaskListModel.cpp
     src/listmodels/TeamsTreeModel.cpp
     # src/listmodels/DistrictTreeModel.cpp
     # src/listmodels/ResourceTreeModel.cpp
@@ -338,6 +341,7 @@ set(LISTMODEL_HEADERS
     src/listmodels/StatusIcons.h
     src/listmodels/NeedsModel.h
     src/listmodels/PersonTreeModel.h
+    src/listmodels/TaskListModel.h
     src/listmodels/UnassignedMinisteringModel.h
     src/listmodels/TeamListModel.h
     src/listmodels/TagListModel.h
