@@ -6,6 +6,7 @@
 #include "EmergencyResponse.h"
 #include "Family.h"
 #include "TaskDialog.h"
+#include "NotifyDialog.h"
 #include "Team.h"
 
 #include <QHBoxLayout>
@@ -30,13 +31,16 @@ TaskListView::TaskListView(QWidget* parent)
     m_editButton = new QPushButton(tr("Edit"), this);
     m_deleteButton = new QPushButton(tr("Delete"), this);
     m_deleteButton->setStyleSheet("color: #c0392b;");
+    m_notifyButton = new QPushButton(tr("Notify"), this);
 
     m_editButton->setEnabled(false);
     m_deleteButton->setEnabled(false);
+    m_notifyButton->setEnabled(false);
 
     buttonBar->addWidget(m_addButton);
     buttonBar->addWidget(m_editButton);
     buttonBar->addWidget(m_deleteButton);
+    buttonBar->addWidget(m_notifyButton);
     buttonBar->addStretch();
 
     layout->addLayout(buttonBar);
@@ -66,6 +70,7 @@ TaskListView::TaskListView(QWidget* parent)
     connect(m_addButton, &QPushButton::clicked, this, &TaskListView::onAddTask);
     connect(m_editButton, &QPushButton::clicked, this, &TaskListView::onEditTask);
     connect(m_deleteButton, &QPushButton::clicked, this, &TaskListView::onDeleteTask);
+    connect(m_notifyButton, &QPushButton::clicked, this, &TaskListView::onNotifyTask);
     connect(m_treeView->selectionModel(), &QItemSelectionModel::selectionChanged,
             this, &TaskListView::onSelectionChanged);
     connect(m_model, &QAbstractItemModel::modelReset,
@@ -121,6 +126,7 @@ void TaskListView::onAddTask()
     if (task)
     {
         EmergencyManager::instance()->addTask(familyId, *task);
+        promptNotifyIfNeeded(familyId, task->id());
     }
 }
 
@@ -166,6 +172,7 @@ void TaskListView::onEditTask()
     if (updatedTask)
     {
         EmergencyManager::instance()->updateTask(familyId, *updatedTask);
+        promptNotifyIfNeeded(familyId, updatedTask->id());
     }
 }
 
@@ -190,11 +197,73 @@ void TaskListView::onDeleteTask()
     }
 }
 
+void TaskListView::onNotifyTask()
+{
+    QModelIndex index = m_treeView->currentIndex();
+    if (!index.isValid())
+    {
+        return;
+    }
+
+    FamilyId familyId = m_model->familyIdForRow(index.row());
+    TaskId taskId = m_model->taskIdForRow(index.row());
+
+    NotifyDialog dialog(this);
+    if (dialog.exec() != QDialog::Accepted)
+    {
+        return;
+    }
+
+    std::optional<TaskNotification> notification = dialog.result();
+    if (notification)
+    {
+        EmergencyManager::instance()->notifyAssignee(familyId, taskId, *notification);
+    }
+}
+
+void TaskListView::promptNotifyIfNeeded(const FamilyId& familyId, const TaskId& taskId)
+{
+    const FamilyResponseRecord* record = EmergencyManager::instance()->recordForFamily(familyId);
+    if (!record)
+    {
+        return;
+    }
+
+    for (const ResponseTask& task : record->tasks())
+    {
+        if (task.id() == taskId)
+        {
+            if (task.isAssigned() && !task.isNotified())
+            {
+                NotifyDialog dialog(this);
+                if (dialog.exec() == QDialog::Accepted)
+                {
+                    std::optional<TaskNotification> notification = dialog.result();
+                    if (notification)
+                    {
+                        EmergencyManager::instance()->notifyAssignee(familyId, taskId, *notification);
+                    }
+                }
+            }
+            return;
+        }
+    }
+}
+
 void TaskListView::onSelectionChanged()
 {
     bool hasSelection = m_treeView->currentIndex().isValid();
     m_editButton->setEnabled(hasSelection);
     m_deleteButton->setEnabled(hasSelection);
+
+    bool canNotify = false;
+    if (hasSelection)
+    {
+        int row = m_treeView->currentIndex().row();
+        canNotify = m_model->isAssignedForRow(row) && !m_model->isNotifiedForRow(row);
+    }
+    m_notifyButton->setEnabled(canNotify);
+
     emit highlightChanged();
 }
 

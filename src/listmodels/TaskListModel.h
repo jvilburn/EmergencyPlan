@@ -31,6 +31,8 @@ public:
 
     FamilyId familyIdForRow(int row) const;
     TaskId taskIdForRow(int row) const;
+    bool isAssignedForRow(int row) const;
+    bool isNotifiedForRow(int row) const;
 
     void rebuild();
 
@@ -45,6 +47,7 @@ private:
         std::optional<TeamId> assignedTeamId;
         std::optional<PersonId> assignedPersonId;
         bool resolved = false;
+        bool notified = false;
     };
 
     static bool taskEntryLessThan(const TaskEntry& a, const TaskEntry& b);

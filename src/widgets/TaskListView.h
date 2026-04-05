@@ -30,12 +30,16 @@ private slots:
     void onAddTask();
     void onEditTask();
     void onDeleteTask();
+    void onNotifyTask();
     void onSelectionChanged();
 
 private:
+    void promptNotifyIfNeeded(const FamilyId& familyId, const TaskId& taskId);
+
     TaskListModel* m_model;
     QTreeView* m_treeView;
     QPushButton* m_addButton;
     QPushButton* m_editButton;
     QPushButton* m_deleteButton;
+    QPushButton* m_notifyButton;
 };

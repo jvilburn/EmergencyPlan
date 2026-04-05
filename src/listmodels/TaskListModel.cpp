@@ -133,6 +133,17 @@ TaskId TaskListModel::taskIdForRow(int row) const
     return m_entries.at(row).taskId;
 }
 
+bool TaskListModel::isAssignedForRow(int row) const
+{
+    const TaskEntry& entry = m_entries.at(row);
+    return entry.assignedTeamId.has_value() || entry.assignedPersonId.has_value();
+}
+
+bool TaskListModel::isNotifiedForRow(int row) const
+{
+    return m_entries.at(row).notified;
+}
+
 void TaskListModel::rebuild()
 {
     beginResetModel();
@@ -176,6 +187,7 @@ void TaskListModel::rebuild()
             entry.assignedTeamId = task.assignedTeamId();
             entry.assignedPersonId = task.assignedPersonId();
             entry.resolved = task.isResolved();
+            entry.notified = task.isNotified();
             m_entries.append(entry);
         }
     }
