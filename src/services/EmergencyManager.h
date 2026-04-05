@@ -15,6 +15,9 @@ class EmergencyManager : public QObject
 public:
     explicit EmergencyManager(QObject* parent);
 
+    /// Global accessor. Valid after construction.
+    static EmergencyManager* instance();
+
     // Lifecycle
     bool isActive() const;
     void startEmergency(const QString& name);
@@ -84,4 +87,6 @@ private:
 
     // Archive viewing state
     std::optional<EmergencyResponse> m_savedResponse;  // stashed live response during archive view
+
+    static EmergencyManager* s_instance;
 };

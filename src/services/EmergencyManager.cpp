@@ -9,11 +9,21 @@
 #include <QMessageBox>
 #include <QRegularExpression>
 
+EmergencyManager* EmergencyManager::s_instance = nullptr;
+
 EmergencyManager::EmergencyManager(QObject* parent)
     : QObject(parent)
 {
+    Q_ASSERT(!s_instance);
+    s_instance = this;
+
     connect(DocumentManager::instance(), &DocumentManager::documentChanged,
             this, &EmergencyManager::onDocumentChanged);
+}
+
+EmergencyManager* EmergencyManager::instance()
+{
+    return s_instance;
 }
 
 void EmergencyManager::onDocumentChanged(const DocumentChange& change)
