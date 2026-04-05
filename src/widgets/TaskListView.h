@@ -1,0 +1,36 @@
+#pragma once
+
+#include <QWidget>
+
+class QTreeView;
+class QPushButton;
+class DocumentManager;
+class EmergencyManager;
+class TaskListModel;
+
+class TaskListView : public QWidget
+{
+    Q_OBJECT
+
+public:
+    explicit TaskListView(DocumentManager* documentManager,
+                          EmergencyManager* emergencyManager,
+                          QWidget* parent);
+
+    void rebuild();
+
+private slots:
+    void onAddTask();
+    void onEditTask();
+    void onDeleteTask();
+    void onSelectionChanged();
+
+private:
+    DocumentManager* m_documentManager;
+    EmergencyManager* m_emergencyManager;
+    TaskListModel* m_model;
+    QTreeView* m_treeView;
+    QPushButton* m_addButton;
+    QPushButton* m_editButton;
+    QPushButton* m_deleteButton;
+};

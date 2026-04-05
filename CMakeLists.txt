@@ -220,6 +220,7 @@ set(WIDGET_SOURCES
     src/widgets/ContactAttemptDialog.cpp
     src/widgets/NotifyDialog.cpp
     src/widgets/TaskDialog.cpp
+    src/widgets/TaskListView.cpp
     src/widgets/CallingsEditor.cpp
     src/widgets/FamilyEditPanel.cpp
     src/widgets/MainWindow.cpp
@@ -271,6 +272,7 @@ set(WIDGET_HEADERS
     src/widgets/ContactAttemptDialog.h
     src/widgets/NotifyDialog.h
     src/widgets/TaskDialog.h
+    src/widgets/TaskListView.h
     src/widgets/CallingsEditor.h
     src/widgets/FamilyEditPanel.h
     src/widgets/MainWindow.h
