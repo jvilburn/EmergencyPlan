@@ -52,7 +52,7 @@ MapWidget::MapWidget(QWidget* parent)
             this, QOverload<>::of(&QWidget::update));
     // Update button positions when document changes (affects unmapped panel)
     connect(DocumentManager::instance(), &DocumentManager::documentChanged,
-            this, [this](const DocumentChange&) { updateButtonPositions(); });
+            this, [this](const DocumentChange&) { updateButtonPositions(); update(); });
 }
 
 MapWidget::~MapWidget()

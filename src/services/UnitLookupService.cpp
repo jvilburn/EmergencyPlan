@@ -1,23 +1,45 @@
 #include "UnitLookupService.h"
 
-#include <QNetworkReply>
+#include <QDir>
 #include <QRegularExpression>
 
-// Church meetinghouse locator APIs
-static const QString WARD_API_URL = "https://maps.churchofjesuschrist.org/wards";
-static const QString STAKE_API_URL = "https://maps.churchofjesuschrist.org/stakes";
+// Church meetinghouse locator base URL
+static const QString BASE_URL = "https://maps.churchofjesuschrist.org";
+
+QString UnitLookupService::s_edgePath;
 
 UnitLookupService::UnitLookupService(QObject* parent)
     : QObject(parent)
-    , m_networkManager(new QNetworkAccessManager(this))
 {
-    connect(m_networkManager, &QNetworkAccessManager::finished,
-            this, &UnitLookupService::onRequestFinished);
+    if (s_edgePath.isEmpty())
+    {
+        s_edgePath = findEdgePath();
+    }
 }
 
 UnitLookupService::~UnitLookupService()
 {
     cancel();
+}
+
+QString UnitLookupService::findEdgePath()
+{
+    // Check standard Edge install locations
+    QStringList candidates = {
+        "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+        "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
+    };
+
+    for (const QString& path : candidates)
+    {
+        if (QFile::exists(path))
+        {
+            return path;
+        }
+    }
+
+    qWarning() << "Microsoft Edge not found - ward/stake lookup will be unavailable";
+    return {};
 }
 
 void UnitLookupService::lookupWard(const QString& wardUnitNumber)
@@ -28,27 +50,7 @@ void UnitLookupService::lookupWard(const QString& wardUnitNumber)
         return;
     }
 
-    // Cancel any pending request
-    cancel();
-
-    m_currentUnitNumber = wardUnitNumber;
-    m_currentLookupType = LookupType::Ward;
-
-    // Check if API is configured
-    if (WARD_API_URL.isEmpty())
-    {
-        return;
-    }
-
-    // Build request URL
-    QString url = WARD_API_URL + "/" + wardUnitNumber;
-
-    QNetworkRequest request(url);
-    request.setHeader(QNetworkRequest::UserAgentHeader, "EmergencyPlan/1.0");
-    request.setRawHeader("Accept", "text/html");
-    request.setRawHeader("Accept-Language", "en-US,en;q=0.9");
-
-    m_pendingReply = m_networkManager->get(request);
+    startLookup(wardUnitNumber, LookupType::Ward);
 }
 
 void UnitLookupService::lookupStake(const QString& stakeUnitNumber)
@@ -59,62 +61,85 @@ void UnitLookupService::lookupStake(const QString& stakeUnitNumber)
         return;
     }
 
-    // Cancel any pending request
+    startLookup(stakeUnitNumber, LookupType::Stake);
+}
+
+void UnitLookupService::startLookup(const QString& unitNumber, LookupType type)
+{
     cancel();
 
-    m_currentUnitNumber = stakeUnitNumber;
-    m_currentLookupType = LookupType::Stake;
-
-    // Check if API is configured
-    if (STAKE_API_URL.isEmpty())
+    if (s_edgePath.isEmpty())
     {
+        emit lookupFailed(unitNumber, tr("Microsoft Edge not found"));
         return;
     }
 
-    // Build request URL
-    QString url = STAKE_API_URL + "/" + stakeUnitNumber;
+    m_currentUnitNumber = unitNumber;
+    m_currentLookupType = type;
 
-    QNetworkRequest request(url);
-    request.setHeader(QNetworkRequest::UserAgentHeader, "EmergencyPlan/1.0");
-    request.setRawHeader("Accept", "text/html");
-    request.setRawHeader("Accept-Language", "en-US,en;q=0.9");
+    QString pathSegment = (type == LookupType::Ward) ? "wards" : "stakes";
+    QString url = BASE_URL + "/" + pathSegment + "/" + unitNumber;
 
-    m_pendingReply = m_networkManager->get(request);
+    m_pendingProcess = new QProcess(this);
+    connect(m_pendingProcess, &QProcess::finished,
+            this, &UnitLookupService::onProcessFinished);
+
+    QStringList args = {
+        "--headless",
+        "--dump-dom",
+        "--disable-gpu",
+        "--no-sandbox",
+        url
+    };
+
+    m_pendingProcess->start(s_edgePath, args);
 }
 
 void UnitLookupService::cancel()
 {
-    if (m_pendingReply)
+    if (m_pendingProcess)
     {
-        m_pendingReply->abort();
-        m_pendingReply->deleteLater();
-        m_pendingReply = nullptr;
+        m_pendingProcess->kill();
+        m_pendingProcess->waitForFinished(3000);
+        m_pendingProcess->deleteLater();
+        m_pendingProcess = nullptr;
     }
     m_currentUnitNumber.clear();
 }
 
-void UnitLookupService::onRequestFinished(QNetworkReply* reply)
+void UnitLookupService::onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus)
 {
-    if (reply != m_pendingReply)
+    if (m_pendingProcess == nullptr)
     {
-        reply->deleteLater();
         return;
     }
 
-    m_pendingReply = nullptr;
     QString unitNumber = m_currentUnitNumber;
     LookupType lookupType = m_currentLookupType;
     m_currentUnitNumber.clear();
 
-    if (reply->error() != QNetworkReply::NoError)
+    QByteArray data = m_pendingProcess->readAllStandardOutput();
+    QByteArray errorOutput = m_pendingProcess->readAllStandardError();
+
+    m_pendingProcess->deleteLater();
+    m_pendingProcess = nullptr;
+
+    if (exitStatus != QProcess::NormalExit || exitCode != 0)
     {
-        emit lookupFailed(unitNumber, reply->errorString());
-        reply->deleteLater();
+        QString error = tr("Edge process failed (exit code %1)").arg(exitCode);
+        if (!errorOutput.isEmpty())
+        {
+            error += ": " + QString::fromUtf8(errorOutput).left(200);
+        }
+        emit lookupFailed(unitNumber, error);
         return;
     }
 
-    QByteArray data = reply->readAll();
-    reply->deleteLater();
+    if (data.isEmpty())
+    {
+        emit lookupFailed(unitNumber, tr("Edge returned empty output"));
+        return;
+    }
 
     if (lookupType == LookupType::Ward)
     {
@@ -132,7 +157,7 @@ void UnitLookupService::parseWardResponse(const QString& wardUnitNumber, const Q
     Ward ward;
     ward.setUnitNumber(wardUnitNumber);
 
-    // Ward name: first h1 tag
+    // Ward name: <h1 class="location-header__name">Tanglewood Ward</h1>
     QRegularExpression nameRe(R"(<h1[^>]*>([^<]+)</h1>)");
     QRegularExpressionMatch match = nameRe.match(html);
     if (match.hasMatch())
@@ -140,8 +165,7 @@ void UnitLookupService::parseWardResponse(const QString& wardUnitNumber, const Q
         ward.setName(match.captured(1).trimmed());
     }
 
-    // Stake: <div class="location-link"><a class="location-link__anchor" href="/stakes/510033">
-    //        <span class="location-link__text"><span class="location-link__name">Winston-Salem North Carolina Stake</span></span></a></div>
+    // Stake: <a ... href="/stakes/510033"> ... <span class="location-link__name">...</span>
     QRegularExpression stakeRe(
         R"RE(href="/stakes/(\d+)"[^>]*>.*?<span class="location-link__name">([^<]+)</span>)RE",
         QRegularExpression::DotMatchesEverythingOption);
@@ -149,7 +173,6 @@ void UnitLookupService::parseWardResponse(const QString& wardUnitNumber, const Q
     if (match.hasMatch())
     {
         ward.setStakeUnitNumber(match.captured(1));
-        // TODO: pass stake name to DocumentMetadata: match.captured(2).trimmed()
     }
 
     // Address: <span class="address__text">4260 Clinard Road<br>Clemmons, North Carolina 27012-8485<br>United States</span>
@@ -180,16 +203,15 @@ void UnitLookupService::parseWardResponse(const QString& wardUnitNumber, const Q
         }
     }
 
-    // Phone: <a class="anchor" href="tel:+1 336-766-3607">...<svg>...</svg></span>+1 336-766-3607</a>
-    QRegularExpression phoneRe(R"RE(href="tel:([^"]+)"[^>]*>.*?</svg></span>([^<]+)</a>)RE",
-        QRegularExpression::DotMatchesEverythingOption);
+    // Phone: <a ... href="tel:+1 336-766-3607">...</a>
+    QRegularExpression phoneRe(R"RE(href="tel:([^"]+)")RE");
     match = phoneRe.match(html);
     if (match.hasMatch())
     {
-        ward.setChapelPhone(match.captured(2).trimmed());
+        ward.setChapelPhone(match.captured(1).trimmed());
     }
 
-    // Meeting time: <div class="hours__line">Sunday 9:00 AM<!-- --> - <!-- -->Sacrament meets first</div>
+    // Meeting time: <div class="hours__line">Sunday 9:00 AM...Sacrament meets first</div>
     QRegularExpression meetingRe(R"(<div class="hours__line">([^<]+(?:<!--[^>]*-->[^<]*)*)</div>)");
     match = meetingRe.match(html);
     if (match.hasMatch())
@@ -197,6 +219,11 @@ void UnitLookupService::parseWardResponse(const QString& wardUnitNumber, const Q
         QString time = match.captured(1);
         time.replace(QRegularExpression(R"(<!--[^>]*-->)"), "");  // Remove HTML comments
         ward.setMeetingTime(time.trimmed());
+    }
+
+    if (!ward.chapelLat().has_value())
+    {
+        qWarning() << "Ward lookup for" << wardUnitNumber << "- no coordinates found in response";
     }
 
     emit wardLookupComplete(wardUnitNumber, ward);
@@ -244,7 +271,7 @@ void UnitLookupService::parseStakeResponse(const QString& stakeUnitNumber, const
         }
     }
 
-    // Ward unit numbers: <a class="location-link__anchor" href="/wards/45004">...
+    // Ward unit numbers: <a ... href="/wards/45004">...
     QSet<QString> wardUnits;
     QRegularExpression wardRe(R"RE(href="/wards/(\d+)")RE");
     QRegularExpressionMatchIterator wardIter = wardRe.globalMatch(html);

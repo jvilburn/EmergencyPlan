@@ -4,11 +4,14 @@
 #include "Stake.h"
 
 #include <QObject>
-#include <QNetworkAccessManager>
+#include <QProcess>
 
-class QNetworkReply;
-
-/// Async service for looking up ward/stake metadata from online API.
+/// Async service for looking up ward/stake metadata from the church
+/// meetinghouse locator website.
+///
+/// Uses headless Edge browser to render the JavaScript-heavy pages and
+/// extract the resulting HTML. This is necessary because the site is a
+/// Next.js React app that requires JavaScript execution.
 ///
 /// Two-step lookup process:
 /// 1. lookupWard(wardUnitNumber) -> returns ward info + stake unit number
@@ -17,9 +20,6 @@ class QNetworkReply;
 /// The lookup is triggered after PDF import, using the ward unit number
 /// extracted from the PDF header. DocumentManager coordinates the two-step
 /// process automatically.
-///
-/// API endpoint is currently TBD - this service provides the infrastructure
-/// and will be updated when the API is determined.
 class UnitLookupService : public QObject
 {
     Q_OBJECT
@@ -40,7 +40,7 @@ public:
     void cancel();
 
     /// Check if a lookup is currently in progress.
-    bool isLookupInProgress() const { return m_pendingReply != nullptr; }
+    bool isLookupInProgress() const { return m_pendingProcess != nullptr; }
 
 signals:
     /// Emitted when ward lookup completes successfully.
@@ -55,7 +55,7 @@ signals:
     void lookupFailed(const QString& unitNumber, const QString& error);
 
 private slots:
-    void onRequestFinished(QNetworkReply* reply);
+    void onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
 
 private:
     enum class LookupType
@@ -64,11 +64,13 @@ private:
         Stake
     };
 
+    static QString findEdgePath();
+    void startLookup(const QString& unitNumber, LookupType type);
     void parseWardResponse(const QString& wardUnitNumber, const QByteArray& data);
     void parseStakeResponse(const QString& stakeUnitNumber, const QByteArray& data);
 
-    QNetworkAccessManager* m_networkManager;
-    QNetworkReply* m_pendingReply = nullptr;
+    static QString s_edgePath;
+    QProcess* m_pendingProcess = nullptr;
     QString m_currentUnitNumber;
     LookupType m_currentLookupType = LookupType::Ward;
 };
