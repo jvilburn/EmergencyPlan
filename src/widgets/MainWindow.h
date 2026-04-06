@@ -116,6 +116,7 @@ private:
     QAction* m_endEmergencyAction;
     QAction* m_generateReportAction;
     QAction* m_openArchiveAction;
+    QAction* m_closeArchiveAction;
     QAction* m_exitAction;
     QAction* m_undoAction;
     QAction* m_redoAction;

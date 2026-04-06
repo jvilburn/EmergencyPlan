@@ -3,7 +3,6 @@
 #include <QFrame>
 
 class QLabel;
-class QPushButton;
 
 class EmergencyBanner : public QFrame
 {
@@ -15,10 +14,6 @@ public:
     void setArchiveName(const QString& name);
     void clearBanner();
 
-signals:
-    void closeArchiveRequested();
-
 private:
     QLabel* m_label = nullptr;
-    QPushButton* m_closeArchiveButton = nullptr;
 };

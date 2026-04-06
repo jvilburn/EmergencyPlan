@@ -188,16 +188,6 @@ void MainWindow::setupMenus()
 
     fileMenu->addSeparator();
 
-    m_startEmergencyAction = fileMenu->addAction(tr("Start &Emergency..."), this, &MainWindow::onStartEmergency);
-    m_endEmergencyAction = fileMenu->addAction(tr("&End Emergency..."), this, &MainWindow::onEndEmergency);
-    m_endEmergencyAction->setEnabled(false);
-    m_generateReportAction = fileMenu->addAction(tr("&Generate Emergency Report..."), this, &MainWindow::generateEmergencyReport);
-    m_generateReportAction->setEnabled(false);
-    m_openArchiveAction = fileMenu->addAction(tr("Open Emergency &Archive..."), this, &MainWindow::onOpenArchive);
-    m_openArchiveAction->setEnabled(false);
-
-    fileMenu->addSeparator();
-
     m_exitAction = fileMenu->addAction(tr("E&xit"), this, &QMainWindow::close);
     m_exitAction->setShortcut(QKeySequence::Quit);
 
@@ -209,6 +199,21 @@ void MainWindow::setupMenus()
 
     m_redoAction = editMenu->addAction(tr("&Redo"), this, &MainWindow::onRedo);
     m_redoAction->setShortcut(QKeySequence::Redo);
+
+    // Emergency menu
+    QMenu* emergencyMenu = menuBar()->addMenu(tr("E&mergency"));
+
+    m_startEmergencyAction = emergencyMenu->addAction(tr("&Start Emergency..."), this, &MainWindow::onStartEmergency);
+    m_endEmergencyAction = emergencyMenu->addAction(tr("&End Emergency..."), this, &MainWindow::onEndEmergency);
+    m_endEmergencyAction->setEnabled(false);
+
+    emergencyMenu->addSeparator();
+
+    m_generateReportAction = emergencyMenu->addAction(tr("&Generate Report..."), this, &MainWindow::generateEmergencyReport);
+    m_generateReportAction->setEnabled(false);
+    m_openArchiveAction = emergencyMenu->addAction(tr("&Open Archive..."), this, &MainWindow::onOpenArchive);
+    m_closeArchiveAction = emergencyMenu->addAction(tr("&Close Archive"), EmergencyManager::instance(), &EmergencyManager::closeArchive);
+    m_closeArchiveAction->setEnabled(false);
 }
 
 void MainWindow::setupConnections()
@@ -235,9 +240,6 @@ void MainWindow::setupConnections()
             this, &MainWindow::onArchiveViewClosed);
     connect(EmergencyManager::instance(), &EmergencyManager::responseDataChanged,
             m_mapWidget, &MapWidget::updateHighlights);
-    connect(m_emergencyBanner, &EmergencyBanner::closeArchiveRequested,
-            EmergencyManager::instance(), &EmergencyManager::closeArchive);
-
     // Sidebar tab changes
     connect(m_sidebarTabs, &SidebarWidget::currentChanged,
             this, &MainWindow::onSidebarTabChanged);
@@ -1186,4 +1188,5 @@ void MainWindow::updateEmergencyActions()
     m_endEmergencyAction->setEnabled(active && !viewing);
     m_generateReportAction->setEnabled(active && !viewing);
     m_openArchiveAction->setEnabled(hasDocument && !viewing);
+    m_closeArchiveAction->setEnabled(viewing);
 }
