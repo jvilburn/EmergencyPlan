@@ -37,9 +37,14 @@ EmergencyAssetView::EmergencyAssetView(ResponseArea area,
     m_editButton = new QPushButton(tr("Edit"));
     m_deleteButton = new QPushButton(tr("Delete"));
 
+    m_removePersonButton = new QPushButton(tr("Remove Person"));
+    m_removePersonButton->setStyleSheet("color: #c0392b;");
+    m_removePersonButton->setEnabled(false);
+
     toolbar->addWidget(m_addButton);
     toolbar->addWidget(m_editButton);
     toolbar->addWidget(m_deleteButton);
+    toolbar->addWidget(m_removePersonButton);
     toolbar->addStretch();
 
     layout->addLayout(toolbar);
@@ -61,6 +66,7 @@ EmergencyAssetView::EmergencyAssetView(ResponseArea area,
     connect(m_addButton, &QPushButton::clicked, this, &EmergencyAssetView::addAsset);
     connect(m_editButton, &QPushButton::clicked, this, &EmergencyAssetView::editSelectedAsset);
     connect(m_deleteButton, &QPushButton::clicked, this, &EmergencyAssetView::deleteAsset);
+    connect(m_removePersonButton, &QPushButton::clicked, this, &EmergencyAssetView::onRemovePersonClicked);
 
     connect(m_tree, &SelectionPreservingTreeView::selectionChanged,
             this, &EmergencyAssetView::onSelectionChanged);
@@ -228,11 +234,43 @@ void EmergencyAssetView::removePersonFromContextMenu()
     }
 }
 
+void EmergencyAssetView::onRemovePersonClicked()
+{
+    QModelIndex index = m_tree->currentIndex();
+    if (!index.isValid())
+    {
+        return;
+    }
+
+    ItemType type = m_model->itemTypeAt(index);
+    if (type != ItemType::Person)
+    {
+        return;
+    }
+
+    std::optional<EmergencyAssetId> assetId = m_model->assetIdAt(index);
+    std::optional<PersonId> personId = m_model->personIdAt(index);
+    if (assetId && personId)
+    {
+        removePersonFromAsset(*assetId, *personId);
+    }
+}
+
 void EmergencyAssetView::updateButtonStates()
 {
-    bool hasAssetSelected = selectedAssetId().has_value();
+    QModelIndex index = m_tree->currentIndex();
+    ItemType type = ItemType::Invalid;
+    if (index.isValid())
+    {
+        type = m_model->itemTypeAt(index);
+    }
+
+    bool hasAssetSelected = (type == ItemType::Asset);
     m_editButton->setEnabled(hasAssetSelected);
     m_deleteButton->setEnabled(hasAssetSelected);
+
+    bool hasPersonSelected = (type == ItemType::Person);
+    m_removePersonButton->setEnabled(hasPersonSelected);
 }
 
 std::optional<EmergencyAssetId> EmergencyAssetView::selectedAssetId() const

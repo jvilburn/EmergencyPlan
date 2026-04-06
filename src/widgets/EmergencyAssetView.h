@@ -41,6 +41,7 @@ private slots:
     void expandAssets();
     void editAssetFromContextMenu();
     void removePersonFromContextMenu();
+    void onRemovePersonClicked();
 
 private:
     void updateButtonStates();
@@ -61,6 +62,7 @@ private:
     QPushButton* m_addButton;
     QPushButton* m_editButton;
     QPushButton* m_deleteButton;
+    QPushButton* m_removePersonButton;
 
     std::optional<EmergencyAssetId> m_contextAssetId;
     std::optional<PersonId> m_contextPersonId;
