@@ -1,0 +1,1886 @@
+/*
+ * Emergency Plan Qt - Windows 7 Aero Stylesheet
+ * Based on 7.css (https://khang-nd.github.io/7.css/)
+ *
+ * Windows 7 Aero design language with:
+ * - Glass-like gradients
+ * - Blue hover/focus highlights (#3c7fb1)
+ * - Selection color #2a90ff
+ * - Surface color #f0f0f0
+ */
+
+/* ============================================================================
+ * Global Settings
+ * ============================================================================ */
+
+* {
+    font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+    font-size: 9pt;
+}
+
+QWidget {
+    background-color: #f0f0f0;
+    color: #202020;
+}
+
+/* Labels should be transparent by default */
+QLabel {
+    background: transparent;
+}
+
+/* Abstract scroll area corner */
+QAbstractScrollArea::corner {
+    background: #f2f2f2;
+    border: none;
+}
+
+/* Scroll area background */
+QScrollArea {
+    background: transparent;
+    border: none;
+}
+
+QScrollArea > QWidget > QWidget {
+    background: transparent;
+}
+
+/* ============================================================================
+ * Main Window
+ * ============================================================================ */
+
+QMainWindow {
+    background: #f0f0f0;
+}
+
+QMainWindow::separator {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 #e4e4e4,
+        stop: 0.5 #f4f4f4,
+        stop: 1 #e4e4e4
+    );
+    width: 4px;
+    height: 4px;
+}
+
+QMainWindow::separator:hover {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #dcebfc,
+        stop: 0.5 #c0ddf4,
+        stop: 1 #dcebfc
+    );
+}
+
+/* ============================================================================
+ * Menu Bar - Windows 7 Aero Style
+ * ============================================================================ */
+
+QMenuBar {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #d0d8e6,
+        stop: 0.15 #fbfcfe,
+        stop: 0.5 #fbfcfe,
+        stop: 1.0 #c8d2e2
+    );
+    border-bottom: 1px solid #8e8f8f;
+    padding: 1px;
+}
+
+QMenuBar::item {
+    background: transparent;
+    padding: 6px 10px;
+}
+
+QMenuBar::item:selected {
+    background: #3399ff;
+    color: white;
+    border: none;
+    border-radius: 2px;
+}
+
+QMenuBar::item:pressed {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #e5f4fc,
+        stop: 0.5 #98d1ef,
+        stop: 1.0 #68b3db
+    );
+    border: 1px solid #6d91ab;
+}
+
+/* ============================================================================
+ * Menus - Windows 7 Aero Style
+ * ============================================================================ */
+
+QMenu {
+    background: #f0f0f0;
+    border: 1px solid #000;
+    padding: 2px;
+}
+
+/* Icon gutter (left column) - Windows 7 style */
+QMenu::icon {
+    padding-left: 4px;
+}
+
+QMenu::item {
+    padding: 4px 10px 4px 10px;
+    margin: 0 2px;
+    background: transparent;
+}
+
+QMenu::item:selected {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 rgba(255, 255, 255, 0.6),
+        stop: 0.9 rgba(230, 236, 245, 0.8),
+        stop: 1.0 rgba(255, 255, 255, 0.8)
+    );
+    border: 1px solid #aaddfa;
+    border-radius: 3px;
+    margin: 0 1px;
+    padding: 3px 9px 3px 9px;
+}
+
+QMenu::item:disabled {
+    color: #838383;
+}
+
+QMenu::separator {
+    height: 2px;
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #a0a0a0,
+        stop: 0.49 #a0a0a0,
+        stop: 0.5 #ffffff,
+        stop: 1.0 #ffffff
+    );
+    margin: 4px 2px;
+}
+
+QMenu::indicator {
+    width: 14px;
+    height: 14px;
+    margin-left: 6px;
+}
+
+QMenu::indicator:checked {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #ecf4fc,
+        stop: 0.2 #ffffff,
+        stop: 1 #ffffff
+    );
+    border: 1px solid #3c7fb1;
+    border-radius: 2px;
+}
+
+QMenu::indicator:unchecked {
+    background: transparent;
+}
+
+QMenu::right-arrow {
+    image: url(:/icons/win7/right-arrow-small.png);
+    width: 9px;
+    height: 9px;
+}
+
+/* ============================================================================
+ * Toolbar - Windows 7 Aero Style
+ * ============================================================================ */
+
+QToolBar {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #ffffff,
+        stop: 0.2 #ffffff,
+        stop: 0.25 #f1f4fa,
+        stop: 0.43 #f1f4fa,
+        stop: 0.48 #d4dbee,
+        stop: 1.0 #e6eaf6
+    );
+    border-bottom: 1px solid #8e8f8f;
+    spacing: 2px;
+    padding: 3px;
+}
+
+QToolBar::separator {
+    background: #c0c1cd;
+    width: 1px;
+    margin: 4px 4px;
+}
+
+QToolButton {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    padding: 3px 4px;
+}
+
+QToolButton:hover {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #ecf4fc,
+        stop: 0.45 #dcecfc,
+        stop: 0.5 #c0ddf4,
+        stop: 1.0 #a8cce8
+    );
+    border: 1px solid #3c7fb1;
+}
+
+QToolButton:pressed {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #e5f4fc,
+        stop: 0.3 #c4e5f6,
+        stop: 0.5 #98d1ef,
+        stop: 1.0 #68b3db
+    );
+    border: 1px solid #6d91ab;
+}
+
+QToolButton:checked {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #e5f4fc,
+        stop: 0.3 #c4e5f6,
+        stop: 0.5 #98d1ef,
+        stop: 1.0 #68b3db
+    );
+    border: 1px solid #6d91ab;
+}
+
+QToolButton:checked:hover {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #ecf8ff,
+        stop: 0.3 #cce8f8,
+        stop: 0.5 #a0d8f4,
+        stop: 1.0 #78c0e4
+    );
+}
+
+QToolButton:disabled {
+    color: #838383;
+}
+
+/* Tool buttons with menus */
+QToolButton[popupMode="1"] {
+    padding-right: 16px;
+}
+
+QToolButton::menu-button {
+    border: 1px solid transparent;
+    border-left: 1px solid #c0c0c0;
+    width: 14px;
+}
+
+QToolButton::menu-button:hover {
+    border-left: 1px solid #3c7fb1;
+}
+
+/* Sidebar navigation buttons */
+SidebarWidget > QToolButton {
+    padding: 3px 8px;
+    border-radius: 0px;
+    margin: 0;
+    border: 1px solid #8e8f8f;
+    background: qlineargradient(y1:0, y2:1, stop:0 #f2f2f2, stop:1 #cfcfcf);
+}
+
+SidebarWidget > QToolButton:hover {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #ecf4fc, stop: 0.45 #dcecfc,
+        stop: 0.5 #c0ddf4, stop: 1.0 #a8cce8
+    );
+    border: 1px solid #3c7fb1;
+}
+
+SidebarWidget > QToolButton:pressed,
+SidebarWidget > QToolButton:checked {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #e5f4fc, stop: 0.3 #c4e5f6,
+        stop: 0.5 #98d1ef, stop: 1.0 #68b3db
+    );
+    border: 1px solid #6d91ab;
+}
+
+SidebarWidget > QToolButton:checked:hover {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #ecf8ff, stop: 0.3 #cce8f8,
+        stop: 0.5 #a0d8f4, stop: 1.0 #78c0e4
+    );
+}
+
+/* Sidebar content pane */
+#sidebarPane {
+    border: 1px solid #8e8f8f;
+    background: white;
+    top: -1px;
+    padding: 14px;
+    margin-bottom: 9px;
+}
+
+/* ============================================================================
+ * Push Buttons
+ * ============================================================================ */
+
+/* ----------------------------------------------------------------------------
+ * Map Widget Buttons - Compact beveled style with 3D effect
+ * ---------------------------------------------------------------------------- */
+#mapWidget QPushButton {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #ffffff, stop:0.03 #f4f4f4, stop:0.5 #e8e8e8, stop:0.97 #d8d8d8, stop:1 #c8c8c8);
+    color: #404040;
+    border: 2px solid #a0a0a0;
+    border-top-color: #ffffff;
+    border-left-color: #f0f0f0;
+    border-right-color: #909090;
+    border-bottom-color: #808080;
+    border-radius: 5px;
+    padding: 4px;
+    min-width: 0;
+    min-height: 0;
+}
+
+#mapWidget QPushButton:hover {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #ffffff, stop:0.03 #f8f8f8, stop:0.5 #f0f0f0, stop:0.97 #e4e4e4, stop:1 #d8d8d8);
+}
+
+#mapWidget QPushButton:pressed {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #c8c8c8, stop:0.03 #d0d0d0, stop:0.5 #e0e0e0, stop:0.97 #e8e8e8, stop:1 #f0f0f0);
+    border-top-color: #808080;
+    border-left-color: #909090;
+    border-right-color: #e0e0e0;
+    border-bottom-color: #f0f0f0;
+}
+
+QPushButton {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #f3f3f3,
+        stop: 0.45 #ebebeb,
+        stop: 0.5 #dddddd,
+        stop: 1.0 #cfcfcf
+    );
+    border: 1px solid #8e8f8f;
+    border-radius: 3px;
+    padding: 4px 12px;
+    min-height: 13px;
+    color: #222;
+}
+
+QPushButton:hover {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #ecf4fc,
+        stop: 0.45 #dcecfc,
+        stop: 0.5 #c0ddf4,
+        stop: 1.0 #a8cce8
+    );
+    border: 1px solid #3c7fb1;
+}
+
+QPushButton:pressed,
+QPushButton:checked {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #e5f4fc,
+        stop: 0.3 #c4e5f6,
+        stop: 0.5 #98d1ef,
+        stop: 1.0 #68b3db
+    );
+    border: 1px solid #6d91ab;
+}
+
+QPushButton:disabled {
+    background: #f4f4f4;
+    border: 1px solid #adb2b5;
+    color: #838383;
+}
+
+QPushButton:focus {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #ecf4fc,
+        stop: 0.45 #dcecfc,
+        stop: 0.5 #c0ddf4,
+        stop: 1.0 #a8cce8
+    );
+    border: 1px solid #5586a3;
+    outline: none;
+}
+
+/* Default button - blue glow effect (dialog's default action) */
+/* Note: 7.css uses pulse animation which Qt QSS doesn't support */
+QPushButton:default {
+    border: 1px solid #5586a3;
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #eaf6fd,
+        stop: 0.45 #bee6fd,
+        stop: 0.5 #a7d9f5,
+        stop: 1.0 #a7d9f5
+    );
+}
+
+QPushButton:default:hover {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #ecf4fc,
+        stop: 0.45 #dcecfc,
+        stop: 0.5 #c0ddf4,
+        stop: 1.0 #a8cce8
+    );
+    border: 1px solid #3c7fb1;
+}
+
+/* Primary action button (use with class or object name) */
+QPushButton[primary="true"], QPushButton#primaryButton {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #5599ee,
+        stop: 0.4 #4488dd,
+        stop: 0.5 #3377cc,
+        stop: 1.0 #2266bb
+    );
+    border: 1px solid #2266aa;
+    color: white;
+}
+
+QPushButton[primary="true"]:hover, QPushButton#primaryButton:hover {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #66aaff,
+        stop: 0.4 #5599ee,
+        stop: 0.5 #4488dd,
+        stop: 1.0 #3377cc
+    );
+}
+
+/* ============================================================================
+ * Line Edits - Windows 7 Aero Style
+ * ============================================================================ */
+
+QLineEdit {
+    background: white;
+    border: 1px solid;
+    border-top-color: #abadb3;
+    border-right-color: #dbdfe6;
+    border-bottom-color: #e3e9ef;
+    border-left-color: #e2e3ea;
+    border-radius: 2px;
+    padding: 3px 4px 5px;
+    min-height: 18px;
+}
+
+QLineEdit:hover {
+    border-top-color: #5794bf;
+    border-right-color: #b7d5ea;
+    border-bottom-color: #c7e2f1;
+    border-left-color: #c5daed;
+}
+
+QLineEdit:focus {
+    border-top-color: #3d7bad;
+    border-right-color: #a4c9e3;
+    border-bottom-color: #b7d9ed;
+    border-left-color: #b5cfe7;
+    outline: none;
+}
+
+QLineEdit:disabled {
+    background: #f0f0f0;
+    border: 1px solid #afafaf;
+}
+
+QLineEdit:read-only {
+    background: #f4f4f4;
+}
+
+/* ============================================================================
+ * Text Edits - Windows 7 Aero Style
+ * ============================================================================ */
+
+QTextEdit, QPlainTextEdit {
+    background: white;
+    border: 1px solid;
+    border-top-color: #abadb3;
+    border-right-color: #dbdfe6;
+    border-bottom-color: #e3e9ef;
+    border-left-color: #e2e3ea;
+    border-radius: 2px;
+    padding: 3px 4px 5px;
+}
+
+QTextEdit:hover, QPlainTextEdit:hover {
+    border-top-color: #5794bf;
+    border-right-color: #b7d5ea;
+    border-bottom-color: #c7e2f1;
+    border-left-color: #c5daed;
+}
+
+QTextEdit:focus, QPlainTextEdit:focus {
+    border-top-color: #3d7bad;
+    border-right-color: #a4c9e3;
+    border-bottom-color: #b7d9ed;
+    border-left-color: #b5cfe7;
+    outline: none;
+}
+
+QTextEdit:disabled, QPlainTextEdit:disabled {
+    background: #f0f0f0;
+    border: 1px solid #afafaf;
+}
+
+/* ============================================================================
+ * Spin Boxes - Windows 7 Aero Style
+ * ============================================================================ */
+
+QSpinBox, QDoubleSpinBox {
+    background: white;
+    border: 1px solid;
+    border-top-color: #abadb3;
+    border-right-color: #dbdfe6;
+    border-bottom-color: #e3e9ef;
+    border-left-color: #e2e3ea;
+    border-radius: 2px;
+    padding: 3px 4px;
+    padding-right: 20px;
+    min-height: 18px;
+    selection-background-color: #2a90ff;
+    selection-color: white;
+}
+
+QSpinBox:hover, QDoubleSpinBox:hover {
+    border-top-color: #3c7fb1;
+    border-right-color: #7db3d4;
+    border-bottom-color: #8cc3e0;
+    border-left-color: #88bfdc;
+}
+
+QSpinBox:focus, QDoubleSpinBox:focus {
+    border-top-color: #3d7bad;
+    border-right-color: #a4c9e3;
+    border-bottom-color: #b7d9ed;
+    border-left-color: #b5cfe7;
+}
+
+QSpinBox:disabled, QDoubleSpinBox:disabled {
+    background: #f0f0f0;
+    color: #838383;
+    border: 1px solid #afafaf;
+}
+
+QSpinBox::up-button, QDoubleSpinBox::up-button {
+    subcontrol-origin: border;
+    subcontrol-position: top right;
+    width: 18px;
+    border-left: 1px solid #c0c0c0;
+    border-bottom: 1px solid #c0c0c0;
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #f3f3f3,
+        stop: 0.45 #ebebeb,
+        stop: 0.5 #dddddd,
+        stop: 1.0 #cfcfcf
+    );
+}
+
+QSpinBox::down-button, QDoubleSpinBox::down-button {
+    subcontrol-origin: border;
+    subcontrol-position: bottom right;
+    width: 18px;
+    border-left: 1px solid #c0c0c0;
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #f3f3f3,
+        stop: 0.45 #ebebeb,
+        stop: 0.5 #dddddd,
+        stop: 1.0 #cfcfcf
+    );
+}
+
+QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover,
+QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #ecf4fc,
+        stop: 0.5 #c0ddf4,
+        stop: 1.0 #a8cce8
+    );
+    border-color: #3c7fb1;
+}
+
+QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {
+    image: url(:/icons/win7/spinbox-up.svg);
+    width: 10px;
+    height: 10px;
+}
+
+QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {
+    image: url(:/icons/win7/spinbox-down.svg);
+    width: 10px;
+    height: 10px;
+}
+
+/* ============================================================================
+ * Combo Boxes - Windows 7 Aero Style
+ * ============================================================================ */
+
+QComboBox {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #f3f3f3,
+        stop: 0.45 #ebebeb,
+        stop: 0.5 #dddddd,
+        stop: 1.0 #cfcfcf
+    );
+    border: 1px solid #8e8f8f;
+    border-radius: 3px;
+    padding: 2px 6px;
+    padding-right: 20px;
+    min-height: 21px;
+    color: #222;
+}
+
+QComboBox:hover {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #ecf4fc,
+        stop: 0.45 #dcecfc,
+        stop: 0.5 #c0ddf4,
+        stop: 1.0 #a8cce8
+    );
+    border: 1px solid #3c7fb1;
+}
+
+QComboBox:focus {
+    border: 1px solid #3c7fb1;
+    outline: 1px dotted #000;
+    outline-offset: -4px;
+}
+
+QComboBox:on {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #e5f4fc,
+        stop: 0.3 #c4e5f6,
+        stop: 0.5 #98d1ef,
+        stop: 1.0 #68b3db
+    );
+    border: 1px solid #6d91ab;
+}
+
+QComboBox:disabled {
+    background: #f4f4f4;
+    border: 1px solid #adb2b5;
+    color: #838383;
+}
+
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 20px;
+    border-left: 1px solid #c0c0c0;
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #f3f3f3,
+        stop: 0.45 #ebebeb,
+        stop: 0.5 #dddddd,
+        stop: 1.0 #cfcfcf
+    );
+}
+
+QComboBox::drop-down:hover {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #ecf4fc,
+        stop: 0.5 #c0ddf4,
+        stop: 1.0 #a8cce8
+    );
+}
+
+QComboBox::down-arrow {
+    image: url(:/icons/win7/dropdown-arrow.png);
+    width: 16px;
+    height: 16px;
+}
+
+QComboBox::down-arrow:disabled {
+    image: url(:/icons/win7/dropdown-arrow-disabled.png);
+}
+
+QComboBox QAbstractItemView {
+    background: white;
+    border: 1px solid #8e8f8f;
+    selection-background-color: #2a90ff;
+    selection-color: white;
+    outline: none;
+}
+
+QComboBox QAbstractItemView::item {
+    padding: 3px 6px;
+}
+
+QComboBox QAbstractItemView::item:hover {
+    background: #dcebfc;
+}
+
+/* ============================================================================
+ * Group Boxes - Windows 7 Aero Style
+ * ============================================================================ */
+
+QGroupBox {
+    background: transparent;
+    border: 1px solid #cdd7db;
+    border-radius: 3px;
+    margin: 0;
+    padding: 8px 10px 10px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+}
+
+/* ============================================================================
+ * Tab Widget - Windows 7 Aero Style
+ * ============================================================================ */
+
+QTabWidget::pane {
+    border: 1px solid #8e8f8f;
+    background: white;
+    top: -1px;
+    padding: 14px;
+    margin-bottom: 9px;
+}
+
+QTabBar::tab {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #f2f2f2,
+        stop: 0.449 #f2f2f2,
+        stop: 0.45 #ebebeb,
+        stop: 1.0 #cfcfcf
+    );
+    border: 1px solid #8e8f8f;
+    border-bottom: none;
+    padding: 2px 6px;
+    margin-right: 1px;
+    border-top-left-radius: 3px;
+    border-top-right-radius: 3px;
+    color: #222;
+}
+
+QTabBar::tab:selected {
+    background: white;
+    border-bottom: none;
+    padding-bottom: 4px;
+}
+
+QTabBar::tab:selected:hover {
+    border-color: #8e8f8f;
+}
+
+QTabBar::tab:selected:focus {
+    outline: 1px dotted #222;
+    outline-offset: -4px;
+}
+
+QTabBar::tab:!selected {
+    margin-top: 2px;
+}
+
+QTabBar::tab:hover:!selected {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #ecf4fc,
+        stop: 0.5 #c0ddf4,
+        stop: 1.0 #a8cce8
+    );
+    border-color: #3c7fb1;
+}
+
+QTabBar::tab:disabled {
+    background: #f4f4f4;
+    border: 1px solid #adb2b5;
+    color: #838383;
+}
+
+/* Tab bar scroll buttons */
+QTabBar::scroller {
+    width: 20px;
+}
+
+QTabBar QToolButton {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #f3f3f3,
+        stop: 0.45 #ebebeb,
+        stop: 0.5 #dddddd,
+        stop: 1.0 #cfcfcf
+    );
+    border: 1px solid #8e8f8f;
+    border-radius: 2px;
+}
+
+QTabBar QToolButton:hover {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #ecf4fc,
+        stop: 0.45 #dcecfc,
+        stop: 0.5 #c0ddf4,
+        stop: 1.0 #a8cce8
+    );
+    border: 1px solid #3c7fb1;
+}
+
+QTabBar QToolButton:pressed {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #e5f4fc,
+        stop: 0.3 #c4e5f6,
+        stop: 0.5 #98d1ef,
+        stop: 1.0 #68b3db
+    );
+}
+
+/* Tab close button */
+QTabBar::close-button {
+    image: none;
+    subcontrol-position: right;
+}
+
+QTabBar::close-button:hover {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #ecf4fc,
+        stop: 0.5 #c0ddf4,
+        stop: 1.0 #a8cce8
+    );
+    border: 1px solid #3c7fb1;
+    border-radius: 2px;
+}
+
+/* ============================================================================
+ * List View - Windows 7 Aero Style
+ * ============================================================================ */
+
+QListView, QListWidget {
+    background: white;
+    border: 1px solid #c0c1cd;
+    alternate-background-color: #f5f9ff;
+    show-decoration-selected: 1;
+}
+
+QListView::item {
+    padding: 1px 4px;
+    border: 1px solid transparent;
+}
+
+QListView::item:hover {
+    background: #dcebfc;
+    border: 1px solid #b8d6fb;
+}
+
+QListView::item:selected {
+    background: #2a90ff;
+    color: white;
+    border: 1px solid #2a90ff;
+}
+
+QListView::item:selected:!active {
+    background: #d4d4d4;
+    color: #000000;
+    border: 1px solid #b4b4b4;
+}
+
+/* ============================================================================
+ * Tree View - Windows 7 Aero Style
+ * Note: CSS outline property not supported in Qt QSS, focus indication omitted
+ * ============================================================================ */
+
+QTreeView, QTreeWidget {
+    background: white;
+    border: 1px solid #8e8f8f;
+    alternate-background-color: #f5f9ff;
+    show-decoration-selected: 1;
+    outline: none;
+    padding: 2px;
+}
+
+QTreeView:disabled, QTreeWidget:disabled {
+    opacity: 0.5;
+}
+
+/* Item painting handled by SculptedItemDelegate */
+QTreeView::item {
+    padding: 2px 2px;
+}
+
+/* Branch expand/collapse arrows - Windows 7 style triangles */
+/* Expanded uses down-right arrow (rotated), not straight down */
+QTreeView::branch:has-children:closed {
+    border-image: none;
+    image: url(:/icons/win7/right-arrow-small.png);
+}
+
+QTreeView::branch:has-children:open {
+    border-image: none;
+    image: url(:/icons/win7/down-right-arrow-small.png);
+}
+
+/* ============================================================================
+ * Table View - Windows 7 Aero Style (matches 7.css file explorer list view)
+ * ============================================================================ */
+
+QTableView, QTableWidget {
+    background: white;
+    border: 1px solid #c0c1cd;
+    gridline-color: #eeeeee;
+    selection-background-color: #2a90ff;
+    selection-color: white;
+}
+
+QTableView::item {
+    height: 14px;
+    padding: 2px 8px;
+    border-right: 1px solid #eeeeee;
+}
+
+QTableView::item:hover {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 rgba(255, 255, 255, 0.6),
+        stop: 0.9 rgba(230, 236, 245, 0.8),
+        stop: 1.0 rgba(255, 255, 255, 0.8)
+    );
+    border: 1px solid #aaddfa;
+    border-radius: 3px;
+}
+
+QTableView::item:selected {
+    background: #2a90ff;
+    color: white;
+    border: 1px solid #2a90ff;
+    border-radius: 3px;
+}
+
+QTableView::item:selected:!active {
+    background: #d4d4d4;
+    color: #000000;
+    border: 1px solid #b4b4b4;
+    border-radius: 3px;
+}
+
+QHeaderView::section {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #ffffff,
+        stop: 0.449 #ffffff,
+        stop: 0.45 #fafafa,
+        stop: 1.0 #f0f0f0
+    );
+    border: 1px solid #d7d7d7;
+    height: 22px;
+    padding: 0 8px;
+    color: #000000;
+}
+
+QHeaderView::section:hover {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #f3f9fc,
+        stop: 0.449 #f3f9fc,
+        stop: 0.45 #e4f0f8,
+        stop: 1.0 #d9eaf5
+    );
+    border: 1px solid #a7d8f5;
+    border-radius: 3px;
+}
+
+/* Sort indicators - 7.css style triangles */
+QHeaderView::down-arrow {
+    image: url(:/icons/win7/sort-arrow-down.png);
+    width: 6px;
+    height: 5px;
+}
+
+QHeaderView::up-arrow {
+    image: url(:/icons/win7/sort-arrow-up.png);
+    width: 6px;
+    height: 5px;
+}
+
+/* Corner button where headers meet */
+QTableView QTableCornerButton::section {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #ffffff,
+        stop: 0.449 #ffffff,
+        stop: 0.45 #fafafa,
+        stop: 1.0 #f0f0f0
+    );
+    border: 1px solid #d7d7d7;
+}
+
+/* ============================================================================
+ * Scroll Bars - Windows 7 Aero Style
+ * ============================================================================ */
+
+QScrollBar:vertical {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 #e5e5e5,
+        stop: 0.2 #f0f0f0,
+        stop: 1 #f0f0f0
+    );
+    width: 16px;
+    margin: 17px 0 17px 0;
+    border: 1px solid #c2c3c9;
+}
+
+QScrollBar::handle:vertical {
+    background: url(:/icons/win7/scrollbar-grip-v.png) no-repeat center,
+        qlineargradient(
+            x1: 0, y1: 0, x2: 1, y2: 0,
+            stop: 0 #f2f2f2,
+            stop: 0.449 #f2f2f2,
+            stop: 0.45 #ebebeb,
+            stop: 1 #cfcfcf
+        );
+    min-height: 30px;
+    border: 1px solid #8e8f8f;
+    border-radius: 3px;
+    margin: 0;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: url(:/icons/win7/scrollbar-grip-v.png) no-repeat center,
+        qlineargradient(
+            x1: 0, y1: 0, x2: 1, y2: 0,
+            stop: 0 #eaf6fd,
+            stop: 0.449 #eaf6fd,
+            stop: 0.45 #bee6fd,
+            stop: 1 #bee6fd
+        );
+    border: 1px solid #3c7fb1;
+}
+
+QScrollBar::handle:vertical:pressed {
+    background: url(:/icons/win7/scrollbar-grip-v.png) no-repeat center,
+        qlineargradient(
+            x1: 0, y1: 0, x2: 1, y2: 0,
+            stop: 0 #c4e5f6,
+            stop: 0.449 #c4e5f6,
+            stop: 0.45 #98d1ef,
+            stop: 1 #98d1ef
+        );
+    border: 1px solid #6d91ab;
+}
+
+QScrollBar::add-line:vertical {
+    background: url(:/icons/win7/arrow-down.svg) no-repeat center,
+        qlineargradient(
+            x1: 0, y1: 0, x2: 1, y2: 0,
+            stop: 0 #e5e5e5,
+            stop: 0.2 #f0f0f0,
+            stop: 1 #f0f0f0
+        );
+    height: 17px;
+    subcontrol-position: bottom;
+    subcontrol-origin: margin;
+    border: 1px solid transparent;
+}
+
+QScrollBar::add-line:vertical:hover {
+    background: url(:/icons/win7/arrow-down.svg) no-repeat center,
+        qlineargradient(
+            x1: 0, y1: 0, x2: 1, y2: 0,
+            stop: 0 #eaf6fd,
+            stop: 0.449 #eaf6fd,
+            stop: 0.45 #bee6fd,
+            stop: 1 #bee6fd
+        );
+    border: 1px solid #3c7fb1;
+    border-radius: 3px;
+}
+
+QScrollBar::add-line:vertical:pressed {
+    background: url(:/icons/win7/arrow-down.svg) no-repeat center,
+        qlineargradient(
+            x1: 0, y1: 0, x2: 1, y2: 0,
+            stop: 0 #c4e5f6,
+            stop: 0.449 #c4e5f6,
+            stop: 0.45 #98d1ef,
+            stop: 1 #98d1ef
+        );
+    border: 1px solid #6d91ab;
+    border-radius: 3px;
+}
+
+QScrollBar::sub-line:vertical {
+    background: url(:/icons/win7/arrow-up.svg) no-repeat center,
+        qlineargradient(
+            x1: 0, y1: 0, x2: 1, y2: 0,
+            stop: 0 #e5e5e5,
+            stop: 0.2 #f0f0f0,
+            stop: 1 #f0f0f0
+        );
+    height: 17px;
+    subcontrol-position: top;
+    subcontrol-origin: margin;
+    border: 1px solid transparent;
+}
+
+QScrollBar::sub-line:vertical:hover {
+    background: url(:/icons/win7/arrow-up.svg) no-repeat center,
+        qlineargradient(
+            x1: 0, y1: 0, x2: 1, y2: 0,
+            stop: 0 #eaf6fd,
+            stop: 0.449 #eaf6fd,
+            stop: 0.45 #bee6fd,
+            stop: 1 #bee6fd
+        );
+    border: 1px solid #3c7fb1;
+    border-radius: 3px;
+}
+
+QScrollBar::sub-line:vertical:pressed {
+    background: url(:/icons/win7/arrow-up.svg) no-repeat center,
+        qlineargradient(
+            x1: 0, y1: 0, x2: 1, y2: 0,
+            stop: 0 #c4e5f6,
+            stop: 0.449 #c4e5f6,
+            stop: 0.45 #98d1ef,
+            stop: 1 #98d1ef
+        );
+    border: 1px solid #6d91ab;
+    border-radius: 3px;
+}
+
+QScrollBar:horizontal {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #e5e5e5,
+        stop: 0.2 #f0f0f0,
+        stop: 1 #f0f0f0
+    );
+    height: 17px;
+    margin: 0 17px 0 17px;
+    border: 1px solid #c2c3c9;
+}
+
+QScrollBar::handle:horizontal {
+    background: url(:/icons/win7/scrollbar-grip-h.png) no-repeat center,
+        qlineargradient(
+            x1: 0, y1: 0, x2: 0, y2: 1,
+            stop: 0 #f2f2f2,
+            stop: 0.449 #f2f2f2,
+            stop: 0.45 #ebebeb,
+            stop: 1 #cfcfcf
+        );
+    min-width: 30px;
+    border: 1px solid #8e8f8f;
+    border-radius: 3px;
+    margin: 0;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background: url(:/icons/win7/scrollbar-grip-h.png) no-repeat center,
+        qlineargradient(
+            x1: 0, y1: 0, x2: 0, y2: 1,
+            stop: 0 #eaf6fd,
+            stop: 0.449 #eaf6fd,
+            stop: 0.45 #bee6fd,
+            stop: 1 #bee6fd
+        );
+    border: 1px solid #3c7fb1;
+}
+
+QScrollBar::handle:horizontal:pressed {
+    background: url(:/icons/win7/scrollbar-grip-h.png) no-repeat center,
+        qlineargradient(
+            x1: 0, y1: 0, x2: 0, y2: 1,
+            stop: 0 #c4e5f6,
+            stop: 0.449 #c4e5f6,
+            stop: 0.45 #98d1ef,
+            stop: 1 #98d1ef
+        );
+    border: 1px solid #6d91ab;
+}
+
+QScrollBar::add-line:horizontal {
+    background: url(:/icons/win7/arrow-right.svg) no-repeat center,
+        qlineargradient(
+            x1: 0, y1: 0, x2: 0, y2: 1,
+            stop: 0 #e5e5e5,
+            stop: 0.2 #f0f0f0,
+            stop: 1 #f0f0f0
+        );
+    width: 16px;
+    subcontrol-position: right;
+    subcontrol-origin: margin;
+    border: 1px solid transparent;
+}
+
+QScrollBar::add-line:horizontal:hover {
+    background: url(:/icons/win7/arrow-right.svg) no-repeat center,
+        qlineargradient(
+            x1: 0, y1: 0, x2: 0, y2: 1,
+            stop: 0 #eaf6fd,
+            stop: 0.449 #eaf6fd,
+            stop: 0.45 #bee6fd,
+            stop: 1 #bee6fd
+        );
+    border: 1px solid #3c7fb1;
+    border-radius: 3px;
+}
+
+QScrollBar::add-line:horizontal:pressed {
+    background: url(:/icons/win7/arrow-right.svg) no-repeat center,
+        qlineargradient(
+            x1: 0, y1: 0, x2: 0, y2: 1,
+            stop: 0 #c4e5f6,
+            stop: 0.449 #c4e5f6,
+            stop: 0.45 #98d1ef,
+            stop: 1 #98d1ef
+        );
+    border: 1px solid #6d91ab;
+    border-radius: 3px;
+}
+
+QScrollBar::sub-line:horizontal {
+    background: url(:/icons/win7/arrow-left.svg) no-repeat center,
+        qlineargradient(
+            x1: 0, y1: 0, x2: 0, y2: 1,
+            stop: 0 #e5e5e5,
+            stop: 0.2 #f0f0f0,
+            stop: 1 #f0f0f0
+        );
+    width: 16px;
+    subcontrol-position: left;
+    subcontrol-origin: margin;
+    border: 1px solid transparent;
+}
+
+QScrollBar::sub-line:horizontal:hover {
+    background: url(:/icons/win7/arrow-left.svg) no-repeat center,
+        qlineargradient(
+            x1: 0, y1: 0, x2: 0, y2: 1,
+            stop: 0 #eaf6fd,
+            stop: 0.449 #eaf6fd,
+            stop: 0.45 #bee6fd,
+            stop: 1 #bee6fd
+        );
+    border: 1px solid #3c7fb1;
+    border-radius: 3px;
+}
+
+QScrollBar::sub-line:horizontal:pressed {
+    background: url(:/icons/win7/arrow-left.svg) no-repeat center,
+        qlineargradient(
+            x1: 0, y1: 0, x2: 0, y2: 1,
+            stop: 0 #c4e5f6,
+            stop: 0.449 #c4e5f6,
+            stop: 0.45 #98d1ef,
+            stop: 1 #98d1ef
+        );
+    border: 1px solid #6d91ab;
+    border-radius: 3px;
+}
+
+/* Page scroll areas (track background) - matches 7.css track gradient */
+QScrollBar::add-page:vertical,
+QScrollBar::sub-page:vertical {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 #e5e5e5,
+        stop: 0.2 #f0f0f0,
+        stop: 1 #f0f0f0
+    );
+}
+
+QScrollBar::add-page:horizontal,
+QScrollBar::sub-page:horizontal {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #e5e5e5,
+        stop: 0.2 #f0f0f0,
+        stop: 1 #f0f0f0
+    );
+}
+
+/* ============================================================================
+ * Splitter - Windows 7 Aero Style
+ * ============================================================================ */
+
+QSplitter::handle {
+    background: #f0f0f0;
+}
+
+QSplitter::handle:horizontal {
+    width: 4px;
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 #e4e4e4,
+        stop: 0.5 #f4f4f4,
+        stop: 1 #e4e4e4
+    );
+}
+
+QSplitter::handle:vertical {
+    height: 4px;
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #e4e4e4,
+        stop: 0.5 #f4f4f4,
+        stop: 1 #e4e4e4
+    );
+}
+
+QSplitter::handle:hover {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #dcebfc,
+        stop: 0.5 #c0ddf4,
+        stop: 1 #dcebfc
+    );
+}
+
+/* ============================================================================
+ * Status Bar - Windows 7 Aero Style
+ * ============================================================================ */
+
+QStatusBar {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #ffffff,
+        stop: 0.2 #ffffff,
+        stop: 0.25 #f1f4fa,
+        stop: 1.0 #e6eaf6
+    );
+    border-top: 1px solid #8e8f8f;
+    color: #333;
+}
+
+QStatusBar::item {
+    border: none;
+}
+
+QStatusBar QLabel {
+    background: transparent;
+    padding: 2px 4px;
+}
+
+/* Size grip */
+QSizeGrip {
+    background: transparent;
+    width: 16px;
+    height: 16px;
+}
+
+/* ============================================================================
+ * Progress Bar - Windows 7 Aero Style (glass-like green)
+ * ============================================================================ */
+
+QProgressBar {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #f3f3f3,
+        stop: 0.2 #fcfcfc,
+        stop: 0.4 #dbdbdb,
+        stop: 0.41 #cacaca,
+        stop: 1 #d5d5d5
+    );
+    border: 1px solid #8e8f8f;
+    border-radius: 3px;
+    text-align: center;
+    min-height: 15px;
+    margin: 2px 0;
+}
+
+QProgressBar::chunk {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #a8f098,
+        stop: 0.2 #4de832,
+        stop: 0.5 #0bd82c,
+        stop: 0.51 #09b824,
+        stop: 0.8 #0bd82c,
+        stop: 1 #4de832
+    );
+}
+
+/* Progress bar paused state (yellow) - use setProperty("state", "paused") */
+QProgressBar[state="paused"]::chunk {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #f8f498,
+        stop: 0.2 #f0ec48,
+        stop: 0.5 #e6df1b,
+        stop: 0.51 #c4bd16,
+        stop: 0.8 #e6df1b,
+        stop: 1 #f0ec48
+    );
+}
+
+/* Progress bar error state (red) - use setProperty("state", "error") */
+QProgressBar[state="error"]::chunk {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #ff8080,
+        stop: 0.2 #ff4040,
+        stop: 0.5 #ef0000,
+        stop: 0.51 #cc0000,
+        stop: 0.8 #ef0000,
+        stop: 1 #ff4040
+    );
+}
+
+/* ============================================================================
+ * Check Box & Radio Button - Windows 7 Aero Style
+ * Note: 7.css uses complex inset box-shadows which Qt QSS doesn't support
+ * ============================================================================ */
+
+QCheckBox, QRadioButton {
+    spacing: 6px;
+}
+
+QCheckBox:focus {
+    outline: 1px dotted #000;
+}
+
+QCheckBox::indicator {
+    width: 14px;
+    height: 14px;
+}
+
+QCheckBox::indicator:unchecked {
+    background: #f6f6f6;
+    border: 1px solid #8e8f8f;
+}
+
+QCheckBox::indicator:unchecked:hover {
+    background: #e9f7fe;
+    border: 1px solid #3c7fb1;
+}
+
+QCheckBox::indicator:checked {
+    background: #f6f6f6;
+    border: 1px solid #8e8f8f;
+    image: url(:/icons/win7/checkbox-check.png);
+}
+
+QCheckBox::indicator:checked:hover {
+    background: #e9f7fe;
+    border: 1px solid #3c7fb1;
+    image: url(:/icons/win7/checkbox-check.png);
+}
+
+QCheckBox::indicator:checked:disabled {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 1, y2: 1,
+        stop: 0 #f0f0f0,
+        stop: 1 #fbfbfb
+    );
+    border: 1px solid #b1b1b1;
+    image: url(:/icons/win7/checkbox-check-disabled.png);
+}
+
+QCheckBox::indicator:unchecked:disabled {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 1, y2: 1,
+        stop: 0 #f0f0f0,
+        stop: 1 #fbfbfb
+    );
+    border: 1px solid #b1b1b1;
+}
+
+QCheckBox:disabled {
+    color: #6d6d6d;
+}
+
+QRadioButton:focus {
+    outline: 1px dotted #000;
+}
+
+QRadioButton::indicator {
+    width: 14px;
+    height: 14px;
+    border-radius: 7px;
+}
+
+QRadioButton::indicator:unchecked {
+    background: #f6f6f6;
+    border: 1px solid #8e8f8f;
+}
+
+QRadioButton::indicator:unchecked:hover {
+    background: #e9f7fe;
+    border: 1px solid #3c7fb1;
+}
+
+QRadioButton::indicator:checked {
+    background: #f6f6f6;
+    border: 1px solid #8e8f8f;
+    image: url(:/icons/win7/radio-dot.png);
+}
+
+QRadioButton::indicator:checked:hover {
+    background: #e9f7fe;
+    border: 1px solid #3c7fb1;
+    image: url(:/icons/win7/radio-dot.png);
+}
+
+QRadioButton::indicator:checked:disabled {
+    background: #f6f6f6;
+    border: 1px solid #b1b1b1;
+    image: url(:/icons/win7/radio-dot-disabled.png);
+}
+
+QRadioButton::indicator:unchecked:disabled {
+    background: #f6f6f6;
+    border: 1px solid #b1b1b1;
+}
+
+QRadioButton:disabled {
+    color: #6d6d6d;
+}
+
+/* ============================================================================
+ * Slider - Windows 7 Aero Style
+ * Uses PNG pointer icons for the thumb handle
+ * ============================================================================ */
+
+QSlider:focus {
+    outline: 1px dotted #000;
+}
+
+QSlider::groove:horizontal {
+    background: #f0f0f0;
+    border-top: 1px solid #999;
+    border-left: 1px solid #999;
+    border-bottom: 1px solid #fff;
+    border-right: 1px solid #999;
+    height: 3px;
+}
+
+QSlider::groove:vertical {
+    background: #f0f0f0;
+    border-top: 1px solid #999;
+    border-left: 1px solid #999;
+    border-bottom: 1px solid #999;
+    border-right: 1px solid #fff;
+    width: 3px;
+}
+
+QSlider::handle:horizontal {
+    image: url(:/icons/win7/slider-thumb.png);
+    width: 10px;
+    height: 18px;
+    margin: -7px 0;
+}
+
+QSlider::handle:vertical {
+    image: url(:/icons/win7/slider-thumb.png);
+    width: 18px;
+    height: 10px;
+    margin: 0 -7px;
+}
+
+QSlider::handle:horizontal:hover, QSlider::handle:vertical:hover {
+    image: url(:/icons/win7/slider-thumb-hover.png);
+}
+
+QSlider::handle:horizontal:pressed, QSlider::handle:vertical:pressed {
+    image: url(:/icons/win7/slider-thumb-pressed.png);
+}
+
+QSlider::handle:horizontal:disabled, QSlider::handle:vertical:disabled {
+    image: url(:/icons/win7/slider-thumb-disabled.png);
+}
+
+/* ============================================================================
+ * Tooltips - Windows 7 Info Balloon Style
+ * ============================================================================ */
+
+QToolTip {
+    border: 0px;
+    border-image: url(:/icons/win7/tooltip-bg.png) 12 12 12 12 stretch stretch;
+    padding: 8px;
+    color: #000000;
+}
+
+/* ============================================================================
+ * Dialog Buttons
+ * ============================================================================ */
+
+QDialogButtonBox {
+    dialogbuttonbox-buttons-have-icons: 0;
+}
+
+/* ============================================================================
+ * Dialog - Windows 7 Aero Style
+ * ============================================================================ */
+
+QDialog {
+    background: #f0f0f0;
+}
+
+/* ============================================================================
+ * Dock Widget - Windows 7 Aero Style
+ * ============================================================================ */
+
+QDockWidget {
+    titlebar-close-icon: url(:/icons/win7/close.png);
+    titlebar-normal-icon: url(none);
+}
+
+QDockWidget::title {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #ffffff,
+        stop: 0.2 #ffffff,
+        stop: 0.25 #f1f4fa,
+        stop: 0.43 #f1f4fa,
+        stop: 0.48 #d4dbee,
+        stop: 1.0 #e6eaf6
+    );
+    border: 1px solid #8e8f8f;
+    padding: 4px;
+    text-align: left;
+}
+
+QDockWidget::close-button {
+    background: transparent;
+    border: 1px solid transparent;
+    padding: 0px;
+    image: url(:/icons/win7/close.png);
+    width: 17px;
+    height: 17px;
+}
+
+QDockWidget::float-button {
+    background: transparent;
+    border: 1px solid transparent;
+    padding: 2px;
+}
+
+QDockWidget::close-button:hover, QDockWidget::float-button:hover {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #ecf4fc,
+        stop: 0.5 #c0ddf4,
+        stop: 1.0 #a8cce8
+    );
+    border: 1px solid #3c7fb1;
+}
+
+/* ============================================================================
+ * Frame - Windows 7 Aero Style
+ * ============================================================================ */
+
+QFrame[frameShape="4"],    /* QFrame::HLine */
+QFrame[frameShape="5"] {   /* QFrame::VLine */
+    color: #d0d0d0;
+}
+
+QFrame[frameShape="1"] {   /* QFrame::Box */
+    border: 1px solid #c0c1cd;
+}
+
+QFrame[frameShape="6"] {   /* QFrame::StyledPanel */
+    background: white;
+    border: 1px solid #c0c1cd;
+}
+
+/* ============================================================================
+ * Date/Time Edit - Windows 7 Aero Style
+ * ============================================================================ */
+
+QDateEdit, QTimeEdit, QDateTimeEdit {
+    background: white;
+    border: 1px solid;
+    border-top-color: #abadb3;
+    border-right-color: #dbdfe6;
+    border-bottom-color: #e3e9ef;
+    border-left-color: #e2e3ea;
+    border-radius: 2px;
+    padding: 3px 6px;
+    padding-right: 20px;
+    min-height: 18px;
+    selection-background-color: #2a90ff;
+    selection-color: white;
+}
+
+QDateEdit:hover, QTimeEdit:hover, QDateTimeEdit:hover {
+    border-top-color: #3c7fb1;
+    border-right-color: #7db3d4;
+    border-bottom-color: #8cc3e0;
+    border-left-color: #88bfdc;
+}
+
+QDateEdit:focus, QTimeEdit:focus, QDateTimeEdit:focus {
+    border-top-color: #3d7bad;
+    border-right-color: #a4c9e3;
+    border-bottom-color: #b7d9ed;
+    border-left-color: #b5cfe7;
+}
+
+QDateEdit::drop-down, QTimeEdit::drop-down, QDateTimeEdit::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 20px;
+    border-left: 1px solid #c0c0c0;
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #f3f3f3,
+        stop: 0.45 #ebebeb,
+        stop: 0.5 #dddddd,
+        stop: 1.0 #cfcfcf
+    );
+}
+
+QDateEdit::drop-down:hover, QTimeEdit::drop-down:hover, QDateTimeEdit::drop-down:hover {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #ecf4fc,
+        stop: 0.5 #c0ddf4,
+        stop: 1.0 #a8cce8
+    );
+}
+
+QDateEdit::down-arrow, QTimeEdit::down-arrow, QDateTimeEdit::down-arrow {
+    image: url(:/icons/win7/dropdown-arrow.svg);
+    width: 12px;
+    height: 12px;
+}
+
+/* ============================================================================
+ * Calendar Widget - Windows 7 Aero Style
+ * ============================================================================ */
+
+QCalendarWidget QToolButton {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #f3f3f3,
+        stop: 0.45 #ebebeb,
+        stop: 0.5 #dddddd,
+        stop: 1.0 #cfcfcf
+    );
+    border: 1px solid #8e8f8f;
+    border-radius: 2px;
+    padding: 2px 6px;
+    color: #222;
+}
+
+QCalendarWidget QToolButton:hover {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #ecf4fc,
+        stop: 0.45 #dcecfc,
+        stop: 0.5 #c0ddf4,
+        stop: 1.0 #a8cce8
+    );
+    border: 1px solid #3c7fb1;
+}
+
+QCalendarWidget QWidget#qt_calendar_navigationbar {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #ffffff,
+        stop: 0.2 #ffffff,
+        stop: 0.25 #f1f4fa,
+        stop: 1.0 #e6eaf6
+    );
+    border-bottom: 1px solid #8e8f8f;
+}
+
+QCalendarWidget QTableView {
+    background: white;
+    selection-background-color: #2a90ff;
+    selection-color: white;
+    alternate-background-color: #f5f9ff;
+}
+
+/* ============================================================================
+ * Message Box - Windows 7 Aero Style
+ * ============================================================================ */
+
+QMessageBox {
+    background: #f0f0f0;
+}
+
+QMessageBox QLabel {
+    color: #202020;
+}
+
+/* ============================================================================
+ * Tool Box - Windows 7 Aero Style
+ * ============================================================================ */
+
+QToolBox::tab {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #f3f3f3,
+        stop: 0.45 #ebebeb,
+        stop: 0.5 #dddddd,
+        stop: 1.0 #cfcfcf
+    );
+    border: 1px solid #8e8f8f;
+    border-radius: 3px;
+    padding: 4px 8px;
+    color: #222;
+}
+
+QToolBox::tab:selected {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #e5f4fc,
+        stop: 0.5 #98d1ef,
+        stop: 1.0 #68b3db
+    );
+    border: 1px solid #3c7fb1;
+    color: #000;
+}
+
+QToolBox::tab:hover:!selected {
+    background: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 #ecf4fc,
+        stop: 0.45 #dcecfc,
+        stop: 0.5 #c0ddf4,
+        stop: 1.0 #a8cce8
+    );
+    border: 1px solid #3c7fb1;
+}
+
+/* ============================================================================
+ * Label Links - Windows 7 Aero Style
+ * ============================================================================ */
+
+QLabel[textInteractionFlags="LinksAccessibleByMouse"] {
+    color: #0066cc;
+}
+
+/* Standard link color for labels with links */
+QLabel a {
+    color: #0066cc;
+}
+
+/* ============================================================================
+ * Disabled State - Windows 7 Aero Style
+ * ============================================================================ */
+
+*:disabled {
+    color: #838383;
+}

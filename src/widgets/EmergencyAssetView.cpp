@@ -1,0 +1,431 @@
+#include "EmergencyAssetView.h"
+#include "BaseTreeModel.h"
+#include "WardListDialog.h"
+#include "DocumentManager.h"
+#include "Document.h"
+#include "EmergencyAsset.h"
+#include "EmergencyAssetModel.h"
+#include "FilterBar.h"
+#include "Person.h"
+#include "Phone.h"
+#include "EmergencyAssetCommands.h"
+#include "SelectionPreservingTreeView.h"
+
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QPushButton>
+#include <QMenu>
+#include <QMessageBox>
+
+EmergencyAssetView::EmergencyAssetView(ResponseArea area,
+                                              QWidget* parent)
+    : QWidget(parent)
+{
+    QVBoxLayout* layout = new QVBoxLayout(this);
+    layout->setContentsMargins(4, 4, 4, 4);
+    layout->setSpacing(4);
+
+    // FilterBar owns Filter
+    m_filterBar = new FilterBar(this);
+    layout->addWidget(m_filterBar);
+
+    // Toolbar
+    QHBoxLayout* toolbar = new QHBoxLayout();
+    toolbar->setContentsMargins(0, 0, 0, 0);
+
+    m_addButton = new QPushButton(tr("Add"));
+    m_editButton = new QPushButton(tr("Edit"));
+    m_deleteButton = new QPushButton(tr("Delete"));
+
+    m_removePersonButton = new QPushButton(tr("Remove Person"));
+    m_removePersonButton->setStyleSheet("color: #c0392b;");
+    m_removePersonButton->setEnabled(false);
+
+    toolbar->addWidget(m_addButton);
+    toolbar->addWidget(m_editButton);
+    toolbar->addWidget(m_deleteButton);
+    toolbar->addWidget(m_removePersonButton);
+    toolbar->addStretch();
+
+    layout->addLayout(toolbar);
+
+    // Create model with filter from FilterBar
+    m_model = new EmergencyAssetModel(m_filterBar->filter(), area, this);
+
+    // Create tree view with model
+    m_tree = new SelectionPreservingTreeView(m_model, this);
+    m_tree->setHeaderHidden(true);
+    m_tree->setRootIsDecorated(true);
+    m_tree->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_tree->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_tree->setIndentation(16);
+    m_tree->expandToDepth(0);
+    layout->addWidget(m_tree);
+
+    // Connections
+    connect(m_addButton, &QPushButton::clicked, this, &EmergencyAssetView::addAsset);
+    connect(m_editButton, &QPushButton::clicked, this, &EmergencyAssetView::editSelectedAsset);
+    connect(m_deleteButton, &QPushButton::clicked, this, &EmergencyAssetView::deleteAsset);
+    connect(m_removePersonButton, &QPushButton::clicked, this, &EmergencyAssetView::onRemovePersonClicked);
+
+    connect(m_tree, &SelectionPreservingTreeView::selectionChanged,
+            this, &EmergencyAssetView::onSelectionChanged);
+    connect(m_tree, &QTreeView::doubleClicked,
+            this, &EmergencyAssetView::onTreeDoubleClicked);
+    connect(m_tree, &QTreeView::customContextMenuRequested,
+            this, &EmergencyAssetView::onContextMenu);
+
+    // Expand top-level items when model is reset
+    connect(m_model, &QAbstractItemModel::modelReset, this, &EmergencyAssetView::expandAssets);
+
+    // Load contact details when person node is expanded
+    connect(m_tree, &QTreeView::expanded,
+            this, &EmergencyAssetView::onTreeExpanded);
+
+    updateButtonStates();
+}
+
+void EmergencyAssetView::onSelectionChanged()
+{
+    updateButtonStates();
+    emit highlightChanged();
+}
+
+void EmergencyAssetView::onTreeDoubleClicked(const QModelIndex& index)
+{
+    ItemType type = m_model->itemTypeAt(index);
+
+    switch (type)
+    {
+    case ItemType::Asset:
+        editSelectedAsset();
+        break;
+
+    case ItemType::Person:
+        // Could open person details in future
+        break;
+
+    case ItemType::ContactDetail:
+        // Contact details are read-only display nodes
+        break;
+
+    case ItemType::Invalid:
+        break;
+    }
+}
+
+void EmergencyAssetView::onTreeExpanded(const QModelIndex& index)
+{
+    ItemType type = m_model->itemTypeAt(index);
+
+    if (type == ItemType::Person)
+    {
+        m_model->loadContactDetails(index);
+    }
+}
+
+void EmergencyAssetView::onContextMenu(const QPoint& pos)
+{
+    QModelIndex index = m_tree->indexAt(pos);
+
+    QMenu menu;
+
+    if (!index.isValid())
+    {
+        // No item - show add option
+        menu.addAction(tr("Add Asset..."), this, &EmergencyAssetView::addAsset);
+    }
+    else
+    {
+        ItemType type = m_model->itemTypeAt(index);
+
+        switch (type)
+        {
+        case ItemType::Asset:
+            {
+                m_contextAssetId = m_model->assetIdAt(index);
+                menu.addAction(tr("Edit..."), this, &EmergencyAssetView::editAssetFromContextMenu);
+                menu.addSeparator();
+                menu.addAction(tr("Delete"), this, &EmergencyAssetView::deleteAsset);
+            }
+            break;
+
+        case ItemType::Person:
+            {
+                // Show contact info (disabled) if available
+                auto personIdOpt = m_model->personIdAt(index);
+                if (!personIdOpt)
+                {
+                    break;
+                }
+                const Document& doc = DocumentManager::instance()->document();
+                PersonId personId = *personIdOpt;
+                std::optional<Person> personOpt = doc.findPersonById(personId);
+                if (personOpt)
+                {
+                    const Phone& phone = personOpt->phone();
+                    if (!phone.isEmpty())
+                    {
+                        QAction* phoneAction = menu.addAction(phone);
+                        phoneAction->setEnabled(false);
+                    }
+                    const QString& email = personOpt->email();
+                    if (!email.isEmpty())
+                    {
+                        QAction* emailAction = menu.addAction(email);
+                        emailAction->setEnabled(false);
+                    }
+                    if (!phone.isEmpty() || !email.isEmpty())
+                    {
+                        menu.addSeparator();
+                    }
+                }
+
+                m_contextAssetId = m_model->assetIdAt(index);
+                m_contextPersonId = personId;
+                menu.addAction(tr("Remove"), this, &EmergencyAssetView::removePersonFromContextMenu);
+            }
+            break;
+
+        case ItemType::ContactDetail:
+            // Contact details are read-only display nodes
+            break;
+
+        case ItemType::Invalid:
+            break;
+        }
+    }
+
+    if (!menu.isEmpty())
+    {
+        menu.exec(m_tree->viewport()->mapToGlobal(pos));
+    }
+
+    // Clear context after menu closes (whether action taken or dismissed)
+    m_contextAssetId = std::nullopt;
+    m_contextPersonId = std::nullopt;
+}
+
+void EmergencyAssetView::expandAssets()
+{
+    m_tree->expandToDepth(0);
+}
+
+void EmergencyAssetView::editAssetFromContextMenu()
+{
+    std::optional<EmergencyAssetId> assetId = m_contextAssetId;
+    m_contextAssetId = std::nullopt;
+    m_contextPersonId = std::nullopt;
+    if (assetId)
+    {
+        showAssetDialog(assetId);
+    }
+}
+
+void EmergencyAssetView::removePersonFromContextMenu()
+{
+    auto assetId = m_contextAssetId;
+    auto personId = m_contextPersonId;
+    m_contextAssetId = std::nullopt;
+    m_contextPersonId = std::nullopt;
+    if (assetId && personId)
+    {
+        removePersonFromAsset(*assetId, *personId);
+    }
+}
+
+void EmergencyAssetView::onRemovePersonClicked()
+{
+    QModelIndex index = m_tree->currentIndex();
+    if (!index.isValid())
+    {
+        return;
+    }
+
+    ItemType type = m_model->itemTypeAt(index);
+    if (type != ItemType::Person)
+    {
+        return;
+    }
+
+    std::optional<EmergencyAssetId> assetId = m_model->assetIdAt(index);
+    std::optional<PersonId> personId = m_model->personIdAt(index);
+    if (assetId && personId)
+    {
+        removePersonFromAsset(*assetId, *personId);
+    }
+}
+
+void EmergencyAssetView::updateButtonStates()
+{
+    QModelIndex index = m_tree->currentIndex();
+    ItemType type = ItemType::Invalid;
+    if (index.isValid())
+    {
+        type = m_model->itemTypeAt(index);
+    }
+
+    bool hasAssetSelected = (type == ItemType::Asset);
+    m_editButton->setEnabled(hasAssetSelected);
+    m_deleteButton->setEnabled(hasAssetSelected);
+
+    bool hasPersonSelected = (type == ItemType::Person);
+    m_removePersonButton->setEnabled(hasPersonSelected);
+}
+
+std::optional<EmergencyAssetId> EmergencyAssetView::selectedAssetId() const
+{
+    QModelIndex current = m_tree->currentIndex();
+    if (!current.isValid())
+    {
+        return std::nullopt;
+    }
+
+    // For both Asset and Person items, assetIdAt returns the asset ID
+    return m_model->assetIdAt(current);
+}
+
+HighlightInfo EmergencyAssetView::highlightInfo() const
+{
+    FamilyAssociation assoc = m_model->relatedFamiliesAt(m_tree->currentIndex());
+    return {assoc.relatedFamilyIds, assoc.contactPointFamilyIds};
+}
+
+QSet<FamilyId> EmergencyAssetView::visibleFamilyIds() const
+{
+    // Show all families
+    return {};
+}
+
+void EmergencyAssetView::clearSelection()
+{
+    m_tree->clearSelection();
+}
+
+void EmergencyAssetView::selectFamily(const FamilyId& familyId)
+{
+    QModelIndex idx = m_model->indexForFamilyId(familyId);
+    if (idx.isValid())
+    {
+        m_tree->setCurrentIndex(idx);
+        m_tree->scrollTo(idx);
+    }
+}
+
+void EmergencyAssetView::addAsset()
+{
+    showAssetDialog(std::nullopt);
+}
+
+void EmergencyAssetView::editSelectedAsset()
+{
+    std::optional<EmergencyAssetId> assetId = selectedAssetId();
+    if (assetId)
+    {
+        showAssetDialog(assetId);
+    }
+}
+
+void EmergencyAssetView::deleteAsset()
+{
+    auto assetId = selectedAssetId();
+    if (!assetId)
+    {
+        return;
+    }
+
+    const Document& doc = DocumentManager::instance()->document();
+    std::optional<EmergencyAsset> assetOpt = doc.findEmergencyAssetById(*assetId);
+    if (!assetOpt)
+    {
+        return;
+    }
+
+    QString message = tr("Delete asset \"%1\"?").arg(assetOpt->name());
+    if (QMessageBox::question(this, tr("Delete Asset"), message) == QMessageBox::Yes)
+    {
+        DocumentManager::instance()->executeCommand(
+            std::make_unique<DeleteEmergencyAssetCommand>(*assetOpt));
+    }
+}
+
+void EmergencyAssetView::showAssetDialog(const std::optional<EmergencyAssetId>& assetId)
+{
+    QString initialName;
+    QList<PersonId> initialIds;
+
+    if (assetId)
+    {
+        const Document& doc = DocumentManager::instance()->document();
+        std::optional<EmergencyAsset> assetOpt = doc.findEmergencyAssetById(*assetId);
+        if (!assetOpt)
+        {
+            return;
+        }
+        initialName = assetOpt->name();
+        initialIds = assetOpt->personIds().values();
+    }
+
+    std::optional<PersonSelectionResult> result = WardListDialog::selectPersons(
+        nameLabel(), initialName, initialIds, this);
+
+    if (!result || result->name.isEmpty())
+    {
+        return;
+    }
+
+    QSet<PersonId> newPersons(result->personIds.begin(), result->personIds.end());
+
+    if (assetId)
+    {
+        // Edit existing asset
+        const Document& doc = DocumentManager::instance()->document();
+        std::optional<EmergencyAsset> assetOpt = doc.findEmergencyAssetById(*assetId);
+        if (!assetOpt)
+        {
+            return;
+        }
+
+        EmergencyAsset updated = *assetOpt;
+        updated.setName(result->name);
+        updated.setPersonIds(newPersons);
+
+        if (updated != *assetOpt)
+        {
+            DocumentManager::instance()->executeCommand(
+                std::make_unique<UpdateEmergencyAssetCommand>(*assetOpt, updated));
+        }
+    }
+    else
+    {
+        // Create new asset
+        EmergencyAsset asset = EmergencyAsset::create(result->name, m_model->area());
+        asset.setPersonIds(newPersons);
+        DocumentManager::instance()->executeCommand(
+            std::make_unique<AddEmergencyAssetCommand>(asset));
+    }
+}
+
+QString EmergencyAssetView::nameLabel() const
+{
+    switch (m_model->area())
+    {
+    case ResponseArea::Medical:
+        return tr("Medical skill");
+    case ResponseArea::Communications:
+        return tr("Communication skill/gear");
+    case ResponseArea::Recovery:
+        return tr("Skill or Gear");
+    case ResponseArea::None:
+    case ResponseArea::SpecialNeeds:
+        break;
+    }
+    Q_UNREACHABLE();
+    return tr("Name");
+}
+
+void EmergencyAssetView::removePersonFromAsset(const EmergencyAssetId& assetId, const PersonId& personId)
+{
+    DocumentManager::instance()->executeCommand(
+        std::make_unique<UnassignEmergencyAssetFromPersonCommand>(assetId, personId));
+}

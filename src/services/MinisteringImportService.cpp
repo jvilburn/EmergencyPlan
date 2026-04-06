@@ -1,0 +1,368 @@
+#include "MinisteringImportService.h"
+#include "MinisteringPdfParser.h"
+#include "PersonMatching.h"
+
+namespace
+{
+    // Helper to remap a set of IDs using a mapping
+    template<typename Id>
+    QSet<Id> remapIds(const QSet<Id>& ids, const QHash<Id, Id>& mapping)
+    {
+        QSet<Id> result;
+        for (const Id& id : ids)
+        {
+            result.insert(mapping.value(id, id));
+        }
+        return result;
+    }
+
+    // Helper to remap a single optional ID
+    template<typename Id>
+    std::optional<Id> remapId(const std::optional<Id>& id,
+                              const QHash<Id, Id>& mapping)
+    {
+        if (!id.has_value())
+        {
+            return std::nullopt;
+        }
+        return mapping.value(*id, *id);
+    }
+}
+
+// ============================================================================
+// Constructor / Destructor
+// ============================================================================
+
+MinisteringImportService::MinisteringImportService(QObject* parent)
+    : QObject(parent)
+{
+}
+
+MinisteringImportService::~MinisteringImportService()
+{
+}
+
+// ============================================================================
+// Public API
+// ============================================================================
+
+MinisteringImportResult MinisteringImportService::importFromPdf(
+    const QString& pdfPath,
+    const QHash<FamilyId, Family>& existingFamilies,
+    std::optional<QDate> wardDirectoryDate)
+{
+    MinisteringImportResult result;
+    result.success = false;
+
+    // Parse the PDF
+    MinisteringPdfParser::ParseResult parseResult = MinisteringPdfParser::parse(pdfPath);
+
+    if (!parseResult.success)
+    {
+        result.errors = parseResult.errors;
+        return result;
+    }
+
+    result.isRSFormat = parseResult.isRSFormat;
+    result.wardName = parseResult.wardName;
+    result.wardUnitNumber = parseResult.wardUnitNumber;
+    result.stakeName = parseResult.stakeName;
+    result.stakeUnitNumber = parseResult.stakeUnitNumber;
+
+    // Pass through PDF date
+    if (parseResult.documentDate.isValid())
+    {
+        result.pdfDate = parseResult.documentDate;
+    }
+
+    // Determine if ministering data is authoritative for family changes
+    bool isAuthoritative = isMinisteringAuthoritative(result.pdfDate, wardDirectoryDate);
+
+    // Step 1: Internal dedup - merge minister families into ministered families
+    // This handles the case where the same family appears as both minister and ministered
+    // Internal merge is always authoritative within the same PDF
+    mergeFamilies(parseResult.ministeredFamilies,
+                  parseResult.ministerFamilies,
+                  parseResult.districts,
+                  parseResult.groups,
+                  true);
+
+    // Step 2: Merge with document families - respect date authority
+    if (existingFamilies.isEmpty())
+    {
+        // No existing families - just copy directly (no matching needed)
+        result.families = parseResult.ministeredFamilies;
+    }
+    else
+    {
+        result.families = existingFamilies;
+        mergeFamilies(result.families,
+                      parseResult.ministeredFamilies,
+                      parseResult.districts,
+                      parseResult.groups,
+                      isAuthoritative);
+    }
+
+    // Copy final districts and groups to result
+    result.districts = parseResult.districts;
+    result.groups = parseResult.groups;
+
+    result.success = true;
+    return result;
+}
+
+// ============================================================================
+// Private Methods - Merge Functions
+// ============================================================================
+
+void MinisteringImportService::mergeFamilies(
+    QHash<FamilyId, Family>& targetFamilies,
+    const QHash<FamilyId, Family>& sourceFamilies,
+    QHash<MinisteringDistrictId, MinisteringDistrict>& districts,
+    QHash<MinisteringGroupId, MinisteringGroup>& groups,
+    bool isAuthoritative)
+{
+    QHash<FamilyId, FamilyId> familyIdMapping;
+    QHash<PersonId, PersonId> personIdMapping;
+
+    // Merge each source family into target
+    for (const Family& sourceFamily : sourceFamilies)
+    {
+        std::optional<Family> match = findMatchingFamily(sourceFamily, targetFamilies);
+
+        if (match.has_value())
+        {
+            // Found matching family - merge members and track ID mapping
+            familyIdMapping.insert(sourceFamily.id(), match->id());
+
+            std::optional<Family> updated = mergeFamilyMembers(
+                sourceFamily, *match, personIdMapping, isAuthoritative);
+
+            if (updated.has_value())
+            {
+                targetFamilies[match->id()] = *updated;
+            }
+        }
+        else if (isAuthoritative)
+        {
+            // No match and authoritative - add as new family
+            familyIdMapping.insert(sourceFamily.id(), sourceFamily.id());
+            for (const Person& member : sourceFamily.members())
+            {
+                personIdMapping.insert(member.id(), member.id());
+            }
+            targetFamilies.insert(sourceFamily.id(), sourceFamily);
+        }
+        else
+        {
+            // No match and not authoritative - just map IDs (don't add family)
+            familyIdMapping.insert(sourceFamily.id(), sourceFamily.id());
+            for (const Person& member : sourceFamily.members())
+            {
+                personIdMapping.insert(member.id(), member.id());
+            }
+        }
+    }
+
+    // Remap IDs in groups (all fields - one set will be empty based on EQ/RS format)
+    for (auto it = groups.begin(); it != groups.end(); ++it)
+    {
+        it->setMinisterIds(remapIds(it->ministerIds(), personIdMapping));
+        it->setFamilyIds(remapIds(it->familyIds(), familyIdMapping));
+        it->setMinisteredPersonIds(remapIds(it->ministeredPersonIds(), personIdMapping));
+        it->setPresidencyMemberId(remapId(it->presidencyMemberId(), personIdMapping));
+    }
+
+    // Remap presidency member IDs in districts
+    for (auto it = districts.begin(); it != districts.end(); ++it)
+    {
+        it->setPresidencyMemberId(remapId(it->presidencyMemberId(), personIdMapping));
+    }
+}
+
+// ============================================================================
+// Private Methods - Matching Functions
+// ============================================================================
+
+std::optional<Family> MinisteringImportService::findMatchingFamily(
+    const Family& pdfFamily,
+    const QHash<FamilyId, Family>& families)
+{
+    // Try member-based matching first (by surname)
+    PersonMatching::FamilyMemberMatchResult match =
+        PersonMatching::findFamilyByMembers(pdfFamily, families);
+
+    if (match.familyId.has_value())
+    {
+        return families.value(*match.familyId);
+    }
+
+    // Fallback: try replacement detection (for surname changes)
+    PersonMatching::FamilyReplacementResult replacement =
+        PersonMatching::findReplacedFamily(pdfFamily, families);
+
+    if (replacement.replacedFamilyId.has_value())
+    {
+        return families.value(*replacement.replacedFamilyId);
+    }
+
+    return std::nullopt;
+}
+
+std::optional<Person> MinisteringImportService::findMatchingPerson(
+    const Person& person,
+    const Family& family)
+{
+    QString firstName = person.givenNames().split(' ').first();
+
+    // Collect all first name matches
+    QList<Person> candidates;
+    for (const Person& member : family.members())
+    {
+        QString existingFirstName = member.givenNames().split(' ').first();
+        if (existingFirstName.compare(firstName, Qt::CaseInsensitive) == 0)
+        {
+            candidates.append(member);
+        }
+    }
+
+    if (candidates.isEmpty())
+    {
+        return std::nullopt;
+    }
+
+    if (candidates.size() == 1)
+    {
+        return candidates.first();
+    }
+
+    // Multiple first name matches - try isParent disambiguation
+    for (const Person& candidate : candidates)
+    {
+        if (person.isParent() == candidate.isParent())
+        {
+            return candidate;
+        }
+    }
+
+    // Can't disambiguate further - return first match
+    return candidates.first();
+}
+
+std::optional<Family> MinisteringImportService::mergeFamilyMembers(
+    const Family& sourceFamily,
+    Family targetFamily,
+    QHash<PersonId, PersonId>& personIdMapping,
+    bool isAuthoritative)
+{
+    bool anyChanges = false;
+
+    // Copy address if target doesn't have one (always allowed - filling empty field)
+    if (targetFamily.address().isEmpty() && !sourceFamily.address().isEmpty())
+    {
+        targetFamily.setAddress(sourceFamily.address());
+        anyChanges = true;
+    }
+
+    QList<Person> updatedMembers = targetFamily.members();
+
+    for (const Person& sourceMember : sourceFamily.members())
+    {
+        std::optional<Person> existingMember = findMatchingPerson(sourceMember, targetFamily);
+
+        if (existingMember.has_value())
+        {
+            // Found matching member - map IDs
+            personIdMapping.insert(sourceMember.id(), existingMember->id());
+
+            // Only update names if authoritative
+            bool needsNameUpdate = isAuthoritative
+                && (sourceMember.surname() != existingMember->surname()
+                    || sourceMember.givenNames() != existingMember->givenNames());
+            // isParent = true wins over false (always allowed - filling empty/false field)
+            bool needsIsParentUpdate = sourceMember.isParent() && !existingMember->isParent();
+            // Copy gender if source has it and target doesn't (always allowed - filling empty field)
+            bool needsGenderUpdate = sourceMember.gender().has_value()
+                && !existingMember->gender().has_value();
+            // Copy birthday if source has date and target doesn't (always allowed - filling empty field)
+            bool needsBirthdayUpdate = sourceMember.birthday().hasDate()
+                && !existingMember->birthday().hasDate();
+
+            if (needsNameUpdate || needsIsParentUpdate || needsGenderUpdate
+                || needsBirthdayUpdate)
+            {
+                // Find and update the member in the list
+                for (int i = 0; i < updatedMembers.size(); ++i)
+                {
+                    if (updatedMembers[i].id() == existingMember->id())
+                    {
+                        Person updated = updatedMembers[i];
+                        if (needsNameUpdate)
+                        {
+                            updated.setName(sourceMember.name());
+                        }
+                        if (needsIsParentUpdate)
+                        {
+                            updated.setIsParent(true);
+                        }
+                        if (needsGenderUpdate)
+                        {
+                            updated.setGender(sourceMember.gender());
+                        }
+                        if (needsBirthdayUpdate)
+                        {
+                            updated.setBirthday(sourceMember.birthday());
+                        }
+                        updatedMembers[i] = updated;
+                        anyChanges = true;
+                        break;
+                    }
+                }
+            }
+        }
+        else if (isAuthoritative)
+        {
+            // No match and authoritative - add as new member
+            personIdMapping.insert(sourceMember.id(), sourceMember.id());
+            updatedMembers.append(sourceMember);
+            anyChanges = true;
+        }
+        else
+        {
+            // No match and not authoritative - just map ID, don't add member
+            personIdMapping.insert(sourceMember.id(), sourceMember.id());
+        }
+    }
+
+    if (anyChanges)
+    {
+        targetFamily.setMembers(updatedMembers);
+        return targetFamily;
+    }
+
+    return std::nullopt;
+}
+
+// ============================================================================
+// Private Methods - Date Comparison
+// ============================================================================
+
+bool MinisteringImportService::isMinisteringAuthoritative(
+    std::optional<QDate> pdfDate,
+    std::optional<QDate> wardDirectoryDate) const
+{
+    // No ward directory date means first import - ministering is authoritative
+    if (!wardDirectoryDate.has_value())
+    {
+        return true;
+    }
+
+    // If PDF date is missing, we can't compare - assume not authoritative
+    if (!pdfDate.has_value())
+    {
+        return false;
+    }
+
+    // Ministering is authoritative if same date or newer
+    return *pdfDate >= *wardDirectoryDate;
+}

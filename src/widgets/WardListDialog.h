@@ -1,0 +1,110 @@
+#pragma once
+
+#include "FamilyMarkerProvider.h"
+#include "Id.h"
+
+#include <QDialog>
+#include <optional>
+
+class FilterBar;
+class FamilyTreeModel;
+class PersonTreeModel;
+class MapWidget;
+class QLabel;
+class QLineEdit;
+class QSplitter;
+class QDialogButtonBox;
+class SelectionPreservingTreeView;
+
+/// Result from multi-select person dialog.
+struct PersonSelectionResult
+{
+    QString name;
+    QList<PersonId> personIds;
+};
+
+/// Result from multi-select family dialog.
+struct FamilySelectionResult
+{
+    QString name;
+    QList<FamilyId> familyIds;
+};
+
+/// Modal dialog for selecting families or persons from the ward list.
+/// Features a split view with tree on left and map on right.
+/// Uses FilterBar for search/filtering and tree models for display.
+class WardListDialog : public QDialog, public FamilyMarkerProvider
+{
+    Q_OBJECT
+
+public:
+    enum Mode
+    {
+        FamilyMode,
+        PersonMode
+    };
+    Q_ENUM(Mode)
+
+    explicit WardListDialog(Mode mode,
+                            bool checkable,
+                            QWidget* parent);
+
+    /// Get the name field text (trimmed).
+    QString name() const;
+
+    /// Pre-select a person by ID (for single-select mode).
+    void setPreselectedPersonIds(const QList<PersonId>& ids);
+
+    /// Get selected person IDs after dialog is accepted (for single-select mode).
+    QList<PersonId> selectedPersonIds() const;
+
+    // FamilyMarkerProvider interface
+    HighlightInfo highlightInfo() const override;
+    QSet<FamilyId> visibleFamilyIds() const override;
+    void selectFamily(const FamilyId& familyId) override;
+
+    // Static convenience methods for common use cases
+
+    /// Show dialog to select multiple families. Returns nullopt if cancelled.
+    static std::optional<FamilySelectionResult> selectFamilies(
+        const QString& nameLabel,
+        const QString& initialName,
+        const QList<FamilyId>& initialIds,
+        QWidget* parent);
+
+    /// Show dialog to select a single person with a name field.
+    /// Returns nullopt if cancelled.
+    static std::optional<PersonSelectionResult> selectPersonWithName(
+        const QString& nameLabel,
+        const QString& initialName,
+        const std::optional<PersonId>& initialId,
+        QWidget* parent);
+
+    /// Show dialog to select multiple persons. Returns nullopt if cancelled.
+    static std::optional<PersonSelectionResult> selectPersons(
+        const QString& nameLabel,
+        const QString& initialName,
+        const QList<PersonId>& initialIds,
+        QWidget* parent);
+
+private slots:
+    void onSelectionChanged();
+
+private:
+    void setupUi();
+    QSet<FamilyId> highlightedFamilyIds() const;
+
+    Mode m_mode;
+    FilterBar* m_filterBar = nullptr;
+    SelectionPreservingTreeView* m_treeView = nullptr;
+    MapWidget* m_mapWidget = nullptr;
+    QDialogButtonBox* m_buttonBox = nullptr;
+    QSplitter* m_splitter = nullptr;
+    bool m_checkable;
+    QLabel* m_nameLabel = nullptr;
+    QLineEdit* m_nameEdit = nullptr;
+
+    // Model - only one is non-null depending on mode
+    FamilyTreeModel* m_familyModel = nullptr;
+    PersonTreeModel* m_personModel = nullptr;
+};
