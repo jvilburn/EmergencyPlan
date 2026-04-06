@@ -27,10 +27,10 @@ constexpr double SHADOW_SPREAD_RADIUS = 2.0;  // Largest spread layer
 constexpr double HIGHLIGHT_GLOW_EXTENT = HIGHLIGHT_RING_WIDTH + SHADOW_SPREAD_RADIUS + SHADOW_BLUR_RADIUS;
 
 // Antenna overlay positioning (relative to marker size)
-constexpr double ANTENNA_SCALE = 0.6;
-constexpr double ANTENNA_OFFSET_X = 0.25;
+constexpr double ANTENNA_SCALE = 0.8;
+constexpr double ANTENNA_OFFSET_X = -0.01;  // Slight left offset to visually center antenna with marker
 constexpr double ANTENNA_OFFSET_Y_BASE = -0.5;
-constexpr double ANTENNA_OFFSET_Y_ADJUST = -0.3;
+constexpr double ANTENNA_OFFSET_Y_ADJUST = -0.89;
 
 // Lazy-initialized icons (must be function-local statics to ensure QApplication exists)
 static QIcon& homeIcon()
@@ -217,6 +217,22 @@ void draw(QPainter& painter, const QPointF& pos,
         painter.drawEllipse(pos, ringRadius, ringRadius);
     }
 
+    // Draw antenna behind marker if present
+    if (state.icons.hasAntenna && !state.icons.antennaPixmap.isNull())
+    {
+        double antennaSize = size * ANTENNA_SCALE;
+        double dpr = state.icons.antennaPixmap.devicePixelRatio();
+        int antennaPhysSize = static_cast<int>(qCeil(antennaSize * dpr));
+        QPixmap antennaPixmap = state.icons.antennaPixmap.scaled(
+            antennaPhysSize, antennaPhysSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        antennaPixmap.setDevicePixelRatio(dpr);
+
+        // Position antenna centered above marker (using logical size)
+        QPointF antennaPos(pos.x() - antennaSize / 2.0 + size * ANTENNA_OFFSET_X,
+                          pos.y() + size * ANTENNA_OFFSET_Y_BASE + antennaSize * ANTENNA_OFFSET_Y_ADJUST);
+        painter.drawPixmap(antennaPos, antennaPixmap);
+    }
+
     // Draw the marker icon using pre-rendered pixmap
     QPixmap pixmap = state.icons.basePixmap;
     if (pixmap.isNull())
@@ -231,20 +247,6 @@ void draw(QPainter& painter, const QPointF& pos,
     }
     QPointF topLeft(pos.x() - size / 2.0, pos.y() - size / 2.0);
     painter.drawPixmap(topLeft, pixmap);
-
-    // Draw antenna overlay if present
-    if (state.icons.hasAntenna && !state.icons.antennaPixmap.isNull())
-    {
-        double antennaSize = size * ANTENNA_SCALE;
-        int antennaIntSize = static_cast<int>(qCeil(antennaSize));
-        QPixmap antennaPixmap = state.icons.antennaPixmap.scaled(
-            antennaIntSize, antennaIntSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-
-        // Position antenna at top-right, partially overlapping
-        QPointF antennaPos(pos.x() + size * ANTENNA_OFFSET_X,
-                          pos.y() + size * ANTENNA_OFFSET_Y_BASE + antennaSize * ANTENNA_OFFSET_Y_ADJUST);
-        painter.drawPixmap(antennaPos, antennaPixmap);
-    }
 
     // Draw pip indicator for contact points
     if (state.showPip)
