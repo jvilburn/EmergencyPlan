@@ -15,6 +15,24 @@
 namespace
 {
 
+QString formatContactSuffix(const Person& person)
+{
+    QStringList parts;
+    if (!person.phone().isEmpty())
+    {
+        parts.append(person.phone());
+    }
+    if (!person.email().isEmpty())
+    {
+        parts.append(person.email());
+    }
+    if (parts.isEmpty())
+    {
+        return QString();
+    }
+    return QString::fromUtf8(" \u2014 ") + parts.join(QString::fromUtf8(" \u2014 "));
+}
+
 const QString kCheckmark = "\u2713";
 const QString kBullet = "\u2022";
 
@@ -126,7 +144,7 @@ void TeamsTreeModel::rebuild()
                 {
                     continue;
                 }
-                QString displayName = person->displayName();
+                QString displayName = person->displayName() + formatContactSuffix(*person);
                 if (leaderId && *leaderId == personId)
                 {
                     displayName += tr(" (leader)");
@@ -769,7 +787,7 @@ void TeamsTreeModel::refreshFamilyDisplayText(const FamilyId& familyId)
                 std::optional<Person> person = doc.findPersonById(*memberNode->personId);
                 if (person)
                 {
-                    QString displayName = person->displayName();
+                    QString displayName = person->displayName() + formatContactSuffix(*person);
                     std::optional<Team> teamOpt = teamNode->teamId
                         ? doc.findTeamById(*teamNode->teamId)
                         : std::nullopt;

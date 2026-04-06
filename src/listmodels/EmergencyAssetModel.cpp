@@ -10,6 +10,29 @@
 #include <algorithm>
 #include <QSet>
 
+namespace
+{
+
+QString formatContactSuffix(const Person& person)
+{
+    QStringList parts;
+    if (!person.phone().isEmpty())
+    {
+        parts.append(person.phone());
+    }
+    if (!person.email().isEmpty())
+    {
+        parts.append(person.email());
+    }
+    if (parts.isEmpty())
+    {
+        return QString();
+    }
+    return QString::fromUtf8(" \u2014 ") + parts.join(QString::fromUtf8(" \u2014 "));
+}
+
+}  // namespace
+
 EmergencyAssetModel::EmergencyAssetModel(Filter* filter,
                                                  ResponseArea area,
                                                  QObject* parent)
@@ -88,7 +111,7 @@ void EmergencyAssetModel::rebuild()
                 {
                     continue;
                 }
-                people.append({personId, person->displayName()});
+                people.append({personId, person->displayName() + formatContactSuffix(*person)});
             }
         }
         std::sort(people.begin(), people.end(),
@@ -540,7 +563,7 @@ void EmergencyAssetModel::refreshFamilyDisplayText(const FamilyId& familyId)
                 std::optional<Person> person = doc.findPersonById(*personNode->personId);
                 if (person)
                 {
-                    personNode->displayText = person->displayName();
+                    personNode->displayText = person->displayName() + formatContactSuffix(*person);
 
                     QModelIndex assetIndex = createIndex(assetRow, 0, assetNode);
                     QModelIndex personIndex = index(personRow, 0, assetIndex);
