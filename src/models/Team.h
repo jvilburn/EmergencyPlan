@@ -32,7 +32,7 @@ public:
     void setLeaderId(std::optional<PersonId> leaderId) { m_leaderId = leaderId; }
     void setMemberIds(const QSet<PersonId>& memberIds) { m_memberIds = memberIds; }
     void addMember(const PersonId& memberId) { m_memberIds.insert(memberId); }
-    void removeMember(const PersonId& memberId) { m_memberIds.remove(memberId); }
+    void removeMember(const PersonId& memberId);
 
     // Computed properties
     bool hasLeader() const { return m_leaderId.has_value(); }

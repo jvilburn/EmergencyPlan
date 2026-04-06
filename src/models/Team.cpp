@@ -12,6 +12,15 @@ Team Team::create(const QString& name,
     return team;
 }
 
+void Team::removeMember(const PersonId& memberId)
+{
+    m_memberIds.remove(memberId);
+    if (m_leaderId && *m_leaderId == memberId)
+    {
+        m_leaderId = std::nullopt;
+    }
+}
+
 QJsonObject Team::toJson() const
 {
     QJsonObject json;
