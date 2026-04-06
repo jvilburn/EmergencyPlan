@@ -7,6 +7,7 @@
 class FilterBar;
 class NeedsModel;
 class QModelIndex;
+class QPushButton;
 class SelectionPreservingTreeView;
 
 /// NeedsSubView displays a 2-level tree of special needs.
