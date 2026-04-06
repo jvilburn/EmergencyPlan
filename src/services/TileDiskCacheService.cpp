@@ -7,6 +7,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QTimeZone>
 
 #include <cstring>
 
@@ -44,7 +45,7 @@ static TileMetadata fromMetaDisk(const TileMetaDisk& d)
     TileMetadata meta;
     if (d.fetchEpochMs != 0)
     {
-        meta.fetchDate = QDateTime::fromMSecsSinceEpoch(d.fetchEpochMs, Qt::UTC);
+        meta.fetchDate = QDateTime::fromMSecsSinceEpoch(d.fetchEpochMs, QTimeZone::UTC);
     }
     meta.providerId = QString::fromUtf8(d.providerId, strnlen(d.providerId, sizeof(d.providerId)));
     meta.etag = QString::fromUtf8(d.etag, strnlen(d.etag, sizeof(d.etag)));

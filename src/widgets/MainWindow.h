@@ -28,6 +28,8 @@ public:
     explicit MainWindow(QWidget* parent);
     ~MainWindow();
 
+    bool openFile(const QString& filePath);
+
 private slots:
     void onNewDocument();
     void onOpenDocument();

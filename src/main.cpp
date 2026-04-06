@@ -33,5 +33,12 @@ int main(int argc, char *argv[])
     MainWindow window(nullptr);
     window.show();
 
+    // Open file passed as command-line argument (e.g. from file association)
+    const QStringList args = app.arguments();
+    if (args.size() > 1 && args[1].endsWith(".emergencyplan", Qt::CaseInsensitive))
+    {
+        window.openFile(args[1]);
+    }
+
     return app.exec();
 }

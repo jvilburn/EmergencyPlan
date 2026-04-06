@@ -303,6 +303,22 @@ void MainWindow::onOpenDocument()
     }
 }
 
+bool MainWindow::openFile(const QString& filePath)
+{
+    QString errorMessage;
+    if (DocumentManager::instance()->openDocument(filePath, &errorMessage))
+    {
+        statusBar()->showMessage(tr("Document opened"), 3000);
+        m_mapWidget->fitAllFamilies();
+        return true;
+    }
+    else
+    {
+        QMessageBox::warning(this, tr("Error"), errorMessage);
+        return false;
+    }
+}
+
 void MainWindow::onSaveDocument()
 {
     if (DocumentManager::instance()->filePath().isEmpty())
