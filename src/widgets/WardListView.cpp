@@ -401,6 +401,18 @@ void WardListView::onEmergencyStateChanged()
     {
         updateFilterTabCounts();
     }
+
+    // Rebuild all action button widgets so they reflect the current emergency state
+    QList<FamilyId> expandedFamilies = m_actionWidgets.keys();
+    for (const FamilyId& familyId : expandedFamilies)
+    {
+        detachActionButtons(familyId);
+        QModelIndex familyIndex = m_model->indexForFamilyId(familyId);
+        if (familyIndex.isValid())
+        {
+            attachActionButtons(familyIndex);
+        }
+    }
 }
 
 void WardListView::onStatusFilterTabClicked()
