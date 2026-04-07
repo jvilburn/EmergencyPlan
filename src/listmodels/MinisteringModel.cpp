@@ -88,8 +88,8 @@ void MinisteringModel::rebuild()
     clearNodes();
 
     const Document& doc = DocumentManager::instance()->document();
-    const QHash<MinisteringDistrictId, MinisteringDistrict>& districts = isEQ() ? doc.eqDistricts() : doc.rsDistricts();
-    const QHash<MinisteringGroupId, MinisteringGroup>& groups = isEQ() ? doc.eqGroups() : doc.rsGroups();
+    const QHash<MinisteringDistrictId, MinisteringDistrict>& districts = doc.districts(m_org);
+    const QHash<MinisteringGroupId, MinisteringGroup>& groups = doc.groups(m_org);
 
     // Sort districts by name
     QList<MinisteringDistrict> sortedDistricts = districts.values();
@@ -170,7 +170,7 @@ void MinisteringModel::rebuild()
 void MinisteringModel::addMinistersSection(TreeNode* companionshipNode, const MinisteringGroupId& groupId)
 {
     const Document& doc = DocumentManager::instance()->document();
-    const QHash<MinisteringGroupId, MinisteringGroup>& groups = isEQ() ? doc.eqGroups() : doc.rsGroups();
+    const QHash<MinisteringGroupId, MinisteringGroup>& groups = doc.groups(m_org);
 
     if (!groups.contains(groupId))
     {
@@ -238,7 +238,7 @@ void MinisteringModel::addMinistersSection(TreeNode* companionshipNode, const Mi
 void MinisteringModel::addMinisteredSection(TreeNode* companionshipNode, const MinisteringGroupId& groupId)
 {
     const Document& doc = DocumentManager::instance()->document();
-    const QHash<MinisteringGroupId, MinisteringGroup>& groups = isEQ() ? doc.eqGroups() : doc.rsGroups();
+    const QHash<MinisteringGroupId, MinisteringGroup>& groups = doc.groups(m_org);
 
     if (!groups.contains(groupId))
     {
@@ -621,8 +621,8 @@ FamilyAssociation MinisteringModel::relatedFamiliesAt(const QModelIndex& index) 
     }
 
     const Document& doc = DocumentManager::instance()->document();
-    const auto& districts = isEQ() ? doc.eqDistricts() : doc.rsDistricts();
-    const auto& groups = isEQ() ? doc.eqGroups() : doc.rsGroups();
+    const auto& districts = doc.districts(m_org);
+    const auto& groups = doc.groups(m_org);
 
     switch (node->type)
     {
@@ -1085,7 +1085,7 @@ void MinisteringModel::onFamilyStatusChanged(const FamilyId& familyId)
                 // Update companionship compact status
                 int filteredCount = countMinisteredChildren(compNode);
                 const QHash<MinisteringGroupId, MinisteringGroup>& groups =
-                    isEQ() ? doc.eqGroups() : doc.rsGroups();
+                    doc.groups(m_org);
 
                 if (compNode->groupId && groups.contains(*compNode->groupId))
                 {
@@ -1115,7 +1115,7 @@ void MinisteringModel::onFamilyStatusChanged(const FamilyId& familyId)
         if (districtAffected)
         {
             // Recalculate district display text with updated progress
-            const auto& districts = isEQ() ? doc.eqDistricts() : doc.rsDistricts();
+            const auto& districts = doc.districts(m_org);
             if (districtNode->districtId && districts.contains(*districtNode->districtId))
             {
                 const MinisteringDistrict& dist = districts[*districtNode->districtId];
@@ -1406,7 +1406,7 @@ void MinisteringModel::refreshFamilyDisplayText(const FamilyId& familyId)
             if (companionshipAffected)
             {
                 const QHash<MinisteringGroupId, MinisteringGroup>& groups =
-                    isEQ() ? doc.eqGroups() : doc.rsGroups();
+                    doc.groups(m_org);
 
                 if (compNode->groupId && groups.contains(*compNode->groupId))
                 {
@@ -1441,7 +1441,7 @@ void MinisteringModel::refreshFamilyDisplayText(const FamilyId& familyId)
             }
         }
 
-        const auto& districts = isEQ() ? doc.eqDistricts() : doc.rsDistricts();
+        const auto& districts = doc.districts(m_org);
         if (districtNode->districtId && districts.contains(*districtNode->districtId))
         {
             const MinisteringDistrict& district = districts[*districtNode->districtId];
