@@ -231,84 +231,64 @@ QList<EmergencyAsset> Document::emergencyAssetsByArea(ResponseArea area) const
 // Ministering operations
 // ============================================================================
 
-void Document::addEqDistrict(const MinisteringDistrict& district)
+const QHash<MinisteringDistrictId, MinisteringDistrict>& Document::districts(MinisteringOrg org) const
 {
-    m_eqDistricts.insert(district.id(), district);
+    return (org == MinisteringOrg::EldersQuorum) ? m_eqDistricts : m_rsDistricts;
 }
 
-void Document::updateEqDistrict(const MinisteringDistrict& district)
+const QHash<MinisteringGroupId, MinisteringGroup>& Document::groups(MinisteringOrg org) const
 {
-    m_eqDistricts.insert(district.id(), district);
+    return (org == MinisteringOrg::EldersQuorum) ? m_eqGroups : m_rsGroups;
 }
 
-void Document::removeEqDistrict(const MinisteringDistrictId& id)
+QHash<MinisteringDistrictId, MinisteringDistrict>& Document::districtsRef(MinisteringOrg org)
 {
-    m_eqDistricts.remove(id);
+    return (org == MinisteringOrg::EldersQuorum) ? m_eqDistricts : m_rsDistricts;
 }
 
-void Document::addEqGroup(const MinisteringGroup& group)
+QHash<MinisteringGroupId, MinisteringGroup>& Document::groupsRef(MinisteringOrg org)
 {
-    m_eqGroups.insert(group.id(), group);
+    return (org == MinisteringOrg::EldersQuorum) ? m_eqGroups : m_rsGroups;
 }
 
-void Document::updateEqGroup(const MinisteringGroup& group)
+void Document::addDistrict(MinisteringOrg org, const MinisteringDistrict& district)
 {
-    m_eqGroups.insert(group.id(), group);
+    districtsRef(org).insert(district.id(), district);
 }
 
-void Document::removeEqGroup(const MinisteringGroupId& id)
+void Document::updateDistrict(MinisteringOrg org, const MinisteringDistrict& district)
 {
-    m_eqGroups.remove(id);
+    districtsRef(org).insert(district.id(), district);
 }
 
-void Document::setEqDistricts(const QHash<MinisteringDistrictId, MinisteringDistrict>& districts)
+void Document::removeDistrict(MinisteringOrg org, const MinisteringDistrictId& id)
 {
-    m_eqDistricts = districts;
+    districtsRef(org).remove(id);
 }
 
-void Document::setEqGroups(const QHash<MinisteringGroupId, MinisteringGroup>& groups)
+void Document::setDistricts(MinisteringOrg org, const QHash<MinisteringDistrictId, MinisteringDistrict>& districts)
 {
-    m_eqGroups = groups;
+    districtsRef(org) = districts;
 }
 
-void Document::addRsDistrict(const MinisteringDistrict& district)
+void Document::addGroup(MinisteringOrg org, const MinisteringGroup& group)
 {
-    m_rsDistricts.insert(district.id(), district);
+    groupsRef(org).insert(group.id(), group);
 }
 
-void Document::updateRsDistrict(const MinisteringDistrict& district)
+void Document::updateGroup(MinisteringOrg org, const MinisteringGroup& group)
 {
-    m_rsDistricts.insert(district.id(), district);
+    groupsRef(org).insert(group.id(), group);
 }
 
-void Document::removeRsDistrict(const MinisteringDistrictId& id)
+void Document::removeGroup(MinisteringOrg org, const MinisteringGroupId& id)
 {
-    m_rsDistricts.remove(id);
+    groupsRef(org).remove(id);
 }
 
-void Document::addRsGroup(const MinisteringGroup& group)
+void Document::setGroups(MinisteringOrg org, const QHash<MinisteringGroupId, MinisteringGroup>& groups)
 {
-    m_rsGroups.insert(group.id(), group);
-}
-
-void Document::updateRsGroup(const MinisteringGroup& group)
-{
-    m_rsGroups.insert(group.id(), group);
-}
-
-void Document::removeRsGroup(const MinisteringGroupId& id)
-{
-    m_rsGroups.remove(id);
-}
-
-void Document::setRsDistricts(const QHash<MinisteringDistrictId, MinisteringDistrict>& districts)
-{
-    m_rsDistricts = districts;
-}
-
-void Document::setRsGroups(const QHash<MinisteringGroupId, MinisteringGroup>& groups)
-{
-    m_rsGroups = groups;
+    groupsRef(org) = groups;
 }
 
 void Document::setWardDirectoryPdfDate(std::optional<QDate> date)
@@ -358,49 +338,33 @@ void Document::cleanupPersonReferences(const PersonId& personId)
         }
     }
 
-    // Remove from EQ groups (ministers only - families are not person IDs)
-    for (auto it = m_eqGroups.begin(); it != m_eqGroups.end(); ++it)
+    // Remove from ministering groups and districts
+    for (MinisteringOrg org : {MinisteringOrg::EldersQuorum, MinisteringOrg::ReliefSociety})
     {
-        if (it->ministerIds().contains(personId))
+        for (auto it = groupsRef(org).begin(); it != groupsRef(org).end(); ++it)
         {
-            it->removeMinister(personId);
+            if (it->ministerIds().contains(personId))
+            {
+                it->removeMinister(personId);
+            }
+            // RS groups also track ministered persons (individual sisters)
+            if (org == MinisteringOrg::ReliefSociety
+                && it->ministeredPersonIds().contains(personId))
+            {
+                it->removeMinisteredPerson(personId);
+            }
+            if (it->presidencyMemberId() == personId)
+            {
+                it->setPresidencyMemberId(std::nullopt);
+            }
         }
-        if (it->presidencyMemberId() == personId)
-        {
-            it->setPresidencyMemberId(std::nullopt);
-        }
-    }
 
-    // Remove from RS groups (both ministers and ministered persons)
-    for (auto it = m_rsGroups.begin(); it != m_rsGroups.end(); ++it)
-    {
-        if (it->ministerIds().contains(personId))
+        for (auto it = districtsRef(org).begin(); it != districtsRef(org).end(); ++it)
         {
-            it->removeMinister(personId);
-        }
-        if (it->ministeredPersonIds().contains(personId))
-        {
-            it->removeMinisteredPerson(personId);
-        }
-        if (it->presidencyMemberId() == personId)
-        {
-            it->setPresidencyMemberId(std::nullopt);
-        }
-    }
-
-    // Clear presidency member ID in districts if matches
-    for (auto it = m_eqDistricts.begin(); it != m_eqDistricts.end(); ++it)
-    {
-        if (it->presidencyMemberId() == personId)
-        {
-            it->setPresidencyMemberId(std::nullopt);
-        }
-    }
-    for (auto it = m_rsDistricts.begin(); it != m_rsDistricts.end(); ++it)
-    {
-        if (it->presidencyMemberId() == personId)
-        {
-            it->setPresidencyMemberId(std::nullopt);
+            if (it->presidencyMemberId() == personId)
+            {
+                it->setPresidencyMemberId(std::nullopt);
+            }
         }
     }
 

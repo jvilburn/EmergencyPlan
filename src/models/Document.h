@@ -13,6 +13,7 @@
 #include "Tag.h"
 #include "MinisteringDistrict.h"
 #include "MinisteringGroup.h"
+#include "ItemType.h"
 #include "EmergencyAsset.h"
 #include "EmergencyResponse.h"
 #include "ResponseArea.h"
@@ -50,10 +51,8 @@ public:
     // ========================================================================
     // Ministering getters
     // ========================================================================
-    const QHash<MinisteringDistrictId, MinisteringDistrict>& eqDistricts() const { return m_eqDistricts; }
-    const QHash<MinisteringGroupId, MinisteringGroup>& eqGroups() const { return m_eqGroups; }
-    const QHash<MinisteringDistrictId, MinisteringDistrict>& rsDistricts() const { return m_rsDistricts; }
-    const QHash<MinisteringGroupId, MinisteringGroup>& rsGroups() const { return m_rsGroups; }
+    const QHash<MinisteringDistrictId, MinisteringDistrict>& districts(MinisteringOrg org) const;
+    const QHash<MinisteringGroupId, MinisteringGroup>& groups(MinisteringOrg org) const;
 
     // ========================================================================
     // Import date tracking
@@ -110,27 +109,15 @@ public:
     // ========================================================================
     // Mutating operations - ministering
     // ========================================================================
-    void addEqDistrict(const MinisteringDistrict& district);
-    void updateEqDistrict(const MinisteringDistrict& district);
-    void removeEqDistrict(const MinisteringDistrictId& id);
+    void addDistrict(MinisteringOrg org, const MinisteringDistrict& district);
+    void updateDistrict(MinisteringOrg org, const MinisteringDistrict& district);
+    void removeDistrict(MinisteringOrg org, const MinisteringDistrictId& id);
+    void setDistricts(MinisteringOrg org, const QHash<MinisteringDistrictId, MinisteringDistrict>& districts);
 
-    void addEqGroup(const MinisteringGroup& group);
-    void updateEqGroup(const MinisteringGroup& group);
-    void removeEqGroup(const MinisteringGroupId& id);
-
-    void setEqDistricts(const QHash<MinisteringDistrictId, MinisteringDistrict>& districts);
-    void setEqGroups(const QHash<MinisteringGroupId, MinisteringGroup>& groups);
-
-    void addRsDistrict(const MinisteringDistrict& district);
-    void updateRsDistrict(const MinisteringDistrict& district);
-    void removeRsDistrict(const MinisteringDistrictId& id);
-
-    void addRsGroup(const MinisteringGroup& group);
-    void updateRsGroup(const MinisteringGroup& group);
-    void removeRsGroup(const MinisteringGroupId& id);
-
-    void setRsDistricts(const QHash<MinisteringDistrictId, MinisteringDistrict>& districts);
-    void setRsGroups(const QHash<MinisteringGroupId, MinisteringGroup>& groups);
+    void addGroup(MinisteringOrg org, const MinisteringGroup& group);
+    void updateGroup(MinisteringOrg org, const MinisteringGroup& group);
+    void removeGroup(MinisteringOrg org, const MinisteringGroupId& id);
+    void setGroups(MinisteringOrg org, const QHash<MinisteringGroupId, MinisteringGroup>& groups);
 
     // ========================================================================
     // Cascading cleanup
@@ -177,6 +164,9 @@ public:
 private:
     void rebuildPersonToFamilyMap();
     void rebuildDecorationCaches();
+
+    QHash<MinisteringDistrictId, MinisteringDistrict>& districtsRef(MinisteringOrg org);
+    QHash<MinisteringGroupId, MinisteringGroup>& groupsRef(MinisteringOrg org);
 
     // Ward/Stake hierarchy and document naming
     DocumentMetadata m_metadata;
