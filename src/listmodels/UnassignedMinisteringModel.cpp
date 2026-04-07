@@ -74,7 +74,7 @@ void UnassignedMinisteringModel::rebuild()
     clearNodes();
 
     const Document& doc = DocumentManager::instance()->document();
-    const QHash<MinisteringGroupId, MinisteringGroup>& groups = isEQ() ? doc.eqGroups() : doc.rsGroups();
+    const QHash<MinisteringGroupId, MinisteringGroup>& groups = doc.groups(m_org);
 
     if (isEQ())
     {
