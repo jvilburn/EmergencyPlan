@@ -1,6 +1,7 @@
 #include "ImportWardDirectoryCommand.h"
 #include "Document.h"
 #include "EmergencyAsset.h"
+#include "ItemType.h"
 
 ImportWardDirectoryCommand::ImportWardDirectoryCommand(
     const QHash<FamilyId, Family>& mergedFamilies,
@@ -169,114 +170,60 @@ void ImportWardDirectoryCommand::cleanupRemovedFamily(
         }
     }
 
-    // Remove from EQ ministering groups
-    for (const MinisteringGroupId& groupId : document.eqGroups().keys())
+    // Remove from ministering groups and districts
+    for (MinisteringOrg org : {MinisteringOrg::EldersQuorum, MinisteringOrg::ReliefSociety})
     {
-        MinisteringGroup group = document.eqGroups()[groupId];
-        bool modified = false;
-
-        QSet<PersonId> ministerIds = group.ministerIds();
-        QSet<FamilyId> familyIds = group.familyIds();
-        QSet<PersonId> ministeredPersonIds = group.ministeredPersonIds();
-
-        if (familyIds.remove(familyId))
+        for (const MinisteringGroupId& groupId : document.groups(org).keys())
         {
-            modified = true;
-        }
+            MinisteringGroup group = document.groups(org)[groupId];
+            bool modified = false;
 
-        for (const Person& member : family.members())
-        {
-            if (ministerIds.remove(member.id()))
+            QSet<PersonId> ministerIds = group.ministerIds();
+            QSet<FamilyId> familyIds = group.familyIds();
+            QSet<PersonId> ministeredPersonIds = group.ministeredPersonIds();
+
+            if (familyIds.remove(familyId))
             {
                 modified = true;
             }
-            if (ministeredPersonIds.remove(member.id()))
+
+            for (const Person& member : family.members())
             {
-                modified = true;
+                if (ministerIds.remove(member.id()))
+                {
+                    modified = true;
+                }
+                if (ministeredPersonIds.remove(member.id()))
+                {
+                    modified = true;
+                }
+                if (group.presidencyMemberId() == member.id())
+                {
+                    group.setPresidencyMemberId(std::nullopt);
+                    modified = true;
+                }
             }
-            if (group.presidencyMemberId() == member.id())
+
+            if (modified)
             {
-                group.setPresidencyMemberId(std::nullopt);
-                modified = true;
-            }
-        }
-
-        if (modified)
-        {
-            group.setMinisterIds(ministerIds);
-            group.setFamilyIds(familyIds);
-            group.setMinisteredPersonIds(ministeredPersonIds);
-            document.updateEqGroup(group);
-        }
-    }
-
-    // Remove from RS ministering groups (same logic)
-    for (const MinisteringGroupId& groupId : document.rsGroups().keys())
-    {
-        MinisteringGroup group = document.rsGroups()[groupId];
-        bool modified = false;
-
-        QSet<PersonId> ministerIds = group.ministerIds();
-        QSet<FamilyId> familyIds = group.familyIds();
-        QSet<PersonId> ministeredPersonIds = group.ministeredPersonIds();
-
-        if (familyIds.remove(familyId))
-        {
-            modified = true;
-        }
-
-        for (const Person& member : family.members())
-        {
-            if (ministerIds.remove(member.id()))
-            {
-                modified = true;
-            }
-            if (ministeredPersonIds.remove(member.id()))
-            {
-                modified = true;
-            }
-            if (group.presidencyMemberId() == member.id())
-            {
-                group.setPresidencyMemberId(std::nullopt);
-                modified = true;
+                group.setMinisterIds(ministerIds);
+                group.setFamilyIds(familyIds);
+                group.setMinisteredPersonIds(ministeredPersonIds);
+                document.updateGroup(org, group);
             }
         }
 
-        if (modified)
+        for (const MinisteringDistrictId& districtId : document.districts(org).keys())
         {
-            group.setMinisterIds(ministerIds);
-            group.setFamilyIds(familyIds);
-            group.setMinisteredPersonIds(ministeredPersonIds);
-            document.updateRsGroup(group);
-        }
-    }
-
-    // Remove from EQ district presidencies
-    for (const MinisteringDistrictId& districtId : document.eqDistricts().keys())
-    {
-        MinisteringDistrict district = document.eqDistricts()[districtId];
-        for (const Person& member : family.members())
-        {
-            if (district.presidencyMemberId() == member.id())
+            MinisteringDistrict district = document.districts(org)[districtId];
+            for (const Person& member : family.members())
             {
-                district.setPresidencyMemberId(std::nullopt);
-                document.updateEqDistrict(district);
-                break;
-            }
-        }
-    }
-
-    // Remove from RS district presidencies
-    for (const MinisteringDistrictId& districtId : document.rsDistricts().keys())
-    {
-        MinisteringDistrict district = document.rsDistricts()[districtId];
-        for (const Person& member : family.members())
-        {
-            if (district.presidencyMemberId() == member.id())
-            {
-                district.setPresidencyMemberId(std::nullopt);
-                document.updateRsDistrict(district);
-                break;
+                if (district.presidencyMemberId() == member.id())
+                {
+                    district.setPresidencyMemberId(std::nullopt);
+                    document.updateDistrict(org, district);
+                    break;
+                }
             }
         }
     }
