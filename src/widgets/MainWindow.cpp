@@ -18,8 +18,8 @@
 #include "Ward.h"
 #include "FamilyCommands.h"
 #include "ImportWardDirectoryCommand.h"
-#include "ImportEQMinisteringCommand.h"
-#include "ImportRSMinisteringCommand.h"
+#include "ImportMinisteringCommand.h"
+#include "ItemType.h"
 #include "Document.h"
 #include "Family.h"
 #include "Person.h"
@@ -480,24 +480,16 @@ void MainWindow::onImportMinisteringPdf()
         .arg(result.districts.size())
         .arg(groupCount);
 
-    if (result.isRSFormat)
-    {
-        DocumentManager::instance()->executeCommand(std::make_unique<ImportRSMinisteringCommand>(
-            result.districts,
-            result.groups,
-            result.families,
-            result.pdfDate,
-            description));
-    }
-    else
-    {
-        DocumentManager::instance()->executeCommand(std::make_unique<ImportEQMinisteringCommand>(
-            result.districts,
-            result.groups,
-            result.families,
-            result.pdfDate,
-            description));
-    }
+    MinisteringOrg org = result.isRSFormat
+        ? MinisteringOrg::ReliefSociety
+        : MinisteringOrg::EldersQuorum;
+    DocumentManager::instance()->executeCommand(std::make_unique<ImportMinisteringCommand>(
+        org,
+        result.districts,
+        result.groups,
+        result.families,
+        result.pdfDate,
+        description));
 
     QString message = tr("Imported %1 ministering: %2 districts, %3 groups")
         .arg(orgType)

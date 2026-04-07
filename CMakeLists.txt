@@ -131,8 +131,7 @@ set(COMMAND_SOURCES
     src/commands/CommandHistory.cpp
     src/commands/FamilyCommands.cpp
     src/commands/ImportWardDirectoryCommand.cpp
-    src/commands/ImportEQMinisteringCommand.cpp
-    src/commands/ImportRSMinisteringCommand.cpp
+    src/commands/ImportMinisteringCommand.cpp
     src/commands/TeamCommands.cpp
     src/commands/MinisteringCommands.cpp
     src/commands/TagCommands.cpp
@@ -145,8 +144,7 @@ set(COMMAND_HEADERS
     src/commands/CommandHistory.h
     src/commands/FamilyCommands.h
     src/commands/ImportWardDirectoryCommand.h
-    src/commands/ImportEQMinisteringCommand.h
-    src/commands/ImportRSMinisteringCommand.h
+    src/commands/ImportMinisteringCommand.h
     src/commands/TeamCommands.h
     src/commands/MinisteringCommands.h
     src/commands/TagCommands.h
@@ -321,6 +319,7 @@ set(LISTMODEL_SOURCES
     src/listmodels/EmergencyAssetModel.cpp
     src/listmodels/Filter.cpp
     src/listmodels/FamilyTreeModel.cpp
+    src/listmodels/ContactIcons.cpp
     src/listmodels/MinisteringModel.cpp
     src/listmodels/StatusIcons.cpp
     src/listmodels/NeedsModel.cpp

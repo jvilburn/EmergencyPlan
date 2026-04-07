@@ -2,6 +2,7 @@
 
 #include "Command.h"
 #include "Family.h"
+#include "ItemType.h"
 #include "MinisteringDistrict.h"
 #include "MinisteringGroup.h"
 
@@ -9,12 +10,13 @@
 #include <QHash>
 #include <optional>
 
-/// Command that handles RS ministering PDF import: sets districts, groups, and families.
+/// Command that handles ministering PDF import: sets districts, groups, and families.
 /// This allows the entire import to be undone as a single operation.
-class ImportRSMinisteringCommand : public Command
+class ImportMinisteringCommand : public Command
 {
 public:
-    ImportRSMinisteringCommand(
+    ImportMinisteringCommand(
+        MinisteringOrg org,
         const QHash<MinisteringDistrictId, MinisteringDistrict>& districts,
         const QHash<MinisteringGroupId, MinisteringGroup>& groups,
         const QHash<FamilyId, Family>& families,
@@ -27,11 +29,11 @@ public:
     DocumentChange documentChange() const override;
 
 private:
+    MinisteringOrg m_org;
     QHash<MinisteringDistrictId, MinisteringDistrict> m_newDistricts;
     QHash<MinisteringGroupId, MinisteringGroup> m_newGroups;
     QHash<FamilyId, Family> m_newFamilies;
     QString m_description;
-
     std::optional<QDate> m_pdfDate;
 
     // For undo

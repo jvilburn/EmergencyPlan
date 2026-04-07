@@ -1,13 +1,15 @@
-#include "ImportEQMinisteringCommand.h"
+#include "ImportMinisteringCommand.h"
 #include "Document.h"
 
-ImportEQMinisteringCommand::ImportEQMinisteringCommand(
+ImportMinisteringCommand::ImportMinisteringCommand(
+    MinisteringOrg org,
     const QHash<MinisteringDistrictId, MinisteringDistrict>& districts,
     const QHash<MinisteringGroupId, MinisteringGroup>& groups,
     const QHash<FamilyId, Family>& families,
     std::optional<QDate> pdfDate,
     const QString& description)
-    : m_newDistricts(districts)
+    : m_org(org)
+    , m_newDistricts(districts)
     , m_newGroups(groups)
     , m_newFamilies(families)
     , m_description(description)
@@ -15,17 +17,17 @@ ImportEQMinisteringCommand::ImportEQMinisteringCommand(
 {
 }
 
-void ImportEQMinisteringCommand::execute(Document& document)
+void ImportMinisteringCommand::execute(Document& document)
 {
     // Save previous state for undo
-    m_previousDistricts = document.eqDistricts();
-    m_previousGroups = document.eqGroups();
+    m_previousDistricts = document.districts(m_org);
+    m_previousGroups = document.groups(m_org);
     m_previousFamilies = document.families();
     m_previousMinisteringPdfDate = document.ministeringPdfDate();
 
     // Apply new ministering data
-    document.setEqDistricts(m_newDistricts);
-    document.setEqGroups(m_newGroups);
+    document.setDistricts(m_org, m_newDistricts);
+    document.setGroups(m_org, m_newGroups);
 
     // Set all families (merged: existing + updated + new)
     document.setFamilies(m_newFamilies);
@@ -37,24 +39,23 @@ void ImportEQMinisteringCommand::execute(Document& document)
     }
 }
 
-void ImportEQMinisteringCommand::undo(Document& document)
+void ImportMinisteringCommand::undo(Document& document)
 {
     // Restore previous state
-    document.setEqDistricts(m_previousDistricts);
-    document.setEqGroups(m_previousGroups);
+    document.setDistricts(m_org, m_previousDistricts);
+    document.setGroups(m_org, m_previousGroups);
     document.setFamilies(m_previousFamilies);
 
     // Restore previous ministering PDF date
     document.setMinisteringPdfDate(m_previousMinisteringPdfDate);
 }
 
-QString ImportEQMinisteringCommand::description() const
+QString ImportMinisteringCommand::description() const
 {
     return m_description;
 }
 
-DocumentChange ImportEQMinisteringCommand::documentChange() const
+DocumentChange ImportMinisteringCommand::documentChange() const
 {
-    // EQ ministering import touches districts, groups, and families - use full
     return DocumentChange::full();
 }
