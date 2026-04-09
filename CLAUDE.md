@@ -6,7 +6,7 @@
 Qt 6 / C++17 port of a Flutter ward planning application for LDS church use. Features family management, ministering tracking, emergency response planning, and map visualization.
 
 ## Coding Style
-See [CODING_STYLE.md](CODING_STYLE.md) for complete details:
+See [CODING_STYLE.md](docs/CODING_STYLE.md) for complete details:
 - Allman-style braces (opening brace on new line)
 - Only one-liner functions in headers; multi-line functions go in .cpp
 - `std::optional<>` for nullable fields (no type aliases)
@@ -58,9 +58,8 @@ Using `QHash<QString, Model>` instead of `QList<Model>` because:
 - Display order is computed at render time (sorted by name, etc.)
 
 ## Architecture References
-- [CONVERSION_PLAN.md](CONVERSION_PLAN.md) - Full conversion plan from Flutter
-- [ARCHITECTURE.md](ARCHITECTURE.md) - Application architecture
-- [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) - Detailed task checklist (static progress tracker)
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md) - Application architecture
+- [IMPORT_DESIGN.md](docs/IMPORT_DESIGN.md) - Import semantics for ward directory and ministering PDFs
 
 ---
 

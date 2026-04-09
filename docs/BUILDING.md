@@ -4,26 +4,25 @@
 
 ### Windows
 
-1. **Visual Studio 2019/2022** (Community edition is free)
+1. **Visual Studio 2022** (Community edition is free)
    - Install "Desktop development with C++" workload
    - Includes MSVC compiler and Windows SDK
 
-2. **Qt 6.5+**
+2. **Qt 6.11+**
    - Download from https://www.qt.io/download-qt-installer
-   - Select: Qt 6.x.x → MSVC 2019 64-bit
-   - Required modules: Core, Gui, Widgets, Network, Svg, Pdf, Positioning, Concurrent
+   - Select: Qt 6.x.x → MSVC 2022 64-bit
+   - Required modules: Core, Gui, Widgets, Network, Svg, Pdf, Concurrent, PrintSupport, Test
 
 3. **CMake 3.21+**
    - Download from https://cmake.org/download/
    - Or install via Visual Studio
 
-4. **Ninja** (recommended build system)
+4. **Ninja** (build system)
    - Install via: `winget install Ninja-build.Ninja`
    - Or download from https://ninja-build.org/
 
-5. **VS Code Extensions**
-   - Open the project folder, VS Code will prompt to install recommended extensions
-   - Or manually install: C/C++, CMake Tools, CMake
+5. **vcpkg** (for MuPDF dependency)
+   - See vcpkg.json for the manifest
 
 ### macOS
 
@@ -42,109 +41,63 @@
    brew install qt@6 cmake ninja
    ```
 
-4. **VS Code Extensions**
-   - Same as Windows
+---
+
+## Building
+
+### Windows
+
+**Important**: Do NOT build from Git Bash or MSYS terminals. The MSVC environment is not set up in those shells.
+
+Use `build.bat` which sets up the Visual Studio environment automatically:
+
+```cmd
+# Debug build (default)
+build.bat
+
+# Release build
+build.bat release
+```
+
+The build script:
+- Sets up MSVC 2022 environment via vcvarsall.bat
+- Runs CMake configure only when CMakeLists.txt changes
+- Builds with Ninja
+- Deploys Qt DLLs with windeployqt
+
+### macOS / Linux
+
+```bash
+# Debug build (default)
+./build.sh
+
+# Release build
+./build.sh release
+```
 
 ---
 
 ## VS Code Setup
 
-### 1. Open Project
-```
-File → Open Folder → Select EmergencyPlanQt directory
-```
+### IDE Configuration
 
-### 2. Install Extensions
-When prompted, click "Install All" for recommended extensions, or install manually:
-- **C/C++** (ms-vscode.cpptools)
-- **CMake Tools** (ms-vscode.cmake-tools)
-- **CMake** (twxs.cmake)
+The project includes pre-configured VS Code settings. The CMake Tools extension is **not needed** — building is handled by `build.bat`/`build.sh` via the VS Code build task.
 
-### 3. Configure Qt Path
+**Build shortcut**: `Ctrl+Shift+B` (runs `build.bat`)
 
-**Option A: Edit CMakePresets.json**
+### Qt Path Configuration
 
-Update the `CMAKE_PREFIX_PATH` in `CMakePresets.json` to match your Qt installation:
+Update `CMAKE_PREFIX_PATH` in `CMakePresets.json` to match your Qt installation:
 
 ```json
 "cacheVariables": {
-    "CMAKE_PREFIX_PATH": "C:/Qt/6.6.0/msvc2019_64"  // Windows
-    // "CMAKE_PREFIX_PATH": "/opt/homebrew/opt/qt@6"  // macOS Homebrew
-    // "CMAKE_PREFIX_PATH": "$HOME/Qt/6.6.0/macos"    // macOS Qt installer
+    "CMAKE_PREFIX_PATH": "C:/Qt/6.11.0/msvc2022_64"
 }
 ```
 
-**Option B: Create CMakeUserPresets.json**
-
-Copy the template and customize:
+Or create a `CMakeUserPresets.json` (gitignored) from the template:
 ```bash
 cp CMakeUserPresets.json.template CMakeUserPresets.json
-```
-Then edit `CMakeUserPresets.json` with your paths (this file is gitignored).
-
-### 4. Select Kit and Configure
-
-1. Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on Mac)
-2. Type "CMake: Select a Kit"
-3. Choose your compiler:
-   - Windows: "Visual Studio ... amd64"
-   - macOS: "Clang ..."
-4. CMake Tools will auto-configure the project
-
-### 5. Build
-
-- **Status Bar**: Click "Build" in the bottom status bar
-- **Keyboard**: Press `F7` or `Ctrl+Shift+B`
-- **Command Palette**: `CMake: Build`
-
-### 6. Run / Debug
-
-- **Run**: Click ▶ in status bar or press `Shift+F5`
-- **Debug**: Press `F5` or click the Run and Debug sidebar
-
----
-
-## Build Configurations
-
-### Using CMake Presets (Recommended)
-
-CMake Presets provide standardized build configurations:
-
-```bash
-# Configure
-cmake --preset windows-debug    # or macos-debug
-
-# Build
-cmake --build --preset windows-debug
-
-# Test
-ctest --preset windows-debug
-```
-
-### Using CMake Tools Extension
-
-The extension provides UI controls in the status bar:
-- **Kit**: Compiler selection
-- **Build Type**: Debug/Release
-- **Build**: Build the project
-- **Target**: Select build target
-- **Launch**: Run/debug the application
-
----
-
-## Project Structure After Build
-
-```
-EmergencyPlanQt/
-├── build/
-│   ├── bin/
-│   │   ├── Debug/
-│   │   │   └── EmergencyPlan.exe     (Windows)
-│   │   └── EmergencyPlan.app/        (macOS)
-│   ├── lib/
-│   └── CMakeFiles/
-├── src/
-└── ...
 ```
 
 ---
@@ -163,50 +116,11 @@ Install Ninja:
 - Windows: `winget install Ninja-build.Ninja`
 - macOS: `brew install ninja`
 
-Or use a different generator:
-```json
-"generator": "Visual Studio 17 2022"  // Windows
-"generator": "Unix Makefiles"          // macOS/Linux
-```
-
-### IntelliSense not working
-
-1. Wait for CMake configuration to complete
-2. Check Output panel → CMake/C++ for errors
-3. Reload VS Code: `Ctrl+Shift+P` → "Developer: Reload Window"
-
 ### Build errors with Qt
 
 Ensure all required Qt modules are installed:
-- Core, Gui, Widgets, Network, Svg, Pdf, Positioning, Concurrent
+- Core, Gui, Widgets, Network, Svg, Pdf, Concurrent, PrintSupport, Test
 
----
+### "Cannot open include file: 'type_traits'" (Windows)
 
-## Keyboard Shortcuts
-
-| Action | Windows | macOS |
-|--------|---------|-------|
-| Build | `F7` or `Ctrl+Shift+B` | `F7` or `Cmd+Shift+B` |
-| Debug | `F5` | `F5` |
-| Run without Debug | `Ctrl+F5` | `Ctrl+F5` |
-| Stop | `Shift+F5` | `Shift+F5` |
-| Command Palette | `Ctrl+Shift+P` | `Cmd+Shift+P` |
-| Go to File | `Ctrl+P` | `Cmd+P` |
-| Go to Symbol | `Ctrl+Shift+O` | `Cmd+Shift+O` |
-| Find in Files | `Ctrl+Shift+F` | `Cmd+Shift+F` |
-
----
-
-## Additional Tools
-
-### Qt Designer
-For visual UI design (if using .ui files):
-- Windows: `C:/Qt/6.x.x/msvc2019_64/bin/designer.exe`
-- macOS: `open -a Designer`
-
-### Qt Assistant
-For Qt documentation:
-- Windows: `C:/Qt/6.x.x/msvc2019_64/bin/assistant.exe`
-- macOS: `open -a Assistant`
-
-Or use VS Code task: `Terminal → Run Task → Open Qt Designer/Assistant`
+You're building from Git Bash or MSYS. Use `build.bat` instead, which sets up the MSVC environment.

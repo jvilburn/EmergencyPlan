@@ -1,29 +1,13 @@
 # Emergency Plan Qt
 
-A C++/Qt desktop application for managing ward/stake family data, emergency response teams, and resources. This application is a conversion from the original Flutter/Dart implementation.
+A C++/Qt desktop application for managing ward/stake family data, emergency response teams, and resources.
 
 ## Platform Support
 
 | Platform | UI Style | Status |
 |----------|----------|--------|
 | **Windows** | Windows 7 / Skeuomorphic | Primary target |
-| **macOS** | Native Aqua | Developed in parallel |
-
-## Design Philosophy
-
-### Windows
-Classic **Windows 7 / Skeuomorphic** design featuring:
-- Visual depth with gradients and shadows
-- Tactile button and control appearances
-- Warm color palette with dimensional effects
-- Familiar classic Windows look
-
-### macOS
-**Native Aqua** styling:
-- Standard macOS controls and appearance
-- System menu bar integration
-- Follows Apple Human Interface Guidelines
-- Respects system dark/light mode
+| **macOS** | Native Aqua | Secondary |
 
 ## Features
 
@@ -31,21 +15,18 @@ Classic **Windows 7 / Skeuomorphic** design featuring:
 - **Interactive Map**: View families on a map with custom markers and highlighting
 - **Ministering Organization**: Manage EQ and RS ministering assignments and visits
 - **Emergency Response**: Organize teams and track skills/equipment for emergency preparedness
-- **Resource Management**: Track medical skills, recovery capabilities, communication resources
 - **Tag System**: Flexible categorization of families and individuals
-- **PDF Import/Export**: Import ward directories and export reports
+- **PDF Import**: Import ward directories and ministering assignments from PDF
 
 ## Building
 
 ### Prerequisites
 
 - CMake 3.21+
-- Qt 6.5+ with the following modules:
-  - Core, Gui, Widgets
-  - Network, Svg, Pdf
-  - Positioning, Concurrent
-  - Test (for running tests)
+- Qt 6.11+ with modules: Core, Gui, Widgets, Network, Svg, Pdf, Concurrent, PrintSupport, Test
 - C++17 compatible compiler
+- Ninja build system
+- vcpkg (for MuPDF dependency)
 
 ### Build Steps
 
@@ -84,13 +65,6 @@ cd WardPlanningQt
 open ./build/bin/EmergencyPlan.app  # macOS
 ```
 
-### Running Tests
-
-```bash
-cd build
-ctest --output-on-failure
-```
-
 ## Development Tools
 
 The project includes command-line tools for debugging and analysis (built when `BUILD_TOOLS=ON`, the default):
@@ -107,12 +81,6 @@ pdf_dump directory.pdf
 pdf_dump -o analysis.txt directory.pdf
 ```
 
-Output includes:
-- Font sizes found on each page (largest to smallest)
-- Text runs with Y position, X position, width, font size, bold flag, and text content
-
-Useful for tuning PDF parsing heuristics when the parser encounters new PDF layouts.
-
 ### test_import
 
 Tests the full ward directory import pipeline and displays parsed family data.
@@ -125,11 +93,6 @@ test_import directory.pdf
 test_import -f Smith directory.pdf
 ```
 
-Output includes:
-- Ward name and unit number
-- Family count
-- For each family: family name, address, coordinates, primary/secondary contacts with phone/email/callings, and children
-
 ## Project Structure
 
 ```
@@ -140,8 +103,8 @@ WardPlanningQt/
 │   ├── services/        # Business logic services
 │   ├── viewmodels/      # UI state management
 │   ├── listmodels/      # QAbstractItemModel wrappers
-│   ├── controllers/     # UI logic coordinators
 │   ├── widgets/         # Qt Widget UI components
+│   ├── ui/              # Qt Designer .ui files
 │   └── resources/       # Icons, styles, configs
 ├── tools/               # Development CLI tools (pdf_dump, test_import)
 ├── tests/               # Unit and integration tests
@@ -151,10 +114,11 @@ WardPlanningQt/
 
 ## Documentation
 
-- **CONVERSION_PLAN.md** - Detailed conversion plan from Flutter
-- **ARCHITECTURE.md** - Application architecture guide
-- **DESIGN_GUIDE.md** - Visual design specifications
-- **IMPLEMENTATION_CHECKLIST.md** - Implementation progress tracking
+- **docs/ARCHITECTURE.md** - Application architecture guide
+- **docs/DESIGN_GUIDE.md** - Visual design specifications
+- **docs/CODING_STYLE.md** - Coding conventions
+- **docs/IMPORT_DESIGN.md** - Import semantics for ward directory and ministering PDFs
+- **docs/BUILDING.md** - Build prerequisites and setup
 
 ## License
 

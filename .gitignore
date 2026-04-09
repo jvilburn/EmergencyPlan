@@ -93,3 +93,6 @@ hs_err_pid*
 *.emergencyplan
 *.txt
 !CMakeLists.txt
+.mcp.json
+.serena/
+installer_output/

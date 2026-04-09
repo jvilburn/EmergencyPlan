@@ -416,12 +416,12 @@ QString EmergencyAssetView::nameLabel() const
         return tr("Communication skill/gear");
     case ResponseArea::Recovery:
         return tr("Skill or Gear");
-    case ResponseArea::None:
     case ResponseArea::SpecialNeeds:
+        return tr("Special Needs");
+    case ResponseArea::None:
         break;
     }
-    Q_UNREACHABLE();
-    return tr("Name");
+    return tr("None");
 }
 
 void EmergencyAssetView::removePersonFromAsset(const EmergencyAssetId& assetId, const PersonId& personId)
