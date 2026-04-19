@@ -2,7 +2,7 @@
 ; Requires a release build: build.bat release
 
 #define MyAppName "Ward Emergency Plan"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.0.1"
 #define MyAppPublisher "Ward Emergency Plan Contributors"
 #define MyAppExeName "EmergencyPlan.exe"
 

@@ -119,7 +119,8 @@ WardPlanningQt/
 - **docs/CODING_STYLE.md** - Coding conventions
 - **docs/IMPORT_DESIGN.md** - Import semantics for ward directory and ministering PDFs
 - **docs/BUILDING.md** - Build prerequisites and setup
+- **docs/USER_GUIDE.md** - How to use the application
 
 ## License
 
-[License information here]
+GNU Affero General Public License v3.0 or later. See [LICENSE.txt](LICENSE.txt) for details.
