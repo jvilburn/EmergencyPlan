@@ -6,17 +6,26 @@ A C++/Qt desktop application for managing ward/stake family data, emergency resp
 
 | Platform | UI Style | Status |
 |----------|----------|--------|
-| **Windows** | Windows 7 / Skeuomorphic | Primary target |
+| **Windows** | Windows 7 | Primary target |
 | **macOS** | Native Aqua | Secondary |
 
 ## Features
 
 - **Family Management**: Track ward families with addresses, members, and contact information
 - **Interactive Map**: View families on a map with custom markers and highlighting
-- **Ministering Organization**: Manage EQ and RS ministering assignments and visits
+- **Ministering Organization**: Display EQ and RS ministering assignments and track emergency response contacts
 - **Emergency Response**: Organize teams and track skills/equipment for emergency preparedness
 - **Tag System**: Flexible categorization of families and individuals
 - **PDF Import**: Import ward directories and ministering assignments from PDF
+
+## Internet Access
+On startup, to center the map near you, it calls https://ipinfo.io/json — an IP-based geolocation service that returns the approximate location from your public IP address.
+
+On import of a Ward Directory pdf, it uses a headless Microsoft Edge browser to access https://maps.churchofjesuschrist.org to find the location of the ward meetinghouse.
+
+To display the map, it uses https://tile.openstreetmap.org for street maps and https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/ for satellite images.
+
+It caches map tiles to make map drawing responsive and also to allow drawing the maps during an emergency, when the internet may not be available.
 
 ## Building
 
