@@ -1,8 +1,8 @@
-# Emergency Plan Qt - Architecture Guide
+# Ward Planning - Architecture Guide
 
 ## Overview
 
-This document describes the architecture of the Emergency Plan Qt application, a C++17/Qt 6 desktop application for managing ward/stake family data, emergency response teams, and resources.
+This document describes the architecture of the Ward Planning application, a C++17/Qt 6 desktop application for managing ward/stake family data, emergency response teams, and resources.
 
 ---
 

@@ -1,6 +1,7 @@
 {
-    "name": "emergencyplan",
-    "version": "1.0.0",
+    "name": "wardplanning",
+    "version": "1.1.0",
+    "builtin-baseline": "245eb91b466a1f2e1eb73e2b04a6ba77c14c35af",
     "dependencies": [
         "libmupdf"
     ]

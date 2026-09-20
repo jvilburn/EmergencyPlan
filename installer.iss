@@ -1,10 +1,10 @@
-; Ward Emergency Plan - Inno Setup Installer Script
+; Ward Planning - Inno Setup Installer Script
 ; Requires a release build: build.bat release
 
-#define MyAppName "Ward Emergency Plan"
-#define MyAppVersion "1.0.1"
-#define MyAppPublisher "Ward Emergency Plan Contributors"
-#define MyAppExeName "EmergencyPlan.exe"
+#define MyAppName "Ward Planning"
+#define MyAppVersion "1.1.0"
+#define MyAppPublisher "Ward Planning Contributors"
+#define MyAppExeName "WardPlanning.exe"
 
 [Setup]
 AppId={{B7E3F2A1-5C8D-4F6E-9A2B-1D3E5F7A9C0B}
@@ -15,7 +15,7 @@ DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=installer_output
-OutputBaseFilename=WardEmergencyPlan-{#MyAppVersion}-setup
+OutputBaseFilename=WardPlanning-{#MyAppVersion}-setup
 SetupIconFile=src\resources\app_icon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 LicenseFile=LICENSE.txt
@@ -40,41 +40,41 @@ Name: "fileassoc"; Description: "Associate .emergencyplan files"; GroupDescripti
 Source: "LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Main executable
-Source: "build\bin\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "build\windows-release\bin\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Qt DLLs (release builds have no 'd' suffix)
-Source: "build\bin\Qt6Core.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "build\bin\Qt6Gui.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "build\bin\Qt6Network.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "build\bin\Qt6Pdf.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "build\bin\Qt6PrintSupport.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "build\bin\Qt6Svg.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "build\bin\Qt6Widgets.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "build\windows-release\bin\Qt6Core.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "build\windows-release\bin\Qt6Gui.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "build\windows-release\bin\Qt6Network.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "build\windows-release\bin\Qt6Pdf.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "build\windows-release\bin\Qt6PrintSupport.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "build\windows-release\bin\Qt6Svg.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "build\windows-release\bin\Qt6Widgets.dll"; DestDir: "{app}"; Flags: ignoreversion
 
 ; System DLLs deployed by windeployqt
-Source: "build\bin\d3dcompiler_47.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
-Source: "build\bin\dxcompiler.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
-Source: "build\bin\dxil.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
-Source: "build\bin\opengl32sw.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "build\windows-release\bin\d3dcompiler_47.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "build\windows-release\bin\dxcompiler.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "build\windows-release\bin\dxil.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "build\windows-release\bin\opengl32sw.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
 ; Qt plugins
-Source: "build\bin\generic\*"; DestDir: "{app}\generic"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
-Source: "build\bin\iconengines\*"; DestDir: "{app}\iconengines"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
-Source: "build\bin\imageformats\*"; DestDir: "{app}\imageformats"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
-Source: "build\bin\networkinformation\*"; DestDir: "{app}\networkinformation"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
-Source: "build\bin\platforms\*"; DestDir: "{app}\platforms"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
-Source: "build\bin\styles\*"; DestDir: "{app}\styles"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
-Source: "build\bin\tls\*"; DestDir: "{app}\tls"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
-Source: "build\bin\translations\*"; DestDir: "{app}\translations"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
+Source: "build\windows-release\bin\generic\*"; DestDir: "{app}\generic"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
+Source: "build\windows-release\bin\iconengines\*"; DestDir: "{app}\iconengines"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
+Source: "build\windows-release\bin\imageformats\*"; DestDir: "{app}\imageformats"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
+Source: "build\windows-release\bin\networkinformation\*"; DestDir: "{app}\networkinformation"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
+Source: "build\windows-release\bin\platforms\*"; DestDir: "{app}\platforms"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
+Source: "build\windows-release\bin\styles\*"; DestDir: "{app}\styles"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
+Source: "build\windows-release\bin\tls\*"; DestDir: "{app}\tls"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
+Source: "build\windows-release\bin\translations\*"; DestDir: "{app}\translations"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
 
 ; ICU (if present in release deploy)
-Source: "build\bin\icu*.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "build\windows-release\bin\icu*.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
 [Registry]
-Root: HKA; Subkey: "Software\Classes\.emergencyplan"; ValueType: string; ValueName: ""; ValueData: "WardEmergencyPlan.Document"; Flags: uninsdeletevalue; Tasks: fileassoc
-Root: HKA; Subkey: "Software\Classes\WardEmergencyPlan.Document"; ValueType: string; ValueName: ""; ValueData: "Ward Emergency Plan Document"; Flags: uninsdeletekey; Tasks: fileassoc
-Root: HKA; Subkey: "Software\Classes\WardEmergencyPlan.Document\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc
-Root: HKA; Subkey: "Software\Classes\WardEmergencyPlan.Document\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc
+Root: HKA; Subkey: "Software\Classes\.emergencyplan"; ValueType: string; ValueName: ""; ValueData: "WardPlanning.Document"; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKA; Subkey: "Software\Classes\WardPlanning.Document"; ValueType: string; ValueName: ""; ValueData: "Ward Planning Document"; Flags: uninsdeletekey; Tasks: fileassoc
+Root: HKA; Subkey: "Software\Classes\WardPlanning.Document\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc
+Root: HKA; Subkey: "Software\Classes\WardPlanning.Document\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

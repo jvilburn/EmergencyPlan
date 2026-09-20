@@ -9,8 +9,8 @@
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
-    app.setApplicationName("Emergency Plan");
-    app.setOrganizationName("");
+    app.setApplicationName("Ward Planning");
+    app.setOrganizationName("Ward Planning");
     app.setWindowIcon(QIcon(":/markers/marker_chapel.svg"));
 
     // Load Windows 7 Aero stylesheet

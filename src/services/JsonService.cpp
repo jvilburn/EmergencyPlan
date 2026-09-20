@@ -107,7 +107,7 @@ QString JsonService::toJsonString(const Document& document)
     // Add metadata
     QJsonObject metadata;
     metadata["lastModified"] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
-    metadata["exportedBy"] = "Emergency Plan v1.0";
+    metadata["exportedBy"] = "Ward Planning v1.1";
     json["metadata"] = metadata;
 
     QJsonDocument jsonDoc(json);

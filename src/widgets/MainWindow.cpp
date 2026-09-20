@@ -527,7 +527,7 @@ void MainWindow::onDocumentChanged(const DocumentChange& change)
 
 void MainWindow::updateWindowTitle()
 {
-    QString title = "Emergency Plan";
+    QString title = "Ward Planning";
 
     QString filePath = DocumentManager::instance()->filePath();
     if (!filePath.isEmpty())

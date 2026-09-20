@@ -30,22 +30,22 @@ set(TEST_SOURCES
 
 # Only build if we have test sources
 if(TEST_SOURCES)
-    add_executable(EmergencyPlanTests
+    add_executable(WardPlanningTests
         ${TEST_SOURCES}
     )
 
-    target_link_libraries(EmergencyPlanTests PRIVATE
-        EmergencyPlanLib
+    target_link_libraries(WardPlanningTests PRIVATE
+        WardPlanningLib
         Qt6::Test
     )
 
     # If using Google Test
     # if(GTest_FOUND)
-    #     target_link_libraries(EmergencyPlanTests PRIVATE GTest::gtest GTest::gtest_main)
+    #     target_link_libraries(WardPlanningTests PRIVATE GTest::gtest GTest::gtest_main)
     # endif()
 
     # Add tests to CTest
-    add_test(NAME EmergencyPlanTests COMMAND EmergencyPlanTests)
+    add_test(NAME WardPlanningTests COMMAND WardPlanningTests)
 endif()
 
 # ============================================================================
@@ -53,5 +53,5 @@ endif()
 # ============================================================================
 
 # Example of registering individual tests:
-# add_test(NAME PersonTest COMMAND EmergencyPlanTests PersonTest)
-# add_test(NAME FamilyTest COMMAND EmergencyPlanTests FamilyTest)
+# add_test(NAME PersonTest COMMAND WardPlanningTests PersonTest)
+# add_test(NAME FamilyTest COMMAND WardPlanningTests FamilyTest)

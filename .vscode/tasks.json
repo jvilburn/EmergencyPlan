@@ -47,7 +47,7 @@
             "type": "shell",
             "command": "ctest",
             "args": [
-                "--test-dir", "${workspaceFolder}/build",
+                "--test-dir", "${workspaceFolder}/build/windows-debug",
                 "--output-on-failure",
                 "-C", "Debug"
             ],
@@ -58,13 +58,13 @@
         {
             "label": "Run Application",
             "type": "shell",
-            "command": "${workspaceFolder}/build/bin/EmergencyPlan.exe",
+            "command": "${workspaceFolder}/build/windows-debug/bin/WardPlanning.exe",
             "windows": {
-                "command": "${workspaceFolder}/build/bin/EmergencyPlan.exe"
+                "command": "${workspaceFolder}/build/windows-debug/bin/WardPlanning.exe"
             },
             "osx": {
                 "command": "open",
-                "args": ["${workspaceFolder}/build/bin/EmergencyPlan.app"]
+                "args": ["${workspaceFolder}/build/macos-debug/bin/WardPlanning.app"]
             },
             "group": "none",
             "problemMatcher": [],
@@ -94,7 +94,7 @@
             "label": "Open Qt Designer",
             "type": "shell",
             "windows": {
-                "command": "C:/Qt/6.10.1/msvc2022_64/bin/designer.exe"
+                "command": "C:/Qt/6.11.0/msvc2022_64/bin/designer.exe"
             },
             "osx": {
                 "command": "open -a Designer"
@@ -107,7 +107,7 @@
             "label": "Open Qt Assistant",
             "type": "shell",
             "windows": {
-                "command": "C:/Qt/6.10.1/msvc2022_64/bin/assistant.exe"
+                "command": "C:/Qt/6.11.0/msvc2022_64/bin/assistant.exe"
             },
             "osx": {
                 "command": "open -a Assistant"

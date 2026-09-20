@@ -17,7 +17,7 @@ TileFetchService::~TileFetchService() = default;
 
 void TileFetchService::initializeProviders()
 {
-    QString userAgent = "EmergencyPlan/1.0";
+    QString userAgent = "WardPlanning/1.1";
 
     // Street maps - OSM primary, ESRI fallback
     m_providers[TileLayer::Street] = {

@@ -22,6 +22,6 @@ esac
 echo "=== Build ($PRESET) ==="
 
 cmake --preset "$PRESET"
-cmake --build build --parallel
+cmake --build "build/$PRESET" --parallel
 
 echo "=== Build complete ==="

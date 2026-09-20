@@ -9,8 +9,9 @@
         {
             "name": "base",
             "hidden": true,
-            "binaryDir": "${sourceDir}/build",
+            "binaryDir": "${sourceDir}/build/${presetName}",
             "cacheVariables": {
+                "VCPKG_INSTALLED_DIR": "${sourceDir}/build/vcpkg_installed",
                 "CMAKE_CXX_STANDARD": "17",
                 "CMAKE_CXX_STANDARD_REQUIRED": "ON",
                 "BUILD_TESTS": "ON"

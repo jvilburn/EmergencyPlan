@@ -68,14 +68,14 @@
     },
     "terminal.integrated.defaultProfile.windows": "PowerShell",
 
-    // Add Qt and build/bin to PATH for all terminal types
+    // Add Qt and the debug build output to PATH for all terminal types
     "terminal.integrated.env.windows": {
-        "PATH": "C:\\Qt\\6.10.1\\msvc2022_64\\bin;${workspaceFolder}\\build\\bin;${env:PATH}"
+        "PATH": "C:\\Qt\\6.11.0\\msvc2022_64\\bin;${workspaceFolder}\\build\\windows-debug\\bin;${env:PATH}"
     },
     "terminal.integrated.env.osx": {
-        "PATH": "${workspaceFolder}/build/bin:/opt/homebrew/opt/qt@6/bin:${env:PATH}"
+        "PATH": "${workspaceFolder}/build/macos-debug/bin:/opt/homebrew/opt/qt@6/bin:${env:PATH}"
     },
     "terminal.integrated.env.linux": {
-        "PATH": "${workspaceFolder}/build/bin:${env:PATH}"
+        "PATH": "${workspaceFolder}/build/linux-debug/bin:${env:PATH}"
     }
 }

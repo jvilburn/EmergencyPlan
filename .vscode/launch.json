@@ -2,44 +2,44 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug EmergencyPlan (Windows)",
+            "name": "Debug WardPlanning (Windows)",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/bin/EmergencyPlan.exe",
+            "program": "${workspaceFolder}/build/windows-debug/bin/WardPlanning.exe",
             "args": [],
             "stopAtEntry": true,
             "cwd": "${workspaceFolder}",
             "environment": [
                 {
                     "name": "PATH",
-                    "value": "C:/Qt/6.10.1/msvc2022_64/bin;${env:PATH}"
+                    "value": "C:/Qt/6.11.0/msvc2022_64/bin;${env:PATH}"
                 }
             ],
             "console": "integratedTerminal",
             "preLaunchTask": "Build Debug"
         },
         {
-            "name": "Release EmergencyPlan (Windows)",
+            "name": "Release WardPlanning (Windows)",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/bin/EmergencyPlan.exe",
+            "program": "${workspaceFolder}/build/windows-release/bin/WardPlanning.exe",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [
                 {
                     "name": "PATH",
-                    "value": "C:/Qt/6.10.1/msvc2022_64/bin;${env:PATH}"
+                    "value": "C:/Qt/6.11.0/msvc2022_64/bin;${env:PATH}"
                 }
             ],
             "console": "integratedTerminal",
             "preLaunchTask": "Build Release"
         },
         {
-            "name": "Debug EmergencyPlan (macOS)",
+            "name": "Debug WardPlanning (macOS)",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/bin/EmergencyPlan.app/Contents/MacOS/EmergencyPlan",
+            "program": "${workspaceFolder}/build/macos-debug/bin/WardPlanning.app/Contents/MacOS/WardPlanning",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
@@ -52,14 +52,14 @@
             "name": "Debug Tests (Windows)",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/bin/EmergencyPlanTests.exe",
+            "program": "${workspaceFolder}/build/windows-debug/bin/WardPlanningTests.exe",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [
                 {
                     "name": "PATH",
-                    "value": "C:/Qt/6.10.1/msvc2022_64/bin;${env:PATH}"
+                    "value": "C:/Qt/6.11.0/msvc2022_64/bin;${env:PATH}"
                 }
             ],
             "console": "integratedTerminal",
@@ -69,14 +69,14 @@
             "name": "Debug pdf_dump",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/bin/pdf_dump.exe",
+            "program": "${workspaceFolder}/build/windows-debug/bin/pdf_dump.exe",
             "args": ["${input:pdfPath}"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [
                 {
                     "name": "PATH",
-                    "value": "C:/Qt/6.10.1/msvc2022_64/bin;${env:PATH}"
+                    "value": "C:/Qt/6.11.0/msvc2022_64/bin;${env:PATH}"
                 }
             ],
             "console": "integratedTerminal",
@@ -86,14 +86,14 @@
             "name": "Debug test_import",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/bin/test_import.exe",
+            "program": "${workspaceFolder}/build/windows-debug/bin/test_import.exe",
             "args": ["-e", "-r", "C:/Users/johnv/Documents/Church/archivedData/assignments.pdf"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [
                 {
                     "name": "PATH",
-                    "value": "C:/Qt/6.10.1/msvc2022_64/bin;${env:PATH}"
+                    "value": "C:/Qt/6.11.0/msvc2022_64/bin;${env:PATH}"
                 }
             ],
             "console": "integratedTerminal",

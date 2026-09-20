@@ -1,6 +1,6 @@
-# Emergency Plan Qt
+# Ward Planning
 
-A C++/Qt desktop application for managing ward/stake family data, emergency response teams, and resources.
+A C++/Qt desktop application for managing ward/stake family data, ministering assignments, emergency response teams, and resources.
 
 ## Platform Support
 
@@ -50,7 +50,7 @@ build.bat
 build.bat release
 
 # Run
-build\bin\EmergencyPlan.exe
+build\windows-debug\bin\WardPlanning.exe
 ```
 
 The build script automatically:
@@ -70,8 +70,8 @@ cd WardPlanningQt
 ./build.sh release
 
 # Run
-./build/bin/EmergencyPlan        # Linux
-open ./build/bin/EmergencyPlan.app  # macOS
+./build/linux-debug/bin/WardPlanning        # Linux
+open ./build/macos-debug/bin/WardPlanning.app  # macOS
 ```
 
 ## Development Tools
