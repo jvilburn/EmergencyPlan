@@ -66,7 +66,7 @@ QJsonObject team()
         "name": "Chainsaw crew",
         "color": "#ff8800",
         "leaderId": "p1",
-        "memberIds": ["p1", "p2"]
+        "memberIds": ["p2"]
     })");
 }
 
@@ -102,7 +102,7 @@ QJsonObject group(const char* id, bool reliefSociety)
         "familyIds": ["f1"],
         "ministeredPersonIds": ["p2"],
         "interviewedDate": "2026-09-01",
-        "presidencyMemberId": "p2"
+        "presidencyMemberId": "p3"
     })");
     json["id"] = QString(id);
     json["isRSFormat"] = reliefSociety;
@@ -140,7 +140,7 @@ QJsonObject stake()
 QJsonObject notification()
 {
     QJsonObject json = parsed(R"({"method": "text", "notes": "Sent a reminder"})");
-    json["timestamp"] = QString(Time);
+    json["timestamp"] = QString("2026-09-27T13:00:00.001Z");
     return json;
 }
 
@@ -156,15 +156,17 @@ QJsonObject task()
     QJsonObject json = parsed(R"({
         "id": "k1",
         "category": "Tree removal",
-        "description": "Oak across the drive",
-        "assignedPersonId": "p1",
-        "assignmentNotes": "Bring the saw",
-        "resolved": true,
-        "resolutionNotes": "Cleared"
+        "description": "Oak across the drive"
     })");
-    json["createdAt"] = QString(Time);
-    json["resolvedAt"] = QString(Time);
-    json["notification"] = notification();
+    json["createdAt"] = QString("2026-09-27T12:40:00.002Z");
+
+    QJsonObject assignment = parsed(R"({"personId": "p1", "notes": "Bring the saw"})");
+    assignment["notification"] = notification();
+    json["assignment"] = assignment;
+
+    QJsonObject resolution = parsed(R"({"notes": "Cleared"})");
+    resolution["at"] = QString("2026-09-27T15:30:00.003Z");
+    json["resolution"] = resolution;
     return json;
 }
 
@@ -204,7 +206,6 @@ QJsonObject document()
     }
 
     QJsonObject json;
-    json["payloadVersion"] = Document::CurrentPayloadVersion;
     json["accessRoster"] = roster.toJson();
     json["stakes"] = QJsonArray{stake()};
     json["wards"] = QJsonArray{ward()};
@@ -221,5 +222,6 @@ QJsonObject document()
     json["responseData"] = emergencyResponse();
     return json;
 }
+
 
 } // namespace ModelSamples

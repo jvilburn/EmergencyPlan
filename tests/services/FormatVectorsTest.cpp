@@ -44,7 +44,6 @@ MemberId writerMember()
 DocumentHeader vectorHeader()
 {
     RecipientEntry entry;
-    entry.kind = RecipientKind::X25519Sealed;
     entry.member = writerMember();
     entry.publicKey = writerPublicKey();
     entry.verifyKey = writerVerifyKey();
@@ -75,9 +74,9 @@ const QByteArray FingerprintVector = "a8be42168ae4429c3b61d6a9107588e3";
 const QByteArray PayloadHashVector =
     "d669c108b6b3d6d3a10956ce1d7ac55cde6223ab30012d8151de02810e129397";
 const QByteArray AssociatedDataSha256Vector =
-    "7e1e845c0169276ddbd095bb40fe7dde96dd96f02311c5a73a54ce5c80f0bec4";
+    "2864a3e80c25a1e0a1511367695384b4964ecf1b003cc78fcbd27d7b942e0fea";
 const QByteArray SignedBytesSha256Vector =
-    "49e4c528c9e44dc27999837e4e2239a0330b86960204627023dbda7668bffdc4";
+    "7ecfad2bde50cc9d3a5e4b9efce2dfaa54673ddfd87581a9b4b0a94b24442e31";
 const QByteArray PairingCommitVector =
     "9bff7eea1d0bb18e4a9dd8a8c7a5afb8432635beb852c6f3167f93e402aebe19";
 const QString PairingNumberVector = "764 409";
@@ -99,8 +98,8 @@ const QByteArray TakeLeaseMessageVector =
 const QByteArray UploadMessageVector =
     "00000013505554202f646f63756d656e74732f7b69647d0000000e766563746f"
     "722d73657373696f6e0000002030303131323233333434353536363737383839"
-    "396161626263636464656566660000002020776414e859a8cbecccb21f0ca604"
-    "dea5587ed890161ad727f30bd400c78b44";
+    "39616162626363646465656666000000206c68f93bd82347d17554536ba92f7f"
+    "5de74e0e8794c24b3b1accdd4e589f7753";
 
 /// Responding to pairing 48219301 with the responder keys 0x41... and 0x61...
 const QByteArray RespondMessageVector =
@@ -143,7 +142,7 @@ void FormatVectorsTest::associatedDataAndSignedBytesMatchTheVectors()
     const DocumentHeader header = vectorHeader();
 
     const QByteArray associated = header.associatedData();
-    QCOMPARE(associated.size(), qsizetype(679));
+    QCOMPARE(associated.size(), qsizetype(674));
     QCOMPARE(sha256Hex(associated), AssociatedDataSha256Vector);
     QCOMPARE(sha256Hex(header.signedBytes()), SignedBytesSha256Vector);
 

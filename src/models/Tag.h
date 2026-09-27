@@ -28,20 +28,6 @@ inline QString tagLevelToString(TagLevel level)
     return QString();
 }
 
-inline std::optional<TagLevel> tagLevelFromString(const QString& str)
-{
-    QString lower = str.toLower();
-    if (lower == "person")
-    {
-        return TagLevel::Person;
-    }
-    if (lower == "family")
-    {
-        return TagLevel::Family;
-    }
-    return std::nullopt;
-}
-
 class Tag
 {
 public:

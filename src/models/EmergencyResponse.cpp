@@ -81,12 +81,6 @@ static bool readMethod(const QJsonObject& json, ContactMethod& out)
     return true;
 }
 
-/// An optional notes field: written only when not empty.
-static bool readNotes(const QJsonObject& json, QLatin1String key, QString& out)
-{
-    return !json.contains(key) || StrictJson::readNonEmptyString(json, key, out);
-}
-
 // === TaskNotification ===
 
 TaskNotification TaskNotification::create(ContactMethod method, const QString& notes)
@@ -117,7 +111,7 @@ std::optional<TaskNotification> TaskNotification::fromJson(const QJsonObject& js
                                  {QLatin1String("method"), QLatin1String("timestamp"), QLatin1String("notes")})
         || !readMethod(json, notification.m_method)
         || !StrictJson::readTime(json, QLatin1String("timestamp"), notification.m_timestamp)
-        || !readNotes(json, QLatin1String("notes"), notification.m_notes))
+        || !StrictJson::readOptionalNonEmptyString(json, QLatin1String("notes"), notification.m_notes))
     {
         return std::nullopt;
     }
@@ -173,7 +167,7 @@ std::optional<ContactAttempt> ContactAttempt::fromJson(const QJsonObject& json)
         || !readMethod(json, attempt.m_method)
         || !StrictJson::readId(json, QLatin1String("who"), attempt.m_who)
         || !StrictJson::readTime(json, QLatin1String("timestamp"), attempt.m_timestamp)
-        || !readNotes(json, QLatin1String("notes"), attempt.m_notes))
+        || !StrictJson::readOptionalNonEmptyString(json, QLatin1String("notes"), attempt.m_notes))
     {
         return std::nullopt;
     }
@@ -201,64 +195,70 @@ ResponseTask ResponseTask::create(const QString& category, const QString& descri
     return task;
 }
 
+std::optional<TeamId> ResponseTask::assignedTeamId() const
+{
+    if (m_assignment.has_value() && std::holds_alternative<TeamId>(m_assignment->assignee))
+    {
+        return std::get<TeamId>(m_assignment->assignee);
+    }
+    return std::nullopt;
+}
+
+std::optional<PersonId> ResponseTask::assignedPersonId() const
+{
+    if (m_assignment.has_value() && std::holds_alternative<PersonId>(m_assignment->assignee))
+    {
+        return std::get<PersonId>(m_assignment->assignee);
+    }
+    return std::nullopt;
+}
+
+QString ResponseTask::assignmentNotes() const
+{
+    return m_assignment.has_value() ? m_assignment->notes : QString();
+}
+
+std::optional<TaskNotification> ResponseTask::notification() const
+{
+    return m_assignment.has_value() ? m_assignment->notification : std::nullopt;
+}
+
 void ResponseTask::assignToTeam(const TeamId& teamId, const QString& notes)
 {
-    m_assignedTeamId = teamId;
-    m_assignedPersonId.reset();
-    m_assignmentNotes = notes;
+    m_assignment = TaskAssignment{teamId, notes, notification()};
 }
 
 void ResponseTask::assignToPerson(const PersonId& personId, const QString& notes)
 {
-    m_assignedPersonId = personId;
-    m_assignedTeamId.reset();
-    m_assignmentNotes = notes;
-}
-
-void ResponseTask::clearAssignment()
-{
-    m_assignedTeamId.reset();
-    m_assignedPersonId.reset();
-    m_assignmentNotes.clear();
-    m_notification.reset();
+    m_assignment = TaskAssignment{personId, notes, notification()};
 }
 
 void ResponseTask::setNotification(const std::optional<TaskNotification>& notification)
 {
-    m_notification = notification;
-}
-
-void ResponseTask::resolve(const QString& notes)
-{
-    m_resolved = true;
-    m_resolutionNotes = notes;
-    m_resolvedAt = QDateTime::currentDateTimeUtc();
-}
-
-void ResponseTask::reopen()
-{
-    m_resolved = false;
-    m_resolutionNotes.clear();
-    m_resolvedAt.reset();
-}
-
-void ResponseTask::setResolution(bool resolved,
-                                 const QString& notes,
-                                 const std::optional<QDateTime>& resolvedAt)
-{
-    m_resolved = resolved;
-    m_resolutionNotes = notes;
-    m_resolvedAt = resolvedAt;
-}
-
-bool ResponseTask::isAssigned() const
-{
-    return m_assignedTeamId.has_value() || m_assignedPersonId.has_value();
+    if (m_assignment.has_value())
+    {
+        m_assignment->notification = notification;
+    }
 }
 
 bool ResponseTask::isNotified() const
 {
-    return m_notification.has_value();
+    return m_assignment.has_value() && m_assignment->notification.has_value();
+}
+
+QString ResponseTask::resolutionNotes() const
+{
+    return m_resolution.has_value() ? m_resolution->notes : QString();
+}
+
+std::optional<QDateTime> ResponseTask::resolvedAt() const
+{
+    return m_resolution.has_value() ? std::optional<QDateTime>(m_resolution->at) : std::nullopt;
+}
+
+void ResponseTask::resolve(const QString& notes)
+{
+    m_resolution = TaskResolution{notes, QDateTime::currentDateTimeUtc()};
 }
 
 QJsonObject ResponseTask::toJson() const
@@ -269,31 +269,37 @@ QJsonObject ResponseTask::toJson() const
     json["description"] = m_description;
     json["createdAt"] = StrictJson::writeTime(m_createdAt);
 
-    if (m_assignedTeamId.has_value())
+    if (m_assignment.has_value())
     {
-        json["assignedTeamId"] = m_assignedTeamId->toString();
-    }
-    if (m_assignedPersonId.has_value())
-    {
-        json["assignedPersonId"] = m_assignedPersonId->toString();
-    }
-    if (!m_assignmentNotes.isEmpty())
-    {
-        json["assignmentNotes"] = m_assignmentNotes;
-    }
-    if (m_notification.has_value())
-    {
-        json["notification"] = m_notification->toJson();
+        QJsonObject assignment;
+        if (std::holds_alternative<TeamId>(m_assignment->assignee))
+        {
+            assignment["teamId"] = std::get<TeamId>(m_assignment->assignee).toString();
+        }
+        else
+        {
+            assignment["personId"] = std::get<PersonId>(m_assignment->assignee).toString();
+        }
+        if (!m_assignment->notes.isEmpty())
+        {
+            assignment["notes"] = m_assignment->notes;
+        }
+        if (m_assignment->notification.has_value())
+        {
+            assignment["notification"] = m_assignment->notification->toJson();
+        }
+        json["assignment"] = assignment;
     }
 
-    json["resolved"] = m_resolved;
-    if (!m_resolutionNotes.isEmpty())
+    if (m_resolution.has_value())
     {
-        json["resolutionNotes"] = m_resolutionNotes;
-    }
-    if (m_resolvedAt.has_value())
-    {
-        json["resolvedAt"] = StrictJson::writeTime(m_resolvedAt.value());
+        QJsonObject resolution;
+        resolution["at"] = StrictJson::writeTime(m_resolution->at);
+        if (!m_resolution->notes.isEmpty())
+        {
+            resolution["notes"] = m_resolution->notes;
+        }
+        json["resolution"] = resolution;
     }
 
     return json;
@@ -307,72 +313,84 @@ std::optional<ResponseTask> ResponseTask::fromJson(const QJsonObject& json)
                                   QLatin1String("category"),
                                   QLatin1String("description"),
                                   QLatin1String("createdAt"),
-                                  QLatin1String("assignedTeamId"),
-                                  QLatin1String("assignedPersonId"),
-                                  QLatin1String("assignmentNotes"),
-                                  QLatin1String("notification"),
-                                  QLatin1String("resolved"),
-                                  QLatin1String("resolutionNotes"),
-                                  QLatin1String("resolvedAt")})
+                                  QLatin1String("assignment"),
+                                  QLatin1String("resolution")})
         || !StrictJson::readId(json, QLatin1String("id"), task.m_id)
         || !StrictJson::readString(json, QLatin1String("category"), task.m_category)
         || !StrictJson::readString(json, QLatin1String("description"), task.m_description)
-        || !StrictJson::readTime(json, QLatin1String("createdAt"), task.m_createdAt)
-        || !StrictJson::readBool(json, QLatin1String("resolved"), task.m_resolved)
-        || !readNotes(json, QLatin1String("assignmentNotes"), task.m_assignmentNotes)
-        || !readNotes(json, QLatin1String("resolutionNotes"), task.m_resolutionNotes))
+        || !StrictJson::readTime(json, QLatin1String("createdAt"), task.m_createdAt))
     {
         return std::nullopt;
     }
 
-    // At most one assignee: assigning to a team clears the person and the reverse.
-    if (json.contains("assignedTeamId") && json.contains("assignedPersonId"))
+    if (json.contains("assignment"))
     {
-        return std::nullopt;
+        QJsonObject assignmentJson;
+        if (!StrictJson::readObject(json, QLatin1String("assignment"), assignmentJson)
+            || !StrictJson::hasOnlyKeys(assignmentJson,
+                                        {QLatin1String("teamId"),
+                                         QLatin1String("personId"),
+                                         QLatin1String("notes"),
+                                         QLatin1String("notification")})
+            || assignmentJson.contains("teamId") == assignmentJson.contains("personId"))
+        {
+            return std::nullopt;
+        }
+
+        TaskAssignment assignment;
+        if (assignmentJson.contains("teamId"))
+        {
+            TeamId team;
+            if (!StrictJson::readId(assignmentJson, QLatin1String("teamId"), team))
+            {
+                return std::nullopt;
+            }
+            assignment.assignee = team;
+        }
+        else
+        {
+            PersonId person;
+            if (!StrictJson::readId(assignmentJson, QLatin1String("personId"), person))
+            {
+                return std::nullopt;
+            }
+            assignment.assignee = person;
+        }
+
+        if (!StrictJson::readOptionalNonEmptyString(assignmentJson, QLatin1String("notes"), assignment.notes))
+        {
+            return std::nullopt;
+        }
+
+        if (assignmentJson.contains("notification"))
+        {
+            QJsonObject notificationJson;
+            if (!StrictJson::readObject(assignmentJson, QLatin1String("notification"), notificationJson))
+            {
+                return std::nullopt;
+            }
+            assignment.notification = TaskNotification::fromJson(notificationJson);
+            if (!assignment.notification.has_value())
+            {
+                return std::nullopt;
+            }
+        }
+
+        task.m_assignment = assignment;
     }
 
-    if (json.contains("assignedTeamId"))
+    if (json.contains("resolution"))
     {
-        TeamId team;
-        if (!StrictJson::readId(json, QLatin1String("assignedTeamId"), team))
+        QJsonObject resolutionJson;
+        TaskResolution resolution;
+        if (!StrictJson::readObject(json, QLatin1String("resolution"), resolutionJson)
+            || !StrictJson::hasOnlyKeys(resolutionJson, {QLatin1String("at"), QLatin1String("notes")})
+            || !StrictJson::readTime(resolutionJson, QLatin1String("at"), resolution.at)
+            || !StrictJson::readOptionalNonEmptyString(resolutionJson, QLatin1String("notes"), resolution.notes))
         {
             return std::nullopt;
         }
-        task.m_assignedTeamId = team;
-    }
-
-    if (json.contains("assignedPersonId"))
-    {
-        PersonId person;
-        if (!StrictJson::readId(json, QLatin1String("assignedPersonId"), person))
-        {
-            return std::nullopt;
-        }
-        task.m_assignedPersonId = person;
-    }
-
-    if (json.contains("notification"))
-    {
-        QJsonObject notificationJson;
-        if (!StrictJson::readObject(json, QLatin1String("notification"), notificationJson))
-        {
-            return std::nullopt;
-        }
-        task.m_notification = TaskNotification::fromJson(notificationJson);
-        if (!task.m_notification.has_value())
-        {
-            return std::nullopt;
-        }
-    }
-
-    if (json.contains("resolvedAt"))
-    {
-        QDateTime resolvedAt;
-        if (!StrictJson::readTime(json, QLatin1String("resolvedAt"), resolvedAt))
-        {
-            return std::nullopt;
-        }
-        task.m_resolvedAt = resolvedAt;
+        task.m_resolution = resolution;
     }
 
     return task;
@@ -384,13 +402,8 @@ bool ResponseTask::operator==(const ResponseTask& other) const
         && m_category == other.m_category
         && m_description == other.m_description
         && m_createdAt == other.m_createdAt
-        && m_assignedTeamId == other.m_assignedTeamId
-        && m_assignedPersonId == other.m_assignedPersonId
-        && m_assignmentNotes == other.m_assignmentNotes
-        && m_notification == other.m_notification
-        && m_resolved == other.m_resolved
-        && m_resolutionNotes == other.m_resolutionNotes
-        && m_resolvedAt == other.m_resolvedAt;
+        && m_assignment == other.m_assignment
+        && m_resolution == other.m_resolution;
 }
 
 // === FamilyResponseRecord ===
@@ -548,7 +561,7 @@ std::optional<FamilyResponseRecord> FamilyResponseRecord::fromJson(const QJsonOb
                                   QLatin1String("tasks")})
         || !StrictJson::readId(json, QLatin1String("familyId"), record.m_familyId)
         || !StrictJson::readString(json, QLatin1String("displayName"), record.m_displayName)
-        || !readNotes(json, QLatin1String("address"), record.m_address)
+        || !StrictJson::readOptionalNonEmptyString(json, QLatin1String("address"), record.m_address)
         || !StrictJson::readString(json, QLatin1String("contactStatus"), status))
     {
         return std::nullopt;

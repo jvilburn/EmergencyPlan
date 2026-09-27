@@ -16,6 +16,7 @@
 #include "Ward.h"
 
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QtTest>
 
 namespace
@@ -28,7 +29,8 @@ QJsonValue wrongTypeFor(const QJsonValue& value)
 }
 
 /// The checks every strict reader meets. optionalKeys are the fields the writer
-/// omits when empty; every other field of the sample is required.
+/// omits when empty; every other field of the sample is required. The sample
+/// holds one element in each set, so the writer's output has a fixed order.
 template<typename T>
 void checkReader(const QJsonObject& sample, const QStringList& optionalKeys)
 {
@@ -38,15 +40,12 @@ void checkReader(const QJsonObject& sample, const QStringList& optionalKeys)
         QVERIFY2(sample.contains(key), qPrintable("the sample lacks " + key));
     }
 
+    // Written back, it is the sample exactly: every field in its place with its
+    // value, so a reader that swapped two same-typed fields fails here.
     const std::optional<T> read = T::fromJson(sample);
     QVERIFY(read.has_value());
-
-    // Written back, it has the same fields and reads as the same value.
     const QJsonObject written = read.value().toJson();
-    QCOMPARE(written.keys(), sample.keys());
-    const std::optional<T> reread = T::fromJson(written);
-    QVERIFY(reread.has_value());
-    QVERIFY(reread.value() == read.value());
+    QVERIFY2(written == sample, QJsonDocument(written).toJson().constData());
 
     for (const QString& key : sample.keys())
     {
@@ -200,17 +199,37 @@ void ModelParsersTest::contactAttempt()
 
 void ModelParsersTest::responseTask()
 {
-    checkReader<ResponseTask>(ModelSamples::task(),
-                              {"assignedPersonId", "assignmentNotes", "notification", "resolutionNotes", "resolvedAt"});
+    checkReader<ResponseTask>(ModelSamples::task(), {"assignment", "resolution"});
+
+    const QJsonObject assignment = ModelSamples::task()["assignment"].toObject();
+    const QJsonObject resolution = ModelSamples::task()["resolution"].toObject();
+
+    // Inside each value, the notes and the notification are optional; the
+    // assignee and the time are not.
+    QJsonObject bare = assignment;
+    bare.remove("notes");
+    bare.remove("notification");
+    QVERIFY(reads<ResponseTask>(with(ModelSamples::task(), "assignment", bare)));
+    QJsonObject noNotes = resolution;
+    noNotes.remove("notes");
+    QVERIFY(reads<ResponseTask>(with(ModelSamples::task(), "resolution", noNotes)));
+    QJsonObject noTime = resolution;
+    noTime.remove("at");
+    QVERIFY(!reads<ResponseTask>(with(ModelSamples::task(), "resolution", noTime)));
 
     // A team instead of a person is equally one assignee.
-    QJsonObject toTeam = ModelSamples::task();
-    toTeam.remove("assignedPersonId");
-    toTeam["assignedTeamId"] = "t1";
-    QVERIFY(reads<ResponseTask>(toTeam));
+    QJsonObject toTeam = assignment;
+    toTeam.remove("personId");
+    toTeam["teamId"] = "t1";
+    QVERIFY(reads<ResponseTask>(with(ModelSamples::task(), "assignment", toTeam)));
 
     // A damaged notification refuses the task.
-    QVERIFY(!reads<ResponseTask>(with(ModelSamples::task(), "notification", QJsonObject{{"method", "text"}})));
+    QJsonObject damaged = assignment;
+    damaged["notification"] = QJsonObject{{"method", "text"}};
+    QVERIFY(!reads<ResponseTask>(with(ModelSamples::task(), "assignment", damaged)));
+
+    QVERIFY(!reads<ResponseTask>(with(ModelSamples::task(), "assignment", with(assignment, "unexpected", true))));
+    QVERIFY(!reads<ResponseTask>(with(ModelSamples::task(), "resolution", with(resolution, "unexpected", true))));
 }
 
 void ModelParsersTest::familyResponseRecord()
@@ -278,6 +297,7 @@ void ModelParsersTest::idSetsRefuseRepeats()
     QVERIFY(!reads<Tag>(with(ModelSamples::tag(), "familyIds", QJsonArray{"f1", "f1"})));
     QVERIFY(!reads<Team>(with(ModelSamples::team(), "memberIds", QJsonArray{"p1", ""})));
     QVERIFY(!reads<Team>(with(ModelSamples::team(), "leaderId", "")));
+    QVERIFY(!reads<Tag>(with(ModelSamples::tag(), "personIds", QJsonArray{"p1", 42})));
 }
 
 void ModelParsersTest::aPersonsFlagsAndBirthdayAreAsWritten()
@@ -289,8 +309,9 @@ void ModelParsersTest::aPersonsFlagsAndBirthdayAreAsWritten()
     QVERIFY(!reads<Person>(with(ModelSamples::person(), "birthday", QJsonObject{{"year", 1980}})));
     QVERIFY(reads<Person>(with(ModelSamples::person(), "birthday", QJsonObject{{"month", 4}, {"day", 12}})));
 
-    // A birthday field that is not a whole number.
+    // A birthday field that is not a whole number, or not one an int holds.
     QVERIFY(!reads<Birthday>(QJsonObject{{"month", 4.5}, {"day", 12}}));
+    QVERIFY(!reads<Birthday>(QJsonObject{{"year", 1e10}, {"month", 4}, {"day", 12}}));
 }
 
 void ModelParsersTest::anAddressLineIsAsTheAddressKeepsIt()
@@ -310,9 +331,14 @@ void ModelParsersTest::aTeamColourIsTheNameQColorWrites()
     QVERIFY(reads<Team>(with(ModelSamples::team(), "color", "#123abc")));
 }
 
-void ModelParsersTest::aTaskHasAtMostOneAssignee()
+void ModelParsersTest::aTaskAssignmentHasExactlyOneAssignee()
 {
-    QVERIFY(!reads<ResponseTask>(with(ModelSamples::task(), "assignedTeamId", "t1")));
+    const QJsonObject assignment = ModelSamples::task()["assignment"].toObject();
+    QVERIFY(!reads<ResponseTask>(with(ModelSamples::task(), "assignment", with(assignment, "teamId", "t1"))));
+
+    QJsonObject nobody = assignment;
+    nobody.remove("personId");
+    QVERIFY(!reads<ResponseTask>(with(ModelSamples::task(), "assignment", nobody)));
 }
 
 void ModelParsersTest::aCollectionRefusesARepeatedId()

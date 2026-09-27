@@ -82,30 +82,15 @@ std::optional<Stake> Stake::fromJson(const QJsonObject& json)
     Stake stake;
 
     // Written only when not empty.
-    for (const auto& [key, field] : {std::pair{QLatin1String("name"), &stake.m_name},
-                                     std::pair{QLatin1String("unitNumber"), &stake.m_unitNumber},
-                                     std::pair{QLatin1String("phone"), &stake.m_phone},
-                                     std::pair{QLatin1String("email"), &stake.m_email},
-                                     std::pair{QLatin1String("stakeCenterAddress"), &stake.m_stakeCenterAddress}})
+    if (!StrictJson::readOptionalNonEmptyString(json, QLatin1String("name"), stake.m_name)
+        || !StrictJson::readOptionalNonEmptyString(json, QLatin1String("unitNumber"), stake.m_unitNumber)
+        || !StrictJson::readOptionalNonEmptyString(json, QLatin1String("phone"), stake.m_phone)
+        || !StrictJson::readOptionalNonEmptyString(json, QLatin1String("email"), stake.m_email)
+        || !StrictJson::readOptionalNonEmptyString(json, QLatin1String("stakeCenterAddress"), stake.m_stakeCenterAddress)
+        || !StrictJson::readOptionalDouble(json, QLatin1String("stakeCenterLat"), stake.m_stakeCenterLat)
+        || !StrictJson::readOptionalDouble(json, QLatin1String("stakeCenterLng"), stake.m_stakeCenterLng))
     {
-        if (json.contains(key) && !StrictJson::readNonEmptyString(json, key, *field))
-        {
-            return std::nullopt;
-        }
-    }
-
-    double coordinate = 0.0;
-    for (const auto& [key, field] : {std::pair{QLatin1String("stakeCenterLat"), &stake.m_stakeCenterLat},
-                                     std::pair{QLatin1String("stakeCenterLng"), &stake.m_stakeCenterLng}})
-    {
-        if (json.contains(key))
-        {
-            if (!StrictJson::readDouble(json, key, coordinate))
-            {
-                return std::nullopt;
-            }
-            *field = coordinate;
-        }
+        return std::nullopt;
     }
 
     if (json.contains("wardUnitNumbers"))

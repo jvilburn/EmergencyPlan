@@ -95,7 +95,9 @@ bool readInt64(const QJsonObject& json, QLatin1String key, qint64& out)
     }
 
     // Both bounds are exact as doubles: -2^63 is representable, and 2^63 is the
-    // first value above the range, so the comparison is >= rather than >.
+    // first value above the range, so the comparison is >= rather than >. The
+    // largest qint64 itself rounds up to 2^63 and is refused, which no field read
+    // this way comes near.
     const double lowest = -9223372036854775808.0;
     const double aboveHighest = 9223372036854775808.0;
 
@@ -155,6 +157,59 @@ bool readDate(const QJsonObject& json, QLatin1String key, QDate& out)
     }
 
     out = parsed;
+    return true;
+}
+
+bool readOptionalNonEmptyString(const QJsonObject& json, QLatin1String key, QString& out)
+{
+    return !json.contains(key) || readNonEmptyString(json, key, out);
+}
+
+bool readOptionalString(const QJsonObject& json, QLatin1String key, std::optional<QString>& out)
+{
+    if (!json.contains(key))
+    {
+        return true;
+    }
+
+    QString text;
+    if (!readString(json, key, text))
+    {
+        return false;
+    }
+    out = text;
+    return true;
+}
+
+bool readOptionalInt(const QJsonObject& json, QLatin1String key, std::optional<int>& out)
+{
+    if (!json.contains(key))
+    {
+        return true;
+    }
+
+    int value = 0;
+    if (!readInt(json, key, value))
+    {
+        return false;
+    }
+    out = value;
+    return true;
+}
+
+bool readOptionalDouble(const QJsonObject& json, QLatin1String key, std::optional<double>& out)
+{
+    if (!json.contains(key))
+    {
+        return true;
+    }
+
+    double value = 0.0;
+    if (!readDouble(json, key, value))
+    {
+        return false;
+    }
+    out = value;
     return true;
 }
 

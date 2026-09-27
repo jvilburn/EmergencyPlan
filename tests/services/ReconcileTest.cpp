@@ -154,10 +154,10 @@ void ReconcileTest::aValidNewerVersionIsAccepted()
     QVERIFY(check.dataKey.value() == w.dataKey);
 
     // The document handed back is the one that was written, whole.
-    Document written;
-    QCOMPARE(Document::parse(next.payload, written), DocumentParse::Ok);
-    QVERIFY(check.document.value() == written);
-    QVERIFY(written.accessRoster() == rosterOf(w.everyone(), w.admins()));
+    const std::optional<Document> written = Document::parse(next.payload);
+    QVERIFY(written.has_value());
+    QVERIFY(check.document.value() == written.value());
+    QVERIFY(written.value().accessRoster() == rosterOf(w.everyone(), w.admins()));
 }
 
 void ReconcileTest::aValidNewerVersionIsAcceptedWithNoBaseHeader()
@@ -543,22 +543,6 @@ void ReconcileTest::aNewerHeaderFormatAnywhereIsNeedsNewerVersion()
     QVERIFY(untouched.isEmpty());
 }
 
-void ReconcileTest::anUnknownRecipientKindAnywhereIsNeedsNewerVersion()
-{
-    const World w = world();
-    const Version next = bobsEdit(w);
-
-    QJsonObject json = next.header.toJson();
-    QJsonArray recipients = json["recipients"].toArray();
-    QJsonObject entry = recipients.at(1).toObject();
-    entry["kind"] = 2;
-    recipients.replace(1, entry);
-    json["recipients"] = recipients;
-
-    QList<DocumentHeader> headers;
-    QCOMPARE(Reconcile::readHeaders({w.base.header.toJson(), json}, headers), Verdict::NeedsNewerVersion);
-}
-
 void ReconcileTest::aMalformedHeaderIsAServerFault()
 {
     const World w = world();
@@ -569,20 +553,4 @@ void ReconcileTest::aMalformedHeaderIsAServerFault()
     QList<DocumentHeader> headers;
     QCOMPARE(Reconcile::readHeaders({w.base.header.toJson(), malformed}, headers), Verdict::ServerFault);
     QVERIFY(headers.isEmpty());
-}
-
-void ReconcileTest::aNewerPayloadVersionIsNeedsNewerVersion()
-{
-    const World w = world();
-
-    QJsonObject payload = payloadFor(w.everyone(), w.admins());
-    payload["payloadVersion"] = Document::CurrentPayloadVersion + 1;
-    const DocumentHeader header =
-        buildHeader(w.documentId, 1, 2, w.everyone(), w.bob, w.dataKey, w.admins());
-    const Version next = seal(header, w.bob, w.dataKey, payload);
-
-    const DownloadCheck check =
-        downloadAs(w, w.base.header, {next.header}, next.ciphertext, w.carol);
-    QCOMPARE(check.verdict, Verdict::NeedsNewerVersion);
-    QVERIFY(!check.document.has_value());
 }

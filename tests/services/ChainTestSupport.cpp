@@ -96,7 +96,6 @@ DocumentHeader buildHeader(const QString& documentId,
     for (const TestDevice& device : devices)
     {
         RecipientEntry entry;
-        entry.kind = RecipientKind::X25519Sealed;
         entry.member = device.member;
         entry.publicKey = device.sealing.publicKey;
         entry.verifyKey = device.signing.verifyKey;

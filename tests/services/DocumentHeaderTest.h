@@ -23,7 +23,6 @@ private slots:
     void parseRefusesANonObjectRecipient();
     void parseRefusesASaveCounterAboveTheCap();
     void parseRefusesAnUnknownKey();
-    void parseRefusesARecipientKindBelowOne();
     void parseAcceptsAHeaderListingNoOne();
     void parseRefusesAnEarlierFormatVersion();
     void parseRefusesANonCanonicalTimestamp();
@@ -31,11 +30,10 @@ private slots:
     void parseRefusesWriterKeysThatAreNotTheLastWriters();
 
     void parseNeedsNewerVersionForALaterFormat();
-    void parseNeedsNewerVersionForAnUnknownRecipientKind();
 
     void associatedDataDiffersWhenAnyCoveredFieldDiffers();
     void associatedDataIgnoresPayloadHashAndSignature();
-    void associatedDataDiffersOnRecipientOrderAndKind();
+    void associatedDataDiffersOnRecipientOrder();
     void associatedDataSurvivesAJsonRoundTrip();
 
     void signedBytesDiffersWhenPayloadHashDiffers();

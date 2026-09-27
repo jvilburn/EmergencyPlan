@@ -3,8 +3,7 @@
 #include <QObject>
 
 /// Document::parse, the only reader of a document, over a payload that uses every
-/// collection: one damaged element anywhere refuses the whole payload, and so does
-/// any reference to something the document does not contain.
+/// collection: one damaged element anywhere refuses the whole payload.
 class DocumentParseTest : public QObject
 {
     Q_OBJECT
@@ -15,10 +14,8 @@ private slots:
     void aFullPayloadReadsAndWritesBackUnchanged();
     void aDamagedElementInAnyCollectionRefusesTheWhole();
     void aRepeatedIdInAnyCollectionRefusesTheWhole();
-    void aPersonInTwoFamiliesIsRefused();
-    void aTagNamingAnUnknownPersonOrFamilyIsRefused();
-    void aTeamNamingAnUnknownPersonIsRefused();
-    void aDistrictNamingAGroupNotInItsOrganisationIsRefused();
+    void aCollectionPresentButEmptyIsRefused();
     void anIllFormedImportDateIsRefused();
+    void anIdNamingSomethingNotInTheDocumentIsRead();
     void jsonServiceReadsWhatItWrites();
 };

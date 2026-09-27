@@ -38,7 +38,5 @@ private slots:
 
     // Newer versions
     void aNewerHeaderFormatAnywhereIsNeedsNewerVersion();
-    void anUnknownRecipientKindAnywhereIsNeedsNewerVersion();
     void aMalformedHeaderIsAServerFault();
-    void aNewerPayloadVersionIsNeedsNewerVersion();
 };

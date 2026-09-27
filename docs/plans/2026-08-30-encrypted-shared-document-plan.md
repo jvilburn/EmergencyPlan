@@ -1492,18 +1492,26 @@ user, not worked around in a later task. Commit as `build: add libsodium and qtk
 > **Done**, with these differences from the text below:
 > - `StrictJson` holds the shared readers (required and optional fields, range-checked
 >   integers, exact times and dates, id sets); `DocumentHeader` uses them too.
-> - Beyond the plan: an optional field present but empty is refused, since the writer
->   omits it when empty; a person may belong to one family only; a ministering district
->   may name only groups of its own organisation; an address line is refused unless
->   `Address` would keep it unchanged.
+> - An optional field present but empty is refused, since the writer omits it when
+>   empty; an address line is refused unless `Address` would keep it unchanged.
+> - **No cross-reference checks.** The app has always tolerated a team, tag, or group
+>   naming someone who is no longer in the document, and removing a member produces
+>   exactly that, so `parse` checks each collection's own ids and nothing between them.
+>   The one real defect behind them, the ward-directory import giving two members who
+>   share a first name the same id, is fixed at its source.
+> - **One version.** The recipient `kind` and the payload's `payloadVersion` are gone:
+>   every change to the sealing or the payload raises the header's `formatVersion`,
+>   which is read before decrypting, so neither ever decided anything on its own.
+>   `Document::parse` returns `std::optional<Document>`.
+> - A task's assignment (assignee, notes, notification) and its resolution (notes,
+>   time) are each one optional value, so a merge can no longer leave a notification
+>   without an assignee or a resolution time on an unresolved task.
 > - Emergency-response times are written with milliseconds (`StrictJson::writeTime`), so
->   a record read back from disk equals the one in memory, which `ResponseMerge` relies
->   on when it compares against a base copy.
-> - `JsonService` reads through `Document::parse` and writes the bare payload, without
->   its former `version` and `metadata` fields. Until the roster bootstrap exists, the
->   app cannot reopen what it saves, because the roster is empty.
-> - The tests are two suites, `ModelParsersTest` (every type, one generic check plus
->   value-level rules) and `DocumentParseTest`, over shared samples in `ModelSamples`.
+>   a record read back from disk equals the one in memory.
+> - `JsonService` reads through `Document::parse` and writes the bare payload. Until the
+>   roster bootstrap exists, the app cannot reopen what it saves.
+> - The tests are two suites, `ModelParsersTest` and `DocumentParseTest`, over shared
+>   samples in `ModelSamples` whose written form must equal the sample exactly.
 
 **Every model type gets a strict reader, so `Document::parse` refuses a damaged payload
 rather than loading part of it.** Task 1.6 made the payload version and the access

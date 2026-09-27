@@ -3,7 +3,6 @@
 #include "ResponseArea.h"
 #include "StrictJson.h"
 
-#include <cmath>
 
 Document Document::empty()
 {
@@ -570,42 +569,12 @@ bool readOptionalDate(const QJsonObject& json, QLatin1String key, std::optional<
     return true;
 }
 
-template<typename Id>
-bool allKnown(const QSet<Id>& ids, const QSet<Id>& known)
-{
-    for (const Id& id : ids)
-    {
-        if (!known.contains(id))
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
-/// Every district names only groups of its own organisation.
-bool districtsNameKnownGroups(const QHash<MinisteringDistrictId, MinisteringDistrict>& districts,
-                              const QHash<MinisteringGroupId, MinisteringGroup>& groups)
-{
-    const QList<MinisteringGroupId> groupIds = groups.keys();
-    const QSet<MinisteringGroupId> known(groupIds.begin(), groupIds.end());
-    for (const MinisteringDistrict& district : districts)
-    {
-        if (!allKnown(district.groupIds(), known))
-        {
-            return false;
-        }
-    }
-    return true;
-}
 
 } // anonymous namespace
 
 QJsonObject Document::toJson() const
 {
     QJsonObject json;
-
-    json["payloadVersion"] = CurrentPayloadVersion;
 
     // Metadata (wards/stakes)
     m_metadata.writeToJson(json);
@@ -621,8 +590,6 @@ QJsonObject Document::toJson() const
     // Emergency assets
     serializeHashToJson(json, "emergencyResources", m_emergencyAssets);
 
-    // Emergency inventory (legacy)
-    // Legacy skill/equipment fields omitted (migrated to emergency assets)
 
     // Ministering
     serializeHashToJson(json, "eqDistricts", m_eqDistricts);
@@ -649,38 +616,11 @@ QJsonObject Document::toJson() const
     return json;
 }
 
-DocumentParse Document::parse(const QJsonObject& json, Document& out)
+std::optional<Document> Document::parse(const QJsonObject& json)
 {
-    // A payload version this build does not write is one it must not guess at.
-    // An absent version is the same refusal: the writer is claiming nothing.
-    const QJsonValue version = json.value("payloadVersion");
-    if (!version.isDouble())
-    {
-        return DocumentParse::Malformed;
-    }
-
-    // Judged as the double JSON carries, so a version beyond int range still
-    // reads as later rather than wrapping or collapsing to zero.
-    const double payloadVersion = version.toDouble();
-    if (!std::isfinite(payloadVersion) || std::floor(payloadVersion) != payloadVersion)
-    {
-        return DocumentParse::Malformed;
-    }
-
-    if (payloadVersion > CurrentPayloadVersion)
-    {
-        return DocumentParse::NeedsNewerVersion;
-    }
-
-    if (payloadVersion < 1)
-    {
-        return DocumentParse::Malformed;
-    }
-
-    // In a version this build knows, every top-level field is one it writes.
+    // Every top-level field is one the writer writes.
     if (!StrictJson::hasOnlyKeys(json,
-                                 {QLatin1String("payloadVersion"),
-                                  QLatin1String("stakes"),
+                                 {QLatin1String("stakes"),
                                   QLatin1String("wards"),
                                   QLatin1String("accessRoster"),
                                   QLatin1String("families"),
@@ -695,7 +635,7 @@ DocumentParse Document::parse(const QJsonObject& json, Document& out)
                                   QLatin1String("ministeringPdfDate"),
                                   QLatin1String("responseData")}))
     {
-        return DocumentParse::Malformed;
+        return std::nullopt;
     }
 
     // The roster decides who may open the document, so it is read strictly: a
@@ -704,7 +644,7 @@ DocumentParse Document::parse(const QJsonObject& json, Document& out)
     const QJsonValue rosterValue = json.value("accessRoster");
     if (!rosterValue.isObject())
     {
-        return DocumentParse::Malformed;
+        return std::nullopt;
     }
 
     // Every readable document lists at least the person reading it. The last
@@ -713,7 +653,7 @@ DocumentParse Document::parse(const QJsonObject& json, Document& out)
     const std::optional<AccessRoster> roster = AccessRoster::fromJson(rosterValue.toObject());
     if (!roster.has_value() || roster.value().isEmpty())
     {
-        return DocumentParse::Malformed;
+        return std::nullopt;
     }
 
     Document document;
@@ -722,7 +662,7 @@ DocumentParse Document::parse(const QJsonObject& json, Document& out)
     const std::optional<DocumentMetadata> metadata = DocumentMetadata::fromJson(json);
     if (!metadata.has_value())
     {
-        return DocumentParse::Malformed;
+        return std::nullopt;
     }
     document.m_metadata = metadata.value();
 
@@ -737,7 +677,7 @@ DocumentParse Document::parse(const QJsonObject& json, Document& out)
         || !readOptionalDate(json, QLatin1String("wardDirectoryPdfDate"), document.m_wardDirectoryPdfDate)
         || !readOptionalDate(json, QLatin1String("ministeringPdfDate"), document.m_ministeringPdfDate))
     {
-        return DocumentParse::Malformed;
+        return std::nullopt;
     }
 
     if (json.contains("responseData"))
@@ -745,58 +685,16 @@ DocumentParse Document::parse(const QJsonObject& json, Document& out)
         QJsonObject responseJson;
         if (!StrictJson::readObject(json, QLatin1String("responseData"), responseJson))
         {
-            return DocumentParse::Malformed;
+            return std::nullopt;
         }
         document.m_emergencyResponse = EmergencyResponse::fromJson(responseJson);
         if (!document.m_emergencyResponse.has_value())
         {
-            return DocumentParse::Malformed;
+            return std::nullopt;
         }
     }
 
-    // A reference to someone or something not in the document is a dangling id
-    // the UI would have to guess about.
-    QSet<PersonId> people;
-    QSet<FamilyId> families;
-    for (const Family& family : document.m_families)
-    {
-        families.insert(family.id());
-        for (const Person& member : family.members())
-        {
-            // One person in one family: a person id is how teams and tags find them.
-            if (people.contains(member.id()))
-            {
-                return DocumentParse::Malformed;
-            }
-            people.insert(member.id());
-        }
-    }
-
-    for (const Tag& tag : document.m_tags)
-    {
-        if (!allKnown(tag.personIds(), people) || !allKnown(tag.familyIds(), families))
-        {
-            return DocumentParse::Malformed;
-        }
-    }
-
-    for (const Team& team : document.m_teams)
-    {
-        if (!allKnown(team.memberIds(), people)
-            || (team.leaderId().has_value() && !people.contains(team.leaderId().value())))
-        {
-            return DocumentParse::Malformed;
-        }
-    }
-
-    if (!districtsNameKnownGroups(document.m_eqDistricts, document.m_eqGroups)
-        || !districtsNameKnownGroups(document.m_rsDistricts, document.m_rsGroups))
-    {
-        return DocumentParse::Malformed;
-    }
-
-    out = document;
-    return DocumentParse::Ok;
+    return document;
 }
 
 void Document::setEmergencyResponse(const std::optional<EmergencyResponse>& response)

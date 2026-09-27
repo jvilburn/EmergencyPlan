@@ -13,7 +13,6 @@ public:
     // ========================================================================
     // Getters
     // ========================================================================
-    const QString& id() const { return m_unitNumber; }  // For JSON serialization template
     const QString& name() const { return m_name; }
     const QString& unitNumber() const { return m_unitNumber; }
     const QString& stakeUnitNumber() const { return m_stakeUnitNumber; }
@@ -40,8 +39,7 @@ public:
     // ========================================================================
     QJsonObject toJson() const;
     /// Reads exactly what toJson writes: nullopt for a missing required field, a
-    /// field of the wrong type or form, a field toJson never writes, or any element
-    /// of a collection that fails the same way.
+    /// field of the wrong type or form, or a field toJson never writes.
     static std::optional<Ward> fromJson(const QJsonObject& json);
 
     // ========================================================================

@@ -599,38 +599,9 @@ void AccessRosterTest::documentParseAcceptsWhatToJsonWrote()
 
     // The whole document, not just the roster: a parse that dropped the family or
     // the emergency response would otherwise pass.
-    Document out;
-    QCOMPARE(Document::parse(document.toJson(), out), DocumentParse::Ok);
-    QVERIFY(out == document);
-}
-
-void AccessRosterTest::documentParseNeedsNewerVersionForALaterPayload()
-{
-    // A roster that parses, so a refusal below is about the version alone.
-    AccessRoster roster;
-    QVERIFY(roster.addPerson(newPerson("Alice Reed", "Laptop", RosterPerson::Role::Admin)));
-    Document document = Document::empty();
-    document.setAccessRoster(roster);
-
-    Document out;
-    QCOMPARE(Document::parse(document.toJson(), out), DocumentParse::Ok);
-
-    QJsonObject json = document.toJson();
-    json["payloadVersion"] = Document::CurrentPayloadVersion + 1;
-    QCOMPARE(Document::parse(json, out), DocumentParse::NeedsNewerVersion);
-
-    // Far beyond any int: still a later version, never read as zero.
-    json["payloadVersion"] = 1e12;
-    QCOMPARE(Document::parse(json, out), DocumentParse::NeedsNewerVersion);
-
-    json["payloadVersion"] = 1.5;
-    QCOMPARE(Document::parse(json, out), DocumentParse::Malformed);
-
-    json["payloadVersion"] = 0;
-    QCOMPARE(Document::parse(json, out), DocumentParse::Malformed);
-
-    json.remove("payloadVersion");
-    QCOMPARE(Document::parse(json, out), DocumentParse::Malformed);
+    const std::optional<Document> out = Document::parse(document.toJson());
+    QVERIFY(out.has_value());
+    QVERIFY(out.value() == document);
 }
 
 void AccessRosterTest::documentParseRefusesAMalformedRoster()
@@ -655,11 +626,10 @@ void AccessRosterTest::documentParseRefusesAMalformedRoster()
     rosterJson["people"] = people;
     json["accessRoster"] = rosterJson;
 
-    Document out;
-    QCOMPARE(Document::parse(json, out), DocumentParse::Malformed);
+    QVERIFY(!Document::parse(json).has_value());
 
     json.remove("accessRoster");
-    QCOMPARE(Document::parse(json, out), DocumentParse::Malformed);
+    QVERIFY(!Document::parse(json).has_value());
 }
 
 void AccessRosterTest::documentParseRefusesAnUnknownTopLevelKey()
@@ -669,17 +639,11 @@ void AccessRosterTest::documentParseRefusesAnUnknownTopLevelKey()
     Document document = Document::empty();
     document.setAccessRoster(roster);
 
-    Document out;
-    QCOMPARE(Document::parse(document.toJson(), out), DocumentParse::Ok);
+    QVERIFY(Document::parse(document.toJson()).has_value());
 
     QJsonObject json = document.toJson();
     json["sharedWith"] = QJsonArray();
-    QCOMPARE(Document::parse(json, out), DocumentParse::Malformed);
-
-    // A later payload may carry fields this build does not know; that is the
-    // later version's to read.
-    json["payloadVersion"] = Document::CurrentPayloadVersion + 1;
-    QCOMPARE(Document::parse(json, out), DocumentParse::NeedsNewerVersion);
+    QVERIFY(!Document::parse(json).has_value());
 }
 
 void AccessRosterTest::documentParseRefusesAnEmptyRoster()
@@ -688,8 +652,7 @@ void AccessRosterTest::documentParseRefusesAnEmptyRoster()
     Document document = Document::empty();
     QVERIFY(document.accessRoster().isEmpty());
 
-    Document out;
-    QCOMPARE(Document::parse(document.toJson(), out), DocumentParse::Malformed);
+    QVERIFY(!Document::parse(document.toJson()).has_value());
 }
 
 void AccessRosterTest::rosterTakesPartInDocumentEquality()

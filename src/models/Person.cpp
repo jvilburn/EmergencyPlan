@@ -158,34 +158,19 @@ std::optional<Person> Person::fromJson(const QJsonObject& json)
     person.m_name = Name(name);
 
     // Written only when not empty.
-    QString text;
-    for (const auto& [key, field] : {std::pair{QLatin1String("stakeUnitNumber"), &person.m_stakeUnitNumber},
-                                     std::pair{QLatin1String("wardUnitNumber"), &person.m_wardUnitNumber},
-                                     std::pair{QLatin1String("specialNeedNote"), &person.m_specialNeedNote},
-                                     std::pair{QLatin1String("email"), &person.m_email}})
+    QString phone;
+    QString altPhone;
+    if (!StrictJson::readOptionalNonEmptyString(json, QLatin1String("stakeUnitNumber"), person.m_stakeUnitNumber)
+        || !StrictJson::readOptionalNonEmptyString(json, QLatin1String("wardUnitNumber"), person.m_wardUnitNumber)
+        || !StrictJson::readOptionalNonEmptyString(json, QLatin1String("specialNeedNote"), person.m_specialNeedNote)
+        || !StrictJson::readOptionalNonEmptyString(json, QLatin1String("email"), person.m_email)
+        || !StrictJson::readOptionalNonEmptyString(json, QLatin1String("phone"), phone)
+        || !StrictJson::readOptionalNonEmptyString(json, QLatin1String("altPhone"), altPhone))
     {
-        if (json.contains(key))
-        {
-            if (!StrictJson::readNonEmptyString(json, key, text))
-            {
-                return std::nullopt;
-            }
-            *field = text;
-        }
+        return std::nullopt;
     }
-
-    for (const auto& [key, field] : {std::pair{QLatin1String("phone"), &person.m_phone},
-                                     std::pair{QLatin1String("altPhone"), &person.m_altPhone}})
-    {
-        if (json.contains(key))
-        {
-            if (!StrictJson::readNonEmptyString(json, key, text))
-            {
-                return std::nullopt;
-            }
-            *field = Phone(text);
-        }
-    }
+    person.m_phone = Phone(phone);
+    person.m_altPhone = Phone(altPhone);
 
     if (json.contains("gender"))
     {

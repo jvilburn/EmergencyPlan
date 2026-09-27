@@ -78,20 +78,14 @@ JsonResult JsonService::parseJson(const QString& jsonString)
         return result;
     }
 
-    Document document;
-    switch (Document::parse(jsonDoc.object(), document))
+    const std::optional<Document> document = Document::parse(jsonDoc.object());
+    if (!document.has_value())
     {
-    case DocumentParse::Ok:
-        break;
-    case DocumentParse::NeedsNewerVersion:
-        result.errorMessage = QObject::tr("This document was saved by a newer version of Ward Planning.");
-        return result;
-    case DocumentParse::Malformed:
         result.errorMessage = QObject::tr("This document is damaged or incomplete, so it was not opened.");
         return result;
     }
 
-    result.document = document;
+    result.document = document.value();
     result.success = true;
 
     return result;

@@ -70,45 +70,18 @@ std::optional<Ward> Ward::fromJson(const QJsonObject& json)
 
     Ward ward;
 
-    // Written only when not empty.
-    for (const auto& [key, field] : {std::pair{QLatin1String("name"), &ward.m_name},
-                                     std::pair{QLatin1String("unitNumber"), &ward.m_unitNumber},
-                                     std::pair{QLatin1String("stakeUnitNumber"), &ward.m_stakeUnitNumber}})
+    // The name and unit numbers are written only when not empty; the chapel fields
+    // whenever set, empty or not.
+    if (!StrictJson::readOptionalNonEmptyString(json, QLatin1String("name"), ward.m_name)
+        || !StrictJson::readOptionalNonEmptyString(json, QLatin1String("unitNumber"), ward.m_unitNumber)
+        || !StrictJson::readOptionalNonEmptyString(json, QLatin1String("stakeUnitNumber"), ward.m_stakeUnitNumber)
+        || !StrictJson::readOptionalString(json, QLatin1String("chapelAddress"), ward.m_chapelAddress)
+        || !StrictJson::readOptionalString(json, QLatin1String("chapelPhone"), ward.m_chapelPhone)
+        || !StrictJson::readOptionalString(json, QLatin1String("meetingTime"), ward.m_meetingTime)
+        || !StrictJson::readOptionalDouble(json, QLatin1String("chapelLat"), ward.m_chapelLat)
+        || !StrictJson::readOptionalDouble(json, QLatin1String("chapelLng"), ward.m_chapelLng))
     {
-        if (json.contains(key) && !StrictJson::readNonEmptyString(json, key, *field))
-        {
-            return std::nullopt;
-        }
-    }
-
-    // Written whenever set, empty or not.
-    QString text;
-    for (const auto& [key, field] : {std::pair{QLatin1String("chapelAddress"), &ward.m_chapelAddress},
-                                     std::pair{QLatin1String("chapelPhone"), &ward.m_chapelPhone},
-                                     std::pair{QLatin1String("meetingTime"), &ward.m_meetingTime}})
-    {
-        if (json.contains(key))
-        {
-            if (!StrictJson::readString(json, key, text))
-            {
-                return std::nullopt;
-            }
-            *field = text;
-        }
-    }
-
-    double coordinate = 0.0;
-    for (const auto& [key, field] : {std::pair{QLatin1String("chapelLat"), &ward.m_chapelLat},
-                                     std::pair{QLatin1String("chapelLng"), &ward.m_chapelLng}})
-    {
-        if (json.contains(key))
-        {
-            if (!StrictJson::readDouble(json, key, coordinate))
-            {
-                return std::nullopt;
-            }
-            *field = coordinate;
-        }
+        return std::nullopt;
     }
 
     return ward;

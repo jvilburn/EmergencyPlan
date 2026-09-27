@@ -10,20 +10,11 @@
 
 #include <optional>
 
-/// How a recipient entry carries the data key.
-///
-/// There is one kind. A new kind is a new format version, so an older build
-/// refuses the whole file rather than reading part of it.
-enum class RecipientKind
-{
-    X25519Sealed = 1
-};
-
 /// One device's claim on a document: its keys in the clear, and the data key
-/// sealed to them.
+/// sealed to its X25519 public key. Another way of carrying the key would be a new
+/// format version, which an older build refuses whole.
 struct RecipientEntry
 {
-    RecipientKind kind = RecipientKind::X25519Sealed;
     MemberId member;            ///< groups a person's devices
     Fingerprint fingerprint;    ///< fingerprintOf(publicKey, verifyKey)
     PublicKey publicKey;        ///< public; lets any reader recompute the fingerprint
@@ -40,7 +31,7 @@ struct RecipientEntry
 enum class HeaderParse
 {
     Ok,
-    NeedsNewerVersion,  ///< a later format, or a recipient kind this build does not know
+    NeedsNewerVersion,  ///< a later format version
     Malformed           ///< missing or ill-formed in a version this build does know
 };
 

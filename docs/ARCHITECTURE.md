@@ -134,9 +134,9 @@ public:
     void setMembers(const QList<Person>& members);
     void setLocation(std::optional<double> lat, std::optional<double> lng);
 
-    // Serialization
+    // Serialization: fromJson reads exactly what toJson writes, or nothing
     QJsonObject toJson() const;
-    static Family fromJson(const QJsonObject& json);
+    static std::optional<Family> fromJson(const QJsonObject& json);
 
     // Value-based equality (all fields)
     bool operator==(const Family& other) const;
@@ -412,26 +412,35 @@ signals:
 
 ### Document JSON Structure
 
+The payload `Document::toJson` writes and `Document::parse` reads. Collections are
+arrays, each omitted when empty; the dates and the emergency response are omitted when
+absent. `parse` accepts exactly this: an unknown field, a damaged element, or a repeated
+id refuses the whole payload. Its format version lives in the file's header, not here.
+
 ```json
 {
-    "version": 3,
-    "families": {
-        "uuid-1": {
+    "accessRoster": { "people": [...] },
+    "stakes": [...],
+    "wards": [...],
+    "families": [
+        {
             "id": "uuid-1",
-            "name": "Smith Family",
             "latitude": 40.123,
             "longitude": -111.456,
-            "address": "123 Main St",
+            "address": ["123 Main St", "Provo, UT 84601"],
             "members": [...]
         }
-    },
-    "teams": {},
-    "tags": {},
-    "emergencyAssets": {},
-    "eqDistrictsCurrent": {},
-    "eqGroupsCurrent": {},
-    "rsDistrictsCurrent": {},
-    "rsGroupsCurrent": {}
+    ],
+    "teams": [...],
+    "tags": [...],
+    "emergencyResources": [...],
+    "eqDistricts": [...],
+    "eqGroups": [...],
+    "rsDistricts": [...],
+    "rsGroups": [...],
+    "wardDirectoryPdfDate": "2026-08-15",
+    "ministeringPdfDate": "2026-08-20",
+    "responseData": { ... }
 }
 ```
 

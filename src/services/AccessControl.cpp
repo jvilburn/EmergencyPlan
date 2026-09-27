@@ -260,7 +260,6 @@ std::optional<DocumentHeader> AccessControl::resealAll(const DocumentHeader& hea
         for (const RosterDevice& device : person.devices())
         {
             RecipientEntry entry;
-            entry.kind = RecipientKind::X25519Sealed;
             entry.member = person.member();
             entry.fingerprint = device.fingerprint();
             entry.publicKey = device.publicKey();

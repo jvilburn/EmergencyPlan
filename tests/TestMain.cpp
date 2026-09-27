@@ -16,6 +16,7 @@
 #include "ResponseMergeTest.h"
 #include "ServerConformanceTest.h"
 #include "SmokeTest.h"
+#include "WardDirectoryImportTest.h"
 
 #include <QApplication>
 #include <QStandardPaths>
@@ -71,6 +72,7 @@ int main(int argc, char** argv)
     status |= run<AccessRosterTest>(argc, argv);
     status |= run<ModelParsersTest>(argc, argv);
     status |= run<DocumentParseTest>(argc, argv);
+    status |= run<WardDirectoryImportTest>(argc, argv);
     status |= run<AccessControlTest>(argc, argv);
     status |= run<FakeServerTest>(argc, argv);
     status |= run<ServerConformanceTest>(argc, argv, makeFakeServer);

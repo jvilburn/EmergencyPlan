@@ -103,7 +103,7 @@ std::optional<Family> WardDirectoryImportService::findMatchingFamily(
 
 std::optional<Person> WardDirectoryImportService::findMatchingPerson(
     const Person& person,
-    const Family& family)
+    const QList<Person>& candidates)
 {
     QString firstName = person.givenNames().split(' ').first();
     if (firstName.isEmpty())
@@ -111,7 +111,7 @@ std::optional<Person> WardDirectoryImportService::findMatchingPerson(
         return std::nullopt;
     }
 
-    for (const Person& member : family.members())
+    for (const Person& member : candidates)
     {
         QString existingFirstName = member.givenNames().split(' ').first();
         if (existingFirstName.compare(firstName, Qt::CaseInsensitive) == 0)
@@ -127,12 +127,15 @@ Family WardDirectoryImportService::preserveIds(
     const Family& existingFamily)
 {
     QList<Person> updatedMembers;
+    QList<Person> unclaimed = existingFamily.members();
     for (const Person& parsedPerson : parsedFamily.members())
     {
-        std::optional<Person> existingPerson = findMatchingPerson(parsedPerson, existingFamily);
+        std::optional<Person> existingPerson = findMatchingPerson(parsedPerson, unclaimed);
 
         if (existingPerson.has_value())
         {
+            unclaimed.removeIf(
+                [&existingPerson](const Person& member) { return member.id() == existingPerson->id(); });
             Person updated = Person::createWithId(
                 existingPerson->id(),
                 parsedPerson.name(),

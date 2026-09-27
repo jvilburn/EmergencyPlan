@@ -30,7 +30,6 @@ RecipientEntry newRecipient(const MemberId& member, const DataKey& dataKey)
     const SigningKeypair signing = DocumentCrypto::generateSigningKeypair();
 
     RecipientEntry entry;
-    entry.kind = RecipientKind::X25519Sealed;
     entry.member = member;
     entry.publicKey = sealing.publicKey;
     entry.verifyKey = signing.verifyKey;
@@ -372,15 +371,6 @@ void DocumentHeaderTest::parseRefusesAnUnknownKey()
     QCOMPARE(DocumentHeader::parse(later, out), HeaderParse::NeedsNewerVersion);
 }
 
-void DocumentHeaderTest::parseRefusesARecipientKindBelowOne()
-{
-    const DocumentHeader header = sampleHeader();
-
-    // No build ever wrote kind 0 or a negative kind, so neither is a later format.
-    QCOMPARE(parseWithRecipient(header, "kind", QJsonValue(0)), HeaderParse::Malformed);
-    QCOMPARE(parseWithRecipient(header, "kind", QJsonValue(-1)), HeaderParse::Malformed);
-}
-
 void DocumentHeaderTest::parseAcceptsAHeaderListingNoOne()
 {
     // The last person's leave lists no one, and must still be readable so their
@@ -449,15 +439,6 @@ void DocumentHeaderTest::parseNeedsNewerVersionForALaterFormat()
                        "formatVersion",
                        QJsonValue(DocumentHeader::CurrentFormatVersion + 1)),
              HeaderParse::NeedsNewerVersion);
-}
-
-void DocumentHeaderTest::parseNeedsNewerVersionForAnUnknownRecipientKind()
-{
-    const DocumentHeader header = sampleHeader();
-
-    // A kind this build does not know is a later format, not a damaged file -
-    // so the app says "update me", never "this document is broken".
-    QCOMPARE(parseWithRecipient(header, "kind", QJsonValue(2)), HeaderParse::NeedsNewerVersion);
 }
 
 void DocumentHeaderTest::associatedDataDiffersWhenAnyCoveredFieldDiffers()
@@ -572,19 +553,13 @@ void DocumentHeaderTest::associatedDataIgnoresPayloadHashAndSignature()
     QCOMPARE(otherSignature.associatedData(), header.associatedData());
 }
 
-void DocumentHeaderTest::associatedDataDiffersOnRecipientOrderAndKind()
+void DocumentHeaderTest::associatedDataDiffersOnRecipientOrder()
 {
     const DocumentHeader header = sampleHeader();
 
     DocumentHeader reordered = header;
     std::swap(reordered.recipients[0], reordered.recipients[1]);
     QVERIFY(reordered.associatedData() != header.associatedData());
-
-    // There is only one kind today, so this asserts the field is in the byte
-    // string at all - the day a second kind exists, it must already be covered.
-    DocumentHeader otherKind = header;
-    otherKind.recipients[0].kind = static_cast<RecipientKind>(2);
-    QVERIFY(otherKind.associatedData() != header.associatedData());
 }
 
 void DocumentHeaderTest::associatedDataSurvivesAJsonRoundTrip()

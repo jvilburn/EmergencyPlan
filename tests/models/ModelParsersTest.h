@@ -41,7 +41,7 @@ private slots:
     void aPersonsFlagsAndBirthdayAreAsWritten();
     void anAddressLineIsAsTheAddressKeepsIt();
     void aTeamColourIsTheNameQColorWrites();
-    void aTaskHasAtMostOneAssignee();
+    void aTaskAssignmentHasExactlyOneAssignee();
     void aCollectionRefusesARepeatedId();
     void timesSurviveTheRoundTripExactly();
 };

@@ -7,6 +7,7 @@
 #include <QList>
 #include <QJsonObject>
 #include <optional>
+#include <variant>
 
 #include "Id.h"
 
@@ -52,8 +53,7 @@ public:
 
     QJsonObject toJson() const;
     /// Reads exactly what toJson writes: nullopt for a missing required field, a
-    /// field of the wrong type or form, a field toJson never writes, or any element
-    /// of a collection that fails the same way.
+    /// field of the wrong type or form, or a field toJson never writes.
     static std::optional<TaskNotification> fromJson(const QJsonObject& json);
     bool operator==(const TaskNotification& other) const;
     bool operator!=(const TaskNotification& other) const { return !(*this == other); }
@@ -84,8 +84,7 @@ public:
 
     QJsonObject toJson() const;
     /// Reads exactly what toJson writes: nullopt for a missing required field, a
-    /// field of the wrong type or form, a field toJson never writes, or any element
-    /// of a collection that fails the same way.
+    /// field of the wrong type or form, or a field toJson never writes.
     static std::optional<ContactAttempt> fromJson(const QJsonObject& json);
     bool operator==(const ContactAttempt& other) const;
     bool operator!=(const ContactAttempt& other) const { return !(*this == other); }
@@ -99,6 +98,29 @@ private:
 };
 
 // === ResponseTask ===
+
+/// Who a task is assigned to, and the notification sent them. One value, because
+/// the notification belongs to the assignee: clearing the assignment clears it.
+struct TaskAssignment
+{
+    std::variant<TeamId, PersonId> assignee;
+    QString notes;
+    std::optional<TaskNotification> notification;
+
+    bool operator==(const TaskAssignment& other) const
+    {
+        return assignee == other.assignee && notes == other.notes && notification == other.notification;
+    }
+};
+
+/// How a task was resolved. Present exactly when the task is resolved.
+struct TaskResolution
+{
+    QString notes;
+    QDateTime at;
+
+    bool operator==(const TaskResolution& other) const { return notes == other.notes && at == other.at; }
+};
 
 class ResponseTask
 {
@@ -115,31 +137,37 @@ public:
     void setCategory(const QString& category) { m_category = category; }
     void setDescription(const QString& description) { m_description = description; }
 
-    // Assignment - at most one set
-    const std::optional<TeamId>& assignedTeamId() const { return m_assignedTeamId; }
-    const std::optional<PersonId>& assignedPersonId() const { return m_assignedPersonId; }
-    const QString& assignmentNotes() const { return m_assignmentNotes; }
-    const std::optional<TaskNotification>& notification() const { return m_notification; }
+    // Assignment
+    const std::optional<TaskAssignment>& assignment() const { return m_assignment; }
+    void setAssignment(const std::optional<TaskAssignment>& assignment) { m_assignment = assignment; }
 
+    std::optional<TeamId> assignedTeamId() const;
+    std::optional<PersonId> assignedPersonId() const;
+    QString assignmentNotes() const;
+    std::optional<TaskNotification> notification() const;
+
+    /// Reassigning keeps any notification already sent.
     void assignToTeam(const TeamId& teamId, const QString& notes);
     void assignToPerson(const PersonId& personId, const QString& notes);
-    void clearAssignment();
+    void clearAssignment() { m_assignment.reset(); }
+
+    /// A notification goes to an assignee, so this does nothing for an
+    /// unassigned task.
     void setNotification(const std::optional<TaskNotification>& notification);
 
+    bool isAssigned() const { return m_assignment.has_value(); }
+    bool isNotified() const;
+
     // Resolution
-    bool isResolved() const { return m_resolved; }
-    const QString& resolutionNotes() const { return m_resolutionNotes; }
-    const std::optional<QDateTime>& resolvedAt() const { return m_resolvedAt; }
+    const std::optional<TaskResolution>& resolution() const { return m_resolution; }
+    void setResolution(const std::optional<TaskResolution>& resolution) { m_resolution = resolution; }
+
+    bool isResolved() const { return m_resolution.has_value(); }
+    QString resolutionNotes() const;
+    std::optional<QDateTime> resolvedAt() const;
 
     void resolve(const QString& notes);
-    void reopen();
-
-    /// The resolution as one value - resolved, notes, and time together - for a
-    /// merge that takes it whole from one side.
-    void setResolution(bool resolved, const QString& notes, const std::optional<QDateTime>& resolvedAt);
-
-    bool isAssigned() const;
-    bool isNotified() const;
+    void reopen() { m_resolution.reset(); }
 
     QJsonObject toJson() const;
     /// Reads exactly what toJson writes: nullopt for a missing required field, a
@@ -155,14 +183,8 @@ private:
     QString m_description;
     QDateTime m_createdAt;
 
-    std::optional<TeamId> m_assignedTeamId;
-    std::optional<PersonId> m_assignedPersonId;
-    QString m_assignmentNotes;
-    std::optional<TaskNotification> m_notification;
-
-    bool m_resolved = false;
-    QString m_resolutionNotes;
-    std::optional<QDateTime> m_resolvedAt;
+    std::optional<TaskAssignment> m_assignment;
+    std::optional<TaskResolution> m_resolution;
 };
 
 // === FamilyResponseRecord ===

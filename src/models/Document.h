@@ -20,14 +20,6 @@
 #include "ResponseArea.h"
 #include <QSet>
 
-/// Why a payload could not be read.
-enum class DocumentParse
-{
-    Ok,
-    NeedsNewerVersion,  ///< a payload version above the one this build writes
-    Malformed           ///< a required field missing or ill-formed
-};
-
 class Document
 {
 public:
@@ -170,18 +162,15 @@ public:
     // JSON serialization
     QJsonObject toJson() const;
 
-    /// The payload format this build writes. A payload claiming a higher number
-    /// is one this build must not guess at.
-    static constexpr int CurrentPayloadVersion = 1;
-
-    /// Reads a payload, the only reader of a document.
+    /// Reads a payload, the only reader of a document. The header's format version
+    /// covers the payload, so a later payload is refused before it is decrypted.
     ///
-    /// Nothing is skipped, defaulted, or carried through unread: an absent or
-    /// unknown version, an empty roster, a top-level field it does not know, any
-    /// element of any collection that fails its own strict reader, a repeated id,
-    /// and a tag, team, or ministering district naming a person, family, or group
-    /// that is not in the document are all refused whole.
-    static DocumentParse parse(const QJsonObject& json, Document& out);
+    /// Nothing is skipped, defaulted, or carried through unread: an empty roster, a
+    /// top-level field it does not know, any element of any collection that fails
+    /// its own strict reader, and a repeated id within a collection are all refused
+    /// whole. Ids that name something elsewhere in the document are not checked;
+    /// the app has always tolerated one that no longer resolves.
+    static std::optional<Document> parse(const QJsonObject& json);
 
     // Value-based equality
     bool operator==(const Document& other) const;

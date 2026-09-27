@@ -11,15 +11,16 @@
 #include <QStringList>
 
 #include <initializer_list>
+#include <optional>
 
 /// Reading the document format strictly: a reader accepts an object only when it
 /// understands all of it, and each value only in exactly the form the writer
 /// produces.
 ///
 /// Every read* returns false when the key is absent or its value is the wrong type
-/// or form, leaving out unchanged. A field the writer omits when empty is read with
-/// `json.contains(key)` first, and when present must not be empty, since the writer
-/// never writes it so.
+/// or form, leaving out unchanged. The readOptional* functions accept an absent key;
+/// a field the writer omits when empty must not be empty when present, since the
+/// writer never writes it so.
 namespace StrictJson
 {
 
@@ -56,6 +57,17 @@ bool readTime(const QJsonObject& json, QLatin1String key, QDateTime& out);
 
 /// Exactly as writeDate writes it.
 bool readDate(const QJsonObject& json, QLatin1String key, QDate& out);
+
+// --- Optional fields: true when the key is absent, or present and well formed ---
+
+/// A string the writer omits when empty, so present means not empty.
+bool readOptionalNonEmptyString(const QJsonObject& json, QLatin1String key, QString& out);
+
+/// A string the writer writes whenever it is set, empty or not.
+bool readOptionalString(const QJsonObject& json, QLatin1String key, std::optional<QString>& out);
+
+bool readOptionalInt(const QJsonObject& json, QLatin1String key, std::optional<int>& out);
+bool readOptionalDouble(const QJsonObject& json, QLatin1String key, std::optional<double>& out);
 
 bool readObject(const QJsonObject& json, QLatin1String key, QJsonObject& out);
 

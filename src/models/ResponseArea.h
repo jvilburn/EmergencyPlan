@@ -29,19 +29,3 @@ inline QString responseAreaToString(ResponseArea area)
     return QString();
 }
 
-inline ResponseArea responseAreaFromString(const QString& str)
-{
-    if (str == "med")
-    {
-        return ResponseArea::Medical;
-    }
-    if (str == "rec")
-    {
-        return ResponseArea::Recovery;
-    }
-    if (str == "com")
-    {
-        return ResponseArea::Communications;
-    }
-    return ResponseArea::None;
-}

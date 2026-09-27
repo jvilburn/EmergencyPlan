@@ -208,8 +208,8 @@ reader's entry, and check versions without decrypting anything.
 - the last writer's X25519 public key and Ed25519 verify key, whose fingerprint must equal
   the last-writer fingerprint
 - payload nonce
-- recipient entries, one per device: `{kind, member id, device fingerprint, X25519
-  public key, Ed25519 verify key, data key sealed to that device's public key}`
+- recipient entries, one per device: `{member id, device fingerprint, X25519 public
+  key, Ed25519 verify key, data key sealed to that device's public key}`
 - admins: the member ids of the people who are admins, a subset of those in the
   recipient entries
 - payload hash: 32-byte BLAKE2b of the encrypted payload, personalised `wp-payload`
@@ -218,14 +218,15 @@ reader's entry, and check versions without decrypting anything.
 
 The write time lets the conflict dialog say *who* saved and *when*. The name itself
 is looked up by fingerprint in the reader's own roster — the header carries no names.
-The `kind` tag names the sealing scheme.
 
-**Parsing is strict; a newer version is refused, never guessed at.** A reader accepts a
-header or payload only when it understands all of it: a format version it knows, every
-recipient entry of a `kind` it knows, a payload version it knows, and every required
-field present and well formed. Tolerant parsing — skipping what it does not recognise —
-mostly produces data read wrongly, so anything else is refused whole. Adding a new
-recipient kind, such as a hybrid post-quantum entry, is therefore a new format version.
+**Parsing is strict; a newer version is refused, never guessed at.** One format
+version, in the header, covers the whole file: the header's fields, how the data key is
+sealed to each device, and the payload inside. A reader accepts a file only when it
+knows that version and finds every required field present and well formed. Tolerant
+parsing, which skips what it does not recognise, mostly produces data read wrongly, so
+anything else is refused whole. Any change to the header, the sealing, or the payload,
+such as a hybrid post-quantum entry, is a new format version, and a reader refuses it
+before decrypting anything.
 
 **When a newer app wrote the version on the server**, this app keeps the local copy it
 has, with the **directory read-only** and **nothing published**, and a persistent notice:
@@ -430,8 +431,8 @@ consistent version whose generation predates a revocation — is refused in two 
 **Post-quantum.** X25519 is exposed to harvest-now-decrypt-later, and hybrid
 X25519 + ML-KEM-768 is now in production elsewhere. The exposure needs an attacker
 holding the file today and a quantum computer later, against data with a
-few-year sensitivity horizon, so this design stays classical. A hybrid entry kind can
-be added later as a new format version, which every member's app picks up by updating.
+few-year sensitivity horizon, so this design stays classical. A hybrid entry can be
+added later as a new format version, which every member's app picks up by updating.
 
 **Compression before encryption** is safe here — there is no adaptive
 chosen-plaintext channel, so CRIME-style attacks do not apply. It does leak
@@ -1198,8 +1199,8 @@ Headless tests in `tests/services`:
 - associated data built from a header that has been through `toJson`/`fromJson`
   matches the original, so a serialisation round-trip never breaks authentication
 - mutating any bound header byte causes decryption to fail, including the document id
-- a header with an unknown format version, an unknown recipient `kind`, or an unknown
-  payload version is refused whole; the directory is read-only and nothing publishes,
+- a header with an unknown format version is refused whole; the directory is read-only
+  and nothing publishes,
   while emergency response edits save locally; the state clears as soon as the server
   again serves a version the app understands
 - a header or payload with a missing or malformed required field is refused, never read

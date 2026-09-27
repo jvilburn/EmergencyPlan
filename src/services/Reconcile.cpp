@@ -187,16 +187,12 @@ DownloadCheck validateDownload(const QString& documentId,
         return fault(QObject::tr("The server's document is not readable."));
     }
 
-    Document document;
-    switch (Document::parse(json.object(), document))
+    const std::optional<Document> parsed = Document::parse(json.object());
+    if (!parsed.has_value())
     {
-    case DocumentParse::Ok:
-        break;
-    case DocumentParse::NeedsNewerVersion:
-        return verdictOnly(Verdict::NeedsNewerVersion);
-    case DocumentParse::Malformed:
         return fault(QObject::tr("The server's document is not readable."));
     }
+    const Document& document = parsed.value();
 
     if (!AccessControl::headerMatchesRoster(header, document.accessRoster()))
     {

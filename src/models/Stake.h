@@ -17,7 +17,6 @@ public:
     // ========================================================================
     // Getters
     // ========================================================================
-    const QString& id() const { return m_unitNumber; }  // For JSON serialization template
     const QString& unitNumber() const { return m_unitNumber; }
     const QString& name() const { return m_name; }
 

@@ -31,6 +31,7 @@ set(TEST_SOURCES
     services/ServerConformanceTest.cpp
     services/ServerTestSupport.cpp
     services/SmokeTest.cpp
+    services/WardDirectoryImportTest.cpp
 )
 
 add_executable(WardPlanningTests

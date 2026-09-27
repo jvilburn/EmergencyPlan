@@ -24,6 +24,7 @@ public:
     /// Returns true if text is "Male" or "Female".
     static bool isGender(const QString& text);
     static std::optional<Gender> fromString(const QString& str);
+    /// Exactly one of the two spellings toJson writes; nullopt for anything else.
     static std::optional<Gender> fromJson(const QJsonValue& value);
 
 private:

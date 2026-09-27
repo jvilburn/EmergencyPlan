@@ -47,8 +47,7 @@ public:
     // JSON serialization
     QJsonObject toJson() const;
     /// Reads exactly what toJson writes: nullopt for a missing required field, a
-    /// field of the wrong type or form, a field toJson never writes, or any element
-    /// of a collection that fails the same way.
+    /// field of the wrong type or form, or a field toJson never writes.
     static std::optional<Birthday> fromJson(const QJsonObject& json);
 
     // Value-based equality

@@ -265,18 +265,10 @@ std::optional<Family> Family::fromJson(const QJsonObject& json)
         return std::nullopt;
     }
 
-    double coordinate = 0.0;
-    for (const auto& [key, field] : {std::pair{QLatin1String("latitude"), &family.m_latitude},
-                                     std::pair{QLatin1String("longitude"), &family.m_longitude}})
+    if (!StrictJson::readOptionalDouble(json, QLatin1String("latitude"), family.m_latitude)
+        || !StrictJson::readOptionalDouble(json, QLatin1String("longitude"), family.m_longitude))
     {
-        if (json.contains(key))
-        {
-            if (!StrictJson::readDouble(json, key, coordinate))
-            {
-                return std::nullopt;
-            }
-            *field = coordinate;
-        }
+        return std::nullopt;
     }
 
     // Written only when not empty, and each line exactly as Address keeps it: a

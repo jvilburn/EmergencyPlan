@@ -5,6 +5,10 @@
 /// Payload JSON for every model type, each with every field it can carry, spelled
 /// out as a writer produces it. The strict readers are tested against these, so a
 /// field the writer and reader spell differently shows up as a failed round trip.
+///
+/// Every set and hashed collection holds one element, so what the writer emits
+/// has a fixed order and compares equal to the sample as it stands; and fields of
+/// the same type hold distinct values, so a reader that swapped two of them fails.
 namespace ModelSamples
 {
 
@@ -14,7 +18,7 @@ extern const char* const Time;
 QJsonObject person();           ///< id "p1", every optional field present
 QJsonObject secondPerson();     ///< id "p2", required fields only
 QJsonObject family();           ///< id "f1", members p1 and p2
-QJsonObject team();             ///< led by p1, members p1 and p2
+QJsonObject team();             ///< led by p1, member p2
 QJsonObject tag();              ///< names p1 and f1
 QJsonObject emergencyAsset();
 QJsonObject district(const char* id, const char* groupId);

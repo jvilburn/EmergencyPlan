@@ -31,7 +31,6 @@ const QLatin1String KeyAdmins("admins");
 const QLatin1String KeyPayloadHash("payloadHash");
 const QLatin1String KeyWriterSignature("writerSignature");
 
-const QLatin1String KeyKind("kind");
 const QLatin1String KeyMember("member");
 const QLatin1String KeyFingerprint("fingerprint");
 const QLatin1String KeyPublicKey("publicKey");
@@ -121,7 +120,6 @@ bool readBase64Bytes(const QJsonObject& json, QLatin1String key, int expectedSiz
 QJsonObject RecipientEntry::toJson() const
 {
     QJsonObject json;
-    json[KeyKind] = int(kind);
     json[KeyMember] = member.toHex();
     json[KeyFingerprint] = fingerprint.toHex();
     json[KeyPublicKey] = toHex(publicKey.bytes);
@@ -132,8 +130,7 @@ QJsonObject RecipientEntry::toJson() const
 
 bool RecipientEntry::operator==(const RecipientEntry& other) const
 {
-    return kind == other.kind
-        && member == other.member
+    return member == other.member
         && fingerprint == other.fingerprint
         && publicKey == other.publicKey
         && verifyKey == other.verifyKey
@@ -282,27 +279,8 @@ HeaderParse DocumentHeader::parse(const QJsonObject& json, DocumentHeader& out)
 
         const QJsonObject entryJson = element.toObject();
 
-        int kind = 0;
-        if (!StrictJson::readInt(entryJson, KeyKind, kind))
-        {
-            return HeaderParse::Malformed;
-        }
-
-        // Kinds are numbered from 1, so nothing below it was ever written. An
-        // unknown kind above it is a later format, not a damaged file.
-        if (kind < 1)
-        {
-            return HeaderParse::Malformed;
-        }
-
-        if (kind != int(RecipientKind::X25519Sealed))
-        {
-            return HeaderParse::NeedsNewerVersion;
-        }
-
         if (!StrictJson::hasOnlyKeys(entryJson,
-                                     {KeyKind,
-                                      KeyMember,
+                                     {KeyMember,
                                       KeyFingerprint,
                                       KeyPublicKey,
                                       KeyVerifyKey,
@@ -312,7 +290,6 @@ HeaderParse DocumentHeader::parse(const QJsonObject& json, DocumentHeader& out)
         }
 
         RecipientEntry entry;
-        entry.kind = RecipientKind::X25519Sealed;
 
         if (!readHexValue(entryJson, KeyMember, entry.member)
             || !readHexValue(entryJson, KeyFingerprint, entry.fingerprint)
@@ -392,7 +369,6 @@ QByteArray DocumentHeader::associatedData() const
     writer.appendNumber(qint64(recipients.size()));
     for (const RecipientEntry& entry : recipients)
     {
-        writer.appendNumber(qint64(int(entry.kind)));
         writer.appendText(entry.member.toHex());
         writer.appendText(entry.fingerprint.toHex());
         writer.appendText(toHex(entry.publicKey.bytes));

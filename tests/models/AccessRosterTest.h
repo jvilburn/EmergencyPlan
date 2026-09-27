@@ -42,7 +42,6 @@ private slots:
     // Document
     void documentCarriesTheRoster();
     void documentParseAcceptsWhatToJsonWrote();
-    void documentParseNeedsNewerVersionForALaterPayload();
     void documentParseRefusesAMalformedRoster();
     void documentParseRefusesAnUnknownTopLevelKey();
     void documentParseRefusesAnEmptyRoster();

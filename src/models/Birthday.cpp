@@ -131,20 +131,11 @@ std::optional<Birthday> Birthday::fromJson(const QJsonObject& json)
     }
 
     Birthday birthday;
-    int value = 0;
-    for (const auto& [key, field] : {std::pair{QLatin1String("year"), &birthday.m_year},
-                                     std::pair{QLatin1String("month"), &birthday.m_month},
-                                     std::pair{QLatin1String("day"), &birthday.m_day}})
+    if (!StrictJson::readOptionalInt(json, QLatin1String("year"), birthday.m_year)
+        || !StrictJson::readOptionalInt(json, QLatin1String("month"), birthday.m_month)
+        || !StrictJson::readOptionalInt(json, QLatin1String("day"), birthday.m_day))
     {
-        if (!json.contains(key))
-        {
-            continue;
-        }
-        if (!StrictJson::readInt(json, key, value))
-        {
-            return std::nullopt;
-        }
-        *field = value;
+        return std::nullopt;
     }
 
     return birthday;

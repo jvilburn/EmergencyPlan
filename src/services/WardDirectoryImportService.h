@@ -39,16 +39,20 @@ public:
         const QHash<FamilyId, Family>& existingFamilies,
         std::optional<QDate> ministeringPdfDate);
 
+    /// The parsed family under the existing family's id, each parsed member
+    /// keeping the id of the existing member it matches by first given name. Each
+    /// existing id goes to one parsed member at most, so two members who share a
+    /// first name never share an id.
+    static Family preserveIds(
+        const Family& parsedFamily,
+        const Family& existingFamily);
+
 private:
     std::optional<Family> findMatchingFamily(
         const Family& pdfFamily,
         const QHash<FamilyId, Family>& families);
 
-    std::optional<Person> findMatchingPerson(
+    static std::optional<Person> findMatchingPerson(
         const Person& person,
-        const Family& family);
-
-    Family preserveIds(
-        const Family& parsedFamily,
-        const Family& existingFamily);
+        const QList<Person>& candidates);
 };

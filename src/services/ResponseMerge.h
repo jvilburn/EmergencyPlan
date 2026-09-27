@@ -22,8 +22,8 @@
 /// - taskCategories: a set - added on either side kept, removed on either side removed;
 /// - a record or task deleted on one side and edited on the other: the edit.
 ///
-/// A task's assignment (team, person, notes, and the notification sent) is one
-/// value, and so is its resolution (resolved, notes, time).
+/// A task's assignment (assignee, notes, and the notification sent) is one value,
+/// and so is its resolution (notes and time).
 namespace ResponseMerge
 {
 
