@@ -12,6 +12,7 @@
 #include "FamilyEditPanel.h"
 #include "MapWidget.h"
 #include "FamilyMarkerProvider.h"
+#include "DocumentConstants.h"
 #include "DocumentManager.h"
 #include "EmergencyManager.h"
 #include "ReportGenerator.h"
@@ -284,7 +285,7 @@ void MainWindow::onOpenDocument()
         this,
         tr("Open Document"),
         QString(),
-        tr("Emergency Plan Files (*.emergencyplan);;All Files (*)"));
+        tr("Ward Planning Files (%1);;All Files (*)").arg(DocumentConstants::FileGlob));
 
     if (filePath.isEmpty())
     {
@@ -340,7 +341,7 @@ void MainWindow::onSaveDocumentAs()
         QString suggested = DocumentManager::instance()->document().suggestedFilename();
         if (!suggested.isEmpty())
         {
-            suggestedPath = suggested + ".emergencyplan";
+            suggestedPath = suggested + DocumentConstants::FileExtension;
         }
     }
 
@@ -348,7 +349,7 @@ void MainWindow::onSaveDocumentAs()
         this,
         tr("Save Document As"),
         suggestedPath,
-        tr("Emergency Plan Files (*.emergencyplan);;All Files (*)"));
+        tr("Ward Planning Files (%1);;All Files (*)").arg(DocumentConstants::FileGlob));
 
     if (filePath.isEmpty())
     {

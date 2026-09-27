@@ -7,6 +7,7 @@
 #include <QJsonArray>
 #include <QDate>
 
+#include "AccessRoster.h"
 #include "DocumentMetadata.h"
 #include "Family.h"
 #include "Team.h"
@@ -18,6 +19,14 @@
 #include "EmergencyResponse.h"
 #include "ResponseArea.h"
 #include <QSet>
+
+/// Why a payload could not be read.
+enum class DocumentParse
+{
+    Ok,
+    NeedsNewerVersion,  ///< a payload version above the one this build writes
+    Malformed           ///< a required field missing or ill-formed
+};
 
 class Document
 {
@@ -153,9 +162,30 @@ public:
     /// This is more efficient than rebuilding in each command's execute/undo.
     void onDocumentChanged(const struct DocumentChange& change);
 
+    // Who may open this document. Lives inside the payload, so it travels with
+    // the content and only a member can read it.
+    const AccessRoster& accessRoster() const { return m_accessRoster; }
+    void setAccessRoster(const AccessRoster& roster) { m_accessRoster = roster; }
+
     // JSON serialization
     QJsonObject toJson() const;
     static Document fromJson(const QJsonObject& json);
+
+    /// The payload format this build writes. A payload claiming a higher number
+    /// is one this build must not guess at.
+    static constexpr int CurrentPayloadVersion = 1;
+
+    /// Reads a decrypted payload.
+    ///
+    /// Strict about the payload version and the access roster: an absent or
+    /// unknown version, an empty roster, or any ill-formed person or device is
+    /// refused, never defaulted. The directory, ministering, and emergency
+    /// collections are still read through fromJson, which is lenient — a damaged
+    /// family record loads as whatever fromJson makes of it.
+    ///
+    /// The only reader of the roster. fromJson ignores it, so no path can load a
+    /// roster in part.
+    static DocumentParse parse(const QJsonObject& json, Document& out);
 
     // Value-based equality
     bool operator==(const Document& other) const;
@@ -170,6 +200,9 @@ private:
 
     // Ward/Stake hierarchy and document naming
     DocumentMetadata m_metadata;
+
+    // Access roster
+    AccessRoster m_accessRoster;
 
     // Core collections
     QHash<FamilyId, Family> m_families;

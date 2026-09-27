@@ -2,56 +2,37 @@
 
 find_package(Qt6 REQUIRED COMPONENTS Test)
 
-# Optionally use Google Test if available
-# find_package(GTest)
-
 enable_testing()
 
 # ============================================================================
 # Test Executable
 # ============================================================================
 
+# One runner: TestMain.cpp holds the only main() and runs every suite in turn.
 set(TEST_SOURCES
-    # Model tests
-    # models/PersonTest.cpp
-    # models/FamilyTest.cpp
-    # models/DocumentTest.cpp
-    # models/TeamTest.cpp
-    # models/TagTest.cpp
-
-    # Command tests
-    # commands/FamilyCommandsTest.cpp
-    # commands/CommandHistoryTest.cpp
-
-    # Service tests
-    # services/JsonServiceTest.cpp
-    # services/FilterServiceTest.cpp
+    TestMain.cpp
+    models/AccessRosterTest.cpp
+    services/AccessControlTest.cpp
+    services/ChainTestSupport.cpp
+    services/CryptoLinkTest.cpp
+    services/CryptoTypesTest.cpp
+    services/DocumentChainTest.cpp
+    services/DocumentCryptoTest.cpp
+    services/DocumentHeaderTest.cpp
+    services/FakeServer.cpp
+    services/FakeServerTest.cpp
+    services/ServerConformanceTest.cpp
+    services/ServerTestSupport.cpp
+    services/SmokeTest.cpp
 )
 
-# Only build if we have test sources
-if(TEST_SOURCES)
-    add_executable(WardPlanningTests
-        ${TEST_SOURCES}
-    )
+add_executable(WardPlanningTests
+    ${TEST_SOURCES}
+)
 
-    target_link_libraries(WardPlanningTests PRIVATE
-        WardPlanningLib
-        Qt6::Test
-    )
+target_link_libraries(WardPlanningTests PRIVATE
+    WardPlanningLib
+    Qt6::Test
+)
 
-    # If using Google Test
-    # if(GTest_FOUND)
-    #     target_link_libraries(WardPlanningTests PRIVATE GTest::gtest GTest::gtest_main)
-    # endif()
-
-    # Add tests to CTest
-    add_test(NAME WardPlanningTests COMMAND WardPlanningTests)
-endif()
-
-# ============================================================================
-# Individual Test Registration (when using Qt Test)
-# ============================================================================
-
-# Example of registering individual tests:
-# add_test(NAME PersonTest COMMAND WardPlanningTests PersonTest)
-# add_test(NAME FamilyTest COMMAND WardPlanningTests FamilyTest)
+add_test(NAME WardPlanningTests COMMAND WardPlanningTests)

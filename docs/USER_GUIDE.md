@@ -11,7 +11,7 @@ Ward Planning is a desktop application for managing ward family data, ministerin
 ### Creating or Opening a Document
 
 - **File > New** (Ctrl+N) — Start with an empty document
-- **File > Open** (Ctrl+O) — Open an existing `.emergencyplan` file
+- **File > Open** (Ctrl+O) — Open an existing `.wardplanning` file
 - The app automatically reopens your last document on launch
 
 ### Importing Data

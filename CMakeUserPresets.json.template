@@ -4,13 +4,16 @@
         {
             "name": "user-windows",
             "inherits": "windows-debug",
+            "binaryDir": "${sourceDir}/build/windows-debug",
             "cacheVariables": {
-                "CMAKE_PREFIX_PATH": "C:/Qt/6.6.0/msvc2019_64"
+                "CMAKE_PREFIX_PATH": "C:/Qt/6.11.0/msvc2022_64",
+                "Qt6_DIR": "C:/Qt/6.11.0/msvc2022_64/lib/cmake/Qt6"
             }
         },
         {
             "name": "user-macos",
             "inherits": "macos-debug",
+            "binaryDir": "${sourceDir}/build/macos-debug",
             "cacheVariables": {
                 "CMAKE_PREFIX_PATH": "/opt/homebrew/opt/qt@6"
             }

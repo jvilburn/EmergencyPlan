@@ -1,4 +1,5 @@
 #include "EmergencyManager.h"
+#include "DocumentConstants.h"
 #include "DocumentManager.h"
 #include "DocumentChange.h"
 #include "JsonService.h"
@@ -575,18 +576,19 @@ bool EmergencyManager::saveArchive()
 
     QString slug = m_response->name().toLower().replace(QRegularExpression("[^a-z0-9]+"), "-");
     QString date = m_response->startedAt().toString("yyyy-MM-dd");
-    QString archivePath = archiveDir + "/" + date + "-" + slug + ".emergencyplan";
+    QString archivePath = archiveDir + "/" + date + "-" + slug + DocumentConstants::FileExtension;
 
     // Avoid overwriting existing archive — append counter if needed
     if (QFile::exists(archivePath))
     {
         int counter = 2;
         QString basePath = archiveDir + "/" + date + "-" + slug;
-        while (QFile::exists(basePath + "-" + QString::number(counter) + ".emergencyplan"))
+        while (QFile::exists(basePath + "-" + QString::number(counter)
+                             + DocumentConstants::FileExtension))
         {
             ++counter;
         }
-        archivePath = basePath + "-" + QString::number(counter) + ".emergencyplan";
+        archivePath = basePath + "-" + QString::number(counter) + DocumentConstants::FileExtension;
     }
 
     // Snapshot the entire current document (prep + response)

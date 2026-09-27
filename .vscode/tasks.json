@@ -51,6 +51,20 @@
                 "--output-on-failure",
                 "-C", "Debug"
             ],
+            "osx": {
+                "args": [
+                    "--test-dir", "${workspaceFolder}/build/macos-debug",
+                    "--output-on-failure",
+                    "-C", "Debug"
+                ]
+            },
+            "linux": {
+                "args": [
+                    "--test-dir", "${workspaceFolder}/build/linux-debug",
+                    "--output-on-failure",
+                    "-C", "Debug"
+                ]
+            },
             "group": "test",
             "problemMatcher": [],
             "detail": "Run all tests with CTest"

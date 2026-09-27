@@ -4,7 +4,7 @@
 
 **Goal:** Encrypt the ward document, hold the authoritative copy on a Ward Planning server the app talks to directly, and keep a complete local file that works with no network at all.
 
-**Architecture:** Envelope encryption. Each document holds one random data key, sealed separately to each device's X25519 public key via libsodium `crypto_box_seal`. The payload — today's document JSON, compressed — is encrypted with XChaCha20-Poly1305 under that data key, as one payload, with the plaintext header bound as associated data. The roster lists people, each with linked devices; every device holds two keypairs, X25519 for sealing and Ed25519 for signing, generated silently on first run and held in the OS keychain through qtkeychain. A signed header chain proves membership changes, and removing a person takes two people. Saving writes the local file; publishing uploads it conditionally on the version this session started from. All local writes funnel through one `DocumentManager` method.
+**Architecture:** Envelope encryption. Each document holds one random data key, sealed separately to each device's X25519 public key via libsodium `crypto_box_seal`. The payload — today's document JSON, compressed — is encrypted with XChaCha20-Poly1305 under that data key, as one payload, with the plaintext header bound as associated data. The roster lists people, each with linked devices; every device holds two keypairs, X25519 for sealing and Ed25519 for signing, generated silently on first run and held in the OS keychain through qtkeychain. A signed header chain proves membership changes; each person is an admin or a member, and any admin grants and removes alone. Saving writes the local file; publishing uploads it conditionally on the version this session started from. All local writes funnel through one `DocumentManager` method.
 
 **Tech Stack:** Qt 6.11 (Widgets, Network, Test), C++17, MSVC 2022, Ninja. libsodium from vcpkg; qtkeychain built from source via `FetchContent` against the system Qt.
 
@@ -27,10 +27,17 @@ from a Claude shell — Git Bash and MSYS lack the MSVC environment and produce
 misleading errors like `Cannot open include file: 'type_traits'`.
 
 **`build.bat` only reconfigures when the top-level `CMakeLists.txt` changes.** It
-byte-compares it against `build/.cmake_marker` (`build.bat:19-27`). A task touching
-only `tests/CMakeLists.txt` will appear to build successfully and produce no new test
-binary. If a build produces no new test binary, have the user delete
-`build/.cmake_marker` and build again.
+byte-compares it against `build/windows-debug/.cmake_marker` (`build.bat:21-30`). A task
+touching only `tests/CMakeLists.txt` will appear to build successfully and produce no new
+test binary. If a build produces no new test binary, have the user delete
+`build/windows-debug/.cmake_marker` and build again.
+
+**Each preset builds into its own directory,** `build/<presetName>`, so the debug
+executable and test binary are under `build/windows-debug/bin/` and the release build
+under `build/windows-release/bin/`. The vcpkg dependency tree is shared at
+`build/vcpkg_installed/`. MuPDF and its dependencies arrive through
+`find_package(unofficial-libmupdf CONFIG REQUIRED)`, which carries per-configuration
+library locations, so a Debug build links the Debug libraries.
 
 **Standing rule: every new `.cpp`/`.h` must be added to the source lists in
 `CMakeLists.txt`.** `WardPlanningLib` is built from hand-maintained
@@ -59,13 +66,14 @@ the user's review is applied. Plain messages, no attribution lines.
 |---|---|
 | Data key | 32-byte random key encrypting one document's payload |
 | Sealed key | The data key encrypted to one device's public key |
-| Person | A member: member id, display name, and one or more devices |
+| Person | Someone with access: member id, display name, role, and one or more devices |
+| Role | **Admin** — grants, removes, unlinks another's device, and changes roles, alone — or **member**. Admins are listed in the header; every version lists at least one |
 | Device | One installation's keypairs and device name; its private keys never leave it |
 | Roster | People, each with their devices, stored **inside** the payload |
 | Link | Adding a device to your own person, authorised from a device you already use |
 | Recipient entry | `{kind, member id, fingerprint, public key, verify key, sealed key}` in the **plaintext** header; the fingerprint covers both keys |
-| Header chain | Every version's header, each signed by a member of the one before; lets a removed member prove removal without decrypting |
-| Removal approval | A second member's signed proposal attached to a header that removes someone else |
+| Header chain | The kept headers — those whose membership changed — each signed by a device of the one before; lets a removed member prove removal without decrypting |
+| Leave | A person publishing the version that drops them; it does not rotate the key |
 | Key generation | Counter incremented on every data key rotation |
 | Save counter | Counter incremented on every local write |
 | Document id | 128 random bits generated by the app at creation; names the local file, keys local records, and is registered unchanged when shared |
@@ -85,6 +93,19 @@ the user's review is applied. Plain messages, no attribution lines.
 First, so every later task — the core, the test harness, the libsodium build — is
 written against final names, and because `setOrganizationName` keys where the storage
 and identity tasks store their records.
+
+> **Done.** Commit `428f047`. The notes below record what the task covered.
+> Beyond the table: the file-dialog filters (`MainWindow.cpp:287,351`), the tile
+> service user agent, the stylesheet header comment, `LICENSE.txt`, and the four
+> `docs/*.md` title lines — which settles Task 36's rename item. The version is
+> single-sourced from `project(VERSION ...)` through `WARD_PLANNING_VERSION` and
+> `QCoreApplication::applicationVersion()`. Two build fixes landed with it: the
+> MuPDF config package, and per-preset build directories. `vcpkg.json` also gained
+> the `builtin-baseline` Task 4 revisits.
+>
+> **Accepted limitation:** the rename moves `QStandardPaths::CacheLocation`, so the
+> map tile cache under the old name is orphaned rather than migrated. Tiles
+> re-download on first use.
 
 **Files:** `CMakeLists.txt`, `src/main.cpp:12-13`, `packaging/macos/Info.plist`,
 `installer.iss`, `vcpkg.json`, `tests/CMakeLists.txt`, **`build.bat:51`**,
@@ -127,7 +148,10 @@ The file **extension** is not part of this task — `Info.plist:59` and the othe
 Task 14.
 
 **`setOrganizationName("")` must become a real value.** It is currently empty and it
-keys per-user storage locations; Task 6 puts a security control there.
+keys per-user storage locations; Task 6 puts a security control there. It is
+`"Church"`, matching the `com.church.wardplanning` bundle identifier, which puts
+per-user storage under `Church/Ward Planning/` — the application name alone would
+repeat itself there.
 
 **Pick one canonical version number** and apply it everywhere: `CMakeLists.txt:3-4`
 says 1.0.0, `installer.iss:5` says 1.0.1, `Info.plist:27,30` say 1.0.0. This release
@@ -149,7 +173,7 @@ Build, run, commit as `refactor: rename product to Ward Planning`.
 ### Task 1: The encrypted document core
 
 **Everything that decides whether this design works, written as one artifact.** The
-document format and its cryptography, the membership chain and two-member removal,
+document format and its cryptography, the membership chain and its admin rules,
 access control, the server contract and its fake, the reconciliation decisions that
 protect the local file, the emergency response merge, and the device pairing that
 authenticates linking and invites. Each has its tests.
@@ -263,7 +287,7 @@ void DocumentCryptoTest::signatureVerifiesAndRejectsTampering()
 void DocumentCryptoTest::signatureUnderOneTagFailsUnderEveryOther()
 {
     // A signature the server can influence (Auth) must never verify as document
-    // evidence (Header, Removal), and no tag may stand in for another.
+    // evidence (Header), and no tag may stand in for another.
 }
 ```
 
@@ -303,7 +327,6 @@ enum class SignatureTag
     Auth,       ///< "auth"    — login challenge, the one message the server chooses
     Request,    ///< "request" — mutating request: document id and body hash
     Header,     ///< "header"  — DocumentHeader::signedBytes()
-    Removal,    ///< "removal" — removal proposal
     Pairing     ///< "pairing" — the responder's handover to a device it just paired with
 };
 ```
@@ -312,7 +335,7 @@ enum class SignatureTag
 0x00 byte to the message before `crypto_sign_detached` / `_verify_detached`. The tag is
 never stored or transmitted. There is no untagged overload, so no code path can sign raw
 bytes. This is what stops a hostile server from choosing login challenge bytes equal to
-a header or proposal and collecting a real member signature over it.
+a header and collecting a real admin's signature over it.
 
 **The two keypairs stay independent.** libsodium offers
 `crypto_sign_ed25519_pk_to_curve25519`, and the design declines it: two keys cost
@@ -363,16 +386,6 @@ struct RecipientEntry
     bool operator==(const RecipientEntry& other) const;
 };
 
-struct RemovalApproval
-{
-    MemberId target;                ///< the person removed, with all their devices
-    Fingerprint proposer;           ///< the proposing device; target's own device for a leave
-    int keyGeneration = 0;          ///< the generation the proposal was made under
-    QByteArray signature;           ///< proposer's Ed25519 over documentId, target, keyGeneration
-
-    bool operator==(const RemovalApproval& other) const;
-};
-
 struct DocumentHeader
 {
     static constexpr int CurrentFormatVersion = 2;
@@ -383,10 +396,12 @@ struct DocumentHeader
     int keyGeneration = 1;
     qint64 saveCounter = 0;
     Fingerprint lastWriter;
+    PublicKey writerPublicKey;              ///< lastWriter's keys; fingerprintOf them == lastWriter
+    VerifyKey writerVerifyKey;
     QDateTime lastWriteTime;                ///< UTC
     QByteArray nonce;                       ///< 24 bytes
     QList<RecipientEntry> recipients;
-    QList<RemovalApproval> removals;        ///< empty unless this write removes a person
+    QList<MemberId> admins;                 ///< the admins' member ids, ascending by hex
     QByteArray payloadHash;                 ///< BLAKE2b of the ciphertext; outside the AD
     QByteArray writerSignature;             ///< Ed25519 by lastWriter; outside the AD
 
@@ -444,12 +459,28 @@ values** — the same strings `toJson` writes. Two traps:
 
 Build the byte string explicitly and in fixed order: format version, document id,
 origin document id (empty when absent),
-key generation, save counter, last-writer hex, write time string, nonce hex,
+key generation, save counter, last-writer hex, writer public key hex, writer verify key
+hex, write time string, nonce hex,
 then each recipient's kind, member id hex, fingerprint hex, public key hex, verify key hex, and base64 sealed key **in stored order**,
-then each removal approval's target hex, proposer hex, key generation, and signature hex in stored order,
+then the number of admins and each admin's member id hex in ascending order,
 with a separator byte that cannot occur in any field or an explicit length prefix.
 
-**Tests:** full round-trip including recipients, removal approvals, and their order; `parse` returns
+**A header verifies its own signature.** It carries its writer's two public keys, and
+`parse` refuses one whose `fingerprintOf(writerPublicKey, writerVerifyKey)` is not
+`lastWriter`. Checking a signature therefore never needs the writer looked up anywhere
+first — which matters for a leave, whose writer has just left the roster. **A header may
+list no recipients** only as the last person's leave (1.5, rule 7); `parse` accepts it,
+and nobody can open or follow it.
+
+**The admin list is canonical.** It is written in ascending order of member id hex, and
+`parse` refuses one out of order or with a repeat, so one admin set has exactly one
+serialisation and one associated data. It is read beside the recipients because a
+removed device proves its removal from headers alone, and that proof has to show the
+remover was an admin.
+
+**Tests:** full round-trip including recipients, their order, the admin list, and the writer's
+keys; `parse` refuses writer keys whose fingerprint is not `lastWriter`, and an admin list out
+of order, with a repeat, or with a malformed id; it accepts a header listing no one; and returns
 `Malformed` for a missing version, a non-object, a wrong-size nonce, a wrong-size
 signature or payload hash, a wrong-size recipient verify key, and a malformed fingerprint;
 `NeedsNewerVersion` for a higher `formatVersion` and for an unknown `kind`;
@@ -475,8 +506,11 @@ static std::optional<QByteArray> decryptPayload(const QByteArray& sealed,
 
 static QByteArray payloadHash(const QByteArray& ciphertext);   ///< crypto_generichash
 static QByteArray signHeader(const DocumentHeader& header, const SigningKey& key);  ///< SignatureTag::Header
-static bool verifyHeader(const DocumentHeader& header,
-                         const VerifyKey& writerKey);   ///< caller looks up lastWriter
+static bool verifyHeader(const DocumentHeader& header);   ///< against header.writerVerifyKey
+
+/// The writer is a device in this version's roster, or this version is a leave by a
+/// device of the person it drops.
+static bool writerIsAccountedFor(const DocumentHeader& header, const AccessRoster& roster);
 
 enum class ChainResult { Removed, StillMember, Broken };
 
@@ -486,51 +520,55 @@ static ChainResult verifyChain(const DocumentHeader& anchor,
                                const Fingerprint& self);
 ```
 
-**Every write is signed.** The writer sets `payloadHash` from the ciphertext, then
-`signHeader` signs `header.signedBytes()`. A member opening a document checks
-`payloadHash` against the ciphertext and `verifyHeader` against the verify key the
-decrypted roster holds for `lastWriter` (the roster arrives in Task 1.6, so that lookup
-lives in Task 9's load path); a writer absent from the roster fails, and so does any
-mismatch between header and roster (`AccessControl::headerMatchesRoster`, Task 1.7).
+**Every write is signed.** The writer sets its own keys and `payloadHash` in the header,
+then `signHeader` signs `header.signedBytes()`. `verifyHeader(header)` checks the
+signature against `header.writerVerifyKey` — one path everywhere. *Who* the writer is
+is a separate question with one answer: a device in the version's own roster, or, for a
+leave, a device of the person the version drops, proven by the chain or, with no base
+copy, by the payload decrypting at all. Task 9's load path and Task 1.9 both use
+`DocumentCrypto::writerIsAccountedFor(header, roster)` for it. Any mismatch between
+header and roster fails too (`AccessControl::headerMatchesRoster`, Task 1.7).
 
 **`verifyChain` is what a removed device's app relies on.** It cannot decrypt, so it
 walks the headers after its base copy's header (Task 1.9). A link from `previous` to
 `next` holds when all of these do, in the design's numbering:
 
-1. `next.lastWriter` is a device among `previous`'s recipients, and the signature
-   verifies against that entry's verify key. The writer must be found in `previous`,
-   never only in `next` — a server could otherwise mint a header listing a key of its
-   own and sign with it.
-2. Key generation equals the previous one or is exactly one more — never a jump, which
-   would otherwise let one member pin it at the maximum and block every later rotation —
-   and the save counter increases.
-3. `next.lastWriter` is also among `next`'s recipients.
+1. `next.lastWriter` is a device among `previous`'s recipients, `next`'s writer keys are
+   that entry's keys, and the signature verifies. The writer must be found in
+   `previous`, never only in `next` — a server could otherwise mint a header listing a
+   key of its own and sign with it.
+2. The save counter increases. The key generation rises by **exactly one when a device or
+   person is dropped by an unlink or a removal, and is unchanged otherwise.** A rotation
+   without a drop is refused, so a header skipped because its membership did not change
+   can never have hidden a rotation, and a jump — which would let one member pin the
+   generation at the maximum — is impossible.
+3. `next.lastWriter` is also among `next`'s recipients — except in a leave (rule 7).
 4. Within each header, every entry's fingerprint equals `fingerprintOf(publicKey,
    verifyKey)`, appears under exactly one person, and no two entries share a public key
    or a verify key; a device in both headers has the **same member id, public key, and
-   verify key** in both.
+   verify key** in both; every admin is a person in that header; and a header listing
+   anyone lists at least one admin.
 5. A device added under a person present in `previous` requires `lastWriter` to be a
-   device of that person.
+   device of that person. An admin cannot attach a device to someone else.
 6. A device dropped while its person remains requires `lastWriter` to be another device
-   of that person, and the key generation to increase. A person's last device is never
-   dropped this way.
-7. A person absent from `next` entirely requires a `RemovalApproval` for that member id,
-   this document id, and `previous.keyGeneration`, whose `removal`-tagged signature
-   verifies against a `previous` device that belongs **either** to a third person —
-   neither `lastWriter`'s person nor the target — **or** to the target (a leave
-   request). The key generation increases.
-8. A person present only in `next` is unrestricted.
+   of that person **or** a device of an admin, and the key generation to increase. A
+   person's last device is never dropped this way; that removes the person.
+7. A person absent from `next` entirely requires either that `lastWriter`'s person is an
+   admin, with the key generation increasing — a removal — or that `lastWriter` is a
+   device of that very person, with nothing else in the membership changed and the key
+   generation unchanged — a leave.
+8. A person present only in `next` requires `lastWriter`'s person to be an admin.
+9. A change to the admin list requires `lastWriter`'s person to be an admin, apart from a
+   leaver dropping off it.
 
-Rule 7 counts people, not devices, so a second device of the proposer's own person
-never satisfies it. The 7-day waiting period for new approvers cannot be checked here —
-headers carry no trustworthy time — and is enforced by the server and the app (Task 1.8,
-Task 32).
+*An admin* always means a person on `previous`'s admin list, never `next`'s, so no one
+can promote themselves and act on it in the same version.
+
+**A leave does not rotate the key.** The leaver would generate the new key and so know
+it; they are leaving by choice, and the server stops serving them the moment the leave
+lands. The next removal or unlink rotates.
 
 ```cpp
-static QByteArray signRemovalProposal(const QString& documentId,
-                                      const MemberId& target,
-                                      int keyGeneration,
-                                      const SigningKey& proposerKey);  ///< SignatureTag::Removal
 static bool verifyLink(const DocumentHeader& previous, const DocumentHeader& next);
 ```
 
@@ -550,34 +588,46 @@ future reader will want to make it deterministic for testing, and that would XOR
 versions of the ward directory against each other and expose the Poly1305 one-time key.
 
 **Tests:** `payloadRoundTrips`; `tamperedHeaderFailsDecryption` (keyGeneration,
-saveCounter, lastWriteTime, and a dropped recipient, each separately);
+saveCounter, lastWriteTime, a dropped recipient, and the admin list, each separately);
 `truncatedPayloadFailsDecryption`; `wrongKeyFailsDecryption`;
 `signatureVerifiesWithWriterKey`; `signatureFailsOnChangedHeaderField`;
 `signatureFailsOnChangedPayloadHash`; `signatureFailsWithAnotherMembersKey`;
-`chainProvesRemovalByMemberGrantedAfterAnchor` (anchor A+B+C; B grants D; D revokes C;
-C's chain is `Removed`); `chainWithWriterOnlyInOwnHeaderIsBroken`;
-`chainWithWithheldGrantHeaderIsBroken`; `chainWithBadSignatureIsBroken`;
+`chainProvesRemovalByAdminGrantedAfterAnchor` (anchor A+B+C with A an admin; A grants D
+and makes D an admin; D removes C; C's chain is `Removed`);
+`chainWithWriterOnlyInOwnHeaderIsBroken`; `chainWithWithheldGrantHeaderIsBroken`;
+`chainWithWithheldPromotionHeaderIsBroken`; `chainWithBadSignatureIsBroken`;
 `chainSkippingHeadersWithUnchangedMembershipVerifies`;
 `chainWithHeaderSignedUnderAuthTagIsBroken`;
-`chainWithProposalSignedUnderAuthTagIsBroken`;
 `chainWithDecreasingGenerationIsBroken`; `chainWithNonIncreasingSaveCounterIsBroken`;
-`chainStillListingSelfIsStillMember`; `linkDroppingAnotherMemberWithoutApprovalIsBroken`;
-`linkWithApprovalSignedByWriterIsBroken`; `linkWithApprovalSignedByTargetIsBroken`;
-`linkWithApprovalForOtherGenerationIsBroken`; `linkWithApprovalForOtherDocumentIsBroken`;
-`linkWithApprovalFromNonMemberIsBroken`; `linkWithWriterAbsentFromOwnRecipientsIsBroken`;
-`linkWithLeaveRequestSignedByTargetHolds`; `linkDroppingSelfWithoutLeaveRequestIsBroken`;
-`linkWithValidSecondMemberApprovalHolds`;
+`chainStillListingSelfIsStillMember`; `chainProvesRemovalForEveryDeviceOfTheRemovedPerson`;
+`chainProvesUnlinkForTheUnlinkedDevice`; `chainProvesALeaveToTheLeaversOtherDevices`;
+`linkWithWriterAbsentFromOwnRecipientsIsBroken`;
 `linkAddingDeviceToOwnPersonHolds`; `linkAddingDeviceToAnotherPersonIsBroken`;
-`linkUnlinkingOwnDeviceWithRotationHolds`; `linkUnlinkingAnotherPersonsDeviceIsBroken`;
-`linkUnlinkingWithoutRotationIsBroken`; `linkUnlinkingLastDeviceIsBroken`;
+`linkAdminAddingDeviceToAnotherPersonIsBroken`;
+`linkUnlinkingOwnDeviceWithRotationHolds`; `linkAdminUnlinkingAnotherPersonsDeviceHolds`;
+`linkMemberUnlinkingAnotherPersonsDeviceIsBroken`; `linkUnlinkingWithoutRotationIsBroken`;
+`droppingAPersonsLastDeviceIsARemovalNotAnUnlink`;
+`linkAdminRemovingAPersonHolds`; `linkMemberRemovingAPersonIsBroken`;
+`linkAdminRemovingAnotherAdminHolds`; `linkRemovingWithoutRotationIsBroken`;
+`linkRemovingPersonDropsAllTheirDevices`;
+`linkAdminGrantingHolds`; `linkMemberGrantingIsBroken`;
+`linkAdminPromotingAndDemotingHolds`; `linkAdminSteppingDownHolds`;
+`linkMemberPromotingIsBroken`; `linkMemberDemotingIsBroken`;
+`linkPromotedInThisVersionCannotActInIt`;
+`linkWithNoAdminIsBroken` (covering the last admin leaving or stepping down while others
+remain); `linkWithAdminNotInTheHeaderIsBroken`;
+`linkRotatingWithoutADropIsBroken`; `linkRemovingWithoutRotatingIsBroken` (also covers
+unlinking); `linkWriterKeysNotMatchingPreviousEntryIsBroken`;
+`linkLeaveHolds`; `linkLeaveByTheLeaversOtherDeviceHolds`; `linkLeaveThatRotatesIsBroken`;
+`linkAdminLeaveThatRotatesIsBroken`; `linkLeaveThatAlsoChangesTheAdminListIsBroken`;
+`linkLastPersonLeavingToAnEmptyHeaderHolds`; `linkAfterAnEmptyHeaderIsBroken`;
+`linkLeaveThatAlsoRemovesSomeoneElseIsBroken`; `linkLeaveThatAlsoGrantsIsBroken`;
+`linkLeavingSomeoneElseIsBroken`;
 `linkWithDeviceUnderTwoPeopleIsBroken`; `linkMovingDeviceBetweenPeopleIsBroken`;
-`linkChangingVerifyKeyOfExistingDeviceIsBroken`; `linkSkippingAKeyGenerationIsBroken`; `linkChangingPublicKeyOfExistingDeviceIsBroken`;
+`linkChangingVerifyKeyOfExistingDeviceIsBroken`; `linkChangingPublicKeyOfExistingDeviceIsBroken`;
+`linkSkippingAKeyGenerationIsBroken`;
 `linkWithFingerprintNotMatchingKeysIsBroken`; `linkWithDuplicateVerifyKeyIsBroken`;
-`linkWithLeaveRequestSignedByReplacedKeyIsBroken`;
-`linkWithApprovalFromProposersOwnSecondDeviceIsBroken`;
-`linkRemovingPersonDropsAllTheirDevices`; `linkWithLeaveRequestFromLeaversOtherDeviceHolds`;
-`chainProvesRemovalForEveryDeviceOfTheRemovedPerson`;
-`chainProvesUnlinkForTheUnlinkedDevice`.
+`linkAcrossDocumentsIsBroken`.
 
 The nonce-freshness assertions live at the `JsonService` level (Task 9), where they
 can observe what the writer actually did.
@@ -596,14 +646,19 @@ fingerprint.
 Bob's laptop and phone are two devices under one person, added by Bob himself.
 
 `RosterDevice` holds device name, X25519 public key, and Ed25519 verify key; derives
-its fingerprint from both public keys. `RosterPerson` holds member id, display name, and a non-empty list of devices — no grant
-date: how new a person is comes only from the server's clock (Task 1.8). Both have `toJson` / `fromJson` (the latter returning `std::optional`).
+its fingerprint from both public keys, once, when made or read. `RosterPerson` holds
+member id, display name, **role** (`Admin` or `Member`), and a non-empty list of devices.
+Both have `toJson` / `fromJson` (the latter returning `std::optional`), and `isValid()`
+requires exactly what `fromJson` requires, so anything valid reads back from the payload.
 
 `AccessRoster` wraps a hash of people keyed by member id hex, offering person add,
 remove, contains; device add and remove under a person; lookup of a device and its
-person by fingerprint; person count; a `people()` accessor sorted by display name, each
-person's devices sorted by device name; and JSON. **A fingerprint may appear under only
-one person**; adding it under a second is refused.
+person by fingerprint; person count; setting a person's role; `admins()`, the admins'
+member ids ascending by hex, exactly as the header lists them; a `people()` accessor
+sorted by display name, each person's devices sorted by device name; and JSON. **A
+fingerprint may appear under only one person**, and **no two devices may share a public
+key or a verify key** — the header forbids both, and every write reseals from the roster,
+so a roster the header could not represent would stop the ward publishing.
 
 **The roster parses strictly, as the header does.** A person or device with a missing or
 ill-formed required field fails the whole payload; nothing is dropped and nothing is
@@ -617,8 +672,8 @@ static DocumentParse parse(const QJsonObject& json, Document& out);
 
 `NeedsNewerVersion` for a payload version above the one this build writes; `Malformed`
 for any missing or ill-formed required field, roster included. `fromJson` stays as it is
-for now — `JsonService.cpp:94` still calls it, and Task 4's build must pass — and Task 9
-deletes it when it switches `JsonService` to `parse`.
+for now — `JsonService.cpp:94` still calls it, and Task 4's build must pass — and Task 4a
+replaces it when it gives every model a strict reader.
 
 **Tests:** `parse` returns `Ok` for a document written by `toJson`, `NeedsNewerVersion`
 for a higher payload version, and `Malformed` for a roster device with a wrong-size public
@@ -632,10 +687,12 @@ dirty state is unaffected, since that is `m_undoStack.size() != m_savedPosition`
 **Tests:** person add, remove, and contains; device add and remove under a person;
 adding the same device twice leaves one; adding a device already held by another person
 is refused; removing a person's last device is refused (that is removing the person);
-two people sharing a display name are distinct and sort stably; round-trip through
-`Document::toJson` and `Document::parse`.
+two people sharing a display name are distinct and sort stably; a person's role
+round-trips and `admins()` lists exactly the admins in ascending order; a person with an
+unknown role fails the whole roster; round-trip through `Document::toJson` and
+`Document::parse`.
 
-#### 1.7 Grant, link, unlink, revoke, and leave
+#### 1.7 Grant, link, unlink, remove, roles, and leave
 
 **Files:** `src/services/AccessControl.h/.cpp`, `tests/services/AccessControlTest.h/.cpp`
 
@@ -647,117 +704,160 @@ struct AccessChange
 {
     DocumentHeader header;
     AccessRoster roster;
-    DataKey dataKey;        ///< unchanged on grant and link; new on revoke, unlink, and completing a leave
+    DataKey dataKey;        ///< new on remove and unlink; unchanged otherwise
 };
 
 class AccessControl
 {
 public:
-    /// Adds a new person with their first device; data key and generation unchanged.
-    /// Returns nullopt when the member id is already in the roster; a re-granted person
-    /// always gets a fresh member id.
+    // Every operation takes the writer — the device that will sign the result —
+    // and acts as that device's person. Each returns nullopt rather than a change
+    // the chain would refuse.
+
+    /// Adds a new person, as a member, with exactly one device. The writer's person
+    /// is an admin; data key and generation unchanged.
     static std::optional<AccessChange> grant(const DocumentHeader& header,
-                              const AccessRoster& roster,
-                              const DataKey& dataKey,
-                              const RosterPerson& newPerson);
+                                             const AccessRoster& roster,
+                                             const DataKey& dataKey,
+                                             const Fingerprint& writer,
+                                             const RosterPerson& newPerson);
 
-    /// Adds a device under the writer's own person; data key and generation unchanged.
-    static AccessChange linkDevice(const DocumentHeader& header,
-                                   const AccessRoster& roster,
-                                   const DataKey& dataKey,
-                                   const MemberId& ownMember,
-                                   const RosterDevice& newDevice);
+    /// Adds a new device under the writer's own person; data key and generation unchanged.
+    static std::optional<AccessChange> linkDevice(const DocumentHeader& header,
+                                                  const AccessRoster& roster,
+                                                  const DataKey& dataKey,
+                                                  const Fingerprint& writer,
+                                                  const RosterDevice& newDevice);
 
-    /// Drops one of the writer's own person's devices, never the last; rotates the key.
-    static AccessChange unlinkDevice(const DocumentHeader& header,
-                                     const AccessRoster& roster,
-                                     const MemberId& ownMember,
-                                     const Fingerprint& device);
+    /// Drops one device, never the writer itself and never a person's last: one of the
+    /// writer's own, or anyone's when the writer's person is an admin. Rotates the key.
+    static std::optional<AccessChange> unlinkDevice(const DocumentHeader& header,
+                                                    const AccessRoster& roster,
+                                                    const Fingerprint& writer,
+                                                    const Fingerprint& device);
 
-    /// Removes a person and all their devices under a third person's approval; the
-    /// approval is attached to the header. The caller's person is neither the proposer's
-    /// nor the target.
-    static std::optional<AccessChange> revoke(const DocumentHeader& header,
+    /// Removes a person and every one of their devices. The writer's person is an admin
+    /// and not the target, so an admin always remains. Rotates the key.
+    static std::optional<AccessChange> remove(const DocumentHeader& header,
                                               const AccessRoster& roster,
-                                              const MemberId& ownMember,
-                                              const RemovalApproval& approval);
+                                              const Fingerprint& writer,
+                                              const MemberId& target);
 
-    /// Completes another person's leave: the caller is a remaining person, the leave
-    /// request (signed by one of the target's devices) is attached, and the key rotates.
-    static std::optional<AccessChange> completeLeave(const DocumentHeader& header,
-                                                     const AccessRoster& roster,
-                                                     const MemberId& ownMember,
-                                                     const RemovalApproval& leaveRequest);
+    /// Makes a person an admin or a member, the writer's own person included. The
+    /// writer's person is an admin, and an admin remains. Data key and generation unchanged.
+    static std::optional<AccessChange> setRole(const DocumentHeader& header,
+                                               const AccessRoster& roster,
+                                               const DataKey& dataKey,
+                                               const Fingerprint& writer,
+                                               const MemberId& person,
+                                               RosterPerson::Role role);
 
-    /// Rebuilds header.recipients by sealing dataKey to every device of every person,
-    /// copying each device's member id and verify key into its entry.
-    static DocumentHeader resealAll(const DocumentHeader& header,
-                                    const AccessRoster& roster,
-                                    const DataKey& dataKey);
+    /// Drops the writer's own person. Refused for the last admin while anyone else
+    /// remains; the last person's leave produces a header listing no one. Does not
+    /// rotate: the leaver would know the new key anyway.
+    static std::optional<AccessChange> leave(const DocumentHeader& header,
+                                             const AccessRoster& roster,
+                                             const DataKey& dataKey,
+                                             const Fingerprint& writer);
 
-    /// True only when every recipient entry has a roster device with the same member id
-    /// and verify key, and every roster device has exactly one entry.
+    /// Rebuilds header.recipients and header.admins from the roster, sealing dataKey
+    /// to every device. nullopt when the key is invalid or any device cannot be sealed to.
+    static std::optional<DocumentHeader> resealAll(const DocumentHeader& header,
+                                                   const AccessRoster& roster,
+                                                   const DataKey& dataKey);
+
+    /// True only when every recipient entry has a roster device with the same
+    /// fingerprint, member id, and keys, every roster device has exactly one entry, and
+    /// the header's admin list is exactly the roster's admins.
     static bool headerMatchesRoster(const DocumentHeader& header, const AccessRoster& roster);
-
 };
 ```
 
-**`revoke` and `completeLeave` return `nullopt` when the caller may not act.** `revoke`
-refuses when `ownMember` is the target or the person whose device signed the approval;
-`completeLeave` refuses when `ownMember` is the person leaving. `linkDevice` and
-`unlinkDevice` already take `ownMember` and act only on that person's devices.
+**Every operation takes the writer's fingerprint, not a member id.** Tying a change to the
+device that will sign it is what lets each operation refuse exactly what `verifyLink`
+refuses — including a device unlinking itself — and it sets `lastWriter`, so the save
+path cannot sign as a different device. Every operation also refuses a header and roster
+that already disagree, and a person or device that would not read back from the payload
+exactly as written: one granted request carrying an empty device name would otherwise
+make the ward unreadable for everyone.
+
+**The returned header is the start of a write.** Its recipients, admin list, generation,
+and `lastWriter` are set; the nonce, write time, payload hash, and signature are cleared,
+so a save path that forgets to produce one fails rather than reusing the previous write's
+nonce under an unchanged key.
+
+**One change per published version.** Remove and unlink each advance the generation by
+exactly one, and the chain refuses a step of two. A change is therefore built on the
+server's accepted version and published before the next is built — which is what the
+`RosterChangeQueue` (Task 31) does.
 
 **There is no allow-list to compute or send.** The server's allow-list is the accepted
 header's recipients (design, *The server*), so every operation above takes effect on the
 server when its header is uploaded. The one agreement the server cannot check — header
-recipients against the payload roster — is `headerMatchesRoster`, checked on every open
-and download (Task 9, Task 1.9); a mismatch is refused, never shown and opened.
+recipients and admin list against the payload roster — is `headerMatchesRoster`, checked
+on every open and download (Task 9, Task 1.9); a mismatch is refused, never shown and
+opened.
 
-**Tests:**
+**Tests:** each operation, finished and signed by its writer, passes `verifyLink` from the
+header it started from; and each refusal is isolated, so deleting the check it targets
+fails the test.
 
 ```cpp
 void grantLetsTheNewPersonsDeviceOpenTheDocument();
 void grantLeavesTheDataKeyAndGenerationAlone();
+void grantAddsAMember();
+void grantRefusesAMemberWriter();
 void grantRefusesAMemberIdAlreadyInTheRoster();
+void grantRefusesAPersonWithMoreThanOneDevice();
+void grantRefusesADeviceWithNoNameOrInvalidKeys();
+void grantRefusesADeviceSharingAKey();
 void linkDeviceLetsTheNewDeviceOpenTheDocumentAndLinkVerifies();
+void linkDeviceRefusesADeviceAlreadyLinked();
 void unlinkDeviceRotatesTheKeyAndTheUnlinkedDeviceCannotUnseal();
-void unlinkDeviceRefusesTheLastDevice();
-void revokeRemovesEveryDeviceOfThePerson();
-void revokeRefusesAnApprovalFromTheCallersOwnPerson();
-void revokeRefusesWhenTheCallerIsTheTarget();
-void completeLeaveRefusesWhenTheCallerIsTheLeaver();
-void revokeRotatesTheDataKey();
-void revokeBumpsKeyGeneration();
-void revokedMemberCannotUnsealTheNewKey();
+void unlinkDeviceRefusesTheWritingDevice();
+void adminUnlinksAnotherPersonsLostDevice();
+void memberCannotUnlinkAnotherPersonsDevice();
+void removeDropsEveryDeviceOfThePerson();
+void removeRotatesTheDataKeyAndBumpsTheGeneration();
+void removedMemberCannotUnsealTheNewKey();
 void remainingMembersCanUnsealTheNewKey();
-void revokeRemovesBothHeaderEntryAndRosterRecord();
-void revokeAttachesApprovalAndLinkVerifies();
-void completeLeaveRotatesKeyAndLinkVerifies();
-void remainingMemberOpensVersionWrittenByCompleteLeave();
-void completeLeaveRefusesARequestNotSignedByItsTarget();
-void resealAllGivesEveryMemberAnEntry();
+void removeRefusesAMemberWriter();
+void removeRefusesTheWritersOwnPerson();
+void adminRemovesAnotherAdmin();
+void setRolePromotesAndDemotes();
+void setRoleRefusesAMemberWriter();
+void setRoleLetsAnAdminStepDown();
+void setRoleRefusesDemotingTheLastAdmin();
+void leaveDropsTheWritersPersonWithoutRotating();
+void remainingMemberOpensVersionWrittenByALeave();
+void leaveRefusesTheLastAdminWhileOthersRemain();
+void theLastPersonsLeaveListsNoOne();
+void resealAllGivesEveryMemberAnEntryAndListsTheAdmins();
 void headerEntryWithNoRosterDeviceFailsTheMatch();
-void entryWhoseVerifyKeyDisagreesWithRosterFailsTheMatch();
-void resealAllCopiesEachMembersVerifyKey();
 void rosterDeviceWithNoHeaderEntryFailsTheMatch();
+void entryWhoseMemberOrKeysDisagreeWithRosterFailsTheMatch();
+void adminListThatDisagreesWithRosterFailsTheMatch();
 void everyAccessChangeProducesAMatchingHeaderAndRoster();
+void operationsRefuseAHeaderThatDisagreesWithItsRoster();
+void changesClearWhatAWriteMustProduceAfresh();
 ```
 
-`revokedMemberCannotUnsealTheNewKey` proves the model: seal to three keypairs, revoke
+`removedMemberCannotUnsealTheNewKey` proves the model: seal to three keypairs, remove
 one, assert the removed keypair opens no entry in the new header **and** that the *old
-data key* fails to decrypt the new payload.
+data key* fails to decrypt the new payload. A leave deliberately makes no such claim.
 
 #### 1.8 The server contract and a fake server
 
 **Files:** `src/services/ServerContract.h`, `tests/services/FakeServer.h/.cpp`,
-`tests/services/FakeServerTest.h/.cpp`
+`tests/services/ServerConformanceTest.h/.cpp`, `tests/services/FakeServerTest.h/.cpp`
 
 `ServerContract.h` holds only types and no transport: the request and response shapes
 for each endpoint in the design's *The server* section — including the pairing endpoints
 and a pairing code on an access request — plus a `ServerError` enum
-covering unreachable, unauthenticated, not-allow-listed, version conflict, lease held,
-waiting period (a removal whose writer, proposer, or approver the server first saw under
-7 days ago), and unknown document.
+covering unreachable, unauthenticated, not-allow-listed, unknown document, version
+conflict, lease held, a header the chain refuses, a payload hash that does not match its
+blob, a device added without an invitation, a taken document id, rate
+limiting, and the pairing refusals.
 
 `FakeServer` implements the contract in memory and enforces the rules the real server
 must enforce, because a client written against a permissive fake will not work against
@@ -768,8 +868,8 @@ a strict server:
 - **the allow-list is the current accepted header's recipients**, with no separate
   endpoint to change it: only those devices read the blob or write, and an accepted
   upload changes it in the same commit
-- an accepted header is kept only when its recipient set (member id, fingerprint, and verify key)
-  differs from the previous header's; the current header is always available; and
+- an accepted header is kept only when its recipient set (member id, fingerprint, and
+  verify key) or its admin list differs from the previous header's; the current header is always available; and
   `headers?after={base}&through={version}` returns the kept headers newer than `base`,
   then the header of `version`,
   in order, to devices in the current header, and to a **former** device only up to and
@@ -780,16 +880,17 @@ a strict server:
   link from: it must list exactly one person, its writer must be one of that person's
   devices, and its signature must verify against that device's verify key in the same
   header
+- the first header's one person is an admin
 - every uploaded header must pass `DocumentCrypto::verifyLink` against the current one,
-  so a header dropping a person without a second person's approval, or changing another
-  person's devices, is refused
-- beyond `verifyLink`, a header that removes a person is refused when **the writer's
-  person, the proposer's person, or the approval signer's person** first appeared in an
-  accepted header **less than 7 days earlier by the fake's clock**. Two exemptions: a
-  leave request signed by the target, and **the person in the document's first header**,
-  its creator
-- a header introducing a member id that appears in any earlier kept header is refused —
-  member ids are never reused
+  so a grant, removal, or role change by a writer who is not an admin, a device added to
+  another person, or another person's device dropped by a writer who is not an admin, is
+  refused
+- a header listing no one — the last person's leave — is accepted like any leave, and
+  afterwards the document is listed for no device and accepts no upload
+- the device uploading a header is the device that wrote it
+- a header's payload hash matches the blob uploaded with it — the server hashes the blob
+  but never reads it
+- a person who left or was removed may be granted again under the same member id
 - a header that **adds a device** is accepted only when that device has a pending access
   request for this document (a grant; the request is consumed) or has completed a pairing
   as initiator with a device of the person it is added under (a link). A completed pairing
@@ -797,16 +898,10 @@ a strict server:
   the person belongs to, so the `RosterChangeQueue` can reach every ward however long it
   takes. The first header of a newly registered document is exempt: it lists only its
   creator. A document never appears in `/me/documents` for a device that did not ask
-- the fake records when each member id first appears, returns those times with the head
-  and the header chain, and exposes a test control to advance its clock
+- a development-only hook moves the server's clock forward, so session, lease, and
+  pairing expiry can be tested
 - `POST /documents` is rate-limited per device key, and one key may register at most a
   fixed number of documents (a configuration value on the server)
-- removal proposals are stored per document, listed to people other than their target,
-  withdrawable **only by the device that signed them**, and cleared when the key
-  generation moves
-- a header that removes another person is accepted only when its `RemovalApproval`
-  matches a proposal **currently pending** on the fake; withdrawal deletes the proposal
-  and an accepted removal consumes it (leave requests are consumed the same way)
 - an access request's status is readable by the device that posted it through
   `requests/mine`: pending, granted, or withdrawn
 - **two authentication levels**: *device* — a signed challenge proving possession of a key,
@@ -816,8 +911,11 @@ a strict server:
 - access requests store the pairing code as posted, and return it to members
 - pairings belong to no document and expire after 10 minutes; `POST /pairings` needs
   device authentication and returns a fresh code; the responder step needs member
-  authentication on some document; each of the responder and reveal steps can be written
-  once only; a pairing is readable only by its initiator and its responder
+  authentication on some document; the responder, reveal, and handover steps are each
+  written once, in that order; until a responder is recorded any member may read a
+  pairing — the responder has to read and keep the commitment before posting its keys —
+  and afterwards only its initiator and its responder; and completing the handover is
+  what permits the initiator's device to be added under the responder's person
 - `GET /documents/{id}` returns version, header, and blob from one consistent state
 - a write set is committed whole or rejected whole
 - signatures are verified for real, using `DocumentCrypto::verify`
@@ -832,8 +930,24 @@ the plaintext header line and the encrypted payload; the fake stores the header 
 chain and never looks inside the payload. If a test ever needs it to, the design has
 been violated somewhere.
 
-**Tests:** the rule list above, one test each, driven directly against the fake. These
-are the tests the companion server plan should also satisfy.
+**One interface, two servers.** `ServerContract.h` declares an abstract `ServerApi` —
+one method per endpoint, each returning `Result<T>` — and `FakeServer` implements it. The
+real server is written separately, in TypeScript on Cloudflare (design, *Hosting notes*),
+so the rules exist twice; what keeps the two in agreement is running the same tests
+against both.
+
+**Tests, in two suites:**
+
+- **`ServerConformanceTest`** — the rule list above, one test each, written against
+  `ServerApi&` and never against `FakeServer` directly. This is the conformance spec: it
+  runs against the fake here, and against the real server over HTTP once Task 15 provides
+  the adapter. It uses no fake-only control. The expiry tests move the clock through a
+  `ServerApi` hook that the real server honours only in local development (design,
+  *Companion work*).
+- **`FakeServerTest`** — the adversarial controls the real server must never offer:
+  offline, forced conflicts, a lease held by another member, withheld and substituted
+  headers, scripted pairing reads. These exist for the client's negative tests and are
+  tested here only to show the controls themselves work.
 
 #### 1.9 Reconciliation decisions
 
@@ -875,22 +989,6 @@ namespace Reconcile
                                    const Keypair& self,
                                    int keyGenerationHighWaterMark);
 
-    struct Adoption
-    {
-        DocumentHeader header;
-        AccessRoster roster;
-        DataKey dataKey;
-        QList<Fingerprint> notCarriedOver;  ///< in mine, absent from the result; shown to the user
-    };
-
-    /// After a refused publish: their key, generation, and roster, plus additions made in
-    /// this session — people, and devices under this identity's own person, that are in
-    /// mine but absent from both the base header's recipients and theirs.
-    Adoption adopt(const std::optional<DocumentHeader>& baseHeader,
-                   const AccessRoster& mine,
-                   const DocumentHeader& theirsHeader,
-                   const AccessRoster& theirsRoster,
-                   const DataKey& theirsKey);
 }
 ```
 
@@ -910,8 +1008,9 @@ namespace Reconcile
 3. The downloaded header's entry for this device's fingerprint carries exactly this
    device's own public and verify keys — otherwise `ServerFault`. The key unseals,
    `payloadHash` matches `ciphertext`, the payload decrypts,
-   `AccessControl::headerMatchesRoster` holds, and `verifyHeader` passes against the
-   decrypted roster's entry for `lastWriter`. A
+   `AccessControl::headerMatchesRoster` holds, `verifyHeader` passes, and
+   `writerIsAccountedFor` holds — so a version written by someone who has just left is
+   accepted like any other. A
    payload whose version is newer than this build's is `NeedsNewerVersion`; a payload or
    roster that fails strict parsing is `ServerFault`.
 4. The key generation is at or above `keyGenerationHighWaterMark`.
@@ -929,20 +1028,12 @@ after offline edits as a broken chain.
 `Accept` carries the decrypted header, key, and document so the caller writes exactly
 what was checked. Only `Removed` ever leads to deleting anything (Task 23).
 
-**`adopt`** takes `theirsRoster` whole, then adds each person of `mine` absent from both
-`theirsRoster` and `baseHeader.recipients` — a grant made here — and each device under
-this identity's own person absent from both — a link made here — and reseals with
-`AccessControl::resealAll` under `theirsKey`. A person or device present in the base but
-absent from theirs was removed there and stays removed. **Removals made in this session
-— an unlink, an approved removal, a completed leave — are not merged:** each rotates the
-key, so the caller re-runs that operation against the adopted state (Task 23).
-
-**With no `baseHeader`, `adopt` takes `theirsRoster` exactly** — a local grant and a remote
-removal are indistinguishable without the base, and carrying either over could restore
-a removed person. Every person or device in `mine` absent from the result goes into
-`notCarriedOver`, which Task 23 shows: *These changes may not have been saved: access for
-Tom Hale. Grant again if needed.* The base copy is written on every fetch and publish, so
-this path means damaged application data.
+**There is no roster merge.** After a refused publish the caller takes their header, key,
+and roster exactly as `validateDownload` returned them. A session's local file never holds
+an unpublished roster change — every grant, link, unlink, removal, role change, and leave
+goes through the `RosterChangeQueue` (Task 31), built on the server's version and
+published on its own — so there is nothing of ours to carry over. Two admins granting at
+once both succeed because the queue re-applies the refused one on top of the other.
 
 **Tests:** each `validateDownload` failure in turn — unsealable, hash mismatch, bad
 signature, broken chain, generation below the mark — yields `ServerFault` with nothing
@@ -956,11 +1047,10 @@ recipient kind anywhere in the fetched headers yields `NeedsNewerVersion` and ne
 `Removed`; a payload with a newer version yields `NeedsNewerVersion`; a header whose entry for this device carries a
 different verify key yields `ServerFault`; an empty `laterHeaders` yields
 `ServerFault`; `checkRemoval`
-reaches the same verdicts from headers alone, with no ciphertext. `adopt` keeps a person granted
-and a device linked in this session, does not restore a person or device removed there,
-never carries over a device added under another person, and every device of the result
-can unseal the resealed key; with no base header it returns theirs' roster exactly and
-lists a person granted in mine in `notCarriedOver`.
+reaches the same verdicts from headers alone, with no ciphertext; a version written by
+someone who has just left yields `Accept`, with and without a base header; a header whose
+writer is neither in its roster nor leaving yields `ServerFault`; the leaver's other
+device reaches `Removed` from the leave.
 
 #### 1.10 Emergency response records on reconnect
 
@@ -992,14 +1082,14 @@ namespace ResponseMerge
 
     /// The whole decision: nullopt when both sides changed the directory (conflict
     /// dialog); otherwise the directory from whichever side changed it (theirs when
-    /// neither did) with the response merged. The roster is set by Reconcile::adopt.
+    /// neither did) with the response merged. The roster is theirs, taken as validated.
     std::optional<Document> mergeDocuments(const Document& base,
                                            const Document& mine,
                                            const Document& theirs);
 }
 ```
 
-**Routing, carried out by Task 23.** After `Reconcile::adopt` (Task 1.9): load the base
+**Routing, carried out by Task 23.** After taking their key and roster (Task 1.9): load the base
 copy. With it, `mergeDocuments(base, mine, theirs)` either returns the merged document,
 which is published silently, or `nullopt`, which raises Task 25's conflict dialog. With
 no usable base copy, the conflict dialog.
@@ -1150,10 +1240,10 @@ Tasks 3 and 4 — so review is of the design as code, not of a passing run.
 Ask the user specifically to look at:
 
 - the header layout, `associatedData()` and `signedBytes()` field order
-- `verifyLink` and `verifyChain`, including the removal-approval rule
-- `AccessControl::revoke`, `completeLeave`, `resealAll`, and strict parsing (`NeedsNewerVersion`, `Malformed`)
+- `verifyLink` and `verifyChain`, including the admin rules and the leave
+- `AccessControl::remove`, `setRole`, `leave`, `resealAll`, and strict parsing (`NeedsNewerVersion`, `Malformed`)
 - `FakeServer`'s enforced rules, which the companion server must also satisfy
-- `Reconcile::checkRemoval`, `validateDownload`, and `adopt`
+- `Reconcile::checkRemoval` and `validateDownload`, including a version written by someone who has just left
 - `ResponseMerge::merge`, `directoryChanged`, and `mergeDocuments`
 - `Pairing`, and the commit–respond–reveal order
 
@@ -1189,7 +1279,7 @@ second test file would be a duplicate-symbol link error.
 int main(int argc, char** argv)
 {
     QApplication app(argc, argv);
-    app.setOrganizationName("Ward Planning");
+    app.setOrganizationName("Church");
     app.setApplicationName("Ward Planning Tests");
 
     // Keep every settings write out of the developer's real profile, so no test
@@ -1316,6 +1406,59 @@ sources to `SERVICE_SOURCES`/`MODEL_SOURCES`, register every Task 1 test suite i
 Task 1.2), build, and have the user run the tests. **Every core test must pass before
 Task 5 starts**; a failure here is a core defect, fixed in the core and shown to the
 user, not worked around in a later task. Commit as `build: add libsodium and qtkeychain`.
+
+---
+
+### Task 4a: Strict model parsers
+
+**Every model type gets a strict reader, so `Document::parse` refuses a damaged payload
+rather than loading part of it.** Task 1.6 made the payload version and the access
+roster strict; the directory, ministering, and emergency collections still go through
+the lenient `fromJson` readers, so a damaged family record loads as whatever `fromJson`
+makes of it. That contradicts the rule the header and roster already follow — nothing
+skipped, nothing defaulted, nothing carried through unread.
+
+Placed here, immediately after the suite first runs, because this is exactly the code
+where one field spelled differently between writer and reader makes every real document
+`Malformed`, and a round-trip test catches that at once — but only when tests run.
+
+**Files:** every model with a `fromJson` — `Family`, `Person`, `Birthday`, `Gender`,
+`Team`, `Tag`, `EmergencyAsset`, `MinisteringDistrict`, `MinisteringGroup`,
+`DocumentMetadata`, `Ward`, `Stake`, and `EmergencyResponse` with its nested records —
+plus `Document.cpp`, and a test file per type under `tests/models/`.
+
+**Each parser accepts exactly what the current `toJson` writes, and nothing else.** This
+is a clean break, so none of `fromJson`'s tolerances carry over: no default fallbacks
+(`tagLevelFromJson`), no case-insensitive enum strings, no reading of retired fields.
+Fields `toJson` omits when empty are optional; everything else is required. Each type
+gets:
+
+```cpp
+static std::optional<Family> fromJson(const QJsonObject& json);   // replacing the lenient one
+```
+
+matching `RosterDevice` and `RosterPerson` — `nullopt` on any missing or ill-formed
+field, and a collection fails whole when any element fails.
+
+**`Document::parse` then reads every collection strictly** and stops calling
+`Document::fromJson`. Cross-references are checked too: a family naming a person id that
+is not in it, a tag or team naming an unknown person or family, and a ministering group
+naming an unknown district are `Malformed`, because each would otherwise be a dangling
+id the UI has to guess about.
+
+**`JsonService` keeps working until Task 9** by switching its one call from
+`Document::fromJson` to `Document::parse` here, reporting `Malformed` as its existing
+load error. With no legacy files to honour, nothing it currently reads is lost: the
+current build's own documents are exactly what `toJson` writes. Task 9 then has no
+`fromJson` left to delete.
+
+**Tests:** per type, a round trip through `toJson` and `fromJson`; every required field
+removed in turn is refused; a wrong JSON type for each field is refused; an optional
+field's absence is accepted. For `Document::parse`, a damaged element in each collection
+refuses the whole payload, and each dangling cross-reference is refused. The existing
+suites must still pass.
+
+Commit as `feat: strict model parsers`.
 
 ---
 
@@ -1451,8 +1594,8 @@ Three groups of state:
 
 | Group | Holds |
 |---|---|
-| Device | Display name, the developer-export toggle, the people already announced as (member id, first-appearance time) pairs, the server address override |
-| Per document, keyed by **document id** | Working copy of the key generation high-water mark (the durable one is in the keychain record, Task 13); server base version, base payload hash, and **published save counter** (present only once shared); cached ward-list entry; **paths of copies written from it** |
+| Device | Display name, the developer-export toggle, the server address override |
+| Per document, keyed by **document id** | Working copy of the key generation high-water mark (the durable one is in the keychain record, Task 13); server base version, base payload hash, and **published save counter** (present only once shared); cached ward-list entry; **paths of copies written from it**; **the last version whose roster changes were announced**; **pending roster changes** (Task 31) |
 | Map | `defaultLat`, `defaultLng` |
 
 **Per-document state is keyed by document id, not by file path.** Documents move
@@ -1510,8 +1653,8 @@ Service string `"Ward Planning"`, account passed in so tests use their own.
 **One keychain entry holds both keypairs.** The identity is an X25519 pair and an
 Ed25519 pair, serialised together as one JSON object and stored as a single secret,
 together with the member id (Task 8), the per-document key generation **and save counter**
-high-water marks (Task 13), **the ids of documents this device was removed from**, and any
-pending "leaving" state (Task 32) — all of which must outlive cleared application data.
+high-water marks (Task 13), and **the ids of documents this device was removed from** —
+all of which must outlive cleared application data.
 Two entries could get out of step — a machine holding a sealing key it cannot
 authenticate with is a state with no recovery path and no useful error.
 
@@ -1640,8 +1783,8 @@ struct JsonResult
 `DocumentManager` keeps all three as its current state (Task 11). It reads the header
 with `DocumentHeader::parse` and the payload with `Document::parse`, mapping each
 `NeedsNewerVersion` to `LoadFailure::NeedsNewerVersion` and each `Malformed` to
-`HeaderMalformed` or `PayloadMalformed`. **`Document::fromJson` loses its last caller here
-and is deleted** in this task.
+`HeaderMalformed` or `PayloadMalformed`. `Document::fromJson` is already gone — Task 4a
+moved `JsonService` onto `Document::parse` and replaced every lenient reader.
 
 The signature change and its call sites land in one commit — after Task 5 removed the
 archive paths (`EmergencyManager.cpp:122,160,594` and `ArchiveBrowserDialog.cpp:174`),
@@ -1686,10 +1829,12 @@ server version, so no expected-counter check belongs here.
 and recipients **rebuilt from the roster by `AccessControl::resealAll`** rather than
 carried forward, so a mis-sealed entry cannot lock its owner out of every later version;
 it encrypts, sets `payloadHash` from the ciphertext, then
-sets `writerSignature` with `DocumentCrypto::signHeader`. `loadDocument` checks
-`payloadHash` against the ciphertext, decrypts, looks up `lastWriter` in the decrypted
-roster, and checks `DocumentCrypto::verifyHeader` with that member's verify key,
-returning `SignatureInvalid` on any failure. `QSaveFile` as before.
+sets `writerSignature` with `DocumentCrypto::signHeader`. `loadDocument` checks the header
+on its own with `DocumentCrypto::isCoherent`, checks `payloadHash` against the ciphertext,
+checks `DocumentCrypto::verifyHeader`, decrypts, and checks
+`DocumentCrypto::writerIsAccountedFor` against the decrypted roster, returning
+`SignatureInvalid` on any failure — so a version written by someone who has just left
+reopens like any other. `QSaveFile` as before.
 
 **Tests:** round-trip with two recipients; a second holder loads it; a third keypair is
 refused; a flipped payload byte fails authentication; the document id survives a
@@ -1753,8 +1898,9 @@ name, so the ward list reads *Tanglewood Ward* at the moment the file used to be
 and the list never has to decrypt a document to show its name.
 
 **Two escape hatches, and no more.** `exportCopy` writes a `.wardplanning` file
-wherever the user likes **re-encrypted under a fresh document id, with the original's id
-as `originDocumentId`**, so a copy can never publish itself into the ward's document, and
+wherever the user likes **re-encrypted under a fresh document id and a fresh data key,
+with the original's id as `originDocumentId`** — a fresh key so nobody who once held the
+ward's key, such as someone who has since left, can read it — so a copy can never publish itself into the ward's document, and
 records the copy's path in `AppSettings` under the original's id. A "Show in folder" action reveals the
 app data directory. Everything else the old file dialogs did is gone.
 
@@ -1873,10 +2019,17 @@ Commit as `feat: reject rolled-back documents`.
 
 ### Task 14: File extension
 
-**Files:** `src/services/DocumentConstants.h` (new), `src/services/FileOpenRouter.h/.cpp`,
-`src/main.cpp:38`, `src/services/SingleInstance.cpp`,
-`installer.iss:36,74`, `packaging/macos/Info.plist:59`, `.gitignore:93`,
-`docs/USER_GUIDE.md:14`
+> **The extension itself landed with Task 0**, at the user's request, because Task 0's
+> rename left the file-dialog filter reading "Ward Planning Files (*.emergencyplan)".
+> `src/services/DocumentConstants.h` now holds `FileExtension` and `FileGlob`, and every
+> literal is gone from `main.cpp`, `DocumentManager.cpp`, `EmergencyManager.cpp`,
+> `ArchiveBrowserDialog.cpp`, `MainWindow.cpp`, `installer.iss`, `Info.plist`,
+> `.gitignore` and `USER_GUIDE.md`. The installer also retires the 1.0.x
+> `.emergencyplan` association. **What remains here is `FileOpenRouter`**, which needs
+> `DocumentLibrary::openCopy` (Task 10) and `SingleInstance` (Task 6).
+
+**Files:** `src/services/FileOpenRouter.h/.cpp`, `src/main.cpp:38`,
+`src/services/SingleInstance.cpp`
 
 ```cpp
 namespace DocumentConstants
@@ -1903,16 +2056,13 @@ second launch (Task 6) — goes through one router that reads the header:
 The same router serves `main.cpp:38` at startup and the running instance's forwarded
 arguments.
 
-`.gitignore:93` currently ignores `*.emergencyplan`; keep that line **and** add
-`*.wardplanning`.
-
 The bundle identifiers at `CMakeLists.txt:525` and `Info.plist:15` are product
 identity, handled in Task 0 — do not touch them here.
 
 **Tests:** the router picks each row above for a file built to match it.
 
 Build, create a document, export a copy, double-click it, and confirm it opens read-only. Commit as
-`refactor: rename document extension to .wardplanning`.
+`feat: route documents opened by path through their header`.
 
 ---
 
@@ -1951,6 +2101,16 @@ deterministic.
 **Tests:** a valid signature authenticates; a signature over the wrong challenge does
 not; an expired token triggers exactly one silent re-authentication and then the
 original request; a request signed for one document is refused for another.
+
+**The conformance run.** Add `HttpServerApi`, a test-only `ServerApi` that blocks on
+`ServerClient`'s requests, and run `ServerConformanceTest` (Task 1.8) through it against
+a real server URL taken from an environment variable — locally, the companion server
+under `wrangler dev` with its development clock override enabled. With the variable
+unset the run is skipped, so the ordinary suite needs no server. **Every rule the client
+depends on is thereby checked against the server that will actually enforce it**, and
+the companion server's plan uses the same run as its acceptance gate. A test that passes
+against the fake and fails against the real server is a disagreement to resolve in one
+of them, never a test to loosen.
 
 Commit as `feat: server client and authentication`.
 
@@ -2276,11 +2436,9 @@ a moved key generation always arrives this way too.
 1. **Fetch and validate their version** through Task 16's path, which calls
    `Reconcile::validateDownload`. `ServerFault` keeps the local file and session
    untouched and reports it; `Removed` goes to *Removed* below.
-2. **Adopt** with `Reconcile::adopt` (Task 1.9): their data key, key generation, and
-   roster, plus people granted and own devices linked in this session. A removal
-   performed in this session — unlink, approved removal, completed leave — is re-run
-   against the adopted state and published. When `notCarriedOver` is non-empty, show it
-   as a dismissible notice naming each person or device.
+2. **Take theirs** — data key, key generation, and roster exactly as validated (Task 1.9).
+   No roster change of this session needs carrying over or re-running; they all went
+   through the queue.
 3. **Route content** per Task 1.10: a response-only change merges with
    `ResponseMerge::merge` and publishes; anything else, or no usable base copy, raises
    Task 25's conflict dialog. Nothing publishes this session's payload over theirs
@@ -2294,12 +2452,13 @@ every recorded copy still at its path — discard the in-memory session and undo
 remove the library entry and the document's `AppSettings` records (base version, base
 hash, published save counter, copy paths) **while keeping the keychain record's removed-from entry and the
 key generation high-water mark** that makes Open a copy refuse its copies, and tell the user their access to the
-ward was removed, naming the removing member when the held roster has them. No recovery
-copy is written.
+ward was removed, naming the removing member when the held roster has them — or, when
+the proving header was a leave by this person from another of their devices, that they
+left this ward. No recovery copy is written.
 
 **Tests:** a refused publish adopts their key, generation, and roster and raises a
-conflict without publishing this session's payload; a grant made this session survives
-adoption; a member they revoked is not restored by adoption; a downloaded version failing
+conflict without publishing this session's payload; a member they removed is not
+restored; a downloaded version failing
 each validation step replaces nothing; a chain-proven revocation deletes the file, the
 library entry, and the settings records, both mid-session and on open — **including
 when the revoker was granted after the anchor**; a withheld header, a substituted
@@ -2345,8 +2504,8 @@ an unshared document, or a shared one whose lease this device holds. `startBatch
 coordinates are queued by the next batch. Starting geocoding when the lease is acquired
 is what fills them in.
 
-**Roster operations do not take the lease.** Grant, link, unlink, approving a removal,
-and completing a leave go through the `RosterChangeQueue` (Task 31), which applies each on
+**Roster operations do not take the lease.** Grant, link, unlink, removal, role changes,
+and leaving go through the `RosterChangeQueue` (Task 31), which applies each on
 top of the server's current version; the lease covers only the directory. They are
 refused only while `requiresUpdate()` is set.
 
@@ -2354,7 +2513,7 @@ The old overlay is the cautionary tale: it gated `executeCommand`, `undo`, and `
 and left everything else to scattered UI checks, so none of `EmergencyManager`'s
 mutators respected it. Enforce at the write path, not in widgets.
 
-**Test:** with a live foreign lease, grant, approve, complete-leave, link, and unlink each
+**Test:** with a live foreign lease, grant, remove, set a role, leave, link, and unlink each
 still publish through the queue; with `requiresUpdate` set, each is refused; with a live
 foreign lease, a directory command is refused and leaves the
 in-memory document, the undo stack, and the on-disk save counter unchanged, as do `undo`
@@ -2375,15 +2534,15 @@ Commit as `feat: enforce read-only at the write path`.
 **Files:** `src/widgets/ConflictDialog.h/.cpp`, `src/services/DocumentManager.cpp`,
 `tests/services/ConflictTest.cpp`
 
-**The roster is already settled when this dialog opens.** `Reconcile::adopt` (Task 23)
-took their key, generation, and roster and added back grants and links made in this
-session, so concurrent grants on both sides survive without any step here.
+**The roster is already settled when this dialog opens.** Task 23 took their key,
+generation, and roster exactly; concurrent grants both survive through the queue, so
+nothing here touches the roster.
 
 When `mergeDocuments` returned `nullopt`, so both sides changed the directory, and
 their key, generation, and roster are already adopted — present three options, naming
 who saved and when from the header's
-`lastWriter` fingerprint (looked up in the reader's own roster — the header carries no
-names) and `lastWriteTime`:
+`lastWriter` fingerprint (looked up in their roster, then in the base copy's — the header
+carries no names — and *a former member* when neither has them) and `lastWriteTime`:
 
 1. **Save mine as a copy** — default, destroys nothing: write this session's version as
    a recovery copy, then keep theirs
@@ -2420,25 +2579,41 @@ Prefer visible buttons over context menus; the audience is casual users.
 
 ### Task 26: Access roster dialog
 
-**Files:** `src/widgets/AccessDialog.h/.cpp`, `src/widgets/MainWindow.cpp`
+**Files:** `src/widgets/AccessDialog.h/.cpp`, `src/widgets/MainWindow.cpp`,
+`src/services/AccessEvents.h/.cpp`, `tests/services/AccessEventsTest.h/.cpp`
 
-Lists **people**, the current person marked, each expandable to their devices by device
-name, each device showing **which device added it and when** — read from the kept header
-that linked it (its `lastWriter` and `lastWriteTime`). A person the server first saw less than 7 days ago — from the first-appearance
-times returned with the head — is marked *new* and cannot approve removals.
+Lists **people** with their roles, the current person marked, each expandable to their
+devices by device name, each device showing **which device added it and when** — read
+from the kept header that linked it (its `lastWriter` and `lastWriteTime`).
 
-Buttons on another person: Remove, Details (revealing device fingerprints). On your own
-person: **Link a device**, **Unlink** on each of your devices except this one (unavailable when you have only one
-device), **Leave** (always available), **Edit my display name**, and
-**Rename this device**. Invite at the top.
+**What an admin sees on another person:** **Remove**, **Make admin** or **Make member**,
+**Unlink** on each of their devices except their last, and Details (revealing device
+fingerprints). A member sees Details only, and a note naming the ward's admins.
+
+**On your own person:** **Link a device**, **Unlink** on each of your devices except this
+one (unavailable when you have only one device), **Make member** for an admin stepping
+down (disabled for the last admin while anyone else remains: *Make someone else an admin
+first*), **Leave** (Task 32), **Edit my display name**, and **Rename this device**. Invite
+at the top, for admins.
 
 **People sharing a display name are flagged** in every member's access list — *Two people
-are named Bob Wilson* — since the member who granted the second one may be the person the
+are named Bob Wilson* — since the admin who granted the second one may be the person the
 warning is meant to catch.
 
-**New people are announced.** When the app first sees a (member id, first-appearance time)
-pair it has not announced before (tracked in `AppSettings`), it shows a dismissible notice in the banner container
-(Task 27): *Bob Wilson added Tom Hale.*
+**Every change to who has access is announced, once per sync.** When the app sees
+versions newer than the last one whose changes it announced (tracked per document in
+`AppSettings`), a pure function, `AccessEvents::between(previousHeader, keptHeaders)`,
+turns the kept headers between them into people-level events — added, removed, left, made
+admin, made member — and the banner container (Task 27) shows **one** dismissible notice,
+*3 changes to who has access*, expanding to the list: *Bob Wilson added Tom Hale*, *Tom
+Hale left*. Names come from the current roster, then the base copy's, then *a former
+member*. Linking and unlinking a person's own devices is not announced; it shows in the
+list above. This is what makes a hostile admin's actions visible within minutes.
+
+**Tests** (`tests/services/AccessEventsTest.cpp`): each event kind is produced from the
+header pair that makes it; a leave is `left`, not `removed`; a grant followed by a removal
+between two syncs yields both; a device link or unlink yields nothing; a person no roster
+names is *a former member*.
 
 Commit as `feat: access roster dialog`.
 
@@ -2462,7 +2637,11 @@ starts in this state and some stay there, so a warning firing on every save woul
 trained away exactly where it matters most. A person with a single device also gets a
 gentler, dismissible suggestion to link a second one.
 
-Commit as `feat: single key holder notice`.
+**While the roster holds exactly one admin and anyone else**, admins see a second
+persistent, dismissible notice: *You are the only admin. If you lose your devices, nobody
+can add or remove people. Make someone else an admin.*
+
+Commit as `feat: single key holder and single admin notices`.
 
 ---
 
@@ -2520,7 +2699,8 @@ Commit as `feat: request document access`.
 
 **Files:** `src/widgets/GrantAccessDialog.h/.cpp`, `src/services/DocumentManager.cpp`
 
-On opening a document, fetch pending requests and present them.
+On opening a document, an admin's app fetches pending requests and presents them. A
+member's app does not offer to grant; the access dialog names the ward's admins instead.
 
 **Remote requests are not verified** (design, *Granting access*) — anyone holding an
 invite link can post one under any name. The dialog shows the name, device name, and when
@@ -2529,7 +2709,8 @@ does not claim the request is verified.
 
 **Flag a display name that matches a current person:** *Bob Wilson already has access.
 If this is Bob's new phone, Bob should link it from his other device instead.* Granting
-anyway is allowed, but the default button is Cancel — a second Bob is a second approver.
+anyway is allowed, but the default button is Cancel — a second Bob is a separate person,
+with none of the first Bob's devices.
 
 **Grant is disabled, with the reason, only while the app is waiting for an update.** Granting
 enqueues a `Grant` change (Task 31) for a new person holding the requesting device, and
@@ -2537,10 +2718,10 @@ clears the request once it publishes. The accepted upload is what puts the new
 device on the server's allow-list, so the grant is complete exactly when the publish is;
 until then it shows as pending.
 
-**Test:** granting adds a person with one device and a header entry, the server admits
+**Test:** granting adds a person, as a member, with one device and a header entry, the server admits
 that device as soon as the upload is accepted, and the new device can then fetch and open the document from `FakeServer`; a
 request whose display name matches a current person shows the warning with Cancel as
-default.
+default; a member's app offers no grant, and `FakeServer` refuses one written by a member.
 
 Commit as `feat: grant document access`.
 
@@ -2589,12 +2770,13 @@ proves it (Task 23).
 ```cpp
 struct RosterChange
 {
-    enum class Kind { Grant, Link, Unlink, Revoke, CompleteLeave };
+    enum class Kind { Grant, Link, Unlink, Remove, SetRole, Leave };
     Kind kind;
     QString documentId;
     std::optional<RosterPerson> person;         ///< Grant: the new person
     std::optional<RosterDevice> device;         ///< Link, Unlink
-    std::optional<RemovalApproval> approval;    ///< Revoke, CompleteLeave
+    std::optional<MemberId> target;             ///< Remove, SetRole
+    std::optional<RosterPerson::Role> role;     ///< SetRole
 };
 
 class RosterChangeQueue : public QObject
@@ -2613,25 +2795,29 @@ signals:
 - **Persisted** in `AppSettings` per document id, so a change survives closing the app,
   and removed only once its publish is accepted.
 - **Every roster change in the app goes through this queue** — grant (Task 30), link and
-  unlink (this task), approving a removal and completing a leave (Task 32) — **and none
+  unlink (this task), removals, role changes, and leaving (Task 32) — **and none
   needs the lease.** A roster change is never blocked by whoever holds the lease, so a
   member cannot hold off their own removal, and a thief cannot hold off an unlink.
 - **Each ward, open or not, is processed the same way**, one at a time: fetch its current
   snapshot (Task 16) and validate it against that ward's base copy with
   `Reconcile::validateDownload`; apply the change on top of the server's version with the
-  matching `AccessControl` call and this device's `ownMember`; encrypt, sign, and publish
-  it conditional on that version. A change the server's version already reflects — the
+  matching `AccessControl` call with this device's fingerprint as writer; encrypt, sign,
+  and publish it conditional on that version. **One change per publish:** each is applied
+  to the server's accepted version and published before the next is built, because a
+  version may advance the key generation by only one. A change the server's version already reflects — the
   person already removed, the device already linked — is dropped as done.
 - **The open ward** then receives the published version like any newer version: its
   `DocumentManager` fast-forwards, or, with unpublished directory edits, adopts the new
   roster and merges silently, since only its own side changed the directory.
   If this device's local file has no unpublished changes it is replaced by the published
   version, with base version, base copy, and published save counter updated; otherwise
-  the local file is left for `Reconcile::adopt` the next time the ward opens.
+  the local file takes the refused-publish route the next time it publishes (Task 23).
 - **Retries** on a backoff when the server is unreachable or the publish is refused; a
-  validation failure stops that ward's change and reports it. **A waiting-period refusal
-  is final, not retried:** the change is dropped and the approver is told, so approving
-  after the week is a fresh decision rather than something queued days earlier.
+  validation failure stops that ward's change and reports it. **When the change no
+  longer applies to the server's version** — the `AccessControl` call returns nullopt,
+  because this person is no longer an admin, or is now the last admin trying to leave —
+  the change is not retried: it is dropped and the user is told why. A leave dropped this
+  way brings the ward back with the successor picker (Task 32).
 - **Visible while pending:** the access dialog shows *Adding Pixel 8 to 2 more wards…* or
   *Removing Surface Laptop from 1 more ward…* until the queue is empty.
 
@@ -2640,7 +2826,7 @@ pairing code in its access request. The granter picks the request, runs the resp
 side in `PairingDialog`, and **Grant** stays disabled until the numbers are confirmed to
 match.
 
-Nothing self-adds: a person is added by a member, and a device only by its own person.
+Nothing self-adds: a person is added by an admin, and a device only by its own person.
 
 **Tests:** linking adds the device under the linking device's own person in every document and the
 new device opens each; a link to a device already held by another person is refused;
@@ -2660,85 +2846,71 @@ Commit as `feat: device linking and pairing`.
 
 ---
 
-### Task 32: Revoke access
+### Task 32: Remove, roles, and leave
 
 **Files:** `src/widgets/AccessDialog.cpp`, `src/services/DocumentManager.cpp`,
 `src/services/ServerClient.cpp`
 
-**Removing someone else takes two people.** A removal removes a person with all their
-devices.
-
-**Propose.** Remove on another person signs a proposal with
-`DocumentCrypto::signRemovalProposal` for that member id and posts it to `/removals`.
-**Remove is disabled for a person the server first saw less than 7 days ago**, with the
-reason, matching what the server checks of a proposer. **The ward's creator — the person in
-its first header — is exempt**, so a new ward works from day one. People other than the
-target see pending proposals alongside access requests — *Bob Wilson proposes removing Tom
-Hale* — with **Approve**. The proposer alone sees **Withdraw**; the server refuses a
-withdrawal signed by anyone else. The target's devices do not list it.
-
-**Approve.** Enabled only for a person who is neither proposer nor target, was
-first seen by the server at least 7 days ago, and not waiting for an update; otherwise
-disabled with the reason. Approving enqueues a `Revoke` change (Task 31), which, on top
-of the server's current version, runs `AccessControl::revoke` with the proposal attached —
+**Remove.** An admin's Remove on another person confirms, then enqueues a `Remove` change
+(Task 31), which, on top of the server's current version, runs `AccessControl::remove` —
 the person's roster record and every one of their header entries removed, the data key
 rotated and re-sealed for every remaining device — and publishes. The accepted header is
 the new allow-list, so the removed person's devices are refused from that moment. **It
 does not need the lease**, so the person being removed cannot delay it by holding one.
+Nobody else approves and nothing waits.
+
+**Unlink another person's device.** An admin's Unlink on someone else's device — a phone
+reported stolen while its owner keeps their laptop — enqueues an `Unlink` change, which
+rotates the key the same way.
+
+**Roles.** An admin's Make admin and Make member enqueue a `SetRole` change. Neither
+rotates the key: who may read is unchanged.
 
 **Leave.** On your own person, Leave warns that your copies on every device are deleted,
-signs a leave request — `signRemovalProposal` with your person as target — and then, in
-this order and **without waiting for anyone or anything**: deletes this device's local
-file, base copy, library entry, and per-document settings records, and queues the request
-for `/removals`, retried in the background while the server is unreachable. Your other
-devices delete theirs when their chain check proves the removal, or when they see the
-pending request. **A "leaving" state is kept** in the keychain record until this person is
-gone from the roster: if a rotation clears the pending proposal first, the request is
-posted again, so a leaver cannot reappear in the ward list with no local file. It never writes the version that drops you.
+**hides the ward at once**, and enqueues a `Leave` change. The queued change runs
+`AccessControl::leave` on top of the server's current version and publishes the version
+that drops this person, without rotating the key. **Once it is accepted**, this device runs
+`DocumentLibrary::forgetRemoved` — the same deletion a proven removal does, including the
+removed-from record — and your other devices do the same when their chain check proves
+the leave. While the server is unreachable the ward stays hidden and the change waits.
+If the change no longer applies (Task 31), the ward reappears.
 
-**Leave is always available**, including to the last person in a ward: with nobody to tidy
-the roster it is exactly the local deletion, so it replaces the separate "Remove from this
-computer" action for a shared document (`DocumentLibrary::forget` still serves an unshared
-one).
+**Every leave is the same, including the last person's**: with nobody else remaining, the
+published version lists no one, so the server lists the ward for no device and it does
+not come back after a reinstall. Leave therefore replaces the separate "Remove from this
+computer" action for a shared document (`DocumentLibrary::forget` still serves an
+unshared one).
 
-**Completing a leave.** When a remaining member's app finds a pending leave request, it
-enqueues a `CompleteLeave` change with no prompt. If two devices do so at once, the second
-publish is refused, and on retry the server's version already lacks the leaver, so that
-change is dropped as done.
+**The last admin names a successor.** When the last admin presses Leave while anyone else
+remains, the app asks *Before you leave, choose who will be admin*, listing the others; one
+confirmation enqueues a `SetRole` promoting them and then the `Leave`. The same picker
+appears when a leave is dropped because this person has meanwhile become the last admin.
 
-**A roster of two people** shows Remove disabled with the reason: a removal needs a
-third person, granted at least 7 days ago, to approve.
+**Until the upload is accepted the change is shown as pending** and retried through the
+queue; acceptance is the moment it takes effect on the server.
 
-**Until the upload is accepted the removal is shown as pending** and retried through the
-publish queue; acceptance is the moment it takes effect on the server.
-
-**The dialog says what revocation does and does not do.** Future versions are closed to
+**The dialog says what removal does and does not do.** Future versions are closed to
 that person the moment the upload is accepted, and their app deletes its local
 copy the next time it connects (Task 23). A copy they took out of the app beforehand,
 or a device that never connects again, keeps what it had.
 
-**Test:** after approval, every device of the removed person is refused by `FakeServer`
-and cannot unseal the new generation, while every remaining device can; `verifyChain`
-from each removed device's base header returns `Removed`; the proposer cannot approve
-their own proposal, from this or any other of their devices; a member other than the
-proposer cannot withdraw it; an approval matching a withdrawn or already-used proposal is
-refused by `FakeServer`; a removal approved while the target holds the lease still
-publishes; a person granted 6 days ago
-cannot approve and one granted 8 days ago can (advancing `FakeServer`'s clock); a removal
-*written* by a 6-day-old person with an old proposer's approval is refused; a removal *proposed* by a
-6-day-old person is refused by the fake and the queue drops it rather than retrying, and
-Remove is disabled for that person in the dialog; the ward's creator can propose and
-approve on the day the ward is created; a roster
-claiming an older grant does not enable Approve; a grant reusing a former member's id is
-refused by the fake; the
-target never sees the proposal; a single member publishing a header that
-drops another member is refused by `FakeServer`; leaving deletes the leaver's local copies at once,
-without writing a version and without the server being reachable, and queues the request;
-the next remaining member's app completes it and every remaining member opens the result;
-with no other member the queued request stays pending and nothing else happens; Remove is
-disabled in a roster of two.
+**Test:** after an admin removes a person, every device of that person is refused by
+`FakeServer` and cannot unseal the new generation, while every remaining device can, and
+`verifyChain` from each removed device's base header returns `Removed`; a removal written
+while the target holds the lease still publishes; a member's app offers no Remove, and a
+removal written by a member is refused by `FakeServer`; an admin removes another admin; an
+admin unlinks another person's device and that device's chain returns `Removed` while the
+person's other device stays a member; promoting, demoting, and stepping down publish and
+change nothing about who can read; the last admin's Make member is disabled while others
+remain; Leave hides the ward at once and deletes its files only once the leave is
+accepted, keeping the key generation, and every remaining member opens the result; a
+leave queued while the server is unreachable publishes when it returns; two admins
+leaving at once leave one ward whose second leaver sees the successor picker; the last
+admin's Leave with others remaining promotes the chosen successor, then leaves; the last
+person's Leave publishes a header listing no one, after which `FakeServer` lists the ward
+for nobody.
 
-Commit as `feat: revoke document access`.
+Commit as `feat: remove, roles, and leave`.
 
 ---
 
@@ -2830,14 +3002,10 @@ Commit as `feat: notify when a newer version is available`.
 **Files:** `docs/USER_GUIDE.md`, `docs/ARCHITECTURE.md`, `docs/BUILDING.md`,
 `docs/DESIGN_GUIDE.md`, `README.md`, `CLAUDE.md`
 
-`BUILDING.md` and `DESIGN_GUIDE.md` both title-line "Emergency Plan Qt" and need the
-product rename.
-
 - **USER_GUIDE**: sharing a document and sending the invite link; granting and removing
-  access; linking your phone or another computer, and unlinking a lost one; that a
-  newly added person cannot approve removals for a week, and why new people are
-  announced; what the
-  single-holder notice means; what the sync indicator's states mean; that the app keeps
+  access; admins and members, and that any admin can grant, remove, and change roles
+  alone; linking your phone or another computer, and unlinking a lost one; why every
+  roster change is announced; what the single-holder and single-admin notices mean; what the sync indicator's states mean; that the app keeps
   working with no network and uploads when it returns; that during an outage responders
   cannot see each other's work until it returns; and — prominently — **that access must
   be granted before an emergency, because granting needs the server.** Also the update
@@ -2862,7 +3030,7 @@ not these checks in the running app.
 
 - **No server needed** — check as the phases land: items 1, 8, and 11 (item 11 reaches
   only GitHub).
-- **Companion server needed:** items 2–7, 4a, 9, and 10. Their behaviour is already
+- **Companion server needed:** items 2–7, 4a, 4b, 4c, 9, and 10. Their behaviour is already
   covered against `FakeServer` by the automated tests; these runs confirm it end to end.
 
 Ask the user to confirm, in the running app:
@@ -2871,18 +3039,24 @@ Ask the user to confirm, in the running app:
 2. Sharing a document produces an invite link.
 3. A second identity (a second Windows account) opens the link, requests access, and is
    granted it; both can then edit.
-4. With three people granted more than 7 days ago (server clock advanced for the test),
-   one proposes removing another and the third approves; the removed person can no
-   longer open the document, and their local copy is deleted with a message the next
-   time that account's app connects. The proposer alone, and the proposer's second
-   linked device, cannot complete the removal.
+4. An admin removes a person; the removed person can no longer open the document, and
+   their local copy is deleted with a message the next time that account's app connects.
+   A member has no Remove. An admin makes a member an admin, and the new admin can then
+   grant. Every member sees the changes announced in one notice.
+4b. A member leaves; their copy disappears at once and is gone once the leave lands, the
+   others still open the ward, and the leaver's second device says they left. The last
+   admin leaving is asked to choose a successor. The single-admin notice shows while one
+   admin remains.
+4c. An admin unlinks another person's lost device; that device's copy is deleted on its
+   next connection and the person's other device keeps working.
 4a. A person links a second device (a second Windows account) by comparing the pairing
    number;
    both open the document; unlinking the second from the first deletes its copy on its
    next connection and leaves the first working.
 5. Two identities editing at once produce a conflict dialog, and "Save mine as a copy"
    leaves both sets of work intact.
-6. Two people granting access at the same time both end up on the roster, and both
+6. Two admins granting access at the same time both end up with their person on the
+   roster, and both
    grantees can open the document.
 7. With the network disconnected, both identities record contact results during an
    emergency; reconnecting keeps every contact attempt from both.
@@ -2908,14 +3082,16 @@ the kind of feature whose failures are invisible in unit tests.
 - Revocation governs future versions and cleans up the app's copy. The removed
   member's app deletes its local copy once the header chain proves the removal; copies
   taken out of the app, and devices that never reconnect, are beyond reach.
-- Removing someone else takes two people; a roster of two cannot remove either person.
-- Remote access requests are not verified; a member can grant one sent by whoever holds a
+- One admin can remove anyone. A compromised admin device can remove every other person;
+  every removal is announced, and recovery is a new ward built from the directory PDFs —
+  tags, teams, assets, special needs, notes, and past emergencies are lost.
+- Remote access requests are not verified; an admin can grant one sent by whoever holds a
   forwarded invite link. In-person grants compare a number.
-- A member can grant an invented person as a second approver; it is announced and
-  cannot approve for 7 days, enforced by the server and the app rather than the chain.
-- A stolen, unlocked device can unlink its owner's other devices and link new ones;
-  unlinking it offers to unlink what it added, and otherwise recovery is two other people
-  removing and re-granting that person.
+- A stolen, unlocked device acts as its owner, with its owner's role; unlinking it offers
+  to unlink what it added, and otherwise any admin removes it.
+- A leaver knows the data key until the next rotation, since leaving does not rotate; the
+  server refuses them every later version, and a leaver colluding with the operator is
+  outside what the design defends.
 - Access must be granted before an emergency, because granting needs the server.
 - Reports stay plaintext.
 - A hostile server operator could keep members on separate copies without them noticing;

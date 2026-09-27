@@ -1,4 +1,5 @@
 #include "ArchiveBrowserDialog.h"
+#include "DocumentConstants.h"
 #include "JsonService.h"
 #include "EmergencyResponse.h"
 
@@ -164,7 +165,7 @@ void ArchiveBrowserDialog::loadArchives()
         return;
     }
 
-    QStringList files = dir.entryList({"*.emergencyplan"}, QDir::Files, QDir::Name);
+    QStringList files = dir.entryList({DocumentConstants::FileGlob}, QDir::Files, QDir::Name);
 
     // Each archive is a full document snapshot, so we load the entire file
     // to extract emergency metadata. Could be slow with many large archives.

@@ -1,8 +1,9 @@
 {
     "name": "wardplanning",
     "version": "1.1.0",
-    "builtin-baseline": "245eb91b466a1f2e1eb73e2b04a6ba77c14c35af",
+    "builtin-baseline": "07f4812200df3d3c931c0c8a6081d3b21fe2bf9f",
     "dependencies": [
-        "libmupdf"
+        "libmupdf",
+        { "name": "libsodium", "version>=": "1.0.22" }
     ]
 }

@@ -100,6 +100,16 @@ Or create a `CMakeUserPresets.json` (gitignored) from the template:
 cp CMakeUserPresets.json.template CMakeUserPresets.json
 ```
 
+The user presets build into the same directories as the presets they inherit
+(`build/windows-debug`, `build/macos-debug`), so the launch configurations and
+the run tasks find the result. Configure with them directly — `build.bat` and
+`build.sh` always select the built-in presets:
+
+```bash
+cmake --preset user-windows
+cmake --build build/windows-debug --parallel
+```
+
 ---
 
 ## Troubleshooting

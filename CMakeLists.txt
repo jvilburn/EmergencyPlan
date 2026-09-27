@@ -43,6 +43,30 @@ find_package(Qt6 REQUIRED COMPONENTS
 # so a Debug build links the Debug libraries and a Release build the Release ones.
 find_package(unofficial-libmupdf CONFIG REQUIRED)
 
+# ============================================================================
+# libsodium for document encryption and signing (from vcpkg)
+# ============================================================================
+find_package(unofficial-sodium CONFIG REQUIRED)
+
+# ============================================================================
+# qtkeychain for the device's secret keys (built from source)
+# ============================================================================
+# Built against the system Qt. The vcpkg port would build a second Qt 6 from
+# source and link it beside this one. Linked statically into the executable and
+# excluded from install, so nothing of it ships separately.
+include(FetchContent)
+FetchContent_Declare(qtkeychain
+    GIT_REPOSITORY https://github.com/frankosterfeld/qtkeychain.git
+    GIT_TAG 0.17.0
+    EXCLUDE_FROM_ALL
+)
+#
+# BUILD_SHARED_LIBS OFF also lands in this project's cache, through qtkeychain's
+# cmake_dependent_option; OFF is what every target here builds with anyway.
+set(BUILD_SHARED_LIBS OFF)
+set(BUILD_TRANSLATIONS OFF)
+set(BUILD_TEST_APPLICATION OFF)
+FetchContent_MakeAvailable(qtkeychain)
 
 # ============================================================================
 # Compiler Warnings
@@ -88,6 +112,9 @@ set(MODEL_SOURCES
     src/models/EmergencyAsset.cpp
     src/models/DocumentChange.cpp
     src/models/EmergencyResponse.cpp
+    src/models/AccessRoster.cpp
+    src/models/RosterDevice.cpp
+    src/models/RosterPerson.cpp
 )
 
 set(MODEL_HEADERS
@@ -114,6 +141,9 @@ set(MODEL_HEADERS
     src/models/DocumentChange.h
     src/models/Id.h
     src/models/EmergencyResponse.h
+    src/models/AccessRoster.h
+    src/models/RosterDevice.h
+    src/models/RosterPerson.h
 )
 
 set(COMMAND_SOURCES
@@ -158,6 +188,12 @@ set(SERVICE_SOURCES
     src/services/GeoLocation.cpp
     src/services/EmergencyManager.cpp
     src/services/ReportGenerator.cpp
+    src/services/AccessControl.cpp
+    src/services/CanonicalBytes.cpp
+    src/services/CryptoTypes.cpp
+    src/services/DocumentCrypto.cpp
+    src/services/DocumentHeader.cpp
+    src/services/HexCodec.cpp
     # src/services/StatisticsService.cpp
     # src/services/ResourceService.cpp
     # src/services/SearchService.cpp
@@ -184,6 +220,14 @@ set(SERVICE_HEADERS
     src/services/GeoLocation.h
     src/services/EmergencyManager.h
     src/services/ReportGenerator.h
+    src/services/AccessControl.h
+    src/services/CanonicalBytes.h
+    src/services/CryptoTypes.h
+    src/services/DocumentConstants.h
+    src/services/DocumentCrypto.h
+    src/services/DocumentHeader.h
+    src/services/HexCodec.h
+    src/services/ServerContract.h
     # src/services/StatisticsService.h
     # src/services/ResourceService.h
     # src/services/SearchService.h
@@ -385,9 +429,17 @@ target_link_libraries(WardPlanningLib PUBLIC
     Qt6::Concurrent
     Qt6::PrintSupport
     unofficial::libmupdf::libmupdf
+    unofficial-sodium::sodium
+    qt6keychain
 )
 
 target_compile_definitions(WardPlanningLib PUBLIC HAVE_MUPDF)
+
+# project(VERSION ...) is the one place the version is written; main.cpp hands it
+# to QCoreApplication, and everything user-visible reads it back from there.
+target_compile_definitions(WardPlanningLib PUBLIC
+    WARD_PLANNING_VERSION="${PROJECT_VERSION}"
+)
 
 
 # ============================================================================
@@ -565,7 +617,7 @@ endif()
 # Summary
 # ============================================================================
 message(STATUS "")
-message(STATUS "=== Ward Planning Qt Configuration ===")
+message(STATUS "=== Ward Planning Configuration ===")
 message(STATUS "  Version: ${PROJECT_VERSION}")
 message(STATUS "  C++ Standard: ${CMAKE_CXX_STANDARD}")
 message(STATUS "  Qt Version: ${Qt6_VERSION}")

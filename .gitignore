@@ -91,6 +91,7 @@ hs_err_pid*
 
 # Data files and temporary dumps
 *.emergencyplan
+*.wardplanning
 *.txt
 !CMakeLists.txt
 .mcp.json

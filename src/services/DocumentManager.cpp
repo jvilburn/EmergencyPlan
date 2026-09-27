@@ -1,4 +1,5 @@
 #include "DocumentManager.h"
+#include "DocumentConstants.h"
 #include "JsonService.h"
 #include "UnitLookupService.h"
 #include "BackgroundGeocodingService.h"
@@ -403,7 +404,7 @@ void DocumentManager::ensureFilePath()
     }
 
     QString documentsDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
-    setFilePath(buildUniquePath(documentsDir, filename, ".emergencyplan"));
+    setFilePath(buildUniquePath(documentsDir, filename, DocumentConstants::FileExtension));
 }
 
 void DocumentManager::maybeRenameForWard()
@@ -428,7 +429,8 @@ void DocumentManager::maybeRenameForWard()
         return;
     }
 
-    QString newPath = buildUniquePath(fileInfo.absolutePath(), suggestedName, ".emergencyplan");
+    QString newPath = buildUniquePath(fileInfo.absolutePath(), suggestedName,
+                                      DocumentConstants::FileExtension);
 
     // Rename the file on disk (if it exists yet)
     if (QFile::exists(m_filePath))

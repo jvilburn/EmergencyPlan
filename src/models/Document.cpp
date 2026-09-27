@@ -540,8 +540,13 @@ QJsonObject Document::toJson() const
 {
     QJsonObject json;
 
+    json["payloadVersion"] = CurrentPayloadVersion;
+
     // Metadata (wards/stakes)
     m_metadata.writeToJson(json);
+
+    // Access roster
+    json["accessRoster"] = m_accessRoster.toJson();
 
     // Core collections
     serializeHashToJson(json, "families", m_families);
@@ -585,6 +590,9 @@ Document Document::fromJson(const QJsonObject& json)
 
     // Metadata (wards/stakes)
     document.m_metadata.readFromJson(json);
+
+    // The access roster is read only by parse(), which refuses a damaged one
+    // rather than loading part of it.
 
     // Core collections
     deserializeJsonToHash(json, "families", document.m_families);
@@ -634,6 +642,53 @@ Document Document::fromJson(const QJsonObject& json)
     return document;
 }
 
+DocumentParse Document::parse(const QJsonObject& json, Document& out)
+{
+    // A payload version this build does not write is one it must not guess at.
+    // An absent version is the same refusal: the writer is claiming nothing.
+    const QJsonValue version = json.value("payloadVersion");
+    if (!version.isDouble())
+    {
+        return DocumentParse::Malformed;
+    }
+
+    // toInt() returns 0 for a value that is not an integer in range, which the
+    // check below then refuses.
+    const int payloadVersion = version.toInt();
+    if (payloadVersion > CurrentPayloadVersion)
+    {
+        return DocumentParse::NeedsNewerVersion;
+    }
+
+    if (payloadVersion < 1)
+    {
+        return DocumentParse::Malformed;
+    }
+
+    // The roster decides who may open the document, so it is read strictly: a
+    // roster understood in part would name fewer people than the document
+    // actually grants.
+    const QJsonValue rosterValue = json.value("accessRoster");
+    if (!rosterValue.isObject())
+    {
+        return DocumentParse::Malformed;
+    }
+
+    // Every real document has at least the person who created it, so an empty
+    // roster is as malformed as a header with no recipients.
+    const std::optional<AccessRoster> roster = AccessRoster::fromJson(rosterValue.toObject());
+    if (!roster.has_value() || roster.value().isEmpty())
+    {
+        return DocumentParse::Malformed;
+    }
+
+    Document document = fromJson(json);
+    document.m_accessRoster = roster.value();
+
+    out = document;
+    return DocumentParse::Ok;
+}
+
 void Document::setEmergencyResponse(const std::optional<EmergencyResponse>& response)
 {
     m_emergencyResponse = response;
@@ -642,6 +697,7 @@ void Document::setEmergencyResponse(const std::optional<EmergencyResponse>& resp
 bool Document::operator==(const Document& other) const
 {
     return m_metadata == other.m_metadata
+        && m_accessRoster == other.m_accessRoster
         && m_families == other.m_families
         && m_teams == other.m_teams
         && m_tags == other.m_tags

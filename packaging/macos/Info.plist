@@ -56,7 +56,7 @@
             <string>Owner</string>
             <key>CFBundleTypeExtensions</key>
             <array>
-                <string>emergencyplan</string>
+                <string>wardplanning</string>
                 <string>json</string>
             </array>
             <key>CFBundleTypeIconFile</key>

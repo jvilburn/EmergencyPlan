@@ -33,7 +33,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
-Name: "fileassoc"; Description: "Associate .emergencyplan files"; GroupDescription: "File associations:"
+Name: "fileassoc"; Description: "Associate .wardplanning files"; GroupDescription: "File associations:"
 
 [Files]
 ; License
@@ -70,8 +70,18 @@ Source: "build\windows-release\bin\translations\*"; DestDir: "{app}\translations
 ; ICU (if present in release deploy)
 Source: "build\windows-release\bin\icu*.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
+[InstallDelete]
+; 1.0.x shipped the same application under its old name into this directory,
+; and the AppId is unchanged so an upgrade lands on top of it.
+Type: files; Name: "{app}\EmergencyPlan.exe"
+Type: files; Name: "{group}\Ward Emergency Plan.lnk"
+Type: files; Name: "{autodesktop}\Ward Emergency Plan.lnk"
+
 [Registry]
-Root: HKA; Subkey: "Software\Classes\.emergencyplan"; ValueType: string; ValueName: ""; ValueData: "WardPlanning.Document"; Flags: uninsdeletevalue; Tasks: fileassoc
+; Retire the file association 1.0.x registered, extension and ProgID together
+Root: HKA; Subkey: "Software\Classes\.emergencyplan"; ValueType: none; Flags: deletekey
+Root: HKA; Subkey: "Software\Classes\WardEmergencyPlan.Document"; ValueType: none; Flags: deletekey
+Root: HKA; Subkey: "Software\Classes\.wardplanning"; ValueType: string; ValueName: ""; ValueData: "WardPlanning.Document"; Flags: uninsdeletevalue; Tasks: fileassoc
 Root: HKA; Subkey: "Software\Classes\WardPlanning.Document"; ValueType: string; ValueName: ""; ValueData: "Ward Planning Document"; Flags: uninsdeletekey; Tasks: fileassoc
 Root: HKA; Subkey: "Software\Classes\WardPlanning.Document\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc
 Root: HKA; Subkey: "Software\Classes\WardPlanning.Document\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc

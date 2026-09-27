@@ -1,4 +1,5 @@
 #include "JsonService.h"
+#include <QCoreApplication>
 #include <QFile>
 #include <QSaveFile>
 #include <QJsonDocument>
@@ -107,7 +108,8 @@ QString JsonService::toJsonString(const Document& document)
     // Add metadata
     QJsonObject metadata;
     metadata["lastModified"] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
-    metadata["exportedBy"] = "Ward Planning v1.1";
+    metadata["exportedBy"] = QStringLiteral("Ward Planning v%1")
+        .arg(QCoreApplication::applicationVersion());
     json["metadata"] = metadata;
 
     QJsonDocument jsonDoc(json);
