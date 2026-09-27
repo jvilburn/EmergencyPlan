@@ -44,6 +44,7 @@ private slots:
     void documentParseAcceptsWhatToJsonWrote();
     void documentParseNeedsNewerVersionForALaterPayload();
     void documentParseRefusesAMalformedRoster();
+    void documentParseRefusesAnUnknownTopLevelKey();
     void documentParseRefusesAnEmptyRoster();
     void documentFromJsonDoesNotReadTheRoster();
     void rosterTakesPartInDocumentEquality();

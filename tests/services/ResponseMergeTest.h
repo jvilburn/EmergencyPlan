@@ -12,6 +12,7 @@ private slots:
     void twoRespondersOfflineRecordsBothSurvive();
     void overlappingContactAttemptsAreAllKept();
     void anAttemptsNotesEditedOnOneSideKeepTheEdit();
+    void anAttemptAbsentFromTheBaseAndEditedOnBothTakesMine();
     void contactStatusChangedDifferentlyTakesMineAndOnlyOnTheirsTakesTheirs();
     void aFamilyRecordAddedOnEitherSideSurvives();
 
@@ -20,6 +21,7 @@ private slots:
     void aTaskRemovedOnEitherSideStaysRemoved();
     void aTaskRemovedOnOneSideAndEditedOnTheOtherKeepsTheEdit();
     void aNotificationClearedWithItsAssignmentStaysCleared();
+    void aNotificationNeverOutlivesItsAssignment();
     void categoriesMergeAsASet();
 
     // The response itself
@@ -32,6 +34,6 @@ private slots:
     // Documents
     void aResponseChangeAndADirectoryEditBothSurviveWhicheverSideIsMine();
     void aDirectoryEditOnBothSidesIsAConflict();
-    void noDirectoryChangeKeepsTheirsAndMergesTheResponse();
+    void noDirectoryChangeMergesTheResponse();
     void theRosterIsAlwaysTheirs();
 };

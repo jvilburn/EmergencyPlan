@@ -1,6 +1,7 @@
 #include "Document.h"
 #include "DocumentChange.h"
 #include "ResponseArea.h"
+#include "StrictJson.h"
 
 #include <cmath>
 
@@ -668,6 +669,27 @@ DocumentParse Document::parse(const QJsonObject& json, Document& out)
     }
 
     if (payloadVersion < 1)
+    {
+        return DocumentParse::Malformed;
+    }
+
+    // In a version this build knows, every top-level field is one it writes.
+    if (!StrictJson::hasOnlyKeys(json,
+                                 {QLatin1String("payloadVersion"),
+                                  QLatin1String("stakes"),
+                                  QLatin1String("wards"),
+                                  QLatin1String("accessRoster"),
+                                  QLatin1String("families"),
+                                  QLatin1String("teams"),
+                                  QLatin1String("tags"),
+                                  QLatin1String("emergencyResources"),
+                                  QLatin1String("eqDistricts"),
+                                  QLatin1String("eqGroups"),
+                                  QLatin1String("rsDistricts"),
+                                  QLatin1String("rsGroups"),
+                                  QLatin1String("wardDirectoryPdfDate"),
+                                  QLatin1String("ministeringPdfDate"),
+                                  QLatin1String("responseData")}))
     {
         return DocumentParse::Malformed;
     }

@@ -128,7 +128,9 @@ ContactAttempt mergeAttempt(const std::optional<ContactAttempt>& base,
                             const ContactAttempt& mine,
                             const ContactAttempt& theirs)
 {
-    const ContactAttempt reference = base.value_or(mine);
+    // With no base to judge against, both sides changed it: mine, as for any
+    // value changed differently on both sides.
+    const ContactAttempt reference = base.value_or(theirs);
 
     ContactAttempt merged = mine;
     merged.setMethod(mergeValue(reference.method(), mine.method(), theirs.method()));
@@ -168,22 +170,29 @@ QList<ContactAttempt> mergeAttempts(const QList<ContactAttempt>& base,
 
 // --- Tasks -----------------------------------------------------------------
 
-/// Team, person, and notes belong together, so they merge as one value.
+/// Team, person, notes, and the notification sent to them belong together - clearing
+/// an assignment clears its notification - so they merge as one value, and a
+/// merge never leaves a notification without an assignee.
 struct Assignment
 {
     std::optional<TeamId> team;
     std::optional<PersonId> person;
     QString notes;
+    std::optional<TaskNotification> notification;
 
     bool operator==(const Assignment& other) const
     {
-        return team == other.team && person == other.person && notes == other.notes;
+        return team == other.team && person == other.person && notes == other.notes
+            && notification == other.notification;
     }
 };
 
 Assignment assignmentOf(const ResponseTask& task)
 {
-    return Assignment{task.assignedTeamId(), task.assignedPersonId(), task.assignmentNotes()};
+    return Assignment{task.assignedTeamId(),
+                      task.assignedPersonId(),
+                      task.assignmentNotes(),
+                      task.notification()};
 }
 
 /// Resolved, notes, and time belong together, so they merge as one value.
@@ -210,8 +219,6 @@ ResponseTask mergeTask(const ResponseTask& base, const ResponseTask& mine, const
     merged.setCategory(mergeValue(base.category(), mine.category(), theirs.category()));
     merged.setDescription(mergeValue(base.description(), mine.description(), theirs.description()));
 
-    // Assignment before notification: clearing an assignment also clears the
-    // notification, which is then set from its own merge.
     const Assignment assignment =
         mergeValue(assignmentOf(base), assignmentOf(mine), assignmentOf(theirs));
     if (assignment.team.has_value())
@@ -227,7 +234,7 @@ ResponseTask mergeTask(const ResponseTask& base, const ResponseTask& mine, const
         merged.clearAssignment();
     }
 
-    merged.setNotification(mergeValue(base.notification(), mine.notification(), theirs.notification()));
+    merged.setNotification(assignment.notification);
 
     const Resolution resolution =
         mergeValue(resolutionOf(base), resolutionOf(mine), resolutionOf(theirs));

@@ -84,13 +84,41 @@ const QString PairingNumberVector = "764 409";
 
 const QByteArray VectorCiphertext = "ciphertext bytes for the vector";
 
-/// The message a request to take the lease on the vector document is signed over:
-/// the route, the document id, and the wp-request BLAKE2b of the empty body, each
-/// length-prefixed.
+/// Request messages in the session "vector-session", each the route, the session
+/// token, the document id, and the wp-request BLAKE2b of the canonical body, every
+/// field length-prefixed.
+///
+/// Taking the lease on the vector document: an empty body.
 const QByteArray TakeLeaseMessageVector =
     "0000001a504f5354202f646f63756d656e74732f7b69647d2f6c65617365"
+    "0000000e766563746f722d73657373696f6e"
     "000000203030313132323333343435353636373738383939616162626363646465656666"
     "0000002077436f4937074fe7317986d86ed2f6364d05492034d327545b1899b2bb124e72";
+
+/// Uploading the vector header, signed 0x99 x 64, on base version 7.
+const QByteArray UploadMessageVector =
+    "00000013505554202f646f63756d656e74732f7b69647d0000000e766563746f"
+    "722d73657373696f6e0000002030303131323233333434353536363737383839"
+    "396161626263636464656566660000002020776414e859a8cbecccb21f0ca604"
+    "dea5587ed890161ad727f30bd400c78b44";
+
+/// Responding to pairing 48219301 with the responder keys 0x41... and 0x61...
+const QByteArray RespondMessageVector =
+    "0000001e505554202f70616972696e67732f7b636f64657d2f726573706f6e64"
+    "65720000000e766563746f722d73657373696f6e0000000000000020e3c52db2"
+    "384fd2dc0ad0bf37766cc56f9a453ed4fef3b35271ee7aa67a8ff433";
+
+/// Whether libsodium itself accepts the signature over the request tag, a zero
+/// byte, and these message bytes spelled out here.
+bool signedOver(const QByteArray& signature, const QByteArray& message, const VerifyKey& key)
+{
+    const QByteArray tagged = QByteArray("request") + QByteArray(1, '\0') + message;
+    return crypto_sign_verify_detached(reinterpret_cast<const unsigned char*>(signature.constData()),
+                                       reinterpret_cast<const unsigned char*>(tagged.constData()),
+                                       quint64(tagged.size()),
+                                       reinterpret_cast<const unsigned char*>(key.bytes.constData()))
+        == 0;
+}
 
 } // namespace
 
@@ -165,30 +193,49 @@ void FormatVectorsTest::signaturesAreMadeOverTheTagThenAZeroByte()
 void FormatVectorsTest::requestSignaturesCoverTheRouteDocumentAndBodyHash()
 {
     const SigningKeypair keys = DocumentCrypto::generateSigningKeypair();
-    const QByteArray signature = ServerContract::signRequest(ServerContract::Endpoint::TakeLease,
-                                                             "00112233445566778899aabbccddeeff",
+    const ServerContract::Session session{"vector-session"};
+    const QString documentId = "00112233445566778899aabbccddeeff";
+
+    const QByteArray takeLease = ServerContract::signRequest(ServerContract::Endpoint::TakeLease,
+                                                             session,
+                                                             documentId,
                                                              ServerContract::emptyBody(),
                                                              keys.signingKey);
+    QVERIFY(signedOver(takeLease, QByteArray::fromHex(TakeLeaseMessageVector), keys.verifyKey));
 
-    const QByteArray tagged = QByteArray("request") + QByteArray(1, '\0')
-        + QByteArray::fromHex(TakeLeaseMessageVector);
-    QCOMPARE(crypto_sign_verify_detached(
-                 reinterpret_cast<const unsigned char*>(signature.constData()),
-                 reinterpret_cast<const unsigned char*>(tagged.constData()),
-                 quint64(tagged.size()),
-                 reinterpret_cast<const unsigned char*>(keys.verifyKey.bytes.constData())),
-             0);
+    ServerContract::Upload upload;
+    upload.header = vectorHeader();
+    upload.header.writerSignature = QByteArray(DocumentCrypto::SignatureSize, '\x99');
+    const QByteArray uploadSignature =
+        ServerContract::signRequest(ServerContract::Endpoint::Upload,
+                                    session,
+                                    documentId,
+                                    ServerContract::uploadBody(7, upload),
+                                    keys.signingKey);
+    QVERIFY(signedOver(uploadSignature, QByteArray::fromHex(UploadMessageVector), keys.verifyKey));
 
-    // The oracle can fail: the same bytes under another route do not verify.
+    const DeviceKeys responder{PublicKey{run(0x41, PublicKey::Size)}, VerifyKey{run(0x61, VerifyKey::Size)}};
+    const QByteArray respondSignature =
+        ServerContract::signRequest(ServerContract::Endpoint::RespondToPairing,
+                                    session,
+                                    QString(),
+                                    ServerContract::respondToPairingBody("48219301", responder),
+                                    keys.signingKey);
+    QVERIFY(signedOver(respondSignature, QByteArray::fromHex(RespondMessageVector), keys.verifyKey));
+
+    // The oracle can fail: the same bytes under another route, and a body one
+    // version off, do not verify.
     QByteArray otherRoute = QByteArray::fromHex(TakeLeaseMessageVector);
     otherRoute.replace(4, 4, "PUT ");
-    const QByteArray otherTagged = QByteArray("request") + QByteArray(1, '\0') + otherRoute;
-    QVERIFY(crypto_sign_verify_detached(
-                reinterpret_cast<const unsigned char*>(signature.constData()),
-                reinterpret_cast<const unsigned char*>(otherTagged.constData()),
-                quint64(otherTagged.size()),
-                reinterpret_cast<const unsigned char*>(keys.verifyKey.bytes.constData()))
-            != 0);
+    QVERIFY(!signedOver(takeLease, otherRoute, keys.verifyKey));
+
+    const QByteArray otherBase =
+        ServerContract::signRequest(ServerContract::Endpoint::Upload,
+                                    session,
+                                    documentId,
+                                    ServerContract::uploadBody(8, upload),
+                                    keys.signingKey);
+    QVERIFY(!signedOver(otherBase, QByteArray::fromHex(UploadMessageVector), keys.verifyKey));
 }
 
 void FormatVectorsTest::eachOracleRejectsACorruptedByte()

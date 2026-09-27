@@ -367,6 +367,34 @@ void DocumentChainTest::linkBeyondTheSaveCounterCapIsBroken()
     QVERIFY(!DocumentCrypto::verifyLink(world.header, beyond));
 }
 
+void DocumentChainTest::coherenceHoldsWhatParseHolds()
+{
+    const TwoPeople world = twoPeople();
+    QVERIFY(DocumentCrypto::isCoherent(world.header));
+
+    // A header built in memory is judged by the rules a parsed one meets.
+    DocumentHeader generationZero = world.header;
+    generationZero.keyGeneration = 0;
+    QVERIFY(!DocumentCrypto::isCoherent(generationZero));
+
+    DocumentHeader otherFormat = world.header;
+    otherFormat.formatVersion = DocumentHeader::CurrentFormatVersion + 1;
+    QVERIFY(!DocumentCrypto::isCoherent(otherFormat));
+
+    DocumentHeader upperCaseId = world.header;
+    upperCaseId.documentId = world.header.documentId.toUpper();
+    QVERIFY(upperCaseId.documentId != world.header.documentId);
+    QVERIFY(!DocumentCrypto::isCoherent(upperCaseId));
+
+    DocumentHeader shortOrigin = world.header;
+    shortOrigin.originDocumentId = "0011";
+    QVERIFY(!DocumentCrypto::isCoherent(shortOrigin));
+
+    DocumentHeader withOrigin = world.header;
+    withOrigin.originDocumentId = newDocumentId();
+    QVERIFY(DocumentCrypto::isCoherent(withOrigin));
+}
+
 void DocumentChainTest::linkChangingOriginOrFormatIsBroken()
 {
     const TwoPeople world = twoPeople();

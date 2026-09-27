@@ -179,9 +179,10 @@ public:
     ///
     /// Strict about the payload version and the access roster: an absent or
     /// unknown version, an empty roster, or any ill-formed person or device is
-    /// refused, never defaulted. The directory, ministering, and emergency
-    /// collections are still read through fromJson, which is lenient — a damaged
-    /// family record loads as whatever fromJson makes of it.
+    /// refused, never defaulted, and so is a top-level field it does not know. The
+    /// directory, ministering, and emergency collections are read through
+    /// fromJson, which is lenient: a damaged family record loads as whatever
+    /// fromJson makes of it.
     ///
     /// The only reader of the roster. fromJson ignores it, so no path can load a
     /// roster in part.

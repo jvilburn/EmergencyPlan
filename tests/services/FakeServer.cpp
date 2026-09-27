@@ -124,7 +124,8 @@ Result<qint64> FakeServer::registerDocument(const Session& session,
         return Result<qint64>::failure(failure);
     }
 
-    const ServerError requestCheck = signedBy(device,
+    const ServerError requestCheck = signedBy(session,
+                                              device,
                                               Endpoint::RegisterDocument,
                                               upload.header.documentId,
                                               registerBody(upload),
@@ -339,7 +340,8 @@ Result<qint64> FakeServer::upload(const Session& session,
         return Result<qint64>::failure(failure);
     }
 
-    const ServerError requestCheck = signedBy(device,
+    const ServerError requestCheck = signedBy(session,
+                                              device,
                                               Endpoint::Upload,
                                               documentId,
                                               uploadBody(baseVersion, upload),
@@ -465,7 +467,8 @@ Result<Lease> FakeServer::takeLease(const Session& session,
         return Result<Lease>::failure(failure);
     }
 
-    const ServerError requestCheck = signedBy(device,
+    const ServerError requestCheck = signedBy(session,
+                                              device,
                                               Endpoint::TakeLease,
                                               documentId,
                                               emptyBody(),
@@ -499,7 +502,8 @@ Result<Done> FakeServer::releaseLease(const Session& session,
         return Result<Done>::failure(failure);
     }
 
-    const ServerError requestCheck = signedBy(device,
+    const ServerError requestCheck = signedBy(session,
+                                              device,
                                               Endpoint::ReleaseLease,
                                               documentId,
                                               emptyBody(),
@@ -535,7 +539,8 @@ Result<Done> FakeServer::requestAccess(const Session& session,
         return Result<Done>::failure(failure);
     }
 
-    const ServerError requestCheck = signedBy(device,
+    const ServerError requestCheck = signedBy(session,
+                                              device,
                                               Endpoint::RequestAccess,
                                               documentId,
                                               requestAccessBody(request),
@@ -563,6 +568,37 @@ Result<Done> FakeServer::requestAccess(const Session& session,
         || entryByVerifyKey(found.value().current(), device).has_value())
     {
         return Result<Done>::failure(ServerError::InvalidRequest);
+    }
+
+    // A sealing key is one device's, so a request naming one already in this
+    // document or in another device's request is claiming a key it does not hold.
+    for (const RecipientEntry& entry : found.value().current().recipients)
+    {
+        if (entry.publicKey == request.device.publicKey())
+        {
+            return Result<Done>::failure(ServerError::InvalidRequest);
+        }
+    }
+    for (const StoredRequest& other : found.value().requests)
+    {
+        if (other.requester != device && other.request.device.publicKey() == request.device.publicKey())
+        {
+            return Result<Done>::failure(ServerError::InvalidRequest);
+        }
+    }
+
+    // One request per device: a new one replaces the device's earlier request, so
+    // its status is always the one it asked most recently.
+    for (auto earlier = found.value().requests.begin(); earlier != found.value().requests.end();)
+    {
+        if (earlier.value().requester == device)
+        {
+            earlier = found.value().requests.erase(earlier);
+        }
+        else
+        {
+            ++earlier;
+        }
     }
 
     StoredRequest stored;
@@ -608,7 +644,8 @@ Result<Done> FakeServer::clearAccessRequest(const Session& session,
         return Result<Done>::failure(failure);
     }
 
-    const ServerError requestCheck = signedBy(device,
+    const ServerError requestCheck = signedBy(session,
+                                              device,
                                               Endpoint::ClearAccessRequest,
                                               documentId,
                                               clearAccessRequestBody(requester),
@@ -694,7 +731,8 @@ Result<QString> FakeServer::startPairing(const Session& session,
         return Result<QString>::failure(failure);
     }
 
-    const ServerError requestCheck = signedBy(device,
+    const ServerError requestCheck = signedBy(session,
+                                              device,
                                               Endpoint::StartPairing,
                                               QString(),
                                               startPairingBody(deviceName, commitment),
@@ -786,7 +824,8 @@ Result<Done> FakeServer::respondToPairing(const Session& session,
         return Result<Done>::failure(failure);
     }
 
-    const ServerError requestCheck = signedBy(device,
+    const ServerError requestCheck = signedBy(session,
+                                              device,
                                               Endpoint::RespondToPairing,
                                               QString(),
                                               respondToPairingBody(code, responder),
@@ -841,7 +880,8 @@ Result<Done> FakeServer::revealPairing(const Session& session,
         return Result<Done>::failure(failure);
     }
 
-    const ServerError requestCheck = signedBy(device,
+    const ServerError requestCheck = signedBy(session,
+                                              device,
                                               Endpoint::RevealPairing,
                                               QString(),
                                               revealPairingBody(code, initiator, nonce),
@@ -879,7 +919,7 @@ Result<Done> FakeServer::revealPairing(const Session& session,
         return Result<Done>::failure(ServerError::AlreadyWritten);
     }
 
-    if (!initiator.isValid() || initiator.verifyKey != device || nonce.isEmpty())
+    if (!initiator.isValid() || initiator.verifyKey != device || nonce.size() != Pairing::NonceSize)
     {
         return Result<Done>::failure(ServerError::InvalidRequest);
     }
@@ -901,7 +941,8 @@ Result<Done> FakeServer::handOver(const Session& session,
         return Result<Done>::failure(failure);
     }
 
-    const ServerError requestCheck = signedBy(device,
+    const ServerError requestCheck = signedBy(session,
+                                              device,
                                               Endpoint::HandOver,
                                               QString(),
                                               handOverBody(code, handover),
@@ -1119,14 +1160,16 @@ bool FakeServer::linkPermitted(const Fingerprint& device,
     return false;
 }
 
-ServerError FakeServer::signedBy(const VerifyKey& device,
+ServerError FakeServer::signedBy(const Session& session,
+                                  const VerifyKey& device,
                                   Endpoint endpoint,
                                   const QString& documentId,
                                   const QByteArray& body,
                                   const QByteArray& signature) const
 {
-    return requestVerifies(endpoint, documentId, body, signature, device) ? ServerError::None
-                                                                          : ServerError::Unauthenticated;
+    return requestVerifies(endpoint, session, documentId, body, signature, device)
+               ? ServerError::None
+               : ServerError::Unauthenticated;
 }
 
 bool FakeServer::pairedWith(const Fingerprint& initiator, const VerifyKey& responder) const

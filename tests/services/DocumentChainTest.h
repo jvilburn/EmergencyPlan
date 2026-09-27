@@ -35,6 +35,7 @@ private slots:
     void linkWithDecreasingGenerationIsBroken();
     void linkWithNonIncreasingSaveCounterIsBroken();
     void linkBeyondTheSaveCounterCapIsBroken();
+    void coherenceHoldsWhatParseHolds();
     void linkChangingOriginOrFormatIsBroken();
     void linkAcrossDocumentsIsBroken();
 

@@ -213,7 +213,8 @@ private:
                        const DocumentHeader& current) const;
 
     /// Unauthenticated unless the signature is this device's over this request.
-    ServerContract::ServerError signedBy(const VerifyKey& device,
+    ServerContract::ServerError signedBy(const ServerContract::Session& session,
+                                         const VerifyKey& device,
                                          ServerContract::Endpoint endpoint,
                                          const QString& documentId,
                                          const QByteArray& body,

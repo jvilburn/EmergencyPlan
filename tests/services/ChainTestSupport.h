@@ -42,7 +42,7 @@ TestDevice newDeviceFor(const MemberId& member);
 /// signs as writer. The payload hash is a stand-in: these tests are about headers,
 /// not payloads.
 ///
-/// The first device's person is the only admin — a stable choice that does not
+/// The first device's person is the only admin - a stable choice that does not
 /// move when the writer does, so consecutive headers built this way have the same
 /// admin list unless a test says otherwise.
 DocumentHeader buildHeader(const QString& documentId,

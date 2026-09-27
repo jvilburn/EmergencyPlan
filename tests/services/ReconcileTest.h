@@ -13,7 +13,6 @@ private slots:
     // Accept
     void aValidNewerVersionIsAccepted();
     void aValidNewerVersionIsAcceptedWithNoBaseHeader();
-    void offlineLocalSavesDoNotDisturbTheAnchor();
     void aVersionWrittenBySomeoneWhoJustLeftIsAccepted();
 
     // Each failure is a ServerFault with nothing else set
@@ -23,9 +22,10 @@ private slots:
     void aBrokenChainIsAServerFault();
     void aWithheldHeaderIsAServerFault();
     void aSubstitutedHeaderIsAServerFault();
-    void aGenerationBelowTheHighWaterMarkIsAServerFault();
-    void anEntryWithAnotherVerifyKeyIsAServerFault();
+    void aVersionBelowTheHighWaterMarkIsAServerFault();
+    void anEntryWhoseKeysDoNotMatchItsFingerprintIsAServerFault();
     void aWriterListedButMissingFromTheRosterIsAServerFault();
+    void aVersionOfAnotherDocumentIsAServerFault();
     void aHeaderDisagreeingWithItsRosterIsAServerFault();
     void anEmptyHeaderListIsAServerFault();
 

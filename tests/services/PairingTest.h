@@ -28,7 +28,10 @@ private slots:
 
     // The relay
     void aRelaySwappingKeysAfterCommitmentCannotPassTheReveal();
-    void theResponderIsSafeOnlyBecauseItKeepsTheFirstCommitment();
+    void theResponderKeepsTheFirstCommitmentItReads();
+    void aGenuinePairingShowsTheSameNumberOnBothScreens();
+    void theInitiatorKeepsTheFirstResponderKeysItReads();
+    void commitRefusesInvalidKeysAndAWrongSizedNonce();
 
     // Handover
     void handoverVerifiesFromThePairedResponder();

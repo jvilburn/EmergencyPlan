@@ -2,6 +2,7 @@
 
 #include "AccessRoster.h"
 #include "DocumentHeader.h"
+#include "HexCodec.h"
 
 #include <QHash>
 #include <QSet>
@@ -130,6 +131,17 @@ QSet<QString> peopleOf(const DocumentHeader& header)
 /// because a comparison against an incoherent header proves nothing.
 bool headerIsCoherent(const DocumentHeader& header)
 {
+    // What parse enforces, held here too, so a header built in memory - one the
+    // server receives, or a test builds - is judged by the same rules as one read.
+    if (header.formatVersion != DocumentHeader::CurrentFormatVersion
+        || !HexCodec::isCanonical(header.documentId, DocumentHeader::DocumentIdLength)
+        || (!header.originDocumentId.isEmpty()
+            && !HexCodec::isCanonical(header.originDocumentId, DocumentHeader::DocumentIdLength))
+        || header.keyGeneration < 1)
+    {
+        return false;
+    }
+
     if (!header.lastWriter.isValid() || !header.writerPublicKey.isValid()
         || !header.writerVerifyKey.isValid()
         || DocumentCrypto::fingerprintOf(header.writerPublicKey, header.writerVerifyKey)

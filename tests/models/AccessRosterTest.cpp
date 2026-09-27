@@ -1,6 +1,9 @@
 #include "AccessRosterTest.h"
 
 #include "AccessRoster.h"
+#include "Address.h"
+#include "EmergencyResponse.h"
+#include "Family.h"
 #include "Document.h"
 #include "DocumentCrypto.h"
 #include "HexCodec.h"
@@ -587,8 +590,14 @@ void AccessRosterTest::documentParseAcceptsWhatToJsonWrote()
 
     Document document = Document::empty();
     document.setAccessRoster(roster);
+    const Family family = Family::create(40.0, -111.0, Address(), {});
+    document.addFamily(family);
+    EmergencyResponse response = EmergencyResponse::create("Storm");
+    response.setStartedAt(QDateTime::fromString("2026-09-27T12:00:00Z", Qt::ISODate));
+    response.addFamilyRecord(FamilyResponseRecord::create(family.id(), "Adams", "1 Oak St"));
+    document.setEmergencyResponse(response);
 
-    // The whole document, not just the roster: a parse that dropped families or
+    // The whole document, not just the roster: a parse that dropped the family or
     // the emergency response would otherwise pass.
     Document out;
     QCOMPARE(Document::parse(document.toJson(), out), DocumentParse::Ok);
@@ -651,6 +660,26 @@ void AccessRosterTest::documentParseRefusesAMalformedRoster()
 
     json.remove("accessRoster");
     QCOMPARE(Document::parse(json, out), DocumentParse::Malformed);
+}
+
+void AccessRosterTest::documentParseRefusesAnUnknownTopLevelKey()
+{
+    AccessRoster roster;
+    QVERIFY(roster.addPerson(newPerson("Alice Reed", "Laptop", RosterPerson::Role::Admin)));
+    Document document = Document::empty();
+    document.setAccessRoster(roster);
+
+    Document out;
+    QCOMPARE(Document::parse(document.toJson(), out), DocumentParse::Ok);
+
+    QJsonObject json = document.toJson();
+    json["sharedWith"] = QJsonArray();
+    QCOMPARE(Document::parse(json, out), DocumentParse::Malformed);
+
+    // A later payload may carry fields this build does not know; that is the
+    // later version's to read.
+    json["payloadVersion"] = Document::CurrentPayloadVersion + 1;
+    QCOMPARE(Document::parse(json, out), DocumentParse::NeedsNewerVersion);
 }
 
 void AccessRosterTest::documentParseRefusesAnEmptyRoster()

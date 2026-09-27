@@ -60,8 +60,8 @@ struct DocumentHeader
     /// The most one upload may raise the save counter: about a million saves
     /// between publishes, months of heavy offline editing. The chain requires only
     /// that the counter rises, because a client walks it with headers missing; the
-    /// server checks this bound on every upload, so no member can push the counter
-    /// to MaxSaveCounter and freeze the ward.
+    /// server checks this bound and an upload rate on every device, so no single
+    /// device can push the counter to MaxSaveCounter and freeze the ward.
     static constexpr qint64 MaxSaveCounterStep = qint64(1) << 20;
 
     int formatVersion = CurrentFormatVersion;
@@ -79,7 +79,7 @@ struct DocumentHeader
     Fingerprint lastWriter;
 
     /// The last writer's own keys, so a header verifies its signature without its
-    /// writer being looked up anywhere — which matters for a leave, whose writer
+    /// writer being looked up anywhere - which matters for a leave, whose writer
     /// has just left. parse refuses keys whose fingerprint is not lastWriter.
     PublicKey writerPublicKey;
     VerifyKey writerVerifyKey;
@@ -91,7 +91,7 @@ struct DocumentHeader
     QList<RecipientEntry> recipients;
 
     /// The member ids of the people who are admins, in ascending order of hex, with
-    /// no repeats — one admin set, one serialisation. Carried in the clear because
+    /// no repeats - one admin set, one serialisation. Carried in the clear because
     /// a removed device proves its removal from headers alone, and that proof has
     /// to show the remover was an admin.
     QList<MemberId> admins;
@@ -108,7 +108,7 @@ struct DocumentHeader
     static HeaderParse parse(const QJsonObject& json, DocumentHeader& out);
 
     /// What the payload is authenticated against. Canonical, and built from the
-    /// same serialised strings toJson writes — never from the in-memory values,
+    /// same serialised strings toJson writes - never from the in-memory values,
     /// because a QDateTime that has been through a round trip is not the one that
     /// went in.
     ///
@@ -117,7 +117,7 @@ struct DocumentHeader
 
     /// associatedData() followed by the length-prefixed payload hash. This is
     /// what the writer signs, and it is what lets a header be verified without
-    /// its payload — which is what the membership chain walks.
+    /// its payload - which is what the membership chain walks.
     QByteArray signedBytes() const;
 
     std::optional<RecipientEntry> entryFor(const Fingerprint& fingerprint) const;

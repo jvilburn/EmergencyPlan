@@ -203,6 +203,28 @@ void ResponseMergeTest::anAttemptsNotesEditedOnOneSideKeepTheEdit()
     QCOMPARE(result.contactAttempts().first().notes(), QString("Called; needs a generator"));
 }
 
+void ResponseMergeTest::anAttemptAbsentFromTheBaseAndEditedOnBothTakesMine()
+{
+    // A publish landed but its answer was lost, so the base never learned of the
+    // attempt; the user then edited its notes. Theirs is the earlier upload, mine
+    // the newer edit.
+    const Storm s = storm();
+    const ContactAttempt called = attempt("Called");
+
+    EmergencyResponse theirs = s.response;
+    recordOf(theirs, s.adams).addContactAttempt(called);
+
+    EmergencyResponse mine = s.response;
+    ContactAttempt edited = called;
+    edited.setNotes("Called; roof damage");
+    recordOf(mine, s.adams).addContactAttempt(edited);
+
+    const EmergencyResponse response = merged(s.response, mine, theirs);
+    const FamilyResponseRecord& result = recordOf(response, s.adams);
+    QCOMPARE(result.contactAttempts().size(), qsizetype(1));
+    QCOMPARE(result.contactAttempts().first().notes(), QString("Called; roof damage"));
+}
+
 void ResponseMergeTest::contactStatusChangedDifferentlyTakesMineAndOnlyOnTheirsTakesTheirs()
 {
     const Storm s = storm();
@@ -322,6 +344,38 @@ void ResponseMergeTest::aNotificationClearedWithItsAssignmentStaysCleared()
     QVERIFY(!task->isAssigned());
     QVERIFY(!task->isNotified());
     QCOMPARE(task->description(), QString("Oak, now blocking the road"));
+}
+
+void ResponseMergeTest::aNotificationNeverOutlivesItsAssignment()
+{
+    TaskId taskId;
+    Storm s = stormWithTask(taskId);
+    ResponseTask* baseTask = recordOf(s.response, s.adams).mutableTask(taskId);
+    baseTask->assignToPerson(PersonId::generate(), "Bring the saw");
+    baseTask->setNotification(TaskNotification::create(ContactMethod::Text, "Sent"));
+
+    // Theirs takes the assignment away; mine sends a new notification for it.
+    EmergencyResponse theirs = s.response;
+    recordOf(theirs, s.adams).mutableTask(taskId)->clearAssignment();
+
+    EmergencyResponse mine = s.response;
+    recordOf(mine, s.adams)
+        .mutableTask(taskId)
+        ->setNotification(TaskNotification::create(ContactMethod::Phone, "Called again"));
+
+    // One value changed differently on both sides: mine, whole - the assignee and
+    // the notification together.
+    for (const EmergencyResponse& response : {merged(s.response, mine, theirs), merged(s.response, theirs, mine)})
+    {
+        const ResponseTask* task = taskIn(recordOf(response, s.adams), taskId);
+        QVERIFY(task != nullptr);
+        QCOMPARE(task->isNotified(), task->isAssigned());
+    }
+
+    const EmergencyResponse response = merged(s.response, mine, theirs);
+    const ResponseTask* task = taskIn(recordOf(response, s.adams), taskId);
+    QVERIFY(task->isAssigned());
+    QCOMPARE(task->notification().value().notes(), QString("Called again"));
 }
 
 void ResponseMergeTest::categoriesMergeAsASet()
@@ -454,7 +508,7 @@ void ResponseMergeTest::aDirectoryEditOnBothSidesIsAConflict()
     QVERIFY(ResponseMerge::mergeDocuments(base, mine, mine).has_value());
 }
 
-void ResponseMergeTest::noDirectoryChangeKeepsTheirsAndMergesTheResponse()
+void ResponseMergeTest::noDirectoryChangeMergesTheResponse()
 {
     const Storm s = storm();
     const Document base = documentWith(s.adams, s);
@@ -473,7 +527,7 @@ void ResponseMergeTest::noDirectoryChangeKeepsTheirsAndMergesTheResponse()
 
     const std::optional<Document> result = ResponseMerge::mergeDocuments(base, mine, theirs);
     QVERIFY(result.has_value());
-    QVERIFY(!ResponseMerge::directoryChanged(result.value(), theirs));
+    QVERIFY(!ResponseMerge::directoryChanged(result.value(), base));
 
     const EmergencyResponse& response = result.value().emergencyResponse().value();
     QVERIFY(hasAttempt(recordOf(response, s.adams), mineCalled.id()));

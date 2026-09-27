@@ -28,6 +28,12 @@ Reconcile::DownloadCheck verdictOnly(Reconcile::Verdict verdict)
 namespace Reconcile
 {
 
+bool HighWaterMark::isAbove(const DocumentHeader& header) const
+{
+    return header.keyGeneration < keyGeneration
+        || (header.keyGeneration == keyGeneration && header.saveCounter < saveCounter);
+}
+
 Fingerprint Self::fingerprint() const
 {
     return DocumentCrypto::fingerprintOf(sealing.publicKey, verifyKey);
@@ -70,13 +76,15 @@ Verdict readHeaders(const QList<QJsonObject>& json, QList<DocumentHeader>& out)
     return Verdict::Accept;
 }
 
-Verdict checkRemoval(const std::optional<DocumentHeader>& baseHeader,
+Verdict checkRemoval(const QString& documentId,
+                     const std::optional<DocumentHeader>& baseHeader,
                      const QList<DocumentHeader>& laterHeaders,
                      const Fingerprint& self)
 {
     // With no trusted anchor, a header without this device proves nothing: the
-    // server could have written it.
-    if (!baseHeader.has_value())
+    // server could have written it. verifyChain holds every later header to the
+    // anchor's document, so checking the anchor ties them all to this one.
+    if (!baseHeader.has_value() || baseHeader.value().documentId != documentId)
     {
         return Verdict::ServerFault;
     }
@@ -89,11 +97,12 @@ Verdict checkRemoval(const std::optional<DocumentHeader>& baseHeader,
     return Verdict::ServerFault;
 }
 
-DownloadCheck validateDownload(const std::optional<DocumentHeader>& baseHeader,
+DownloadCheck validateDownload(const QString& documentId,
+                               const std::optional<DocumentHeader>& baseHeader,
                                const QList<DocumentHeader>& laterHeaders,
                                const QByteArray& ciphertext,
                                const Self& self,
-                               int keyGenerationHighWaterMark)
+                               const HighWaterMark& highWaterMark)
 {
     if (laterHeaders.isEmpty())
     {
@@ -103,11 +112,18 @@ DownloadCheck validateDownload(const std::optional<DocumentHeader>& baseHeader,
     const Fingerprint fingerprint = self.fingerprint();
     const DocumentHeader& header = laterHeaders.last();
 
+    // Without a base header nothing else ties the version to this document, and
+    // another ward that also lists this device would pass every check below.
+    if (header.documentId != documentId)
+    {
+        return fault(QObject::tr("The server sent a version of a different document."));
+    }
+
     // The only place removal is concluded.
     const std::optional<RecipientEntry> entry = header.entryFor(fingerprint);
     if (!entry.has_value())
     {
-        const Verdict removal = checkRemoval(baseHeader, laterHeaders, fingerprint);
+        const Verdict removal = checkRemoval(documentId, baseHeader, laterHeaders, fingerprint);
         if (removal == Verdict::Removed)
         {
             return verdictOnly(Verdict::Removed);
@@ -119,14 +135,20 @@ DownloadCheck validateDownload(const std::optional<DocumentHeader>& baseHeader,
     // With a base header the chain must hold from it. Without one, this device can
     // decrypt, so the checks below judge the version directly.
     if (baseHeader.has_value()
-        && DocumentCrypto::verifyChain(baseHeader.value(), laterHeaders, fingerprint)
-               != ChainResult::StillMember)
+        && (baseHeader.value().documentId != documentId
+            || DocumentCrypto::verifyChain(baseHeader.value(), laterHeaders, fingerprint)
+                   != ChainResult::StillMember))
     {
         return fault(QObject::tr("The server's history of who may open this document "
                                  "does not hold."));
     }
 
-    if (!DocumentCrypto::isCoherent(header) || !DocumentCrypto::verifyHeader(header))
+    if (!DocumentCrypto::isCoherent(header))
+    {
+        return fault(QObject::tr("The server's version is not a well-formed header."));
+    }
+
+    if (!DocumentCrypto::verifyHeader(header))
     {
         return fault(QObject::tr("The server's version is not signed by its writer."));
     }
@@ -189,12 +211,12 @@ DownloadCheck validateDownload(const std::optional<DocumentHeader>& baseHeader,
                                  "not on its access list."));
     }
 
-    // A generation below one this device has already seen is an old key being
-    // replayed.
-    if (header.keyGeneration < keyGenerationHighWaterMark)
+    // Below the highest version this device has seen - an older key, or an older
+    // version under the current one - is a version being replayed.
+    if (highWaterMark.isAbove(header))
     {
-        return fault(QObject::tr("The server's version uses an older key than this "
-                                 "device has already seen."));
+        return fault(QObject::tr("The server's version is older than one this device "
+                                 "has already seen."));
     }
 
     DownloadCheck check;

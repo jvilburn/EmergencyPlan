@@ -52,7 +52,7 @@ Note: MuPDF uses `fz_try/fz_catch/fz_always` macros (setjmp/longjmp) for error h
 ### libsodium (document encryption and signing)
 - **Source**: vcpkg (`libsodium`, 1.0.22 or later, pinned in `vcpkg.json`)
 - **Target**: `unofficial-sodium::sodium`; the static port writes `SODIUM_STATIC` into its own `export.h`
-- **Wrapper**: `DocumentCrypto.h/cpp` - every other file reaches libsodium through it, apart from `Pairing.cpp` and the tests
+- **Wrapper**: `DocumentCrypto.h/cpp` - every other file reaches libsodium through it, apart from `CryptoTypes.cpp` (size checks), `Pairing.cpp` (random values and constant-time compare), and the tests
 - `DocumentCrypto::initialise()` runs in `main()` and in the test runner before any other call
 
 ### qtkeychain (device keys in the OS keychain)

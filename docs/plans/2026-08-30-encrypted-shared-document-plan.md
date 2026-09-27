@@ -180,12 +180,20 @@ Build, run, commit as `refactor: rename product to Ward Planning`.
 >   `NeedsNewerVersion` when any is a later format, so a caller never has to.
 > - `DeviceKeys` lives in `CryptoTypes.h`, shared by `Pairing` and `ServerContract`.
 >   `Pairing::newPairingCode` is the one generator; `FakeServer` issues codes with it.
+>   `Pairing::Responder` and `Pairing::Initiator` are the pure steps of the exchange,
+>   each keeping the first value it reads; the pairing driver (Task 31) feeds them what
+>   the server returns, and `PairingTest` drives them through `FakeServer`'s scripted
+>   reads to show a responder that re-read would be fooled.
+> - `validateDownload` and `checkRemoval` take the document id the local file names,
+>   and `validateDownload` a `HighWaterMark` of key generation and save counter.
+> - `isCoherent` holds the format version, canonical document ids, and a generation
+>   of at least 1, as `parse` does, so the server judges an in-memory header the same.
 > - `ResponseMerge`: a record or task deleted on one side and edited on the other keeps
 >   the edit, matching the response-level rule; a directory changed identically on both
 >   sides is not a conflict.
 > - The save counter is capped at 2^53 - 1, and the server refuses an upload that
 >   raises it by more than 2^20 (`CounterJump`) or comes faster than 600 an hour from
->   one device, so no member can pin it at the cap. `verifyLink` holds
+>   one device, so no single device can pin it at the cap. `verifyLink` holds
 >   `originDocumentId` and `formatVersion` fixed across a link.
 > - Every parser refuses keys it does not know (`StrictJson::hasOnlyKeys`), and a
 >   recipient kind below 1 is `Malformed`.
@@ -936,13 +944,17 @@ a strict server:
 - `POST /documents/{id}/requests` is rate-limited per device key: it is the one write
   open to a non-member
 - every mutating request carries a signature by the calling device's own key, under the
-  `request` tag, over the route, the document id, and the `wp-request` hash of the
-  request's canonical body (`ServerContract::signRequest`); anything else is
+  `request` tag, over the route, the session token, the document id, and the
+  `wp-request` hash of the request's canonical body (`ServerContract::signRequest`), so a
+  captured signature is good only in its own session; anything else is
   `Unauthenticated`. The HTTP adapter (Task 15) sends the signature in a header and the
   server rebuilds the canonical body from the request it parsed
 - an upload that raises the save counter by more than `DocumentHeader::MaxSaveCounterStep`
   over the current version is refused (`CounterJump`), and uploads are limited to 600 an
-  hour per device key, so no member can push the counter to its cap
+  hour per device key, so no single device can push the counter to its cap
+- a device has one access request per document: a new one replaces its earlier
+  request, and a request naming a sealing key already held by a device in the document
+  or in another device's request is `InvalidRequest`
 - an access request's status is readable by the device that posted it through
   `requests/mine`: pending, granted, or withdrawn
 - **two authentication levels**: *device* — a signed challenge proving possession of a key,
@@ -1017,18 +1029,20 @@ namespace Reconcile
     /// Proves removal from headers alone — no payload, so it also serves a key the
     /// server now refuses. Removed only with a baseHeader and a chain that holds and
     /// ends without this identity; otherwise ServerFault.
-    Verdict checkRemoval(const std::optional<DocumentHeader>& baseHeader,
+    Verdict checkRemoval(const QString& documentId,
+                         const std::optional<DocumentHeader>& baseHeader,
                          const QList<DocumentHeader>& laterHeaders,
                          const Fingerprint& self);
 
     /// Decides whether a server version may replace the local file.
     /// baseHeader is the base copy's header — the last version this machine and the
     /// server agreed on — or nullopt when no base copy passes its recorded hash.
-    DownloadCheck validateDownload(const std::optional<DocumentHeader>& baseHeader,
+    DownloadCheck validateDownload(const QString& documentId,
+                                   const std::optional<DocumentHeader>& baseHeader,
                                    const QList<DocumentHeader>& laterHeaders,
                                    const QByteArray& ciphertext,
-                                   const Keypair& self,
-                                   int keyGenerationHighWaterMark);
+                                   const Self& self,
+                                   const HighWaterMark& highWaterMark);
 
 }
 ```
@@ -1054,7 +1068,12 @@ namespace Reconcile
    accepted like any other. A
    payload whose version is newer than this build's is `NeedsNewerVersion`; a payload or
    roster that fails strict parsing is `ServerFault`.
-4. The key generation is at or above `keyGenerationHighWaterMark`.
+4. The version is not below the high-water mark: not a lower key generation, and not
+   a lower save counter in the same generation.
+
+**The document id is checked first,** against the one the local file names: without a
+base header nothing else ties a version to this document, and another ward that also
+lists this device would pass every other check.
 
 **`laterHeaders` is never empty.** It always ends with the header of the downloaded
 version, which `SyncService` fetched in the same snapshot as `ciphertext`. An empty list is

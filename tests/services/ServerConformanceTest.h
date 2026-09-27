@@ -11,7 +11,7 @@
 /// alone.
 ///
 /// Runs against FakeServer in the ordinary suite, and against the real server
-/// over HTTP in the conformance run (Task 15). It therefore uses no fake-only
+/// over HTTP in the conformance run. It therefore uses no fake-only
 /// control, makes a fresh server per test where it can, uses fresh random ids
 /// and keys everywhere so it can share a real server with other runs, and signs
 /// in again after every clock advance rather than assuming how long a session
@@ -88,6 +88,8 @@ private slots:
     // Access requests
     void requestStatusIsReadableByItsDevice();
     void accessRequestsAreRateLimited();
+    void aDeviceHasOneRequestPerDocument();
+    void aRequestCannotClaimAnotherDevicesSealingKey();
     void accessRequestsCarryTheirPairingCodeToMembers();
 
     // Authentication levels

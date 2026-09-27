@@ -17,7 +17,7 @@ void CryptoLinkTest::sodiumIsAtLeastTheFixedRelease()
 void CryptoLinkTest::keychainLinks()
 {
     // Constructing a job reaches into the library, so a missing or mis-exported
-    // qtkeychain fails here at link time rather than in Task 7.
+    // qtkeychain fails here, at link time, before any code relies on it.
     QKeychain::ReadPasswordJob job("Ward Planning Tests");
     job.setKey("link check");
     QCOMPARE(job.key(), QString("link check"));

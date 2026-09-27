@@ -80,6 +80,7 @@ void FakeServerTest::aWithheldHeaderIsLeftOutOfTheChain()
     const Result<HeaderChain> chain = server.headers(w.aliceSession, w.id, 1, w.version);
     QVERIFY(chain.ok());
     QCOMPARE(chain.value->headers.size(), qsizetype(1));
+    QVERIFY(chain.value->headers.first() == w.current);
     QVERIFY(!(chain.value->headers.first() == grant));
 }
 
@@ -115,8 +116,8 @@ void FakeServerTest::scriptedPairingReadsAreServedInOrder()
 
     const QString code = signedStartPairing(server, phoneSession.value(), "Phone", "the real commitment").value.value();
 
-    // What Task 31's relay test needs: one commitment before the responder posts,
-    // another after.
+    // What a relay test needs: one commitment before the responder posts, another
+    // after.
     PairingState first;
     first.code = code;
     first.commitment = "first commitment";

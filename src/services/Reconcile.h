@@ -38,6 +38,17 @@ struct DownloadCheck
     std::optional<Document> document;       ///< set on Accept
 };
 
+/// The highest version this device has seen of one document, kept by the device.
+/// A version below it is an older one being replayed.
+struct HighWaterMark
+{
+    int keyGeneration = 0;
+    qint64 saveCounter = 0;
+
+    /// Lower on generation, or the same generation and lower on the save counter.
+    bool isAbove(const DocumentHeader& header) const;
+};
+
 /// This device, as a download is checked against it.
 struct Self
 {
@@ -53,9 +64,10 @@ struct Self
 Verdict readHeaders(const QList<QJsonObject>& json, QList<DocumentHeader>& out);
 
 /// Proves removal from headers alone - no payload, so it also serves a key the
-/// server now refuses. Removed only with a baseHeader and a chain that holds and
-/// ends without this device; otherwise ServerFault.
-Verdict checkRemoval(const std::optional<DocumentHeader>& baseHeader,
+/// server now refuses. Removed only with a baseHeader of documentId and a chain
+/// that holds and ends without this device; otherwise ServerFault.
+Verdict checkRemoval(const QString& documentId,
+                     const std::optional<DocumentHeader>& baseHeader,
                      const QList<DocumentHeader>& laterHeaders,
                      const Fingerprint& self);
 
@@ -66,12 +78,16 @@ Verdict checkRemoval(const std::optional<DocumentHeader>& baseHeader,
 /// saw and so are not in its chain. nullopt when no base copy passes its recorded
 /// hash.
 ///
+/// documentId is the document being reconciled, as the local file names it; a
+/// version of any other document is ServerFault, with or without a base header.
+///
 /// laterHeaders ends with the header of the downloaded version, fetched in the
 /// same snapshot as ciphertext; empty is ServerFault.
-DownloadCheck validateDownload(const std::optional<DocumentHeader>& baseHeader,
+DownloadCheck validateDownload(const QString& documentId,
+                               const std::optional<DocumentHeader>& baseHeader,
                                const QList<DocumentHeader>& laterHeaders,
                                const QByteArray& ciphertext,
                                const Self& self,
-                               int keyGenerationHighWaterMark);
+                               const HighWaterMark& highWaterMark);
 
 } // namespace Reconcile

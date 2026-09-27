@@ -78,7 +78,7 @@ bool AccessRoster::addPerson(const RosterPerson& person)
 
 bool AccessRoster::removePerson(const MemberId& member)
 {
-    return m_people.remove(member.toHex()) > 0;
+    return m_people.remove(member.toHex());
 }
 
 bool AccessRoster::contains(const MemberId& member) const

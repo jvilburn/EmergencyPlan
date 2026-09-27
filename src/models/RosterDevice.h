@@ -31,7 +31,7 @@ public:
     /// revocation needs the roster: you cannot seal to a fingerprint.
     ///
     /// Computed once when the device is made or read, so lookups, sorting and
-    /// equality never hash — and a model's equality never calls into libsodium.
+    /// equality never hash - and a model's equality never calls into libsodium.
     const Fingerprint& fingerprint() const { return m_fingerprint; }
 
     /// Exactly what fromJson requires, so anything valid here reads back from

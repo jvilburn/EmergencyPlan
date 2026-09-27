@@ -8,7 +8,6 @@
 namespace
 {
 
-constexpr int NonceSize = 32;
 constexpr int CommitmentSize = 32;
 
 /// The first eight bytes of a 16-byte digest - BLAKE2b's shortest - read as one
@@ -70,6 +69,11 @@ QByteArray newNonce()
 
 QByteArray commit(const DeviceKeys& initiator, const QByteArray& nonce)
 {
+    if (!initiator.isValid() || nonce.size() != NonceSize)
+    {
+        return QByteArray();
+    }
+
     CanonicalBytes writer;
     appendKeys(writer, initiator);
     writer.appendBytes(nonce);
@@ -80,6 +84,7 @@ bool revealMatches(const QByteArray& commitment,
                    const DeviceKeys& initiator,
                    const QByteArray& nonce)
 {
+    // commit is empty for invalid keys or a wrong-sized nonce, so those never match.
     const QByteArray expected = commit(initiator, nonce);
     return commitment.size() == CommitmentSize && expected.size() == CommitmentSize
         && sodium_memcmp(commitment.constData(), expected.constData(), CommitmentSize) == 0;
@@ -123,6 +128,69 @@ bool handoverVerifies(const Handover& handover,
                                   handoverMessage(handover, nonce),
                                   handover.signature,
                                   responderVerifyKey);
+}
+
+Responder::Responder(const DeviceKeys& self)
+    : m_self(self)
+{
+}
+
+bool Responder::keepCommitment(const QByteArray& commitment)
+{
+    if (m_commitment.has_value())
+    {
+        return false;
+    }
+
+    m_commitment = commitment;
+    return true;
+}
+
+std::optional<QString> Responder::acceptReveal(const DeviceKeys& initiator, const QByteArray& nonce) const
+{
+    if (!m_commitment.has_value() || !revealMatches(m_commitment.value(), initiator, nonce))
+    {
+        return std::nullopt;
+    }
+
+    return comparisonNumber(initiator, m_self, nonce);
+}
+
+Initiator::Initiator(const DeviceKeys& self)
+    : m_self(self)
+    , m_nonce(newNonce())
+{
+}
+
+QByteArray Initiator::commitment() const
+{
+    return commit(m_self, m_nonce);
+}
+
+bool Initiator::keepResponder(const DeviceKeys& responder)
+{
+    if (m_responder.has_value())
+    {
+        return false;
+    }
+
+    m_responder = responder;
+    return true;
+}
+
+std::optional<QByteArray> Initiator::reveal() const
+{
+    return m_responder.has_value() ? std::optional<QByteArray>(m_nonce) : std::nullopt;
+}
+
+std::optional<QString> Initiator::comparisonNumber() const
+{
+    if (!m_responder.has_value())
+    {
+        return std::nullopt;
+    }
+
+    return Pairing::comparisonNumber(m_self, m_responder.value(), m_nonce);
 }
 
 } // namespace Pairing

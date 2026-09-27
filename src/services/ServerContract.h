@@ -151,11 +151,11 @@ struct PairingState
 // A session token proves a device signed in; every mutating call is also signed,
 // under SignatureTag::Request, with the device's own key. A token taken from a
 // device is then not enough to change anything, and a captured signature cannot be
-// replayed against another document or another endpoint.
+// replayed against another document, another endpoint, or after its session ends.
 //
-// The signed message is the endpoint's route, the document id (empty for a
-// pairing, which belongs to no document), and a BLAKE2b of the call's canonical
-// body under HashDomain::Request. The bodies below are part of the protocol: the
+// The signed message is the endpoint's route, the session token, the document id
+// (empty for a pairing, which belongs to no document), and a BLAKE2b of the call's
+// canonical body under HashDomain::Request. The bodies below are part of the protocol: the
 // companion server rebuilds them from the request it received.
 
 enum class Endpoint
@@ -185,11 +185,13 @@ QByteArray revealPairingBody(const QString& code, const DeviceKeys& initiator, c
 QByteArray handOverBody(const QString& code, const QByteArray& handover);
 
 QByteArray signRequest(Endpoint endpoint,
+                       const Session& session,
                        const QString& documentId,
                        const QByteArray& body,
                        const SigningKey& key);
 
 bool requestVerifies(Endpoint endpoint,
+                     const Session& session,
                      const QString& documentId,
                      const QByteArray& body,
                      const QByteArray& signature,

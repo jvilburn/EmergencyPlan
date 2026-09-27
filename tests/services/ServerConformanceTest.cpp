@@ -2,6 +2,7 @@
 
 #include "ChainTestSupport.h"
 #include "DocumentCrypto.h"
+#include "Pairing.h"
 #include "ServerTestSupport.h"
 
 #include <QtTest>
@@ -16,16 +17,20 @@ namespace
 constexpr qint64 OneHour = 60 * 60;
 constexpr qint64 OneDay = 24 * OneHour;
 
+/// A request with an empty body - taking or releasing the lease - signed by this
+/// device in this session, for this endpoint and document, for tests that vary
+/// one of them.
+QByteArray emptyBodySignature(const TestDevice& device,
+                              const Session& session,
+                              Endpoint endpoint,
+                              const QString& documentId)
+{
+    return signRequest(endpoint, session, documentId, emptyBody(), device.signing.signingKey);
+}
+
 /// For a call the test expects to succeed. A failed call is recorded against the
 /// running test and yields an empty value, so against a real server one failure
 /// ends one test rather than throwing out of the whole runner.
-/// A request with an empty body - taking or releasing the lease - signed by this
-/// device for this endpoint and document, for tests that vary one of the three.
-QByteArray emptyBodySignature(const TestDevice& device, Endpoint endpoint, const QString& documentId)
-{
-    return signRequest(endpoint, documentId, emptyBody(), device.signing.signingKey);
-}
-
 template<typename T>
 T valueOf(const Result<T>& result, const char* file, int line)
 {
@@ -128,19 +133,27 @@ void ServerConformanceTest::aMutatingRequestMustBeSignedByTheCallingDevice()
 
     // Signed, but by another member: a token taken from Alice is not enough even
     // with a key of Bob's.
-    const QByteArray byBob = emptyBodySignature(w.bob, Endpoint::TakeLease, w.id);
+    const QByteArray byBob = emptyBodySignature(w.bob, w.aliceSession, Endpoint::TakeLease, w.id);
     QCOMPARE(server().takeLease(w.aliceSession, w.id, byBob).error, ServerError::Unauthenticated);
 
     // Alice's own signature, captured from a request to another ward.
-    const QByteArray otherWard = emptyBodySignature(w.alice, Endpoint::TakeLease, newDocumentId());
+    const QByteArray otherWard =
+        emptyBodySignature(w.alice, w.aliceSession, Endpoint::TakeLease, newDocumentId());
     QCOMPARE(server().takeLease(w.aliceSession, w.id, otherWard).error, ServerError::Unauthenticated);
 
     // And from another endpoint with the same empty body.
-    const QByteArray otherEndpoint = emptyBodySignature(w.alice, Endpoint::ReleaseLease, w.id);
+    const QByteArray otherEndpoint = emptyBodySignature(w.alice, w.aliceSession, Endpoint::ReleaseLease, w.id);
     QCOMPARE(server().takeLease(w.aliceSession, w.id, otherEndpoint).error, ServerError::Unauthenticated);
 
+    // And from another session of Alice's own: a captured signature is good only
+    // in the session it was made in.
+    const std::optional<Session> another = signIn(server(), w.alice);
+    QVERIFY(another.has_value());
+    const QByteArray otherSession = emptyBodySignature(w.alice, another.value(), Endpoint::TakeLease, w.id);
+    QCOMPARE(server().takeLease(w.aliceSession, w.id, otherSession).error, ServerError::Unauthenticated);
+
     // The control: signed by Alice, for this ward and this endpoint.
-    const QByteArray byAlice = emptyBodySignature(w.alice, Endpoint::TakeLease, w.id);
+    const QByteArray byAlice = emptyBodySignature(w.alice, w.aliceSession, Endpoint::TakeLease, w.id);
     QVERIFY(server().takeLease(w.aliceSession, w.id, byAlice).ok());
 }
 
@@ -152,6 +165,7 @@ void ServerConformanceTest::aRequestSignatureCoversItsBody()
 
     const Upload upload = sealedUpload(nextHeader(w, {w.alice, w.bob, w.carol}, w.alice), w.alice);
     const QByteArray signature = signRequest(Endpoint::Upload,
+                                             w.aliceSession,
                                              w.id,
                                              uploadBody(w.version, upload),
                                              w.alice.signing.signingKey);
@@ -273,6 +287,12 @@ void ServerConformanceTest::aFirstHeaderIsWrittenAndSignedByTheRegisteringDevice
     const Upload strangerWrote =
         sealedUpload(buildHeader(newDocumentId(), 1, 1, {alice}, bob, key), bob);
     QCOMPARE(signedRegisterDocument(server(), bobSession.value(), strangerWrote).error,
+             ServerError::ChainRefused);
+
+    // A first header in generation 0, which no reader would accept.
+    const Upload generationZero =
+        sealedUpload(buildHeader(newDocumentId(), 0, 1, {alice}, alice, key), alice);
+    QCOMPARE(signedRegisterDocument(server(), aliceSession.value(), generationZero).error,
              ServerError::ChainRefused);
 
     // Alice's valid first header, registered by Bob.
@@ -767,7 +787,7 @@ void ServerConformanceTest::anUnfinishedPairingPermitsNothing()
     QVERIFY(code.ok());
     QVERIFY(server().pairing(w.aliceSession, code.value.value()).ok());
     QVERIFY(signedRespondToPairing(server(), w.aliceSession, code.value.value(), keysOf(w.alice)).ok());
-    QVERIFY(signedRevealPairing(server(), phoneSession.value(), code.value.value(), keysOf(alicePhone), "a nonce").ok());
+    QVERIFY(signedRevealPairing(server(), phoneSession.value(), code.value.value(), keysOf(alicePhone), Pairing::newNonce()).ok());
 
     QCOMPARE(publish(server(), w, w.aliceSession, w.alice, nextHeader(w, {w.alice, alicePhone, w.bob, w.carol}, w.alice)),
              ServerError::DeviceNotInvited);
@@ -962,6 +982,63 @@ void ServerConformanceTest::accessRequestsAreRateLimited()
     QVERIFY(limited);
 }
 
+void ServerConformanceTest::aDeviceHasOneRequestPerDocument()
+{
+    std::optional<SharedDocument> ward = wardOfThree(server());
+    QVERIFY(ward.has_value());
+    SharedDocument& w = ward.value();
+
+    // Dave asks twice, naming a different sealing key the second time. The later
+    // request replaces the earlier, so members see one and Dave's status is the
+    // one he asked last.
+    const TestDevice dave = newPerson();
+    const std::optional<Session> daveSession = signIn(server(), dave);
+    QVERIFY(daveSession.has_value());
+    QVERIFY(signedRequestAccess(server(), daveSession.value(), w.id, requestFor(dave, "")).ok());
+
+    TestDevice daveRekeyed = dave;
+    daveRekeyed.sealing = DocumentCrypto::generateKeypair();
+    QVERIFY(signedRequestAccess(server(), daveSession.value(), w.id, requestFor(daveRekeyed, "")).ok());
+
+    const Result<QList<AccessRequest>> requests = server().accessRequests(w.aliceSession, w.id);
+    QVERIFY(requests.ok());
+    QCOMPARE(requests.value->size(), qsizetype(1));
+    QVERIFY(requests.value->first().device.fingerprint() == daveRekeyed.fingerprint());
+
+    // Granting the earlier key finds no request for it.
+    QCOMPARE(publish(server(), w, w.aliceSession, w.alice, nextHeader(w, {w.alice, w.bob, w.carol, dave}, w.alice)),
+             ServerError::DeviceNotInvited);
+}
+
+void ServerConformanceTest::aRequestCannotClaimAnotherDevicesSealingKey()
+{
+    std::optional<SharedDocument> ward = wardOfThree(server());
+    QVERIFY(ward.has_value());
+    SharedDocument& w = ward.value();
+
+    const TestDevice dave = newPerson();
+    const TestDevice eve = newPerson();
+    const std::optional<Session> daveSession = signIn(server(), dave);
+    const std::optional<Session> eveSession = signIn(server(), eve);
+    QVERIFY(daveSession.has_value() && eveSession.has_value());
+
+    // Eve's own verify key with Bob's sealing key: Bob is in the ward.
+    TestDevice eveWithBobsKey = eve;
+    eveWithBobsKey.sealing = w.bob.sealing;
+    QCOMPARE(signedRequestAccess(server(), eveSession.value(), w.id, requestFor(eveWithBobsKey, "")).error,
+             ServerError::InvalidRequest);
+
+    // Or Dave's, from his pending request.
+    QVERIFY(signedRequestAccess(server(), daveSession.value(), w.id, requestFor(dave, "")).ok());
+    TestDevice eveWithDavesKey = eve;
+    eveWithDavesKey.sealing = dave.sealing;
+    QCOMPARE(signedRequestAccess(server(), eveSession.value(), w.id, requestFor(eveWithDavesKey, "")).error,
+             ServerError::InvalidRequest);
+
+    // Her own key goes through.
+    QVERIFY(signedRequestAccess(server(), eveSession.value(), w.id, requestFor(eve, "")).ok());
+}
+
 void ServerConformanceTest::accessRequestsCarryTheirPairingCodeToMembers()
 {
     std::optional<SharedDocument> ward = wardOfThree(server());
@@ -1051,7 +1128,7 @@ void ServerConformanceTest::pairingStepsAreWrittenOnceAndInOrder()
 
     // The initiator reveals only once it holds the responder's keys, and the
     // responder hands over only once it has checked the reveal.
-    QCOMPARE(signedRevealPairing(server(), phoneSession.value(), code, keysOf(phone), "a nonce").error,
+    QCOMPARE(signedRevealPairing(server(), phoneSession.value(), code, keysOf(phone), Pairing::newNonce()).error,
              ServerError::OutOfOrder);
 
     QVERIFY(signedRespondToPairing(server(), w.aliceSession, code, keysOf(w.alice)).ok());
@@ -1060,8 +1137,8 @@ void ServerConformanceTest::pairingStepsAreWrittenOnceAndInOrder()
 
     QCOMPARE(signedHandOver(server(), w.aliceSession, code, "a signed handover").error, ServerError::OutOfOrder);
 
-    QVERIFY(signedRevealPairing(server(), phoneSession.value(), code, keysOf(phone), "a nonce").ok());
-    QCOMPARE(signedRevealPairing(server(), phoneSession.value(), code, keysOf(phone), "another nonce").error,
+    QVERIFY(signedRevealPairing(server(), phoneSession.value(), code, keysOf(phone), Pairing::newNonce()).ok());
+    QCOMPARE(signedRevealPairing(server(), phoneSession.value(), code, keysOf(phone), Pairing::newNonce()).error,
              ServerError::AlreadyWritten);
 
     QVERIFY(signedHandOver(server(), w.aliceSession, code, "a signed handover").ok());
@@ -1087,7 +1164,7 @@ void ServerConformanceTest::pairingKeysMustBeTheCallersOwn()
     QVERIFY(signedRespondToPairing(server(), w.aliceSession, code, keysOf(w.alice)).ok());
 
     const TestDevice other = newPerson();
-    QCOMPARE(signedRevealPairing(server(), phoneSession.value(), code, keysOf(other), "a nonce").error,
+    QCOMPARE(signedRevealPairing(server(), phoneSession.value(), code, keysOf(other), Pairing::newNonce()).error,
              ServerError::InvalidRequest);
 
     // A member cannot pair with itself either.

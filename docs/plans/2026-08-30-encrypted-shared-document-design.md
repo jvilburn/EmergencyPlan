@@ -610,10 +610,10 @@ current header, and every other document endpoint requires it.
 **Authentication.** The client fetches a challenge, signs it under the `auth` tag with
 its Ed25519 key, and receives a short-lived token; every mutating request is
 additionally signed under the `request` tag, with the device's own key, over the
-endpoint's route, the document id (empty for a pairing), and a `wp-request` BLAKE2b of
-the request's canonical body. A token taken from a device is then not enough to change
-anything, and a captured signature cannot be replayed against a different document or
-a different endpoint. The canonical bodies are part of the protocol
+endpoint's route, the session token, the document id (empty for a pairing), and a
+`wp-request` BLAKE2b of the request's canonical body. A token taken from a device is
+then not enough to change anything, and a captured signature cannot be replayed against
+a different document, a different endpoint, or in another session. The canonical bodies are part of the protocol
 (`ServerContract.cpp`); an upload's body is its base version and its header's signed
 bytes and signature, which bind the blob through the payload hash. Posting an access request is the only write open to a non-member — by
 definition, since it is how someone asks to become one — and it still carries device

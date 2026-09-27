@@ -11,7 +11,7 @@
 ///
 /// The header is the start of a write, not a finished one. Its recipients, admin
 /// list, key generation, lastWriter, and writer keys are set. The nonce, write
-/// time, payload hash, and signature are cleared — the save path must produce each
+/// time, payload hash, and signature are cleared - the save path must produce each
 /// of them afresh, and a save path that forgets one fails on it rather than
 /// quietly reusing the previous write's value. For the nonce that would be
 /// catastrophic. The save counter is the previous write's; the save path advances
@@ -25,8 +25,8 @@ struct AccessChange
 
 /// Membership changes as pure functions over a header and its roster.
 ///
-/// Every operation takes the writer — the device that will sign the resulting
-/// version — and acts as that device's person. Tying a change to its signer is
+/// Every operation takes the writer - the device that will sign the resulting
+/// version - and acts as that device's person. Tying a change to its signer is
 /// what lets each operation refuse everything the membership chain would refuse:
 /// an operation that returns a change has produced one that, finished and signed
 /// by that writer, links.
@@ -56,8 +56,8 @@ public:
                                              const RosterPerson& newPerson);
 
     /// Adds a new device under the writer's own person, whatever their role. Data
-    /// key and generation unchanged. Refused for a device already on the roster —
-    /// renaming is not linking — for one sharing a key with a device already here,
+    /// key and generation unchanged. Refused for a device already on the roster -
+    /// renaming is not linking - for one sharing a key with a device already here,
     /// and for one that would not read back exactly as written.
     static std::optional<AccessChange> linkDevice(const DocumentHeader& header,
                                                   const AccessRoster& roster,
@@ -66,7 +66,7 @@ public:
                                                   const RosterDevice& newDevice);
 
     /// Drops one device and rotates the key, so it reads nothing written
-    /// afterwards: one of the writer's own, or — when the writer is an admin —
+    /// afterwards: one of the writer's own, or - when the writer is an admin -
     /// anyone's, such as a phone reported stolen. Refused for the writing device
     /// itself, since a version's writer is among its recipients, and for a
     /// person's last device, which is removing the person.
@@ -76,7 +76,7 @@ public:
                                                     const Fingerprint& device);
 
     /// Removes a person and every one of their devices, and rotates the key. The
-    /// writer's person is an admin and is not the target — so an admin always
+    /// writer's person is an admin and is not the target - so an admin always
     /// remains. Another admin may be removed this way.
     static std::optional<AccessChange> remove(const DocumentHeader& header,
                                               const AccessRoster& roster,
@@ -113,7 +113,7 @@ public:
     /// True only when every recipient entry has a roster device with the same
     /// fingerprint, member id, and keys, every roster device has exactly one entry,
     /// and the header's admin list is exactly the roster's admins. The one agreement
-    /// the server cannot check, since it never sees the roster — so every open and
+    /// the server cannot check, since it never sees the roster - so every open and
     /// every download checks it, and a version that fails is refused.
     static bool headerMatchesRoster(const DocumentHeader& header, const AccessRoster& roster);
 };

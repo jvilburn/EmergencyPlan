@@ -1,6 +1,7 @@
 #include "ServerTestSupport.h"
 
 #include "DocumentCrypto.h"
+#include "Pairing.h"
 
 #include <QHash>
 
@@ -20,7 +21,8 @@ QHash<QString, TestDevice>& signers()
 
 QByteArray signAs(const Session& session, Endpoint endpoint, const QString& documentId, const QByteArray& body)
 {
-    return signRequest(endpoint, documentId, body, ServerTestSupport::signerOf(session).signing.signingKey);
+    const SigningKey& key = ServerTestSupport::signerOf(session).signing.signingKey;
+    return signRequest(endpoint, session, documentId, body, key);
 }
 
 } // namespace
@@ -329,7 +331,7 @@ bool completePairing(ServerApi& server,
 
     return server.pairing(responderSession, code.value.value()).ok()
         && signedRespondToPairing(server, responderSession, code.value.value(), keysOf(responder)).ok()
-        && signedRevealPairing(server, initiatorSession, code.value.value(), keysOf(initiator), "a nonce")
+        && signedRevealPairing(server, initiatorSession, code.value.value(), keysOf(initiator), Pairing::newNonce())
                .ok()
         && signedHandOver(server, responderSession, code.value.value(), "a signed handover").ok();
 }

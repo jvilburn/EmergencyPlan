@@ -1,11 +1,17 @@
 #include "PairingTest.h"
 
 #include "DocumentCrypto.h"
+#include "FakeServer.h"
 #include "Pairing.h"
+#include "ServerTestSupport.h"
 
 #include <QRegularExpression>
 #include <QSet>
 #include <QtTest>
+
+using namespace ChainTestSupport;
+using namespace ServerContract;
+using namespace ServerTestSupport;
 
 namespace
 {
@@ -26,13 +32,6 @@ Device newDevice()
     device.keys.verifyKey = signing.verifyKey;
     device.signingKey = signing.signingKey;
     return device;
-}
-
-MemberId newMember()
-{
-    MemberId member;
-    member.bytes = DocumentCrypto::generateDataKey().bytes.left(MemberId::Size);
-    return member;
 }
 
 Pairing::Handover signedHandover(const Device& responder, const QByteArray& nonce)
@@ -222,27 +221,99 @@ void PairingTest::aRelaySwappingKeysAfterCommitmentCannotPassTheReveal()
             != Pairing::comparisonNumber(initiator.keys, responder.keys, nonce));
 }
 
-void PairingTest::theResponderIsSafeOnlyBecauseItKeepsTheFirstCommitment()
+void PairingTest::theResponderKeepsTheFirstCommitmentItReads()
+{
+    FakeServer server;
+    std::optional<SharedDocument> ward = wardOfThree(server);
+    QVERIFY(ward.has_value());
+    SharedDocument& w = ward.value();
+
+    // Alice's new phone starts a pairing; Alice's laptop responds.
+    const TestDevice phone = newDeviceFor(w.alice.member);
+    const std::optional<Session> phoneSession = signIn(server, phone);
+    QVERIFY(phoneSession.has_value());
+    Pairing::Initiator initiator(keysOf(phone));
+    const Result<QString> code =
+        signedStartPairing(server, phoneSession.value(), "Phone", initiator.commitment());
+    QVERIFY(code.ok());
+
+    // A relay serves the real commitment until the responder posts its keys, then
+    // a commitment-and-reveal pair of its own, self-consistent by construction.
+    const TestDevice relay = newPerson();
+    const QByteArray forgedNonce = Pairing::newNonce();
+    PairingState before;
+    before.code = code.value.value();
+    before.commitment = initiator.commitment();
+    PairingState after = before;
+    after.commitment = Pairing::commit(keysOf(relay), forgedNonce);
+    after.initiator = keysOf(relay);
+    after.nonce = forgedNonce;
+    server.scriptPairingReads(code.value.value(), {before, after});
+
+    // The responder, driven by what the server returns.
+    Pairing::Responder responder(keysOf(w.alice));
+    const PairingState first = server.pairing(w.aliceSession, code.value.value()).value.value();
+    QVERIFY(responder.keepCommitment(first.commitment));
+    QVERIFY(signedRespondToPairing(server, w.aliceSession, code.value.value(), keysOf(w.alice)).ok());
+
+    const PairingState second = server.pairing(w.aliceSession, code.value.value()).value.value();
+    QVERIFY(!responder.keepCommitment(second.commitment));
+    QVERIFY(!responder.acceptReveal(second.initiator.value(), second.nonce).has_value());
+
+    // A responder that took the commitment from the later read would have been
+    // fooled: the ordering, not the maths, is what refuses the relay.
+    Pairing::Responder rereading(keysOf(w.alice));
+    QVERIFY(rereading.keepCommitment(second.commitment));
+    QVERIFY(rereading.acceptReveal(second.initiator.value(), second.nonce).has_value());
+}
+
+void PairingTest::aGenuinePairingShowsTheSameNumberOnBothScreens()
+{
+    const Device phone = newDevice();
+    const Device laptop = newDevice();
+
+    Pairing::Initiator initiator(phone.keys);
+    Pairing::Responder responder(laptop.keys);
+
+    QVERIFY(responder.keepCommitment(initiator.commitment()));
+    QVERIFY(!initiator.reveal().has_value());
+    QVERIFY(!initiator.comparisonNumber().has_value());
+
+    QVERIFY(initiator.keepResponder(laptop.keys));
+    const std::optional<QByteArray> nonce = initiator.reveal();
+    QVERIFY(nonce.has_value());
+
+    const std::optional<QString> shownByLaptop = responder.acceptReveal(phone.keys, nonce.value());
+    QVERIFY(shownByLaptop.has_value());
+    QCOMPARE(shownByLaptop.value(), initiator.comparisonNumber().value());
+}
+
+void PairingTest::theInitiatorKeepsTheFirstResponderKeysItReads()
+{
+    const Device phone = newDevice();
+    const Device laptop = newDevice();
+    const Device relay = newDevice();
+
+    Pairing::Initiator initiator(phone.keys);
+    QVERIFY(initiator.keepResponder(laptop.keys));
+    const QString number = initiator.comparisonNumber().value();
+
+    // Keys offered afterwards change nothing the initiator shows.
+    QVERIFY(!initiator.keepResponder(relay.keys));
+    QCOMPARE(initiator.comparisonNumber().value(), number);
+    QCOMPARE(number, Pairing::comparisonNumber(phone.keys, laptop.keys, initiator.reveal().value()));
+}
+
+void PairingTest::commitRefusesInvalidKeysAndAWrongSizedNonce()
 {
     const Device initiator = newDevice();
-    const Device relay = newDevice();
-    const QByteArray nonce = Pairing::newNonce();
 
-    // Before the responder posts its keys, the relay serves the real commitment.
-    const QByteArray servedFirst = Pairing::commit(initiator.keys, nonce);
+    QVERIFY(Pairing::commit(initiator.keys, QByteArray()).isEmpty());
+    QVERIFY(Pairing::commit(initiator.keys, QByteArray(Pairing::NonceSize - 1, 'x')).isEmpty());
+    QVERIFY(Pairing::commit(DeviceKeys(), Pairing::newNonce()).isEmpty());
 
-    // Afterwards, having seen everything, it serves a commitment-and-reveal pair
-    // of its own choosing, self-consistent by construction.
-    const QByteArray forgedNonce = Pairing::newNonce();
-    const QByteArray servedLater = Pairing::commit(relay.keys, forgedNonce);
-
-    // The responder that kept what it first read refuses the forged reveal.
-    QVERIFY(!Pairing::revealMatches(servedFirst, relay.keys, forgedNonce));
-
-    // A responder that re-read the commitment would accept it. This pins the
-    // ordering rather than the maths: the check is only as good as the bytes it
-    // is made against.
-    QVERIFY(Pairing::revealMatches(servedLater, relay.keys, forgedNonce));
+    // An empty commitment matches nothing, even an equally empty expectation.
+    QVERIFY(!Pairing::revealMatches(QByteArray(), initiator.keys, QByteArray()));
 }
 
 // --- Handover ----------------------------------------------------------------

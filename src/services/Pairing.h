@@ -6,6 +6,8 @@
 #include <QList>
 #include <QString>
 
+#include <optional>
+
 /// Two devices authenticating each other's public keys by comparing a six-digit
 /// number, with the server relaying. Used for linking a device and for in-person
 /// invites. It never carries the data key.
@@ -28,10 +30,13 @@
 namespace Pairing
 {
 
-/// 32 random bytes; the initiator's secret until it reveals.
+constexpr int NonceSize = 32;
+
+/// NonceSize random bytes; the initiator's secret until it reveals.
 QByteArray newNonce();
 
 /// BLAKE2b over the initiator's keys and nonce, under its own personalisation.
+/// Empty for invalid keys or a nonce of any other size, which no reveal matches.
 QByteArray commit(const DeviceKeys& initiator, const QByteArray& nonce);
 
 /// Constant-time. False for any commitment that is not exactly commit(initiator, nonce).
@@ -67,5 +72,51 @@ QByteArray signHandover(const Handover& handover,
 bool handoverVerifies(const Handover& handover,
                       const QByteArray& nonce,
                       const VerifyKey& responderVerifyKey);
+
+/// The existing device's half. It keeps the first commitment it reads and checks
+/// the reveal against that alone.
+class Responder
+{
+public:
+    explicit Responder(const DeviceKeys& self);
+
+    /// Step 2. Kept on the first call; a later call is refused and changes
+    /// nothing, so no value read afterwards can replace it.
+    bool keepCommitment(const QByteArray& commitment);
+
+    /// Step 4. The number to show, or nullopt when nothing was kept or the reveal
+    /// does not match what was.
+    std::optional<QString> acceptReveal(const DeviceKeys& initiator, const QByteArray& nonce) const;
+
+private:
+    DeviceKeys m_self;
+    std::optional<QByteArray> m_commitment;
+};
+
+/// The new device's half. It commits first, keeps the first responder keys it
+/// reads, and reveals only once it has.
+class Initiator
+{
+public:
+    /// With a fresh nonce.
+    explicit Initiator(const DeviceKeys& self);
+
+    /// Step 1.
+    QByteArray commitment() const;
+
+    /// Step 3. Kept on the first call; a later call is refused and changes nothing.
+    bool keepResponder(const DeviceKeys& responder);
+
+    /// The nonce to reveal, only once the responder's keys are kept.
+    std::optional<QByteArray> reveal() const;
+
+    /// Step 5. The number to show, from the responder keys kept.
+    std::optional<QString> comparisonNumber() const;
+
+private:
+    DeviceKeys m_self;
+    QByteArray m_nonce;
+    std::optional<DeviceKeys> m_responder;
+};
 
 } // namespace Pairing

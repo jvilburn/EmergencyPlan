@@ -55,11 +55,13 @@ void appendKeys(CanonicalBytes& writer, const DeviceKeys& keys)
 }
 
 QByteArray requestMessage(ServerContract::Endpoint endpoint,
+                          const ServerContract::Session& session,
                           const QString& documentId,
                           const QByteArray& body)
 {
     CanonicalBytes writer;
     writer.appendText(routeOf(endpoint));
+    writer.appendText(session.token);
     writer.appendText(documentId);
     writer.appendBytes(DocumentCrypto::hash(HashDomain::Request, body, BodyHashSize));
     return writer.bytes();
@@ -143,21 +145,25 @@ QByteArray handOverBody(const QString& code, const QByteArray& handover)
 }
 
 QByteArray signRequest(Endpoint endpoint,
+                       const Session& session,
                        const QString& documentId,
                        const QByteArray& body,
                        const SigningKey& key)
 {
-    return DocumentCrypto::sign(SignatureTag::Request, requestMessage(endpoint, documentId, body), key);
+    return DocumentCrypto::sign(SignatureTag::Request,
+                                requestMessage(endpoint, session, documentId, body),
+                                key);
 }
 
 bool requestVerifies(Endpoint endpoint,
+                     const Session& session,
                      const QString& documentId,
                      const QByteArray& body,
                      const QByteArray& signature,
                      const VerifyKey& key)
 {
     return DocumentCrypto::verify(SignatureTag::Request,
-                                  requestMessage(endpoint, documentId, body),
+                                  requestMessage(endpoint, session, documentId, body),
                                   signature,
                                   key);
 }
