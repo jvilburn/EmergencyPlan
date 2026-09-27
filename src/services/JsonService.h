@@ -15,9 +15,6 @@ struct JsonResult
 class JsonService
 {
 public:
-    // Current file format version
-    static constexpr const char* CurrentVersion = "1.0";
-
     // Load document from file
     static JsonResult loadDocument(const QString& filePath);
 

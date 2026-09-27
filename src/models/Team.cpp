@@ -1,4 +1,5 @@
 #include "Team.h"
+#include "StrictJson.h"
 
 Team Team::create(const QString& name,
                   const QColor& color,
@@ -49,30 +50,55 @@ QJsonObject Team::toJson() const
     return json;
 }
 
-Team Team::fromJson(const QJsonObject& json)
+std::optional<Team> Team::fromJson(const QJsonObject& json)
 {
-    Team team;
-    team.m_id = TeamId::fromString(json["id"].toString());
-    team.m_name = json["name"].toString();
+    if (!StrictJson::hasOnlyKeys(json,
+                                 {QLatin1String("id"),
+                                  QLatin1String("name"),
+                                  QLatin1String("color"),
+                                  QLatin1String("leaderId"),
+                                  QLatin1String("memberIds")}))
+    {
+        return std::nullopt;
+    }
 
+    Team team;
+    if (!StrictJson::readId(json, QLatin1String("id"), team.m_id)
+        || !StrictJson::readString(json, QLatin1String("name"), team.m_name))
+    {
+        return std::nullopt;
+    }
+
+    // Exactly the #rrggbb name QColor writes.
     if (json.contains("color"))
     {
-        team.m_color = QColor(json["color"].toString());
-    }
-
-    QString leaderStr = json["leaderId"].toString();
-    if (!leaderStr.isEmpty())
-    {
-        team.m_leaderId = PersonId::fromString(leaderStr);
-    }
-
-    if (json.contains("memberIds"))
-    {
-        QJsonArray memberIdsArray = json["memberIds"].toArray();
-        for (const QJsonValue& value : memberIdsArray)
+        QString color;
+        if (!StrictJson::readNonEmptyString(json, QLatin1String("color"), color))
         {
-            team.m_memberIds.insert(PersonId::fromString(value.toString()));
+            return std::nullopt;
         }
+        team.m_color = QColor(color);
+        if (!team.m_color.isValid() || team.m_color.name() != color)
+        {
+            return std::nullopt;
+        }
+    }
+
+    if (json.contains("leaderId"))
+    {
+        PersonId leader;
+        if (!StrictJson::readId(json, QLatin1String("leaderId"), leader))
+        {
+            return std::nullopt;
+        }
+        team.m_leaderId = leader;
+    }
+
+    if (json.contains("memberIds")
+        && (!StrictJson::readIdSet(json, QLatin1String("memberIds"), team.m_memberIds)
+            || team.m_memberIds.isEmpty()))
+    {
+        return std::nullopt;
     }
 
     return team;

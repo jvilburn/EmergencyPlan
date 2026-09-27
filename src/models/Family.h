@@ -65,7 +65,10 @@ public:
 
     // JSON serialization
     QJsonObject toJson() const;
-    static Family fromJson(const QJsonObject& json);
+    /// Reads exactly what toJson writes: nullopt for a missing required field, a
+    /// field of the wrong type or form, a field toJson never writes, or any element
+    /// of a collection that fails the same way.
+    static std::optional<Family> fromJson(const QJsonObject& json);
 
     // Value-based equality
     bool operator==(const Family& other) const;

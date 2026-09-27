@@ -1,4 +1,5 @@
 #include "Birthday.h"
+#include "StrictJson.h"
 
 #include <QDate>
 #include <QLocale>
@@ -118,21 +119,34 @@ QJsonObject Birthday::toJson() const
     return json;
 }
 
-Birthday Birthday::fromJson(const QJsonObject& json)
+std::optional<Birthday> Birthday::fromJson(const QJsonObject& json)
 {
+    // toJson is written only for a birthday with a date, so an empty object is
+    // never one of its outputs.
+    if (json.isEmpty()
+        || !StrictJson::hasOnlyKeys(json,
+                                    {QLatin1String("year"), QLatin1String("month"), QLatin1String("day")}))
+    {
+        return std::nullopt;
+    }
+
     Birthday birthday;
-    if (json.contains("year"))
+    int value = 0;
+    for (const auto& [key, field] : {std::pair{QLatin1String("year"), &birthday.m_year},
+                                     std::pair{QLatin1String("month"), &birthday.m_month},
+                                     std::pair{QLatin1String("day"), &birthday.m_day}})
     {
-        birthday.m_year = json["year"].toInt();
+        if (!json.contains(key))
+        {
+            continue;
+        }
+        if (!StrictJson::readInt(json, key, value))
+        {
+            return std::nullopt;
+        }
+        *field = value;
     }
-    if (json.contains("month"))
-    {
-        birthday.m_month = json["month"].toInt();
-    }
-    if (json.contains("day"))
-    {
-        birthday.m_day = json["day"].toInt();
-    }
+
     return birthday;
 }
 

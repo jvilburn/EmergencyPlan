@@ -1489,6 +1489,22 @@ user, not worked around in a later task. Commit as `build: add libsodium and qtk
 
 ### Task 4a: Strict model parsers
 
+> **Done**, with these differences from the text below:
+> - `StrictJson` holds the shared readers (required and optional fields, range-checked
+>   integers, exact times and dates, id sets); `DocumentHeader` uses them too.
+> - Beyond the plan: an optional field present but empty is refused, since the writer
+>   omits it when empty; a person may belong to one family only; a ministering district
+>   may name only groups of its own organisation; an address line is refused unless
+>   `Address` would keep it unchanged.
+> - Emergency-response times are written with milliseconds (`StrictJson::writeTime`), so
+>   a record read back from disk equals the one in memory, which `ResponseMerge` relies
+>   on when it compares against a base copy.
+> - `JsonService` reads through `Document::parse` and writes the bare payload, without
+>   its former `version` and `metadata` fields. Until the roster bootstrap exists, the
+>   app cannot reopen what it saves, because the roster is empty.
+> - The tests are two suites, `ModelParsersTest` (every type, one generic check plus
+>   value-level rules) and `DocumentParseTest`, over shared samples in `ModelSamples`.
+
 **Every model type gets a strict reader, so `Document::parse` refuses a damaged payload
 rather than loading part of it.** Task 1.6 made the payload version and the access
 roster strict; the directory, ministering, and emergency collections still go through
@@ -1835,10 +1851,6 @@ Commit as `feat: device identity service`.
 
 ### Task 9: On-disk format
 
-**The payload carries one version.** `Document::toJson` writes `payloadVersion`, which
-`Document::parse` reads strictly; `JsonService` still adds its own `version` and
-`metadata` for the unencrypted 1.0 files. The new format drops `JsonService`'s `version`
-and reads `payloadVersion` alone.
 
 **Files:** `src/services/JsonService.h/.cpp`, **`src/services/DocumentManager.cpp:148,185,361`**,
 `src/models/Document.h/.cpp`, `tests/services/JsonServiceTest.h/.cpp`

@@ -12,6 +12,9 @@ enable_testing()
 set(TEST_SOURCES
     TestMain.cpp
     models/AccessRosterTest.cpp
+    models/DocumentParseTest.cpp
+    models/ModelParsersTest.cpp
+    models/ModelSamples.cpp
     services/AccessControlTest.cpp
     services/ChainTestSupport.cpp
     services/CryptoLinkTest.cpp

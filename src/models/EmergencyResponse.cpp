@@ -1,5 +1,7 @@
 #include "EmergencyResponse.h"
 
+#include "StrictJson.h"
+
 #include <QJsonArray>
 
 // === Helper functions for enum serialization ===
@@ -22,25 +24,17 @@ static QString contactMethodToString(ContactMethod method)
     return "phone";
 }
 
-static ContactMethod contactMethodFromString(const QString& str)
+static std::optional<ContactMethod> contactMethodFromString(const QString& str)
 {
-    if (str == "text")
+    for (const ContactMethod method :
+         {ContactMethod::Phone, ContactMethod::Text, ContactMethod::Email, ContactMethod::Visit, ContactMethod::Other})
     {
-        return ContactMethod::Text;
+        if (str == contactMethodToString(method))
+        {
+            return method;
+        }
     }
-    if (str == "email")
-    {
-        return ContactMethod::Email;
-    }
-    if (str == "visit")
-    {
-        return ContactMethod::Visit;
-    }
-    if (str == "other")
-    {
-        return ContactMethod::Other;
-    }
-    return ContactMethod::Phone;
+    return std::nullopt;
 }
 
 static QString contactStatusToString(ContactStatus status)
@@ -57,17 +51,40 @@ static QString contactStatusToString(ContactStatus status)
     return "notContacted";
 }
 
-static ContactStatus contactStatusFromString(const QString& str)
+static std::optional<ContactStatus> contactStatusFromString(const QString& str)
 {
-    if (str == "ok")
+    for (const ContactStatus status :
+         {ContactStatus::NotContacted, ContactStatus::OK, ContactStatus::UnableToReach})
     {
-        return ContactStatus::OK;
+        if (str == contactStatusToString(status))
+        {
+            return status;
+        }
     }
-    if (str == "unableToReach")
+    return std::nullopt;
+}
+
+/// A method field read strictly.
+static bool readMethod(const QJsonObject& json, ContactMethod& out)
+{
+    QString text;
+    if (!StrictJson::readString(json, QLatin1String("method"), text))
     {
-        return ContactStatus::UnableToReach;
+        return false;
     }
-    return ContactStatus::NotContacted;
+    const std::optional<ContactMethod> method = contactMethodFromString(text);
+    if (!method.has_value())
+    {
+        return false;
+    }
+    out = method.value();
+    return true;
+}
+
+/// An optional notes field: written only when not empty.
+static bool readNotes(const QJsonObject& json, QLatin1String key, QString& out)
+{
+    return !json.contains(key) || StrictJson::readNonEmptyString(json, key, out);
 }
 
 // === TaskNotification ===
@@ -85,7 +102,7 @@ QJsonObject TaskNotification::toJson() const
 {
     QJsonObject json;
     json["method"] = contactMethodToString(m_method);
-    json["timestamp"] = m_timestamp.toString(Qt::ISODate);
+    json["timestamp"] = StrictJson::writeTime(m_timestamp);
     if (!m_notes.isEmpty())
     {
         json["notes"] = m_notes;
@@ -93,13 +110,18 @@ QJsonObject TaskNotification::toJson() const
     return json;
 }
 
-TaskNotification TaskNotification::fromJson(const QJsonObject& json)
+std::optional<TaskNotification> TaskNotification::fromJson(const QJsonObject& json)
 {
-    TaskNotification n;
-    n.m_method = contactMethodFromString(json["method"].toString());
-    n.m_timestamp = QDateTime::fromString(json["timestamp"].toString(), Qt::ISODate);
-    n.m_notes = json["notes"].toString();
-    return n;
+    TaskNotification notification;
+    if (!StrictJson::hasOnlyKeys(json,
+                                 {QLatin1String("method"), QLatin1String("timestamp"), QLatin1String("notes")})
+        || !readMethod(json, notification.m_method)
+        || !StrictJson::readTime(json, QLatin1String("timestamp"), notification.m_timestamp)
+        || !readNotes(json, QLatin1String("notes"), notification.m_notes))
+    {
+        return std::nullopt;
+    }
+    return notification;
 }
 
 bool TaskNotification::operator==(const TaskNotification& other) const
@@ -130,7 +152,7 @@ QJsonObject ContactAttempt::toJson() const
     json["id"] = m_id.toString();
     json["method"] = contactMethodToString(m_method);
     json["who"] = m_who.toString();
-    json["timestamp"] = m_timestamp.toString(Qt::ISODate);
+    json["timestamp"] = StrictJson::writeTime(m_timestamp);
     if (!m_notes.isEmpty())
     {
         json["notes"] = m_notes;
@@ -138,14 +160,23 @@ QJsonObject ContactAttempt::toJson() const
     return json;
 }
 
-ContactAttempt ContactAttempt::fromJson(const QJsonObject& json)
+std::optional<ContactAttempt> ContactAttempt::fromJson(const QJsonObject& json)
 {
     ContactAttempt attempt;
-    attempt.m_id = ContactAttemptId::fromString(json["id"].toString());
-    attempt.m_method = contactMethodFromString(json["method"].toString());
-    attempt.m_who = PersonId::fromString(json["who"].toString());
-    attempt.m_timestamp = QDateTime::fromString(json["timestamp"].toString(), Qt::ISODate);
-    attempt.m_notes = json["notes"].toString();
+    if (!StrictJson::hasOnlyKeys(json,
+                                 {QLatin1String("id"),
+                                  QLatin1String("method"),
+                                  QLatin1String("who"),
+                                  QLatin1String("timestamp"),
+                                  QLatin1String("notes")})
+        || !StrictJson::readId(json, QLatin1String("id"), attempt.m_id)
+        || !readMethod(json, attempt.m_method)
+        || !StrictJson::readId(json, QLatin1String("who"), attempt.m_who)
+        || !StrictJson::readTime(json, QLatin1String("timestamp"), attempt.m_timestamp)
+        || !readNotes(json, QLatin1String("notes"), attempt.m_notes))
+    {
+        return std::nullopt;
+    }
     return attempt;
 }
 
@@ -236,7 +267,7 @@ QJsonObject ResponseTask::toJson() const
     json["id"] = m_id.toString();
     json["category"] = m_category;
     json["description"] = m_description;
-    json["createdAt"] = m_createdAt.toString(Qt::ISODate);
+    json["createdAt"] = StrictJson::writeTime(m_createdAt);
 
     if (m_assignedTeamId.has_value())
     {
@@ -262,46 +293,86 @@ QJsonObject ResponseTask::toJson() const
     }
     if (m_resolvedAt.has_value())
     {
-        json["resolvedAt"] = m_resolvedAt->toString(Qt::ISODate);
+        json["resolvedAt"] = StrictJson::writeTime(m_resolvedAt.value());
     }
 
     return json;
 }
 
-ResponseTask ResponseTask::fromJson(const QJsonObject& json)
+std::optional<ResponseTask> ResponseTask::fromJson(const QJsonObject& json)
 {
     ResponseTask task;
-    task.m_id = TaskId::fromString(json["id"].toString());
-    task.m_category = json["category"].toString();
-    task.m_description = json["description"].toString();
-    task.m_createdAt = QDateTime::fromString(json["createdAt"].toString(), Qt::ISODate);
-
-    QString teamIdStr = json["assignedTeamId"].toString();
-    if (!teamIdStr.isEmpty())
+    if (!StrictJson::hasOnlyKeys(json,
+                                 {QLatin1String("id"),
+                                  QLatin1String("category"),
+                                  QLatin1String("description"),
+                                  QLatin1String("createdAt"),
+                                  QLatin1String("assignedTeamId"),
+                                  QLatin1String("assignedPersonId"),
+                                  QLatin1String("assignmentNotes"),
+                                  QLatin1String("notification"),
+                                  QLatin1String("resolved"),
+                                  QLatin1String("resolutionNotes"),
+                                  QLatin1String("resolvedAt")})
+        || !StrictJson::readId(json, QLatin1String("id"), task.m_id)
+        || !StrictJson::readString(json, QLatin1String("category"), task.m_category)
+        || !StrictJson::readString(json, QLatin1String("description"), task.m_description)
+        || !StrictJson::readTime(json, QLatin1String("createdAt"), task.m_createdAt)
+        || !StrictJson::readBool(json, QLatin1String("resolved"), task.m_resolved)
+        || !readNotes(json, QLatin1String("assignmentNotes"), task.m_assignmentNotes)
+        || !readNotes(json, QLatin1String("resolutionNotes"), task.m_resolutionNotes))
     {
-        task.m_assignedTeamId = TeamId::fromString(teamIdStr);
+        return std::nullopt;
     }
 
-    QString personIdStr = json["assignedPersonId"].toString();
-    if (!personIdStr.isEmpty())
+    // At most one assignee: assigning to a team clears the person and the reverse.
+    if (json.contains("assignedTeamId") && json.contains("assignedPersonId"))
     {
-        task.m_assignedPersonId = PersonId::fromString(personIdStr);
+        return std::nullopt;
     }
 
-    task.m_assignmentNotes = json["assignmentNotes"].toString();
+    if (json.contains("assignedTeamId"))
+    {
+        TeamId team;
+        if (!StrictJson::readId(json, QLatin1String("assignedTeamId"), team))
+        {
+            return std::nullopt;
+        }
+        task.m_assignedTeamId = team;
+    }
+
+    if (json.contains("assignedPersonId"))
+    {
+        PersonId person;
+        if (!StrictJson::readId(json, QLatin1String("assignedPersonId"), person))
+        {
+            return std::nullopt;
+        }
+        task.m_assignedPersonId = person;
+    }
 
     if (json.contains("notification"))
     {
-        task.m_notification = TaskNotification::fromJson(json["notification"].toObject());
+        QJsonObject notificationJson;
+        if (!StrictJson::readObject(json, QLatin1String("notification"), notificationJson))
+        {
+            return std::nullopt;
+        }
+        task.m_notification = TaskNotification::fromJson(notificationJson);
+        if (!task.m_notification.has_value())
+        {
+            return std::nullopt;
+        }
     }
 
-    task.m_resolved = json["resolved"].toBool();
-    task.m_resolutionNotes = json["resolutionNotes"].toString();
-
-    QString resolvedAtStr = json["resolvedAt"].toString();
-    if (!resolvedAtStr.isEmpty())
+    if (json.contains("resolvedAt"))
     {
-        task.m_resolvedAt = QDateTime::fromString(resolvedAtStr, Qt::ISODate);
+        QDateTime resolvedAt;
+        if (!StrictJson::readTime(json, QLatin1String("resolvedAt"), resolvedAt))
+        {
+            return std::nullopt;
+        }
+        task.m_resolvedAt = resolvedAt;
     }
 
     return task;
@@ -464,31 +535,70 @@ QJsonObject FamilyResponseRecord::toJson() const
     return json;
 }
 
-FamilyResponseRecord FamilyResponseRecord::fromJson(const QJsonObject& json)
+std::optional<FamilyResponseRecord> FamilyResponseRecord::fromJson(const QJsonObject& json)
 {
     FamilyResponseRecord record;
-    record.m_familyId = FamilyId::fromString(json["familyId"].toString());
-    record.m_displayName = json["displayName"].toString();
-    record.m_address = json["address"].toString();
-    record.m_contactStatus = contactStatusFromString(json["contactStatus"].toString());
+    QString status;
+    if (!StrictJson::hasOnlyKeys(json,
+                                 {QLatin1String("familyId"),
+                                  QLatin1String("displayName"),
+                                  QLatin1String("address"),
+                                  QLatin1String("contactStatus"),
+                                  QLatin1String("contactAttempts"),
+                                  QLatin1String("tasks")})
+        || !StrictJson::readId(json, QLatin1String("familyId"), record.m_familyId)
+        || !StrictJson::readString(json, QLatin1String("displayName"), record.m_displayName)
+        || !readNotes(json, QLatin1String("address"), record.m_address)
+        || !StrictJson::readString(json, QLatin1String("contactStatus"), status))
+    {
+        return std::nullopt;
+    }
 
-    // append (not prepend) - JSON array is already in most-recent-first order from toJson()
+    const std::optional<ContactStatus> contactStatus = contactStatusFromString(status);
+    if (!contactStatus.has_value())
+    {
+        return std::nullopt;
+    }
+    record.m_contactStatus = contactStatus.value();
+
+    // Appended in the order written, which is already most recent first.
     if (json.contains("contactAttempts"))
     {
-        QJsonArray attemptsArray = json["contactAttempts"].toArray();
-        for (const QJsonValue& value : attemptsArray)
+        QList<QJsonObject> attempts;
+        if (!StrictJson::readObjectArray(json, QLatin1String("contactAttempts"), attempts) || attempts.isEmpty())
         {
-            record.m_contactAttempts.append(ContactAttempt::fromJson(value.toObject()));
+            return std::nullopt;
+        }
+        QSet<ContactAttemptId> seen;
+        for (const QJsonObject& attemptJson : attempts)
+        {
+            const std::optional<ContactAttempt> attempt = ContactAttempt::fromJson(attemptJson);
+            if (!attempt.has_value() || seen.contains(attempt.value().id()))
+            {
+                return std::nullopt;
+            }
+            seen.insert(attempt.value().id());
+            record.m_contactAttempts.append(attempt.value());
         }
     }
 
-    // append (not prepend) - JSON array is already in most-recent-first order from toJson()
     if (json.contains("tasks"))
     {
-        QJsonArray tasksArray = json["tasks"].toArray();
-        for (const QJsonValue& value : tasksArray)
+        QList<QJsonObject> tasks;
+        if (!StrictJson::readObjectArray(json, QLatin1String("tasks"), tasks) || tasks.isEmpty())
         {
-            record.m_tasks.append(ResponseTask::fromJson(value.toObject()));
+            return std::nullopt;
+        }
+        QSet<TaskId> seen;
+        for (const QJsonObject& taskJson : tasks)
+        {
+            const std::optional<ResponseTask> task = ResponseTask::fromJson(taskJson);
+            if (!task.has_value() || seen.contains(task.value().id()))
+            {
+                return std::nullopt;
+            }
+            seen.insert(task.value().id());
+            record.m_tasks.append(task.value());
         }
     }
 
@@ -571,11 +681,11 @@ QJsonObject EmergencyResponse::toJson() const
 {
     QJsonObject json;
     json["name"] = m_name;
-    json["startedAt"] = m_startedAt.toString(Qt::ISODate);
+    json["startedAt"] = StrictJson::writeTime(m_startedAt);
 
     if (m_endedAt.has_value())
     {
-        json["endedAt"] = m_endedAt->toString(Qt::ISODate);
+        json["endedAt"] = StrictJson::writeTime(m_endedAt.value());
     }
 
     QJsonArray recordsArray;
@@ -595,29 +705,48 @@ QJsonObject EmergencyResponse::toJson() const
     return json;
 }
 
-EmergencyResponse EmergencyResponse::fromJson(const QJsonObject& json)
+std::optional<EmergencyResponse> EmergencyResponse::fromJson(const QJsonObject& json)
 {
     EmergencyResponse response;
-    response.m_name = json["name"].toString();
-    response.m_startedAt = QDateTime::fromString(json["startedAt"].toString(), Qt::ISODate);
-
-    QString endedAtStr = json["endedAt"].toString();
-    if (!endedAtStr.isEmpty())
+    QList<QJsonObject> records;
+    if (!StrictJson::hasOnlyKeys(json,
+                                 {QLatin1String("name"),
+                                  QLatin1String("startedAt"),
+                                  QLatin1String("endedAt"),
+                                  QLatin1String("familyRecords"),
+                                  QLatin1String("taskCategories")})
+        || !StrictJson::readString(json, QLatin1String("name"), response.m_name)
+        || !StrictJson::readTime(json, QLatin1String("startedAt"), response.m_startedAt)
+        || !StrictJson::readObjectArray(json, QLatin1String("familyRecords"), records)
+        || !StrictJson::readStringArray(json, QLatin1String("taskCategories"), response.m_taskCategories))
     {
-        response.m_endedAt = QDateTime::fromString(endedAtStr, Qt::ISODate);
+        return std::nullopt;
     }
 
-    QJsonArray recordsArray = json["familyRecords"].toArray();
-    for (const QJsonValue& value : recordsArray)
+    // A set kept in the order categories were added; addTaskCategory never repeats one.
+    if (response.m_taskCategories.removeDuplicates() != 0)
     {
-        FamilyResponseRecord record = FamilyResponseRecord::fromJson(value.toObject());
-        response.m_familyRecords.insert(record.familyId(), record);
+        return std::nullopt;
     }
 
-    QJsonArray categoriesArray = json["taskCategories"].toArray();
-    for (const QJsonValue& value : categoriesArray)
+    if (json.contains("endedAt"))
     {
-        response.m_taskCategories.append(value.toString());
+        QDateTime endedAt;
+        if (!StrictJson::readTime(json, QLatin1String("endedAt"), endedAt))
+        {
+            return std::nullopt;
+        }
+        response.m_endedAt = endedAt;
+    }
+
+    for (const QJsonObject& recordJson : records)
+    {
+        const std::optional<FamilyResponseRecord> record = FamilyResponseRecord::fromJson(recordJson);
+        if (!record.has_value() || response.m_familyRecords.contains(record.value().familyId()))
+        {
+            return std::nullopt;
+        }
+        response.m_familyRecords.insert(record.value().familyId(), record.value());
     }
 
     return response;

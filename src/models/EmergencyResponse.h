@@ -51,7 +51,10 @@ public:
     const QString& notes() const { return m_notes; }
 
     QJsonObject toJson() const;
-    static TaskNotification fromJson(const QJsonObject& json);
+    /// Reads exactly what toJson writes: nullopt for a missing required field, a
+    /// field of the wrong type or form, a field toJson never writes, or any element
+    /// of a collection that fails the same way.
+    static std::optional<TaskNotification> fromJson(const QJsonObject& json);
     bool operator==(const TaskNotification& other) const;
     bool operator!=(const TaskNotification& other) const { return !(*this == other); }
 
@@ -80,7 +83,10 @@ public:
     void setNotes(const QString& notes) { m_notes = notes; }
 
     QJsonObject toJson() const;
-    static ContactAttempt fromJson(const QJsonObject& json);
+    /// Reads exactly what toJson writes: nullopt for a missing required field, a
+    /// field of the wrong type or form, a field toJson never writes, or any element
+    /// of a collection that fails the same way.
+    static std::optional<ContactAttempt> fromJson(const QJsonObject& json);
     bool operator==(const ContactAttempt& other) const;
     bool operator!=(const ContactAttempt& other) const { return !(*this == other); }
 
@@ -136,7 +142,10 @@ public:
     bool isNotified() const;
 
     QJsonObject toJson() const;
-    static ResponseTask fromJson(const QJsonObject& json);
+    /// Reads exactly what toJson writes: nullopt for a missing required field, a
+    /// field of the wrong type or form, a field toJson never writes, or any element
+    /// of a collection that fails the same way.
+    static std::optional<ResponseTask> fromJson(const QJsonObject& json);
     bool operator==(const ResponseTask& other) const;
     bool operator!=(const ResponseTask& other) const { return !(*this == other); }
 
@@ -194,7 +203,10 @@ public:
     EffectiveContactStatus effectiveStatus() const;
 
     QJsonObject toJson() const;
-    static FamilyResponseRecord fromJson(const QJsonObject& json);
+    /// Reads exactly what toJson writes: nullopt for a missing required field, a
+    /// field of the wrong type or form, a field toJson never writes, or any element
+    /// of a collection that fails the same way.
+    static std::optional<FamilyResponseRecord> fromJson(const QJsonObject& json);
     bool operator==(const FamilyResponseRecord& other) const;
     bool operator!=(const FamilyResponseRecord& other) const { return !(*this == other); }
 
@@ -242,7 +254,10 @@ public:
     int countByStatus(EffectiveContactStatus status) const;
 
     QJsonObject toJson() const;
-    static EmergencyResponse fromJson(const QJsonObject& json);
+    /// Reads exactly what toJson writes: nullopt for a missing required field, a
+    /// field of the wrong type or form, a field toJson never writes, or any element
+    /// of a collection that fails the same way.
+    static std::optional<EmergencyResponse> fromJson(const QJsonObject& json);
     bool operator==(const EmergencyResponse& other) const;
     bool operator!=(const EmergencyResponse& other) const { return !(*this == other); }
 

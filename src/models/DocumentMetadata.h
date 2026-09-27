@@ -57,7 +57,10 @@ public:
     // JSON serialization
     // ========================================================================
     void writeToJson(QJsonObject& json) const;
-    void readFromJson(const QJsonObject& json);
+    /// Reads the "stakes" and "wards" writeToJson puts into a document's top level,
+    /// strictly: nullopt when either is ill-formed, when any stake or ward fails to
+    /// parse, or when two share a unit number.
+    static std::optional<DocumentMetadata> fromJson(const QJsonObject& json);
 
     // ========================================================================
     // Equality

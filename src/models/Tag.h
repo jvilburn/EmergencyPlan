@@ -42,15 +42,6 @@ inline std::optional<TagLevel> tagLevelFromString(const QString& str)
     return std::nullopt;
 }
 
-inline TagLevel tagLevelFromJson(const QJsonValue& value)
-{
-    if (value.isNull() || !value.isString())
-    {
-        return TagLevel::Person;  // Default fallback
-    }
-    return tagLevelFromString(value.toString()).value_or(TagLevel::Person);
-}
-
 class Tag
 {
 public:
@@ -90,7 +81,10 @@ public:
 
     // JSON serialization
     QJsonObject toJson() const;
-    static Tag fromJson(const QJsonObject& json);
+    /// Reads exactly what toJson writes: nullopt for a missing required field, a
+    /// field of the wrong type or form, a field toJson never writes, or any element
+    /// of a collection that fails the same way.
+    static std::optional<Tag> fromJson(const QJsonObject& json);
 
     // Value-based equality
     bool operator==(const Tag& other) const;

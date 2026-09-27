@@ -169,23 +169,18 @@ public:
 
     // JSON serialization
     QJsonObject toJson() const;
-    static Document fromJson(const QJsonObject& json);
 
     /// The payload format this build writes. A payload claiming a higher number
     /// is one this build must not guess at.
     static constexpr int CurrentPayloadVersion = 1;
 
-    /// Reads a decrypted payload.
+    /// Reads a payload, the only reader of a document.
     ///
-    /// Strict about the payload version and the access roster: an absent or
-    /// unknown version, an empty roster, or any ill-formed person or device is
-    /// refused, never defaulted, and so is a top-level field it does not know. The
-    /// directory, ministering, and emergency collections are read through
-    /// fromJson, which is lenient: a damaged family record loads as whatever
-    /// fromJson makes of it.
-    ///
-    /// The only reader of the roster. fromJson ignores it, so no path can load a
-    /// roster in part.
+    /// Nothing is skipped, defaulted, or carried through unread: an absent or
+    /// unknown version, an empty roster, a top-level field it does not know, any
+    /// element of any collection that fails its own strict reader, a repeated id,
+    /// and a tag, team, or ministering district naming a person, family, or group
+    /// that is not in the document are all refused whole.
     static DocumentParse parse(const QJsonObject& json, Document& out);
 
     // Value-based equality

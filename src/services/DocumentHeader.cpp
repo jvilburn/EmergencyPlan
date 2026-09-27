@@ -8,9 +8,6 @@
 #include <QJsonArray>
 #include <QJsonValue>
 
-#include <cmath>
-#include <limits>
-
 namespace
 {
 
@@ -43,15 +40,6 @@ const QLatin1String KeySealedKey("sealedKey");
 
 // --- Serialisation ---
 
-/// Milliseconds are kept deliberately. Qt::ISODate drops them, and a writer that
-/// built its associated data from a value carrying milliseconds while the reader
-/// built it from one that had lost them would make every file fail to
-/// authenticate.
-QString serialiseTime(const QDateTime& time)
-{
-    return time.toUTC().toString(Qt::ISODateWithMs);
-}
-
 QString toHex(const QByteArray& bytes)
 {
     return HexCodec::encode(bytes);
@@ -63,54 +51,6 @@ QString toBase64(const QByteArray& bytes)
 }
 
 // --- Strict reading ---
-
-/// Converting a double that is outside the integer type's range is undefined
-/// behaviour, so the range is checked while the value is still a double. These
-/// bytes come from the server, so "no sane writer would" is not a guard.
-bool readInt(const QJsonObject& json, QLatin1String key, int& out)
-{
-    const QJsonValue value = json.value(key);
-    if (!value.isDouble())
-    {
-        return false;
-    }
-
-    const double number = value.toDouble();
-    if (!std::isfinite(number)
-        || number < double(std::numeric_limits<int>::min())
-        || number > double(std::numeric_limits<int>::max())
-        || number != std::trunc(number))
-    {
-        return false;
-    }
-
-    out = int(number);
-    return true;
-}
-
-bool readInt64(const QJsonObject& json, QLatin1String key, qint64& out)
-{
-    const QJsonValue value = json.value(key);
-    if (!value.isDouble())
-    {
-        return false;
-    }
-
-    // Both bounds are exact as doubles: -2^63 is representable, and 2^63 is the
-    // first value above the range, so the comparison is >= rather than >.
-    const double lowest = -9223372036854775808.0;
-    const double aboveHighest = 9223372036854775808.0;
-
-    const double number = value.toDouble();
-    if (!std::isfinite(number) || number < lowest || number >= aboveHighest
-        || number != std::trunc(number))
-    {
-        return false;
-    }
-
-    out = value.toInteger();
-    return true;
-}
 
 bool readHexBytes(const QJsonObject& json, QLatin1String key, int expectedSize, QByteArray& out)
 {
@@ -174,27 +114,6 @@ bool readBase64Bytes(const QJsonObject& json, QLatin1String key, int expectedSiz
     return out.size() == expectedSize;
 }
 
-bool readTime(const QJsonObject& json, QLatin1String key, QDateTime& out)
-{
-    const QJsonValue value = json.value(key);
-    if (!value.isString())
-    {
-        return false;
-    }
-
-    const QDateTime parsed = QDateTime::fromString(value.toString(), Qt::ISODateWithMs);
-    if (!parsed.isValid())
-    {
-        return false;
-    }
-
-    out = parsed.toUTC();
-
-    // The value must survive a round trip, or the associated data a reader
-    // computes will differ from the one the writer computed.
-    return serialiseTime(out) == value.toString();
-}
-
 } // namespace
 
 // --- RecipientEntry ---
@@ -239,7 +158,7 @@ QJsonObject DocumentHeader::toJson() const
     json[KeyLastWriter] = lastWriter.toHex();
     json[KeyWriterPublicKey] = toHex(writerPublicKey.bytes);
     json[KeyWriterVerifyKey] = toHex(writerVerifyKey.bytes);
-    json[KeyLastWriteTime] = serialiseTime(lastWriteTime);
+    json[KeyLastWriteTime] = StrictJson::writeTime(lastWriteTime);
     json[KeyNonce] = toHex(nonce);
 
     QJsonArray recipientArray;
@@ -265,7 +184,7 @@ HeaderParse DocumentHeader::parse(const QJsonObject& json, DocumentHeader& out)
 {
     DocumentHeader header;
 
-    if (!readInt(json, KeyFormatVersion, header.formatVersion))
+    if (!StrictJson::readInt(json, KeyFormatVersion, header.formatVersion))
     {
         return HeaderParse::Malformed;
     }
@@ -311,12 +230,12 @@ HeaderParse DocumentHeader::parse(const QJsonObject& json, DocumentHeader& out)
         return HeaderParse::Malformed;
     }
 
-    if (!readInt(json, KeyKeyGeneration, header.keyGeneration) || header.keyGeneration < 1)
+    if (!StrictJson::readInt(json, KeyKeyGeneration, header.keyGeneration) || header.keyGeneration < 1)
     {
         return HeaderParse::Malformed;
     }
 
-    if (!readInt64(json, KeySaveCounter, header.saveCounter) || header.saveCounter < 0
+    if (!StrictJson::readInt64(json, KeySaveCounter, header.saveCounter) || header.saveCounter < 0
         || header.saveCounter > MaxSaveCounter)
     {
         return HeaderParse::Malformed;
@@ -337,7 +256,7 @@ HeaderParse DocumentHeader::parse(const QJsonObject& json, DocumentHeader& out)
         return HeaderParse::Malformed;
     }
 
-    if (!readTime(json, KeyLastWriteTime, header.lastWriteTime))
+    if (!StrictJson::readTime(json, KeyLastWriteTime, header.lastWriteTime))
     {
         return HeaderParse::Malformed;
     }
@@ -364,7 +283,7 @@ HeaderParse DocumentHeader::parse(const QJsonObject& json, DocumentHeader& out)
         const QJsonObject entryJson = element.toObject();
 
         int kind = 0;
-        if (!readInt(entryJson, KeyKind, kind))
+        if (!StrictJson::readInt(entryJson, KeyKind, kind))
         {
             return HeaderParse::Malformed;
         }
@@ -464,7 +383,7 @@ QByteArray DocumentHeader::associatedData() const
     writer.appendText(lastWriter.toHex());
     writer.appendText(toHex(writerPublicKey.bytes));
     writer.appendText(toHex(writerVerifyKey.bytes));
-    writer.appendText(serialiseTime(lastWriteTime));
+    writer.appendText(StrictJson::writeTime(lastWriteTime));
     writer.appendText(toHex(nonce));
 
     // The counts are what stop one collection borrowing the other's elements:
@@ -526,7 +445,7 @@ bool DocumentHeader::operator==(const DocumentHeader& other) const
         && lastWriter == other.lastWriter
         && writerPublicKey == other.writerPublicKey
         && writerVerifyKey == other.writerVerifyKey
-        && serialiseTime(lastWriteTime) == serialiseTime(other.lastWriteTime)
+        && StrictJson::writeTime(lastWriteTime) == StrictJson::writeTime(other.lastWriteTime)
         && nonce == other.nonce
         && recipients == other.recipients
         && admins == other.admins

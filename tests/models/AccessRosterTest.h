@@ -46,6 +46,5 @@ private slots:
     void documentParseRefusesAMalformedRoster();
     void documentParseRefusesAnUnknownTopLevelKey();
     void documentParseRefusesAnEmptyRoster();
-    void documentFromJsonDoesNotReadTheRoster();
     void rosterTakesPartInDocumentEquality();
 };

@@ -1,4 +1,5 @@
 #include "EmergencyAsset.h"
+#include "StrictJson.h"
 
 #include <QJsonArray>
 
@@ -43,17 +44,42 @@ QJsonObject EmergencyAsset::toJson() const
     return json;
 }
 
-EmergencyAsset EmergencyAsset::fromJson(const QJsonObject& json)
+std::optional<EmergencyAsset> EmergencyAsset::fromJson(const QJsonObject& json)
 {
-    EmergencyAsset asset;
-    asset.m_id = EmergencyAssetId::fromString(json["id"].toString());
-    asset.m_name = json["name"].toString();
-    asset.m_responseArea = responseAreaFromString(json["responseArea"].toString());
-
-    const QJsonArray personArray = json["personIds"].toArray();
-    for (const QJsonValue& val : personArray)
+    if (!StrictJson::hasOnlyKeys(json,
+                                 {QLatin1String("id"),
+                                  QLatin1String("name"),
+                                  QLatin1String("responseArea"),
+                                  QLatin1String("personIds")}))
     {
-        asset.m_personIds.insert(PersonId::fromString(val.toString()));
+        return std::nullopt;
+    }
+
+    EmergencyAsset asset;
+    QString area;
+    if (!StrictJson::readId(json, QLatin1String("id"), asset.m_id)
+        || !StrictJson::readString(json, QLatin1String("name"), asset.m_name)
+        || !StrictJson::readString(json, QLatin1String("responseArea"), area)
+        || !StrictJson::readIdSet(json, QLatin1String("personIds"), asset.m_personIds))
+    {
+        return std::nullopt;
+    }
+
+    // Exactly as responseAreaToString writes it: an asset's own area, or none.
+    bool known = false;
+    for (const ResponseArea candidate :
+         {ResponseArea::Medical, ResponseArea::Recovery, ResponseArea::Communications, ResponseArea::None})
+    {
+        if (area == responseAreaToString(candidate))
+        {
+            asset.m_responseArea = candidate;
+            known = true;
+            break;
+        }
+    }
+    if (!known)
+    {
+        return std::nullopt;
     }
 
     return asset;

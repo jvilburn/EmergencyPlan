@@ -523,18 +523,80 @@ void serializeHashToJson(QJsonObject& json, const QString& key, const QHash<K, T
     }
 }
 
+/// A collection written only when not empty, each element read strictly and each
+/// id appearing once: a repeated id would otherwise overwrite its twin unseen.
 template<typename K, typename T>
-void deserializeJsonToHash(const QJsonObject& json, const QString& key, QHash<K, T>& hash)
+bool readCollection(const QJsonObject& json, QLatin1String key, QHash<K, T>& out)
 {
-    if (json.contains(key))
+    if (!json.contains(key))
     {
-        QJsonArray array = json[key].toArray();
-        for (const QJsonValue& value : array)
+        return true;
+    }
+
+    QList<QJsonObject> objects;
+    if (!StrictJson::readObjectArray(json, key, objects) || objects.isEmpty())
+    {
+        return false;
+    }
+
+    QHash<K, T> items;
+    for (const QJsonObject& object : objects)
+    {
+        const std::optional<T> item = T::fromJson(object);
+        if (!item.has_value() || items.contains(item.value().id()))
         {
-            T item = T::fromJson(value.toObject());
-            hash.insert(item.id(), item);
+            return false;
+        }
+        items.insert(item.value().id(), item.value());
+    }
+
+    out = items;
+    return true;
+}
+
+bool readOptionalDate(const QJsonObject& json, QLatin1String key, std::optional<QDate>& out)
+{
+    if (!json.contains(key))
+    {
+        return true;
+    }
+
+    QDate date;
+    if (!StrictJson::readDate(json, key, date))
+    {
+        return false;
+    }
+    out = date;
+    return true;
+}
+
+template<typename Id>
+bool allKnown(const QSet<Id>& ids, const QSet<Id>& known)
+{
+    for (const Id& id : ids)
+    {
+        if (!known.contains(id))
+        {
+            return false;
         }
     }
+    return true;
+}
+
+/// Every district names only groups of its own organisation.
+bool districtsNameKnownGroups(const QHash<MinisteringDistrictId, MinisteringDistrict>& districts,
+                              const QHash<MinisteringGroupId, MinisteringGroup>& groups)
+{
+    const QList<MinisteringGroupId> groupIds = groups.keys();
+    const QSet<MinisteringGroupId> known(groupIds.begin(), groupIds.end());
+    for (const MinisteringDistrict& district : districts)
+    {
+        if (!allKnown(district.groupIds(), known))
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 } // anonymous namespace
@@ -571,11 +633,11 @@ QJsonObject Document::toJson() const
     // Import dates
     if (m_wardDirectoryPdfDate.has_value())
     {
-        json["wardDirectoryPdfDate"] = m_wardDirectoryPdfDate->toString(Qt::ISODate);
+        json["wardDirectoryPdfDate"] = StrictJson::writeDate(m_wardDirectoryPdfDate.value());
     }
     if (m_ministeringPdfDate.has_value())
     {
-        json["ministeringPdfDate"] = m_ministeringPdfDate->toString(Qt::ISODate);
+        json["ministeringPdfDate"] = StrictJson::writeDate(m_ministeringPdfDate.value());
     }
 
     // Emergency response data
@@ -585,64 +647,6 @@ QJsonObject Document::toJson() const
     }
 
     return json;
-}
-
-Document Document::fromJson(const QJsonObject& json)
-{
-    Document document;
-
-    // Metadata (wards/stakes)
-    document.m_metadata.readFromJson(json);
-
-    // The access roster is read only by parse(), which refuses a damaged one
-    // rather than loading part of it.
-
-    // Core collections
-    deserializeJsonToHash(json, "families", document.m_families);
-    deserializeJsonToHash(json, "teams", document.m_teams);
-    deserializeJsonToHash(json, "tags", document.m_tags);
-
-    // Emergency assets
-    deserializeJsonToHash(json, "emergencyResources", document.m_emergencyAssets);
-
-    // Emergency inventory (legacy)
-    // Legacy skill/equipment fields ignored on load (migrated to emergency assets)
-
-    // Ministering
-    deserializeJsonToHash(json, "eqDistricts", document.m_eqDistricts);
-    deserializeJsonToHash(json, "eqGroups", document.m_eqGroups);
-    deserializeJsonToHash(json, "rsDistricts", document.m_rsDistricts);
-    deserializeJsonToHash(json, "rsGroups", document.m_rsGroups);
-
-    // Import dates
-    if (json.contains("wardDirectoryPdfDate"))
-    {
-        QDate date = QDate::fromString(
-            json["wardDirectoryPdfDate"].toString(), Qt::ISODate);
-        if (date.isValid())
-        {
-            document.m_wardDirectoryPdfDate = date;
-        }
-    }
-    if (json.contains("ministeringPdfDate"))
-    {
-        QDate date = QDate::fromString(
-            json["ministeringPdfDate"].toString(), Qt::ISODate);
-        if (date.isValid())
-        {
-            document.m_ministeringPdfDate = date;
-        }
-    }
-
-    // Emergency response data
-    if (json.contains("responseData"))
-    {
-        document.m_emergencyResponse = EmergencyResponse::fromJson(json["responseData"].toObject());
-    }
-
-    // Note: lookup caches are built by DocumentManager::setDocument() via onDocumentChanged()
-
-    return document;
 }
 
 DocumentParse Document::parse(const QJsonObject& json, Document& out)
@@ -712,8 +716,84 @@ DocumentParse Document::parse(const QJsonObject& json, Document& out)
         return DocumentParse::Malformed;
     }
 
-    Document document = fromJson(json);
+    Document document;
     document.m_accessRoster = roster.value();
+
+    const std::optional<DocumentMetadata> metadata = DocumentMetadata::fromJson(json);
+    if (!metadata.has_value())
+    {
+        return DocumentParse::Malformed;
+    }
+    document.m_metadata = metadata.value();
+
+    if (!readCollection(json, QLatin1String("families"), document.m_families)
+        || !readCollection(json, QLatin1String("teams"), document.m_teams)
+        || !readCollection(json, QLatin1String("tags"), document.m_tags)
+        || !readCollection(json, QLatin1String("emergencyResources"), document.m_emergencyAssets)
+        || !readCollection(json, QLatin1String("eqDistricts"), document.m_eqDistricts)
+        || !readCollection(json, QLatin1String("eqGroups"), document.m_eqGroups)
+        || !readCollection(json, QLatin1String("rsDistricts"), document.m_rsDistricts)
+        || !readCollection(json, QLatin1String("rsGroups"), document.m_rsGroups)
+        || !readOptionalDate(json, QLatin1String("wardDirectoryPdfDate"), document.m_wardDirectoryPdfDate)
+        || !readOptionalDate(json, QLatin1String("ministeringPdfDate"), document.m_ministeringPdfDate))
+    {
+        return DocumentParse::Malformed;
+    }
+
+    if (json.contains("responseData"))
+    {
+        QJsonObject responseJson;
+        if (!StrictJson::readObject(json, QLatin1String("responseData"), responseJson))
+        {
+            return DocumentParse::Malformed;
+        }
+        document.m_emergencyResponse = EmergencyResponse::fromJson(responseJson);
+        if (!document.m_emergencyResponse.has_value())
+        {
+            return DocumentParse::Malformed;
+        }
+    }
+
+    // A reference to someone or something not in the document is a dangling id
+    // the UI would have to guess about.
+    QSet<PersonId> people;
+    QSet<FamilyId> families;
+    for (const Family& family : document.m_families)
+    {
+        families.insert(family.id());
+        for (const Person& member : family.members())
+        {
+            // One person in one family: a person id is how teams and tags find them.
+            if (people.contains(member.id()))
+            {
+                return DocumentParse::Malformed;
+            }
+            people.insert(member.id());
+        }
+    }
+
+    for (const Tag& tag : document.m_tags)
+    {
+        if (!allKnown(tag.personIds(), people) || !allKnown(tag.familyIds(), families))
+        {
+            return DocumentParse::Malformed;
+        }
+    }
+
+    for (const Team& team : document.m_teams)
+    {
+        if (!allKnown(team.memberIds(), people)
+            || (team.leaderId().has_value() && !people.contains(team.leaderId().value())))
+        {
+            return DocumentParse::Malformed;
+        }
+    }
+
+    if (!districtsNameKnownGroups(document.m_eqDistricts, document.m_eqGroups)
+        || !districtsNameKnownGroups(document.m_rsDistricts, document.m_rsGroups))
+    {
+        return DocumentParse::Malformed;
+    }
 
     out = document;
     return DocumentParse::Ok;

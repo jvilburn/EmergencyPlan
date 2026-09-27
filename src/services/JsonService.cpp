@@ -1,10 +1,7 @@
 #include "JsonService.h"
-#include <QCoreApplication>
 #include <QFile>
 #include <QSaveFile>
 #include <QJsonDocument>
-#include <QJsonArray>
-#include <QDateTime>
 
 JsonResult JsonService::loadDocument(const QString& filePath)
 {
@@ -81,18 +78,20 @@ JsonResult JsonService::parseJson(const QString& jsonString)
         return result;
     }
 
-    QJsonObject json = jsonDoc.object();
-
-    // Check version
-    QString version = json["version"].toString();
-    if (version.isEmpty())
+    Document document;
+    switch (Document::parse(jsonDoc.object(), document))
     {
-        result.errorMessage = QObject::tr("Invalid JSON file: missing version");
+    case DocumentParse::Ok:
+        break;
+    case DocumentParse::NeedsNewerVersion:
+        result.errorMessage = QObject::tr("This document was saved by a newer version of Ward Planning.");
+        return result;
+    case DocumentParse::Malformed:
+        result.errorMessage = QObject::tr("This document is damaged or incomplete, so it was not opened.");
         return result;
     }
 
-    // Parse document
-    result.document = Document::fromJson(json);
+    result.document = document;
     result.success = true;
 
     return result;
@@ -100,18 +99,6 @@ JsonResult JsonService::parseJson(const QString& jsonString)
 
 QString JsonService::toJsonString(const Document& document)
 {
-    QJsonObject json = document.toJson();
-
-    // Add version info
-    json["version"] = QString(CurrentVersion);
-
-    // Add metadata
-    QJsonObject metadata;
-    metadata["lastModified"] = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
-    metadata["exportedBy"] = QString("Ward Planning v%1")
-        .arg(QCoreApplication::applicationVersion());
-    json["metadata"] = metadata;
-
-    QJsonDocument jsonDoc(json);
+    QJsonDocument jsonDoc(document.toJson());
     return QString::fromUtf8(jsonDoc.toJson(QJsonDocument::Indented));
 }

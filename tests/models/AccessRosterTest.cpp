@@ -692,20 +692,6 @@ void AccessRosterTest::documentParseRefusesAnEmptyRoster()
     QCOMPARE(Document::parse(document.toJson(), out), DocumentParse::Malformed);
 }
 
-void AccessRosterTest::documentFromJsonDoesNotReadTheRoster()
-{
-    AccessRoster roster;
-    QVERIFY(roster.addPerson(newPerson("Alice Reed", "Laptop", RosterPerson::Role::Member)));
-
-    Document document = Document::empty();
-    document.setAccessRoster(roster);
-
-    // parse is the roster's only reader, so there is no lenient path that could
-    // load part of one.
-    const Document lenient = Document::fromJson(document.toJson());
-    QVERIFY(lenient.accessRoster().isEmpty());
-}
-
 void AccessRosterTest::rosterTakesPartInDocumentEquality()
 {
     // A copy, not a second empty(): each empty document seeds its default

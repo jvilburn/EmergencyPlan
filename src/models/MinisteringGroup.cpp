@@ -1,4 +1,5 @@
 #include "MinisteringGroup.h"
+#include "StrictJson.h"
 
 MinisteringGroup MinisteringGroup::createEQ(
     const QSet<PersonId>& ministerIds,
@@ -62,7 +63,7 @@ QJsonObject MinisteringGroup::toJson() const
 
     if (m_interviewedDate.has_value())
     {
-        json["interviewedDate"] = m_interviewedDate->toString(Qt::ISODate);
+        json["interviewedDate"] = StrictJson::writeDate(m_interviewedDate.value());
     }
 
     if (m_presidencyMemberId.has_value())
@@ -73,51 +74,66 @@ QJsonObject MinisteringGroup::toJson() const
     return json;
 }
 
-MinisteringGroup MinisteringGroup::fromJson(const QJsonObject& json)
+std::optional<MinisteringGroup> MinisteringGroup::fromJson(const QJsonObject& json)
 {
+    if (!StrictJson::hasOnlyKeys(json,
+                                 {QLatin1String("id"),
+                                  QLatin1String("isRSFormat"),
+                                  QLatin1String("ministerIds"),
+                                  QLatin1String("familyIds"),
+                                  QLatin1String("ministeredPersonIds"),
+                                  QLatin1String("interviewedDate"),
+                                  QLatin1String("presidencyMemberId")}))
+    {
+        return std::nullopt;
+    }
+
     MinisteringGroup group;
-    group.m_id = MinisteringGroupId::fromString(json["id"].toString());
-    group.m_isRSFormat = json["isRSFormat"].toBool();
-
-    if (json.contains("ministerIds"))
+    if (!StrictJson::readId(json, QLatin1String("id"), group.m_id)
+        || !StrictJson::readBool(json, QLatin1String("isRSFormat"), group.m_isRSFormat))
     {
-        QJsonArray ministerIdsArray = json["ministerIds"].toArray();
-        for (const QJsonValue& value : ministerIdsArray)
-        {
-            group.m_ministerIds.insert(PersonId::fromString(value.toString()));
-        }
+        return std::nullopt;
     }
 
-    if (json.contains("familyIds"))
+    if (json.contains("ministerIds")
+        && (!StrictJson::readIdSet(json, QLatin1String("ministerIds"), group.m_ministerIds)
+            || group.m_ministerIds.isEmpty()))
     {
-        QJsonArray familyIdsArray = json["familyIds"].toArray();
-        for (const QJsonValue& value : familyIdsArray)
-        {
-            group.m_familyIds.insert(FamilyId::fromString(value.toString()));
-        }
+        return std::nullopt;
     }
 
-    if (json.contains("ministeredPersonIds"))
+    if (json.contains("familyIds")
+        && (!StrictJson::readIdSet(json, QLatin1String("familyIds"), group.m_familyIds)
+            || group.m_familyIds.isEmpty()))
     {
-        QJsonArray ministeredPersonIdsArray = json["ministeredPersonIds"].toArray();
-        for (const QJsonValue& value : ministeredPersonIdsArray)
-        {
-            group.m_ministeredPersonIds.insert(PersonId::fromString(value.toString()));
-        }
+        return std::nullopt;
     }
 
-    if (json.contains("interviewedDate") && !json["interviewedDate"].isNull())
+    if (json.contains("ministeredPersonIds")
+        && (!StrictJson::readIdSet(json, QLatin1String("ministeredPersonIds"), group.m_ministeredPersonIds)
+            || group.m_ministeredPersonIds.isEmpty()))
     {
-        group.m_interviewedDate = QDate::fromString(json["interviewedDate"].toString(), Qt::ISODate);
+        return std::nullopt;
     }
 
-    if (json.contains("presidencyMemberId") && !json["presidencyMemberId"].isNull())
+    if (json.contains("interviewedDate"))
     {
-        QString pmStr = json["presidencyMemberId"].toString();
-        if (!pmStr.isEmpty())
+        QDate date;
+        if (!StrictJson::readDate(json, QLatin1String("interviewedDate"), date))
         {
-            group.m_presidencyMemberId = PersonId::fromString(pmStr);
+            return std::nullopt;
         }
+        group.m_interviewedDate = date;
+    }
+
+    if (json.contains("presidencyMemberId"))
+    {
+        PersonId member;
+        if (!StrictJson::readId(json, QLatin1String("presidencyMemberId"), member))
+        {
+            return std::nullopt;
+        }
+        group.m_presidencyMemberId = member;
     }
 
     return group;

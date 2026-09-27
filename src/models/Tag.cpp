@@ -1,4 +1,5 @@
 #include "Tag.h"
+#include "StrictJson.h"
 
 Tag Tag::create(const QString& name, TagLevel level, const QString& color)
 {
@@ -45,29 +46,59 @@ QJsonObject Tag::toJson() const
     return json;
 }
 
-Tag Tag::fromJson(const QJsonObject& json)
+std::optional<Tag> Tag::fromJson(const QJsonObject& json)
 {
-    Tag tag;
-    tag.m_id = TagId::fromString(json["id"].toString());
-    tag.m_name = json["name"].toString();
-    tag.m_color = json["color"].toString();
-    tag.m_level = tagLevelFromJson(json["level"]);
-
-    if (json.contains("personIds"))
+    if (!StrictJson::hasOnlyKeys(json,
+                                 {QLatin1String("id"),
+                                  QLatin1String("name"),
+                                  QLatin1String("level"),
+                                  QLatin1String("color"),
+                                  QLatin1String("personIds"),
+                                  QLatin1String("familyIds")}))
     {
-        QJsonArray personIdsArray = json["personIds"].toArray();
-        for (const QJsonValue& value : personIdsArray)
-        {
-            tag.m_personIds.insert(PersonId::fromString(value.toString()));
-        }
+        return std::nullopt;
     }
-    if (json.contains("familyIds"))
+
+    Tag tag;
+    QString level;
+    if (!StrictJson::readId(json, QLatin1String("id"), tag.m_id)
+        || !StrictJson::readString(json, QLatin1String("name"), tag.m_name)
+        || !StrictJson::readString(json, QLatin1String("level"), level))
     {
-        QJsonArray familyIdsArray = json["familyIds"].toArray();
-        for (const QJsonValue& value : familyIdsArray)
-        {
-            tag.m_familyIds.insert(FamilyId::fromString(value.toString()));
-        }
+        return std::nullopt;
+    }
+
+    // Exactly as tagLevelToString writes it.
+    if (level == tagLevelToString(TagLevel::Person))
+    {
+        tag.m_level = TagLevel::Person;
+    }
+    else if (level == tagLevelToString(TagLevel::Family))
+    {
+        tag.m_level = TagLevel::Family;
+    }
+    else
+    {
+        return std::nullopt;
+    }
+
+    if (json.contains("color") && !StrictJson::readNonEmptyString(json, QLatin1String("color"), tag.m_color))
+    {
+        return std::nullopt;
+    }
+
+    if (json.contains("personIds")
+        && (!StrictJson::readIdSet(json, QLatin1String("personIds"), tag.m_personIds)
+            || tag.m_personIds.isEmpty()))
+    {
+        return std::nullopt;
+    }
+
+    if (json.contains("familyIds")
+        && (!StrictJson::readIdSet(json, QLatin1String("familyIds"), tag.m_familyIds)
+            || tag.m_familyIds.isEmpty()))
+    {
+        return std::nullopt;
     }
 
     return tag;

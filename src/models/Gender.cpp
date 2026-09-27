@@ -38,9 +38,15 @@ QJsonValue Gender::toJson() const
 
 std::optional<Gender> Gender::fromJson(const QJsonValue& value)
 {
-    if (value.isNull() || !value.isString())
+    // Exactly as toString writes it; the case-insensitive fromString is for text
+    // read out of a PDF.
+    if (value == QJsonValue(Male.toString()))
     {
-        return std::nullopt;
+        return Male;
     }
-    return fromString(value.toString());
+    if (value == QJsonValue(Female.toString()))
+    {
+        return Female;
+    }
+    return std::nullopt;
 }

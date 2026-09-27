@@ -1,4 +1,5 @@
 #include "Ward.h"
+#include "StrictJson.h"
 
 void Ward::setName(const QString& name)
 {
@@ -52,33 +53,62 @@ QJsonObject Ward::toJson() const
     return json;
 }
 
-Ward Ward::fromJson(const QJsonObject& json)
+std::optional<Ward> Ward::fromJson(const QJsonObject& json)
 {
+    if (!StrictJson::hasOnlyKeys(json,
+                                 {QLatin1String("name"),
+                                  QLatin1String("unitNumber"),
+                                  QLatin1String("stakeUnitNumber"),
+                                  QLatin1String("chapelAddress"),
+                                  QLatin1String("chapelLat"),
+                                  QLatin1String("chapelLng"),
+                                  QLatin1String("chapelPhone"),
+                                  QLatin1String("meetingTime")}))
+    {
+        return std::nullopt;
+    }
+
     Ward ward;
 
-    ward.m_name = json["name"].toString();
-    ward.m_unitNumber = json["unitNumber"].toString();
-    ward.m_stakeUnitNumber = json["stakeUnitNumber"].toString();
+    // Written only when not empty.
+    for (const auto& [key, field] : {std::pair{QLatin1String("name"), &ward.m_name},
+                                     std::pair{QLatin1String("unitNumber"), &ward.m_unitNumber},
+                                     std::pair{QLatin1String("stakeUnitNumber"), &ward.m_stakeUnitNumber}})
+    {
+        if (json.contains(key) && !StrictJson::readNonEmptyString(json, key, *field))
+        {
+            return std::nullopt;
+        }
+    }
 
-    if (json.contains("chapelAddress"))
+    // Written whenever set, empty or not.
+    QString text;
+    for (const auto& [key, field] : {std::pair{QLatin1String("chapelAddress"), &ward.m_chapelAddress},
+                                     std::pair{QLatin1String("chapelPhone"), &ward.m_chapelPhone},
+                                     std::pair{QLatin1String("meetingTime"), &ward.m_meetingTime}})
     {
-        ward.m_chapelAddress = json["chapelAddress"].toString();
+        if (json.contains(key))
+        {
+            if (!StrictJson::readString(json, key, text))
+            {
+                return std::nullopt;
+            }
+            *field = text;
+        }
     }
-    if (json.contains("chapelLat"))
+
+    double coordinate = 0.0;
+    for (const auto& [key, field] : {std::pair{QLatin1String("chapelLat"), &ward.m_chapelLat},
+                                     std::pair{QLatin1String("chapelLng"), &ward.m_chapelLng}})
     {
-        ward.m_chapelLat = json["chapelLat"].toDouble();
-    }
-    if (json.contains("chapelLng"))
-    {
-        ward.m_chapelLng = json["chapelLng"].toDouble();
-    }
-    if (json.contains("chapelPhone"))
-    {
-        ward.m_chapelPhone = json["chapelPhone"].toString();
-    }
-    if (json.contains("meetingTime"))
-    {
-        ward.m_meetingTime = json["meetingTime"].toString();
+        if (json.contains(key))
+        {
+            if (!StrictJson::readDouble(json, key, coordinate))
+            {
+                return std::nullopt;
+            }
+            *field = coordinate;
+        }
     }
 
     return ward;

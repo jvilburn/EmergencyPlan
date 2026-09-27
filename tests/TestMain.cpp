@@ -6,9 +6,11 @@
 #include "DocumentCrypto.h"
 #include "DocumentCryptoTest.h"
 #include "DocumentHeaderTest.h"
+#include "DocumentParseTest.h"
 #include "FakeServer.h"
 #include "FakeServerTest.h"
 #include "FormatVectorsTest.h"
+#include "ModelParsersTest.h"
 #include "PairingTest.h"
 #include "ReconcileTest.h"
 #include "ResponseMergeTest.h"
@@ -67,6 +69,8 @@ int main(int argc, char** argv)
     status |= run<FormatVectorsTest>(argc, argv);
     status |= run<DocumentChainTest>(argc, argv);
     status |= run<AccessRosterTest>(argc, argv);
+    status |= run<ModelParsersTest>(argc, argv);
+    status |= run<DocumentParseTest>(argc, argv);
     status |= run<AccessControlTest>(argc, argv);
     status |= run<FakeServerTest>(argc, argv);
     status |= run<ServerConformanceTest>(argc, argv, makeFakeServer);

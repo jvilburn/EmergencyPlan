@@ -1,4 +1,5 @@
 #include "Family.h"
+#include "StrictJson.h"
 
 Family Family::create(std::optional<double> latitude,
                       std::optional<double> longitude,
@@ -246,35 +247,75 @@ QJsonObject Family::toJson() const
     return json;
 }
 
-Family Family::fromJson(const QJsonObject& json)
+std::optional<Family> Family::fromJson(const QJsonObject& json)
 {
+    if (!StrictJson::hasOnlyKeys(json,
+                                 {QLatin1String("id"),
+                                  QLatin1String("latitude"),
+                                  QLatin1String("longitude"),
+                                  QLatin1String("address"),
+                                  QLatin1String("members")}))
+    {
+        return std::nullopt;
+    }
+
     Family family;
-    family.m_id = FamilyId::fromString(json["id"].toString());
-
-    if (json.contains("latitude"))
+    if (!StrictJson::readId(json, QLatin1String("id"), family.m_id))
     {
-        family.m_latitude = json["latitude"].toDouble();
-    }
-    if (json.contains("longitude"))
-    {
-        family.m_longitude = json["longitude"].toDouble();
+        return std::nullopt;
     }
 
+    double coordinate = 0.0;
+    for (const auto& [key, field] : {std::pair{QLatin1String("latitude"), &family.m_latitude},
+                                     std::pair{QLatin1String("longitude"), &family.m_longitude}})
+    {
+        if (json.contains(key))
+        {
+            if (!StrictJson::readDouble(json, key, coordinate))
+            {
+                return std::nullopt;
+            }
+            *field = coordinate;
+        }
+    }
+
+    // Written only when not empty, and each line exactly as Address keeps it: a
+    // line the sanitiser would change or drop is not one toJson wrote.
     if (json.contains("address"))
     {
-        QJsonArray addressArray = json["address"].toArray();
-        for (const QJsonValue& value : addressArray)
+        QStringList lines;
+        if (!StrictJson::readStringArray(json, QLatin1String("address"), lines) || lines.isEmpty())
         {
-            family.m_address.addLine(value.toString());
+            return std::nullopt;
+        }
+        for (const QString& line : lines)
+        {
+            family.m_address.addLine(line);
+        }
+        if (family.m_address.lines() != lines)
+        {
+            return std::nullopt;
         }
     }
 
     if (json.contains("members"))
     {
-        QJsonArray membersArray = json["members"].toArray();
-        for (const QJsonValue& value : membersArray)
+        QList<QJsonObject> members;
+        if (!StrictJson::readObjectArray(json, QLatin1String("members"), members) || members.isEmpty())
         {
-            family.m_members.append(Person::fromJson(value.toObject()));
+            return std::nullopt;
+        }
+
+        QSet<PersonId> seen;
+        for (const QJsonObject& memberJson : members)
+        {
+            const std::optional<Person> member = Person::fromJson(memberJson);
+            if (!member.has_value() || seen.contains(member.value().id()))
+            {
+                return std::nullopt;
+            }
+            seen.insert(member.value().id());
+            family.m_members.append(member.value());
         }
     }
 

@@ -1,4 +1,5 @@
 #include "DocumentMetadata.h"
+#include "StrictJson.h"
 
 #include <QJsonArray>
 
@@ -228,27 +229,47 @@ void DocumentMetadata::writeToJson(QJsonObject& json) const
     }
 }
 
-void DocumentMetadata::readFromJson(const QJsonObject& json)
+std::optional<DocumentMetadata> DocumentMetadata::fromJson(const QJsonObject& json)
 {
+    DocumentMetadata metadata;
+
     if (json.contains("stakes"))
     {
-        QJsonArray array = json["stakes"].toArray();
-        for (const QJsonValue& value : array)
+        QList<QJsonObject> stakes;
+        if (!StrictJson::readObjectArray(json, QLatin1String("stakes"), stakes) || stakes.isEmpty())
         {
-            Stake stake = Stake::fromJson(value.toObject());
-            m_stakes.insert(stake.unitNumber(), stake);
+            return std::nullopt;
+        }
+        for (const QJsonObject& stakeJson : stakes)
+        {
+            const std::optional<Stake> stake = Stake::fromJson(stakeJson);
+            if (!stake.has_value() || metadata.m_stakes.contains(stake.value().unitNumber()))
+            {
+                return std::nullopt;
+            }
+            metadata.m_stakes.insert(stake.value().unitNumber(), stake.value());
         }
     }
 
     if (json.contains("wards"))
     {
-        QJsonArray array = json["wards"].toArray();
-        for (const QJsonValue& value : array)
+        QList<QJsonObject> wards;
+        if (!StrictJson::readObjectArray(json, QLatin1String("wards"), wards) || wards.isEmpty())
         {
-            Ward ward = Ward::fromJson(value.toObject());
-            m_wards.insert(ward.unitNumber(), ward);
+            return std::nullopt;
+        }
+        for (const QJsonObject& wardJson : wards)
+        {
+            const std::optional<Ward> ward = Ward::fromJson(wardJson);
+            if (!ward.has_value() || metadata.m_wards.contains(ward.value().unitNumber()))
+            {
+                return std::nullopt;
+            }
+            metadata.m_wards.insert(ward.value().unitNumber(), ward.value());
         }
     }
+
+    return metadata;
 }
 
 // ============================================================================

@@ -1,4 +1,5 @@
 #include "Stake.h"
+#include "StrictJson.h"
 
 void Stake::setName(const QString& name)
 {
@@ -63,32 +64,64 @@ QJsonObject Stake::toJson() const
     return json;
 }
 
-Stake Stake::fromJson(const QJsonObject& json)
+std::optional<Stake> Stake::fromJson(const QJsonObject& json)
 {
+    if (!StrictJson::hasOnlyKeys(json,
+                                 {QLatin1String("name"),
+                                  QLatin1String("unitNumber"),
+                                  QLatin1String("phone"),
+                                  QLatin1String("email"),
+                                  QLatin1String("stakeCenterAddress"),
+                                  QLatin1String("stakeCenterLat"),
+                                  QLatin1String("stakeCenterLng"),
+                                  QLatin1String("wardUnitNumbers")}))
+    {
+        return std::nullopt;
+    }
+
     Stake stake;
 
-    stake.m_unitNumber = json["unitNumber"].toString();
-    stake.m_name = json["name"].toString();
-    stake.m_phone = json["phone"].toString();
-    stake.m_email = json["email"].toString();
-    stake.m_stakeCenterAddress = json["stakeCenterAddress"].toString();
-
-    if (json.contains("stakeCenterLat"))
+    // Written only when not empty.
+    for (const auto& [key, field] : {std::pair{QLatin1String("name"), &stake.m_name},
+                                     std::pair{QLatin1String("unitNumber"), &stake.m_unitNumber},
+                                     std::pair{QLatin1String("phone"), &stake.m_phone},
+                                     std::pair{QLatin1String("email"), &stake.m_email},
+                                     std::pair{QLatin1String("stakeCenterAddress"), &stake.m_stakeCenterAddress}})
     {
-        stake.m_stakeCenterLat = json["stakeCenterLat"].toDouble();
-    }
-    if (json.contains("stakeCenterLng"))
-    {
-        stake.m_stakeCenterLng = json["stakeCenterLng"].toDouble();
+        if (json.contains(key) && !StrictJson::readNonEmptyString(json, key, *field))
+        {
+            return std::nullopt;
+        }
     }
 
-    // Deserialize ward unit numbers
+    double coordinate = 0.0;
+    for (const auto& [key, field] : {std::pair{QLatin1String("stakeCenterLat"), &stake.m_stakeCenterLat},
+                                     std::pair{QLatin1String("stakeCenterLng"), &stake.m_stakeCenterLng}})
+    {
+        if (json.contains(key))
+        {
+            if (!StrictJson::readDouble(json, key, coordinate))
+            {
+                return std::nullopt;
+            }
+            *field = coordinate;
+        }
+    }
+
     if (json.contains("wardUnitNumbers"))
     {
-        QJsonArray wardUnitsArray = json["wardUnitNumbers"].toArray();
-        for (const QJsonValue& value : wardUnitsArray)
+        QStringList units;
+        if (!StrictJson::readStringArray(json, QLatin1String("wardUnitNumbers"), units) || units.isEmpty())
         {
-            stake.m_wardUnitNumbers.insert(value.toString());
+            return std::nullopt;
+        }
+        for (const QString& unit : units)
+        {
+            if (unit.isEmpty() || stake.m_wardUnitNumbers.contains(unit))
+            {
+                return std::nullopt;
+            }
+            stake.m_wardUnitNumbers.insert(unit);
         }
     }
 

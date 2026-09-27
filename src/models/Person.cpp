@@ -1,4 +1,5 @@
 #include "Person.h"
+#include "StrictJson.h"
 
 Person Person::create(const Name& name,
                       bool isParent,
@@ -128,37 +129,104 @@ QJsonObject Person::toJson() const
     return json;
 }
 
-Person Person::fromJson(const QJsonObject& json)
+std::optional<Person> Person::fromJson(const QJsonObject& json)
 {
+    if (!StrictJson::hasOnlyKeys(json,
+                                 {QLatin1String("id"),
+                                  QLatin1String("name"),
+                                  QLatin1String("phone"),
+                                  QLatin1String("altPhone"),
+                                  QLatin1String("email"),
+                                  QLatin1String("gender"),
+                                  QLatin1String("birthday"),
+                                  QLatin1String("callings"),
+                                  QLatin1String("stakeUnitNumber"),
+                                  QLatin1String("wardUnitNumber"),
+                                  QLatin1String("isParent"),
+                                  QLatin1String("specialNeedNote")}))
+    {
+        return std::nullopt;
+    }
+
     Person person;
-    person.m_id = PersonId::fromString(json["id"].toString());
-    person.m_name = Name(json["name"].toString());
-    person.m_phone = Phone(json["phone"].toString());
-    person.m_altPhone = Phone(json["altPhone"].toString());
-    person.m_email = json["email"].toString();
-
-    if (json.contains("gender"))
+    QString name;
+    if (!StrictJson::readId(json, QLatin1String("id"), person.m_id)
+        || !StrictJson::readString(json, QLatin1String("name"), name))
     {
-        person.m_gender = Gender::fromString(json["gender"].toString());
+        return std::nullopt;
     }
-    if (json.contains("birthday"))
-    {
-        person.m_birthday = Birthday::fromJson(json["birthday"].toObject());
-    }
+    person.m_name = Name(name);
 
-    if (json.contains("callings"))
+    // Written only when not empty.
+    QString text;
+    for (const auto& [key, field] : {std::pair{QLatin1String("stakeUnitNumber"), &person.m_stakeUnitNumber},
+                                     std::pair{QLatin1String("wardUnitNumber"), &person.m_wardUnitNumber},
+                                     std::pair{QLatin1String("specialNeedNote"), &person.m_specialNeedNote},
+                                     std::pair{QLatin1String("email"), &person.m_email}})
     {
-        QJsonArray callingsArray = json["callings"].toArray();
-        for (const QJsonValue& value : callingsArray)
+        if (json.contains(key))
         {
-            person.m_callings.append(value.toString());
+            if (!StrictJson::readNonEmptyString(json, key, text))
+            {
+                return std::nullopt;
+            }
+            *field = text;
         }
     }
 
-    person.m_stakeUnitNumber = json["stakeUnitNumber"].toString();
-    person.m_wardUnitNumber = json["wardUnitNumber"].toString();
-    person.m_isParent = json["isParent"].toBool();  // false if missing
-    person.m_specialNeedNote = json["specialNeedNote"].toString();  // empty if missing
+    for (const auto& [key, field] : {std::pair{QLatin1String("phone"), &person.m_phone},
+                                     std::pair{QLatin1String("altPhone"), &person.m_altPhone}})
+    {
+        if (json.contains(key))
+        {
+            if (!StrictJson::readNonEmptyString(json, key, text))
+            {
+                return std::nullopt;
+            }
+            *field = Phone(text);
+        }
+    }
+
+    if (json.contains("gender"))
+    {
+        person.m_gender = Gender::fromJson(json.value("gender"));
+        if (!person.m_gender.has_value())
+        {
+            return std::nullopt;
+        }
+    }
+
+    if (json.contains("birthday"))
+    {
+        QJsonObject birthdayJson;
+        if (!StrictJson::readObject(json, QLatin1String("birthday"), birthdayJson))
+        {
+            return std::nullopt;
+        }
+        // Written only for a birthday with a date.
+        const std::optional<Birthday> birthday = Birthday::fromJson(birthdayJson);
+        if (!birthday.has_value() || !birthday.value().hasDate())
+        {
+            return std::nullopt;
+        }
+        person.m_birthday = birthday.value();
+    }
+
+    if (json.contains("callings")
+        && (!StrictJson::readStringArray(json, QLatin1String("callings"), person.m_callings)
+            || person.m_callings.isEmpty()))
+    {
+        return std::nullopt;
+    }
+
+    // Written only when true.
+    if (json.contains("isParent"))
+    {
+        if (!StrictJson::readBool(json, QLatin1String("isParent"), person.m_isParent) || !person.m_isParent)
+        {
+            return std::nullopt;
+        }
+    }
 
     return person;
 }

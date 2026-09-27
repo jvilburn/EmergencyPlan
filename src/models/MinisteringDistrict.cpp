@@ -1,4 +1,5 @@
 #include "MinisteringDistrict.h"
+#include "StrictJson.h"
 
 MinisteringDistrict MinisteringDistrict::create(
     const QString& name,
@@ -37,28 +38,39 @@ QJsonObject MinisteringDistrict::toJson() const
     return json;
 }
 
-MinisteringDistrict MinisteringDistrict::fromJson(const QJsonObject& json)
+std::optional<MinisteringDistrict> MinisteringDistrict::fromJson(const QJsonObject& json)
 {
-    MinisteringDistrict district;
-    district.m_id = MinisteringDistrictId::fromString(json["id"].toString());
-    district.m_name = json["name"].toString();
-
-    if (json.contains("presidencyMemberId") && !json["presidencyMemberId"].isNull())
+    if (!StrictJson::hasOnlyKeys(json,
+                                 {QLatin1String("id"),
+                                  QLatin1String("name"),
+                                  QLatin1String("presidencyMemberId"),
+                                  QLatin1String("groupIds")}))
     {
-        QString pmStr = json["presidencyMemberId"].toString();
-        if (!pmStr.isEmpty())
-        {
-            district.m_presidencyMemberId = PersonId::fromString(pmStr);
-        }
+        return std::nullopt;
     }
 
-    if (json.contains("groupIds"))
+    MinisteringDistrict district;
+    if (!StrictJson::readId(json, QLatin1String("id"), district.m_id)
+        || !StrictJson::readString(json, QLatin1String("name"), district.m_name))
     {
-        QJsonArray groupIdsArray = json["groupIds"].toArray();
-        for (const QJsonValue& value : groupIdsArray)
+        return std::nullopt;
+    }
+
+    if (json.contains("presidencyMemberId"))
+    {
+        PersonId member;
+        if (!StrictJson::readId(json, QLatin1String("presidencyMemberId"), member))
         {
-            district.m_groupIds.insert(MinisteringGroupId::fromString(value.toString()));
+            return std::nullopt;
         }
+        district.m_presidencyMemberId = member;
+    }
+
+    if (json.contains("groupIds")
+        && (!StrictJson::readIdSet(json, QLatin1String("groupIds"), district.m_groupIds)
+            || district.m_groupIds.isEmpty()))
+    {
+        return std::nullopt;
     }
 
     return district;
