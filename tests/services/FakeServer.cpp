@@ -2,6 +2,7 @@
 
 #include "DocumentCrypto.h"
 #include "HexCodec.h"
+#include "Pairing.h"
 
 using namespace ServerContract;
 
@@ -112,13 +113,25 @@ Result<Session> FakeServer::authenticate(const VerifyKey& device,
 
 // --- Documents -----------------------------------------------------------------
 
-Result<qint64> FakeServer::registerDocument(const Session& session, const Upload& upload)
+Result<qint64> FakeServer::registerDocument(const Session& session,
+                                            const Upload& upload,
+                                            const QByteArray& requestSignature)
 {
     VerifyKey device;
     const ServerError failure = authenticated(session, device);
     if (failure != ServerError::None)
     {
         return Result<qint64>::failure(failure);
+    }
+
+    const ServerError requestCheck = signedBy(device,
+                                              Endpoint::RegisterDocument,
+                                              upload.header.documentId,
+                                              registerBody(upload),
+                                              requestSignature);
+    if (requestCheck != ServerError::None)
+    {
+        return Result<qint64>::failure(requestCheck);
     }
 
     if (!withinLimits(m_registrations,
@@ -163,6 +176,18 @@ Result<qint64> FakeServer::registerDocument(const Session& session, const Upload
     if (writer.value().verifyKey != device)
     {
         return Result<qint64>::failure(ServerError::InvalidRequest);
+    }
+
+    // The registering person may bring their own other devices, each one vouched
+    // for by a pairing with the registering device itself. Anyone who has seen a
+    // header knows a device's public keys; without this, a stranger could list
+    // someone else's device in a look-alike ward and have it appear on their list.
+    for (const RecipientEntry& entry : header.recipients)
+    {
+        if (entry.fingerprint != writer.value().fingerprint && !pairedWith(entry.fingerprint, device))
+        {
+            return Result<qint64>::failure(ServerError::DeviceNotInvited);
+        }
     }
 
     StoredDocument document;
@@ -303,7 +328,8 @@ Result<Snapshot> FakeServer::download(const Session& session, const QString& doc
 Result<qint64> FakeServer::upload(const Session& session,
                                   const QString& documentId,
                                   qint64 baseVersion,
-                                  const Upload& upload)
+                                  const Upload& upload,
+                                  const QByteArray& requestSignature)
 {
     VerifyKey device;
     StoredDocument* document = nullptr;
@@ -311,6 +337,16 @@ Result<qint64> FakeServer::upload(const Session& session,
     if (failure != ServerError::None)
     {
         return Result<qint64>::failure(failure);
+    }
+
+    const ServerError requestCheck = signedBy(device,
+                                              Endpoint::Upload,
+                                              documentId,
+                                              uploadBody(baseVersion, upload),
+                                              requestSignature);
+    if (requestCheck != ServerError::None)
+    {
+        return Result<qint64>::failure(requestCheck);
     }
 
     if (document->forceConflict)
@@ -322,6 +358,13 @@ Result<qint64> FakeServer::upload(const Session& session,
     if (baseVersion != document->version)
     {
         return Result<qint64>::failure(ServerError::VersionConflict);
+    }
+
+    // Accepted uploads are what advance the save counter, so they are what is
+    // counted: pushing it to its cap takes uploads this limit makes centuries long.
+    if (!withinLimits(m_uploads, device, m_limits.uploadsPerHour, 0))
+    {
+        return Result<qint64>::failure(ServerError::RateLimited);
     }
 
     const DocumentHeader& current = document->current();
@@ -349,6 +392,13 @@ Result<qint64> FakeServer::upload(const Session& session,
     if (!DocumentCrypto::verifyLink(current, next))
     {
         return Result<qint64>::failure(ServerError::ChainRefused);
+    }
+
+    // The chain requires only a rise. The server sees every version, so it alone
+    // can bound each one, which keeps any member from pinning the counter at its cap.
+    if (next.saveCounter - current.saveCounter > DocumentHeader::MaxSaveCounterStep)
+    {
+        return Result<qint64>::failure(ServerError::CounterJump);
     }
 
     const QHash<QString, RecipientEntry> before = byFingerprint(current);
@@ -391,6 +441,7 @@ Result<qint64> FakeServer::upload(const Session& session,
     document->version = version;
     document->blob = upload.blob;
     document->history.append(StoredVersion{version, next, kept});
+    m_uploads[device.bytes].append(m_now);
 
     for (const QString& fingerprint : consumedRequests)
     {
@@ -402,7 +453,9 @@ Result<qint64> FakeServer::upload(const Session& session,
 
 // --- Lease ---------------------------------------------------------------------
 
-Result<Lease> FakeServer::takeLease(const Session& session, const QString& documentId)
+Result<Lease> FakeServer::takeLease(const Session& session,
+                                    const QString& documentId,
+                                    const QByteArray& requestSignature)
 {
     VerifyKey device;
     StoredDocument* document = nullptr;
@@ -410,6 +463,16 @@ Result<Lease> FakeServer::takeLease(const Session& session, const QString& docum
     if (failure != ServerError::None)
     {
         return Result<Lease>::failure(failure);
+    }
+
+    const ServerError requestCheck = signedBy(device,
+                                              Endpoint::TakeLease,
+                                              documentId,
+                                              emptyBody(),
+                                              requestSignature);
+    if (requestCheck != ServerError::None)
+    {
+        return Result<Lease>::failure(requestCheck);
     }
 
     const Fingerprint self = entryByVerifyKey(document->current(), device).value().fingerprint;
@@ -424,7 +487,9 @@ Result<Lease> FakeServer::takeLease(const Session& session, const QString& docum
     return Result<Lease>::success(document->lease.value());
 }
 
-Result<Done> FakeServer::releaseLease(const Session& session, const QString& documentId)
+Result<Done> FakeServer::releaseLease(const Session& session,
+                                      const QString& documentId,
+                                      const QByteArray& requestSignature)
 {
     VerifyKey device;
     StoredDocument* document = nullptr;
@@ -432,6 +497,16 @@ Result<Done> FakeServer::releaseLease(const Session& session, const QString& doc
     if (failure != ServerError::None)
     {
         return Result<Done>::failure(failure);
+    }
+
+    const ServerError requestCheck = signedBy(device,
+                                              Endpoint::ReleaseLease,
+                                              documentId,
+                                              emptyBody(),
+                                              requestSignature);
+    if (requestCheck != ServerError::None)
+    {
+        return Result<Done>::failure(requestCheck);
     }
 
     const Fingerprint self = entryByVerifyKey(document->current(), device).value().fingerprint;
@@ -450,13 +525,30 @@ Result<Done> FakeServer::releaseLease(const Session& session, const QString& doc
 
 Result<Done> FakeServer::requestAccess(const Session& session,
                                        const QString& documentId,
-                                       const AccessRequest& request)
+                                       const AccessRequest& request,
+                                       const QByteArray& requestSignature)
 {
     VerifyKey device;
     const ServerError failure = authenticated(session, device);
     if (failure != ServerError::None)
     {
         return Result<Done>::failure(failure);
+    }
+
+    const ServerError requestCheck = signedBy(device,
+                                              Endpoint::RequestAccess,
+                                              documentId,
+                                              requestAccessBody(request),
+                                              requestSignature);
+    if (requestCheck != ServerError::None)
+    {
+        return Result<Done>::failure(requestCheck);
+    }
+
+    // The one write open to a non-member, so the one a stranger can repeat.
+    if (!withinLimits(m_accessRequests, device, m_limits.requestsPerHour, 0))
+    {
+        return Result<Done>::failure(ServerError::RateLimited);
     }
 
     const auto found = m_documents.find(documentId);
@@ -477,6 +569,7 @@ Result<Done> FakeServer::requestAccess(const Session& session,
     stored.request = request;
     stored.requester = device;
     found.value().requests.insert(request.device.fingerprint().toHex(), stored);
+    m_accessRequests[device.bytes].append(m_now);
     return Result<Done>::success(Done());
 }
 
@@ -504,7 +597,8 @@ Result<QList<AccessRequest>> FakeServer::accessRequests(const Session& session,
 
 Result<Done> FakeServer::clearAccessRequest(const Session& session,
                                             const QString& documentId,
-                                            const Fingerprint& requester)
+                                            const Fingerprint& requester,
+                                            const QByteArray& requestSignature)
 {
     VerifyKey device;
     StoredDocument* document = nullptr;
@@ -512,6 +606,16 @@ Result<Done> FakeServer::clearAccessRequest(const Session& session,
     if (failure != ServerError::None)
     {
         return Result<Done>::failure(failure);
+    }
+
+    const ServerError requestCheck = signedBy(device,
+                                              Endpoint::ClearAccessRequest,
+                                              documentId,
+                                              clearAccessRequestBody(requester),
+                                              requestSignature);
+    if (requestCheck != ServerError::None)
+    {
+        return Result<Done>::failure(requestCheck);
     }
 
     const auto stored = document->requests.find(requester.toHex());
@@ -580,13 +684,24 @@ Result<QStringList> FakeServer::myDocuments(const Session& session)
 
 Result<QString> FakeServer::startPairing(const Session& session,
                                          const QString& deviceName,
-                                         const QByteArray& commitment)
+                                         const QByteArray& commitment,
+                                         const QByteArray& requestSignature)
 {
     VerifyKey device;
     const ServerError failure = authenticated(session, device);
     if (failure != ServerError::None)
     {
         return Result<QString>::failure(failure);
+    }
+
+    const ServerError requestCheck = signedBy(device,
+                                              Endpoint::StartPairing,
+                                              QString(),
+                                              startPairingBody(deviceName, commitment),
+                                              requestSignature);
+    if (requestCheck != ServerError::None)
+    {
+        return Result<QString>::failure(requestCheck);
     }
 
     if (!withinLimits(m_pairingStarts, device, m_limits.pairingsPerHour, 0))
@@ -599,17 +714,10 @@ Result<QString> FakeServer::startPairing(const Session& session,
         return Result<QString>::failure(ServerError::InvalidRequest);
     }
 
-    // A lookup handle, not a secret: eight digits someone can type.
     QString code;
     do
     {
-        const QByteArray random = DocumentCrypto::generateDataKey().bytes;
-        quint32 number = 0;
-        for (int index = 0; index < 4; ++index)
-        {
-            number = (number << 8) | quint8(random.at(index));
-        }
-        code = QString::number(number % 100000000u).rightJustified(8, QLatin1Char('0'));
+        code = Pairing::newPairingCode();
     }
     while (m_pairings.contains(code));
 
@@ -668,13 +776,24 @@ Result<PairingState> FakeServer::pairing(const Session& session, const QString& 
 
 Result<Done> FakeServer::respondToPairing(const Session& session,
                                           const QString& code,
-                                          const DeviceKeys& responder)
+                                          const DeviceKeys& responder,
+                                          const QByteArray& requestSignature)
 {
     VerifyKey device;
     const ServerError failure = authenticated(session, device);
     if (failure != ServerError::None)
     {
         return Result<Done>::failure(failure);
+    }
+
+    const ServerError requestCheck = signedBy(device,
+                                              Endpoint::RespondToPairing,
+                                              QString(),
+                                              respondToPairingBody(code, responder),
+                                              requestSignature);
+    if (requestCheck != ServerError::None)
+    {
+        return Result<Done>::failure(requestCheck);
     }
 
     const auto found = m_pairings.find(code);
@@ -712,13 +831,24 @@ Result<Done> FakeServer::respondToPairing(const Session& session,
 Result<Done> FakeServer::revealPairing(const Session& session,
                                        const QString& code,
                                        const DeviceKeys& initiator,
-                                       const QByteArray& nonce)
+                                       const QByteArray& nonce,
+                                       const QByteArray& requestSignature)
 {
     VerifyKey device;
     const ServerError failure = authenticated(session, device);
     if (failure != ServerError::None)
     {
         return Result<Done>::failure(failure);
+    }
+
+    const ServerError requestCheck = signedBy(device,
+                                              Endpoint::RevealPairing,
+                                              QString(),
+                                              revealPairingBody(code, initiator, nonce),
+                                              requestSignature);
+    if (requestCheck != ServerError::None)
+    {
+        return Result<Done>::failure(requestCheck);
     }
 
     const auto found = m_pairings.find(code);
@@ -759,13 +889,26 @@ Result<Done> FakeServer::revealPairing(const Session& session,
     return Result<Done>::success(Done());
 }
 
-Result<Done> FakeServer::handOver(const Session& session, const QString& code, const QByteArray& handover)
+Result<Done> FakeServer::handOver(const Session& session,
+                                  const QString& code,
+                                  const QByteArray& handover,
+                                  const QByteArray& requestSignature)
 {
     VerifyKey device;
     const ServerError failure = authenticated(session, device);
     if (failure != ServerError::None)
     {
         return Result<Done>::failure(failure);
+    }
+
+    const ServerError requestCheck = signedBy(device,
+                                              Endpoint::HandOver,
+                                              QString(),
+                                              handOverBody(code, handover),
+                                              requestSignature);
+    if (requestCheck != ServerError::None)
+    {
+        return Result<Done>::failure(requestCheck);
     }
 
     const auto found = m_pairings.find(code);
@@ -969,6 +1112,28 @@ bool FakeServer::linkPermitted(const Fingerprint& device,
 
         const std::optional<RecipientEntry> responder = entryByVerifyKey(current, permission.responder);
         if (responder.has_value() && responder.value().member == member)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+ServerError FakeServer::signedBy(const VerifyKey& device,
+                                  Endpoint endpoint,
+                                  const QString& documentId,
+                                  const QByteArray& body,
+                                  const QByteArray& signature) const
+{
+    return requestVerifies(endpoint, documentId, body, signature, device) ? ServerError::None
+                                                                          : ServerError::Unauthenticated;
+}
+
+bool FakeServer::pairedWith(const Fingerprint& initiator, const VerifyKey& responder) const
+{
+    for (const LinkPermission& permission : m_linkPermissions)
+    {
+        if (permission.initiator == initiator && permission.responder == responder)
         {
             return true;
         }

@@ -45,8 +45,33 @@ QString Fingerprint::toGroupedHex() const
 
 Fingerprint Fingerprint::fromHex(const QString& hex)
 {
-    QString plain = hex;
-    plain.remove(GroupSeparator);
+    // What a person types after hearing it read aloud: either case, plain or in
+    // groups exactly as toGroupedHex writes them.
+    const QString text = hex.trimmed().toLower();
+
+    const int hexLength = Size * 2;
+    const int groupedLength = hexLength + hexLength / GroupLength - 1;
+
+    QString plain;
+    if (text.size() == hexLength)
+    {
+        plain = text;
+    }
+    else if (text.size() == groupedLength)
+    {
+        for (int index = 0; index < text.size(); ++index)
+        {
+            const bool separatorHere = (index + 1) % (GroupLength + 1) == 0;
+            if (separatorHere != (text.at(index) == GroupSeparator))
+            {
+                return Fingerprint();
+            }
+            if (!separatorHere)
+            {
+                plain.append(text.at(index));
+            }
+        }
+    }
 
     Fingerprint fingerprint;
     fingerprint.bytes = HexCodec::decode(plain, Size);

@@ -29,7 +29,7 @@ RosterDevice newDevice(const QString& name)
 
 RosterPerson newPerson(const QString& displayName,
                        const QString& deviceName,
-                       RosterPerson::Role role = RosterPerson::Role::Member)
+                       RosterPerson::Role role)
 {
     return RosterPerson::create(newMember(), displayName, newDevice(deviceName), role);
 }
@@ -111,11 +111,49 @@ void AccessRosterTest::deviceFromJsonRefusesMissingOrIllFormedFields()
     QVERIFY(!RosterDevice::fromJson(notHex).has_value());
 }
 
+void AccessRosterTest::parsersRefuseAnUnknownKey()
+{
+    AccessRoster roster;
+    const RosterPerson alice = newPerson("Alice Reed", "Laptop", RosterPerson::Role::Admin);
+    QVERIFY(roster.addPerson(alice));
+
+    // Each positive first, so a refusal below is the extra key and nothing else.
+    const QJsonObject device = alice.devices().first().toJson();
+    const QJsonObject person = alice.toJson();
+    const QJsonObject whole = roster.toJson();
+    QVERIFY(RosterDevice::fromJson(device).has_value());
+    QVERIFY(RosterPerson::fromJson(person).has_value());
+    QVERIFY(AccessRoster::fromJson(whole).has_value());
+
+    QJsonObject deviceExtra = device;
+    deviceExtra["trusted"] = true;
+    QVERIFY(!RosterDevice::fromJson(deviceExtra).has_value());
+
+    QJsonObject personExtra = person;
+    personExtra["canRemove"] = true;
+    QVERIFY(!RosterPerson::fromJson(personExtra).has_value());
+
+    QJsonObject rosterExtra = whole;
+    rosterExtra["owners"] = QJsonArray();
+    QVERIFY(!AccessRoster::fromJson(rosterExtra).has_value());
+
+    // And the same key buried a level down refuses the whole roster.
+    QJsonObject nested = whole;
+    QJsonArray people = nested["people"].toArray();
+    QJsonObject first = people.at(0).toObject();
+    QJsonArray devices = first["devices"].toArray();
+    devices.replace(0, deviceExtra);
+    first["devices"] = devices;
+    people.replace(0, first);
+    nested["people"] = people;
+    QVERIFY(!AccessRoster::fromJson(nested).has_value());
+}
+
 // --- People ------------------------------------------------------------------
 
 void AccessRosterTest::personAddsAndRemovesDevices()
 {
-    RosterPerson person = newPerson("Bob Hale", "Laptop");
+    RosterPerson person = newPerson("Bob Hale", "Laptop", RosterPerson::Role::Member);
     const RosterDevice phone = newDevice("Phone");
 
     QCOMPARE(person.deviceCount(), 1);
@@ -133,7 +171,7 @@ void AccessRosterTest::personAddsAndRemovesDevices()
 
 void AccessRosterTest::personRefusesToRemoveItsLastDevice()
 {
-    RosterPerson person = newPerson("Bob Hale", "Laptop");
+    RosterPerson person = newPerson("Bob Hale", "Laptop", RosterPerson::Role::Member);
     const Fingerprint only = person.devices().first().fingerprint();
 
     // A person without devices is a person nobody can reach. Taking the last one
@@ -144,7 +182,7 @@ void AccessRosterTest::personRefusesToRemoveItsLastDevice()
 
 void AccessRosterTest::personSortsDevicesByName()
 {
-    RosterPerson person = newPerson("Bob Hale", "Laptop");
+    RosterPerson person = newPerson("Bob Hale", "Laptop", RosterPerson::Role::Member);
     QVERIFY(person.addDevice(newDevice("Phone")));
     QVERIFY(person.addDevice(newDevice("Desktop")));
 
@@ -157,7 +195,7 @@ void AccessRosterTest::personSortsDevicesByName()
 
 void AccessRosterTest::personFromJsonRefusesADeviceListedTwice()
 {
-    const RosterPerson person = newPerson("Bob Hale", "Laptop");
+    const RosterPerson person = newPerson("Bob Hale", "Laptop", RosterPerson::Role::Member);
 
     QJsonObject json = person.toJson();
     QJsonArray devices = json["devices"].toArray();
@@ -190,7 +228,7 @@ void AccessRosterTest::personRoleRoundTripsThroughJson()
 
 void AccessRosterTest::personFromJsonRefusesAMissingOrUnknownRole()
 {
-    const QJsonObject complete = newPerson("Alice Reed", "Laptop").toJson();
+    const QJsonObject complete = newPerson("Alice Reed", "Laptop", RosterPerson::Role::Member).toJson();
 
     QJsonObject missing = complete;
     missing.remove("role");
@@ -216,7 +254,7 @@ void AccessRosterTest::personFromJsonRefusesAMissingOrUnknownRole()
 void AccessRosterTest::addsRemovesAndFindsPeople()
 {
     AccessRoster roster;
-    const RosterPerson alice = newPerson("Alice Reed", "Laptop");
+    const RosterPerson alice = newPerson("Alice Reed", "Laptop", RosterPerson::Role::Member);
 
     QVERIFY(roster.isEmpty());
     QVERIFY(roster.addPerson(alice));
@@ -232,11 +270,11 @@ void AccessRosterTest::addsRemovesAndFindsPeople()
 void AccessRosterTest::refusesAMemberIdAlreadyPresent()
 {
     AccessRoster roster;
-    const RosterPerson alice = newPerson("Alice Reed", "Laptop");
+    const RosterPerson alice = newPerson("Alice Reed", "Laptop", RosterPerson::Role::Member);
     QVERIFY(roster.addPerson(alice));
 
-    // A re-granted person gets a fresh member id, so an id arriving twice is a
-    // mistake or an attempt to overwrite someone.
+    // A member id is unique within the roster, so an id arriving while its person
+    // is still here is a mistake or an attempt to overwrite someone.
     const RosterPerson impostor =
         RosterPerson::create(alice.member(),
                              "Alice Reed",
@@ -249,7 +287,7 @@ void AccessRosterTest::refusesAMemberIdAlreadyPresent()
 void AccessRosterTest::addingTheSameDeviceTwiceLeavesOne()
 {
     AccessRoster roster;
-    const RosterPerson alice = newPerson("Alice Reed", "Laptop");
+    const RosterPerson alice = newPerson("Alice Reed", "Laptop", RosterPerson::Role::Member);
     QVERIFY(roster.addPerson(alice));
 
     const RosterDevice phone = newDevice("Phone");
@@ -262,8 +300,8 @@ void AccessRosterTest::addingTheSameDeviceTwiceLeavesOne()
 void AccessRosterTest::refusesADeviceHeldByAnotherPerson()
 {
     AccessRoster roster;
-    const RosterPerson alice = newPerson("Alice Reed", "Laptop");
-    const RosterPerson bob = newPerson("Bob Hale", "Desktop");
+    const RosterPerson alice = newPerson("Alice Reed", "Laptop", RosterPerson::Role::Member);
+    const RosterPerson bob = newPerson("Bob Hale", "Desktop", RosterPerson::Role::Member);
     QVERIFY(roster.addPerson(alice));
     QVERIFY(roster.addPerson(bob));
 
@@ -277,8 +315,8 @@ void AccessRosterTest::refusesADeviceHeldByAnotherPerson()
 void AccessRosterTest::refusesADeviceSharingAKeyWithAnotherDevice()
 {
     AccessRoster roster;
-    const RosterPerson alice = newPerson("Alice Reed", "Laptop");
-    const RosterPerson bob = newPerson("Bob Hale", "Desktop");
+    const RosterPerson alice = newPerson("Alice Reed", "Laptop", RosterPerson::Role::Member);
+    const RosterPerson bob = newPerson("Bob Hale", "Desktop", RosterPerson::Role::Member);
     QVERIFY(roster.addPerson(alice));
     QVERIFY(roster.addPerson(bob));
 
@@ -317,7 +355,7 @@ void AccessRosterTest::refusesADeviceSharingAKeyWithAnotherDevice()
 void AccessRosterTest::findsAPersonAndDeviceByFingerprint()
 {
     AccessRoster roster;
-    const RosterPerson alice = newPerson("Alice Reed", "Laptop");
+    const RosterPerson alice = newPerson("Alice Reed", "Laptop", RosterPerson::Role::Member);
     QVERIFY(roster.addPerson(alice));
 
     const RosterDevice phone = newDevice("Phone");
@@ -338,7 +376,7 @@ void AccessRosterTest::findsAPersonAndDeviceByFingerprint()
 void AccessRosterTest::removingAPersonsLastDeviceIsRefused()
 {
     AccessRoster roster;
-    const RosterPerson alice = newPerson("Alice Reed", "Laptop");
+    const RosterPerson alice = newPerson("Alice Reed", "Laptop", RosterPerson::Role::Member);
     QVERIFY(roster.addPerson(alice));
 
     const Fingerprint only = alice.devices().first().fingerprint();
@@ -349,9 +387,9 @@ void AccessRosterTest::removingAPersonsLastDeviceIsRefused()
 void AccessRosterTest::twoPeopleSharingADisplayNameAreDistinctAndSortStably()
 {
     AccessRoster roster;
-    const RosterPerson first = newPerson("Chris Ford", "Laptop");
-    const RosterPerson second = newPerson("Chris Ford", "Phone");
-    const RosterPerson third = newPerson("Alice Reed", "Desktop");
+    const RosterPerson first = newPerson("Chris Ford", "Laptop", RosterPerson::Role::Member);
+    const RosterPerson second = newPerson("Chris Ford", "Phone", RosterPerson::Role::Member);
+    const RosterPerson third = newPerson("Alice Reed", "Desktop", RosterPerson::Role::Member);
 
     QVERIFY(roster.addPerson(first));
     QVERIFY(roster.addPerson(second));
@@ -372,9 +410,9 @@ void AccessRosterTest::twoPeopleSharingADisplayNameAreDistinctAndSortStably()
 void AccessRosterTest::peopleAndDevicesSortIgnoringCase()
 {
     AccessRoster roster;
-    const RosterPerson young = newPerson("Young", "Laptop");
-    const RosterPerson deGroot = newPerson("de Groot", "Laptop");
-    const RosterPerson adams = newPerson("Adams", "Laptop");
+    const RosterPerson young = newPerson("Young", "Laptop", RosterPerson::Role::Member);
+    const RosterPerson deGroot = newPerson("de Groot", "Laptop", RosterPerson::Role::Member);
+    const RosterPerson adams = newPerson("Adams", "Laptop", RosterPerson::Role::Member);
     QVERIFY(roster.addPerson(young));
     QVERIFY(roster.addPerson(deGroot));
     QVERIFY(roster.addPerson(adams));
@@ -386,7 +424,7 @@ void AccessRosterTest::peopleAndDevicesSortIgnoringCase()
     QCOMPARE(people.at(1).displayName(), QString("de Groot"));
     QCOMPARE(people.at(2).displayName(), QString("Young"));
 
-    RosterPerson person = newPerson("Adams", "Surface");
+    RosterPerson person = newPerson("Adams", "Surface", RosterPerson::Role::Member);
     QVERIFY(person.addDevice(newDevice("iPhone")));
     QVERIFY(person.addDevice(newDevice("Desktop")));
 
@@ -434,7 +472,7 @@ void AccessRosterTest::rosterRoundTripsThroughJson()
 {
     AccessRoster roster;
     const RosterPerson alice = newPerson("Alice Reed", "Laptop", RosterPerson::Role::Admin);
-    const RosterPerson bob = newPerson("Bob Hale", "Desktop");
+    const RosterPerson bob = newPerson("Bob Hale", "Desktop", RosterPerson::Role::Member);
     QVERIFY(roster.addPerson(alice));
     QVERIFY(roster.addPerson(bob));
     QVERIFY(roster.addDevice(alice.member(), newDevice("Phone")));
@@ -450,7 +488,7 @@ void AccessRosterTest::rosterRoundTripsThroughJson()
 void AccessRosterTest::rosterFromJsonRefusesAMalformedPerson()
 {
     AccessRoster roster;
-    QVERIFY(roster.addPerson(newPerson("Alice Reed", "Laptop")));
+    QVERIFY(roster.addPerson(newPerson("Alice Reed", "Laptop", RosterPerson::Role::Member)));
 
     QJsonObject json = roster.toJson();
     QJsonArray people = json["people"].toArray();
@@ -477,8 +515,8 @@ void AccessRosterTest::rosterFromJsonRefusesAMalformedPerson()
 void AccessRosterTest::rosterFromJsonRefusesADeviceUnderTwoPeople()
 {
     AccessRoster roster;
-    const RosterPerson alice = newPerson("Alice Reed", "Laptop");
-    const RosterPerson bob = newPerson("Bob Hale", "Desktop");
+    const RosterPerson alice = newPerson("Alice Reed", "Laptop", RosterPerson::Role::Member);
+    const RosterPerson bob = newPerson("Bob Hale", "Desktop", RosterPerson::Role::Member);
     QVERIFY(roster.addPerson(alice));
     QVERIFY(roster.addPerson(bob));
 
@@ -500,8 +538,8 @@ void AccessRosterTest::rosterFromJsonRefusesADeviceUnderTwoPeople()
 void AccessRosterTest::rosterFromJsonRefusesDevicesSharingAKey()
 {
     AccessRoster roster;
-    const RosterPerson alice = newPerson("Alice Reed", "Laptop");
-    const RosterPerson bob = newPerson("Bob Hale", "Desktop");
+    const RosterPerson alice = newPerson("Alice Reed", "Laptop", RosterPerson::Role::Member);
+    const RosterPerson bob = newPerson("Bob Hale", "Desktop", RosterPerson::Role::Member);
     QVERIFY(roster.addPerson(alice));
     QVERIFY(roster.addPerson(bob));
 
@@ -531,7 +569,7 @@ void AccessRosterTest::rosterFromJsonRefusesDevicesSharingAKey()
 void AccessRosterTest::documentCarriesTheRoster()
 {
     AccessRoster roster;
-    const RosterPerson alice = newPerson("Alice Reed", "Laptop");
+    const RosterPerson alice = newPerson("Alice Reed", "Laptop", RosterPerson::Role::Member);
     QVERIFY(roster.addPerson(alice));
 
     Document document = Document::empty();
@@ -544,26 +582,43 @@ void AccessRosterTest::documentCarriesTheRoster()
 void AccessRosterTest::documentParseAcceptsWhatToJsonWrote()
 {
     AccessRoster roster;
-    QVERIFY(roster.addPerson(newPerson("Alice Reed", "Laptop")));
-    QVERIFY(roster.addPerson(newPerson("Bob Hale", "Desktop")));
+    QVERIFY(roster.addPerson(newPerson("Alice Reed", "Laptop", RosterPerson::Role::Member)));
+    QVERIFY(roster.addPerson(newPerson("Bob Hale", "Desktop", RosterPerson::Role::Member)));
 
+    Document document = Document::empty();
+    document.setAccessRoster(roster);
+
+    // The whole document, not just the roster: a parse that dropped families or
+    // the emergency response would otherwise pass.
+    Document out;
+    QCOMPARE(Document::parse(document.toJson(), out), DocumentParse::Ok);
+    QVERIFY(out == document);
+}
+
+void AccessRosterTest::documentParseNeedsNewerVersionForALaterPayload()
+{
+    // A roster that parses, so a refusal below is about the version alone.
+    AccessRoster roster;
+    QVERIFY(roster.addPerson(newPerson("Alice Reed", "Laptop", RosterPerson::Role::Admin)));
     Document document = Document::empty();
     document.setAccessRoster(roster);
 
     Document out;
     QCOMPARE(Document::parse(document.toJson(), out), DocumentParse::Ok);
-    QVERIFY(out.accessRoster() == roster);
-}
-
-void AccessRosterTest::documentParseNeedsNewerVersionForALaterPayload()
-{
-    Document document = Document::empty();
 
     QJsonObject json = document.toJson();
     json["payloadVersion"] = Document::CurrentPayloadVersion + 1;
-
-    Document out;
     QCOMPARE(Document::parse(json, out), DocumentParse::NeedsNewerVersion);
+
+    // Far beyond any int: still a later version, never read as zero.
+    json["payloadVersion"] = 1e12;
+    QCOMPARE(Document::parse(json, out), DocumentParse::NeedsNewerVersion);
+
+    json["payloadVersion"] = 1.5;
+    QCOMPARE(Document::parse(json, out), DocumentParse::Malformed);
+
+    json["payloadVersion"] = 0;
+    QCOMPARE(Document::parse(json, out), DocumentParse::Malformed);
 
     json.remove("payloadVersion");
     QCOMPARE(Document::parse(json, out), DocumentParse::Malformed);
@@ -572,7 +627,7 @@ void AccessRosterTest::documentParseNeedsNewerVersionForALaterPayload()
 void AccessRosterTest::documentParseRefusesAMalformedRoster()
 {
     AccessRoster roster;
-    QVERIFY(roster.addPerson(newPerson("Alice Reed", "Laptop")));
+    QVERIFY(roster.addPerson(newPerson("Alice Reed", "Laptop", RosterPerson::Role::Member)));
 
     Document document = Document::empty();
     document.setAccessRoster(roster);
@@ -611,7 +666,7 @@ void AccessRosterTest::documentParseRefusesAnEmptyRoster()
 void AccessRosterTest::documentFromJsonDoesNotReadTheRoster()
 {
     AccessRoster roster;
-    QVERIFY(roster.addPerson(newPerson("Alice Reed", "Laptop")));
+    QVERIFY(roster.addPerson(newPerson("Alice Reed", "Laptop", RosterPerson::Role::Member)));
 
     Document document = Document::empty();
     document.setAccessRoster(roster);
@@ -631,7 +686,7 @@ void AccessRosterTest::rosterTakesPartInDocumentEquality()
     QVERIFY(first == second);
 
     AccessRoster roster;
-    QVERIFY(roster.addPerson(newPerson("Alice Reed", "Laptop")));
+    QVERIFY(roster.addPerson(newPerson("Alice Reed", "Laptop", RosterPerson::Role::Member)));
     first.setAccessRoster(roster);
 
     QVERIFY(!(first == second));

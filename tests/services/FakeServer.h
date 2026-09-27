@@ -19,10 +19,10 @@
 /// hashed, never read. If a test ever needs the fake to look inside it, the
 /// design has been violated somewhere.
 ///
-/// Beyond ServerApi it offers controls the real server must never have — going
+/// Beyond ServerApi it offers controls the real server must never have - going
 /// offline, forcing a conflict, holding the lease as someone else, withholding or
 /// substituting a header in the chain, and scripting what successive pairing
-/// reads return — so the client's negative tests can make the server misbehave.
+/// reads return - so the client's negative tests can make the server misbehave.
 class FakeServer : public ServerContract::ServerApi
 {
 public:
@@ -33,6 +33,8 @@ public:
         int registrationsPerKey = 20;
         int registrationsPerHour = 5;
         int pairingsPerHour = 10;
+        int requestsPerHour = 10;
+        int uploadsPerHour = 600;
         qint64 maxBlobBytes = 16 * 1024 * 1024;
         qint64 sessionSeconds = 15 * 60;
         qint64 leaseSeconds = 2 * 60;
@@ -50,7 +52,8 @@ public:
                                                                  const QByteArray& signature) override;
 
     ServerContract::Result<qint64> registerDocument(const ServerContract::Session& session,
-                                                    const ServerContract::Upload& upload) override;
+                                                    const ServerContract::Upload& upload,
+                                                    const QByteArray& requestSignature) override;
     ServerContract::Result<ServerContract::Head> head(const ServerContract::Session& session,
                                                       const QString& documentId) override;
     ServerContract::Result<ServerContract::HeaderChain> headers(const ServerContract::Session& session,
@@ -62,24 +65,29 @@ public:
     ServerContract::Result<qint64> upload(const ServerContract::Session& session,
                                           const QString& documentId,
                                           qint64 baseVersion,
-                                          const ServerContract::Upload& upload) override;
+                                          const ServerContract::Upload& upload,
+                                          const QByteArray& requestSignature) override;
 
     ServerContract::Result<ServerContract::Lease> takeLease(const ServerContract::Session& session,
-                                                            const QString& documentId) override;
+                                                            const QString& documentId,
+                                                            const QByteArray& requestSignature) override;
     ServerContract::Result<ServerContract::Done> releaseLease(const ServerContract::Session& session,
-                                                              const QString& documentId) override;
+                                                              const QString& documentId,
+                                                              const QByteArray& requestSignature) override;
 
     ServerContract::Result<ServerContract::Done> requestAccess(
         const ServerContract::Session& session,
         const QString& documentId,
-        const ServerContract::AccessRequest& request) override;
+        const ServerContract::AccessRequest& request,
+        const QByteArray& requestSignature) override;
     ServerContract::Result<QList<ServerContract::AccessRequest>> accessRequests(
         const ServerContract::Session& session,
         const QString& documentId) override;
     ServerContract::Result<ServerContract::Done> clearAccessRequest(
         const ServerContract::Session& session,
         const QString& documentId,
-        const Fingerprint& device) override;
+        const Fingerprint& device,
+        const QByteArray& requestSignature) override;
     ServerContract::Result<ServerContract::RequestStatus> myRequestStatus(
         const ServerContract::Session& session,
         const QString& documentId) override;
@@ -88,22 +96,26 @@ public:
 
     ServerContract::Result<QString> startPairing(const ServerContract::Session& session,
                                                  const QString& deviceName,
-                                                 const QByteArray& commitment) override;
+                                                 const QByteArray& commitment,
+                                                 const QByteArray& requestSignature) override;
     ServerContract::Result<ServerContract::PairingState> pairing(
         const ServerContract::Session& session,
         const QString& code) override;
     ServerContract::Result<ServerContract::Done> respondToPairing(
         const ServerContract::Session& session,
         const QString& code,
-        const DeviceKeys& responder) override;
+        const DeviceKeys& responder,
+        const QByteArray& requestSignature) override;
     ServerContract::Result<ServerContract::Done> revealPairing(
         const ServerContract::Session& session,
         const QString& code,
         const DeviceKeys& initiator,
-        const QByteArray& nonce) override;
+        const QByteArray& nonce,
+        const QByteArray& requestSignature) override;
     ServerContract::Result<ServerContract::Done> handOver(const ServerContract::Session& session,
                                                           const QString& code,
-                                                          const QByteArray& handover) override;
+                                                          const QByteArray& handover,
+                                                          const QByteArray& requestSignature) override;
 
     ServerContract::Result<ServerContract::Done> advanceClock(qint64 seconds) override;
 
@@ -199,6 +211,16 @@ private:
     bool linkPermitted(const Fingerprint& device,
                        const MemberId& member,
                        const DocumentHeader& current) const;
+
+    /// Unauthenticated unless the signature is this device's over this request.
+    ServerContract::ServerError signedBy(const VerifyKey& device,
+                                         ServerContract::Endpoint endpoint,
+                                         const QString& documentId,
+                                         const QByteArray& body,
+                                         const QByteArray& signature) const;
+
+    /// Whether this device completed a pairing with exactly this responder.
+    bool pairedWith(const Fingerprint& initiator, const VerifyKey& responder) const;
     QString randomToken() const;
 
     Limits m_limits;
@@ -212,4 +234,6 @@ private:
     QList<LinkPermission> m_linkPermissions;
     QHash<QByteArray, QList<QDateTime>> m_registrations;
     QHash<QByteArray, QList<QDateTime>> m_pairingStarts;
+    QHash<QByteArray, QList<QDateTime>> m_accessRequests;
+    QHash<QByteArray, QList<QDateTime>> m_uploads;
 };

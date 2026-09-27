@@ -2,8 +2,28 @@
 
 #include "DocumentCrypto.h"
 
+#include <QHash>
+
 using namespace ChainTestSupport;
 using namespace ServerContract;
+
+namespace
+{
+
+/// Session tokens are random and fresh per sign-in, so one table serves every
+/// server a run creates.
+QHash<QString, TestDevice>& signers()
+{
+    static QHash<QString, TestDevice> table;
+    return table;
+}
+
+QByteArray signAs(const Session& session, Endpoint endpoint, const QString& documentId, const QByteArray& body)
+{
+    return signRequest(endpoint, documentId, body, ServerTestSupport::signerOf(session).signing.signingKey);
+}
+
+} // namespace
 
 namespace ServerTestSupport
 {
@@ -19,7 +39,131 @@ std::optional<Session> signIn(ServerApi& server, const TestDevice& device)
     const QByteArray signature = DocumentCrypto::sign(SignatureTag::Auth,
                                                       challenge.value.value(),
                                                       device.signing.signingKey);
-    return server.authenticate(device.signing.verifyKey, challenge.value.value(), signature).value;
+    const std::optional<Session> session =
+        server.authenticate(device.signing.verifyKey, challenge.value.value(), signature).value;
+    if (session.has_value())
+    {
+        signers().insert(session.value().token, device);
+    }
+    return session;
+}
+
+const TestDevice& signerOf(const Session& session)
+{
+    const auto found = signers().constFind(session.token);
+    if (found == signers().constEnd())
+    {
+        qFatal("signerOf: a session that did not come from signIn");
+    }
+    return found.value();
+}
+
+Result<qint64> signedRegisterDocument(ServerApi& server, const Session& session, const Upload& upload)
+{
+    return server.registerDocument(
+        session,
+        upload,
+        signAs(session, Endpoint::RegisterDocument, upload.header.documentId, registerBody(upload)));
+}
+
+Result<qint64> signedUpload(ServerApi& server,
+                            const Session& session,
+                            const QString& documentId,
+                            qint64 baseVersion,
+                            const Upload& upload)
+{
+    return server.upload(session,
+                         documentId,
+                         baseVersion,
+                         upload,
+                         signAs(session, Endpoint::Upload, documentId, uploadBody(baseVersion, upload)));
+}
+
+Result<Lease> signedTakeLease(ServerApi& server, const Session& session, const QString& documentId)
+{
+    return server.takeLease(session,
+                            documentId,
+                            signAs(session, Endpoint::TakeLease, documentId, emptyBody()));
+}
+
+Result<Done> signedReleaseLease(ServerApi& server, const Session& session, const QString& documentId)
+{
+    return server.releaseLease(session,
+                               documentId,
+                               signAs(session, Endpoint::ReleaseLease, documentId, emptyBody()));
+}
+
+Result<Done> signedRequestAccess(ServerApi& server,
+                                 const Session& session,
+                                 const QString& documentId,
+                                 const AccessRequest& request)
+{
+    return server.requestAccess(
+        session,
+        documentId,
+        request,
+        signAs(session, Endpoint::RequestAccess, documentId, requestAccessBody(request)));
+}
+
+Result<Done> signedClearAccessRequest(ServerApi& server,
+                                      const Session& session,
+                                      const QString& documentId,
+                                      const Fingerprint& device)
+{
+    return server.clearAccessRequest(
+        session,
+        documentId,
+        device,
+        signAs(session, Endpoint::ClearAccessRequest, documentId, clearAccessRequestBody(device)));
+}
+
+Result<QString> signedStartPairing(ServerApi& server,
+                                   const Session& session,
+                                   const QString& deviceName,
+                                   const QByteArray& commitment)
+{
+    return server.startPairing(
+        session,
+        deviceName,
+        commitment,
+        signAs(session, Endpoint::StartPairing, QString(), startPairingBody(deviceName, commitment)));
+}
+
+Result<Done> signedRespondToPairing(ServerApi& server,
+                                    const Session& session,
+                                    const QString& code,
+                                    const DeviceKeys& responder)
+{
+    return server.respondToPairing(
+        session,
+        code,
+        responder,
+        signAs(session, Endpoint::RespondToPairing, QString(), respondToPairingBody(code, responder)));
+}
+
+Result<Done> signedRevealPairing(ServerApi& server,
+                                 const Session& session,
+                                 const QString& code,
+                                 const DeviceKeys& initiator,
+                                 const QByteArray& nonce)
+{
+    return server.revealPairing(
+        session,
+        code,
+        initiator,
+        nonce,
+        signAs(session, Endpoint::RevealPairing, QString(), revealPairingBody(code, initiator, nonce)));
+}
+
+Result<Done> signedHandOver(ServerApi& server,
+                            const Session& session,
+                            const QString& code,
+                            const QByteArray& handover)
+{
+    return server.handOver(session,
+                           code,
+                           handover,
+                           signAs(session, Endpoint::HandOver, QString(), handOverBody(code, handover)));
 }
 
 DeviceKeys keysOf(const TestDevice& device)
@@ -90,7 +234,7 @@ std::optional<SharedDocument> registerWardWith(ServerApi& server,
     const Upload upload =
         sealedUpload(buildHeader(ward.id, 1, 1, aliceDevices, ward.alice, ward.dataKey), ward.alice);
 
-    const Result<qint64> result = server.registerDocument(ward.aliceSession, upload);
+    const Result<qint64> result = signedRegisterDocument(server, ward.aliceSession, upload);
     if (!result.ok())
     {
         return std::nullopt;
@@ -138,7 +282,7 @@ ServerError publish(ServerApi& server,
                     const DocumentHeader& header)
 {
     const Upload upload = sealedUpload(header, writer);
-    const Result<qint64> result = server.upload(session, ward.id, ward.version, upload);
+    const Result<qint64> result = signedUpload(server, session, ward.id, ward.version, upload);
     if (result.ok())
     {
         ward.version = result.value.value();
@@ -156,8 +300,8 @@ std::optional<SharedDocument> wardOfThree(ServerApi& server)
     }
 
     SharedDocument& w = ward.value();
-    if (!server.requestAccess(w.bobSession, w.id, requestFor(w.bob, "")).ok()
-        || !server.requestAccess(w.carolSession, w.id, requestFor(w.carol, "")).ok())
+    if (!signedRequestAccess(server, w.bobSession, w.id, requestFor(w.bob, "")).ok()
+        || !signedRequestAccess(server, w.carolSession, w.id, requestFor(w.carol, "")).ok())
     {
         return std::nullopt;
     }
@@ -177,17 +321,17 @@ bool completePairing(ServerApi& server,
                      const TestDevice& responder,
                      const Session& responderSession)
 {
-    const Result<QString> code = server.startPairing(initiatorSession, "Phone", "a commitment");
+    const Result<QString> code = signedStartPairing(server, initiatorSession, "Phone", "a commitment");
     if (!code.ok())
     {
         return false;
     }
 
     return server.pairing(responderSession, code.value.value()).ok()
-        && server.respondToPairing(responderSession, code.value.value(), keysOf(responder)).ok()
-        && server.revealPairing(initiatorSession, code.value.value(), keysOf(initiator), "a nonce")
+        && signedRespondToPairing(server, responderSession, code.value.value(), keysOf(responder)).ok()
+        && signedRevealPairing(server, initiatorSession, code.value.value(), keysOf(initiator), "a nonce")
                .ok()
-        && server.handOver(responderSession, code.value.value(), "a signed handover").ok();
+        && signedHandOver(server, responderSession, code.value.value(), "a signed handover").ok();
 }
 
 } // namespace ServerTestSupport

@@ -1,16 +1,19 @@
-#include "models/AccessRosterTest.h"
-#include "services/AccessControlTest.h"
-#include "services/CryptoLinkTest.h"
-#include "services/CryptoTypesTest.h"
-#include "services/DocumentChainTest.h"
-#include "services/DocumentCryptoTest.h"
-#include "services/DocumentHeaderTest.h"
-#include "services/FakeServer.h"
-#include "services/FakeServerTest.h"
-#include "services/ServerConformanceTest.h"
-#include "services/SmokeTest.h"
-
+#include "AccessControlTest.h"
+#include "AccessRosterTest.h"
+#include "CryptoLinkTest.h"
+#include "CryptoTypesTest.h"
+#include "DocumentChainTest.h"
 #include "DocumentCrypto.h"
+#include "DocumentCryptoTest.h"
+#include "DocumentHeaderTest.h"
+#include "FakeServer.h"
+#include "FakeServerTest.h"
+#include "FormatVectorsTest.h"
+#include "PairingTest.h"
+#include "ReconcileTest.h"
+#include "ResponseMergeTest.h"
+#include "ServerConformanceTest.h"
+#include "SmokeTest.h"
 
 #include <QApplication>
 #include <QStandardPaths>
@@ -20,6 +23,11 @@
 
 namespace
 {
+
+std::unique_ptr<ServerContract::ServerApi> makeFakeServer()
+{
+    return std::make_unique<FakeServer>();
+}
 
 template<typename Suite, typename... Args>
 int run(int argc, char** argv, Args&&... args)
@@ -56,17 +64,15 @@ int main(int argc, char** argv)
     status |= run<CryptoTypesTest>(argc, argv);
     status |= run<DocumentCryptoTest>(argc, argv);
     status |= run<DocumentHeaderTest>(argc, argv);
+    status |= run<FormatVectorsTest>(argc, argv);
     status |= run<DocumentChainTest>(argc, argv);
     status |= run<AccessRosterTest>(argc, argv);
     status |= run<AccessControlTest>(argc, argv);
     status |= run<FakeServerTest>(argc, argv);
-    status |= run<ServerConformanceTest>(
-        argc,
-        argv,
-        []() -> std::unique_ptr<ServerContract::ServerApi>
-        {
-            return std::make_unique<FakeServer>();
-        });
+    status |= run<ServerConformanceTest>(argc, argv, makeFakeServer);
+    status |= run<ReconcileTest>(argc, argv);
+    status |= run<ResponseMergeTest>(argc, argv);
+    status |= run<PairingTest>(argc, argv);
 
     return status;
 }

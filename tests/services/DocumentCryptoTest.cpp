@@ -58,7 +58,8 @@ void DocumentCryptoTest::hashIsStableAndSeparatesDomains()
         HashDomain::Fingerprint,
         HashDomain::Payload,
         HashDomain::PairingCommit,
-        HashDomain::PairingComparison
+        HashDomain::PairingComparison,
+        HashDomain::Request
     };
 
     // Same length as well as same material, so the digests are told apart by the

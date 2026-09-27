@@ -192,7 +192,7 @@ void ResponseTask::clearAssignment()
     m_notification.reset();
 }
 
-void ResponseTask::setNotification(const TaskNotification& notification)
+void ResponseTask::setNotification(const std::optional<TaskNotification>& notification)
 {
     m_notification = notification;
 }
@@ -209,6 +209,15 @@ void ResponseTask::reopen()
     m_resolved = false;
     m_resolutionNotes.clear();
     m_resolvedAt.reset();
+}
+
+void ResponseTask::setResolution(bool resolved,
+                                 const QString& notes,
+                                 const std::optional<QDateTime>& resolvedAt)
+{
+    m_resolved = resolved;
+    m_resolutionNotes = notes;
+    m_resolvedAt = resolvedAt;
 }
 
 bool ResponseTask::isAssigned() const
@@ -463,7 +472,7 @@ FamilyResponseRecord FamilyResponseRecord::fromJson(const QJsonObject& json)
     record.m_address = json["address"].toString();
     record.m_contactStatus = contactStatusFromString(json["contactStatus"].toString());
 
-    // append (not prepend) — JSON array is already in most-recent-first order from toJson()
+    // append (not prepend) - JSON array is already in most-recent-first order from toJson()
     if (json.contains("contactAttempts"))
     {
         QJsonArray attemptsArray = json["contactAttempts"].toArray();
@@ -473,7 +482,7 @@ FamilyResponseRecord FamilyResponseRecord::fromJson(const QJsonObject& json)
         }
     }
 
-    // append (not prepend) — JSON array is already in most-recent-first order from toJson()
+    // append (not prepend) - JSON array is already in most-recent-first order from toJson()
     if (json.contains("tasks"))
     {
         QJsonArray tasksArray = json["tasks"].toArray();

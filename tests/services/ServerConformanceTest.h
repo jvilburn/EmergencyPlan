@@ -37,10 +37,14 @@ private slots:
     void refusesAChallengeSignedUnderAnotherTagOrKey();
     void aChallengeIsGoodForOneLogin();
     void anExpiredSessionIsUnauthenticated();
+    void aMutatingRequestMustBeSignedByTheCallingDevice();
+    void aRequestSignatureCoversItsBody();
+    void writesOpenToNonMembersAreSignedToo();
 
     // Registering a document
     void registersADocumentWithOnePerson();
     void aFirstHeaderListsExactlyOnePerson();
+    void aFirstHeaderBringsOnlyDevicesPairedWithTheRegisteringDevice();
     void aFirstHeaderIsWrittenAndSignedByTheRegisteringDevice();
     void refusesATakenDocumentId();
     void registrationIsRateLimited();
@@ -48,6 +52,8 @@ private slots:
     // Versions
     void writesAreConditionalOnTheStartingVersion();
     void versionAndKeyGenerationNeverDecrease();
+    void oneUploadRaisesTheSaveCounterOnlySoFar();
+    void uploadsAreRateLimited();
     void thePayloadHashMustMatchTheBlob();
     void theUploaderIsTheWriter();
 
@@ -76,9 +82,12 @@ private slots:
     void aMemberCannotRemoveAnyone();
     void aMemberLeavesByWritingTheirOwnLeave();
     void aRemovedPersonCanProveARemovalByAnAdminPromotedSince();
+    void aLastPersonsLeaveEndsTheDocument();
+    void aPersonWhoLeftOrWasRemovedIsGrantedAgainUnderTheSameMemberId();
 
     // Access requests
     void requestStatusIsReadableByItsDevice();
+    void accessRequestsAreRateLimited();
     void accessRequestsCarryTheirPairingCodeToMembers();
 
     // Authentication levels

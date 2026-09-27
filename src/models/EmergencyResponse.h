@@ -118,7 +118,7 @@ public:
     void assignToTeam(const TeamId& teamId, const QString& notes);
     void assignToPerson(const PersonId& personId, const QString& notes);
     void clearAssignment();
-    void setNotification(const TaskNotification& notification);
+    void setNotification(const std::optional<TaskNotification>& notification);
 
     // Resolution
     bool isResolved() const { return m_resolved; }
@@ -127,6 +127,10 @@ public:
 
     void resolve(const QString& notes);
     void reopen();
+
+    /// The resolution as one value - resolved, notes, and time together - for a
+    /// merge that takes it whole from one side.
+    void setResolution(bool resolved, const QString& notes, const std::optional<QDateTime>& resolvedAt);
 
     bool isAssigned() const;
     bool isNotified() const;
@@ -170,7 +174,11 @@ public:
     const QList<ContactAttempt>& contactAttempts() const { return m_contactAttempts; }
     const QList<ResponseTask>& tasks() const { return m_tasks; }
 
+    void setDisplayName(const QString& displayName) { m_displayName = displayName; }
+    void setAddress(const QString& address) { m_address = address; }
     void setContactStatus(ContactStatus status) { m_contactStatus = status; }
+    void setContactAttempts(const QList<ContactAttempt>& attempts) { m_contactAttempts = attempts; }
+    void setTasks(const QList<ResponseTask>& tasks) { m_tasks = tasks; }
     void addContactAttempt(const ContactAttempt& attempt);
     void removeContactAttempt(const ContactAttemptId& id);
     void addTask(const ResponseTask& task);
@@ -214,8 +222,12 @@ public:
     const QHash<FamilyId, FamilyResponseRecord>& familyRecords() const { return m_familyRecords; }
     const QStringList& taskCategories() const { return m_taskCategories; }
 
-    void setEndedAt(const QDateTime& endedAt) { m_endedAt = endedAt; }
+    void setName(const QString& name) { m_name = name; }
+    void setStartedAt(const QDateTime& startedAt) { m_startedAt = startedAt; }
+    void setEndedAt(const std::optional<QDateTime>& endedAt) { m_endedAt = endedAt; }
     void clearEndedAt() { m_endedAt.reset(); }
+    void setFamilyRecords(const QHash<FamilyId, FamilyResponseRecord>& records) { m_familyRecords = records; }
+    void setTaskCategories(const QStringList& categories) { m_taskCategories = categories; }
 
     // Family record management (called by EmergencyManager)
     void addFamilyRecord(const FamilyResponseRecord& record);

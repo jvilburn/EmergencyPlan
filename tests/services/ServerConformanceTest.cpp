@@ -16,6 +16,29 @@ namespace
 constexpr qint64 OneHour = 60 * 60;
 constexpr qint64 OneDay = 24 * OneHour;
 
+/// For a call the test expects to succeed. A failed call is recorded against the
+/// running test and yields an empty value, so against a real server one failure
+/// ends one test rather than throwing out of the whole runner.
+/// A request with an empty body - taking or releasing the lease - signed by this
+/// device for this endpoint and document, for tests that vary one of the three.
+QByteArray emptyBodySignature(const TestDevice& device, Endpoint endpoint, const QString& documentId)
+{
+    return signRequest(endpoint, documentId, emptyBody(), device.signing.signingKey);
+}
+
+template<typename T>
+T valueOf(const Result<T>& result, const char* file, int line)
+{
+    if (!result.ok())
+    {
+        QTest::qFail(qPrintable(QString("call failed with ServerError %1").arg(int(result.error))),
+                     file,
+                     line);
+        return T();
+    }
+    return result.value.value();
+}
+
 } // namespace
 
 ServerConformanceTest::ServerConformanceTest(
@@ -58,14 +81,14 @@ void ServerConformanceTest::refusesAChallengeSignedUnderAnotherTagOrKey()
 
     // A challenge the server chose, signed as if it were a header: the tag is what
     // stops login bytes standing in for document evidence, and the reverse.
-    const QByteArray first = server().challenge().value.value();
+    const QByteArray first = valueOf(server().challenge(), __FILE__, __LINE__);
     const QByteArray asHeader =
         DocumentCrypto::sign(SignatureTag::Header, first, device.signing.signingKey);
     QCOMPARE(server().authenticate(device.signing.verifyKey, first, asHeader).error,
              ServerError::Unauthenticated);
 
     // Someone else's key, claiming this device.
-    const QByteArray second = server().challenge().value.value();
+    const QByteArray second = valueOf(server().challenge(), __FILE__, __LINE__);
     const QByteArray byOther = DocumentCrypto::sign(SignatureTag::Auth, second, other.signing.signingKey);
     QCOMPARE(server().authenticate(device.signing.verifyKey, second, byOther).error,
              ServerError::Unauthenticated);
@@ -75,7 +98,7 @@ void ServerConformanceTest::aChallengeIsGoodForOneLogin()
 {
     const TestDevice device = newPerson();
 
-    const QByteArray challenge = server().challenge().value.value();
+    const QByteArray challenge = valueOf(server().challenge(), __FILE__, __LINE__);
     const QByteArray signature =
         DocumentCrypto::sign(SignatureTag::Auth, challenge, device.signing.signingKey);
 
@@ -94,6 +117,84 @@ void ServerConformanceTest::anExpiredSessionIsUnauthenticated()
     QCOMPARE(server().myDocuments(session.value()).error, ServerError::Unauthenticated);
 }
 
+void ServerConformanceTest::aMutatingRequestMustBeSignedByTheCallingDevice()
+{
+    std::optional<SharedDocument> ward = wardOfThree(server());
+    QVERIFY(ward.has_value());
+    SharedDocument& w = ward.value();
+
+    // A session token alone changes nothing.
+    QCOMPARE(server().takeLease(w.aliceSession, w.id, QByteArray()).error, ServerError::Unauthenticated);
+
+    // Signed, but by another member: a token taken from Alice is not enough even
+    // with a key of Bob's.
+    const QByteArray byBob = emptyBodySignature(w.bob, Endpoint::TakeLease, w.id);
+    QCOMPARE(server().takeLease(w.aliceSession, w.id, byBob).error, ServerError::Unauthenticated);
+
+    // Alice's own signature, captured from a request to another ward.
+    const QByteArray otherWard = emptyBodySignature(w.alice, Endpoint::TakeLease, newDocumentId());
+    QCOMPARE(server().takeLease(w.aliceSession, w.id, otherWard).error, ServerError::Unauthenticated);
+
+    // And from another endpoint with the same empty body.
+    const QByteArray otherEndpoint = emptyBodySignature(w.alice, Endpoint::ReleaseLease, w.id);
+    QCOMPARE(server().takeLease(w.aliceSession, w.id, otherEndpoint).error, ServerError::Unauthenticated);
+
+    // The control: signed by Alice, for this ward and this endpoint.
+    const QByteArray byAlice = emptyBodySignature(w.alice, Endpoint::TakeLease, w.id);
+    QVERIFY(server().takeLease(w.aliceSession, w.id, byAlice).ok());
+}
+
+void ServerConformanceTest::aRequestSignatureCoversItsBody()
+{
+    std::optional<SharedDocument> ward = wardOfThree(server());
+    QVERIFY(ward.has_value());
+    SharedDocument& w = ward.value();
+
+    const Upload upload = sealedUpload(nextHeader(w, {w.alice, w.bob, w.carol}, w.alice), w.alice);
+    const QByteArray signature = signRequest(Endpoint::Upload,
+                                             w.id,
+                                             uploadBody(w.version, upload),
+                                             w.alice.signing.signingKey);
+
+    // The signature was for this upload built on this version; the same bytes
+    // offered against another base version, or with another header, are refused.
+    QCOMPARE(server().upload(w.aliceSession, w.id, w.version - 1, upload, signature).error,
+             ServerError::Unauthenticated);
+
+    const Upload other = sealedUpload(nextHeader(w, {w.alice, w.bob, w.carol}, w.alice), w.alice);
+    QCOMPARE(server().upload(w.aliceSession, w.id, w.version, other, signature).error,
+             ServerError::Unauthenticated);
+
+    QVERIFY(server().upload(w.aliceSession, w.id, w.version, upload, signature).ok());
+}
+
+void ServerConformanceTest::writesOpenToNonMembersAreSignedToo()
+{
+    std::optional<SharedDocument> ward = wardOfThree(server());
+    QVERIFY(ward.has_value());
+
+    const TestDevice stranger = newPerson();
+    const std::optional<Session> session = signIn(server(), stranger);
+    QVERIFY(session.has_value());
+
+    // Device authentication is still the device's own key on each write.
+    QCOMPARE(server().requestAccess(session.value(), ward->id, requestFor(stranger, ""), QByteArray()).error,
+             ServerError::Unauthenticated);
+    QCOMPARE(server().startPairing(session.value(), "Phone", "a commitment", QByteArray()).error,
+             ServerError::Unauthenticated);
+
+    const Upload own = sealedUpload(
+        buildHeader(newDocumentId(), 1, 1, {stranger}, stranger, DocumentCrypto::generateDataKey()),
+        stranger);
+    QCOMPARE(server().registerDocument(session.value(), own, QByteArray()).error,
+             ServerError::Unauthenticated);
+
+    // Each one signed goes through.
+    QVERIFY(signedRequestAccess(server(), session.value(), ward->id, requestFor(stranger, "")).ok());
+    QVERIFY(signedStartPairing(server(), session.value(), "Phone", "a commitment").ok());
+    QVERIFY(signedRegisterDocument(server(), session.value(), own).ok());
+}
+
 // --- Registering a document --------------------------------------------------
 
 void ServerConformanceTest::registersADocumentWithOnePerson()
@@ -105,11 +206,36 @@ void ServerConformanceTest::registersADocumentWithOnePerson()
     const Result<Head> head = server().head(ward->aliceSession, ward->id);
     QVERIFY(head.ok());
     QVERIFY(head.value->header == ward->current);
+}
 
-    // One person may bring more than one of their own devices.
-    const TestDevice alice = newPerson();
+void ServerConformanceTest::aFirstHeaderBringsOnlyDevicesPairedWithTheRegisteringDevice()
+{
+    std::optional<SharedDocument> first = registerWard(server());
+    QVERIFY(first.has_value());
+    const TestDevice alice = first->alice;
+
+    // A device Alice never paired with, listed under her own member id: anyone
+    // who has seen a header knows its keys.
+    const TestDevice unpaired = newDeviceFor(alice.member);
+    const Upload withUnpaired = sealedUpload(
+        buildHeader(newDocumentId(), 1, 1, {alice, unpaired}, alice, DocumentCrypto::generateDataKey()),
+        alice);
+    QCOMPARE(signedRegisterDocument(server(), first->aliceSession, withUnpaired).error,
+             ServerError::DeviceNotInvited);
+    QCOMPARE(valueOf(server().myDocuments(first->aliceSession), __FILE__, __LINE__),
+             QStringList{first->id});
+
+    // Her phone, once paired with the registering device, comes along.
     const TestDevice alicePhone = newDeviceFor(alice.member);
-    QVERIFY(registerWardWith(server(), alice, {alice, alicePhone}).has_value());
+    const std::optional<Session> phoneSession = signIn(server(), alicePhone);
+    QVERIFY(phoneSession.has_value());
+    QVERIFY(completePairing(server(), alicePhone, phoneSession.value(), alice, first->aliceSession));
+
+    const std::optional<SharedDocument> second = registerWardWith(server(), alice, {alice, alicePhone});
+    QVERIFY(second.has_value());
+    const Result<QStringList> phoneDocuments = server().myDocuments(phoneSession.value());
+    QVERIFY(phoneDocuments.ok());
+    QCOMPARE(phoneDocuments.value.value(), QStringList{second->id});
 }
 
 void ServerConformanceTest::aFirstHeaderListsExactlyOnePerson()
@@ -124,7 +250,7 @@ void ServerConformanceTest::aFirstHeaderListsExactlyOnePerson()
     const Upload twoPeople = sealedUpload(
         buildHeader(newDocumentId(), 1, 1, {alice, bob}, alice, DocumentCrypto::generateDataKey()),
         alice);
-    QCOMPARE(server().registerDocument(session.value(), twoPeople).error, ServerError::ChainRefused);
+    QCOMPARE(signedRegisterDocument(server(), session.value(), twoPeople).error, ServerError::ChainRefused);
 }
 
 void ServerConformanceTest::aFirstHeaderIsWrittenAndSignedByTheRegisteringDevice()
@@ -140,19 +266,19 @@ void ServerConformanceTest::aFirstHeaderIsWrittenAndSignedByTheRegisteringDevice
     Upload badSignature =
         sealedUpload(buildHeader(newDocumentId(), 1, 1, {alice}, alice, key), alice);
     badSignature.header.writerSignature = QByteArray(DocumentCrypto::SignatureSize, '\0');
-    QCOMPARE(server().registerDocument(aliceSession.value(), badSignature).error,
+    QCOMPARE(signedRegisterDocument(server(), aliceSession.value(), badSignature).error,
              ServerError::ChainRefused);
 
     // Written by someone the header does not list.
     const Upload strangerWrote =
         sealedUpload(buildHeader(newDocumentId(), 1, 1, {alice}, bob, key), bob);
-    QCOMPARE(server().registerDocument(bobSession.value(), strangerWrote).error,
+    QCOMPARE(signedRegisterDocument(server(), bobSession.value(), strangerWrote).error,
              ServerError::ChainRefused);
 
     // Alice's valid first header, registered by Bob.
     const Upload alicesHeader =
         sealedUpload(buildHeader(newDocumentId(), 1, 1, {alice}, alice, key), alice);
-    QCOMPARE(server().registerDocument(bobSession.value(), alicesHeader).error,
+    QCOMPARE(signedRegisterDocument(server(), bobSession.value(), alicesHeader).error,
              ServerError::InvalidRequest);
 }
 
@@ -169,7 +295,7 @@ void ServerConformanceTest::refusesATakenDocumentId()
 
     const Upload sameId = sealedUpload(
         buildHeader(ward->id, 1, 1, {other}, other, DocumentCrypto::generateDataKey()), other);
-    QCOMPARE(server().registerDocument(session.value(), sameId).error, ServerError::IdTaken);
+    QCOMPARE(signedRegisterDocument(server(), session.value(), sameId).error, ServerError::IdTaken);
 }
 
 void ServerConformanceTest::registrationIsRateLimited()
@@ -186,7 +312,7 @@ void ServerConformanceTest::registrationIsRateLimited()
         const Upload upload = sealedUpload(
             buildHeader(newDocumentId(), 1, 1, {device}, device, DocumentCrypto::generateDataKey()),
             device);
-        const Result<qint64> result = server().registerDocument(session.value(), upload);
+        const Result<qint64> result = signedRegisterDocument(server(), session.value(), upload);
 
         if (result.error == ServerError::RateLimited)
         {
@@ -222,7 +348,7 @@ void ServerConformanceTest::writesAreConditionalOnTheStartingVersion()
                                           w.bob,
                                           w.dataKey);
     const Upload upload = sealedUpload(bobsEdit, w.bob);
-    QCOMPARE(server().upload(w.bobSession, w.id, started, upload).error,
+    QCOMPARE(signedUpload(server(), w.bobSession, w.id, started, upload).error,
              ServerError::VersionConflict);
 }
 
@@ -238,7 +364,7 @@ void ServerConformanceTest::versionAndKeyGenerationNeverDecrease()
     ward.alice = alice;
 
     const Upload first = sealedUpload(buildHeader(ward.id, 3, 1, {alice}, alice, ward.dataKey), alice);
-    QVERIFY(server().registerDocument(session.value(), first).ok());
+    QVERIFY(signedRegisterDocument(server(), session.value(), first).ok());
     ward.current = first.header;
     ward.version = 1;
 
@@ -253,6 +379,64 @@ void ServerConformanceTest::versionAndKeyGenerationNeverDecrease()
     QCOMPARE(ward.version, qint64(3));
 }
 
+void ServerConformanceTest::oneUploadRaisesTheSaveCounterOnlySoFar()
+{
+    std::optional<SharedDocument> ward = wardOfThree(server());
+    QVERIFY(ward.has_value());
+    SharedDocument& w = ward.value();
+    const QList<TestDevice> everyone = {w.alice, w.bob, w.carol};
+
+    // One past the step: a member pushing toward the cap.
+    const DocumentHeader tooFar = buildHeader(w.id,
+                                              w.current.keyGeneration,
+                                              w.current.saveCounter + DocumentHeader::MaxSaveCounterStep + 1,
+                                              everyone,
+                                              w.alice,
+                                              w.dataKey);
+    QCOMPARE(publish(server(), w, w.aliceSession, w.alice, tooFar), ServerError::CounterJump);
+
+    // Exactly the step: months of offline saves published at once.
+    const DocumentHeader longOffline = buildHeader(w.id,
+                                                   w.current.keyGeneration,
+                                                   w.current.saveCounter + DocumentHeader::MaxSaveCounterStep,
+                                                   everyone,
+                                                   w.alice,
+                                                   w.dataKey);
+    QCOMPARE(publish(server(), w, w.aliceSession, w.alice, longOffline), ServerError::None);
+}
+
+void ServerConformanceTest::uploadsAreRateLimited()
+{
+    std::optional<SharedDocument> ward = wardOfThree(server());
+    QVERIFY(ward.has_value());
+    SharedDocument& w = ward.value();
+    const QList<TestDevice> everyone = {w.alice, w.bob, w.carol};
+
+    // The limit is the server's configuration, so this asks only that there is
+    // one before two thousand - generous enough for a responder publishing
+    // every few seconds, and what makes pushing the counter to its cap take
+    // centuries.
+    bool limited = false;
+    for (int attempt = 0; attempt < 2000 && !limited; ++attempt)
+    {
+        const ServerError error =
+            publish(server(), w, w.aliceSession, w.alice, nextHeader(w, everyone, w.alice));
+        if (error == ServerError::RateLimited)
+        {
+            limited = true;
+        }
+        else
+        {
+            QCOMPARE(error, ServerError::None);
+        }
+    }
+
+    QVERIFY(limited);
+
+    // Another device is not held back by Alice's uploads.
+    QCOMPARE(publish(server(), w, w.bobSession, w.bob, nextHeader(w, everyone, w.bob)), ServerError::None);
+}
+
 void ServerConformanceTest::thePayloadHashMustMatchTheBlob()
 {
     std::optional<SharedDocument> ward = wardOfThree(server());
@@ -262,7 +446,7 @@ void ServerConformanceTest::thePayloadHashMustMatchTheBlob()
     Upload upload = sealedUpload(nextHeader(w, {w.alice, w.bob, w.carol}, w.alice), w.alice);
     upload.blob.append("tampered");
 
-    QCOMPARE(server().upload(w.aliceSession, w.id, w.version, upload).error,
+    QCOMPARE(signedUpload(server(), w.aliceSession, w.id, w.version, upload).error,
              ServerError::PayloadMismatch);
 }
 
@@ -274,7 +458,7 @@ void ServerConformanceTest::theUploaderIsTheWriter()
 
     const Upload alicesVersion =
         sealedUpload(nextHeader(w, {w.alice, w.bob, w.carol}, w.alice), w.alice);
-    QCOMPARE(server().upload(w.bobSession, w.id, w.version, alicesVersion).error,
+    QCOMPARE(signedUpload(server(), w.bobSession, w.id, w.version, alicesVersion).error,
              ServerError::InvalidRequest);
 }
 
@@ -292,11 +476,11 @@ void ServerConformanceTest::onlyCurrentDevicesReadOrWrite()
 
     QCOMPARE(server().head(session.value(), w.id).error, ServerError::NotAllowListed);
     QCOMPARE(server().download(session.value(), w.id).error, ServerError::NotAllowListed);
-    QCOMPARE(server().takeLease(session.value(), w.id).error, ServerError::NotAllowListed);
+    QCOMPARE(signedTakeLease(server(), session.value(), w.id).error, ServerError::NotAllowListed);
     QCOMPARE(server().accessRequests(session.value(), w.id).error, ServerError::NotAllowListed);
 
     const Upload upload = sealedUpload(nextHeader(w, {w.alice, w.bob, w.carol}, stranger), stranger);
-    QCOMPARE(server().upload(session.value(), w.id, w.version, upload).error,
+    QCOMPARE(signedUpload(server(), session.value(), w.id, w.version, upload).error,
              ServerError::NotAllowListed);
 }
 
@@ -316,7 +500,7 @@ void ServerConformanceTest::anAcceptedUploadChangesTheAllowListAtOnce()
     const TestDevice dave = newPerson();
     const std::optional<Session> daveSession = signIn(server(), dave);
     QVERIFY(daveSession.has_value());
-    QVERIFY(server().requestAccess(daveSession.value(), w.id, requestFor(dave, "")).ok());
+    QVERIFY(signedRequestAccess(server(), daveSession.value(), w.id, requestFor(dave, "")).ok());
     QCOMPARE(publish(server(), w, w.aliceSession, w.alice, nextHeader(w, {w.alice, w.carol, dave}, w.alice)),
              ServerError::None);
 
@@ -349,7 +533,7 @@ void ServerConformanceTest::everyUploadMustExtendTheChain()
     const TestDevice bobPhone = newDeviceFor(w.bob.member);
     const std::optional<Session> phoneSession = signIn(server(), bobPhone);
     QVERIFY(phoneSession.has_value());
-    QVERIFY(server().requestAccess(phoneSession.value(), w.id, requestFor(bobPhone, "")).ok());
+    QVERIFY(signedRequestAccess(server(), phoneSession.value(), w.id, requestFor(bobPhone, "")).ok());
 
     QCOMPARE(publish(server(), w, w.aliceSession, w.alice, nextHeader(w, {w.alice, w.bob, w.carol, bobPhone}, w.alice)),
              ServerError::ChainRefused);
@@ -482,7 +666,7 @@ void ServerConformanceTest::aDeviceJoinsOnlyByRequest()
     QCOMPARE(publish(server(), w, w.aliceSession, w.alice, nextHeader(w, withDave, w.alice)),
              ServerError::DeviceNotInvited);
 
-    QVERIFY(server().requestAccess(daveSession.value(), w.id, requestFor(dave, "")).ok());
+    QVERIFY(signedRequestAccess(server(), daveSession.value(), w.id, requestFor(dave, "")).ok());
     QCOMPARE(publish(server(), w, w.aliceSession, w.alice, nextHeader(w, withDave, w.alice)),
              ServerError::None);
 
@@ -503,11 +687,11 @@ void ServerConformanceTest::aDeviceRequestsOnlyForItself()
     QVERIFY(daveSession.has_value());
 
     // Dave asking on Eve's behalf would let him enrol a device he does not hold.
-    QCOMPARE(server().requestAccess(daveSession.value(), w.id, requestFor(eve, "")).error,
+    QCOMPARE(signedRequestAccess(server(), daveSession.value(), w.id, requestFor(eve, "")).error,
              ServerError::InvalidRequest);
 
     // A current member has nothing to ask for.
-    QCOMPARE(server().requestAccess(w.bobSession, w.id, requestFor(w.bob, "")).error,
+    QCOMPARE(signedRequestAccess(server(), w.bobSession, w.id, requestFor(w.bob, "")).error,
              ServerError::InvalidRequest);
 }
 
@@ -579,11 +763,11 @@ void ServerConformanceTest::anUnfinishedPairingPermitsNothing()
     QVERIFY(phoneSession.has_value());
 
     // Every step but the handover: the responder never vouched for it.
-    const Result<QString> code = server().startPairing(phoneSession.value(), "Phone", "a commitment");
+    const Result<QString> code = signedStartPairing(server(), phoneSession.value(), "Phone", "a commitment");
     QVERIFY(code.ok());
     QVERIFY(server().pairing(w.aliceSession, code.value.value()).ok());
-    QVERIFY(server().respondToPairing(w.aliceSession, code.value.value(), keysOf(w.alice)).ok());
-    QVERIFY(server().revealPairing(phoneSession.value(), code.value.value(), keysOf(alicePhone), "a nonce").ok());
+    QVERIFY(signedRespondToPairing(server(), w.aliceSession, code.value.value(), keysOf(w.alice)).ok());
+    QVERIFY(signedRevealPairing(server(), phoneSession.value(), code.value.value(), keysOf(alicePhone), "a nonce").ok());
 
     QCOMPARE(publish(server(), w, w.aliceSession, w.alice, nextHeader(w, {w.alice, alicePhone, w.bob, w.carol}, w.alice)),
              ServerError::DeviceNotInvited);
@@ -665,6 +849,57 @@ void ServerConformanceTest::aRemovedPersonCanProveARemovalByAnAdminPromotedSince
              ChainResult::Removed);
 }
 
+void ServerConformanceTest::aLastPersonsLeaveEndsTheDocument()
+{
+    std::optional<SharedDocument> ward = registerWard(server());
+    QVERIFY(ward.has_value());
+    SharedDocument& w = ward.value();
+    const qint64 before = w.version;
+
+    // Alice, alone, leaves: a version that lists no one and has no admin.
+    const DocumentHeader leave = buildHeader(w.id,
+                                             w.current.keyGeneration,
+                                             w.current.saveCounter + 1,
+                                             {},
+                                             w.alice,
+                                             w.dataKey,
+                                             {});
+    QCOMPARE(publish(server(), w, w.aliceSession, w.alice, leave), ServerError::None);
+    QCOMPARE(w.version, before + 1);
+
+    // Listed for nobody, readable by nobody, and nothing can follow it.
+    const Result<QStringList> documents = server().myDocuments(w.aliceSession);
+    QVERIFY(documents.ok());
+    QVERIFY(!documents.value->contains(w.id));
+    QCOMPARE(server().download(w.aliceSession, w.id).error, ServerError::NotAllowListed);
+
+    const Upload afterwards = sealedUpload(nextHeader(w, {w.alice}, w.alice), w.alice);
+    QCOMPARE(signedUpload(server(), w.aliceSession, w.id, w.version, afterwards).error,
+             ServerError::NotAllowListed);
+}
+
+void ServerConformanceTest::aPersonWhoLeftOrWasRemovedIsGrantedAgainUnderTheSameMemberId()
+{
+    std::optional<SharedDocument> ward = wardOfThree(server());
+    QVERIFY(ward.has_value());
+    SharedDocument& w = ward.value();
+
+    // Bob leaves; Alice removes Carol.
+    QCOMPARE(publish(server(), w, w.bobSession, w.bob, nextHeader(w, {w.alice, w.carol}, w.bob)),
+             ServerError::None);
+    QCOMPARE(publish(server(), w, w.aliceSession, w.alice, removalHeader(w, {w.alice}, w.alice)),
+             ServerError::None);
+
+    // Each asks again from the same device, under the same member id, and is let back in.
+    QVERIFY(signedRequestAccess(server(), w.bobSession, w.id, requestFor(w.bob, "")).ok());
+    QVERIFY(signedRequestAccess(server(), w.carolSession, w.id, requestFor(w.carol, "")).ok());
+    QCOMPARE(publish(server(), w, w.aliceSession, w.alice, nextHeader(w, {w.alice, w.bob, w.carol}, w.alice)),
+             ServerError::None);
+
+    QVERIFY(server().download(w.bobSession, w.id).ok());
+    QVERIFY(server().download(w.carolSession, w.id).ok());
+}
+
 // --- Access requests ---------------------------------------------------------
 
 void ServerConformanceTest::requestStatusIsReadableByItsDevice()
@@ -681,18 +916,50 @@ void ServerConformanceTest::requestStatusIsReadableByItsDevice()
     const std::optional<Session> frankSession = signIn(server(), frank);
     QVERIFY(daveSession.has_value() && eveSession.has_value() && frankSession.has_value());
 
-    QVERIFY(server().requestAccess(daveSession.value(), w.id, requestFor(dave, "")).ok());
-    QVERIFY(server().requestAccess(eveSession.value(), w.id, requestFor(eve, "")).ok());
-    QCOMPARE(server().myRequestStatus(daveSession.value(), w.id).value.value(), RequestStatus::Pending);
+    QVERIFY(signedRequestAccess(server(), daveSession.value(), w.id, requestFor(dave, "")).ok());
+    QVERIFY(signedRequestAccess(server(), eveSession.value(), w.id, requestFor(eve, "")).ok());
+    QCOMPARE(valueOf(server().myRequestStatus(daveSession.value(), w.id), __FILE__, __LINE__),
+             RequestStatus::Pending);
 
-    QVERIFY(server().clearAccessRequest(w.aliceSession, w.id, eve.fingerprint()).ok());
-    QCOMPARE(server().myRequestStatus(eveSession.value(), w.id).value.value(), RequestStatus::Withdrawn);
+    QVERIFY(signedClearAccessRequest(server(), w.aliceSession, w.id, eve.fingerprint()).ok());
+    QCOMPARE(valueOf(server().myRequestStatus(eveSession.value(), w.id), __FILE__, __LINE__),
+             RequestStatus::Withdrawn);
 
     QCOMPARE(publish(server(), w, w.aliceSession, w.alice, nextHeader(w, {w.alice, w.bob, w.carol, dave}, w.alice)),
              ServerError::None);
-    QCOMPARE(server().myRequestStatus(daveSession.value(), w.id).value.value(), RequestStatus::Granted);
+    QCOMPARE(valueOf(server().myRequestStatus(daveSession.value(), w.id), __FILE__, __LINE__),
+             RequestStatus::Granted);
 
     QCOMPARE(server().myRequestStatus(frankSession.value(), w.id).error, ServerError::NotFound);
+}
+
+void ServerConformanceTest::accessRequestsAreRateLimited()
+{
+    std::optional<SharedDocument> ward = wardOfThree(server());
+    QVERIFY(ward.has_value());
+
+    const TestDevice stranger = newPerson();
+    const std::optional<Session> session = signIn(server(), stranger);
+    QVERIFY(session.has_value());
+
+    // The one write open to a non-member. The limit is the server's configuration,
+    // so this asks only that there is one, well before a hundred.
+    bool limited = false;
+    for (int attempt = 0; attempt < 100 && !limited; ++attempt)
+    {
+        const Result<Done> result =
+            signedRequestAccess(server(), session.value(), ward->id, requestFor(stranger, ""));
+        if (result.error == ServerError::RateLimited)
+        {
+            limited = true;
+        }
+        else
+        {
+            QVERIFY(result.ok());
+        }
+    }
+
+    QVERIFY(limited);
 }
 
 void ServerConformanceTest::accessRequestsCarryTheirPairingCodeToMembers()
@@ -704,7 +971,7 @@ void ServerConformanceTest::accessRequestsCarryTheirPairingCodeToMembers()
     const TestDevice dave = newPerson();
     const std::optional<Session> daveSession = signIn(server(), dave);
     QVERIFY(daveSession.has_value());
-    QVERIFY(server().requestAccess(daveSession.value(), w.id, requestFor(dave, "48219301")).ok());
+    QVERIFY(signedRequestAccess(server(), daveSession.value(), w.id, requestFor(dave, "48219301")).ok());
 
     const Result<QList<AccessRequest>> requests = server().accessRequests(w.bobSession, w.id);
     QVERIFY(requests.ok());
@@ -731,9 +998,9 @@ void ServerConformanceTest::deviceAuthenticationReachesOnlyItsEndpoints()
 
     // What a device does before it is a member.
     QVERIFY(server().myDocuments(session.value()).ok());
-    QVERIFY(server().requestAccess(session.value(), w.id, requestFor(stranger, "")).ok());
+    QVERIFY(signedRequestAccess(server(), session.value(), w.id, requestFor(stranger, "")).ok());
     QVERIFY(server().myRequestStatus(session.value(), w.id).ok());
-    QVERIFY(server().startPairing(session.value(), "Phone", "a commitment").ok());
+    QVERIFY(signedStartPairing(server(), session.value(), "Phone", "a commitment").ok());
 
     // Everything else needs membership.
     QCOMPARE(server().head(session.value(), w.id).error, ServerError::NotAllowListed);
@@ -751,20 +1018,20 @@ void ServerConformanceTest::myDocumentsListsOnlyDocumentsTheDeviceIsIn()
 
     QStringList both = {a.id, second->id};
     both.sort();
-    QCOMPARE(server().myDocuments(a.aliceSession).value.value(), both);
-    QCOMPARE(server().myDocuments(a.bobSession).value.value(), QStringList{a.id});
+    QCOMPARE(valueOf(server().myDocuments(a.aliceSession), __FILE__, __LINE__), both);
+    QCOMPARE(valueOf(server().myDocuments(a.bobSession), __FILE__, __LINE__), QStringList{a.id});
 
     // Asking is not joining.
     const TestDevice dave = newPerson();
     const std::optional<Session> daveSession = signIn(server(), dave);
     QVERIFY(daveSession.has_value());
-    QVERIFY(server().requestAccess(daveSession.value(), a.id, requestFor(dave, "")).ok());
-    QVERIFY(server().myDocuments(daveSession.value()).value->isEmpty());
+    QVERIFY(signedRequestAccess(server(), daveSession.value(), a.id, requestFor(dave, "")).ok());
+    QVERIFY(valueOf(server().myDocuments(daveSession.value()), __FILE__, __LINE__).isEmpty());
 
     // And leaving takes a ward off the list.
     QCOMPARE(publish(server(), a, a.bobSession, a.bob, nextHeader(a, {a.alice, a.carol}, a.bob)),
              ServerError::None);
-    QVERIFY(server().myDocuments(a.bobSession).value->isEmpty());
+    QVERIFY(valueOf(server().myDocuments(a.bobSession), __FILE__, __LINE__).isEmpty());
 }
 
 // --- Pairings ----------------------------------------------------------------
@@ -779,25 +1046,26 @@ void ServerConformanceTest::pairingStepsAreWrittenOnceAndInOrder()
     const std::optional<Session> phoneSession = signIn(server(), phone);
     QVERIFY(phoneSession.has_value());
 
-    const QString code = server().startPairing(phoneSession.value(), "Phone", "a commitment").value.value();
+    const QString code =
+        valueOf(signedStartPairing(server(), phoneSession.value(), "Phone", "a commitment"), __FILE__, __LINE__);
 
     // The initiator reveals only once it holds the responder's keys, and the
     // responder hands over only once it has checked the reveal.
-    QCOMPARE(server().revealPairing(phoneSession.value(), code, keysOf(phone), "a nonce").error,
+    QCOMPARE(signedRevealPairing(server(), phoneSession.value(), code, keysOf(phone), "a nonce").error,
              ServerError::OutOfOrder);
 
-    QVERIFY(server().respondToPairing(w.aliceSession, code, keysOf(w.alice)).ok());
-    QCOMPARE(server().respondToPairing(w.bobSession, code, keysOf(w.bob)).error,
+    QVERIFY(signedRespondToPairing(server(), w.aliceSession, code, keysOf(w.alice)).ok());
+    QCOMPARE(signedRespondToPairing(server(), w.bobSession, code, keysOf(w.bob)).error,
              ServerError::AlreadyWritten);
 
-    QCOMPARE(server().handOver(w.aliceSession, code, "a signed handover").error, ServerError::OutOfOrder);
+    QCOMPARE(signedHandOver(server(), w.aliceSession, code, "a signed handover").error, ServerError::OutOfOrder);
 
-    QVERIFY(server().revealPairing(phoneSession.value(), code, keysOf(phone), "a nonce").ok());
-    QCOMPARE(server().revealPairing(phoneSession.value(), code, keysOf(phone), "another nonce").error,
+    QVERIFY(signedRevealPairing(server(), phoneSession.value(), code, keysOf(phone), "a nonce").ok());
+    QCOMPARE(signedRevealPairing(server(), phoneSession.value(), code, keysOf(phone), "another nonce").error,
              ServerError::AlreadyWritten);
 
-    QVERIFY(server().handOver(w.aliceSession, code, "a signed handover").ok());
-    QCOMPARE(server().handOver(w.aliceSession, code, "another handover").error,
+    QVERIFY(signedHandOver(server(), w.aliceSession, code, "a signed handover").ok());
+    QCOMPARE(signedHandOver(server(), w.aliceSession, code, "another handover").error,
              ServerError::AlreadyWritten);
 }
 
@@ -811,19 +1079,21 @@ void ServerConformanceTest::pairingKeysMustBeTheCallersOwn()
     const std::optional<Session> phoneSession = signIn(server(), phone);
     QVERIFY(phoneSession.has_value());
 
-    const QString code = server().startPairing(phoneSession.value(), "Phone", "a commitment").value.value();
+    const QString code =
+        valueOf(signedStartPairing(server(), phoneSession.value(), "Phone", "a commitment"), __FILE__, __LINE__);
 
-    QCOMPARE(server().respondToPairing(w.aliceSession, code, keysOf(w.bob)).error,
+    QCOMPARE(signedRespondToPairing(server(), w.aliceSession, code, keysOf(w.bob)).error,
              ServerError::InvalidRequest);
-    QVERIFY(server().respondToPairing(w.aliceSession, code, keysOf(w.alice)).ok());
+    QVERIFY(signedRespondToPairing(server(), w.aliceSession, code, keysOf(w.alice)).ok());
 
     const TestDevice other = newPerson();
-    QCOMPARE(server().revealPairing(phoneSession.value(), code, keysOf(other), "a nonce").error,
+    QCOMPARE(signedRevealPairing(server(), phoneSession.value(), code, keysOf(other), "a nonce").error,
              ServerError::InvalidRequest);
 
     // A member cannot pair with itself either.
-    const QString own = server().startPairing(w.carolSession, "Carol", "a commitment").value.value();
-    QCOMPARE(server().respondToPairing(w.carolSession, own, keysOf(w.carol)).error,
+    const QString own =
+        valueOf(signedStartPairing(server(), w.carolSession, "Carol", "a commitment"), __FILE__, __LINE__);
+    QCOMPARE(signedRespondToPairing(server(), w.carolSession, own, keysOf(w.carol)).error,
              ServerError::InvalidRequest);
 }
 
@@ -839,14 +1109,15 @@ void ServerConformanceTest::aPairingIsReadableOnlyByItsParties()
     const std::optional<Session> strangerSession = signIn(server(), stranger);
     QVERIFY(phoneSession.has_value() && strangerSession.has_value());
 
-    const QString code = server().startPairing(phoneSession.value(), "Phone", "a commitment").value.value();
+    const QString code =
+        valueOf(signedStartPairing(server(), phoneSession.value(), "Phone", "a commitment"), __FILE__, __LINE__);
 
     // Until someone responds, the responder-to-be must read the commitment to keep
     // it, so any member may; a non-member may not.
     QCOMPARE(server().pairing(strangerSession.value(), code).error, ServerError::NotAllowListed);
     QVERIFY(server().pairing(w.carolSession, code).ok());
 
-    QVERIFY(server().respondToPairing(w.aliceSession, code, keysOf(w.alice)).ok());
+    QVERIFY(signedRespondToPairing(server(), w.aliceSession, code, keysOf(w.alice)).ok());
 
     QCOMPARE(server().pairing(w.carolSession, code).error, ServerError::NotAllowListed);
     QVERIFY(server().pairing(w.aliceSession, code).ok());
@@ -863,11 +1134,12 @@ void ServerConformanceTest::aPairingExpires()
     const std::optional<Session> phoneSession = signIn(server(), phone);
     QVERIFY(phoneSession.has_value());
 
-    const QString code = server().startPairing(phoneSession.value(), "Phone", "a commitment").value.value();
+    const QString code =
+        valueOf(signedStartPairing(server(), phoneSession.value(), "Phone", "a commitment"), __FILE__, __LINE__);
 
     QVERIFY(advance(server(), w, 11 * 60));
     QCOMPARE(server().pairing(w.aliceSession, code).error, ServerError::Expired);
-    QCOMPARE(server().respondToPairing(w.aliceSession, code, keysOf(w.alice)).error, ServerError::Expired);
+    QCOMPARE(signedRespondToPairing(server(), w.aliceSession, code, keysOf(w.alice)).error, ServerError::Expired);
 }
 
 // --- Commits -----------------------------------------------------------------
@@ -882,7 +1154,7 @@ void ServerConformanceTest::aRefusedUploadChangesNothing()
     const TestDevice eve = newPerson();
     const std::optional<Session> daveSession = signIn(server(), dave);
     QVERIFY(daveSession.has_value());
-    QVERIFY(server().requestAccess(daveSession.value(), w.id, requestFor(dave, "")).ok());
+    QVERIFY(signedRequestAccess(server(), daveSession.value(), w.id, requestFor(dave, "")).ok());
 
     // One upload that removes Bob and grants Dave, whose request it would
     // consume, and Eve, who never asked. The chain accepts all of it; Eve is
@@ -892,8 +1164,9 @@ void ServerConformanceTest::aRefusedUploadChangesNothing()
     QCOMPARE(publish(server(), w, w.aliceSession, w.alice, removalHeader(w, {w.alice, w.carol, dave, eve}, w.alice)),
              ServerError::DeviceNotInvited);
 
-    QCOMPARE(server().head(w.aliceSession, w.id).value->version, before);
-    QCOMPARE(server().myRequestStatus(daveSession.value(), w.id).value.value(), RequestStatus::Pending);
+    QCOMPARE(valueOf(server().head(w.aliceSession, w.id), __FILE__, __LINE__).version, before);
+    QCOMPARE(valueOf(server().myRequestStatus(daveSession.value(), w.id), __FILE__, __LINE__),
+             RequestStatus::Pending);
     QCOMPARE(server().download(daveSession.value(), w.id).error, ServerError::NotAllowListed);
     QVERIFY(server().download(w.bobSession, w.id).ok());
 }
@@ -906,20 +1179,20 @@ void ServerConformanceTest::theLeaseIsHeldByOneDeviceAtATime()
     QVERIFY(ward.has_value());
     SharedDocument& w = ward.value();
 
-    const Result<Lease> alices = server().takeLease(w.aliceSession, w.id);
+    const Result<Lease> alices = signedTakeLease(server(), w.aliceSession, w.id);
     QVERIFY(alices.ok());
     QVERIFY(alices.value->holder == w.alice.fingerprint());
 
-    QCOMPARE(server().takeLease(w.bobSession, w.id).error, ServerError::LeaseHeld);
-    QVERIFY(server().head(w.bobSession, w.id).value->leaseHolder == w.alice.fingerprint());
+    QCOMPARE(signedTakeLease(server(), w.bobSession, w.id).error, ServerError::LeaseHeld);
+    QVERIFY(valueOf(server().head(w.bobSession, w.id), __FILE__, __LINE__).leaseHolder == w.alice.fingerprint());
 
     // The holder refreshes it; nobody else can release it.
-    QVERIFY(server().takeLease(w.aliceSession, w.id).ok());
-    QCOMPARE(server().releaseLease(w.bobSession, w.id).error, ServerError::LeaseHeld);
+    QVERIFY(signedTakeLease(server(), w.aliceSession, w.id).ok());
+    QCOMPARE(signedReleaseLease(server(), w.bobSession, w.id).error, ServerError::LeaseHeld);
 
-    QVERIFY(server().releaseLease(w.aliceSession, w.id).ok());
-    QVERIFY(!server().head(w.bobSession, w.id).value->leaseHolder.has_value());
-    QVERIFY(server().takeLease(w.bobSession, w.id).ok());
+    QVERIFY(signedReleaseLease(server(), w.aliceSession, w.id).ok());
+    QVERIFY(!valueOf(server().head(w.bobSession, w.id), __FILE__, __LINE__).leaseHolder.has_value());
+    QVERIFY(signedTakeLease(server(), w.bobSession, w.id).ok());
 }
 
 void ServerConformanceTest::aLeaseExpires()
@@ -929,7 +1202,7 @@ void ServerConformanceTest::aLeaseExpires()
     SharedDocument& w = ward.value();
 
     // A holder that vanishes does not lock the directory for good.
-    QVERIFY(server().takeLease(w.aliceSession, w.id).ok());
+    QVERIFY(signedTakeLease(server(), w.aliceSession, w.id).ok());
     QVERIFY(advance(server(), w, OneHour));
-    QVERIFY(server().takeLease(w.bobSession, w.id).ok());
+    QVERIFY(signedTakeLease(server(), w.bobSession, w.id).ok());
 }

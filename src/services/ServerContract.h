@@ -12,7 +12,7 @@
 
 #include <optional>
 
-/// What the Ward Planning server accepts and returns — types only, no transport.
+/// What the Ward Planning server accepts and returns - types only, no transport.
 ///
 /// The server is a blob store with a version check and an allow-list. It holds
 /// no key material and never reads a payload; its only cryptography is verifying
@@ -30,13 +30,14 @@ enum class ServerError
 {
     None,
     Unreachable,
-    Unauthenticated,    ///< no session, an expired one, or a login that did not verify
+    Unauthenticated,    ///< no session, an expired one, a login that did not verify, or an unsigned request
     NotAllowListed,     ///< the device is not in the document's current header
     UnknownDocument,
     VersionConflict,    ///< the upload was not built on the current version
     LeaseHeld,          ///< another device holds the edit lease
     ChainRefused,       ///< the header does not extend the membership chain, or is not a valid first header
     PayloadMismatch,    ///< the header's payload hash does not match the blob uploaded with it
+    CounterJump,        ///< the save counter rose by more than DocumentHeader::MaxSaveCounterStep
     DeviceNotInvited,   ///< an added device has neither a pending access request nor a completed pairing
     IdTaken,            ///< a document id already registered
     RateLimited,
@@ -65,7 +66,7 @@ struct Done
 };
 
 /// A short-lived token from a signed login challenge. Holding one proves only that
-/// the caller has a device's signing key — device authentication. Member
+/// the caller has a device's signing key - device authentication. Member
 /// authentication is checked per document, against its current header.
 struct Session
 {
@@ -81,7 +82,7 @@ struct Head
     DocumentHeader header;
 };
 
-/// GET /documents/{id} — version, header, and blob from one consistent state, so
+/// GET /documents/{id} - version, header, and blob from one consistent state, so
 /// a publish landing mid-download can never pair a header with another version's
 /// blob.
 struct Snapshot
@@ -91,7 +92,7 @@ struct Snapshot
     QByteArray blob;
 };
 
-/// GET /documents/{id}/headers?after={base}&through={version} — the kept headers
+/// GET /documents/{id}/headers?after={base}&through={version} - the kept headers
 /// newer than base, then the header of the requested version, in order.
 struct HeaderChain
 {
@@ -114,7 +115,7 @@ struct Lease
     QDateTime expires;
 };
 
-/// POST /documents/{id}/requests — the only write open to a non-member, since it
+/// POST /documents/{id}/requests - the only write open to a non-member, since it
 /// is how someone asks to become one. The device must be the caller's own.
 struct AccessRequest
 {
@@ -132,7 +133,7 @@ enum class RequestStatus
     Withdrawn
 };
 
-/// GET /pairings/{code} — a pairing belongs to no document.
+/// GET /pairings/{code} - a pairing belongs to no document.
 struct PairingState
 {
     QString code;
@@ -145,11 +146,60 @@ struct PairingState
     QDateTime expires;
 };
 
+// --- Request signing ---
+//
+// A session token proves a device signed in; every mutating call is also signed,
+// under SignatureTag::Request, with the device's own key. A token taken from a
+// device is then not enough to change anything, and a captured signature cannot be
+// replayed against another document or another endpoint.
+//
+// The signed message is the endpoint's route, the document id (empty for a
+// pairing, which belongs to no document), and a BLAKE2b of the call's canonical
+// body under HashDomain::Request. The bodies below are part of the protocol: the
+// companion server rebuilds them from the request it received.
+
+enum class Endpoint
+{
+    RegisterDocument,       ///< POST /documents
+    Upload,                 ///< PUT /documents/{id}
+    TakeLease,              ///< POST /documents/{id}/lease
+    ReleaseLease,           ///< DELETE /documents/{id}/lease
+    RequestAccess,          ///< POST /documents/{id}/requests
+    ClearAccessRequest,     ///< DELETE /documents/{id}/requests
+    StartPairing,           ///< POST /pairings
+    RespondToPairing,       ///< PUT /pairings/{code}/responder
+    RevealPairing,          ///< PUT /pairings/{code}/reveal
+    HandOver                ///< PUT /pairings/{code}/handover
+};
+
+/// A header travels as the bytes its writer signed and the signature itself; the
+/// blob is bound through the payload hash inside those bytes.
+QByteArray registerBody(const Upload& upload);
+QByteArray uploadBody(qint64 baseVersion, const Upload& upload);
+QByteArray emptyBody();
+QByteArray requestAccessBody(const AccessRequest& request);
+QByteArray clearAccessRequestBody(const Fingerprint& device);
+QByteArray startPairingBody(const QString& deviceName, const QByteArray& commitment);
+QByteArray respondToPairingBody(const QString& code, const DeviceKeys& responder);
+QByteArray revealPairingBody(const QString& code, const DeviceKeys& initiator, const QByteArray& nonce);
+QByteArray handOverBody(const QString& code, const QByteArray& handover);
+
+QByteArray signRequest(Endpoint endpoint,
+                       const QString& documentId,
+                       const QByteArray& body,
+                       const SigningKey& key);
+
+bool requestVerifies(Endpoint endpoint,
+                     const QString& documentId,
+                     const QByteArray& body,
+                     const QByteArray& signature,
+                     const VerifyKey& key);
+
 /// The server, one method per endpoint.
 ///
 /// FakeServer implements it in memory. The conformance suite is written against
-/// this interface only, so the same tests run against the fake and — through an
-/// HTTP-backed implementation — against the real server, which is how two
+/// this interface only, so the same tests run against the fake and - through an
+/// HTTP-backed implementation - against the real server, which is how two
 /// implementations of the same rules are kept in agreement.
 class ServerApi
 {
@@ -168,7 +218,9 @@ public:
     // --- Documents ---
 
     /// POST /documents. Device authentication: the document does not exist yet.
-    virtual Result<qint64> registerDocument(const Session& session, const Upload& upload) = 0;
+    virtual Result<qint64> registerDocument(const Session& session,
+                                            const Upload& upload,
+                                            const QByteArray& requestSignature) = 0;
 
     virtual Result<Head> head(const Session& session, const QString& documentId) = 0;
 
@@ -183,27 +235,34 @@ public:
     virtual Result<qint64> upload(const Session& session,
                                   const QString& documentId,
                                   qint64 baseVersion,
-                                  const Upload& upload) = 0;
+                                  const Upload& upload,
+                                  const QByteArray& requestSignature) = 0;
 
     // --- Lease ---
 
     /// Takes the lease, or refreshes it when this device already holds it.
-    virtual Result<Lease> takeLease(const Session& session, const QString& documentId) = 0;
-    virtual Result<Done> releaseLease(const Session& session, const QString& documentId) = 0;
+    virtual Result<Lease> takeLease(const Session& session,
+                                    const QString& documentId,
+                                    const QByteArray& requestSignature) = 0;
+    virtual Result<Done> releaseLease(const Session& session,
+                                      const QString& documentId,
+                                      const QByteArray& requestSignature) = 0;
 
     // --- Access requests ---
 
     /// Device authentication: the one write open to a non-member.
     virtual Result<Done> requestAccess(const Session& session,
                                        const QString& documentId,
-                                       const AccessRequest& request) = 0;
+                                       const AccessRequest& request,
+                                       const QByteArray& requestSignature) = 0;
 
     virtual Result<QList<AccessRequest>> accessRequests(const Session& session,
                                                         const QString& documentId) = 0;
 
     virtual Result<Done> clearAccessRequest(const Session& session,
                                             const QString& documentId,
-                                            const Fingerprint& device) = 0;
+                                            const Fingerprint& device,
+                                            const QByteArray& requestSignature) = 0;
 
     /// Device authentication: the requester's own request only.
     virtual Result<RequestStatus> myRequestStatus(const Session& session,
@@ -220,26 +279,30 @@ public:
     /// Device authentication. Returns the pairing code.
     virtual Result<QString> startPairing(const Session& session,
                                          const QString& deviceName,
-                                         const QByteArray& commitment) = 0;
+                                         const QByteArray& commitment,
+                                         const QByteArray& requestSignature) = 0;
 
     virtual Result<PairingState> pairing(const Session& session, const QString& code) = 0;
 
     /// Member authentication on some document; written once.
     virtual Result<Done> respondToPairing(const Session& session,
                                           const QString& code,
-                                          const DeviceKeys& responder) = 0;
+                                          const DeviceKeys& responder,
+                                          const QByteArray& requestSignature) = 0;
 
     /// The initiator only, after the responder; written once.
     virtual Result<Done> revealPairing(const Session& session,
                                        const QString& code,
                                        const DeviceKeys& initiator,
-                                       const QByteArray& nonce) = 0;
+                                       const QByteArray& nonce,
+                                       const QByteArray& requestSignature) = 0;
 
     /// The responder only, after the reveal; written once. Completing it is what
     /// lets the initiator's device be added under the responder's person.
     virtual Result<Done> handOver(const Session& session,
                                   const QString& code,
-                                  const QByteArray& handover) = 0;
+                                  const QByteArray& handover,
+                                  const QByteArray& requestSignature) = 0;
 
     // --- Development only ---
 

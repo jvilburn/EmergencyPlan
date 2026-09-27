@@ -172,6 +172,31 @@ Build, run, commit as `refactor: rename product to Ward Planning`.
 
 ### Task 1: The encrypted document core
 
+> **Done.** Commit `1a222a2` and the review fixes after it. Where the code differs from
+> the sections below, the code is the reference:
+> - `Reconcile::validateDownload` takes a `Reconcile::Self` (the sealing keypair and the
+>   verify key) in place of a bare `Keypair`, since checking this device's entry needs
+>   both public keys. `Reconcile::readHeaders` parses fetched headers and returns
+>   `NeedsNewerVersion` when any is a later format, so a caller never has to.
+> - `DeviceKeys` lives in `CryptoTypes.h`, shared by `Pairing` and `ServerContract`.
+>   `Pairing::newPairingCode` is the one generator; `FakeServer` issues codes with it.
+> - `ResponseMerge`: a record or task deleted on one side and edited on the other keeps
+>   the edit, matching the response-level rule; a directory changed identically on both
+>   sides is not a conflict.
+> - The save counter is capped at 2^53 - 1, and the server refuses an upload that
+>   raises it by more than 2^20 (`CounterJump`) or comes faster than 600 an hour from
+>   one device, so no member can pin it at the cap. `verifyLink` holds
+>   `originDocumentId` and `formatVersion` fixed across a link.
+> - Every parser refuses keys it does not know (`StrictJson::hasOnlyKeys`), and a
+>   recipient kind below 1 is `Malformed`.
+> - `FormatVectorsTest` pins the associated data, signed bytes, fingerprint, payload
+>   hash, pairing values, signature tags, and a request message against vectors
+>   computed independently.
+> - Every mutating `ServerApi` call takes a request signature (`ServerContract.cpp`
+>   holds the endpoints, canonical bodies, and `signRequest`/`requestVerifies`), and
+>   `FakeServer` checks each one. Tests sign through `ServerTestSupport`'s `signed...`
+>   wrappers, which sign with the device that owns the session.
+
 **Everything that decides whether this design works, written as one artifact.** The
 document format and its cryptography, the membership chain and its admin rules,
 access control, the server contract and its fake, the reconciliation decisions that
@@ -537,8 +562,11 @@ walks the headers after its base copy's header (Task 1.9). A link from `previous
    that entry's keys, and the signature verifies. The writer must be found in
    `previous`, never only in `next` — a server could otherwise mint a header listing a
    key of its own and sign with it.
-2. The save counter increases. The key generation rises by **exactly one when a device or
-   person is dropped by an unlink or a removal, and is unchanged otherwise.** A rotation
+2. The save counter rises. The key generation rises by **exactly one when a device or
+   person is dropped by an unlink or a removal, and is unchanged otherwise.** The counter
+   is capped at `DocumentHeader::MaxSaveCounter` (2^53 - 1); the server alone bounds one
+   upload's rise to `MaxSaveCounterStep` (2^20), since a chain walked with headers
+   missing sees larger gaps. A rotation
    without a drop is refused, so a header skipped because its membership did not change
    can never have hidden a rotation, and a jump — which would let one member pin the
    generation at the maximum — is impossible.
@@ -599,6 +627,7 @@ and makes D an admin; D removes C; C's chain is `Removed`);
 `chainSkippingHeadersWithUnchangedMembershipVerifies`;
 `chainWithHeaderSignedUnderAuthTagIsBroken`;
 `chainWithDecreasingGenerationIsBroken`; `chainWithNonIncreasingSaveCounterIsBroken`;
+`linkBeyondTheSaveCounterCapIsBroken`;
 `chainStillListingSelfIsStillMember`; `chainProvesRemovalForEveryDeviceOfTheRemovedPerson`;
 `chainProvesUnlinkForTheUnlinkedDevice`; `chainProvesALeaveToTheLeaversOtherDevices`;
 `linkWithWriterAbsentFromOwnRecipientsIsBroken`;
@@ -896,12 +925,24 @@ a strict server:
   as initiator with a device of the person it is added under (a link). A completed pairing
   is recorded as lasting permission to add that device under that person in any document
   the person belongs to, so the `RosterChangeQueue` can reach every ward however long it
-  takes. The first header of a newly registered document is exempt: it lists only its
-  creator. A document never appears in `/me/documents` for a device that did not ask
+  takes. A newly registered document's first header may list its creator's other
+  devices only when each has completed a pairing as initiator with the registering
+  device itself; anything else is `DeviceNotInvited`. A document never appears in
+  `/me/documents` for a device that did not ask
 - a development-only hook moves the server's clock forward, so session, lease, and
   pairing expiry can be tested
 - `POST /documents` is rate-limited per device key, and one key may register at most a
   fixed number of documents (a configuration value on the server)
+- `POST /documents/{id}/requests` is rate-limited per device key: it is the one write
+  open to a non-member
+- every mutating request carries a signature by the calling device's own key, under the
+  `request` tag, over the route, the document id, and the `wp-request` hash of the
+  request's canonical body (`ServerContract::signRequest`); anything else is
+  `Unauthenticated`. The HTTP adapter (Task 15) sends the signature in a header and the
+  server rebuilds the canonical body from the request it parsed
+- an upload that raises the save counter by more than `DocumentHeader::MaxSaveCounterStep`
+  over the current version is refused (`CounterJump`), and uploads are limited to 600 an
+  hour per device key, so no member can push the counter to its cap
 - an access request's status is readable by the device that posted it through
   `requests/mine`: pending, granted, or withdrawn
 - **two authentication levels**: *device* — a signed challenge proving possession of a key,
@@ -1257,6 +1298,10 @@ as `feat: encrypted document core` once both are settled.
 
 ### Task 3: Stand up the test harness
 
+> **Done.** Commit `1a222a2`, together with Tasks 1 and 4. The smoke test was seen
+> failing before its assertion was corrected. `tests/CMakeLists.txt` adds `tests/models`
+> and `tests/services` to the include path so suites include their headers by name.
+
 Every entry in `TEST_SOURCES` is commented out (`tests/CMakeLists.txt:14-29`), so
 `if(TEST_SOURCES)` at line 32 is false and nothing is built.
 
@@ -1320,6 +1365,12 @@ Fix the assertion, confirm PASS, commit as `test: add Qt Test harness`.
 
 ### Task 4: Add libsodium and qtkeychain
 
+> **Done.** Commit `1a222a2`. vcpkg baseline `07f4812` (vcpkg tool re-bootstrapped to
+> 2026-07-27), libsodium 1.0.22 port-version 1. The static port writes `SODIUM_STATIC`
+> into its own installed `export.h`, so no compile definition is needed. qtkeychain is
+> 0.17.0, chosen over 0.15.0 by the user. Moving the baseline changed zlib's static
+> library name, so the first build needed a fresh configure (delete `CMakeCache.txt`).
+
 **libsodium comes from vcpkg; qtkeychain does not.** The vcpkg port `qtkeychain-qt6`
 declares `{"name": "qtbase", "default-features": false}` and `qttools`, so taking it
 would build a second Qt 6 from source and link it beside the system Qt at
@@ -1356,9 +1407,12 @@ fix commit `ad3004e`. Upstream vcpkg ships libsodium 1.0.22 (checked 2026-09-13)
 1. Ask the user to update the local vcpkg clone (`git -C $VCPKG_ROOT pull`), then set
    `builtin-baseline` to `git -C $VCPKG_ROOT rev-parse HEAD` and confirm
    `$VCPKG_ROOT/ports/libsodium/vcpkg.json` reports 1.0.22 or later.
-2. **Confirm the fix is in that release** — not yet verified: in a libsodium clone,
-   `git merge-base --is-ancestor ad3004e 1.0.22-RELEASE` must exit 0. If it does not,
-   stop and ask the user before continuing.
+2. **Confirm the fix is in that release.** Verified 2026-09-27: `ad3004e` itself sits
+   on a side branch and is not an ancestor of `1.0.22-RELEASE`, but the same patch
+   landed as `f2da4cd8`, which is an ancestor of both `1.0.21-RELEASE` and
+   `1.0.22-RELEASE`. The source agrees: `ge25519_is_on_main_subgroup` in 1.0.21 and
+   1.0.22 adds the `Y == Z` check that 1.0.20 lacks. The user accepted 1.0.22 on that
+   evidence. `CryptoLinkTest` asserts the linked library is at least 1.0.22.
 3. **Warn the user before they build:** moving the baseline re-resolves `libmupdf` and
    its whole transitive tree (freetype, harfbuzz, openjpeg, libjpeg, libpng, zlib,
    jbig2dec, gumbo, brotli, bz2). That can be a long rebuild. After it, have the user
@@ -1371,17 +1425,22 @@ fix commit `ad3004e`. Upstream vcpkg ships libsodium 1.0.22 (checked 2026-09-13)
 include(FetchContent)
 FetchContent_Declare(qtkeychain
     GIT_REPOSITORY https://github.com/frankosterfeld/qtkeychain.git
-    GIT_TAG v0.15.0
+    GIT_TAG 875f77d9f61bd97fd84cca47ce3bc71186dfbd09  # 0.17.0
+    EXCLUDE_FROM_ALL
 )
-set(BUILD_WITH_QT6 ON CACHE BOOL "" FORCE)
-set(BUILD_TRANSLATIONS OFF CACHE BOOL "" FORCE)
-set(BUILD_TEST_APPLICATION OFF CACHE BOOL "" FORCE)
-set(QTKEYCHAIN_STATIC ON CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS OFF)
+set(BUILD_TRANSLATIONS OFF)
+set(BUILD_TEST_APPLICATION OFF)
 FetchContent_MakeAvailable(qtkeychain)
+target_compile_definitions(qt6keychain PUBLIC QTKEYCHAIN_NO_EXPORT)
 ```
 
-Verify the option names against the fetched `CMakeLists.txt` — they are from
-recollection, not verified.
+Checked against the fetched source: the tag has no `v` prefix; 0.17.0 builds for Qt 6 by
+default; `QTKEYCHAIN_STATIC` is deprecated in favour of `BUILD_SHARED_LIBS`, which
+qtkeychain's `cmake_dependent_option` writes to the cache; `BUILD_TRANSLATIONS OFF`
+skips `LinguistTools`. The generated export header marks a static build's classes
+`dllimport` unless told otherwise, which `QTKEYCHAIN_NO_EXPORT` does. On Linux it needs
+Qt DBus and the libsecret development headers.
 
 **Step 4: Find and link**
 
@@ -1757,6 +1816,11 @@ Commit as `feat: device identity service`.
 
 ### Task 9: On-disk format
 
+**The payload carries one version.** `Document::toJson` writes `payloadVersion`, which
+`Document::parse` reads strictly; `JsonService` still adds its own `version` and
+`metadata` for the unencrypted 1.0 files. The new format drops `JsonService`'s `version`
+and reads `payloadVersion` alone.
+
 **Files:** `src/services/JsonService.h/.cpp`, **`src/services/DocumentManager.cpp:148,185,361`**,
 `src/models/Document.h/.cpp`, `tests/services/JsonServiceTest.h/.cpp`
 
@@ -2019,8 +2083,9 @@ Commit as `feat: reject rolled-back documents`.
 
 ### Task 14: File extension
 
-> **The extension itself landed with Task 0**, at the user's request, because Task 0's
-> rename left the file-dialog filter reading "Ward Planning Files (*.emergencyplan)".
+> **The extension itself was done alongside Task 0**, at the user's request, because
+> Task 0's rename left the file-dialog filter reading "Ward Planning Files
+> (*.emergencyplan)"; it was committed in `1a222a2`.
 > `src/services/DocumentConstants.h` now holds `FileExtension` and `FileGlob`, and every
 > literal is gone from `main.cpp`, `DocumentManager.cpp`, `EmergencyManager.cpp`,
 > `ArchiveBrowserDialog.cpp`, `MainWindow.cpp`, `installer.iss`, `Info.plist`,

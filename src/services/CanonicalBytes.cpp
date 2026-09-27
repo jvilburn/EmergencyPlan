@@ -1,6 +1,6 @@
 #include "CanonicalBytes.h"
 
-CanonicalBytes& CanonicalBytes::append(const QByteArray& value)
+CanonicalBytes& CanonicalBytes::appendBytes(const QByteArray& value)
 {
     const quint32 length = quint32(value.size());
     m_bytes.append(char((length >> 24) & 0xff));
@@ -11,12 +11,12 @@ CanonicalBytes& CanonicalBytes::append(const QByteArray& value)
     return *this;
 }
 
-CanonicalBytes& CanonicalBytes::append(const QString& text)
+CanonicalBytes& CanonicalBytes::appendText(const QString& text)
 {
-    return append(text.toUtf8());
+    return appendBytes(text.toUtf8());
 }
 
-CanonicalBytes& CanonicalBytes::append(qint64 number)
+CanonicalBytes& CanonicalBytes::appendNumber(qint64 number)
 {
-    return append(QByteArray::number(number));
+    return appendBytes(QByteArray::number(number));
 }

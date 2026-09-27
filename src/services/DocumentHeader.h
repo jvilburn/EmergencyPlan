@@ -52,6 +52,18 @@ struct DocumentHeader
     /// 128 random bits as 32 hex characters.
     static constexpr int DocumentIdLength = 32;
 
+    /// The largest save counter a header may carry: 2^53 - 1, the largest integer
+    /// a JSON number holds exactly in every reader, the companion server's
+    /// included, and far beyond any real count of saves.
+    static constexpr qint64 MaxSaveCounter = (qint64(1) << 53) - 1;
+
+    /// The most one upload may raise the save counter: about a million saves
+    /// between publishes, months of heavy offline editing. The chain requires only
+    /// that the counter rises, because a client walks it with headers missing; the
+    /// server checks this bound on every upload, so no member can push the counter
+    /// to MaxSaveCounter and freeze the ward.
+    static constexpr qint64 MaxSaveCounterStep = qint64(1) << 20;
+
     int formatVersion = CurrentFormatVersion;
 
     /// Set at creation and never changed. Bound into the associated data, so only

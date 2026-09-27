@@ -1,7 +1,9 @@
 #include <QApplication>
 #include <QFile>
 #include <QIcon>
+#include <QMessageBox>
 #include "DocumentConstants.h"
+#include "DocumentCrypto.h"
 #include "DocumentManager.h"
 #include "EmergencyManager.h"
 #include "MainWindow.h"
@@ -14,6 +16,16 @@ int main(int argc, char *argv[])
     app.setOrganizationName("Church");
     app.setApplicationVersion(WARD_PLANNING_VERSION);
     app.setWindowIcon(QIcon(":/markers/marker_chapel.svg"));
+
+    // Before anything that might touch a document: libsodium must be initialised
+    // before its first use, and without it no shared document can be opened.
+    if (!DocumentCrypto::initialise())
+    {
+        QMessageBox::critical(nullptr,
+                              QObject::tr("Ward Planning"),
+                              QObject::tr("Ward Planning could not start its encryption library."));
+        return 1;
+    }
 
     // Load Windows 7 Aero stylesheet
     QFile styleFile(":/styles/windows7.qss");

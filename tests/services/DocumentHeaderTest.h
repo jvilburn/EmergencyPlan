@@ -21,6 +21,11 @@ private slots:
     void parseRefusesAWrongSizeRecipientVerifyKey();
     void parseRefusesAMalformedFingerprint();
     void parseRefusesANonObjectRecipient();
+    void parseRefusesASaveCounterAboveTheCap();
+    void parseRefusesAnUnknownKey();
+    void parseRefusesARecipientKindBelowOne();
+    void parseAcceptsAHeaderListingNoOne();
+    void parseRefusesAnEarlierFormatVersion();
     void parseRefusesANonCanonicalTimestamp();
     void parseRefusesNonCanonicalAdmins();
     void parseRefusesWriterKeysThatAreNotTheLastWriters();

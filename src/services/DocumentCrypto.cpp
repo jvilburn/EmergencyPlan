@@ -66,11 +66,13 @@ constexpr char FingerprintDomain[] = "wp-fingerprint";
 constexpr char PayloadDomain[] = "wp-payload";
 constexpr char PairingCommitDomain[] = "wp-pair-commit";
 constexpr char PairingComparisonDomain[] = "wp-pair-number";
+constexpr char RequestDomain[] = "wp-request";
 
 static_assert(sizeof(FingerprintDomain) - 1 <= crypto_generichash_blake2b_PERSONALBYTES);
 static_assert(sizeof(PayloadDomain) - 1 <= crypto_generichash_blake2b_PERSONALBYTES);
 static_assert(sizeof(PairingCommitDomain) - 1 <= crypto_generichash_blake2b_PERSONALBYTES);
 static_assert(sizeof(PairingComparisonDomain) - 1 <= crypto_generichash_blake2b_PERSONALBYTES);
+static_assert(sizeof(RequestDomain) - 1 <= crypto_generichash_blake2b_PERSONALBYTES);
 
 const char* domainText(HashDomain domain)
 {
@@ -84,6 +86,8 @@ const char* domainText(HashDomain domain)
         return PairingCommitDomain;
     case HashDomain::PairingComparison:
         return PairingComparisonDomain;
+    case HashDomain::Request:
+        return RequestDomain;
     }
 
     // Unreachable for a value of the enumeration. A new domain added without a
@@ -131,6 +135,7 @@ bool headerIsCoherent(const DocumentHeader& header)
         || DocumentCrypto::fingerprintOf(header.writerPublicKey, header.writerVerifyKey)
                != header.lastWriter
         || !header.lastWriteTime.isValid()
+        || header.saveCounter < 0 || header.saveCounter > DocumentHeader::MaxSaveCounter
         || header.payloadHash.size() != DocumentCrypto::PayloadHashSize
         || header.nonce.size() != DocumentCrypto::NonceSize)
     {
@@ -169,7 +174,7 @@ bool headerIsCoherent(const DocumentHeader& header)
     }
 
     // Admins are people in this header, listed once each in ascending order, and a
-    // header that lists anyone lists at least one — so a ward can never be left
+    // header that lists anyone lists at least one - so a ward can never be left
     // with people and nobody able to change who they are.
     const QSet<QString> people = peopleOf(header);
     QString previousAdmin;
@@ -293,7 +298,7 @@ QByteArray DocumentCrypto::sealDataKey(const DataKey& dataKey, const PublicKey& 
 
     // A sealed box is XSalsa20-Poly1305 internally, not the XChaCha20-Poly1305
     // the payload uses. That difference is immaterial for 32 bytes of key
-    // material, and it is what crypto_box_seal provides — do not "fix" it.
+    // material, and it is what crypto_box_seal provides - do not "fix" it.
     QByteArray sealed(SealedDataKeySize, '\0');
     if (crypto_box_seal(asUnsigned(sealed),
                         asUnsigned(dataKey.bytes),
@@ -492,10 +497,13 @@ bool DocumentCrypto::verifyHeader(const DocumentHeader& header)
 
 bool DocumentCrypto::writerIsAccountedFor(const DocumentHeader& header, const AccessRoster& roster)
 {
+    // A writer in the roster is in the header too, with the keys the header
+    // carries for it.
     const std::optional<RosterDevice> device = roster.deviceFor(header.lastWriter);
     if (device.has_value())
     {
-        return device.value().publicKey() == header.writerPublicKey
+        return header.entryFor(header.lastWriter).has_value()
+            && device.value().publicKey() == header.writerPublicKey
             && device.value().verifyKey() == header.writerVerifyKey;
     }
 
@@ -522,8 +530,12 @@ bool DocumentCrypto::verifyLink(const DocumentHeader& previous, const DocumentHe
     }
 
     // One document. A chain is only ever assembled for one, but nothing else checks
-    // it, and a server splicing another ward's headers in would otherwise pass.
-    if (previous.documentId != next.documentId)
+    // it, and a server splicing another ward's headers in would otherwise pass. Its
+    // origin and format are set when it is created and never change either; an
+    // origin added later would change how Open-a-copy treats it.
+    if (previous.documentId != next.documentId
+        || previous.originDocumentId != next.originDocumentId
+        || previous.formatVersion != next.formatVersion)
     {
         return false;
     }
@@ -538,7 +550,10 @@ bool DocumentCrypto::verifyLink(const DocumentHeader& previous, const DocumentHe
         return false;
     }
 
-    // Rule 2, first half.
+    // Rule 2, first half: the save counter rises, so versions of one key generation
+    // are ordered and a device's high-water mark can refuse an older one. How far
+    // it may rise in one upload is the server's check, since a chain with headers
+    // missing sees larger gaps.
     if (next.saveCounter <= previous.saveCounter)
     {
         return false;
@@ -588,7 +603,7 @@ bool DocumentCrypto::verifyLink(const DocumentHeader& previous, const DocumentHe
     const bool writerIsAdmin = previous.isAdmin(writerMember);
 
     // Rules 3 and 7: a writer missing from its own version is leaving. A leave drops
-    // the writer's whole person and nothing else, and does not rotate the key — the
+    // the writer's whole person and nothing else, and does not rotate the key - the
     // leaver would generate the new key, so rotating would protect nothing.
     if (!after.contains(next.lastWriter.toHex()))
     {
@@ -651,7 +666,7 @@ bool DocumentCrypto::verifyLink(const DocumentHeader& previous, const DocumentHe
     }
 
     // Rule 2, second half: the key rotates exactly when someone loses access, and
-    // only then — so a header skipped for leaving membership unchanged can never
+    // only then - so a header skipped for leaving membership unchanged can never
     // have hidden a rotation, and the generation can never jump.
     return generationStep == (dropped.isEmpty() ? 0 : 1);
 }

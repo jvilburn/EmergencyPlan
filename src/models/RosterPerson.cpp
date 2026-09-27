@@ -1,6 +1,7 @@
 #include "RosterPerson.h"
 
 #include "HexCodec.h"
+#include "StrictJson.h"
 
 #include <QJsonArray>
 
@@ -10,8 +11,31 @@ namespace
 {
 
 // Part of the payload format.
-const char* AdminText = "admin";
-const char* MemberText = "member";
+const QLatin1String KeyMember("member");
+const QLatin1String KeyDisplayName("displayName");
+const QLatin1String KeyRole("role");
+const QLatin1String KeyDevices("devices");
+
+const QLatin1String AdminText("admin");
+const QLatin1String MemberText("member");
+
+/// Case-insensitive first, so "iPad" sits beside "IPhone" rather than after every
+/// capitalised name; then case-sensitive, then fingerprint, so two devices sharing
+/// a name still order the same way. Not locale-aware, so the order is the same on
+/// every device.
+bool deviceSortsBefore(const RosterDevice& left, const RosterDevice& right)
+{
+    const int byName = QString::compare(left.deviceName(), right.deviceName(), Qt::CaseInsensitive);
+    if (byName != 0)
+    {
+        return byName < 0;
+    }
+    if (left.deviceName() != right.deviceName())
+    {
+        return left.deviceName() < right.deviceName();
+    }
+    return left.fingerprint().toHex() < right.fingerprint().toHex();
+}
 
 } // namespace
 
@@ -31,26 +55,7 @@ RosterPerson RosterPerson::create(const MemberId& member,
 QList<RosterDevice> RosterPerson::devices() const
 {
     QList<RosterDevice> sorted = m_devices;
-    std::sort(sorted.begin(),
-              sorted.end(),
-              [](const RosterDevice& left, const RosterDevice& right)
-              {
-                  // Case-insensitive first, so "iPad" sits beside "IPhone" rather than
-                  // after every capitalised name. Not locale-aware, so the order is
-                  // the same on every device.
-                  const int byName = QString::compare(left.deviceName(),
-                                                      right.deviceName(),
-                                                      Qt::CaseInsensitive);
-                  if (byName != 0)
-                  {
-                      return byName < 0;
-                  }
-                  if (left.deviceName() != right.deviceName())
-                  {
-                      return left.deviceName() < right.deviceName();
-                  }
-                  return left.fingerprint().toHex() < right.fingerprint().toHex();
-              });
+    std::sort(sorted.begin(), sorted.end(), deviceSortsBefore);
     return sorted;
 }
 
@@ -139,26 +144,31 @@ bool RosterPerson::isValid() const
 QJsonObject RosterPerson::toJson() const
 {
     QJsonObject json;
-    json["member"] = m_member.toHex();
-    json["displayName"] = m_displayName;
-    json["role"] = QString(m_role == Role::Admin ? AdminText : MemberText);
+    json[KeyMember] = m_member.toHex();
+    json[KeyDisplayName] = m_displayName;
+    json[KeyRole] = m_role == Role::Admin ? AdminText : MemberText;
 
     QJsonArray deviceArray;
     for (const RosterDevice& device : devices())
     {
         deviceArray.append(device.toJson());
     }
-    json["devices"] = deviceArray;
+    json[KeyDevices] = deviceArray;
 
     return json;
 }
 
 std::optional<RosterPerson> RosterPerson::fromJson(const QJsonObject& json)
 {
-    const QJsonValue member = json.value("member");
-    const QJsonValue displayName = json.value("displayName");
-    const QJsonValue role = json.value("role");
-    const QJsonValue devices = json.value("devices");
+    if (!StrictJson::hasOnlyKeys(json, {KeyMember, KeyDisplayName, KeyRole, KeyDevices}))
+    {
+        return std::nullopt;
+    }
+
+    const QJsonValue member = json.value(KeyMember);
+    const QJsonValue displayName = json.value(KeyDisplayName);
+    const QJsonValue role = json.value(KeyRole);
+    const QJsonValue devices = json.value(KeyDevices);
 
     if (!member.isString() || !displayName.isString() || !role.isString() || !devices.isArray())
     {

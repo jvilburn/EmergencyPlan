@@ -3,6 +3,7 @@
 #include "CanonicalBytes.h"
 #include "DocumentCrypto.h"
 #include "HexCodec.h"
+#include "StrictJson.h"
 
 #include <QJsonArray>
 #include <QJsonValue>
@@ -279,6 +280,26 @@ HeaderParse DocumentHeader::parse(const QJsonObject& json, DocumentHeader& out)
         return HeaderParse::Malformed;
     }
 
+    // In a version this build knows, every field is one it understands.
+    if (!StrictJson::hasOnlyKeys(json,
+                                 {KeyFormatVersion,
+                                  KeyDocumentId,
+                                  KeyOriginDocumentId,
+                                  KeyKeyGeneration,
+                                  KeySaveCounter,
+                                  KeyLastWriter,
+                                  KeyWriterPublicKey,
+                                  KeyWriterVerifyKey,
+                                  KeyLastWriteTime,
+                                  KeyNonce,
+                                  KeyRecipients,
+                                  KeyAdmins,
+                                  KeyPayloadHash,
+                                  KeyWriterSignature}))
+    {
+        return HeaderParse::Malformed;
+    }
+
     if (!readDocumentId(json, KeyDocumentId, header.documentId))
     {
         return HeaderParse::Malformed;
@@ -295,7 +316,8 @@ HeaderParse DocumentHeader::parse(const QJsonObject& json, DocumentHeader& out)
         return HeaderParse::Malformed;
     }
 
-    if (!readInt64(json, KeySaveCounter, header.saveCounter) || header.saveCounter < 0)
+    if (!readInt64(json, KeySaveCounter, header.saveCounter) || header.saveCounter < 0
+        || header.saveCounter > MaxSaveCounter)
     {
         return HeaderParse::Malformed;
     }
@@ -347,10 +369,27 @@ HeaderParse DocumentHeader::parse(const QJsonObject& json, DocumentHeader& out)
             return HeaderParse::Malformed;
         }
 
-        // An unknown kind is a later format, not a damaged file.
+        // Kinds are numbered from 1, so nothing below it was ever written. An
+        // unknown kind above it is a later format, not a damaged file.
+        if (kind < 1)
+        {
+            return HeaderParse::Malformed;
+        }
+
         if (kind != int(RecipientKind::X25519Sealed))
         {
             return HeaderParse::NeedsNewerVersion;
+        }
+
+        if (!StrictJson::hasOnlyKeys(entryJson,
+                                     {KeyKind,
+                                      KeyMember,
+                                      KeyFingerprint,
+                                      KeyPublicKey,
+                                      KeyVerifyKey,
+                                      KeySealedKey}))
+        {
+            return HeaderParse::Malformed;
         }
 
         RecipientEntry entry;
@@ -417,35 +456,35 @@ QByteArray DocumentHeader::associatedData() const
 {
     CanonicalBytes writer;
 
-    writer.append(qint64(formatVersion));
-    writer.append(documentId);
-    writer.append(originDocumentId);
-    writer.append(qint64(keyGeneration));
-    writer.append(saveCounter);
-    writer.append(lastWriter.toHex());
-    writer.append(toHex(writerPublicKey.bytes));
-    writer.append(toHex(writerVerifyKey.bytes));
-    writer.append(serialiseTime(lastWriteTime));
-    writer.append(toHex(nonce));
+    writer.appendNumber(qint64(formatVersion));
+    writer.appendText(documentId);
+    writer.appendText(originDocumentId);
+    writer.appendNumber(qint64(keyGeneration));
+    writer.appendNumber(saveCounter);
+    writer.appendText(lastWriter.toHex());
+    writer.appendText(toHex(writerPublicKey.bytes));
+    writer.appendText(toHex(writerVerifyKey.bytes));
+    writer.appendText(serialiseTime(lastWriteTime));
+    writer.appendText(toHex(nonce));
 
     // The counts are what stop one collection borrowing the other's elements:
     // without them a header with two recipients and no admins could produce the
     // same bytes as one with fewer recipients and an admin.
-    writer.append(qint64(recipients.size()));
+    writer.appendNumber(qint64(recipients.size()));
     for (const RecipientEntry& entry : recipients)
     {
-        writer.append(qint64(int(entry.kind)));
-        writer.append(entry.member.toHex());
-        writer.append(entry.fingerprint.toHex());
-        writer.append(toHex(entry.publicKey.bytes));
-        writer.append(toHex(entry.verifyKey.bytes));
-        writer.append(toBase64(entry.sealedKey));
+        writer.appendNumber(qint64(int(entry.kind)));
+        writer.appendText(entry.member.toHex());
+        writer.appendText(entry.fingerprint.toHex());
+        writer.appendText(toHex(entry.publicKey.bytes));
+        writer.appendText(toHex(entry.verifyKey.bytes));
+        writer.appendText(toBase64(entry.sealedKey));
     }
 
-    writer.append(qint64(admins.size()));
+    writer.appendNumber(qint64(admins.size()));
     for (const MemberId& admin : admins)
     {
-        writer.append(admin.toHex());
+        writer.appendText(admin.toHex());
     }
 
     return writer.bytes();
@@ -454,8 +493,8 @@ QByteArray DocumentHeader::associatedData() const
 QByteArray DocumentHeader::signedBytes() const
 {
     CanonicalBytes writer;
-    writer.append(associatedData());
-    writer.append(toHex(payloadHash));
+    writer.appendBytes(associatedData());
+    writer.appendText(toHex(payloadHash));
     return writer.bytes();
 }
 

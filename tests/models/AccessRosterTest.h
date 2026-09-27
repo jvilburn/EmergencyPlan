@@ -13,6 +13,7 @@ private slots:
     void deviceFingerprintFollowsBothKeys();
     void deviceRoundTripsThroughJson();
     void deviceFromJsonRefusesMissingOrIllFormedFields();
+    void parsersRefuseAnUnknownKey();
 
     // People
     void personAddsAndRemovesDevices();

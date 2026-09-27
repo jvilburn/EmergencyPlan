@@ -162,19 +162,23 @@ AccessRoster rosterOf(const QList<TestDevice>& devices, const QList<MemberId>& a
 
         if (roster.contains(device.member))
         {
-            const bool added = roster.addDevice(device.member, rosterDevice(device, deviceName));
-            Q_ASSERT(added);
-            Q_UNUSED(added);
+            // A fixture the roster refuses would make every test built on it
+            // meaningless, in release builds as much as debug ones.
+            if (!roster.addDevice(device.member, rosterDevice(device, deviceName)))
+            {
+                qFatal("rosterOf: the roster refused a device");
+            }
             continue;
         }
 
         const QString displayName = QString("Person %1").arg(device.member.toHex().left(6));
         const RosterPerson::Role role =
             admins.contains(device.member) ? RosterPerson::Role::Admin : RosterPerson::Role::Member;
-        const bool added = roster.addPerson(
-            RosterPerson::create(device.member, displayName, rosterDevice(device, deviceName), role));
-        Q_ASSERT(added);
-        Q_UNUSED(added);
+        if (!roster.addPerson(
+                RosterPerson::create(device.member, displayName, rosterDevice(device, deviceName), role)))
+        {
+            qFatal("rosterOf: the roster refused a person");
+        }
     }
     return roster;
 }

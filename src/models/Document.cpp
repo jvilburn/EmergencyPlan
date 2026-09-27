@@ -2,6 +2,8 @@
 #include "DocumentChange.h"
 #include "ResponseArea.h"
 
+#include <cmath>
+
 Document Document::empty()
 {
     Document doc;
@@ -652,9 +654,14 @@ DocumentParse Document::parse(const QJsonObject& json, Document& out)
         return DocumentParse::Malformed;
     }
 
-    // toInt() returns 0 for a value that is not an integer in range, which the
-    // check below then refuses.
-    const int payloadVersion = version.toInt();
+    // Judged as the double JSON carries, so a version beyond int range still
+    // reads as later rather than wrapping or collapsing to zero.
+    const double payloadVersion = version.toDouble();
+    if (!std::isfinite(payloadVersion) || std::floor(payloadVersion) != payloadVersion)
+    {
+        return DocumentParse::Malformed;
+    }
+
     if (payloadVersion > CurrentPayloadVersion)
     {
         return DocumentParse::NeedsNewerVersion;
@@ -674,8 +681,9 @@ DocumentParse Document::parse(const QJsonObject& json, Document& out)
         return DocumentParse::Malformed;
     }
 
-    // Every real document has at least the person who created it, so an empty
-    // roster is as malformed as a header with no recipients.
+    // Every readable document lists at least the person reading it. The last
+    // person's leave writes an empty roster, but nobody can decrypt that payload,
+    // so an empty roster that reaches this reader is damage.
     const std::optional<AccessRoster> roster = AccessRoster::fromJson(rosterValue.toObject());
     if (!roster.has_value() || roster.value().isEmpty())
     {

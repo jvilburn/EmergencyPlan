@@ -33,8 +33,70 @@ struct SharedDocument
     qint64 version = 0;
 };
 
+/// Signs in and remembers which device the session belongs to, so the signed
+/// calls below can sign each request with that device's own key.
 std::optional<ServerContract::Session> signIn(ServerContract::ServerApi& server,
                                               const TestDevice& device);
+
+/// The device a session from signIn belongs to.
+const TestDevice& signerOf(const ServerContract::Session& session);
+
+// --- Every mutating call, signed by the session's own device ---
+//
+// A test that means to send a bad signature calls the ServerApi method directly.
+
+ServerContract::Result<qint64> signedRegisterDocument(ServerContract::ServerApi& server,
+                                                      const ServerContract::Session& session,
+                                                      const ServerContract::Upload& upload);
+
+ServerContract::Result<qint64> signedUpload(ServerContract::ServerApi& server,
+                                            const ServerContract::Session& session,
+                                            const QString& documentId,
+                                            qint64 baseVersion,
+                                            const ServerContract::Upload& upload);
+
+ServerContract::Result<ServerContract::Lease> signedTakeLease(ServerContract::ServerApi& server,
+                                                              const ServerContract::Session& session,
+                                                              const QString& documentId);
+
+ServerContract::Result<ServerContract::Done> signedReleaseLease(ServerContract::ServerApi& server,
+                                                                const ServerContract::Session& session,
+                                                                const QString& documentId);
+
+ServerContract::Result<ServerContract::Done> signedRequestAccess(
+    ServerContract::ServerApi& server,
+    const ServerContract::Session& session,
+    const QString& documentId,
+    const ServerContract::AccessRequest& request);
+
+ServerContract::Result<ServerContract::Done> signedClearAccessRequest(
+    ServerContract::ServerApi& server,
+    const ServerContract::Session& session,
+    const QString& documentId,
+    const Fingerprint& device);
+
+ServerContract::Result<QString> signedStartPairing(ServerContract::ServerApi& server,
+                                                   const ServerContract::Session& session,
+                                                   const QString& deviceName,
+                                                   const QByteArray& commitment);
+
+ServerContract::Result<ServerContract::Done> signedRespondToPairing(
+    ServerContract::ServerApi& server,
+    const ServerContract::Session& session,
+    const QString& code,
+    const DeviceKeys& responder);
+
+ServerContract::Result<ServerContract::Done> signedRevealPairing(
+    ServerContract::ServerApi& server,
+    const ServerContract::Session& session,
+    const QString& code,
+    const DeviceKeys& initiator,
+    const QByteArray& nonce);
+
+ServerContract::Result<ServerContract::Done> signedHandOver(ServerContract::ServerApi& server,
+                                                            const ServerContract::Session& session,
+                                                            const QString& code,
+                                                            const QByteArray& handover);
 
 DeviceKeys keysOf(const TestDevice& device);
 
@@ -50,7 +112,8 @@ bool signInAll(ServerContract::ServerApi& server, SharedDocument& ward);
 /// session lasts is the server's business.
 bool advance(ServerContract::ServerApi& server, SharedDocument& ward, qint64 seconds);
 
-/// A ward registered by this Alice, listing only these devices of hers.
+/// A ward registered by this Alice, listing only these devices of hers. Each one
+/// besides Alice herself must already have paired with her.
 std::optional<SharedDocument> registerWardWith(ServerContract::ServerApi& server,
                                                const TestDevice& alice,
                                                const QList<TestDevice>& aliceDevices);

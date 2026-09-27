@@ -49,6 +49,18 @@ vcpkg install libmupdf:x64-windows-static-md
 
 Note: MuPDF uses `fz_try/fz_catch/fz_always` macros (setjmp/longjmp) for error handling. Avoid C++ objects with destructors crossing these boundaries.
 
+### libsodium (document encryption and signing)
+- **Source**: vcpkg (`libsodium`, 1.0.22 or later, pinned in `vcpkg.json`)
+- **Target**: `unofficial-sodium::sodium`; the static port writes `SODIUM_STATIC` into its own `export.h`
+- **Wrapper**: `DocumentCrypto.h/cpp` - every other file reaches libsodium through it, apart from `Pairing.cpp` and the tests
+- `DocumentCrypto::initialise()` runs in `main()` and in the test runner before any other call
+
+### qtkeychain (device keys in the OS keychain)
+- **Source**: built from GitHub by `FetchContent`, pinned to the 0.17.0 commit; the vcpkg port would build a second Qt
+- **Target**: `qt6keychain`, static, with `QTKEYCHAIN_NO_EXPORT` defined for it and every user
+- **Include**: `#include <qtkeychain/keychain.h>`
+- Linux needs Qt DBus and the libsecret development headers
+
 ## Key Design Decisions
 
 ### Document Collections

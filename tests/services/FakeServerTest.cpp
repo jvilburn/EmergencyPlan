@@ -55,7 +55,7 @@ void FakeServerTest::aLeaseCanBeHeldByAnotherMember()
 
     server.holdLeaseAs(w.id, w.carol.fingerprint());
 
-    QCOMPARE(server.takeLease(w.aliceSession, w.id).error, ServerError::LeaseHeld);
+    QCOMPARE(signedTakeLease(server, w.aliceSession, w.id).error, ServerError::LeaseHeld);
     QVERIFY(server.head(w.aliceSession, w.id).value->leaseHolder == w.carol.fingerprint());
 
     // A held lease never blocks a roster change or a response record: the lease
@@ -113,7 +113,7 @@ void FakeServerTest::scriptedPairingReadsAreServedInOrder()
     const std::optional<Session> phoneSession = signIn(server, phone);
     QVERIFY(phoneSession.has_value());
 
-    const QString code = server.startPairing(phoneSession.value(), "Phone", "the real commitment").value.value();
+    const QString code = signedStartPairing(server, phoneSession.value(), "Phone", "the real commitment").value.value();
 
     // What Task 31's relay test needs: one commitment before the responder posts,
     // another after.
@@ -146,11 +146,11 @@ void FakeServerTest::limitsAreConfigurable()
         const Upload upload = sealedUpload(
             buildHeader(newDocumentId(), 1, 1, {device}, device, DocumentCrypto::generateDataKey()),
             device);
-        QVERIFY(server.registerDocument(session.value(), upload).ok());
+        QVERIFY(signedRegisterDocument(server, session.value(), upload).ok());
     }
 
     const Upload third = sealedUpload(
         buildHeader(newDocumentId(), 1, 1, {device}, device, DocumentCrypto::generateDataKey()),
         device);
-    QCOMPARE(server.registerDocument(session.value(), third).error, ServerError::RateLimited);
+    QCOMPARE(signedRegisterDocument(server, session.value(), third).error, ServerError::RateLimited);
 }

@@ -2,6 +2,17 @@
 
 #include "DocumentCrypto.h"
 #include "HexCodec.h"
+#include "StrictJson.h"
+
+namespace
+{
+
+// Part of the payload format.
+const QLatin1String KeyDeviceName("deviceName");
+const QLatin1String KeyPublicKey("publicKey");
+const QLatin1String KeyVerifyKey("verifyKey");
+
+} // namespace
 
 RosterDevice RosterDevice::create(const QString& deviceName,
                                   const PublicKey& publicKey,
@@ -23,22 +34,27 @@ bool RosterDevice::isValid() const
 QJsonObject RosterDevice::toJson() const
 {
     QJsonObject json;
-    json["deviceName"] = m_deviceName;
-    json["publicKey"] = HexCodec::encode(m_publicKey.bytes);
-    json["verifyKey"] = HexCodec::encode(m_verifyKey.bytes);
+    json[KeyDeviceName] = m_deviceName;
+    json[KeyPublicKey] = HexCodec::encode(m_publicKey.bytes);
+    json[KeyVerifyKey] = HexCodec::encode(m_verifyKey.bytes);
     return json;
 }
 
 std::optional<RosterDevice> RosterDevice::fromJson(const QJsonObject& json)
 {
-    const QJsonValue name = json.value("deviceName");
+    if (!StrictJson::hasOnlyKeys(json, {KeyDeviceName, KeyPublicKey, KeyVerifyKey}))
+    {
+        return std::nullopt;
+    }
+
+    const QJsonValue name = json.value(KeyDeviceName);
     if (!name.isString() || name.toString().isEmpty())
     {
         return std::nullopt;
     }
 
-    const QJsonValue publicKey = json.value("publicKey");
-    const QJsonValue verifyKey = json.value("verifyKey");
+    const QJsonValue publicKey = json.value(KeyPublicKey);
+    const QJsonValue verifyKey = json.value(KeyVerifyKey);
     if (!publicKey.isString() || !verifyKey.isString())
     {
         return std::nullopt;

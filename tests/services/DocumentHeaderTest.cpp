@@ -95,9 +95,10 @@ DocumentHeader sampleHeader()
 DocumentHeader reparsed(const DocumentHeader& header)
 {
     DocumentHeader out;
-    const HeaderParse result = DocumentHeader::parse(header.toJson(), out);
-    Q_ASSERT(result == HeaderParse::Ok);
-    Q_UNUSED(result);
+    if (DocumentHeader::parse(header.toJson(), out) != HeaderParse::Ok)
+    {
+        qFatal("reparsed: a header this test built did not parse");
+    }
     return out;
 }
 
@@ -337,6 +338,72 @@ void DocumentHeaderTest::parseRefusesAMalformedFingerprint()
                                 "fingerprint",
                                 QJsonValue(QString(Fingerprint::Size * 2, QLatin1Char('q')))),
              HeaderParse::Malformed);
+}
+
+void DocumentHeaderTest::parseRefusesASaveCounterAboveTheCap()
+{
+    DocumentHeader header = sampleHeader();
+
+    header.saveCounter = DocumentHeader::MaxSaveCounter;
+    QCOMPARE(reparsed(header).saveCounter, DocumentHeader::MaxSaveCounter);
+
+    // 2^53 is exact as a double, so this is the value above the cap and not a
+    // rounding of it.
+    QCOMPARE(parseWith(header, "saveCounter", QJsonValue(9007199254740992.0)), HeaderParse::Malformed);
+    QCOMPARE(parseWith(header, "saveCounter", QJsonValue(9.0e18)), HeaderParse::Malformed);
+}
+
+void DocumentHeaderTest::parseRefusesAnUnknownKey()
+{
+    const DocumentHeader header = sampleHeader();
+
+    // A field a newer writer added without a version bump would otherwise be
+    // read past, and outside the associated data nothing authenticates it.
+    QCOMPARE(parseWith(header, "comment", QJsonValue(QLatin1String("hello"))),
+             HeaderParse::Malformed);
+    QCOMPARE(parseWithRecipient(header, "comment", QJsonValue(QLatin1String("hello"))),
+             HeaderParse::Malformed);
+
+    // The same key in a later format is that format's business.
+    QJsonObject later = header.toJson();
+    later["formatVersion"] = DocumentHeader::CurrentFormatVersion + 1;
+    later["comment"] = QLatin1String("hello");
+    DocumentHeader out;
+    QCOMPARE(DocumentHeader::parse(later, out), HeaderParse::NeedsNewerVersion);
+}
+
+void DocumentHeaderTest::parseRefusesARecipientKindBelowOne()
+{
+    const DocumentHeader header = sampleHeader();
+
+    // No build ever wrote kind 0 or a negative kind, so neither is a later format.
+    QCOMPARE(parseWithRecipient(header, "kind", QJsonValue(0)), HeaderParse::Malformed);
+    QCOMPARE(parseWithRecipient(header, "kind", QJsonValue(-1)), HeaderParse::Malformed);
+}
+
+void DocumentHeaderTest::parseAcceptsAHeaderListingNoOne()
+{
+    // The last person's leave lists no one, and must still be readable so their
+    // other devices can walk the chain to it.
+    DocumentHeader header = sampleHeader();
+    header.recipients.clear();
+    header.admins.clear();
+
+    DocumentHeader out;
+    QCOMPARE(DocumentHeader::parse(header.toJson(), out), HeaderParse::Ok);
+    QVERIFY(out.recipients.isEmpty());
+}
+
+void DocumentHeaderTest::parseRefusesAnEarlierFormatVersion()
+{
+    const DocumentHeader header = sampleHeader();
+
+    // There is no earlier format to read: anything below current is damage.
+    QCOMPARE(parseWith(header,
+                       "formatVersion",
+                       QJsonValue(DocumentHeader::CurrentFormatVersion - 1)),
+             HeaderParse::Malformed);
+    QCOMPARE(parseWith(header, "formatVersion", QJsonValue(0)), HeaderParse::Malformed);
 }
 
 void DocumentHeaderTest::parseRefusesANonObjectRecipient()

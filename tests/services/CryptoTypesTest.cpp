@@ -95,6 +95,11 @@ void CryptoTypesTest::fingerprintFromHexAcceptsTheGroupedForm()
     // Someone reading a fingerprint aloud is looking at the grouped form, so
     // that is what gets typed back in.
     QVERIFY(Fingerprint::fromHex(SampleGrouped) == sampleFingerprint());
+
+    // Typed back in capitals, or with a stray space either side.
+    QVERIFY(Fingerprint::fromHex(SampleGrouped.toUpper()) == sampleFingerprint());
+    QVERIFY(Fingerprint::fromHex(SampleHex.toUpper()) == sampleFingerprint());
+    QVERIFY(Fingerprint::fromHex(" " + SampleGrouped + " ") == sampleFingerprint());
 }
 
 void CryptoTypesTest::fingerprintFromHexRefusesMalformedInput()
@@ -115,6 +120,18 @@ void CryptoTypesTest::fingerprintFromHexRefusesMalformedInput()
 
     // A separator in the wrong place does not rescue a short value.
     QVERIFY(!Fingerprint::fromHex("0001-0203").isValid());
+
+    // Separators anywhere but between groups of four, at the grouped length.
+    QString shifted = SampleGrouped;
+    shifted.replace(4, 1, QLatin1Char('0'));
+    shifted.replace(3, 1, QLatin1Char('-'));
+    QCOMPARE(shifted.size(), SampleGrouped.size());
+    QVERIFY(!Fingerprint::fromHex(shifted).isValid());
+
+    // A separator standing in for a digit at the plain length.
+    QString dashed = SampleHex;
+    dashed.replace(4, 1, QLatin1Char('-'));
+    QVERIFY(!Fingerprint::fromHex(dashed).isValid());
 }
 
 void CryptoTypesTest::memberIdHexRoundTrips()

@@ -34,6 +34,8 @@ private slots:
     void linkSkippingAKeyGenerationIsBroken();
     void linkWithDecreasingGenerationIsBroken();
     void linkWithNonIncreasingSaveCounterIsBroken();
+    void linkBeyondTheSaveCounterCapIsBroken();
+    void linkChangingOriginOrFormatIsBroken();
     void linkAcrossDocumentsIsBroken();
 
     // Links: device identity
@@ -80,6 +82,9 @@ private slots:
     void linkAdminLeavingWhenAnotherRemainsHolds();
     void linkLastAdminLeavingOthersBehindIsBroken();
     void linkLastPersonLeavingHolds();
+    void linkAdminLeaveThatRotatesIsBroken();
+    void linkLeavingSomeoneElseIsBroken();
+    void linkAfterAnEmptyHeaderIsBroken();
     void linkLeaveSignedByAKeyNotInPreviousIsBroken();
 
     // Chains
@@ -89,6 +94,8 @@ private slots:
     void chainProvesUnlinkForTheUnlinkedDevice();
     void chainSkippingHeadersWithUnchangedMembershipVerifies();
     void chainWithWithheldGrantHeaderIsBroken();
+    void chainWithWithheldPromotionHeaderIsBroken();
+    void chainProvesALeaveToTheLeaversOtherDevices();
     void chainWithBadSignatureIsBroken();
     void chainWithAnchorNotListingSelfIsBroken();
     void chainWithEmptyListIsBroken();

@@ -61,9 +61,7 @@ Fixture fixture()
     return f;
 }
 
-RosterPerson personFor(const TestDevice& device,
-                       const QString& name,
-                       RosterPerson::Role role = RosterPerson::Role::Member)
+RosterPerson personFor(const TestDevice& device, const QString& name, RosterPerson::Role role)
 {
     return RosterPerson::create(device.member, name, rosterDevice(device, "Laptop"), role);
 }
@@ -114,7 +112,7 @@ void AccessControlTest::grantLetsTheNewPersonsDeviceOpenTheDocument()
     const TestDevice dave = newPerson();
 
     const std::optional<AccessChange> result =
-        AccessControl::grant(f.header, f.roster, f.dataKey, f.writer(), personFor(dave, "Dave Kent"));
+        AccessControl::grant(f.header, f.roster, f.dataKey, f.writer(), personFor(dave, "Dave Kent", RosterPerson::Role::Member));
     QVERIFY(result.has_value());
 
     AccessChange change = result.value();
@@ -130,7 +128,7 @@ void AccessControlTest::grantLeavesTheDataKeyAndGenerationAlone()
     const TestDevice dave = newPerson();
 
     const std::optional<AccessChange> result =
-        AccessControl::grant(f.header, f.roster, f.dataKey, f.writer(), personFor(dave, "Dave Kent"));
+        AccessControl::grant(f.header, f.roster, f.dataKey, f.writer(), personFor(dave, "Dave Kent", RosterPerson::Role::Member));
     QVERIFY(result.has_value());
 
     // A new member may read what came before; that is what being granted access
@@ -164,7 +162,7 @@ void AccessControlTest::grantRefusesAWriterWhoIsNotAnAdmin()
                                   f.roster,
                                   f.dataKey,
                                   f.bob.fingerprint(),
-                                  personFor(dave, "Dave Kent"))
+                                  personFor(dave, "Dave Kent", RosterPerson::Role::Member))
                  .has_value());
 }
 
@@ -177,7 +175,7 @@ void AccessControlTest::grantRefusesAMemberIdAlreadyInTheRoster()
                                   f.roster,
                                   f.dataKey,
                                   f.writer(),
-                                  personFor(bobAgain, "Bob Hale"))
+                                  personFor(bobAgain, "Bob Hale", RosterPerson::Role::Member))
                  .has_value());
 }
 
@@ -187,7 +185,7 @@ void AccessControlTest::grantRefusesAPersonWithMoreThanOneDevice()
     const TestDevice dave = newPerson();
     const TestDevice davePhone = newDeviceFor(dave.member);
 
-    RosterPerson withTwo = personFor(dave, "Dave Kent");
+    RosterPerson withTwo = personFor(dave, "Dave Kent", RosterPerson::Role::Member);
     QVERIFY(withTwo.addDevice(rosterDevice(davePhone, "Phone")));
 
     // Further devices come by linking, from the person's own device.
@@ -246,7 +244,7 @@ void AccessControlTest::grantRefusesAnInvalidDataKey()
                                   f.roster,
                                   DataKey(),
                                   f.writer(),
-                                  personFor(dave, "Dave Kent"))
+                                  personFor(dave, "Dave Kent", RosterPerson::Role::Member))
                  .has_value());
 }
 
@@ -256,7 +254,7 @@ void AccessControlTest::grantVerifiesAsALink()
     const TestDevice dave = newPerson();
 
     const std::optional<AccessChange> result =
-        AccessControl::grant(f.header, f.roster, f.dataKey, f.writer(), personFor(dave, "Dave Kent"));
+        AccessControl::grant(f.header, f.roster, f.dataKey, f.writer(), personFor(dave, "Dave Kent", RosterPerson::Role::Member));
     QVERIFY(result.has_value());
     QVERIFY(linksAs(result.value(), f.header, f.alice));
 }
@@ -915,7 +913,7 @@ void AccessControlTest::everyAccessChangeProducesAMatchingHeaderAndRoster()
     };
 
     const QList<Case> cases = {
-        {AccessControl::grant(f.header, f.roster, f.dataKey, f.writer(), personFor(dave, "Dave Kent")),
+        {AccessControl::grant(f.header, f.roster, f.dataKey, f.writer(), personFor(dave, "Dave Kent", RosterPerson::Role::Member)),
          f.alice},
         {AccessControl::linkDevice(
              f.header, f.roster, f.dataKey, f.writer(), rosterDevice(alicePhone, "Phone")),
@@ -950,13 +948,13 @@ void AccessControlTest::operationsRefuseAHeaderThatDisagreesWithItsRoster()
     seal(f, {f.alice, f.bob, f.carol, aliceSecond});
 
     AccessRoster withDave = f.roster;
-    QVERIFY(withDave.addPerson(personFor(dave, "Dave Kent")));
+    QVERIFY(withDave.addPerson(personFor(dave, "Dave Kent", RosterPerson::Role::Member)));
     QVERIFY(!AccessControl::headerMatchesRoster(f.header, withDave));
 
     const TestDevice eve = newPerson();
     const TestDevice alicePhone = newDeviceFor(f.alice.member);
 
-    QVERIFY(!AccessControl::grant(f.header, withDave, f.dataKey, f.writer(), personFor(eve, "Eve Lund"))
+    QVERIFY(!AccessControl::grant(f.header, withDave, f.dataKey, f.writer(), personFor(eve, "Eve Lund", RosterPerson::Role::Member))
                  .has_value());
     QVERIFY(!AccessControl::linkDevice(
                  f.header, withDave, f.dataKey, f.writer(), rosterDevice(alicePhone, "Phone"))
@@ -976,7 +974,7 @@ void AccessControlTest::changesClearWhatAWriteMustProduceAfresh()
     const TestDevice dave = newPerson();
 
     const std::optional<AccessChange> result =
-        AccessControl::grant(f.header, f.roster, f.dataKey, f.writer(), personFor(dave, "Dave Kent"));
+        AccessControl::grant(f.header, f.roster, f.dataKey, f.writer(), personFor(dave, "Dave Kent", RosterPerson::Role::Member));
     QVERIFY(result.has_value());
 
     const DocumentHeader& header = result.value().header;

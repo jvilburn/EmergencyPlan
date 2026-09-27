@@ -57,7 +57,7 @@ find_package(unofficial-sodium CONFIG REQUIRED)
 include(FetchContent)
 FetchContent_Declare(qtkeychain
     GIT_REPOSITORY https://github.com/frankosterfeld/qtkeychain.git
-    GIT_TAG 0.17.0
+    GIT_TAG 875f77d9f61bd97fd84cca47ce3bc71186dfbd09  # 0.17.0
     EXCLUDE_FROM_ALL
 )
 #
@@ -67,6 +67,10 @@ set(BUILD_SHARED_LIBS OFF)
 set(BUILD_TRANSLATIONS OFF)
 set(BUILD_TEST_APPLICATION OFF)
 FetchContent_MakeAvailable(qtkeychain)
+
+# Built static, so its classes are neither exported nor imported. keychain.h reads
+# this in place of its generated export header, for the library and every user.
+target_compile_definitions(qt6keychain PUBLIC QTKEYCHAIN_NO_EXPORT)
 
 # ============================================================================
 # Compiler Warnings
@@ -115,6 +119,7 @@ set(MODEL_SOURCES
     src/models/AccessRoster.cpp
     src/models/RosterDevice.cpp
     src/models/RosterPerson.cpp
+    src/models/StrictJson.cpp
 )
 
 set(MODEL_HEADERS
@@ -144,6 +149,7 @@ set(MODEL_HEADERS
     src/models/AccessRoster.h
     src/models/RosterDevice.h
     src/models/RosterPerson.h
+    src/models/StrictJson.h
 )
 
 set(COMMAND_SOURCES
@@ -194,6 +200,10 @@ set(SERVICE_SOURCES
     src/services/DocumentCrypto.cpp
     src/services/DocumentHeader.cpp
     src/services/HexCodec.cpp
+    src/services/Pairing.cpp
+    src/services/Reconcile.cpp
+    src/services/ResponseMerge.cpp
+    src/services/ServerContract.cpp
     # src/services/StatisticsService.cpp
     # src/services/ResourceService.cpp
     # src/services/SearchService.cpp
@@ -227,6 +237,9 @@ set(SERVICE_HEADERS
     src/services/DocumentCrypto.h
     src/services/DocumentHeader.h
     src/services/HexCodec.h
+    src/services/Pairing.h
+    src/services/Reconcile.h
+    src/services/ResponseMerge.h
     src/services/ServerContract.h
     # src/services/StatisticsService.h
     # src/services/ResourceService.h

@@ -90,6 +90,10 @@ void DocumentChainTest::tamperedHeaderFailsDecryption()
     otherDocument.documentId = newDocumentId();
     QVERIFY(!DocumentCrypto::decryptPayload(sealed, world.dataKey, otherDocument).has_value());
 
+    DocumentHeader otherAdmins = world.header;
+    otherAdmins.admins = canonicalAdmins({world.alice.member, world.bob.member});
+    QVERIFY(!DocumentCrypto::decryptPayload(sealed, world.dataKey, otherAdmins).has_value());
+
     // The two fields outside the associated data must NOT affect decryption.
     DocumentHeader otherHash = world.header;
     otherHash.payloadHash = QByteArray(DocumentCrypto::PayloadHashSize, '\x99');
@@ -193,6 +197,9 @@ void DocumentChainTest::writerIsAccountedForByTheRosterOrAsALeave()
     const DocumentHeader leave =
         buildHeader(world.documentId, 1, 2, {world.bob}, world.alice, world.dataKey);
     QVERIFY(DocumentCrypto::writerIsAccountedFor(leave, withoutAlice));
+
+    // A writer in the roster but not in the header is neither.
+    QVERIFY(!DocumentCrypto::writerIsAccountedFor(leave, roster));
 }
 
 // --- Links: writer and counters ----------------------------------------------
@@ -252,17 +259,34 @@ void DocumentChainTest::linkWithHeaderSignedUnderAuthTagIsBroken()
 void DocumentChainTest::linkSkippingAKeyGenerationIsBroken()
 {
     const TwoPeople world = twoPeople();
+    const TestDevice alicePhone = newDeviceFor(world.alice.member);
+    const DocumentHeader before = buildHeader(world.documentId,
+                                              1,
+                                              1,
+                                              {world.alice, world.bob, alicePhone},
+                                              world.alice,
+                                              world.dataKey);
 
-    // A jump would let one member pin the generation at the maximum and block
-    // every later rotation.
-    const DocumentHeader next = buildHeader(world.documentId,
-                                            world.header.keyGeneration + 2,
-                                            2,
-                                            {world.alice, world.bob},
-                                            world.alice,
-                                            world.dataKey);
+    // A drop that earns a rotation, with the generation stepped by two. A jump
+    // would let one member pin the generation at the maximum and block every later
+    // rotation, so the rule is exactly one - and a step of one is the control.
+    const DataKey rotated = DocumentCrypto::generateDataKey();
+    const DocumentHeader byOne =
+        buildHeader(world.documentId, 2, 2, {world.alice, world.bob}, world.alice, rotated);
+    QVERIFY(DocumentCrypto::verifyLink(before, byOne));
 
-    QVERIFY(!DocumentCrypto::verifyLink(world.header, next));
+    const DocumentHeader byTwo =
+        buildHeader(world.documentId, 3, 2, {world.alice, world.bob}, world.alice, rotated);
+    QVERIFY(!DocumentCrypto::verifyLink(before, byTwo));
+
+    // And without any drop, any step at all.
+    const DocumentHeader unchanged = buildHeader(world.documentId,
+                                                 3,
+                                                 2,
+                                                 {world.alice, world.bob},
+                                                 world.alice,
+                                                 world.dataKey);
+    QVERIFY(!DocumentCrypto::verifyLink(world.header, unchanged));
 }
 
 void DocumentChainTest::linkWithDecreasingGenerationIsBroken()
@@ -288,6 +312,14 @@ void DocumentChainTest::linkWithNonIncreasingSaveCounterIsBroken()
 {
     const TwoPeople world = twoPeople();
 
+    const DocumentHeader next = buildHeader(world.documentId,
+                                            1,
+                                            world.header.saveCounter + 1,
+                                            {world.alice, world.bob},
+                                            world.alice,
+                                            world.dataKey);
+    QVERIFY(DocumentCrypto::verifyLink(world.header, next));
+
     const DocumentHeader same = buildHeader(world.documentId,
                                             1,
                                             world.header.saveCounter,
@@ -303,6 +335,63 @@ void DocumentChainTest::linkWithNonIncreasingSaveCounterIsBroken()
                                             world.alice,
                                             world.dataKey);
     QVERIFY(!DocumentCrypto::verifyLink(world.header, back));
+
+    // Any rise links: the step bound is the server's, because a chain walked with
+    // headers missing sees larger gaps than any one upload made.
+    const DocumentHeader farAhead = buildHeader(world.documentId,
+                                                1,
+                                                world.header.saveCounter
+                                                    + 10 * DocumentHeader::MaxSaveCounterStep,
+                                                {world.alice, world.bob},
+                                                world.alice,
+                                                world.dataKey);
+    QVERIFY(DocumentCrypto::verifyLink(world.header, farAhead));
+}
+
+void DocumentChainTest::linkBeyondTheSaveCounterCapIsBroken()
+{
+    const TwoPeople world = twoPeople();
+
+    DocumentHeader atCap = buildHeader(world.documentId,
+                                       1,
+                                       DocumentHeader::MaxSaveCounter,
+                                       {world.alice, world.bob},
+                                       world.alice,
+                                       world.dataKey);
+    QVERIFY(DocumentCrypto::verifyLink(world.header, atCap));
+
+    DocumentHeader beyond = atCap;
+    beyond.saveCounter = DocumentHeader::MaxSaveCounter + 1;
+    resign(beyond, world.alice);
+    QVERIFY(!DocumentCrypto::isCoherent(beyond));
+    QVERIFY(!DocumentCrypto::verifyLink(world.header, beyond));
+}
+
+void DocumentChainTest::linkChangingOriginOrFormatIsBroken()
+{
+    const TwoPeople world = twoPeople();
+
+    DocumentHeader withOrigin = buildHeader(world.documentId,
+                                            1,
+                                            2,
+                                            {world.alice, world.bob},
+                                            world.alice,
+                                            world.dataKey);
+    QVERIFY(DocumentCrypto::verifyLink(world.header, withOrigin));
+
+    withOrigin.originDocumentId = newDocumentId();
+    resign(withOrigin, world.alice);
+    QVERIFY(!DocumentCrypto::verifyLink(world.header, withOrigin));
+
+    DocumentHeader otherFormat = buildHeader(world.documentId,
+                                             1,
+                                             2,
+                                             {world.alice, world.bob},
+                                             world.alice,
+                                             world.dataKey);
+    otherFormat.formatVersion += 1;
+    resign(otherFormat, world.alice);
+    QVERIFY(!DocumentCrypto::verifyLink(world.header, otherFormat));
 }
 
 void DocumentChainTest::linkAcrossDocumentsIsBroken()
@@ -325,21 +414,26 @@ void DocumentChainTest::linkAcrossDocumentsIsBroken()
 void DocumentChainTest::linkWithFingerprintNotMatchingKeysIsBroken()
 {
     const TwoPeople world = twoPeople();
+    const TestDevice bobPhone = newDeviceFor(world.bob.member);
 
+    // Bob links his own new phone: no drop, no rotation, his own person, so every
+    // cross-header rule is satisfied.
     DocumentHeader next = buildHeader(world.documentId,
                                       1,
                                       2,
-                                      {world.alice, world.bob},
-                                      world.alice,
+                                      {world.alice, world.bob, bobPhone},
+                                      world.bob,
                                       world.dataKey);
-    // A fingerprint belonging to nobody, so only the recompute-and-compare check
-    // can refuse this. Reusing another entry's fingerprint would also trip the
-    // duplicate check and prove nothing about this one.
+    QVERIFY(DocumentCrypto::verifyLink(world.header, next));
+
+    // The phone's entry then claims a fingerprint that belongs to nobody. Only the
+    // recompute-and-compare check stands in the way.
     Fingerprint unrelated;
     unrelated.bytes = DocumentCrypto::generateDataKey().bytes.left(Fingerprint::Size);
-    next.recipients[1].fingerprint = unrelated;
-    resign(next, world.alice);
+    next.recipients[2].fingerprint = unrelated;
+    resign(next, world.bob);
 
+    QVERIFY(!DocumentCrypto::isCoherent(next));
     QVERIFY(!DocumentCrypto::verifyLink(world.header, next));
 }
 
@@ -950,6 +1044,72 @@ void DocumentChainTest::linkLastPersonLeavingHolds()
     QVERIFY(DocumentCrypto::verifyLink(before, next));
 }
 
+void DocumentChainTest::linkAdminLeaveThatRotatesIsBroken()
+{
+    const TwoPeople world = twoPeople();
+    const DocumentHeader bothAdmins = buildHeader(world.documentId,
+                                                  1,
+                                                  1,
+                                                  {world.alice, world.bob},
+                                                  world.alice,
+                                                  world.dataKey,
+                                                  {world.alice.member, world.bob.member});
+
+    // The same leave holds without a rotation.
+    const DocumentHeader leave = buildHeader(
+        world.documentId, 1, 2, {world.bob}, world.alice, world.dataKey, {world.bob.member});
+    QVERIFY(DocumentCrypto::verifyLink(bothAdmins, leave));
+
+    const DocumentHeader rotating = buildHeader(world.documentId,
+                                                2,
+                                                2,
+                                                {world.bob},
+                                                world.alice,
+                                                DocumentCrypto::generateDataKey(),
+                                                {world.bob.member});
+    QVERIFY(!DocumentCrypto::verifyLink(bothAdmins, rotating));
+}
+
+void DocumentChainTest::linkLeavingSomeoneElseIsBroken()
+{
+    const QString documentId = newDocumentId();
+    const DataKey dataKey = DocumentCrypto::generateDataKey();
+    const TestDevice alice = newPerson();
+    const TestDevice bob = newPerson();
+    const TestDevice bobPhone = newDeviceFor(bob.member);
+    const TestDevice carol = newPerson();
+
+    const DocumentHeader before =
+        buildHeader(documentId, 1, 1, {alice, bob, bobPhone, carol}, alice, dataKey);
+
+    // Bob's laptop, absent from its own version, while Bob stays on through his
+    // phone: that drops a device, not Bob, so it is no leave.
+    const DocumentHeader laptopOnly =
+        buildHeader(documentId, 1, 2, {alice, bobPhone, carol}, bob, dataKey);
+    QVERIFY(!DocumentCrypto::verifyLink(before, laptopOnly));
+
+    // The same, taking Carol with it.
+    const DocumentHeader takingCarol =
+        buildHeader(documentId, 1, 2, {alice, bobPhone}, bob, dataKey);
+    QVERIFY(!DocumentCrypto::verifyLink(before, takingCarol));
+}
+
+void DocumentChainTest::linkAfterAnEmptyHeaderIsBroken()
+{
+    const QString documentId = newDocumentId();
+    const DataKey dataKey = DocumentCrypto::generateDataKey();
+    const TestDevice alice = newPerson();
+
+    const DocumentHeader before = buildHeader(documentId, 1, 1, {alice}, alice, dataKey);
+    const DocumentHeader lastLeave = buildHeader(documentId, 1, 2, {}, alice, dataKey, {});
+    QVERIFY(DocumentCrypto::verifyLink(before, lastLeave));
+
+    // Nobody is left to write the next version, so nothing can follow it - not
+    // even the person who just left.
+    const DocumentHeader afterwards = buildHeader(documentId, 1, 3, {alice}, alice, dataKey);
+    QVERIFY(!DocumentCrypto::verifyLink(lastLeave, afterwards));
+}
+
 void DocumentChainTest::linkLeaveSignedByAKeyNotInPreviousIsBroken()
 {
     const TwoPeople world = twoPeople();
@@ -1054,15 +1214,25 @@ void DocumentChainTest::chainSkippingHeadersWithUnchangedMembershipVerifies()
     // The server keeps only headers whose membership changed, plus the current
     // one. This is what makes dropping the rest safe.
     const TwoPeople world = twoPeople();
+    const TestDevice carol = newPerson();
 
-    const DocumentHeader current = buildHeader(world.documentId,
-                                               1,
-                                               99,
-                                               {world.alice, world.bob},
-                                               world.alice,
-                                               world.dataKey);
+    // Alice grants Carol; Carol then writes an ordinary edit, which the server
+    // drops; Bob writes the current version.
+    const QList<TestDevice> everyone = {world.alice, world.bob, carol};
+    const DocumentHeader granted =
+        buildHeader(world.documentId, 1, 2, everyone, world.alice, world.dataKey);
+    const DocumentHeader dropped =
+        buildHeader(world.documentId, 1, 3, everyone, carol, world.dataKey);
+    const DocumentHeader current =
+        buildHeader(world.documentId, 1, 4, everyone, world.bob, world.dataKey);
 
-    QCOMPARE(DocumentCrypto::verifyChain(world.header, {current}, world.bob.fingerprint()),
+    QCOMPARE(DocumentCrypto::verifyChain(world.header,
+                                         {granted, dropped, current},
+                                         world.bob.fingerprint()),
+             ChainResult::StillMember);
+
+    // Without the dropped header, Bob's version links straight from the grant.
+    QCOMPARE(DocumentCrypto::verifyChain(world.header, {granted, current}, world.bob.fingerprint()),
              ChainResult::StillMember);
 }
 
@@ -1087,6 +1257,56 @@ void DocumentChainTest::chainWithWithheldGrantHeaderIsBroken()
 
     QCOMPARE(DocumentCrypto::verifyChain(anchor, {removed}, carol.fingerprint()),
              ChainResult::Broken);
+}
+
+void DocumentChainTest::chainWithWithheldPromotionHeaderIsBroken()
+{
+    const QString documentId = newDocumentId();
+    const DataKey dataKey = DocumentCrypto::generateDataKey();
+    const TestDevice alice = newPerson();
+    const TestDevice bob = newPerson();
+    const TestDevice carol = newPerson();
+
+    const DocumentHeader anchor =
+        buildHeader(documentId, 1, 1, {alice, bob, carol}, alice, dataKey);
+
+    // Alice makes Carol an admin; Carol removes Bob.
+    const QList<MemberId> admins = {alice.member, carol.member};
+    const DocumentHeader promoted =
+        buildHeader(documentId, 1, 2, {alice, bob, carol}, alice, dataKey, admins);
+    const DataKey rotated = DocumentCrypto::generateDataKey();
+    const DocumentHeader removed =
+        buildHeader(documentId, 2, 3, {alice, carol}, carol, rotated, admins);
+
+    QCOMPARE(DocumentCrypto::verifyChain(anchor, {promoted, removed}, bob.fingerprint()),
+             ChainResult::Removed);
+
+    // Without the promotion, Carol removing anyone is a member removing someone.
+    QCOMPARE(DocumentCrypto::verifyChain(anchor, {removed}, bob.fingerprint()),
+             ChainResult::Broken);
+}
+
+void DocumentChainTest::chainProvesALeaveToTheLeaversOtherDevices()
+{
+    const QString documentId = newDocumentId();
+    const DataKey dataKey = DocumentCrypto::generateDataKey();
+    const TestDevice alice = newPerson();
+    const TestDevice bob = newPerson();
+    const TestDevice bobPhone = newDeviceFor(bob.member);
+
+    const DocumentHeader anchor =
+        buildHeader(documentId, 1, 1, {alice, bob, bobPhone}, alice, dataKey);
+
+    // Bob leaves from his laptop. His phone, offline at the time, can no longer
+    // decrypt, and the leave is all the evidence it has.
+    const DocumentHeader leave = buildHeader(documentId, 1, 2, {alice}, bob, dataKey);
+
+    QCOMPARE(DocumentCrypto::verifyChain(anchor, {leave}, bobPhone.fingerprint()),
+             ChainResult::Removed);
+    QCOMPARE(DocumentCrypto::verifyChain(anchor, {leave}, bob.fingerprint()),
+             ChainResult::Removed);
+    QCOMPARE(DocumentCrypto::verifyChain(anchor, {leave}, alice.fingerprint()),
+             ChainResult::StillMember);
 }
 
 void DocumentChainTest::chainWithBadSignatureIsBroken()

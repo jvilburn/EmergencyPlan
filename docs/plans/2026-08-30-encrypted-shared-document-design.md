@@ -212,7 +212,7 @@ reader's entry, and check versions without decrypting anything.
   public key, Ed25519 verify key, data key sealed to that device's public key}`
 - admins: the member ids of the people who are admins, a subset of those in the
   recipient entries
-- payload hash: BLAKE2b of the encrypted payload
+- payload hash: 32-byte BLAKE2b of the encrypted payload, personalised `wp-payload`
 - writer signature: Ed25519, by the last writer, over the associated data and the
   payload hash
 
@@ -322,10 +322,17 @@ person on the previous header's admin list. The next header is valid when:
 
 1. Its writer device appears among the previous header's recipients with the same keys
    the header carries for it, and its signature verifies.
-2. Its save counter increases. Its key generation rises by exactly one when a device or
-   person is dropped by an unlink or a removal, and stays the same otherwise — so a key is
+2. Its save counter rises. Its key generation rises by exactly one when a device or
+   person is dropped by an unlink or a removal, and stays the same otherwise, so a key is
    never rotated without a membership change, and a header skipped for leaving membership
-   unchanged never hides a rotation.
+   unchanged never hides a rotation. The rising counter is what orders versions of one
+   generation, and so what lets a device refuse an older one. A counter that only rises
+   could be pushed to its maximum to freeze the ward, so it is capped at 2^53 - 1 (exact in
+   every JSON reader) and the server refuses any upload that raises it by more than 2^20,
+   about a million saves between publishes. With uploads limited to 600 an hour per
+   device, reaching the cap would take one device some 1,600 years of continuous
+   publishing. The chain itself requires only a rise, because a client walks it with
+   headers missing.
 3. Its writer device appears among its own recipients — except in a leave (rule 7).
 4. Every device fingerprint belongs to exactly one person and matches the entry's own
    keys; no two entries share an X25519 key or a verify key; a device that appears in
@@ -390,8 +397,15 @@ unlink "Surface Laptop" rather than guess between two rows.
 and member ids are random, so the header carries no names. Anyone who obtains the file learns nothing about who the
 bishopric is.
 
-**Fingerprints are ≥128 bits** — BLAKE2b over the device's X25519 public key followed by
-its Ed25519 verify key. They are an identity handle and a human comparison aid, not a
+**Fingerprints are at least 128 bits:** 16-byte BLAKE2b over the device's X25519 public key
+followed by its Ed25519 verify key, personalised `wp-fingerprint`.
+
+**Every BLAKE2b in the format carries its own personalisation:** the string, zero-padded
+to 16 bytes, in BLAKE2b's parameter block, with a zero salt: `wp-fingerprint`,
+`wp-payload`, `wp-pair-commit` for a pairing commitment, `wp-pair-number` for the
+comparison number, and `wp-request` for a signed request's body. A digest made for one purpose can never equal one made for another,
+whatever the inputs and lengths. The strings are part of the format, and the companion
+server reproduces them; the known-answer vectors pin them. They are an identity handle and a human comparison aid, not a
 shortened secret. Because the fingerprint covers both keys, a device cannot keep its
 identity while either key is swapped: a changed key is a different device, which only its
 own person can add.
@@ -595,8 +609,13 @@ current header, and every other document endpoint requires it.
 
 **Authentication.** The client fetches a challenge, signs it under the `auth` tag with
 its Ed25519 key, and receives a short-lived token; every mutating request is
-additionally signed under the `request` tag over the document id and a hash of its body, so a captured request cannot be replayed against a
-different document. Posting an access request is the only write open to a non-member — by
+additionally signed under the `request` tag, with the device's own key, over the
+endpoint's route, the document id (empty for a pairing), and a `wp-request` BLAKE2b of
+the request's canonical body. A token taken from a device is then not enough to change
+anything, and a captured signature cannot be replayed against a different document or
+a different endpoint. The canonical bodies are part of the protocol
+(`ServerContract.cpp`); an upload's body is its base version and its header's signed
+bytes and signature, which bind the blob through the payload hash. Posting an access request is the only write open to a non-member — by
 definition, since it is how someone asks to become one — and it still carries device
 authentication, which is what rate limiting counts against.
 
@@ -716,7 +735,7 @@ identity, the header chain from the base copy's header holds, the key unseals, t
 payload hash matches, the payload decrypts, the signature verifies against the
 roster, and the key generation passes the local high-water mark. The chain starts at
 the base copy — the last version this machine and the server agreed on — because local
-saves never reach the server and their save counters would not fit its chain. Without
+saves never reach the server and so are not in its chain. Without
 a usable base copy the chain check is skipped for a version this identity can decrypt,
 since decryption and the signature check it directly. The operator is in
 the threat model, and the local file is the one copy that has to survive a server
@@ -1195,8 +1214,9 @@ Headless tests in `tests/services`:
   bound header byte changes or when the signer is not on the roster; a payload byte
   change fails the payload hash
 - a header chain verifies link by link; it breaks on a writer absent from the previous
-  header's recipients, a bad signature, a decreasing key generation, or a save counter
-  that does not increase; a chain whose revoker was granted after the anchor verifies
+  header's recipients, a bad signature, a key generation that does not step by exactly
+  the rule, or a save counter that does not increase; a chain whose revoker was granted
+  after the anchor verifies
 - grant and revoke changing the roster; rotation making a removed key fail
 - a chain breaks on a device added to a person by any device but that person's own —
   an admin's included — on a device dropped from a person by a device that is neither

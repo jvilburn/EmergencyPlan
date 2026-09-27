@@ -20,9 +20,10 @@ class AccessRoster
 public:
     AccessRoster() = default;
 
-    /// Refused when the member id is already here - a re-granted person always
-    /// gets a fresh member id, so ids are never reused - or when any of the
-    /// person's devices is refused as addDevice would refuse it.
+    /// Refused when the member id is already here - a member id is unique within
+    /// one roster, and a person who left is granted again under the same id only
+    /// once they are gone from it - or when any of the person's devices is refused
+    /// as addDevice would refuse it.
     bool addPerson(const RosterPerson& person);
 
     bool removePerson(const MemberId& member);

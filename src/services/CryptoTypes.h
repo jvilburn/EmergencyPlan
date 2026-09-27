@@ -96,8 +96,9 @@ struct Fingerprint
     /// groups separated by '-'.
     QString toGroupedHex() const;
 
-    /// Returns an invalid Fingerprint when the text is not exactly Size bytes of
-    /// hex. Accepts the grouped form as well as plain hex.
+    /// For text a person typed: plain hex or exactly the grouped form, in either
+    /// case, with surrounding space ignored. Returns an invalid Fingerprint for
+    /// anything else, including separators anywhere but between groups.
     static Fingerprint fromHex(const QString& hex);
 };
 
@@ -113,7 +114,8 @@ struct DeviceKeys
     bool operator!=(const DeviceKeys& other) const { return !(*this == other); }
 };
 
-/// Identifies a person on the access roster: 128 random bits, never reused.
+/// Identifies a person on the access roster: 128 random bits, unique within one
+/// roster. A person who left or was removed may be granted again under the same id.
 ///
 /// Not the directory's PersonId (src/models/Id.h): a MemberId identifies a
 /// person who may open the document, a PersonId a member of the ward directory.

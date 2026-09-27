@@ -21,6 +21,10 @@ set(TEST_SOURCES
     services/DocumentHeaderTest.cpp
     services/FakeServer.cpp
     services/FakeServerTest.cpp
+    services/FormatVectorsTest.cpp
+    services/PairingTest.cpp
+    services/ReconcileTest.cpp
+    services/ResponseMergeTest.cpp
     services/ServerConformanceTest.cpp
     services/ServerTestSupport.cpp
     services/SmokeTest.cpp
@@ -33,6 +37,11 @@ add_executable(WardPlanningTests
 target_link_libraries(WardPlanningTests PRIVATE
     WardPlanningLib
     Qt6::Test
+)
+
+target_include_directories(WardPlanningTests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/models
+    ${CMAKE_CURRENT_SOURCE_DIR}/services
 )
 
 add_test(NAME WardPlanningTests COMMAND WardPlanningTests)

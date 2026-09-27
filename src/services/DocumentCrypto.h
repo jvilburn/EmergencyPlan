@@ -51,7 +51,8 @@ enum class HashDomain
     Fingerprint,        ///< "wp-fingerprint" - a device's two public keys
     Payload,            ///< "wp-payload"     - the encrypted payload
     PairingCommit,      ///< "wp-pair-commit" - the initiator's keys and nonce
-    PairingComparison   ///< "wp-pair-number" - both devices' keys and the nonce
+    PairingComparison,  ///< "wp-pair-number" - both devices' keys and the nonce
+    Request             ///< "wp-request"     - a mutating request's canonical body
 };
 
 /// One device's sealing keys.
@@ -185,8 +186,8 @@ public:
     static bool verifyLink(const DocumentHeader& previous, const DocumentHeader& next);
 
     /// Walks headers forward from an already-authenticated anchor - the base
-    /// copy's header, never the local file's, whose save counter runs ahead of
-    /// the server's after offline edits.
+    /// copy's header, never the local file's, whose offline saves are not in the
+    /// server's chain.
     ///
     /// This is what a removed device relies on: it can no longer decrypt, so the
     /// headers are all the evidence it has.

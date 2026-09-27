@@ -1,5 +1,7 @@
 #include "AccessRoster.h"
 
+#include "StrictJson.h"
+
 #include <QJsonArray>
 #include <QStringList>
 
@@ -8,7 +10,27 @@
 namespace
 {
 
-/// True when another device — a different fingerprint — already uses either of
+// Part of the payload format.
+const QLatin1String KeyPeople("people");
+
+/// Case-insensitive first, so "de Groot" sorts among the Ds; then case-sensitive,
+/// then member id, so two people sharing a name still order the same way. Not
+/// locale-aware, so the order is the same on every device.
+bool personSortsBefore(const RosterPerson& left, const RosterPerson& right)
+{
+    const int byName = QString::compare(left.displayName(), right.displayName(), Qt::CaseInsensitive);
+    if (byName != 0)
+    {
+        return byName < 0;
+    }
+    if (left.displayName() != right.displayName())
+    {
+        return left.displayName() < right.displayName();
+    }
+    return left.member().toHex() < right.member().toHex();
+}
+
+/// True when another device - a different fingerprint - already uses either of
 /// this device's keys.
 bool sharesAKey(const RosterDevice& device, const QList<RosterDevice>& others)
 {
@@ -178,25 +200,7 @@ std::optional<RosterDevice> AccessRoster::deviceFor(const Fingerprint& fingerpri
 QList<RosterPerson> AccessRoster::people() const
 {
     QList<RosterPerson> sorted = m_people.values();
-    std::sort(sorted.begin(),
-              sorted.end(),
-              [](const RosterPerson& left, const RosterPerson& right)
-              {
-                  // Case-insensitive first, so "de Groot" sorts among the Ds.
-                  // Not locale-aware, so the order is the same on every device.
-                  const int byName = QString::compare(left.displayName(),
-                                                      right.displayName(),
-                                                      Qt::CaseInsensitive);
-                  if (byName != 0)
-                  {
-                      return byName < 0;
-                  }
-                  if (left.displayName() != right.displayName())
-                  {
-                      return left.displayName() < right.displayName();
-                  }
-                  return left.member().toHex() < right.member().toHex();
-              });
+    std::sort(sorted.begin(), sorted.end(), personSortsBefore);
     return sorted;
 }
 
@@ -219,13 +223,18 @@ QJsonObject AccessRoster::toJson() const
     }
 
     QJsonObject json;
-    json["people"] = peopleArray;
+    json[KeyPeople] = peopleArray;
     return json;
 }
 
 std::optional<AccessRoster> AccessRoster::fromJson(const QJsonObject& json)
 {
-    const QJsonValue people = json.value("people");
+    if (!StrictJson::hasOnlyKeys(json, {KeyPeople}))
+    {
+        return std::nullopt;
+    }
+
+    const QJsonValue people = json.value(KeyPeople);
     if (!people.isArray())
     {
         return std::nullopt;
