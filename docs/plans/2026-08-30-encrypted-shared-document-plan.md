@@ -4,26 +4,26 @@
 
 **Goal:** Encrypt the ward document, hold the authoritative copy on a Ward Planning server the app talks to directly, and keep a complete local file that works with no network at all.
 
-**Architecture:** Envelope encryption. Each document holds one random data key, sealed separately to each device's X25519 public key via libsodium `crypto_box_seal`. The payload — today's document JSON, compressed — is encrypted with XChaCha20-Poly1305 under that data key, as one payload, with the plaintext header bound as associated data. The roster lists people, each with linked devices; every device holds two keypairs, X25519 for sealing and Ed25519 for signing, generated silently on first run and held in the OS keychain through qtkeychain. A signed header chain proves membership changes; each person is an admin or a member, and any admin grants and removes alone. Saving writes the local file; publishing uploads it conditionally on the version this session started from. All local writes funnel through one `DocumentManager` method.
+**Architecture:** Envelope encryption. Each document holds one random data key, sealed separately to each device's X25519 public key via libsodium `crypto_box_seal`. The payload - today's document JSON, compressed - is encrypted with XChaCha20-Poly1305 under that data key, as one payload, with the plaintext header bound as associated data. The roster lists people, each with linked devices; every device holds two keypairs, X25519 for sealing and Ed25519 for signing, generated silently on first run and held in the OS keychain through qtkeychain. A signed header chain proves membership changes; each person is an admin or a member, and any admin grants and removes alone. Saving writes the local file; publishing uploads it conditionally on the version this session started from. All local writes funnel through one `DocumentSession` path, and every server call answers through a callback.
 
 **Tech Stack:** Qt 6.11 (Widgets, Network, Test), C++17, MSVC 2022, Ninja. libsodium from vcpkg; qtkeychain built from source via `FetchContent` against the system Qt.
 
-**Design document:** [2026-08-30-encrypted-shared-document-design.md](2026-08-30-encrypted-shared-document-design.md) — read it before starting. This plan implements it and does not restate its rationale.
+**Design document:** [2026-08-30-encrypted-shared-document-design.md](2026-08-30-encrypted-shared-document-design.md) - read it before starting. This plan implements it and does not restate its rationale.
 
 ---
 
 ## Before you start
 
 **The server is separate work.** Its design, implementation, hosting, and operation
-have their own document. This plan builds the client against a **fake server** — an
+have their own document. This plan builds the client against a **fake server** - an
 in-process test double implementing the contract in the design's *The server* section
-— written in Task 1.8. Every sync task is testable before a real server exists, and
+ - written in Task 1.8. Every sync task is testable before a real server exists, and
 end-to-end verification waits on that companion work.
 
 **You do not build or run anything.** The MSVC environment is only set up inside
 `build.bat`. Ask the user to build with **Ctrl+Shift+B** in VS Code and to run the
 test executable, then paste the output. Never invoke cmake, ninja, or the compiler
-from a Claude shell — Git Bash and MSYS lack the MSVC environment and produce
+from a Claude shell - Git Bash and MSYS lack the MSVC environment and produce
 misleading errors like `Cannot open include file: 'type_traits'`.
 
 **`build.bat` only reconfigures when the top-level `CMakeLists.txt` changes.** It
@@ -41,13 +41,16 @@ library locations, so a Debug build links the Debug libraries.
 
 **Standing rule: every new `.cpp`/`.h` must be added to the source lists in
 `CMakeLists.txt`.** `WardPlanningLib` is built from hand-maintained
-`set(MODEL_SOURCES ...)` / `SERVICE_SOURCES` / `WIDGET_SOURCES` lists above line 350 —
+`set(MODEL_SOURCES ...)` / `SERVICE_SOURCES` / `WIDGET_SOURCES` lists above line 350 - 
 there is no globbing. This plan creates roughly thirty files and does not repeat the
 instruction in each task.
 
-**Standing rule: core first.** After Task 0's rename, Task 1 is the whole behavioural core, and Task 2 is a
-stop for the user's review of it. The tree may not build between tasks while the core
-and its consequences land; that is expected. Within a related set of files, migrate the
+**Standing rule: core first.** After Task 0's rename, Task 1 is the whole behavioural core
+of the format, membership, and server rules, and Task 2 is a stop for the user's review of
+it. Task 6 is the second core - the runtime orchestration that saves, publishes, and
+reconciles - and Task 7 is the stop for its review; every task after it is a consequence.
+The tree may not build between tasks while a core and its consequences land; that is
+expected. Within a related set of files, migrate the
 whole unit to the new design in one step so it never reads as two designs at once, and
 delete code in the same task that removes its last caller.
 
@@ -57,8 +60,8 @@ continuation lines, `std::optional<>` for nullable fields, the local in
 `toJson`/`fromJson` is named `json`, and every user-visible string goes through
 `tr()`.
 
-**Commit after every task**, except that Task 1 is committed at the end of Task 2, once
-the user's review is applied. Plain messages, no attribution lines.
+**Commit after every task**, except that each core is committed at the end of its review
+stop - Task 1 at Task 2, Task 6 at Task 7 - once the user's review is applied. Plain messages, no attribution lines.
 
 **Terminology:**
 
@@ -67,12 +70,12 @@ the user's review is applied. Plain messages, no attribution lines.
 | Data key | 32-byte random key encrypting one document's payload |
 | Sealed key | The data key encrypted to one device's public key |
 | Person | Someone with access: member id, display name, role, and one or more devices |
-| Role | **Admin** — grants, removes, unlinks another's device, and changes roles, alone — or **member**. Admins are listed in the header; every version lists at least one |
+| Role | **Admin** - grants, removes, unlinks another's device, and changes roles, alone - or **member**. Admins are listed in the header; every version lists at least one |
 | Device | One installation's keypairs and device name; its private keys never leave it |
 | Roster | People, each with their devices, stored **inside** the payload |
 | Link | Adding a device to your own person, authorised from a device you already use |
 | Recipient entry | `{kind, member id, fingerprint, public key, verify key, sealed key}` in the **plaintext** header; the fingerprint covers both keys |
-| Header chain | The kept headers — those whose membership changed — each signed by a device of the one before; lets a removed member prove removal without decrypting |
+| Header chain | The kept headers - those whose membership changed - each signed by a device of the one before; lets a removed member prove removal without decrypting |
 | Leave | A person publishing the version that drops them; it does not rotate the key |
 | Key generation | Counter incremented on every data key rotation |
 | Save counter | Counter incremented on every local write |
@@ -82,22 +85,22 @@ the user's review is applied. Plain messages, no attribution lines.
 | Base version | The server version this local file was last reconciled with |
 | Publish | Upload the local file, conditional on the base version |
 | Lease | Server-held edit token; while it is held elsewhere, this session is read-only |
-| Allow-list | The devices the server permits to read and write one document — exactly the current accepted header's recipients, never updated separately |
+| Allow-list | The devices the server permits to read and write one document - exactly the current accepted header's recipients, never updated separately |
 
 ---
 
-## Phase 0 — Rename
+## Phase 0 - Rename
 
 ### Task 0: Rename the product to Ward Planning
 
-First, so every later task — the core, the test harness, the libsodium build — is
+First, so every later task - the core, the test harness, the libsodium build - is
 written against final names, and because `setOrganizationName` keys where the storage
 and identity tasks store their records.
 
 > **Done.** Commit `428f047`. The notes below record what the task covered.
 > Beyond the table: the file-dialog filters (`MainWindow.cpp:287,351`), the tile
 > service user agent, the stylesheet header comment, `LICENSE.txt`, and the four
-> `docs/*.md` title lines — which settles Task 36's rename item. The version is
+> `docs/*.md` title lines - which settles Task 29's rename item. The version is
 > single-sourced from `project(VERSION ...)` through `WARD_PLANNING_VERSION` and
 > `QCoreApplication::applicationVersion()`. Two build fixes landed with it: the
 > MuPDF config package, and per-preset build directories. `vcpkg.json` also gained
@@ -120,7 +123,7 @@ if errorlevel 1 exit /b 1
 
 Renaming the executable target leaves that path missing. And because this task edits
 `CMakeLists.txt`, `build.bat:23` sets `NEED_CONFIGURE=1`, which deletes
-`build\.deployed` at `:36`, which forces the deploy branch at `:48` to run — so the
+`build\.deployed` at `:36`, which forces the deploy branch at `:48` to run - so the
 failure is guaranteed on the very build this task asks the user to perform. Check
 `build.sh` for the same path; it is referenced from `.vscode/tasks.json:12,16,34,38`.
 
@@ -128,7 +131,7 @@ failure is guaranteed on the very build this task asks the user to perform. Chec
 
 | What | Where |
 |---|---|
-| CMake project and targets `EmergencyPlan`/`EmergencyPlanLib` → `WardPlanning`/`WardPlanningLib` | `CMakeLists.txt:3`, target definitions, `:602` status message |
+| CMake project and targets `EmergencyPlan`/`EmergencyPlanLib` -> `WardPlanning`/`WardPlanningLib` | `CMakeLists.txt:3`, target definitions, `:602` status message |
 | Project `DESCRIPTION` | `CMakeLists.txt:5` |
 | `MACOSX_BUNDLE_GUI_IDENTIFIER`, `_BUNDLE_NAME`, `_ICON_FILE` | `CMakeLists.txt:525,528,537` |
 | Commented `.rc` path | `CMakeLists.txt:513` |
@@ -144,13 +147,13 @@ failure is guaranteed on the very build this task asks the user to perform. Chec
 | Window title | `src/widgets/MainWindow.cpp:530` |
 | `exportedBy` metadata | `src/services/JsonService.cpp:110` |
 
-The file **extension** is not part of this task — `Info.plist:59` and the others are
-Task 14.
+The file **extension** is not part of this task - `Info.plist:59` and the others are
+Task 13.
 
 **`setOrganizationName("")` must become a real value.** It is currently empty and it
-keys per-user storage locations; Task 6 puts a security control there. It is
+keys per-user storage locations; Task 8 puts a security control there. It is
 `"Church"`, matching the `com.church.wardplanning` bundle identifier, which puts
-per-user storage under `Church/Ward Planning/` — the application name alone would
+per-user storage under `Church/Ward Planning/` - the application name alone would
 repeat itself there.
 
 **Pick one canonical version number** and apply it everywhere: `CMakeLists.txt:3-4`
@@ -159,7 +162,7 @@ is 1.1.0.
 
 **Settings from earlier versions are not carried forward.** Changing the application
 and organization names moves `QStandardPaths` directories, so the old settings file at
-`QStandardPaths::CacheLocation` (`MainWindow.cpp:630-634`) is no longer read, and Task 6
+`QStandardPaths::CacheLocation` (`MainWindow.cpp:630-634`) is no longer read, and Task 8
 replaces it outright. The map asks for a default location once, and no document is
 reopened at startup. (There is no window geometry
 persistence in this app; `MainWindow` hard-codes `resize(1400, 900)` at `:86`.)
@@ -168,7 +171,7 @@ Build, run, commit as `refactor: rename product to Ward Planning`.
 
 ---
 
-## Phase 1 — The core
+## Phase 1 - The core
 
 ### Task 1: The encrypted document core
 
@@ -181,7 +184,7 @@ Build, run, commit as `refactor: rename product to Ward Planning`.
 > - `DeviceKeys` lives in `CryptoTypes.h`, shared by `Pairing` and `ServerContract`.
 >   `Pairing::newPairingCode` is the one generator; `FakeServer` issues codes with it.
 >   `Pairing::Responder` and `Pairing::Initiator` are the pure steps of the exchange,
->   each keeping the first value it reads; the pairing driver (Task 31) feeds them what
+>   each keeping the first value it reads; the pairing driver (Task 24) feeds them what
 >   the server returns, and `PairingTest` drives them through `FakeServer`'s scripted
 >   reads to show a responder that re-read would be fooled.
 > - `validateDownload` and `checkRemoval` take the document id the local file names,
@@ -204,6 +207,8 @@ Build, run, commit as `refactor: rename product to Ward Planning`.
 >   holds the endpoints, canonical bodies, and `signRequest`/`requestVerifies`), and
 >   `FakeServer` checks each one. Tests sign through `ServerTestSupport`'s `signed...`
 >   wrappers, which sign with the device that owns the session.
+> - `ServerApi` returns `Result<T>` from each call as written here; Task 6.1 changes every
+>   method to answer through a callback.
 
 **Everything that decides whether this design works, written as one artifact.** The
 document format and its cryptography, the membership chain and its admin rules,
@@ -212,7 +217,7 @@ protect the local file, the emergency response merge, and the device pairing tha
 authenticates linking and invites. Each has its tests.
 
 It is pure computation over values: no UI, no settings, no keychain, no network, no
-`DocumentManager`. Every later task is a consequence — plumbing, storage, transport,
+`DocumentManager`. Every later task is a consequence - plumbing, storage, transport,
 wiring, and UI around these pieces.
 
 **The tree is not expected to build during this task.** libsodium and the test harness
@@ -226,7 +231,7 @@ ones above it.
 Fixed-size byte wrappers so the compiler catches a public key passed where a data key
 belongs.
 
-**Keep `<sodium.h>` out of the header** — the library target's
+**Keep `<sodium.h>` out of the header** - the library target's
 `target_include_directories(... PUBLIC ...)` at `CMakeLists.txt:370` would propagate it into every widget translation
 unit. Use literals in the header and `static_assert` in the `.cpp`:
 
@@ -263,8 +268,8 @@ and the public key together. Writing 32 there compiles and then fails at run tim
 inside `crypto_sign_detached`.
 
 `Fingerprint::Size = 16` is 128 bits, meeting the design's floor, and is a legal
-BLAKE2b output length. The fingerprint is taken over **both** public keys — X25519 then
-Ed25519 — so neither key of a device can change while its identity stays the same.
+BLAKE2b output length. The fingerprint is taken over **both** public keys - X25519 then
+Ed25519 - so neither key of a device can change while its identity stays the same.
 
 **Tests:** `fromHex(fp.toHex()) == fp`; `toGroupedHex` produces four-character groups
 separated by `-`; `fromHex` on malformed input yields an invalid fingerprint. (The `static_assert`s are
@@ -324,10 +329,10 @@ void DocumentCryptoTest::signatureUnderOneTagFailsUnderEveryOther()
 }
 ```
 
-**`DocumentCrypto::initialise()` must run before any other call** — libsodium's failure
+**`DocumentCrypto::initialise()` must run before any other call** - libsodium's failure
 mode without `sodium_init()` is platform-dependent, not a clean crash. The test runner
 calls it in Task 4, where the core tests first run; the app calls it in `main.cpp`
-(Task 16).
+(Task 15).
 
 **Step 2: Implement**
 
@@ -357,10 +362,10 @@ public:
 ```cpp
 enum class SignatureTag
 {
-    Auth,       ///< "auth"    — login challenge, the one message the server chooses
-    Request,    ///< "request" — mutating request: document id and body hash
-    Header,     ///< "header"  — DocumentHeader::signedBytes()
-    Pairing     ///< "pairing" — the responder's handover to a device it just paired with
+    Auth,       ///< "auth"    - login challenge, the one message the server chooses
+    Request,    ///< "request" - mutating request: document id and body hash
+    Header,     ///< "header"  - DocumentHeader::signedBytes()
+    Pairing     ///< "pairing" - the responder's handover to a device it just paired with
 };
 ```
 
@@ -387,7 +392,7 @@ static std::optional<DataKey> unsealDataKey(const QByteArray& sealed, const Keyp
 ```
 
 `crypto_box_seal` / `crypto_box_seal_open`. Output is
-`DataKey::Size + crypto_box_SEALBYTES`. A failed open returns `std::nullopt` — the
+`DataKey::Size + crypto_box_SEALBYTES`. A failed open returns `std::nullopt` - the
 ordinary "not addressed to me" case, not an error to report.
 
 Sealed boxes use XSalsa20-Poly1305 internally rather than the payload's
@@ -450,10 +455,10 @@ struct DocumentHeader
 
 **`documentId` is generated once, at creation, and bound in the associated data.**
 Only someone already holding the data key can change it, and a modified file fails to
-decrypt. Sharing registers the same id with the server (Task 28), so the id never
+decrypt. Sharing registers the same id with the server (Task 6), so the id never
 changes and nothing is re-encrypted. A copy is re-encrypted under a fresh id, which
 makes it a genuinely different document. Whether a document is shared is not a header
-property: it is shared once `AppSettings` holds a base version for it (Task 16).
+property: it is shared once `AppSettings` holds a base version for it (Task 6).
 
 **`payloadHash` and `writerSignature` are the two fields outside the associated
 data.** The hash is computed from the ciphertext the associated data produces, and the
@@ -462,7 +467,7 @@ length-prefixed payload hash; Task 1.5 signs and verifies it. Carrying the hash 
 header is what lets a header verify without its payload, which the membership chain
 needs (Task 1.5).
 
-**The header carries no server address.** The app supplies it (Task 6), so moving the
+**The header carries no server address.** The app supplies it (Task 8), so moving the
 service to a new domain is an app release and existing documents follow unchanged.
 
 **Parsing is strict.** `DocumentHeader::parse` is the only reader, and it distinguishes two refusals:
@@ -474,11 +479,11 @@ static HeaderParse parse(const QJsonObject& json, DocumentHeader& out);
 
 `NeedsNewerVersion` for a `formatVersion` above `CurrentFormatVersion` or any recipient
 `kind` this build does not know; `Malformed` for anything missing or ill-formed in a
-version it does know. Nothing is skipped and nothing is carried through unread — a
+version it does know. Nothing is skipped and nothing is carried through unread - a
 tolerant reader mostly misreads. A new recipient kind ships as a new format version.
 
 **`associatedData()` must be canonical, stable, and computed from the serialized field
-values** — the same strings `toJson` writes. Two traps:
+values** - the same strings `toJson` writes. Two traps:
 
 - **Do not use `QJsonDocument::toJson`.** Key ordering is unspecified across Qt
   versions, and a reordering would make every existing file undecryptable after a Qt
@@ -501,7 +506,7 @@ with a separator byte that cannot occur in any field or an explicit length prefi
 **A header verifies its own signature.** It carries its writer's two public keys, and
 `parse` refuses one whose `fingerprintOf(writerPublicKey, writerVerifyKey)` is not
 `lastWriter`. Checking a signature therefore never needs the writer looked up anywhere
-first — which matters for a leave, whose writer has just left the roster. **A header may
+first - which matters for a leave, whose writer has just left the roster. **A header may
 list no recipients** only as the last person's leave (1.5, rule 7); `parse` accepts it,
 and nobody can open or follow it.
 
@@ -520,7 +525,7 @@ signature or payload hash, a wrong-size recipient verify key, and a malformed fi
 `associatedData()` differs when any single field differs, **including the document
 id**, and including recipient order and kind, **but not when only `payloadHash` or
 `writerSignature` differs**; `signedBytes()` differs when `payloadHash` differs; **AD computed from a header
-that has been through `toJson`/`parse` equals AD from the original** — this is the
+that has been through `toJson`/`parse` equals AD from the original** - this is the
 test that catches the timestamp trap, and "byte-identical across two constructions"
 does not.
 
@@ -555,10 +560,10 @@ static ChainResult verifyChain(const DocumentHeader& anchor,
 
 **Every write is signed.** The writer sets its own keys and `payloadHash` in the header,
 then `signHeader` signs `header.signedBytes()`. `verifyHeader(header)` checks the
-signature against `header.writerVerifyKey` — one path everywhere. *Who* the writer is
+signature against `header.writerVerifyKey` - one path everywhere. *Who* the writer is
 is a separate question with one answer: a device in the version's own roster, or, for a
 leave, a device of the person the version drops, proven by the chain or, with no base
-copy, by the payload decrypting at all. Task 9's load path and Task 1.9 both use
+copy, by the payload decrypting at all. Task 6's load path and Task 1.9 both use
 `DocumentCrypto::writerIsAccountedFor(header, roster)` for it. Any mismatch between
 header and roster fails too (`AccessControl::headerMatchesRoster`, Task 1.7).
 
@@ -568,7 +573,7 @@ walks the headers after its base copy's header (Task 1.9). A link from `previous
 
 1. `next.lastWriter` is a device among `previous`'s recipients, `next`'s writer keys are
    that entry's keys, and the signature verifies. The writer must be found in
-   `previous`, never only in `next` — a server could otherwise mint a header listing a
+   `previous`, never only in `next` - a server could otherwise mint a header listing a
    key of its own and sign with it.
 2. The save counter rises. The key generation rises by **exactly one when a device or
    person is dropped by an unlink or a removal, and is unchanged otherwise.** The counter
@@ -576,9 +581,9 @@ walks the headers after its base copy's header (Task 1.9). A link from `previous
    upload's rise to `MaxSaveCounterStep` (2^20), since a chain walked with headers
    missing sees larger gaps. A rotation
    without a drop is refused, so a header skipped because its membership did not change
-   can never have hidden a rotation, and a jump — which would let one member pin the
-   generation at the maximum — is impossible.
-3. `next.lastWriter` is also among `next`'s recipients — except in a leave (rule 7).
+   can never have hidden a rotation, and a jump - which would let one member pin the
+   generation at the maximum - is impossible.
+3. `next.lastWriter` is also among `next`'s recipients - except in a leave (rule 7).
 4. Within each header, every entry's fingerprint equals `fingerprintOf(publicKey,
    verifyKey)`, appears under exactly one person, and no two entries share a public key
    or a verify key; a device in both headers has the **same member id, public key, and
@@ -590,9 +595,9 @@ walks the headers after its base copy's header (Task 1.9). A link from `previous
    of that person **or** a device of an admin, and the key generation to increase. A
    person's last device is never dropped this way; that removes the person.
 7. A person absent from `next` entirely requires either that `lastWriter`'s person is an
-   admin, with the key generation increasing — a removal — or that `lastWriter` is a
+   admin, with the key generation increasing - a removal - or that `lastWriter` is a
    device of that very person, with nothing else in the membership changed and the key
-   generation unchanged — a leave.
+   generation unchanged - a leave.
 8. A person present only in `next` requires `lastWriter`'s person to be an admin.
 9. A change to the admin list requires `lastWriter`'s person to be an admin, apart from a
    leaver dropping off it.
@@ -611,7 +616,7 @@ static bool verifyLink(const DocumentHeader& previous, const DocumentHeader& nex
 `verifyLink` is the single statement of the rule; `verifyChain` applies it pairwise,
 and the fake server (Task 1.8) applies it to every upload. If
 every link holds and the last header has no entry for `self`, the result is `Removed`;
-any failure is `Broken`. Only `Removed` deletes anything (Task 23).
+any failure is `Broken`. Only `Removed` deletes anything (Task 6).
 
 `crypto_aead_xchacha20poly1305_ietf_encrypt` / `_decrypt`, with
 `header.associatedData()` as AD and `header.nonce` as the nonce. `qCompress` before
@@ -619,7 +624,7 @@ encrypting, `qUncompress` after decrypting; an empty `qUncompress` result is a f
 not an empty document.
 
 **`generateNonce()` is called on every single save**, never derived from the save
-counter and never carried over from a loaded header. Comment it on the declaration — a
+counter and never carried over from a loaded header. Comment it on the declaration - a
 future reader will want to make it deterministic for testing, and that would XOR two
 versions of the ward directory against each other and expose the Poly1305 one-time key.
 
@@ -666,7 +671,7 @@ unlinking); `linkWriterKeysNotMatchingPreviousEntryIsBroken`;
 `linkWithFingerprintNotMatchingKeysIsBroken`; `linkWithDuplicateVerifyKeyIsBroken`;
 `linkAcrossDocumentsIsBroken`.
 
-The nonce-freshness assertions live at the `JsonService` level (Task 9), where they
+The nonce-freshness assertions live at the `DocumentFile` level (Task 6.4), where they
 can observe what the writer actually did.
 
 #### 1.6 The access roster
@@ -694,7 +699,7 @@ person by fingerprint; person count; setting a person's role; `admins()`, the ad
 member ids ascending by hex, exactly as the header lists them; a `people()` accessor
 sorted by display name, each person's devices sorted by device name; and JSON. **A
 fingerprint may appear under only one person**, and **no two devices may share a public
-key or a verify key** — the header forbids both, and every write reseals from the roster,
+key or a verify key** - the header forbids both, and every write reseals from the roster,
 so a roster the header could not represent would stop the ward publishing.
 
 **The roster parses strictly, as the header does.** A person or device with a missing or
@@ -709,7 +714,7 @@ static DocumentParse parse(const QJsonObject& json, Document& out);
 
 `NeedsNewerVersion` for a payload version above the one this build writes; `Malformed`
 for any missing or ill-formed required field, roster included. `fromJson` stays as it is
-for now — `JsonService.cpp:94` still calls it, and Task 4's build must pass — and Task 4a
+for now - `JsonService.cpp:94` still calls it, and Task 4's build must pass - and Task 4a
 replaces it when it gives every model a strict reader.
 
 **Tests:** `parse` returns `Ok` for a document written by `toJson`, `NeedsNewerVersion`
@@ -747,7 +752,7 @@ struct AccessChange
 class AccessControl
 {
 public:
-    // Every operation takes the writer — the device that will sign the result —
+    // Every operation takes the writer - the device that will sign the result - 
     // and acts as that device's person. Each returns nullopt rather than a change
     // the chain would refuse.
 
@@ -812,7 +817,7 @@ public:
 
 **Every operation takes the writer's fingerprint, not a member id.** Tying a change to the
 device that will sign it is what lets each operation refuse exactly what `verifyLink`
-refuses — including a device unlinking itself — and it sets `lastWriter`, so the save
+refuses - including a device unlinking itself - and it sets `lastWriter`, so the save
 path cannot sign as a different device. Every operation also refuses a header and roster
 that already disagree, and a person or device that would not read back from the payload
 exactly as written: one granted request carrying an empty device name would otherwise
@@ -825,14 +830,14 @@ nonce under an unchanged key.
 
 **One change per published version.** Remove and unlink each advance the generation by
 exactly one, and the chain refuses a step of two. A change is therefore built on the
-server's accepted version and published before the next is built — which is what the
-`RosterChangeQueue` (Task 31) does.
+server's accepted version and published before the next is built - which is what the
+`RosterChangeQueue` (Task 6) does.
 
 **There is no allow-list to compute or send.** The server's allow-list is the accepted
 header's recipients (design, *The server*), so every operation above takes effect on the
-server when its header is uploaded. The one agreement the server cannot check — header
-recipients and admin list against the payload roster — is `headerMatchesRoster`, checked
-on every open and download (Task 9, Task 1.9); a mismatch is refused, never shown and
+server when its header is uploaded. The one agreement the server cannot check - header
+recipients and admin list against the payload roster - is `headerMatchesRoster`, checked
+on every open and download (Task 6, Task 1.9); a mismatch is refused, never shown and
 opened.
 
 **Tests:** each operation, finished and signed by its writer, passes `verifyLink` from the
@@ -889,8 +894,8 @@ data key* fails to decrypt the new payload. A leave deliberately makes no such c
 `tests/services/ServerConformanceTest.h/.cpp`, `tests/services/FakeServerTest.h/.cpp`
 
 `ServerContract.h` holds only types and no transport: the request and response shapes
-for each endpoint in the design's *The server* section — including the pairing endpoints
-and a pairing code on an access request — plus a `ServerError` enum
+for each endpoint in the design's *The server* section - including the pairing endpoints
+and a pairing code on an access request - plus a `ServerError` enum
 covering unreachable, unauthenticated, not-allow-listed, unknown document, version
 conflict, lease held, a header the chain refuses, a payload hash that does not match its
 blob, a device added without an invitation, a taken document id, rate
@@ -922,10 +927,10 @@ a strict server:
   so a grant, removal, or role change by a writer who is not an admin, a device added to
   another person, or another person's device dropped by a writer who is not an admin, is
   refused
-- a header listing no one — the last person's leave — is accepted like any leave, and
+- a header listing no one - the last person's leave - is accepted like any leave, and
   afterwards the document is listed for no device and accepts no upload
 - the device uploading a header is the device that wrote it
-- a header's payload hash matches the blob uploaded with it — the server hashes the blob
+- a header's payload hash matches the blob uploaded with it - the server hashes the blob
   but never reads it
 - a person who left or was removed may be granted again under the same member id
 - a header that **adds a device** is accepted only when that device has a pending access
@@ -947,7 +952,7 @@ a strict server:
   `request` tag, over the route, the session token, the document id, and the
   `wp-request` hash of the request's canonical body (`ServerContract::signRequest`), so a
   captured signature is good only in its own session; anything else is
-  `Unauthenticated`. The HTTP adapter (Task 15) sends the signature in a header and the
+  `Unauthenticated`. The HTTP adapter (Task 14) sends the signature in a header and the
   server rebuilds the canonical body from the request it parsed
 - an upload that raises the save counter by more than `DocumentHeader::MaxSaveCounterStep`
   over the current version is refused (`CounterJump`), and uploads are limited to 600 an
@@ -957,16 +962,16 @@ a strict server:
   or in another device's request is `InvalidRequest`
 - an access request's status is readable by the device that posted it through
   `requests/mine`: pending, granted, or withdrawn
-- **two authentication levels**: *device* — a signed challenge proving possession of a key,
+- **two authentication levels**: *device* - a signed challenge proving possession of a key,
   enough for `/me/documents`, `requests/mine`, and posting an access or link request;
-  *member* — the device is also in the document's current header, required for every
+  *member* - the device is also in the document's current header, required for every
   other document endpoint
 - access requests store the pairing code as posted, and return it to members
 - pairings belong to no document and expire after 10 minutes; `POST /pairings` needs
   device authentication and returns a fresh code; the responder step needs member
   authentication on some document; the responder, reveal, and handover steps are each
   written once, in that order; until a responder is recorded any member may read a
-  pairing — the responder has to read and keep the commitment before posting its keys —
+  pairing - the responder has to read and keep the commitment before posting its keys - 
   and afterwards only its initiator and its responder; and completing the handover is
   what permits the initiator's device to be added under the responder's person
 - `GET /documents/{id}` returns version, header, and blob from one consistent state
@@ -974,8 +979,8 @@ a strict server:
 - signatures are verified for real, using `DocumentCrypto::verify`
 
 It also offers test-only controls: go offline, force a conflict, hold the lease as
-another member, — for Task 23's negative tests — withhold or substitute a header in the
-chain it returns, and — for Task 31's pairing tests — serve different pairing contents to
+another member, - for Task 6's negative tests - withhold or substitute a header in the
+chain it returns, and - for Task 24's pairing tests - serve different pairing contents to
 successive reads.
 
 **The payload is opaque to the fake, as it is to the real server.** An upload carries
@@ -983,21 +988,21 @@ the plaintext header line and the encrypted payload; the fake stores the header 
 chain and never looks inside the payload. If a test ever needs it to, the design has
 been violated somewhere.
 
-**One interface, two servers.** `ServerContract.h` declares an abstract `ServerApi` —
-one method per endpoint, each returning `Result<T>` — and `FakeServer` implements it. The
+**One interface, two servers.** `ServerContract.h` declares an abstract `ServerApi` - 
+one method per endpoint, each returning `Result<T>` - and `FakeServer` implements it. The
 real server is written separately, in TypeScript on Cloudflare (design, *Hosting notes*),
 so the rules exist twice; what keeps the two in agreement is running the same tests
 against both.
 
 **Tests, in two suites:**
 
-- **`ServerConformanceTest`** — the rule list above, one test each, written against
+- **`ServerConformanceTest`** - the rule list above, one test each, written against
   `ServerApi&` and never against `FakeServer` directly. This is the conformance spec: it
-  runs against the fake here, and against the real server over HTTP once Task 15 provides
+  runs against the fake here, and against the real server over HTTP once Task 14 provides
   the adapter. It uses no fake-only control. The expiry tests move the clock through a
   `ServerApi` hook that the real server honours only in local development (design,
   *Companion work*).
-- **`FakeServerTest`** — the adversarial controls the real server must never offer:
+- **`FakeServerTest`** - the adversarial controls the real server must never offer:
   offline, forced conflicts, a lease held by another member, withheld and substituted
   headers, scripted pairing reads. These exist for the client's negative tests and are
   tested here only to show the controls themselves work.
@@ -1007,9 +1012,8 @@ against both.
 **Files:** `src/services/Reconcile.h/.cpp`, `tests/services/ReconcileTest.h/.cpp`
 
 The decisions that keep a local file safe when the server moves, as pure functions over
-headers, ciphertext, keys, and rosters. No network, no settings, no files: the sync
-service (Task 16) and `DocumentManager` (Task 23) supply the inputs and carry out the
-result. Writing them here, beside the crypto and the fake server, is what lets the
+headers, ciphertext, keys, and rosters. No network, no settings, no files: the
+sync-and-save core (Task 6) supplies the inputs and carries out the result. Writing them here, beside the crypto and the fake server, is what lets the
 whole safety story be read and tested in one place.
 
 ```cpp
@@ -1026,7 +1030,7 @@ namespace Reconcile
         std::optional<Document> document;       ///< set on Accept
     };
 
-    /// Proves removal from headers alone — no payload, so it also serves a key the
+    /// Proves removal from headers alone - no payload, so it also serves a key the
     /// server now refuses. Removed only with a baseHeader and a chain that holds and
     /// ends without this identity; otherwise ServerFault.
     Verdict checkRemoval(const QString& documentId,
@@ -1035,8 +1039,8 @@ namespace Reconcile
                          const Fingerprint& self);
 
     /// Decides whether a server version may replace the local file.
-    /// baseHeader is the base copy's header — the last version this machine and the
-    /// server agreed on — or nullopt when no base copy passes its recorded hash.
+    /// baseHeader is the base copy's header - the last version this machine and the
+    /// server agreed on - or nullopt when no base copy passes its recorded hash.
     DownloadCheck validateDownload(const QString& documentId,
                                    const std::optional<DocumentHeader>& baseHeader,
                                    const QList<DocumentHeader>& laterHeaders,
@@ -1054,17 +1058,17 @@ namespace Reconcile
    `Verdict::NeedsNewerVersion` without calling here; `Malformed` is `ServerFault`.
    `checkRemoval` follows the same rule, so a newer-format header never leads to
    deleting anything.
-1. The last header in `laterHeaders` has no entry for this identity → return
+1. The last header in `laterHeaders` has no entry for this identity -> return
    `checkRemoval(baseHeader, laterHeaders, self)`. **Removal is never concluded
    without a trusted anchor**, and this is the only place it is concluded.
-2. With a `baseHeader`, `verifyChain` from it returns `StillMember` → otherwise
+2. With a `baseHeader`, `verifyChain` from it returns `StillMember` -> otherwise
    `ServerFault`. With none, this step is skipped: this identity can decrypt, so
    steps 3-4 check the version directly.
 3. The downloaded header's entry for this device's fingerprint carries exactly this
-   device's own public and verify keys — otherwise `ServerFault`. The key unseals,
+   device's own public and verify keys - otherwise `ServerFault`. The key unseals,
    `payloadHash` matches `ciphertext`, the payload decrypts,
    `AccessControl::headerMatchesRoster` holds, `verifyHeader` passes, and
-   `writerIsAccountedFor` holds — so a version written by someone who has just left is
+   `writerIsAccountedFor` holds - so a version written by someone who has just left is
    accepted like any other. A
    payload whose version is newer than this build's is `NeedsNewerVersion`; a payload or
    roster that fails strict parsing is `ServerFault`.
@@ -1076,7 +1080,7 @@ base header nothing else ties a version to this document, and another ward that 
 lists this device would pass every other check.
 
 **`laterHeaders` is never empty.** It always ends with the header of the downloaded
-version, which `SyncService` fetched in the same snapshot as `ciphertext`. An empty list is
+version, which the session fetched in the same snapshot as `ciphertext`. An empty list is
 `ServerFault`. When the server is still at the base version there is nothing newer, and
 the caller does not call `validateDownload` at all.
 
@@ -1086,17 +1090,17 @@ and its counter can exceed the next member's; anchoring there would read every c
 after offline edits as a broken chain.
 
 `Accept` carries the decrypted header, key, and document so the caller writes exactly
-what was checked. Only `Removed` ever leads to deleting anything (Task 23).
+what was checked. Only `Removed` ever leads to deleting anything (Task 6).
 
 **There is no roster merge.** After a refused publish the caller takes their header, key,
 and roster exactly as `validateDownload` returned them. A session's local file never holds
-an unpublished roster change — every grant, link, unlink, removal, role change, and leave
-goes through the `RosterChangeQueue` (Task 31), built on the server's version and
-published on its own — so there is nothing of ours to carry over. Two admins granting at
+an unpublished roster change - every grant, link, unlink, removal, role change, and leave
+goes through the `RosterChangeQueue` (Task 6), built on the server's version and
+published on its own - so there is nothing of ours to carry over. Two admins granting at
 once both succeed because the queue re-applies the refused one on top of the other.
 
-**Tests:** each `validateDownload` failure in turn — unsealable, hash mismatch, bad
-signature, broken chain, generation below the mark — yields `ServerFault` with nothing
+**Tests:** each `validateDownload` failure in turn - unsealable, hash mismatch, bad
+signature, broken chain, generation below the mark - yields `ServerFault` with nothing
 else set; a chain-proven removal yields `Removed`, **including when the remover was
 granted after the base header**; a withheld or substituted header yields `ServerFault`; a
 valid newer version yields `Accept` with the decrypted document; **after several local
@@ -1118,10 +1122,10 @@ device reaches `Removed` from the leave.
 
 The one case the conflict dialog must never handle. An emergency is when several
 people record work at once and when the network is least likely to be there, so
-responders edit offline in parallel by design — and telling one of them to "choose a
+responders edit offline in parallel by design - and telling one of them to "choose a
 version" would discard their record of who they contacted during a disaster.
 
-**Reconnect merges three ways against the base copy (Task 16), silently.** Nothing for a
+**Reconnect merges three ways against the base copy (Task 6), silently.** Nothing for a
 user to decide at two in the morning, and no model changes: no timestamps, no
 tombstones.
 
@@ -1149,15 +1153,15 @@ namespace ResponseMerge
 }
 ```
 
-**Routing, carried out by Task 23.** After taking their key and roster (Task 1.9): load the base
+**Routing, carried out by Task 6.** After taking their key and roster (Task 1.9): load the base
 copy. With it, `mergeDocuments(base, mine, theirs)` either returns the merged document,
-which is published silently, or `nullopt`, which raises Task 25's conflict dialog. With
+which is published silently, or `nullopt`, which raises Task 18's conflict dialog. With
 no usable base copy, the conflict dialog.
 
 **The same routing serves online and offline work.** Response edits need no lease
-(Task 18), so while one member holds the lease and edits a family, a responder may
+(Task 6), so while one member holds the lease and edits a family, a responder may
 publish a contact record first. The lease holder's refused publish then finds the
-directory changed only on its own side and merges silently — the conflict dialog is
+directory changed only on its own side and merges silently - the conflict dialog is
 reserved for the directory changing on both sides.
 
 **Rules**, per family record, per task field, per contact attempt:
@@ -1167,7 +1171,7 @@ reserved for the directory changing on both sides.
 | Changed on one side only | That side's value, including a deletion |
 | Changed on both sides to the same value | That value |
 | Contact attempts | Keyed by `ContactAttemptId`; the union of both sides, each attempt merged field by field |
-| A single value changed differently on both sides — including the response's `name`, `startedAt`, `endedAt` | Mine |
+| A single value changed differently on both sides - including the response's `name`, `startedAt`, `endedAt` | Mine |
 | `taskCategories` | A set: added on either side kept, removed on either side removed |
 | Response absent in base, present on one side | That side's response |
 | Response absent in base, present on both | One response: family records merged as above with an empty base, `name` and `startedAt` from theirs |
@@ -1176,8 +1180,8 @@ reserved for the directory changing on both sides.
 
 **Every attempt survives, so the record of who was contacted and when survives overlap
 intact.** That is the part a ward has to be able to trust afterwards, and it is worth
-an explicit test rather than an assumption. A task field — category, description,
-assignment, notification, resolution — is merged as a unit where its parts belong
+an explicit test rather than an assumption. A task field - category, description,
+assignment, notification, resolution - is merged as a unit where its parts belong
 together: assignment (team, person, notes) is one value, and resolution (resolved,
 notes, time) is one value.
 
@@ -1187,7 +1191,7 @@ app does not restrict a device to its assigned area, which would block the perso
 stepping in to cover someone else.
 
 **Directory and ministering changes made offline take the ordinary conflict path** of
-Task 25. Nobody imports a ward directory during a disaster.
+Task 18. Nobody imports a ward directory during a disaster.
 
 **Tests:** two responders' offline records both survive reconnect; overlapping contact
 attempts are all kept; an attempt's notes edited on one side keep the edit; a contact
@@ -1266,7 +1270,7 @@ server.
 
 A relay substituting the initiator's keys must commit before it sees the responder's
 keys, and learns the nonce only after choosing any substitute responder keys, so it
-cannot search for a matching number — one chance in a million per attempt, and a failure
+cannot search for a matching number - one chance in a million per attempt, and a failure
 shows two different numbers. **Re-reading either value after the fact is what would break
 this:** a relay that waits until it holds the commitment, the responder keys, the nonce,
 and the number can then search for a substitute commitment and nonce that reproduce the
@@ -1282,20 +1286,20 @@ digits; two nonces and two pairing codes differ; a simulated relay that swaps th
 initiator's keys after commitment cannot make the responder's number match without
 breaking `revealMatches`; **a relay that serves one commitment before the responder posts
 its keys and a different commitment-and-reveal pair afterwards is caught, because the
-responder verifies against the commitment it kept** — the same test with the responder
+responder verifies against the commitment it kept** - the same test with the responder
 re-reading instead must fail, so the test pins the ordering and not just the maths. `handoverVerifies` accepts a handover signed by the paired responder and
 rejects one signed by another key, one for a different nonce, and one whose member id,
 display name, or ward list was changed.
 
 ---
 
-### Task 2: STOP — user review of the core
+### Task 2: STOP - user review of the core
 
 **Stop here and hand the core to the user for review.** Do not start Task 3.
 
 Present Task 1 as one artifact: the source files and their tests, in the order of its
-sections. The tree does not need to build yet — libsodium and the test harness arrive in
-Tasks 3 and 4 — so review is of the design as code, not of a passing run.
+sections. The tree does not need to build yet - libsodium and the test harness arrive in
+Tasks 3 and 4 - so review is of the design as code, not of a passing run.
 
 Ask the user specifically to look at:
 
@@ -1305,7 +1309,7 @@ Ask the user specifically to look at:
 - `FakeServer`'s enforced rules, which the companion server must also satisfy
 - `Reconcile::checkRemoval` and `validateDownload`, including a version written by someone who has just left
 - `ResponseMerge::merge`, `directoryChanged`, and `mergeDocuments`
-- `Pairing`, and the commit–respond–reveal order
+- `Pairing`, and the commit-respond-reveal order
 
 Apply the user's changes to the core before anything else. After the user's review,
 run the agent code review on the core (user review first, then agent). Commit the core
@@ -1313,7 +1317,7 @@ as `feat: encrypted document core` once both are settled.
 
 ---
 
-## Phase 2 — Make the core build and pass
+## Phase 2 - Make the core build and pass
 
 ### Task 3: Stand up the test harness
 
@@ -1324,7 +1328,7 @@ as `feat: encrypted document core` once both are settled.
 Every entry in `TEST_SOURCES` is commented out (`tests/CMakeLists.txt:14-29`), so
 `if(TEST_SOURCES)` at line 32 is false and nothing is built.
 
-Build the consolidated runner immediately — `QTEST_MAIN` generates a `main()`, so a
+Build the consolidated runner immediately - `QTEST_MAIN` generates a `main()`, so a
 second test file would be a duplicate-symbol link error.
 
 **Files:** `tests/TestMain.cpp`, `tests/services/SmokeTest.h/.cpp`,
@@ -1347,7 +1351,7 @@ int main(int argc, char** argv)
     app.setApplicationName("Ward Planning Tests");
 
     // Keep every settings write out of the developer's real profile, so no test
-    // depends on state left by a previous run. AppSettings arrives in Task 6; until
+    // depends on state left by a previous run. AppSettings arrives in Task 8; until
     // then this also keeps QStandardPaths-based paths in a test location.
     QStandardPaths::setTestModeEnabled(true);
 
@@ -1367,7 +1371,7 @@ without it `QSettings` has no organization, `QStandardPaths` misbehaves, and
 qtkeychain's asynchronous jobs have no event loop to complete on.
 
 `SmokeTest.h` declares a `QObject` subclass with `Q_OBJECT` and a private slot;
-`SmokeTest.cpp` defines it. AUTOMOC handles the header — `CMAKE_AUTOMOC` is set at
+`SmokeTest.cpp` defines it. AUTOMOC handles the header - `CMAKE_AUTOMOC` is set at
 `CMakeLists.txt:19`, before `add_subdirectory(tests)` at `:577`, and is
 directory-inherited.
 
@@ -1393,7 +1397,7 @@ Fix the assertion, confirm PASS, commit as `test: add Qt Test harness`.
 **libsodium comes from vcpkg; qtkeychain does not.** The vcpkg port `qtkeychain-qt6`
 declares `{"name": "qtbase", "default-features": false}` and `qttools`, so taking it
 would build a second Qt 6 from source and link it beside the system Qt at
-`C:/Qt/6.11.0/msvc2022_64` — hours of build time and an ABI hazard.
+`C:/Qt/6.11.0/msvc2022_64` - hours of build time and an ABI hazard.
 
 **Files:** `vcpkg.json`, `CMakeLists.txt`, `tests/services/CryptoLinkTest.h/.cpp`,
 `tests/TestMain.cpp`
@@ -1401,7 +1405,7 @@ would build a second Qt 6 from source and link it beside the system Qt at
 **Step 1: Translations off.** qtkeychain's own CMake uses `Qt6LinguistTools` for its
 `.ts` files unless translations are disabled; with them off (Step 3) the system Qt needs
 no Linguist Tools. If the fetched `CMakeLists.txt` has no such option, confirm
-`C:/Qt/6.11.0/msvc2022_64/lib/cmake/Qt6LinguistTools` exists before building — a missing
+`C:/Qt/6.11.0/msvc2022_64/lib/cmake/Qt6LinguistTools` exists before building - a missing
 one fails at *configure* time, which under `build.bat` looks like a total build failure.
 
 **Step 2: libsodium**
@@ -1517,16 +1521,16 @@ user, not worked around in a later task. Commit as `build: add libsodium and qtk
 rather than loading part of it.** Task 1.6 made the payload version and the access
 roster strict; the directory, ministering, and emergency collections still go through
 the lenient `fromJson` readers, so a damaged family record loads as whatever `fromJson`
-makes of it. That contradicts the rule the header and roster already follow — nothing
+makes of it. That contradicts the rule the header and roster already follow - nothing
 skipped, nothing defaulted, nothing carried through unread.
 
 Placed here, immediately after the suite first runs, because this is exactly the code
 where one field spelled differently between writer and reader makes every real document
-`Malformed`, and a round-trip test catches that at once — but only when tests run.
+`Malformed`, and a round-trip test catches that at once - but only when tests run.
 
-**Files:** every model with a `fromJson` — `Family`, `Person`, `Birthday`, `Gender`,
+**Files:** every model with a `fromJson` - `Family`, `Person`, `Birthday`, `Gender`,
 `Team`, `Tag`, `EmergencyAsset`, `MinisteringDistrict`, `MinisteringGroup`,
-`DocumentMetadata`, `Ward`, `Stake`, and `EmergencyResponse` with its nested records —
+`DocumentMetadata`, `Ward`, `Stake`, and `EmergencyResponse` with its nested records - 
 plus `Document.cpp`, and a test file per type under `tests/models/`.
 
 **Each parser accepts exactly what the current `toJson` writes, and nothing else.** This
@@ -1539,7 +1543,7 @@ gets:
 static std::optional<Family> fromJson(const QJsonObject& json);   // replacing the lenient one
 ```
 
-matching `RosterDevice` and `RosterPerson` — `nullopt` on any missing or ill-formed
+matching `RosterDevice` and `RosterPerson` - `nullopt` on any missing or ill-formed
 field, and a collection fails whole when any element fails.
 
 **`Document::parse` then reads every collection strictly** and stops calling
@@ -1548,10 +1552,10 @@ is not in it, a tag or team naming an unknown person or family, and a ministerin
 naming an unknown district are `Malformed`, because each would otherwise be a dangling
 id the UI has to guess about.
 
-**`JsonService` keeps working until Task 9** by switching its one call from
+**`JsonService` keeps working until Task 6** by switching its one call from
 `Document::fromJson` to `Document::parse` here, reporting `Malformed` as its existing
 load error. With no legacy files to honour, nothing it currently reads is lost: the
-current build's own documents are exactly what `toJson` writes. Task 9 then has no
+current build's own documents are exactly what `toJson` writes. The core then has no
 `fromJson` left to delete.
 
 **Tests:** per type, a round trip through `toJson` and `fromJson`; every required field
@@ -1564,12 +1568,13 @@ Commit as `feat: strict model parsers`.
 
 ---
 
-## Phase 3 — Clear the ground
+## Phase 3 - Clear the ground
 
 ### Task 5: Remove the emergency archive feature
 
-The first consequence task, because it deletes code the storage, sync, and
-`DocumentManager` tasks would otherwise have to carry. About 180 references across 17 files — recount before starting.
+Before the sync-and-save core, because it deletes the archive's paths into
+`JsonService` and `DocumentManager`, so the core replaces one write design rather than
+two. About 180 references across 17 files - recount before starting.
 
 **Files:**
 - Delete: `src/widgets/ArchiveBrowserDialog.h`, `src/widgets/ArchiveBrowserDialog.cpp`
@@ -1604,7 +1609,7 @@ otherwise always take the false branch.
 `:990-997`.
 
 Collapse it to a confirmation. **The summary report stays and becomes more
-prominent** — with archives gone it is the only thing that outlives the response, so
+prominent** - with archives gone it is the only thing that outlives the response, so
 the dialog should present it as the way to keep a record rather than as an
 afterthought.
 
@@ -1612,8 +1617,8 @@ afterthought.
 `EmergencyResponse EmergencyManager::endedSnapshot() const`, returning a copy of the
 response with `setEndedAt(now)` applied. The end dialog passes that copy to
 `ReportGenerator`; the live response ends only when the user confirms. Cancelling the
-report — `generateEmergencyReportWithConfirm` returning false at `MainWindow.cpp:1024-1033`
-— therefore leaves an active emergency with no end time. The mid-emergency **Generate
+report - `generateEmergencyReportWithConfirm` returning false at `MainWindow.cpp:1024-1033`
+ - therefore leaves an active emergency with no end time. The mid-emergency **Generate
 report** action (`:1000-1003`) keeps using the live response, with no end time.
 `generateEmergencyReportWithConfirm` takes the `EmergencyResponse` to report on as a
 parameter rather than reading `EmergencyManager::response()` at `:1012`.
@@ -1632,7 +1637,7 @@ More sites than a quick sweep finds: `:2` the include; `:214-216` **two** menu a
 
 `DocumentManager`: delete `setArchiveDocument()`, `clearArchiveDocument()`,
 `isViewingArchive()`, and `m_archiveDocument`; `document()` returns `m_document`
-unconditionally; remove the guards at `:89,106,122` (Task 24 replaces them).
+unconditionally; remove the guards at `:89,106,122` (Task 6 replaces them).
 
 `EmergencyBanner.h:14` and `EmergencyBanner.cpp:42-52` (`setArchiveName`).
 `WardListView.cpp:94,96` (the `archiveViewOpened`/`archiveViewClosed` connections) as
@@ -1652,9 +1657,690 @@ Existing `*_archives/` folders are left on disk; the app stops reading them.
 
 ---
 
-## Phase 4 — Storage and identity
+## Phase 4 - The sync-and-save core
 
-### Task 6: Settings store
+### Task 6: The sync-and-save core
+
+**Everything that decides how a document is saved, published, and kept safe at run time,
+written as one artifact.** Task 1 made the decisions as pure functions over values. This
+task is the orchestration that carries them out: the file on disk, the open ward's state
+machine, the publish queue, the lease, the refused-publish route, removal, and the roster
+change queue. Every later task is storage, transport, wiring, or UI around it.
+
+It runs against small seams rather than the real services. Identity is a value; the
+per-document records sit behind an interface that tests keep in memory; files go to paths
+the caller names; the server is `ServerApi`, with `FakeServer` in the tests; and timers
+fire when the test says so. No settings file, keychain, network, `DocumentManager`, or
+widget is touched.
+
+**The tree is not expected to build while this lands.** Write the sections in order; each
+builds on the ones above it.
+
+#### 6.1 `ServerApi` answers through callbacks
+
+**Files:** `src/services/ServerContract.h/.cpp`, `tests/services/FakeServer.h/.cpp`,
+`tests/services/ServerTestSupport.h/.cpp`, `tests/services/ServerConformanceTest.cpp`,
+`tests/services/FakeServerTest.cpp`, `tests/services/PairingTest.cpp`
+
+The real server answers over the network, and the window must not freeze while it does.
+Every `ServerApi` method therefore takes a completion instead of returning its result:
+
+```cpp
+template<typename T>
+using Reply = std::function<void(const Result<T>&)>;
+
+class ServerApi
+{
+public:
+    virtual ~ServerApi() = default;
+
+    virtual void challenge(Reply<QByteArray> reply) = 0;
+    virtual void head(const Session& session, const QString& documentId, Reply<Head> reply) = 0;
+    virtual void upload(const Session& session,
+                        const QString& documentId,
+                        qint64 baseVersion,
+                        const Upload& upload,
+                        const QByteArray& requestSignature,
+                        Reply<qint64> reply) = 0;
+    // ...every other endpoint the same way: its parameters, then the reply.
+};
+```
+
+**Two rules every implementation keeps.** The reply is called exactly once, and never
+before the call returns. The second is what lets a caller start a request from inside its
+own state change without being re-entered halfway through it; the HTTP implementation
+(Task 14) keeps it naturally, and the fake keeps it by queueing.
+
+**`FakeServer` decides at call time and replies later.** The server's state changes when
+the call is made, as when a request reaches a real server, and the reply is queued and
+delivered on a later turn of the event loop. Two controls join the others:
+
+```cpp
+void holdReplies(bool hold);    ///< queued replies wait for deliverNext()
+bool deliverNext();             ///< delivers the oldest held reply; false when none
+```
+
+Holding replies is how a session test puts a publish in flight and then saves again, or
+closes the ward, before the server's answer arrives.
+
+**The server suites keep what they assert.** `ServerTestSupport` gains one helper that
+makes a call and waits for its reply:
+
+```cpp
+/// Runs call with a reply that stores the result, then spins a QEventLoop until it
+/// arrives. Ten seconds without one is ServerError::Unreachable.
+template<typename T>
+ServerContract::Result<T> wait(const std::function<void(ServerContract::Reply<T>)>& call);
+```
+
+The `signed...` wrappers keep their signatures and wait internally, and each direct
+`server().method(...)` call in the suites becomes a `wait`. Waiting on the event loop
+serves the fake and a real server alike, so the conformance suite still runs unchanged
+against both.
+
+**Tests (`FakeServerTest`):** a reply never arrives before the call returns; held replies
+arrive in call order, one per `deliverNext()`; an upload's effect is visible to a second
+call while the first call's reply is still held. Every existing server and pairing test
+passes.
+
+#### 6.2 The seams
+
+**Files:** `src/services/DeviceIdentity.h/.cpp`, `src/services/DocumentRecords.h/.cpp`,
+`src/services/SessionTimers.h/.cpp`, `tests/services/SessionTestSupport.h/.cpp`
+
+```cpp
+/// This device, as the core sees it. IdentityService (Task 10) produces it.
+struct DeviceIdentity
+{
+    Keypair sealing;
+    SigningKeypair signing;
+    MemberId member;
+    QString displayName;
+    QString deviceName;
+
+    Fingerprint fingerprint() const;
+    Reconcile::Self self() const;
+    RosterDevice asRosterDevice() const;
+    RosterPerson asNewPerson() const;   ///< this person, an admin, with only this device
+};
+```
+
+```cpp
+/// What this device keeps about one document besides its files. AppSettings keeps it
+/// in the app (Task 8); the high-water mark and the removed flag are also kept in the
+/// keychain record (Task 11).
+struct DocumentRecord
+{
+    std::optional<qint64> baseVersion;      ///< the server version the base copy holds; set once shared
+    QByteArray baseHash;                    ///< the base copy's payload hash
+    qint64 publishedSaveCounter = 0;        ///< the local save counter at the last fetch or publish
+    Reconcile::HighWaterMark highWaterMark;
+    QList<RosterChange> pendingChanges;     ///< 6.6
+    bool removed = false;                   ///< this device was removed or left; never cleared by the session
+};
+
+class DocumentRecords
+{
+public:
+    virtual ~DocumentRecords() = default;
+
+    /// A default record when none is held.
+    virtual DocumentRecord record(const QString& documentId) const = 0;
+    virtual void setRecord(const QString& documentId, const DocumentRecord& record) = 0;
+};
+```
+
+```cpp
+/// Where one document's files live. DocumentLibrary (Task 12) names them.
+struct DocumentPaths
+{
+    QString file;
+    QString base;
+};
+```
+
+```cpp
+/// The session's four timers. The app runs them on QTimer; tests fire them by hand, so
+/// no test waits on the clock and no assertion depends on event-loop timing.
+class SessionTimers
+{
+public:
+    enum class Timer { Save, Retry, Heartbeat, HeadCheck };
+
+    virtual ~SessionTimers() = default;
+
+    virtual void start(Timer timer, int milliseconds) = 0;  ///< restarts one already running
+    virtual void stop(Timer timer) = 0;
+
+    std::function<void(Timer)> onTimeout;
+};
+```
+
+`SessionTestSupport` holds the test implementations: `MemoryRecords`; `ManualTimers`,
+which records each running timer and its interval and fires one on `fire(Timer)`; and a
+`TestWard` of up to three devices - each a `DeviceIdentity`, `MemoryRecords`,
+`ManualTimers`, `ServerConnection`, and `QTemporaryDir` - over one `FakeServer`, with
+helpers to open a session for any of them and to let every pending reply arrive.
+
+#### 6.3 `ServerConnection`: signing in and signing requests
+
+**Files:** `src/services/ServerConnection.h/.cpp`,
+`tests/services/ServerConnectionTest.h/.cpp`
+
+One per device, over a `ServerApi&`. It holds the session token, signs in on first use -
+fetch a challenge, sign it under `SignatureTag::Auth`, exchange it for a token - and signs
+every mutating request under `SignatureTag::Request` with `ServerContract::signRequest`.
+Everything above it calls the server without seeing sessions or signatures.
+
+```cpp
+class ServerConnection
+{
+public:
+    ServerConnection(ServerContract::ServerApi& server, const DeviceIdentity& identity);
+
+    void registerDocument(const ServerContract::Upload& upload, ServerContract::Reply<qint64> reply);
+    void head(const QString& documentId, ServerContract::Reply<ServerContract::Head> reply);
+    void headers(const QString& documentId,
+                 qint64 after,
+                 qint64 through,
+                 ServerContract::Reply<ServerContract::HeaderChain> reply);
+    void download(const QString& documentId, ServerContract::Reply<ServerContract::Snapshot> reply);
+    void upload(const QString& documentId,
+                qint64 baseVersion,
+                const ServerContract::Upload& upload,
+                ServerContract::Reply<qint64> reply);
+    void takeLease(const QString& documentId, ServerContract::Reply<ServerContract::Lease> reply);
+    void releaseLease(const QString& documentId, ServerContract::Reply<ServerContract::Done> reply);
+    void myDocuments(ServerContract::Reply<QStringList> reply);
+};
+```
+
+Tasks 22-24 add the access request and pairing calls in the same shape.
+
+**An expired session is signed into again once.** On `Unauthenticated` the connection
+signs in afresh and repeats the call once; a second `Unauthenticated` is the answer. Calls
+made while a sign-in is in flight wait for it, so a burst of calls costs one sign-in.
+
+**Never log a token, a challenge response, or a request body.** The bodies are
+ciphertext, but the habit of logging them survives longer than the ciphertext does.
+
+**Tests, against `FakeServer`:** the first call signs in and succeeds; after the clock
+moves past the session length, the next call signs in again and succeeds; a device whose
+sign-in the server refuses gets one `Unauthenticated` reply and no retry loop; three calls
+made before the first sign-in completes fetch one challenge; every mutating call reaches
+the server with a signature `requestVerifies` accepts.
+
+#### 6.4 The file on disk
+
+**Files:** `src/services/DocumentFile.h/.cpp`, `tests/services/DocumentFileTest.h/.cpp`,
+`src/services/JsonService.h/.cpp`
+
+**Layout:** a single-line JSON header, a `'\n'` byte, then the raw encrypted payload. The
+same bytes are the local file and the base copy, and split at the first newline they are an
+upload's header and blob. Reading the header is one `readLine()`, which keeps every version
+check cheap.
+
+```cpp
+namespace DocumentFile
+{
+
+/// One version of a document as written: its header and its ciphertext.
+struct Sealed
+{
+    DocumentHeader header;
+    QByteArray ciphertext;
+};
+
+/// The header line, '\n', and the ciphertext.
+QByteArray encode(const Sealed& sealed);
+
+enum class Read { Ok, NeedsNewerVersion, Malformed };
+
+/// Splits at the first newline and parses the header with DocumentHeader::parse.
+Read decode(const QByteArray& bytes, Sealed& out);
+
+/// Builds the next version on previous: recipients and admins resealed from the
+/// document's roster by AccessControl::resealAll, a fresh nonce, saveCounter + 1, the
+/// writer's keys, the time, the payload hash, and the signature. nullopt when resealing
+/// fails.
+std::optional<Sealed> seal(const Document& document,
+                           const DocumentHeader& previous,
+                           const DataKey& dataKey,
+                           const DeviceIdentity& writer);
+
+std::optional<QByteArray> readAll(const QString& path);
+bool write(const QString& path, const QByteArray& bytes, QString* errorMessage);
+
+} // namespace DocumentFile
+```
+
+**`seal` is the only place the save counter increments.** Callers keep the returned
+header as their current one. Recipients are rebuilt from the roster on every seal rather
+than carried forward, so a mis-sealed entry cannot lock its owner out of every later
+version. `generateNonce()` is called on every seal (Task 1.5).
+
+**Serialize the header with `QJsonDocument::Compact`.** The old `JsonService` code uses
+`Indented`, which is the natural thing to copy and would break the layout.
+
+**Open files without `QIODevice::Text`.** On Windows it translates `\n` to `\r\n` on write
+and back on read; applied to raw XChaCha20-Poly1305 output every 0x0A byte becomes 0x0D
+0x0A, and the reverse translation is not an inverse for pre-existing pairs. Every save
+would produce a file that fails authentication. `write` uses `QSaveFile`, so a crash
+mid-write leaves the previous file intact.
+
+**Opening a local file is a download with no base copy.** The session checks it with
+`Reconcile::validateDownload(documentId, std::nullopt, {header}, ciphertext, self, mark)`,
+so one statement of the rules - this device's entry and keys, the payload hash, decryption,
+`headerMatchesRoster`, the signature, `writerIsAccountedFor`, and the high-water mark -
+serves the local file and every download alike. What the user can act on is small:
+
+```cpp
+enum class LoadFailure
+{
+    None,
+    NotFound,
+    NeedsNewerVersion,
+    Refused         ///< failed a check; the reason is validateDownload's
+};
+```
+
+A shared ward whose local file is missing or refused is fetched from the server (6.5), so
+a damaged or rolled-back file costs nothing while the server is reachable.
+
+**`JsonService` becomes plaintext-only.** `toJsonString` and `parseJson` serve the
+developer export (Task 27); `loadDocument` and `saveDocument` are deleted with their last
+callers in `DocumentManager` (Task 15).
+
+**Tests:** a round trip with two recipients opens for either; a third keypair is refused; a
+flipped payload byte is refused; the document id survives a round trip and is covered by
+authentication; a header whose signature was replaced by another member's is refused; **two
+consecutive seals produce different nonces**, and **two seals from the same previous header
+also produce different nonces** - the second catches a counter-derived nonce, which the
+first would pass; a ciphertext holding both 0x0A and 0x0D bytes reads back byte-identical
+through `write` and `readAll`; `encode` writes exactly one newline before the ciphertext;
+`decode` reports `NeedsNewerVersion` for a later header format and `Malformed` for bytes
+with no newline.
+
+#### 6.5 `DocumentSession`
+
+**Files:** `src/services/DocumentSession.h/.cpp`, `tests/services/DocumentSessionTest.h/.cpp`
+
+**One open ward: its document, header, data key, and sync state.** `DocumentManager`
+(Task 15) owns the session the window shows and keeps commands, undo, and geocoding; the
+roster change queue (6.6) opens its own for wards not on screen.
+
+```cpp
+enum class SyncState
+{
+    Local,              ///< not shared
+    UpToDate,
+    PendingUpload,
+    Unreachable,
+    ServerFault         ///< a download failed validation; the local file is untouched
+};
+
+class DocumentSession : public QObject
+{
+    Q_OBJECT
+
+public:
+    enum class Edit { Directory, Response };
+    enum class Refusal { None, DirectoryReadOnly, RequiresUpdate };
+    enum class Resolution { KeepMine, KeepTheirs };
+
+    struct Context
+    {
+        const DeviceIdentity& identity;
+        DocumentRecords& records;
+        ServerConnection& server;
+        SessionTimers& timers;
+    };
+
+    struct Conflict
+    {
+        QString writerName;         ///< their roster, then the base copy's, then "a former member"
+        QDateTime writeTime;
+        Document mine;              ///< for Save mine as a copy (Task 18)
+    };
+
+    /// A new, unshared ward, written at once: a first data key, generation 1, and a
+    /// roster holding only this person, as admin, with only this device.
+    static std::unique_ptr<DocumentSession> create(const Context& context,
+                                                   const QString& documentId,
+                                                   const DocumentPaths& paths,
+                                                   QString* errorMessage);
+
+    /// Opens the local file; a shared ward then checks the server (the table below).
+    static std::unique_ptr<DocumentSession> open(const Context& context,
+                                                 const QString& documentId,
+                                                 const DocumentPaths& paths,
+                                                 LoadFailure& failure);
+
+    const Document& document() const;
+    const DocumentHeader& header() const;
+    bool isShared() const;
+
+    /// Applies change unless refused, then schedules a save. A refusal changes nothing.
+    Refusal edit(Edit kind, const std::function<void(Document&)>& change);
+
+    bool flush(QString* errorMessage);  ///< writes a scheduled save now
+    void publishNow();                  ///< flush, then publish without waiting on the retry timer
+    void close();                       ///< flush, release the lease, stop every timer
+
+    bool isDirectoryReadOnly() const;
+    bool requiresUpdate() const;
+    bool mayWriteDirectory() const;     ///< unshared, or this device holds the lease
+    SyncState syncState() const;
+    void setEmergencyActive(bool active);
+
+    void share();
+    void resolve(Resolution resolution);
+    void applyRosterChange(const RosterChange& change);
+
+signals:
+    void documentReplaced();            ///< fast-forward, adoption, Keep theirs: undo no longer applies
+    void syncStateChanged(SyncState state);
+    void readOnlyChanged();
+    void conflictRaised(const Conflict& conflict);
+    void saveFailed(const QString& errorMessage);   ///< a local write; the one modal failure
+    void shareFailed(ServerContract::ServerError error);
+    void rosterChangeFinished(const RosterChange& change, RosterChangeOutcome outcome);
+    void removed(const QString& byWhom, bool left); ///< files and records gone; the session is finished
+};
+```
+
+**Saving and publishing are separate operations on separate clocks.** An accepted `edit`
+restarts the `Save` timer; its timeout writes the local file through `DocumentFile::seal`
+and `write`. `flush` does the same at once and reports a failure. Every write reaches disk
+through this one path - directory commands, response edits, geocoding results, ward
+lookups - so the read-only check and the debounce cover all of them. A written save of a
+shared ward then publishes.
+
+**Refuse before changing anything.** `edit` checks first and returns a `Refusal` without
+calling `change`:
+
+| State | `Directory` | `Response` |
+|---|---|---|
+| Ordinary | Allowed | Allowed |
+| Lease held by another device | `DirectoryReadOnly` | Allowed, saved, published |
+| `requiresUpdate()` | `RequiresUpdate` | Allowed, saved locally, not published |
+
+`DocumentManager` routes `undo` and `redo` through `edit(Directory, ...)`, so they are
+refused the same way. The write path checks again as a backstop.
+
+**The base version is the whole mechanism.** It is what tells "the server moved" from "I
+moved" with certainty rather than by timestamp. It is set, with the base copy and
+`publishedSaveCounter`, on every successful fetch, publish, and registration, and nowhere
+else. The base copy is the exact bytes downloaded or published, written with `QSaveFile`,
+and its payload hash goes into the record beside the base version. Loading it returns
+`nullopt` when the file is missing or its hash does not match; it is read without the
+high-water mark, since it is older than the document by design.
+
+**"Unpublished changes" is exact:** the local header's save counter is above
+`publishedSaveCounter`. Because it is read from the record, a publish pending when the app
+closed is pending again when it opens.
+
+**On open**, a shared ward fetches the head, then:
+
+| Server | Local | Action |
+|---|---|---|
+| At base | No unpublished changes | Open the local file |
+| Ahead of base | No unpublished changes | Download, validate, then replace and update the base |
+| At base | Unpublished changes | Open, publish when able |
+| Ahead of base | Unpublished changes | The refused-publish route below |
+| Unreachable | Either | Open the local file, state `Unreachable` |
+
+A missing or refused local file skips the local column and downloads. **Nothing replaces
+the local file until the download validates**: fetch the snapshot and the headers after
+the base version through the snapshot's version, then `Reconcile::validateDownload` with
+the base copy's header and the record's high-water mark.
+
+- `Accept`: write the downloaded file, then update the base version, base copy,
+  `publishedSaveCounter`, and high-water mark; emit `documentReplaced`.
+- `Removed`: the *Removed* path below.
+- `NeedsNewerVersion`: the local file and record stay untouched and `requiresUpdate()`
+  becomes true. **It is re-evaluated on every head check**, and clears as soon as the
+  server serves a version this build understands; the response records saved meanwhile
+  then publish through the ordinary route.
+- `ServerFault`: the local file and record stay untouched, the local copy opens, and the
+  state is `ServerFault`.
+
+**Publishing.** One pending upload, never a list: a later save supersedes an earlier one.
+A publish is the local file's bytes, uploaded conditional on the base version. A publish
+that cannot reach the server is retried on the `Retry` timer, starting at 5 seconds and
+doubling to at most 5 minutes, reset by any success - a ward on a phone tether during an
+emergency should not lose its connection to a retry storm. Nothing publishes while
+`requiresUpdate()` is set or a conflict awaits `resolve`. **A failed publish is a state,
+never an error**; only a failed local write emits `saveFailed`.
+
+**Every refused publish takes one route.** The server refuses only when its version moved
+past the base, so theirs is newer; a revocation is itself a new version, so a moved key
+generation always arrives this way too.
+
+1. **Fetch and validate theirs** as on open. `ServerFault` keeps everything untouched;
+   `Removed` goes to *Removed*.
+2. **Take theirs** - data key, key generation, and roster exactly as validated. Nothing of
+   this session's roster needs carrying over, since every roster change goes through the
+   queue (6.6).
+3. **Route the content** with `ResponseMerge::mergeDocuments(base, mine, theirs)`. A
+   merged document is sealed on their header and published at once. `nullopt`, or no usable
+   base copy, emits `conflictRaised`. Nothing publishes this session's payload over theirs
+   directly.
+
+**While a conflict waits, the base does not move.** The local file keeps saving this
+session's work under the adopted roster and key, but the base version and base copy stay
+where they were, so a crash before `resolve` meets the same refusal on reopen rather than
+publishing mine over theirs unasked. `resolve` then:
+
+- **Keep theirs**: their directory with the merged response; the base moves to theirs;
+  `documentReplaced`.
+- **Keep mine**: this session's directory, the merged response, and the adopted roster and
+  key, sealed on their header and published. The new save counter is one above the higher
+  of theirs and the local file's, so it passes every server rule and never restores anyone
+  they removed.
+
+Save mine as a copy is Task 18's: it exports `Conflict::mine`, then resolves Keep theirs.
+
+**Removed.** Reached from `validateDownload`, and when the server refuses this device as
+not allow-listed - which fetches only the header chain, since the blob is no longer served
+to it, and calls `Reconcile::checkRemoval` - so only a chain-proven removal is acted on.
+Delete the local file and the base copy; clear the record except its high-water mark, and
+set `removed`; stop every timer; emit `removed`, naming the removing member when the held
+roster has them, with `left` set when the proving header was this person's own leave from
+another of their devices. Recorded copies are the library's (Task 12). No recovery copy is
+written.
+
+**The lease.** Opening a shared ward takes the lease, refreshed on the `Heartbeat` timer
+at a third of its lifetime and released by `close`. `LeaseHeld` makes the directory
+read-only (`readOnlyChanged`); the session then tries again on each head check, and a lease
+whose heartbeat stopped is taken over when the server lets it expire. **The emergency
+response is outside the lease:** response edits are always allowed and always publish, and
+a refusal merges through the route above. **The lease cannot speak for a disconnected
+device:** while the server is unreachable there is no lease to take, the session is
+editable, and reconciliation happens on reconnect.
+
+**Head checks** run on the `HeadCheck` timer, every 5 minutes, and every 30 seconds while
+`setEmergencyActive(true)`, so connected responders see each other's records within about
+half a minute. A server ahead of the base takes the open table's route. **A
+directory-read-only session fast-forwards** to what the lease holder publishes, and every
+replacement of the in-memory document emits `documentReplaced`.
+
+**Automatic directory updates follow the lease.** `mayWriteDirectory()` is true for an
+unshared ward, or a shared one whose lease this device holds. `DocumentManager` starts
+geocoding and unit lookups only while it is true, and drops their results when it has
+since become false (Task 15).
+
+**Sharing.** `share` registers the local file with `registerDocument` under its existing
+id; the header, listing this device alone, becomes the first allow-list. The returned
+version becomes the base version, with the base copy and `publishedSaveCounter`, which is
+what makes the ward shared. The id, paths, and header bytes are unchanged. A refusal emits
+`shareFailed`; Task 21 handles `IdTaken`.
+
+**Tests** are in 6.7.
+
+#### 6.6 The roster change queue
+
+**Files:** `src/services/RosterChangeQueue.h/.cpp`, `src/services/RosterChange.h/.cpp`,
+`tests/services/RosterChangeQueueTest.h/.cpp`
+
+**Every change to who has access goes through this queue** - grant (Task 23), link and
+unlink (Task 24), removal, role changes, and leaving (Task 25) - **and none needs the
+lease.** A roster change is never blocked by whoever holds the lease, so a member cannot
+hold off their own removal and a thief cannot hold off an unlink.
+
+```cpp
+struct RosterChange
+{
+    enum class Kind { Grant, Link, Unlink, Remove, SetRole, Leave };
+
+    Kind kind;
+    QString documentId;
+    std::optional<RosterPerson> person;         ///< Grant: the new person
+    std::optional<RosterDevice> device;         ///< Link, Unlink
+    std::optional<MemberId> target;             ///< Remove, SetRole
+    std::optional<RosterPerson::Role> role;     ///< SetRole
+
+    QJsonObject toJson() const;
+    static std::optional<RosterChange> fromJson(const QJsonObject& json);
+};
+
+enum class RosterChangeOutcome { Published, AlreadyDone, NoLongerApplies, ValidationFailed };
+
+class RosterChangeQueue : public QObject
+{
+    Q_OBJECT
+
+public:
+    RosterChangeQueue(const DocumentSession::Context& context,
+                      std::function<DocumentPaths(const QString&)> pathsFor,
+                      QObject* parent = nullptr);
+
+    void setOpenSession(DocumentSession* session);          ///< nullptr when no ward is open
+    void enqueue(const RosterChange& change);
+    void enqueueForEveryWard(const RosterChange& change, const QStringList& documentIds);
+    QList<RosterChange> pending() const;
+
+signals:
+    void pendingChanged();
+    void changeFinished(const RosterChange& change, RosterChangeOutcome outcome);
+};
+```
+
+- **Persisted** in each ward's `DocumentRecord::pendingChanges`, and removed only once its
+  publish is accepted or it is dropped. A queue constructed over existing records resumes
+  them.
+- **One ward at a time, one change per publish.** Each change is applied to the server's
+  accepted version and published before the next is built, because a version may advance
+  the key generation by only one.
+- **The open ward is changed through its session; any other ward through a session the
+  queue opens and closes itself.** `DocumentSession::applyRosterChange` fetches the
+  snapshot, validates it against the base copy, applies the matching `AccessControl` call
+  with this device's fingerprint as writer to *their* document, seals it on their header,
+  and uploads it conditional on their version. The published version then reaches the
+  local file by the ordinary route: a fast-forward with no unpublished changes, otherwise
+  the refused-publish route, which merges silently when only this side changed the
+  directory.
+- **`AlreadyDone`** when the server's version already reflects the change - the person
+  already removed, the device already linked.
+- **`NoLongerApplies`** when the `AccessControl` call returns `nullopt` against the
+  server's version - this person is no longer an admin, or is now the last admin trying to
+  leave. Not retried; dropped, and reported so the UI can say why (Task 25).
+- **Retried** on the session's backoff when the server is unreachable or the upload is
+  refused as a conflict. **`ValidationFailed`** stops that ward's change and reports it.
+- **Refused only while `requiresUpdate()`** is set for that ward.
+- **A leave, once accepted,** runs the session's *Removed* path with `left` set.
+
+#### 6.7 Tests
+
+**Files:** `tests/services/DocumentSessionTest.h/.cpp`,
+`tests/services/RosterChangeQueueTest.h/.cpp`, `tests/TestMain.cpp`
+
+Every test runs devices of a `TestWard` against one `FakeServer`, fires timers by hand,
+and holds replies where ordering matters. Each asserts on disk bytes, records, and the
+server's state, not only on signals.
+
+**Creating and opening.** A created ward reopens with the same keys, its roster holds
+exactly one person, an admin, with exactly this device, and its header carries the given
+id; `NotFound`, `NeedsNewerVersion`, and `Refused` each come from a file built to produce
+it; a file rolled back to a lower generation, or to a lower save counter in the same
+generation, is `Refused` by the high-water mark; a shared ward whose local file was deleted
+or corrupted downloads and opens; each row of the open table.
+
+**Saving.** Several edits then one `Save` timeout advance the on-disk save counter by
+exactly 1; `flush` writes a scheduled save at once; a `Directory` edit and a `Response` edit
+each advance the counter through the same path; a failed write emits `saveFailed` and leaves
+the previous file intact.
+
+**Publishing.** A save while the server is unreachable leaves one pending upload, and three
+saves still leave one; coming back online publishes once and reaches `UpToDate`; the retry
+interval grows from 5 seconds and caps at 5 minutes; a publish pending at close is pending
+again when the ward reopens from the same records; with a publish's reply held, a further
+edit publishes after it rather than beside it; a successful fetch and a successful publish
+each write a base copy whose hash matches the record, and a tampered or missing base copy
+loads as `nullopt`.
+
+**Downloads.** A server ahead with nothing local fast-forwards and emits `documentReplaced`;
+a server serving a version that fails each validation step in turn - unsealable, hash
+mismatch, bad signature, broken chain, older generation - leaves the local file
+byte-identical, the record unchanged, and the state `ServerFault`.
+
+**The refused-publish route.** A refused publish adopts their key, generation, and roster;
+a response-only change on one side and a family edit on the other merge and publish
+silently; a family edit on both sides raises a conflict without publishing mine; a member
+they removed is not restored; reopening before `resolve` meets the conflict again; **Keep
+mine** after they granted a person publishes a version `FakeServer` accepts, holding this
+session's directory and still listing their new person; **Keep theirs** holds their
+directory and the merged response.
+
+**Removal.** A chain-proven revocation deletes the file, base copy, and record while
+keeping the high-water mark and setting `removed` - mid-session and on open, **including
+when the revoker was granted after the base header**; a withheld header, a substituted
+header, or an allow-list refusal without a proving chain deletes nothing; a leave from this
+person's other device reports `left`.
+
+**Read-only and updates.** With a foreign lease, a `Directory` edit is refused without
+calling its change and leaves the document and on-disk counter unchanged, while a
+`Response` edit saves and publishes; a lease whose holder stops its heartbeat is taken over
+after expiry; going unreachable while holding the lease leaves the session editable; a
+read-only session fast-forwards to the holder's publish; the head check runs at 30 seconds
+while an emergency is active and at 5 minutes otherwise; `close` releases the lease and stops
+the heartbeat; with `requiresUpdate` set, a `Directory` edit is refused, a `Response` edit
+saves locally, and nothing publishes; a later head check serving an understood version
+clears it and publishes the saved response records; `mayWriteDirectory` is false with a
+foreign lease and true once the lease is taken.
+
+**Sharing.** Sharing leaves the document id, paths, and header bytes unchanged, records a
+base version, and the server holds the ward; a second device granted access opens it.
+
+**The queue.** With three wards and one open, an unlink reaches all three and the server
+refuses the unlinked device on each; a ward whose lease is held elsewhere still takes a
+removal; a change the server already reflects is `AlreadyDone`; a removal by a person
+demoted meanwhile is `NoLongerApplies` and not retried; a pending change survives
+recreating the queue over the same records; a ward whose local file has unpublished
+directory changes keeps them and holds the new roster after the change publishes; two
+admins granting at once both end up with their person on the roster.
+
+Register both suites in `TestMain.cpp`.
+
+---
+
+### Task 7: STOP - user review of the core
+
+**Stop here and hand the core to the user for review.** Do not start Task 8.
+
+Present Task 6 as one artifact: the source files and their tests, in the order of its
+sections. The tree does not need to build yet.
+
+Apply the user's changes to the core before anything else. After the user's review, run
+the agent code review on the core. Then have the user build and run the tests; **every test
+must pass before Task 8 starts**, and a failure is a core defect, fixed in the core and
+shown to the user. Commit as `feat: sync-and-save core` once all of this is settled.
+
+---
+
+## Phase 5 - Storage and identity
+
+### Task 8: Settings store
 
 Before identity, because identity stores a display name in it.
 
@@ -1668,12 +2354,15 @@ task replaces it; **nothing is migrated** from earlier versions, and the old fil
 
 **`AppSettings` is a JSON file at an explicit path**, `<AppDataLocation>/settings.json`.
 It loads the file once into memory, and every change rewrites it through `QSaveFile`, so a
-crash mid-write leaves the previous file intact — the key generation high-water mark and
-published save counter are security-relevant and must never be half-written. JSON fits
-the data: sets of fingerprints and ids, and a record per document id with a list of copy
-paths, map directly onto objects and arrays, and the rest of the codebase already speaks
-`QJsonDocument`. Nothing goes in `CacheLocation`, which the OS may clear — silently
+crash mid-write leaves the previous file intact - the high-water mark and the published
+save counter are security-relevant and must never be half-written. JSON fits the data:
+sets of fingerprints and ids, and a record per document id with a list of copy paths, map
+directly onto objects and arrays, and the rest of the codebase already speaks
+`QJsonDocument`. Nothing goes in `CacheLocation`, which the OS may clear - silently
 discarding the high-water mark would disable the rollback defence with no signal.
+
+**`AppSettings` implements `DocumentRecords` (Task 6.2)**, so the core's records persist
+without the core knowing where.
 
 **Only one instance of the app runs per user.** The settings file, documents, base copies,
 and lease heartbeat all assume a single writer, and JSON has no cross-process locking. At
@@ -1683,8 +2372,7 @@ the top of `main()`, before settings or identity load, take a `QLockFile` in
 double-clicked `.wardplanning` file opens there), and exit. The running instance listens
 on a `QLocalServer` created with `QLocalServer::UserAccessOption`, so only the same user's
 processes can connect, raises and activates its window, and handles the forwarded
-arguments.
-A stale lock left by a crash is taken over (`QLockFile::setStaleLockTime`, plus
+arguments. A stale lock left by a crash is taken over (`QLockFile::setStaleLockTime`, plus
 `removeStaleLockFile` when the owning process is gone).
 
 **The path is set in one place.** `AppSettings::setFilePath` is called once at startup
@@ -1697,35 +2385,33 @@ Three groups of state:
 | Group | Holds |
 |---|---|
 | Device | Display name, the developer-export toggle, the server address override |
-| Per document, keyed by **document id** | Working copy of the key generation high-water mark (the durable one is in the keychain record, Task 13); server base version, base payload hash, and **published save counter** (present only once shared); cached ward-list entry; **paths of copies written from it**; **the last version whose roster changes were announced**; **pending roster changes** (Task 31) |
+| Per document, keyed by **document id** | The `DocumentRecord`; cached ward-list entry; **paths of copies written from it**; **the last version whose roster changes were announced** |
 | Map | `defaultLat`, `defaultLng` |
 
-**Per-document state is keyed by document id, not by file path.** Documents move
-between machines and are named by id in app data (Task 10), and a path-keyed record
-would lose the high-water mark the first time either changed. Every document has its
-id from creation (Task 1.4), so its records exist from the first save and never move.
-`AppSettings::isShared(id)` is true once a base version is recorded.
+**Per-document state is keyed by document id, not by file path.** Documents move between
+machines and are named by id in app data (Task 12), and a path-keyed record would lose the
+high-water mark the first time either changed.
 
 `lastDocumentPath` becomes `lastDocumentId`.
 
 **The server address comes from here.** `AppSettings::serverAddress()` returns the
-override when one is set and the built-in default otherwise. The default is a
-compile-time constant in `AppSettings.cpp`, filled in with the companion server work;
-the override is an advanced setting for testing and self-hosting, with no everyday UI.
-Every `ServerClient` request resolves its base URL through this one call.
+override when one is set and the built-in default otherwise. The default is a compile-time
+constant in `AppSettings.cpp`, filled in with the companion server work; the override is an
+advanced setting for testing and self-hosting, with no everyday UI. `HttpServerApi`
+(Task 14) resolves its base URL through this one call on every request.
 
 **Tests:** a value written is read back through a second `AppSettings` on the same path;
-numbers round-trip as numbers; two runs of the suite each start from an empty file;
-per-document records for two ids stay separate; `isShared` is false until a base version
-is recorded; a malformed settings file is reported, not silently replaced with defaults.
-By hand: launching the app a second time raises the first window and exits, and
-double-clicking a `.wardplanning` file while the app runs hands it to the running window.
+numbers round-trip as numbers; two runs of the suite each start from an empty file; records
+for two ids stay separate; a `DocumentRecord` with pending roster changes round-trips; a
+malformed settings file is reported, not silently replaced with defaults. By hand:
+launching the app a second time raises the first window and exits, and double-clicking a
+`.wardplanning` file while the app runs hands it to the running window.
 
 Commit as `refactor: unify settings storage`.
 
 ---
 
-### Task 7: KeyStore
+### Task 9: KeyStore
 
 **Files:** `src/services/KeyStore.h/.cpp`, `tests/services/KeyStoreTest.h/.cpp`
 
@@ -1752,36 +2438,34 @@ signals:
 Service string `"Ward Planning"`, account passed in so tests use their own.
 `ReadPasswordJob`, `WritePasswordJob`, and `DeletePasswordJob`, secret as base64.
 
-**One keychain entry holds both keypairs.** The identity is an X25519 pair and an
-Ed25519 pair, serialised together as one JSON object and stored as a single secret,
-together with the member id (Task 8), the per-document key generation **and save counter**
-high-water marks (Task 13), and **the ids of documents this device was removed from** —
-all of which must outlive cleared application data.
-Two entries could get out of step — a machine holding a sealing key it cannot
-authenticate with is a state with no recovery path and no useful error.
+**One keychain entry holds both keypairs.** The identity is an X25519 pair and an Ed25519
+pair, serialised together as one JSON object and stored as a single secret, together with
+the member id (Task 10), the per-document high-water marks, **and the ids of documents this
+device was removed from** (Task 11) - all of which must outlive cleared application data.
+Two entries could get out of step - a machine holding a sealing key it cannot authenticate
+with is a state with no recovery path and no useful error.
 
-**Distinguish `notFound` from `failed`.** The first is a first run; the second is a
-locked keychain or a Linux box with no Secret Service. Conflating them makes a locked
-keychain look like a first run and silently mints a second identity, orphaning the
-user's documents.
+**Distinguish `notFound` from `failed`.** The first is a first run; the second is a locked
+keychain or a Linux box with no Secret Service. Conflating them makes a locked keychain
+look like a first run and silently mints a second identity, orphaning the user's
+documents.
 
-**Tests** need a real keychain: use account `"identity-test"`, remove it in
-`cleanup()`, `QSKIP` on `failed()`. A stored secret loads back; a missing secret
-reports `notFound`; a stored identity record round-trips both keypairs.
+**Tests** need a real keychain: use account `"identity-test"`, remove it in `cleanup()`,
+`QSKIP` on `failed()`. A stored secret loads back; a missing secret reports `notFound`; a
+stored identity record round-trips both keypairs.
 
 Commit as `feat: KeyStore over qtkeychain`.
 
 ---
 
-### Task 8: IdentityService
+### Task 10: IdentityService
 
 **Files:** `src/services/IdentityService.h/.cpp`, `src/main.cpp:24-33`,
 `tests/services/IdentityServiceTest.h/.cpp`
 
-Owns this device's two keypairs and device name, and the person this device belongs
-to — member id and display name — and resolves **before any document exists** —
-`ensureFilePath()` invents a path and saves an untitled document, and `autoSave()` can
-fire from a network callback with nobody present.
+Owns this device's two keypairs and device name, and the person this device belongs to -
+member id and display name - and resolves **before any document exists**. Its product is
+the `DeviceIdentity` value the core takes (Task 6.2).
 
 ```cpp
 class IdentityService : public QObject
@@ -1789,180 +2473,91 @@ class IdentityService : public QObject
     Q_OBJECT
 
 public:
-    static IdentityService* instance();
-    static void setInstanceForTesting(IdentityService* identity);   ///< tests only; nullptr clears
-
     bool initialiseBlocking();          ///< true when an identity is loaded or created
 
     bool isReady() const;
-    std::optional<Keypair> keypair() const;             ///< empty until ready
-    std::optional<SigningKeypair> signingKeypair() const;   ///< empty until ready
-    PublicKey publicKey() const;
-    VerifyKey verifyKey() const;
-    Fingerprint fingerprint() const;
+    std::optional<DeviceIdentity> identity() const;     ///< empty until ready and a person exists
 
-    std::optional<MemberId> memberId() const;   ///< empty until a person is created or linked
     QString displayName() const;
     void setDisplayName(const QString& displayName);
     QString deviceName() const;                 ///< QSysInfo::machineHostName(), editable
+    void setDeviceName(const QString& deviceName);
 
     void createPerson(const QString& displayName);   ///< fresh random member id
     void joinPerson(const MemberId& memberId, const QString& displayName);  ///< on link
 
-    RosterDevice asRosterDevice() const;
-    RosterPerson asNewPerson() const;           ///< this person with only this device
-
     QString lastError() const;
+
+signals:
+    void identityChanged();
 };
 ```
 
 **`KeyStore` is signal-based, so `main()` cannot call it and continue.**
 `initialiseBlocking()` runs a local `QEventLoop`, quit by whichever of `loaded`,
-`notFound`, or `failed` arrives, with a timeout so a wedged keychain cannot hang
-startup. On `notFound` it generates **both** keypairs and stores them as one record.
-This is the mechanism the design's "construct `MainWindow` only after ready"
-requirement needs; straight-line code cannot express it.
+`notFound`, or `failed` arrives, with a timeout so a wedged keychain cannot hang startup.
+On `notFound` it generates **both** keypairs and stores them as one record.
 
-Sequence in `main.cpp`: `DocumentCrypto::initialise()`, then `initialiseBlocking()`,
-and construct `MainWindow` only if it returns true. On failure show a modal naming the
-platform store and exit — there is no document without an identity. `DocumentManager`
-is constructed at `:25` and `MainWindow` at `:33`, both stack locals, so `MainWindow`
-is destroyed first and `DocumentManager` outlives it, which Task 21's flush-on-close
-relies on.
+On failure `main()` shows a modal naming the platform store and exits - there is no
+document without an identity (Task 15 wires the order).
 
 **The member id is stored in the keychain record with the keypairs**, so a reinstall or
-cleared application data keeps the device attached to its person. Display name lives
-in `AppSettings`. Device name defaults to the system host name and can be edited, since
+cleared application data keeps the device attached to its person. Display name lives in
+`AppSettings`. Device name defaults to the system host name and can be edited, since
 "DESKTOP-4F2K9" is not how Bob knows his laptop.
 
-**The first screen asks one question** when `memberId()` is empty: *Do you already use
-Ward Planning on another device?* **No** calls `createPerson` after asking for a display
-name. **Yes** starts linking (Task 31), which calls `joinPerson` once the existing device
-accepts. This order is what keeps Bob from becoming two people by tapping Request access
-on his phone.
+**The first screen asks one question** when no person exists yet: *Do you already use Ward
+Planning on another device?* **No** calls `createPerson` after asking for a display name.
+**Yes** starts linking (Task 24), which calls `joinPerson` once the existing device
+accepts. This order is what keeps Bob from becoming two people by tapping Request access on
+his phone.
 
-**Tests:** `asRosterDevice()` carries device name, public key, and verify key;
-`fingerprint()` matches `DocumentCrypto::fingerprintOf(publicKey(), verifyKey())`; `createPerson`
-yields a fresh member id and `asNewPerson()` holds exactly this device; `joinPerson`
-keeps the given id; the member id survives a reload of the keychain record;
-`keypair()` and `signingKeypair()` are empty before initialisation.
-
-**Tests never touch the real keychain.** Add a test constructor,
-`IdentityService(const Keypair&, const SigningKeypair&, const MemberId&, const QString& displayName)`,
-that is ready immediately and never reads or writes `KeyStore`; the tests above and the
-`DocumentManager` fixture (Task 19) use it. Only `KeyStore`'s own tests (Task 7) use a
-keychain, under their separate test account removed in `cleanup()`.
+**Tests** use a test constructor, `IdentityService(const DeviceIdentity&)`, that is ready
+at once and never reads or writes `KeyStore`: `identity()` is empty before initialisation
+and before a person exists; `createPerson` yields a fresh member id; `joinPerson` keeps the
+given id; the member id survives a reload of the keychain record; a device rename reaches
+`identity()`. Only `KeyStore`'s own tests use a keychain.
 
 Commit as `feat: device identity service`.
 
 ---
 
-### Task 9: On-disk format
+### Task 11: Durable high-water marks
 
+**Files:** `src/services/IdentityService.cpp`, `src/services/AppSettings.cpp`,
+`tests/services/DurableMarksTest.h/.cpp`
 
-**Files:** `src/services/JsonService.h/.cpp`, **`src/services/DocumentManager.cpp:148,185,361`**,
-`src/models/Document.h/.cpp`, `tests/services/JsonServiceTest.h/.cpp`
+The core checks every version against `DocumentRecord::highWaterMark` and never forgets
+`removed` (Task 6). This task makes both outlive cleared application data, which is when a
+rollback is most likely to be attempted.
 
-**The load result, defined here:**
+**The keychain record holds the durable copy**, as a map from document id to key
+generation and save counter, and the set of removed document ids. It is **never deleted**,
+including when this device is removed from a ward. `AppSettings` holds the working copy,
+raised to the keychain values at startup; the keychain record is written whenever a mark
+rises or `removed` is set. Keying by id rather than by path matters: the same document has
+different paths on different machines and is re-downloaded after a reinstall, and a
+path-keyed mark would be lost exactly when it is needed.
 
-```cpp
-enum class LoadFailure
-{
-    None, NotFound, HeaderMalformed, PayloadMalformed, NeedsNewerVersion,
-    NoAccess, AuthenticationFailed, SignatureInvalid, OlderGeneration
-};
+**Tests** use `IdentityService`'s test constructor, whose record lives in memory, and start
+from an empty settings file: after generation 3 is seen, the settings file is cleared, and
+generation 2 is still refused; an older version of the current generation is still refused;
+a removed ward stays removed after the settings file is cleared; an unrelated document id
+is unaffected.
 
-struct JsonResult
-{
-    LoadFailure failure = LoadFailure::None;
-    QString errorMessage;
-    std::optional<DocumentHeader> header;
-    std::optional<DataKey> dataKey;
-    std::optional<Document> document;
-};
-```
-
-`loadDocument` fills `header`, `dataKey`, and `document` only when `failure` is `None`;
-`DocumentManager` keeps all three as its current state (Task 11). It reads the header
-with `DocumentHeader::parse` and the payload with `Document::parse`, mapping each
-`NeedsNewerVersion` to `LoadFailure::NeedsNewerVersion` and each `Malformed` to
-`HeaderMalformed` or `PayloadMalformed`. `Document::fromJson` is already gone — Task 4a
-moved `JsonService` onto `Document::parse` and replaced every lenient reader.
-
-The signature change and its call sites land in one commit — after Task 5 removed the
-archive paths (`EmergencyManager.cpp:122,160,594` and `ArchiveBrowserDialog.cpp:174`),
-exactly three callers remain, all in `DocumentManager`.
-
-**Layout:** a single-line JSON header, a `'\n'` byte, then the raw encrypted payload.
-Reading the header is `readLine()`, which makes every version check cheap.
-**Serialize the header with `QJsonDocument::Compact`** — the existing code in this
-file uses `Indented` (`JsonService.cpp:114`), which is the natural thing to copy and
-would break the layout.
-
-**Drop `QIODevice::Text` from both `open()` calls** (`JsonService.cpp:13` and `:28`).
-On Windows it translates `\n` to `\r\n` on write and back on read; applied to raw
-XChaCha20-Poly1305 output every 0x0A byte becomes 0x0D 0x0A, and the reverse
-translation is not an inverse for pre-existing pairs. Every save would produce a file
-that fails authentication. This is the single most important line in the task.
-
-```cpp
-static JsonResult loadDocument(const QString& filePath, const Keypair& keys);
-
-struct SaveResult
-{
-    bool success = false;
-    QString errorMessage;
-    std::optional<DocumentHeader> header;   ///< the header as written: new counter, nonce, hash, signature
-};
-
-static SaveResult saveDocument(const QString& filePath,
-                               const Document& document,
-                               const DocumentHeader& header,
-                               const DataKey& dataKey,
-                               const Fingerprint& writer,
-                               const SigningKey& signingKey);
-```
-
-**`saveDocument` is the only place the save counter increments.** Callers keep the
-returned header as their current one. Conflicts are detected at publish, against the
-server version, so no expected-counter check belongs here.
-
-`saveDocument` builds the header fresh each time: new nonce, `saveCounter + 1`,
-`lastWriter` from `writer` and `lastWriteTime` from the clock, document id and
-and recipients **rebuilt from the roster by `AccessControl::resealAll`** rather than
-carried forward, so a mis-sealed entry cannot lock its owner out of every later version;
-it encrypts, sets `payloadHash` from the ciphertext, then
-sets `writerSignature` with `DocumentCrypto::signHeader`. `loadDocument` checks the header
-on its own with `DocumentCrypto::isCoherent`, checks `payloadHash` against the ciphertext,
-checks `DocumentCrypto::verifyHeader`, decrypts, and checks
-`DocumentCrypto::writerIsAccountedFor` against the decrypted roster, returning
-`SignatureInvalid` on any failure — so a version written by someone who has just left
-reopens like any other. `QSaveFile` as before.
-
-**Tests:** round-trip with two recipients; a second holder loads it; a third keypair is
-refused; a flipped payload byte fails authentication; the document id survives a
-round-trip and is covered by authentication; a saved file's signature verifies, and a
-file whose signature was replaced by another member's fails to load; **two consecutive saves produce
-different `nonce` values in the parsed header**; **two saves made at the same save
-counter** — save the same in-memory state to two paths — **also produce different
-nonces**. The second case is the one that catches a counter-derived nonce, which the
-first would pass.
-
-Commit as `feat: encrypted document file format`.
+Commit as `feat: keep rollback marks in the keychain`.
 
 ---
 
-### Task 10: The document library
+### Task 12: The document library
 
 **Files:** `src/services/DocumentLibrary.h/.cpp`, `src/widgets/OpenWardDialog.h/.cpp`,
 `src/widgets/MainWindow.h/.cpp` (File menu, `:287,343,351`, `openFile` at `:306`),
 `tests/services/DocumentLibraryTest.h/.cpp`
 
 **The app owns the file, and the user never chooses a path.** Documents live in
-`QStandardPaths::AppDataLocation`, named by document id. "Open" becomes a list of
-wards, not a file dialog. This is the largest of the design's ease-of-setup
-simplifications and it has to land before the sync tasks, which address documents by
-id.
+`QStandardPaths::AppDataLocation`, named by document id. "Open" becomes a list of wards,
+not a file dialog.
 
 ```cpp
 struct LibraryEntry
@@ -1976,718 +2571,294 @@ class DocumentLibrary
 {
 public:
     QList<LibraryEntry> entries() const;        ///< sorted by ward name
-    QString pathFor(const QString& documentId) const;
-    LibraryEntry create(const QString& wardName);
-    void forget(const QString& documentId);     ///< removes the local file too
+    QStringList documentIds() const;
+    DocumentPaths pathsFor(const QString& documentId) const;
+    QString newDocumentId() const;              ///< 128 random bits, hex
+    void add(const QString& documentId, const QString& wardName);
+    void setWardName(const QString& documentId, const QString& wardName);
+    void forget(const QString& documentId);     ///< an unshared ward: its files and entry
 
-    /// Writes a copy under a fresh id with originDocumentId set, and records its path.
-    void exportCopy(const QString& documentId, const QString& targetPath);
+    /// Writes a copy under a fresh id and a fresh data key, with originDocumentId set,
+    /// and records its path.
+    bool exportCopy(const Document& document,
+                    const QString& originDocumentId,
+                    const QString& targetPath,
+                    QString* errorMessage);
     /// Opens a copy read-only; refuses one whose origin this device was removed from.
     std::optional<Document> openCopy(const QString& sourcePath);
-    /// On a proven removal: deletes the document, base copy, and every recorded copy
-    /// still at its path, and records the removal.
+    /// After a session's removed(): deletes every recorded copy still at its path and
+    /// removes the entry.
     void forgetRemoved(const QString& documentId);
 };
 ```
 
 `ensureFilePath()` (`DocumentManager.cpp:392-407`) and the untitled-document dance go
-away: `create()` allocates an id and a path up front, so there is no window in which a
-document has no home.
+away: a new ward gets its id and paths up front, then `DocumentSession::create`, so there is
+no window in which a document has no home.
 
-**`maybeRenameForWard()` (`:409-443`, called from `autoSave` at `:377`) is deleted too.**
-There is no file to rename. In its place, each save sets the library entry's `wardName`
-from `Document::suggestedFilename()` when that is non-empty and differs from the stored
-name, so the ward list reads *Tanglewood Ward* at the moment the file used to be renamed,
-and the list never has to decrypt a document to show its name.
+**`maybeRenameForWard()` (`:409-443`) is deleted too.** There is no file to rename. In its
+place, each save sets the entry's `wardName` from `Document::suggestedFilename()` when that
+is non-empty and differs, so the ward list reads *Tanglewood Ward* at the moment the file
+used to be renamed, and the list never has to decrypt a document to show its name.
 
-**Two escape hatches, and no more.** `exportCopy` writes a `.wardplanning` file
-wherever the user likes **re-encrypted under a fresh document id and a fresh data key,
-with the original's id as `originDocumentId`** — a fresh key so nobody who once held the
-ward's key, such as someone who has since left, can read it — so a copy can never publish itself into the ward's document, and
-records the copy's path in `AppSettings` under the original's id. A "Show in folder" action reveals the
-app data directory. Everything else the old file dialogs did is gone.
+**Two escape hatches, and no more.** `exportCopy` writes a `.wardplanning` file wherever
+the user likes, **sealed with `DocumentFile::seal` under a fresh document id and a fresh
+data key, with the original's id as `originDocumentId`** - a fresh key so nobody who once
+held the ward's key, such as someone who has since left, can read it - so a copy can never
+publish itself into the ward's document; its path is recorded in `AppSettings` under the
+original's id. A "Show in folder" action reveals the app data directory.
 
 `openCopy` opens an exported file **read-only** and reports whose roster it carries; it
-never becomes the live document and is never added to the library. It refuses a copy whose `originDocumentId` is in this device's removed-documents record,
-kept in the keychain record so clearing application data does not reopen those copies, and
-cleared again when this device reappears in a current header for that document. This replaces Save As entirely, including its
-different-roster block: a copy cannot be written back over a shared document because
-that operation no longer exists.
+never becomes the live document and is never added to the library. It refuses a copy whose
+`originDocumentId` has `removed` set in the records (Task 11 keeps that in the keychain), so
+clearing application data does not reopen those copies. This replaces Save As entirely,
+including its different-roster block: a copy cannot be written back over a shared document
+because that operation no longer exists.
 
 **The File menu this task builds**, replacing the old file dialogs at `MainWindow.cpp:287,
 343,351`:
 
 | Action | Does |
 |---|---|
-| **New ward** | `DocumentManager::newDocument` through `create()` |
-| **Open ward…** | `OpenWardDialog`: the wards from `entries()`, sorted by name, each showing whether it is shared; double-click or Open loads by id |
-| **Save a copy…** | File dialog for a target path, then `exportCopy` |
-| **Open a copy…** | File dialog for a `.wardplanning` file, then `openCopy`, shown read-only with a banner naming whose roster it carries |
+| **New ward** | A fresh id, then `DocumentSession::create` |
+| **Open ward...** | `OpenWardDialog`: the wards from `entries()`, sorted by name, each showing whether it is shared; double-click or Open loads by id |
+| **Save a copy...** | File dialog for a target path, then `exportCopy` |
+| **Open a copy...** | File dialog for a `.wardplanning` file, then `openCopy`, shown read-only with a banner naming whose roster it carries |
 | **Show in folder** | Reveals the app data directory |
 
 `MainWindow::openFile(path)` (`:306`) is removed with its callers; opening by path is
-Task 14's routing.
+Task 13's routing.
 
-**Tests:** `create` produces a distinct 128-bit id and a path under the test app data
-directory; `entries()` sorts by ward name; `exportCopy` output has a document id different from the original's and from a second export's
-and the original as its origin, still opens with the same keys, and is recorded;
-`forgetRemoved` deletes the document, base copy, and recorded copies still at their paths,
-leaves a moved copy alone, and makes `openCopy` refuse copies of that document; `forget`
-removes both the entry and the file; `pathFor` an unknown id is empty rather than a guess;
-a save after the ward is identified changes the entry's `wardName` from *Untitled* to the
-suggested name.
+**Tests:** `newDocumentId` produces distinct 128-bit ids and `pathsFor` paths under the test
+app data directory; `entries()` sorts by ward name; `exportCopy` output has a document id
+different from the original's and from a second export's, the original as its origin, opens
+with the same device keys, and is recorded; `forgetRemoved` deletes recorded copies still at
+their paths, leaves a moved copy alone, and makes `openCopy` refuse copies of that document;
+`forget` removes both the entry and the files; `pathsFor` an unknown id is empty rather than a
+guess; a save after the ward is identified changes the entry's `wardName` from *Untitled* to
+the suggested name.
 
 Commit as `feat: document library in app data`.
 
 ---
 
-### Task 11: New-document bootstrap
+### Task 13: File extension routing
 
-**Files:** `src/services/DocumentManager.cpp:136-144` (`newDocument`),
-`tests/services/JsonServiceTest.cpp`
-
-Without this the first file the app writes has zero recipient entries and **nobody,
-including its author, can ever open it** — and `autoSave()` fires on the very first
-command.
-
-`newDocument()` asks `DocumentLibrary::create()` for an id and a path, generates the
-first data key, seeds the roster with `IdentityService::asNewPerson()`, and builds a
-generation-1 header with one recipient entry. `DocumentManager` holds the
-current header and data key alongside `m_document`.
-
-**Test:** create, save, reload with the same keypair; it opens, the roster has exactly
-one person with exactly this device, and the header carries the library's document id.
-
-Commit as `feat: seed new documents with an access roster`.
-
----
-
-### Task 12: Load failures
-
-**Files:** `src/services/DocumentManager.h/.cpp`, `src/widgets/MainWindow.cpp`,
-`tests/services/JsonServiceTest.cpp`
-
-`LoadFailure` and `JsonResult` are defined in Task 9.
-
-**Widen `DocumentManager::openDocument`** (`DocumentManager.h:55`) to take a document
-id rather than a path and to carry `LoadFailure` out; today it returns `bool` plus a
-message string, and Task 33 must branch on the specific failure. Note
-`MainWindow.cpp:59` passes `nullptr` for the message.
-
-Sync failures are **not** in this enum. A server that cannot be reached is a sync
-state, not a load failure: the local file opens either way.
-
-**Tests:** each `LoadFailure` value except `OlderGeneration` is produced by a file
-constructed to trigger it. `NeedsNewerVersion` — a local file whose header or payload a
-newer build wrote — opens nothing and shows the update message. `OlderGeneration` is tested in Task 13, where `GenerationGuard` arrives.
-
-Commit as `feat: distinguish document load failures`.
-
----
-
-### Task 13: Key generation high-water mark
-
-**Files:** `src/services/GenerationGuard.h/.cpp`, `src/services/JsonService.cpp`,
-`tests/services/GenerationGuardTest.h/.cpp`
-
-Defends against rollback — a local file swapped for a pre-revocation copy that is
-internally consistent under a key its holder still has. The server refuses to move
-backwards on its own account, so this is the guard for the file on this machine.
-
-Stores the highest generation **and the highest save counter** seen per document **in the device's keychain record**
-beside the keypairs (Task 7, Task 8), as a map from document id to generation, so it
-survives an uninstall and cleared application data. It is **never deleted**, including
-when this device is removed from a ward. `AppSettings` holds a working copy that is raised
-to the keychain values at startup; the keychain record is written whenever a mark rises.
-`loadDocument` and `Reconcile::validateDownload` use the higher of the two, and
-`loadDocument` returns `OlderGeneration` for a lower generation **or a lower save
-counter**; a successful load records both marks. The save-counter mark is what refuses an
-older version of the current generation served to a device with no base copy.
-
-Keying by id rather than by path matters: the same document has different paths on
-different machines and is re-downloaded after a reinstall, and a path-keyed mark would
-be lost exactly when it is needed.
-
-**Tests:** first sight of generation 3 is accepted and recorded; 2 afterwards is
-rejected, and `loadDocument` reports `OlderGeneration` for it; 4 afterwards is accepted;
-an unrelated document id is unaffected; with the settings file cleared, the mark comes
-back from the keychain record and 2 is still rejected; an older version of the current
-generation is refused by the save-counter mark; `forgetRemoved` leaves the mark in
-place. Tests use `IdentityService`'s test constructor, whose record lives in memory, and
-start from an empty settings file (Task 6).
-
-Commit as `feat: reject rolled-back documents`.
-
----
-
-### Task 14: File extension
-
-> **The extension itself was done alongside Task 0**, at the user's request, because
-> Task 0's rename left the file-dialog filter reading "Ward Planning Files
-> (*.emergencyplan)"; it was committed in `1a222a2`.
-> `src/services/DocumentConstants.h` now holds `FileExtension` and `FileGlob`, and every
-> literal is gone from `main.cpp`, `DocumentManager.cpp`, `EmergencyManager.cpp`,
-> `ArchiveBrowserDialog.cpp`, `MainWindow.cpp`, `installer.iss`, `Info.plist`,
-> `.gitignore` and `USER_GUIDE.md`. The installer also retires the 1.0.x
-> `.emergencyplan` association. **What remains here is `FileOpenRouter`**, which needs
-> `DocumentLibrary::openCopy` (Task 10) and `SingleInstance` (Task 6).
+> **The extension itself was done alongside Task 0**, at the user's request, and committed
+> in `1a222a2`. `src/services/DocumentConstants.h` holds `FileExtension` and `FileGlob`, and
+> the installer retires the 1.0.x `.emergencyplan` association. **What remains here is
+> `FileOpenRouter`.**
 
 **Files:** `src/services/FileOpenRouter.h/.cpp`, `src/main.cpp:38`,
-`src/services/SingleInstance.cpp`
+`src/services/SingleInstance.cpp`, `tests/services/FileOpenRouterTest.h/.cpp`
 
-```cpp
-namespace DocumentConstants
-{
-    constexpr const char* FileExtension = ".wardplanning";
-}
-```
+With documents held in app data the extension governs **exported copies, recovery copies,
+and file association** rather than an everyday Open dialog. Files with any other extension,
+`.emergencyplan` included, are not the app's files and get no special handling.
 
-One constant rather than ten literals. With documents held in app data the extension
-now governs **exported copies, recovery copies, and file association** rather than an
-everyday Open dialog. Files with any other extension, `.emergencyplan` included, are not
-the app's files and get no special handling.
-
-**Opening a `.wardplanning` file by path** — a double-click, or a path forwarded by a
-second launch (Task 6) — goes through one router that reads the header:
+**Opening a `.wardplanning` file by path** - a double-click, or a path forwarded by a second
+launch (Task 8) - goes through one router that reads the header with `DocumentFile::decode`:
 
 | Header | Action |
 |---|---|
 | `documentId` is in the ward list | Open that ward by id |
 | `originDocumentId` is set (a copy) | `DocumentLibrary::openCopy`, read-only |
-| Neither — a document this device does not have, such as a managed file handed over on a USB stick | Offer Request access for its `documentId` (Task 29) |
+| Neither - a document this device does not have, such as a managed file handed over on a USB stick | Offer Request access for its `documentId` (Task 22) |
 | Not a readable Ward Planning header | Say the file is not a Ward Planning document |
 
 The same router serves `main.cpp:38` at startup and the running instance's forwarded
 arguments.
 
-The bundle identifiers at `CMakeLists.txt:525` and `Info.plist:15` are product
-identity, handled in Task 0 — do not touch them here.
+The bundle identifiers at `CMakeLists.txt:525` and `Info.plist:15` are product identity,
+handled in Task 0 - do not touch them here.
 
 **Tests:** the router picks each row above for a file built to match it.
 
-Build, create a document, export a copy, double-click it, and confirm it opens read-only. Commit as
-`feat: route documents opened by path through their header`.
+Build, create a document, export a copy, double-click it, and confirm it opens read-only.
+Commit as `feat: route documents opened by path through their header`.
 
 ---
 
-## Phase 5 — Transport and sync service
+## Phase 6 - Transport
 
-The fake server and the reconciliation decisions already exist (Task 1.8, Task 1.9); this phase puts real transport, settings, and a service around them.
+### Task 14: HTTP server
 
-### Task 15: ServerClient and authentication
+**Files:** `src/services/HttpServerApi.h/.cpp`, `tests/services/HttpServerApiTest.h/.cpp`,
+`tests/services/ServerConformanceTest.cpp`, `CMakeLists.txt`
 
-**Files:** `src/services/ServerClient.h/.cpp`, `tests/services/ServerClientTest.h/.cpp`,
-`CMakeLists.txt`
+`HttpServerApi` implements `ServerApi` (Task 6.1) over `QNetworkAccessManager`, in the same
+shape as the existing geocoding services (`Qt6::Network` is already linked,
+`CMakeLists.txt:30,392`). Each reply arrives from the network's own signal, which keeps
+6.1's rule that a reply never comes before the call returns. The base URL comes from
+`AppSettings::serverAddress()` (Task 8) on each request, so an override takes effect without
+restarting. Signing in and signing requests are `ServerConnection`'s (Task 6.3), so this
+class is transport only: routes, bodies, the request signature in a header, and HTTP status
+mapped onto `ServerError`, with a failed connection as `Unreachable`.
 
-`QNetworkAccessManager` over the contract, asynchronous throughout, in the same shape
-as the existing geocoding services (`Qt6::Network` is already linked, `CMakeLists.txt:30,392`). The base URL
-comes from `AppSettings::serverAddress()` (Task 6) on each request, so an override
-takes effect without restarting.
+**Never log a token, a challenge response, or a request body.**
 
-**Two authentication levels.** *Device* proves only that the caller holds a key, for
-`/me/documents`, `requests/mine`, and posting access or link requests; *member* also
-requires the device to be in the document's current header, for everything else.
-`ServerClient` asks for the level each endpoint needs.
+**Tests:** each request and response body round-trips through its JSON form; each HTTP
+status the server uses maps to its `ServerError`; a connection refused is `Unreachable`.
 
-**Authentication is challenge and response.** Fetch a challenge, sign it with the
-Ed25519 signing key under `SignatureTag::Auth`, exchange it for a short-lived token.
-Every mutating request is additionally signed under `SignatureTag::Request` over the
-document id and a hash of the body, so a captured request
-cannot be replayed against another document.
-
-**Never log a token, a challenge response, or a request body.** The bodies are
-ciphertext, but the habit of logging them survives longer than the ciphertext does.
-
-Give `ServerClient` an injectable transport so `ServerClientTest` drives it against
-`FakeServer` with no sockets. That seam is what keeps the sync tests fast and
-deterministic.
-
-**Tests:** a valid signature authenticates; a signature over the wrong challenge does
-not; an expired token triggers exactly one silent re-authentication and then the
-original request; a request signed for one document is refused for another.
-
-**The conformance run.** Add `HttpServerApi`, a test-only `ServerApi` that blocks on
-`ServerClient`'s requests, and run `ServerConformanceTest` (Task 1.8) through it against
-a real server URL taken from an environment variable — locally, the companion server
-under `wrangler dev` with its development clock override enabled. With the variable
+**The conformance run.** `ServerConformanceTest` (Task 1.8) runs through `HttpServerApi`
+against a real server URL taken from an environment variable - locally, the companion
+server under `wrangler dev` with its development clock override enabled. With the variable
 unset the run is skipped, so the ordinary suite needs no server. **Every rule the client
-depends on is thereby checked against the server that will actually enforce it**, and
-the companion server's plan uses the same run as its acceptance gate. A test that passes
-against the fake and fails against the real server is a disagreement to resolve in one
-of them, never a test to loosen.
+depends on is thereby checked against the server that will actually enforce it**, and the
+companion server's plan uses the same run as its acceptance gate. A test that passes against
+the fake and fails against the real server is a disagreement to resolve in one of them,
+never a test to loosen.
 
-Commit as `feat: server client and authentication`.
-
----
-
-### Task 16: SyncService — fetch and publish
-
-**Files:** `src/services/SyncService.h/.cpp`, `src/services/DocumentManager.h/.cpp`,
-`src/main.cpp`, `tests/services/SyncServiceTest.h/.cpp`
-
-The heart of the design: **saving and publishing are separate operations on separate
-clocks.**
-
-**Who does what.** `DocumentManager` owns the document: it makes every decision (through
-`Reconcile` and `ResponseMerge`), writes every file — the local file, the base copy,
-deletions on removal — and raises the conflict dialog. `SyncService` only talks to the
-server: it fetches heads, header chains, and blobs, publishes, runs the lease, the head
-checks, and the retry queue, and reports what it finds. It never opens or writes a
-document file.
-
-```cpp
-enum class SyncState { UpToDate, PendingUpload, Unreachable, ReadOnly };
-
-class SyncService : public QObject
-{
-    Q_OBJECT
-
-public:
-    explicit SyncService(ServerClient& client, QObject* parent = nullptr);
-
-    void watch(const QString& documentId, int baseVersion);   ///< start head checks
-    void fetchCurrent();                        ///< one snapshot: version, header, blob;
-                                                ///< then headers after base through that version
-    void fetchHeaderChain();                    ///< headers only; for a refused key
-    void publish(const QByteArray& headerLine, const QByteArray& ciphertext);
-    SyncState state() const;
-
-signals:
-    void stateChanged(SyncState state);
-    void serverAhead(const DocumentHeader& current,
-                     const QList<DocumentHeader>& laterHeaders,
-                     const QByteArray& ciphertext);
-    void headerChainFetched(const QList<DocumentHeader>& laterHeaders);
-    void published(int newVersion);
-    void publishRefused();                      ///< server version moved past base
-    void accessRefused();                       ///< this device is not in the current header
-};
-```
-
-`DocumentManager` connects to these: `serverAhead` → `Reconcile::validateDownload` and, as
-the table below says, fast-forward or Task 23's route; `publishRefused` → `fetchCurrent`
-then Task 23's route; `accessRefused` → `fetchHeaderChain` then `Reconcile::checkRemoval`;
-`published` → record base version, base copy, and published save counter.
-
-**Wiring in `main.cpp`**, in order: single-instance lock (Task 6), `AppSettings` (Task 6),
-`DocumentCrypto::initialise()`, `IdentityService::initialiseBlocking()` (Task 8),
-`ServerClient`, `SyncService`, `DocumentManager` given the `SyncService`,
-`EmergencyManager`, `TileService`, `MainWindow`, then the startup file argument through
-Task 14's router.
-
-**The base version is the whole mechanism.** It lives in `AppSettings` keyed by
-document id, and it is what distinguishes "the server moved" from "I moved" with
-certainty rather than by timestamp. Set it on every successful fetch and every
-successful publish, and never anywhere else.
-
-**The base copy is written at the same two moments.** `DocumentLibrary::basePathFor(id)`
-names it beside the document; `QSaveFile` writes the exact bytes just downloaded or
-just published, and the base header's `payloadHash` goes into `AppSettings` with the
-base version. `loadBase` returns `nullopt` when the file is missing or its hash does not
-match. It is read without `GenerationGuard`, since it is older than the document by
-design; the recorded hash is what stops it being swapped. `DocumentLibrary::forget` and
-Task 23's *Removed* path delete it with the document.
-
-On open: fetch the head, then
-
-| Server | Local | Action |
-|---|---|---|
-| At base | No unpublished changes | Open the local file |
-| Ahead of base | No unpublished changes | Download, validate, then replace and update base |
-| At base | Unpublished changes | Open, publish when able |
-| Ahead of base | Unpublished changes | Task 23's route: validate, adopt, `mergeDocuments`; conflict dialog only on `nullopt` |
-| Unreachable | Either | Open the local file, state `Unreachable` |
-
-**"Unpublished changes" is exact.** `AppSettings` stores, per document id, the local save
-counter at the last successful fetch or publish, set at the same two moments as the base
-version. The local file has unpublished changes exactly when its header's save counter is
-above that value. It is read at startup, so a publish queued when the app closed is
-queued again when it opens.
-
-**Nothing replaces the local file until the download validates.** Fetch the snapshot
-(version, header, blob) and the headers after the base version through that version, then call `Reconcile::validateDownload`
-(Task 1.9) with the base copy's header (`nullopt` when `loadBase` fails) and the high-water mark from `GenerationGuard`
-(Task 13). This service owns the I/O; the decision is the core's.
-
-- `Accept`: `QSaveFile` writes the downloaded file, then the base version, base copy,
-  and high-water mark are updated.
-- `Removed`: hand to Task 23's *Removed* path.
-- `NeedsNewerVersion`: the local file and records stay untouched; through
-  `DocumentManager::setRequiresUpdate(true)` the **directory becomes read-only** and
-  **publishing stops**, while **emergency response edits stay available and are saved
-  locally**; the persistent notice *This ward was saved by a newer version of Ward
-  Planning. Update to see the latest changes and share your work.* is shown, and the
-  update check (Task 35) runs at once. **The state is re-evaluated on every head check:**
-  as soon as the server serves a version this build understands, `setRequiresUpdate(false)`
-  clears it and ordinary syncing resumes. After updating, the locally saved response
-  records merge through the ordinary route.
-- `ServerFault`: the local file, base version, and high-water mark stay untouched, the
-  local copy opens, and the sync indicator reports the fault.
-
-**A failed publish is not an error dialog.** It is a state. The modal is reserved for a
-failed *local* save, where the user's work is genuinely not written down.
-
-**Tests, all against `FakeServer`:** publishing from the current base advances it;
-publishing from a stale base emits `publishRefused`; a device absent from the current header emits `accessRefused`; `SyncService` never writes a document file; a server ahead
-with nothing local fast-forwards silently; a server ahead serving a blob that fails
-each validation step in turn — unsealable, hash mismatch, bad signature, broken chain,
-older generation — leaves the local file byte-identical and the base version
-unchanged; going offline mid-session moves to
-`Unreachable` and back without losing the queued upload; a successful fetch and a
-successful publish each write a base copy whose hash matches `AppSettings`; a tampered
-or missing base copy loads as `nullopt`. Removal and adoption are
-tested in Task 23.
-
-**Restoring the ward list and missing files.** When the local ward list is empty, or
-application data was cleared, fetch `/me/documents` and add each document this device is
-listed on to `DocumentLibrary`, downloading it through the same validation as any
-fast-forward — with no base copy, so `Reconcile::validateDownload` checks it directly.
-When a ward in the list has no local file, offer *Fetch Tanglewood Ward from the server*
-and download it the same way.
-
-**Tests (restore):** clearing the library and settings, then starting, restores every
-document the fake server lists for this device and each opens; a listed document whose
-local file was deleted is fetched on request.
-
-Commit as `feat: local-first document sync`.
+Commit as `feat: HTTP server transport`.
 
 ---
 
-### Task 17: The publish queue and the sync indicator
+## Phase 7 - The app on the core
 
-**Files:** `src/services/SyncService.h/.cpp`, `src/widgets/SyncStatusWidget.h/.cpp`,
-`src/widgets/MainWindow.cpp`, `tests/services/SyncServiceTest.cpp`
+### Task 15: Wire the app to the core
 
-A publish that fails because the server is unreachable is retried with a backoff, and
-survives being asked again in the meantime — one pending upload, not a growing list,
-since a later save supersedes an earlier one.
+**Files:** `src/main.cpp`, `src/services/DocumentManager.h/.cpp`,
+`src/services/EmergencyManager.cpp`, `src/services/QtSessionTimers.h/.cpp`,
+`src/widgets/MainWindow.h/.cpp`, `tests/services/DocumentManagerTest.h/.cpp`
 
-**Retry on a backoff, not a tight loop.** A ward on a phone tether during an emergency
-should not have its connection consumed by a retry storm.
+**Wiring in `main.cpp`**, in order: single-instance lock (Task 8), `AppSettings`,
+`DocumentCrypto::initialise()`, `IdentityService::initialiseBlocking()` (Task 10),
+`HttpServerApi`, `ServerConnection`, `DocumentLibrary`, `RosterChangeQueue`,
+`DocumentManager`, `EmergencyManager`, `TileService`, `MainWindow`, then the startup file
+argument through Task 13's router. `DocumentManager` is constructed before `MainWindow`, both
+stack locals, so `MainWindow` is destroyed first and `DocumentManager` outlives it.
 
-The indicator is **quiet and persistent**, in the status bar: *Up to date*, *Changes
-not yet uploaded*, *Server unreachable*, *Read-only, another member is editing*. It is
-never a dialog and never steals focus. It lives in the status bar only; banners belong
-to Task 27's container.
+`QtSessionTimers` implements `SessionTimers` (Task 6.2) with four single-shot `QTimer`s.
 
-**Tests:** three saves while unreachable produce one pending upload, not three; coming
-back online publishes once and reaches `UpToDate`; the retry interval grows.
+**`DocumentManager` holds the open `DocumentSession`** and keeps what is its own: commands,
+undo, geocoding, and unit lookups.
 
-Commit as `feat: publish queue and sync status`.
+- `executeCommand`, `undo`, and `redo` go through `session.edit(Edit::Directory, ...)`; a
+  refusal leaves the undo stack untouched and shows *Another member is editing the
+  directory.* or the update notice. `DocumentManager.cpp:97-101` mutates before saving
+  today, which is exactly what this replaces.
+- `setEmergencyResponse` goes through `edit(Edit::Response, ...)`. `EmergencyManager`'s
+  calls to `persistResponseData()` (15 sites, `EmergencyManager.cpp:71` through `:659`,
+  including the one inside `syncFamilies()` that fires from a signal handler) all reach
+  the same path.
+- `documentReplaced` clears the undo stack and resets the saved position.
+- `onFamilyGeocoded`, `onWardLookupComplete`, and `onStakeLookupComplete` apply through
+  `edit(Edit::Directory, ...)`. `startBatchGeocoding` and the lookups start only while
+  `mayWriteDirectory()` is true, their results are dropped when it has since become false,
+  and taking the lease starts a batch for families still lacking coordinates.
+- `newDocument`, `openDocument(id)`, `saveDocument`, and `filePath` move onto the library
+  and session. `saveDocumentAs`, `saveDocumentOnly`, `autoSave`, `ensureFilePath`,
+  `maybeRenameForWard`, `buildUniquePath`, and `JsonService::loadDocument`/`saveDocument`
+  are deleted with their last callers. `openDocument` carries `LoadFailure` out rather than
+  a `bool` and message; `MainWindow.cpp:59` passes `nullptr` for the message today.
+- The open session is handed to the `RosterChangeQueue`, and cleared when it closes. A
+  session's `removed` runs `DocumentLibrary::forgetRemoved` and tells the user their access
+  was removed, naming who removed them, or that they left from another device.
 
----
+**`MainWindow::closeEvent`** - there is none in `src/widgets/` today and no `aboutToQuit`
+connection - calls `session.close()`, which flushes the pending save and releases the lease.
+Opening another ward or a new one closes the current session the same way.
 
-### Task 18: The lease
+**Ctrl+S** (`MainWindow.cpp:322-328`, a no-op when a path exists) calls `publishNow()`.
+Report only a local failure modally: if the flush succeeds and the publish cannot reach the
+server, the work is saved, and the sync indicator says the rest.
 
-**Files:** `src/services/SyncService.h/.cpp`, `tests/services/SyncServiceTest.cpp`
+**Tests:** `DocumentManager` needs a test constructor that takes its `DocumentSession` and
+creates no network services, and a reset for `s_instance` (`DocumentManager.cpp:36-37`) in
+`cleanup()`. With a foreign lease, a command, `undo`, and `redo` are each refused and leave
+the document and undo stack unchanged while `setEmergencyResponse` saves; a fast-forward
+clears the undo stack; batch geocoding does not start without the lease; a geocoding result
+arriving after the lease is lost leaves the document unchanged.
 
-Opening a shared document for edit takes a server lease with a TTL, refreshed by
-heartbeat, released on a clean close. Another member holding a live lease puts the
-**directory** — families, ministering, ward details — in `ReadOnly`; roster changes are
-never blocked by the lease (Task 31); a lease
-whose heartbeat has stopped can be taken over.
-
-**The emergency response is outside the lease.** Response edits are always allowed and
-always publish; a refusal merges through Task 23. `SyncState::ReadOnly` therefore means
-"directory read-only", and the indicator says so: *Another member is editing the
-directory; you can still record emergency responses.*
-
-**The lease is what keeps directory reconciliation out of ordinary use.** While the
-server is reachable, one person edits the directory and everyone else reads it.
-
-**While an emergency is active, check the head every 30 seconds** instead of the ordinary
-slow interval, fetching or merging newer versions, so connected responders see each
-other's records within about half a minute. Return to the slow interval when the
-emergency ends.
-
-**The lease cannot speak for a disconnected device.** When the server is unreachable
-there is no lease to take, and the app does not pretend otherwise: the session is
-editable, and reconciliation happens on reconnect. Write the UI copy to promise only
-what holds — *while you are connected, one person edits the directory at a time* —
-rather than implying a lock that spans an outage.
-
-Release the lease in the `closeEvent` added by Task 21, alongside the final flush.
-
-**Tests:** a live foreign lease yields `ReadOnly` for the directory while a response
-edit still saves and publishes; a stale lease offers takeover; going unreachable while
-holding a lease leaves the session editable; the head is checked every 30 seconds while
-an emergency is active and at the slow interval otherwise; the heartbeat stops when the
-document closes.
-
-Commit as `feat: server edit lease`.
+Commit as `feat: run the app on the sync-and-save core`.
 
 ---
 
-## Phase 6 — DocumentManager
+### Task 16: Restore the ward list and missing files
 
-### Task 19: DocumentManager test fixture
+**Files:** `src/services/DocumentLibrary.cpp`, `src/widgets/OpenWardDialog.cpp`,
+`tests/services/DocumentLibraryTest.cpp`
 
-**Files:** `tests/services/DocumentManagerFixture.h/.cpp`,
-`src/services/DocumentManager.h/.cpp`
+When the local ward list is empty, or application data was cleared, fetch
+`/me/documents` through `ServerConnection::myDocuments` and add each document this device
+is listed on to the library, downloading it the way a session downloads a missing local
+file - with no base copy, so `validateDownload` checks it directly. When a ward in the list
+has no local file, offer *Fetch Tanglewood Ward from the server* and open it, which
+downloads it.
 
-Later tasks need `DocumentManager` instances, but the constructor asserts
-`Q_ASSERT(!s_instance)` (`DocumentManager.cpp:36-37`) and spins up `UnitLookupService`
-and `BackgroundGeocodingService` (`:33,40`), both of which reach the network.
+**Tests:** clearing the library and settings, then starting, restores every document the
+fake server lists for this device and each opens; a listed document whose local file was
+deleted is fetched on request.
 
-Add a test-only reset hook for `s_instance` and a way to construct without the network
-services — a constructor flag or a small seam; do not add a mocking framework. The
-fixture provides a `QTemporaryDir` standing in for app data, an `IdentityService` registered
-through `setInstanceForTesting` in `init()` and cleared in `cleanup()`, built
-with its test constructor from generated keys (no keychain),
-a `FakeServer`, and a saved document to open, and clears the relevant `AppSettings`
-keys in `init()`.
-
-Commit as `test: DocumentManager fixture`.
+Commit as `feat: restore the ward list from the server`.
 
 ---
 
-### Task 20: One write method
+### Task 17: The sync indicator
 
-**Files:** `src/services/DocumentManager.h/.cpp`,
-`tests/services/DocumentManagerWriteTest.h/.cpp`
+**Files:** `src/widgets/SyncStatusWidget.h/.cpp`, `src/widgets/MainWindow.cpp`
 
-Two write paths remain after Task 5:
+**Quiet and persistent**, in the status bar, following `DocumentSession::syncState()` and
+`isDirectoryReadOnly()`: *Up to date*, *Changes not yet uploaded*, *Server unreachable*,
+*Could not check the server's copy*, and, while the lease is held elsewhere, *Another member
+is editing the directory; you can still record emergency responses.* Nothing for an
+unshared ward. It is never a dialog and never steals focus; banners belong to Task 20's
+container.
 
-| Path | Reached from |
-|---|---|
-| `saveDocument` | `autoSave()` |
-| `saveDocumentOnly()` (`DocumentManager.cpp:354-368`) | `setEmergencyResponse`, called by every `EmergencyManager` mutation |
+Write the copy to promise only what holds - *while you are connected, one person edits the
+directory at a time* - rather than implying a lock that spans an outage.
 
-Add a private `bool writeToDisk(QString* errorMessage)` owning the read-only backstop,
-generation adoption, and the `JsonService::saveDocument` call — keeping the returned
-`SaveResult::header` as the current header, never incrementing the counter itself —
-then a request to `SyncService::publish()`. `saveDocumentOnly()` keeps its "does not
-mark dirty" semantic but routes through it.
-
-**`saveDocumentAs` is gone.** Task 10 replaced it with `DocumentLibrary::exportCopy`,
-which is not a document write at all: it produces a standalone file under a fresh document id,
-and the live document keeps its own path and counters. The
-different-roster block the old Save As needed goes with it, because writing a copy back
-over a shared document is no longer an operation that exists.
-
-**Test:** a `setEmergencyResponse` call and an `executeCommand` call each advance the
-on-disk save counter, proving both paths share the method; `exportCopy` leaves the live
-document's counter untouched.
-
-Commit as `refactor: single document write path`.
+Commit as `feat: sync status indicator`.
 
 ---
 
-### Task 21: Debounced saving
+### Task 18: Conflict resolution dialog
 
-**Files:** `src/services/DocumentManager.h/.cpp`, `src/widgets/MainWindow.h/.cpp`
+**Files:** `src/widgets/ConflictDialog.h/.cpp`, `src/widgets/MainWindow.cpp`,
+`src/services/DocumentLibrary.cpp`, `tests/services/DocumentLibraryTest.cpp`
 
-The real write churn is `EmergencyManager::persistResponseData()`
-(`EmergencyManager.cpp:554-557`), called from 15 sites after Task 5 removes the one at
-`:187` — `:71,271,292,309,330,347,364,386,408,434,455,476,501,525` plus `:659` inside
-`syncFamilies()`. The last matters: adding a family triggers a save from a signal
-handler, so the debounce and the read-only check must both cover it. `autoSave()` also
-fires from `onWardLookupComplete` (`DocumentManager.cpp:279`) and `onStakeLookupComplete`
-(`DocumentManager.cpp:289`).
-Geocoding is already fine — `onFamilyGeocoded` is a silent update and only
-`onGeocodingFinished` saves.
+**The roster is already settled when this dialog opens.** The session took their key,
+generation, and roster exactly (Task 6.5); nothing here touches the roster.
 
-Add a `QTimer` restarted by each save request, with a **settable interval** for tests
-and a synchronous `bool flush(QString* errorMessage)`.
+On `conflictRaised`, present three options, naming who saved and when from
+`Conflict::writerName` and `writeTime`:
 
-**Add `MainWindow::closeEvent`** — there is no `closeEvent` override anywhere in
-`src/widgets/` and no `aboutToQuit` connection, so without one, closing the app inside
-the debounce window discards the pending write. Flush there, and on `newDocument` and
-`openDocument`.
-
-**Update Task 20's test** to call `flush()` before reading the on-disk save counter, since
-saves are now deferred.
-
-**Test:** with a long interval, several rapid mutations followed by `flush()` advance
-the on-disk save counter by exactly 1. Do not build the test around a zero interval —
-whether the writes coalesce would then depend on whether the test spins the event
-loop, which is a race dressed as an assertion.
-
-Commit as `perf: debounce document saves`.
-
----
-
-### Task 22: Ctrl+S flushes and publishes
-
-**Files:** `src/widgets/MainWindow.cpp:322-328`
-
-`onSaveDocument` is a no-op when a path exists, since auto-save covered it. With
-deferred saves that leaves the user's "I saved it" belief wrong during the debounce
-window. Flush the local write, then ask `SyncService` to publish immediately.
-
-**Report only the local failure modally.** If the flush succeeds and the publish
-cannot reach the server, the work is saved; the sync indicator says the rest. A modal
-there would train users to dismiss modals during exactly the outage the design is
-built for.
-
-Commit as `fix: Ctrl+S flushes pending save`.
-
----
-
-### Task 23: Conflict detection and generation adoption
-
-**Files:** `src/services/DocumentManager.h/.cpp`, `src/services/SyncService.cpp`,
-`tests/services/ConflictTest.h/.cpp`
-
-Detection now happens **at publish time against the server version**, not by re-reading
-a file another process might have replaced. `SyncService::publish` sends the base
-version; the server accepts or refuses.
-
-**Every refusal takes one route.** The server refuses only when its version moved past
-the base version, so their content is newer; a revocation is itself a new version, so
-a moved key generation always arrives this way too.
-
-1. **Fetch and validate their version** through Task 16's path, which calls
-   `Reconcile::validateDownload`. `ServerFault` keeps the local file and session
-   untouched and reports it; `Removed` goes to *Removed* below.
-2. **Take theirs** — data key, key generation, and roster exactly as validated (Task 1.9).
-   No roster change of this session needs carrying over or re-running; they all went
-   through the queue.
-3. **Route content** per Task 1.10: a response-only change merges with
-   `ResponseMerge::merge` and publishes; anything else, or no usable base copy, raises
-   Task 25's conflict dialog. Nothing publishes this session's payload over theirs
-   directly.
-
-**Removed.** Reached from `validateDownload`, and also when the server refuses this key
-at the allow-list — which fetches only the header chain, since the blob is no longer
-served to this key, and calls `Reconcile::checkRemoval` — so only a chain-proven removal
-is acted on. Call `DocumentLibrary::forgetRemoved` — the local file, its base copy, and
-every recorded copy still at its path — discard the in-memory session and undo stack,
-remove the library entry and the document's `AppSettings` records (base version, base
-hash, published save counter, copy paths) **while keeping the keychain record's removed-from entry and the
-key generation high-water mark** that makes Open a copy refuse its copies, and tell the user their access to the
-ward was removed, naming the removing member when the held roster has them — or, when
-the proving header was a leave by this person from another of their devices, that they
-left this ward. No recovery copy is written.
-
-**Tests:** a refused publish adopts their key, generation, and roster and raises a
-conflict without publishing this session's payload; a member they removed is not
-restored; a downloaded version failing
-each validation step replaces nothing; a chain-proven revocation deletes the file, the
-library entry, and the settings records, both mid-session and on open — **including
-when the revoker was granted after the anchor**; a withheld header, a substituted
-header, or an allow-list refusal without a proving chain deletes nothing; matching
-versions publish cleanly.
-
-Commit as `feat: publish-time conflict detection`.
-
----
-
-### Task 24: Read-only enforcement
-
-**Files:** `src/services/DocumentManager.h/.cpp`
-
-After the lease, so the test can enter read-only through a real foreign lease rather
-than a seam invented for the purpose. With the archive overlay gone, a lease held
-elsewhere is the only source of read-only, and **it covers the directory only**; a
-proven revocation closes the session entirely (Task 23).
-
-**While an update is required.** `bool requiresUpdate() const`, set and cleared by Task
-16 on each head check, refuses directory commands, `undo`, `redo`, and roster changes
-before they change anything, and stops publishing. `setEmergencyResponse` stays allowed
-and saves locally, so responders keep recording. It clears by itself the moment the
-server again serves a version this build understands.
-
-Add `bool isDirectoryReadOnly() const`. **Refuse before mutating:** `executeCommand`,
-`undo`, and `redo` check it first and return a refusal without touching `m_document` or
-the undo stack (`DocumentManager.cpp:97-101` mutates before `autoSave` today); the UI
-shows *Another member is editing the directory.* `writeToDisk` checks again as a
-backstop. Response edits — everything reaching `setEmergencyResponse` — are never refused
-by it.
-
-**Stay current and keep undo honest.** A directory-read-only session fast-forwards to
-newer versions found by Task 18's head checks. Whenever the in-memory document is
-replaced — a fast-forward, an adoption, Keep theirs — clear the undo stack and reset the
-saved position.
-
-**Automatic updates follow the lease.** Add `bool mayWriteDirectory() const` — true for
-an unshared document, or a shared one whose lease this device holds. `startBatchGeocoding`
-(`DocumentManager.cpp:304`) and the ward and stake lookups start only when it is true;
-`onFamilyGeocoded` (`:326`), `onWardLookupComplete` (`:227`), and `onStakeLookupComplete`
-(`:282`) discard their results when it has since become false. Families still lacking
-coordinates are queued by the next batch. Starting geocoding when the lease is acquired
-is what fills them in.
-
-**Roster operations do not take the lease.** Grant, link, unlink, removal, role changes,
-and leaving go through the `RosterChangeQueue` (Task 31), which applies each on
-top of the server's current version; the lease covers only the directory. They are
-refused only while `requiresUpdate()` is set.
-
-The old overlay is the cautionary tale: it gated `executeCommand`, `undo`, and `redo`
-and left everything else to scattered UI checks, so none of `EmergencyManager`'s
-mutators respected it. Enforce at the write path, not in widgets.
-
-**Test:** with a live foreign lease, grant, remove, set a role, leave, link, and unlink each
-still publish through the queue; with `requiresUpdate` set, each is refused; with a live
-foreign lease, a directory command is refused and leaves the
-in-memory document, the undo stack, and the on-disk save counter unchanged, as do `undo`
-and `redo`, while a `setEmergencyResponse` call advances the counter; a fast-forward
-clears the undo stack; with `requiresUpdate` set, a directory command, `undo`, and `redo`
-are refused and nothing changes, while `setEmergencyResponse` saves locally and nothing is
-published; a later head check that returns an understood version clears `requiresUpdate`
-and publishes the saved response records; batch geocoding does not start
-without the lease; a geocoding result arriving after the lease is lost leaves the
-document unchanged; acquiring the lease starts a batch for families missing coordinates.
-
-Commit as `feat: enforce read-only at the write path`.
-
----
-
-### Task 25: Conflict resolution
-
-**Files:** `src/widgets/ConflictDialog.h/.cpp`, `src/services/DocumentManager.cpp`,
-`tests/services/ConflictTest.cpp`
-
-**The roster is already settled when this dialog opens.** Task 23 took their key,
-generation, and roster exactly; concurrent grants both survive through the queue, so
-nothing here touches the roster.
-
-When `mergeDocuments` returned `nullopt`, so both sides changed the directory, and
-their key, generation, and roster are already adopted — present three options, naming
-who saved and when from the header's
-`lastWriter` fingerprint (looked up in their roster, then in the base copy's — the header
-carries no names — and *a former member* when neither has them) and `lastWriteTime`:
-
-1. **Save mine as a copy** — default, destroys nothing: write this session's version as
-   a recovery copy, then keep theirs
+1. **Save mine as a copy** - default, destroys nothing: write `Conflict::mine` as a recovery
+   copy, then `resolve(KeepTheirs)`
 2. **Keep theirs**: their directory, with the merged response
-3. **Keep mine**: this session's directory, the merged response, and the adopted roster
-   and key, published on top of their version with their save counter + 1 — it passes
-   every server rule and never restores anyone they removed
+3. **Keep mine**: this session's directory, the merged response, and the adopted roster and
+   key, published on top of their version
 
 **Recovery copies** go to `QStandardPaths::DocumentsLocation`, named
-`<Ward> (unsaved changes yyyy-MM-dd HHmm).wardplanning`, under a fresh document id with
-the original as `originDocumentId`, their path recorded like an exported copy's, sealed to
-the **full current roster** — after a refused publish, the roster
-adopted in Task 23 — since they are never published, so sealing to one person would buy
-nothing and would make the copy unreadable if that machine is what failed.
+`<Ward> (unsaved changes yyyy-MM-dd HHmm).wardplanning`, written by `exportCopy` under a
+fresh document id with the original as `originDocumentId`, their path recorded like an
+exported copy's. `exportCopy` seals to the **full current roster** - after a refused publish,
+the adopted one - since a copy is never published, so sealing to one person would buy nothing
+and would make the copy unreadable if that machine is what failed.
 
-They land in Documents, where the user can see them, precisely because ordinary
-documents do not: a recovery copy is an artifact to deal with, not a document the app
-manages. `DocumentLibrary::openCopy` opens one read-only; merging it back is manual
-and the wording says so.
+They land in Documents, where the user can see them, precisely because ordinary documents do
+not: a recovery copy is an artifact to deal with, not a document the app manages.
+`DocumentLibrary::openCopy` opens one read-only; merging it back is manual and the wording
+says so.
 
-**Tests:** **Keep mine** after they granted a person publishes
-a version the fake server accepts, holding this session's directory and still listing
-their new person; **Keep theirs** holds their directory and the merged response; a
-recovery copy opens with every current roster device's key, has a document id different
-from the original's with the original as origin, and its path is recorded.
+**Tests:** a recovery copy opens with every current roster device's key, has a document id
+different from the original's with the original as origin, and its path is recorded.
 
-Commit as `feat: conflict resolution`.
+Commit as `feat: conflict resolution dialog`.
 
 ---
 
-## Phase 7 — Access UI
+## Phase 8 - Access UI
 
 Prefer visible buttons over context menus; the audience is casual users.
 
-### Task 26: Access roster dialog
+### Task 19: Access roster dialog
 
 **Files:** `src/widgets/AccessDialog.h/.cpp`, `src/widgets/MainWindow.cpp`,
 `src/services/AccessEvents.h/.cpp`, `tests/services/AccessEventsTest.h/.cpp`
 
 Lists **people** with their roles, the current person marked, each expandable to their
-devices by device name, each device showing **which device added it and when** — read
+devices by device name, each device showing **which device added it and when** - read
 from the kept header that linked it (its `lastWriter` and `lastWriteTime`).
 
 **What an admin sees on another person:** **Remove**, **Make admin** or **Make member**,
@@ -2697,18 +2868,18 @@ fingerprints). A member sees Details only, and a note naming the ward's admins.
 **On your own person:** **Link a device**, **Unlink** on each of your devices except this
 one (unavailable when you have only one device), **Make member** for an admin stepping
 down (disabled for the last admin while anyone else remains: *Make someone else an admin
-first*), **Leave** (Task 32), **Edit my display name**, and **Rename this device**. Invite
+first*), **Leave** (Task 25), **Edit my display name**, and **Rename this device**. Invite
 at the top, for admins.
 
-**People sharing a display name are flagged** in every member's access list — *Two people
-are named Bob Wilson* — since the admin who granted the second one may be the person the
+**People sharing a display name are flagged** in every member's access list - *Two people
+are named Bob Wilson* - since the admin who granted the second one may be the person the
 warning is meant to catch.
 
 **Every change to who has access is announced, once per sync.** When the app sees
 versions newer than the last one whose changes it announced (tracked per document in
 `AppSettings`), a pure function, `AccessEvents::between(previousHeader, keptHeaders)`,
-turns the kept headers between them into people-level events — added, removed, left, made
-admin, made member — and the banner container (Task 27) shows **one** dismissible notice,
+turns the kept headers between them into people-level events - added, removed, left, made
+admin, made member - and the banner container (Task 20) shows **one** dismissible notice,
 *3 changes to who has access*, expanding to the list: *Bob Wilson added Tom Hale*, *Tom
 Hale left*. Names come from the current roster, then the base copy's, then *a former
 member*. Linking and unlinking a person's own devices is not announced; it shows in the
@@ -2723,7 +2894,7 @@ Commit as `feat: access roster dialog`.
 
 ---
 
-### Task 27: Single key holder notice
+### Task 20: Single key holder notice
 
 **Files:** `src/widgets/MainWindow.h/.cpp`
 
@@ -2749,35 +2920,35 @@ Commit as `feat: single key holder and single admin notices`.
 
 ---
 
-### Task 28: Share a document
+### Task 21: Share a document
 
-**Files:** `src/widgets/ShareDialog.h/.cpp`, `src/services/DocumentManager.cpp`
+**Files:** `src/widgets/ShareDialog.h/.cpp`, `src/services/DocumentManager.cpp`,
+`src/services/DocumentLibrary.cpp`, `tests/services/DocumentLibraryTest.cpp`
 
-A new document is local and private. **Share** registers it with the server: post the
-blob under the document's existing id — its header, listing this device, becomes the
-first allow-list — and record the returned version as the base version (which is what makes it shared) with
-its base copy. The id, file name, and header are unchanged. **If the server refuses the
-id as taken** — someone holding a copy of the managed file registered it first — the app
-gives the document a fresh id, re-encrypts it under that id, renames its local records,
-and shares that instead; the squatted id is abandoned.
+A new document is local and private. **Share** calls `DocumentSession::share` (Task 6.5),
+which registers it under its existing id. **If the server refuses the id as taken** -
+someone holding a copy of the managed file registered it first - the app gives the
+document a fresh id: it seals the current document under that id with the same data key
+and roster, writes it at the library's paths for the new id, moves the library entry and
+records across, opens the new session, and shares that instead; the squatted id is
+abandoned.
 
 What the user gets back is an **invite link** carrying the document id, with a copy
-button. It is not secret and grants no access on its own — say so in the dialog, or
+button. It is not secret and grants no access on its own - say so in the dialog, or
 someone will treat it as one and be afraid to send it.
 
 An already-shared document shows the link rather than offering to share again.
 
-**Test:** sharing leaves the document id, file path, and header bytes unchanged,
-records a base version so `AppSettings::isShared` becomes true, and the server holds
-the document under that id; `FakeServer` refuses a second registration of the same id.
+**Test:** a share refused as `IdTaken` ends with the ward shared under a fresh id, one
+library entry for it, and nothing left under the old id.
 
 Commit as `feat: share a document`.
 
 ---
 
-### Task 29: Request access
+### Task 22: Request access
 
-**Files:** `src/widgets/RequestAccessDialog.h/.cpp`, `src/services/ServerClient.cpp`
+**Files:** `src/widgets/RequestAccessDialog.h/.cpp`, `src/services/ServerConnection.h/.cpp`
 
 Someone opens an invite link, or opens an `.wardplanning` file that carries a document
 id. Offer "Request access". One click posts a request to the server carrying this
@@ -2785,8 +2956,8 @@ device's public keys, the member id and display name, and the device name. A dev
 that already belongs to a person of this document never offers it; that is linking.
 
 **Pending state, with a concrete mechanism:** poll `GET /documents/{id}/requests/mine`
-— authenticated by the requesting device, answering *pending*, *granted*, or
-*withdrawn* — on a slow interval and when the app regains focus. A non-member cannot read
+ - authenticated by the requesting device, answering *pending*, *granted*, or
+*withdrawn* - on a slow interval and when the app regains focus. A non-member cannot read
 the head, so without this endpoint pending, refused, and unknown would look the same. The grant can arrive minutes or hours later,
 and a volunteer told "install this and you'll see the ward list" needs to see *waiting
 for someone to grant access*, not a bare failure.
@@ -2799,25 +2970,25 @@ Commit as `feat: request document access`.
 
 ---
 
-### Task 30: Grant access
+### Task 23: Grant access
 
 **Files:** `src/widgets/GrantAccessDialog.h/.cpp`, `src/services/DocumentManager.cpp`
 
 On opening a document, an admin's app fetches pending requests and presents them. A
 member's app does not offer to grant; the access dialog names the ward's admins instead.
 
-**Remote requests are not verified** (design, *Granting access*) — anyone holding an
+**Remote requests are not verified** (design, *Granting access*) - anyone holding an
 invite link can post one under any name. The dialog shows the name, device name, and when
 the request arrived; the device fingerprint is under Details for anyone who wants it. It
 does not claim the request is verified.
 
 **Flag a display name that matches a current person:** *Bob Wilson already has access.
 If this is Bob's new phone, Bob should link it from his other device instead.* Granting
-anyway is allowed, but the default button is Cancel — a second Bob is a separate person,
+anyway is allowed, but the default button is Cancel - a second Bob is a separate person,
 with none of the first Bob's devices.
 
 **Grant is disabled, with the reason, only while the app is waiting for an update.** Granting
-enqueues a `Grant` change (Task 31) for a new person holding the requesting device, and
+enqueues a `Grant` change (Task 6.6) for a new person holding the requesting device, and
 clears the request once it publishes. The accepted upload is what puts the new
 device on the server's allow-list, so the grant is complete exactly when the publish is;
 until then it shows as pending.
@@ -2831,11 +3002,11 @@ Commit as `feat: grant document access`.
 
 ---
 
-### Task 31: Device linking and in-person invite
+### Task 24: Device linking and in-person invite
 
-**Files:** `src/services/RosterChangeQueue.h/.cpp`, `src/widgets/LinkDeviceDialog.h/.cpp`,
-`src/widgets/PairingDialog.h/.cpp`, `src/widgets/InviteDialog.h/.cpp`,
-`src/services/ServerClient.cpp`, `src/main.cpp`, `tests/services/LinkingTest.h/.cpp`
+**Files:** `src/widgets/LinkDeviceDialog.h/.cpp`, `src/widgets/PairingDialog.h/.cpp`,
+`src/widgets/InviteDialog.h/.cpp`, `src/widgets/AccessDialog.cpp`,
+`src/services/ServerConnection.h/.cpp`, `tests/services/LinkingTest.h/.cpp`
 
 **Pairing is the core's `Pairing` (Task 1.11).** This task builds the flows on it. One
 `PairingDialog` serves both roles and both uses: the initiator shows the pairing code and
@@ -2846,84 +3017,31 @@ then the number; the responder takes the code and then shows the number; each ha
 commitment before posting its keys and verifies the later reveal against that stored
 copy; the initiator fetches and stores the responder's keys before revealing and computes
 its number from that stored copy. Neither re-reads the pairing to check what it already
-has — that is what stops a relay searching for matching values once it has seen
+has - that is what stops a relay searching for matching values once it has seen
 everything.
 
-**Linking.** On the new device, the first screen's **Yes** (Task 8) starts a pairing as
+**Linking.** On the new device, the first screen's **Yes** (Task 10) starts a pairing as
 initiator: *On a device where you already use Ward Planning, choose Link a device and
 enter this code.* On the existing device, **Link a device** takes the code and runs the
 responder side. When the person confirms the numbers match, it adds a **link** change for
-every ward this device belongs to to the `RosterChangeQueue` below. The new device
+every ward this device belongs to to the `RosterChangeQueue` (Task 6.6). The new device
 receives the responder's signed `Handover` (Task 1.11), checks it against the responder
 keys it kept, and calls `IdentityService::joinPerson` with the member id and display name
 it carries. It then **polls `/me/documents`**, adding only the wards the handover names
 and **only when the header that added its device was written by the device it paired
-with** — the writer's verify key equals the responder keys it kept. Nothing about its
+with** - the writer's verify key equals the responder keys it kept. Nothing about its
 identity comes from the server. **Numbers differ**, a failed `revealMatches`, or expiry abandons the
 pairing and says to start again.
 
 **Unlinking.** **Unlink** on one of your devices first finds, in the kept headers, every
-device that device linked — each header that added a device under this person records its
-writer — and asks: *This phone also added "Dell Laptop" on 3 September. Unlink it too?*,
+device that device linked - each header that added a device under this person records its
+writer - and asks: *This phone also added "Dell Laptop" on 3 September. Unlink it too?*,
 defaulting to **Unlink both**. It then adds an **unlink** change for every chosen device and
 every ward to the `RosterChangeQueue`. The unlinked device deletes its copies when its chain check
-proves it (Task 23).
+proves it (Task 6).
 
-**`RosterChangeQueue` carries a change to every ward, not just the open one.**
-
-```cpp
-struct RosterChange
-{
-    enum class Kind { Grant, Link, Unlink, Remove, SetRole, Leave };
-    Kind kind;
-    QString documentId;
-    std::optional<RosterPerson> person;         ///< Grant: the new person
-    std::optional<RosterDevice> device;         ///< Link, Unlink
-    std::optional<MemberId> target;             ///< Remove, SetRole
-    std::optional<RosterPerson::Role> role;     ///< SetRole
-};
-
-class RosterChangeQueue : public QObject
-{
-    Q_OBJECT
-public:
-    RosterChangeQueue(ServerClient& client, DocumentManager& manager, QObject* parent = nullptr);
-    void enqueue(const RosterChange& change);                   ///< one ward
-    void enqueueForEveryWard(RosterChange::Kind kind, const RosterDevice& device);
-    QList<RosterChange> pending() const;
-signals:
-    void pendingChanged();
-};
-```
-
-- **Persisted** in `AppSettings` per document id, so a change survives closing the app,
-  and removed only once its publish is accepted.
-- **Every roster change in the app goes through this queue** — grant (Task 30), link and
-  unlink (this task), removals, role changes, and leaving (Task 32) — **and none
-  needs the lease.** A roster change is never blocked by whoever holds the lease, so a
-  member cannot hold off their own removal, and a thief cannot hold off an unlink.
-- **Each ward, open or not, is processed the same way**, one at a time: fetch its current
-  snapshot (Task 16) and validate it against that ward's base copy with
-  `Reconcile::validateDownload`; apply the change on top of the server's version with the
-  matching `AccessControl` call with this device's fingerprint as writer; encrypt, sign,
-  and publish it conditional on that version. **One change per publish:** each is applied
-  to the server's accepted version and published before the next is built, because a
-  version may advance the key generation by only one. A change the server's version already reflects — the
-  person already removed, the device already linked — is dropped as done.
-- **The open ward** then receives the published version like any newer version: its
-  `DocumentManager` fast-forwards, or, with unpublished directory edits, adopts the new
-  roster and merges silently, since only its own side changed the directory.
-  If this device's local file has no unpublished changes it is replaced by the published
-  version, with base version, base copy, and published save counter updated; otherwise
-  the local file takes the refused-publish route the next time it publishes (Task 23).
-- **Retries** on a backoff when the server is unreachable or the publish is refused; a
-  validation failure stops that ward's change and reports it. **When the change no
-  longer applies to the server's version** — the `AccessControl` call returns nullopt,
-  because this person is no longer an admin, or is now the last admin trying to leave —
-  the change is not retried: it is dropped and the user is told why. A leave dropped this
-  way brings the ward back with the successor picker (Task 32).
-- **Visible while pending:** the access dialog shows *Adding Pixel 8 to 2 more wards…* or
-  *Removing Surface Laptop from 1 more ward…* until the queue is empty.
+**Visible while pending:** the access dialog shows *Adding Pixel 8 to 2 more wards...* or
+*Removing Surface Laptop from 1 more ward...* until the queue's `pending()` is empty.
 
 **In-person invite.** The invitee's app starts a pairing as initiator and includes the
 pairing code in its access request. The granter picks the request, runs the responder
@@ -2939,32 +3057,27 @@ unlinking a device that itself linked another offers both, and choosing both lea
 neither able to open the next generation; a relay that changes the pairing between
 reads is refused by both dialogs; a ward whose adding header was written by a device other
 than the paired one is not accepted by the new device; a ward listed by the fake but absent from the
-handover is not added; a handover signed by any other key is refused;
-with three wards and one open, an unlink reaches all three and the fake server refuses
-the unlinked device on each; a ward whose lease is held elsewhere is retried and
-completes once the lease frees; a pending change survives restarting the queue from
-`AppSettings`; a ward whose local file has unpublished changes keeps them and adopts the
-new roster on next open.
+handover is not added; a handover signed by any other key is refused.
 
 Commit as `feat: device linking and pairing`.
 
 ---
 
-### Task 32: Remove, roles, and leave
+### Task 25: Remove, roles, and leave
 
 **Files:** `src/widgets/AccessDialog.cpp`, `src/services/DocumentManager.cpp`,
-`src/services/ServerClient.cpp`
+`tests/services/RemovalTest.h/.cpp`
 
 **Remove.** An admin's Remove on another person confirms, then enqueues a `Remove` change
-(Task 31), which, on top of the server's current version, runs `AccessControl::remove` —
+(Task 6.6), which, on top of the server's current version, runs `AccessControl::remove` - 
 the person's roster record and every one of their header entries removed, the data key
-rotated and re-sealed for every remaining device — and publishes. The accepted header is
+rotated and re-sealed for every remaining device - and publishes. The accepted header is
 the new allow-list, so the removed person's devices are refused from that moment. **It
 does not need the lease**, so the person being removed cannot delay it by holding one.
 Nobody else approves and nothing waits.
 
-**Unlink another person's device.** An admin's Unlink on someone else's device — a phone
-reported stolen while its owner keeps their laptop — enqueues an `Unlink` change, which
+**Unlink another person's device.** An admin's Unlink on someone else's device - a phone
+reported stolen while its owner keeps their laptop - enqueues an `Unlink` change, which
 rotates the key the same way.
 
 **Roles.** An admin's Make admin and Make member enqueue a `SetRole` change. Neither
@@ -2973,11 +3086,11 @@ rotates the key: who may read is unchanged.
 **Leave.** On your own person, Leave warns that your copies on every device are deleted,
 **hides the ward at once**, and enqueues a `Leave` change. The queued change runs
 `AccessControl::leave` on top of the server's current version and publishes the version
-that drops this person, without rotating the key. **Once it is accepted**, this device runs
-`DocumentLibrary::forgetRemoved` — the same deletion a proven removal does, including the
-removed-from record — and your other devices do the same when their chain check proves
+that drops this person, without rotating the key. **Once it is accepted**, the session's
+*Removed* path runs and then `DocumentLibrary::forgetRemoved` - the same deletion a proven
+removal does, including the removed flag - and your other devices do the same when their chain check proves
 the leave. While the server is unreachable the ward stays hidden and the change waits.
-If the change no longer applies (Task 31), the ward reappears.
+If the change no longer applies (`NoLongerApplies`, Task 6.6), the ward reappears.
 
 **Every leave is the same, including the last person's**: with nobody else remaining, the
 published version lists no one, so the server lists the ward for no device and it does
@@ -2995,7 +3108,7 @@ queue; acceptance is the moment it takes effect on the server.
 
 **The dialog says what removal does and does not do.** Future versions are closed to
 that person the moment the upload is accepted, and their app deletes its local
-copy the next time it connects (Task 23). A copy they took out of the app beforehand,
+copy the next time it connects (Task 6). A copy they took out of the app beforehand,
 or a device that never connects again, keeps what it had.
 
 **Test:** after an admin removes a person, every device of that person is refused by
@@ -3018,9 +3131,9 @@ Commit as `feat: remove, roles, and leave`.
 
 ---
 
-## Phase 8 — Messages, update notice, and documentation
+## Phase 9 - Messages, update notice, and documentation
 
-### Task 33: Failure path messages
+### Task 26: Failure path messages
 
 **Files:** `src/widgets/MainWindow.cpp:56-69,592-595`
 
@@ -3033,16 +3146,17 @@ Three behaviour changes:
   the stored path** (`:68`), so the user finds an empty window and is told nothing.
   Startup now restores the last document from the ward list by id; a failure is
   reported and the record left alone.
-- `autoSaveFailed` reaches a transient `statusBar()->showMessage(...)` (`:592-595`)
-  that the next status message overwrites. A failed **local** save becomes a modal
-  error — a user must not keep working while nothing is being written down.
+- A failed local save (`DocumentSession::saveFailed`, relayed by `DocumentManager` in
+  place of `autoSaveFailed`) reaches a transient `statusBar()->showMessage(...)`
+  (`:592-595`) that the next status message overwrites. A failed **local** save becomes a modal
+  error - a user must not keep working while nothing is being written down.
 - A failed **publish** is never modal. It is the sync indicator's job.
 
 Commit as `fix: explain document load and save failures`.
 
 ---
 
-### Task 34: Developer JSON export
+### Task 27: Developer JSON export
 
 **Files:** `src/widgets/MainWindow.cpp`
 
@@ -3055,7 +3169,7 @@ Commit as `feat: developer decrypted JSON export`.
 
 ---
 
-### Task 35: Update notice
+### Task 28: Update notice
 
 **Files:** `src/services/UpdateChecker.h/.cpp`, `src/main.cpp`, `CMakeLists.txt`,
 `src/widgets/MainWindow.h/.cpp`, `tests/services/UpdateCheckerTest.h/.cpp`
@@ -3076,11 +3190,11 @@ today; Task 0 set the CMake project version to 1.1.0. Pass `PROJECT_VERSION` in 
 compile definition and call `QCoreApplication::setApplicationVersion` from it.
 
 **Cadence:** on startup and then at most once a day while running, the last check time
-kept in `AppSettings`. Silent on any failure — no network, rate limiting, malformed
-JSON — since the next check tries again and a failed update check is never the user's
+kept in `AppSettings`. Silent on any failure - no network, rate limiting, malformed
+JSON - since the next check tries again and a failed update check is never the user's
 problem.
 
-**The notice is a banner**, in the container Task 27 introduced, below the emergency
+**The notice is a banner**, in the container Task 20 introduced, below the emergency
 banner: *A new version of Ward Planning is available.* with **Download**, opening the
 release page through `QDesktopServices::openUrl`, and **Not now**, which hides it until
 the next newer version. The app installs nothing itself; the installer the user already
@@ -3088,9 +3202,10 @@ knows does that.
 
 **When the server has been unreachable for a day or more and a newer version is
 known**, the sync indicator's *Server unreachable* state adds *a newer version is
-available* — the pairing that most likely means the service moved.
+available* - the pairing that most likely means the service moved.
 
-Give `UpdateChecker` the same injectable transport seam as `ServerClient` (Task 15).
+Give `UpdateChecker` an injectable fetch - a function from URL to reply bytes or
+failure - so its tests need no network.
 
 **Tests:** a newer tag raises the notice; an equal or older tag does not; `v1.10.0` is
 newer than `v1.9.0`, which is the comparison string ordering gets wrong; a malformed
@@ -3101,7 +3216,7 @@ Commit as `feat: notify when a newer version is available`.
 
 ---
 
-### Task 36: Documentation
+### Task 29: Documentation
 
 **Files:** `docs/USER_GUIDE.md`, `docs/ARCHITECTURE.md`, `docs/BUILDING.md`,
 `docs/DESIGN_GUIDE.md`, `README.md`, `CLAUDE.md`
@@ -3111,7 +3226,7 @@ Commit as `feat: notify when a newer version is available`.
   alone; linking your phone or another computer, and unlinking a lost one; why every
   roster change is announced; what the single-holder and single-admin notices mean; what the sync indicator's states mean; that the app keeps
   working with no network and uploads when it returns; that during an outage responders
-  cannot see each other's work until it returns; and — prominently — **that access must
+  cannot see each other's work until it returns; and - prominently - **that access must
   be granted before an emergency, because granting needs the server.** Also the update
   notice, and that installing new versions keeps the app reaching the service.
 - **ARCHITECTURE**: the new services, the single write path, save versus publish, the
@@ -3132,9 +3247,9 @@ Commit as `docs: encrypted shared documents`.
 `FakeServer` exists only inside the test executable, so it covers the automated tests,
 not these checks in the running app.
 
-- **No server needed** — check as the phases land: items 1, 8, and 11 (item 11 reaches
+- **No server needed** - check as the phases land: items 1, 8, and 11 (item 11 reaches
   only GitHub).
-- **Companion server needed:** items 2–7, 4a, 4b, 4c, 9, and 10. Their behaviour is already
+- **Companion server needed:** items 2-7, 4a, 4b, 4c, 9, and 10. Their behaviour is already
   covered against `FakeServer` by the automated tests; these runs confirm it end to end.
 
 Ask the user to confirm, in the running app:
@@ -3172,7 +3287,7 @@ Ask the user to confirm, in the running app:
 11. A build whose version is below the latest GitHub release shows the update notice,
     and Download opens the release page.
 
-Do not claim the feature works until the user reports these results — this is exactly
+Do not claim the feature works until the user reports these results - this is exactly
 the kind of feature whose failures are invisible in unit tests.
 
 ---
@@ -3187,7 +3302,7 @@ the kind of feature whose failures are invisible in unit tests.
   member's app deletes its local copy once the header chain proves the removal; copies
   taken out of the app, and devices that never reconnect, are beyond reach.
 - One admin can remove anyone. A compromised admin device can remove every other person;
-  every removal is announced, and recovery is a new ward built from the directory PDFs —
+  every removal is announced, and recovery is a new ward built from the directory PDFs - 
   tags, teams, assets, special needs, notes, and past emergencies are lost.
 - Remote access requests are not verified; an admin can grant one sent by whoever holds a
   forwarded invite link. In-person grants compare a number.

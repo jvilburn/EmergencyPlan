@@ -1,4 +1,4 @@
-# Encrypted Shared Document — Design
+# Encrypted Shared Document - Design
 
 **Date:** 2026-08-30
 **Status:** Design agreed; revised after design review; revised again to hold the
@@ -49,8 +49,8 @@ interface that work has to present.
 
 Two related ideas surfaced during design and are deferred to their own work:
 
-- **Spreadsheet sync** — column-mapped add/remove against an external `.csv`/`.xlsx`
-- **Native talks tracker** — speaking history held in the document itself
+- **Spreadsheet sync** - column-mapped add/remove against an external `.csv`/`.xlsx`
+- **Native talks tracker** - speaking history held in the document itself
 
 ## Decisions
 
@@ -70,12 +70,12 @@ Two related ideas surfaced during design and are deferred to their own work:
 | Revocation | Rotates the data key; the removed member's app deletes its local copy once the signed header chain proves the removal |
 | What the server holds | Ciphertext, public keys, and write metadata. No key material. |
 | Private key storage | qtkeychain (Windows Credential Store, macOS/iOS Keychain, Android Keystore, Linux Secret Service), built from source against the system Qt |
-| Crypto library | libsodium ≥ 1.0.22 from vcpkg, confirmed to contain commit `ad3004e` |
+| Crypto library | libsodium 1.0.22 or later from vcpkg, confirmed to contain commit `ad3004e` |
 | Who is on the roster | People. Each person has one or more linked devices; keys never leave the device that made them. |
 | Roles | Each person is an **admin** or a **member**. The ward's creator is its first admin, and every version that lists anyone lists at least one admin. |
 | Who may grant | Any admin adds a person; only a person links their own devices |
 | Who may remove | Any admin, alone and at once: a person, another person's device, or another admin. An admin promotes and demotes, including stepping down while another admin remains. Every change to who has access is announced to all members. |
-| Leaving | Any person, at once, by publishing the version that drops them — no rotation and nobody else involved. The last admin promotes someone first. |
+| Leaving | Any person, at once, by publishing the version that drops them - no rotation and nobody else involved. The last admin promotes someone first. |
 | Fingerprint confirmation | Shown by default for device keys this device has not seen before |
 | Recovery | Link from another of your devices; with none left, an admin removes the old person and grants you again; persistent notices appear while only one person holds access or only one person is an admin |
 | Identity scope | Per person, across linked devices. Adding a phone is a link from your laptop, not a new grant. |
@@ -93,21 +93,21 @@ Naming this explicitly, because several design choices only make sense against i
 
 **What is being protected, and how much.** The document holds a ward's member directory:
 names, addresses, phone numbers, birth dates, family relationships, and the ward's own
-planning notes. That deserves real protection — it should not sit readable on a server or
-in a stray file — but it is not money, credentials, or secrets anyone would mount an
+planning notes. That deserves real protection - it should not sit readable on a server or
+in a stray file - but it is not money, credentials, or secrets anyone would mount an
 elaborate attack for. Easier routes to the same data already exist: a focused phishing
 attack on a ward leader's church website login yields the whole directory with far less
 effort than anything this design could be attacked with.
 
-So the defences are proportionate. The design protects against the realistic failures —
+So the defences are proportionate. The design protects against the realistic failures - 
 a server operator who can read what it stores, a lost or stolen device, a mistaken grant,
-a file that leaks, a server bug — and keeps each defence cheap in code and invisible in
+a file that leaks, a server bug - and keeps each defence cheap in code and invisible in
 use. **Attacks that need collusion** (two members together, or a member with the server
 operator) **or a chain of unlikely steps are accepted, not defended**, and are listed below
 in a line each. Where a defence would cost usability or much code to stop such an attack,
 the simpler design wins.
 
-**Defended against.** The server operator reading member data — the operator is the
+**Defended against.** The server operator reading member data - the operator is the
 application's author, and the design keeps that from being a matter of trust. Anyone
 who obtains a file without ever having held a key. A revoked person's access to
 future versions, which the server refuses at the allow-list. Rollback to a
@@ -115,35 +115,35 @@ pre-revocation version, which the server refuses by never accepting a lower vers
 or key generation. Silent corruption or truncation.
 
 **Detected, not prevented.** Tampering with a local file's header, including its
-document id — the header is bound as associated data, so a modified local file fails
+document id - the header is bound as associated data, so a modified local file fails
 to decrypt rather than quietly attaching itself to a different document.
 
 **Inside the trust boundary.** Every member can read everything and write whatever they
 like into the document. Admins also decide who has access: an admin grants, removes, and
-changes roles alone. A ward's admins are its bishopric and clerks — the people who would
-hold that authority anyway — and the design trusts them with it.
+changes roles alone. A ward's admins are its bishopric and clerks - the people who would
+hold that authority anyway - and the design trusts them with it.
 
 **Accepted: one compromised admin device can remove everyone.** Removal deletes the
 removed person's local copies, so an admin device in hostile hands could remove every
 other person and leave the ward's data only on itself. This was weighed against
 requiring a second admin's approval and judged the better trade for a ward: the
 realistic threat is a lost device, not a hostile one, and what a lost device needs is
-someone able to remove it quickly and alone. A hostile use is visible at once — every
+someone able to remove it quickly and alone. A hostile use is visible at once - every
 roster change is announced to every member. **Recovery is a new ward:** someone creates a
 fresh document, imports the ward directory and ministering PDFs again, and grants people
-again; the old ward is abandoned to whoever took it. What the PDFs do not recreate — tags,
-teams, emergency assets, special needs, notes, and past emergency records — is lost.
+again; the old ward is abandoned to whoever took it. What the PDFs do not recreate - tags,
+teams, emergency assets, special needs, notes, and past emergency records - is lost.
 Content vandalism, already possible for any member, is recovered the same way.
 
 **Accepted: a stolen, unlocked device acts as its owner.** It can read everything, write
 content, unlink its owner's other devices, and link devices of the thief's own under its
-owner's name — and, on an admin's device, anything an admin can do. Any admin removes it:
+owner's name - and, on an admin's device, anything an admin can do. Any admin removes it:
 the device alone, or its whole person, who is then granted again. Planted devices are
 shown for what they are: the access list says which device added each one, and unlinking
 a device offers to unlink every device it added.
 
 **Cleaned up, best-effort.** A revoked member's local copy, and every copy the app wrote
-from it — exported copies and recovery copies still where the app put them. Their app
+from it - exported copies and recovery copies still where the app put them. Their app
 deletes them the next time it connects and verifies the revocation, and refuses to open
 a copy of that document afterwards, which covers the ordinary case of a released leader
 who would never think to remove them. A copy moved or sent elsewhere, or a device that
@@ -152,8 +152,8 @@ never connects again, keeps what it had.
 **Accepted: a hostile server could show a device a ward it never joined.** Device public
 keys appear in every header, so an operator could build a look-alike ward containing a
 member's device and let it arrive with the ward list after a reinstall; data typed into it
-would be readable by the operator. The server's own rule — a device is added only where it
-asked or paired — is what normally prevents this, and an operator does not run its own
+would be readable by the operator. The server's own rule - a device is added only where it
+asked or paired - is what normally prevents this, and an operator does not run its own
 rule. Keeping a separate record of every ward this device asked for was judged more
 machinery than the case is worth; a linked device does take its identity and its ward list
 from the pairing, not from the server.
@@ -180,8 +180,8 @@ therefore how many people are on it and how many devices each uses; which device
 when, and from what address; the display name and device name attached to an access
 request, a pairing, or a lease. The server learns the
 shape of a bishopric without being able to read the directory. This is comparable to
-what a sync provider learned in the folder-based design — it also saw account
-identities and file sizes — with the difference that the operator is now the
+what a sync provider learned in the folder-based design - it also saw account
+identities and file sizes - with the difference that the operator is now the
 application's author rather than a provider the ward already uses. The user guide says
 so plainly.
 
@@ -217,7 +217,7 @@ reader's entry, and check versions without decrypting anything.
   payload hash
 
 The write time lets the conflict dialog say *who* saved and *when*. The name itself
-is looked up by fingerprint in the reader's own roster — the header carries no names.
+is looked up by fingerprint in the reader's own roster - the header carries no names.
 
 **Parsing is strict; a newer version is refused, never guessed at.** One format
 version, in the header, covers the whole file: the header's fields, how the data key is
@@ -235,7 +235,7 @@ changes and share your work.* **Emergency response edits stay available** and ar
 locally, so responders keep working through an update; they merge after the app is
 updated. The update notice offers the download. The state is **checked again on every
 server check**, so it lasts only while the server keeps presenting a version this app
-cannot read — a server that presents a false one once cannot freeze the app beyond that. The server supports a format before any app writes it.
+cannot read - a server that presents a false one once cannot freeze the app beyond that. The server supports a format before any app writes it.
 
 **The server address lives in the app; the document carries only its id.** A file
 handed over on a USB stick still knows which document it is, so the recipient's app
@@ -248,12 +248,12 @@ existing document follows without being rewritten.
 **One id for the document's whole life.** The id names the local file, keys the local
 record, and is bound into the header from the first save. Sharing registers that same
 id with the server, so nothing is renamed, re-keyed, or re-encrypted when a document
-is shared. Whether a document is shared is a property of the local record — it has a
-base version — not of the id.
+is shared. Whether a document is shared is a property of the local record - it has a
+base version - not of the id.
 
 **Copies get a fresh id and a fresh key, and remember their origin.** An exported copy or
-recovery copy is encrypted under a new data key — so nobody who once held the ward's key,
-such as someone who has since left, can read it — and carries a new random id the server
+recovery copy is encrypted under a new data key - so nobody who once held the ward's key,
+such as someone who has since left, can read it - and carries a new random id the server
 has never seen, so a copy can never publish itself
 into the ward's document, and its local records never collide with the original's. It
 also carries the original's id as its origin, bound in the associated data like every
@@ -281,7 +281,7 @@ XChaCha20-Poly1305's extended nonce exists precisely so random nonces are safe
 without counters or stored state. This matters more than it looks: the data key is
 long-lived, so a repeated nonce would XOR two versions of the ward directory against
 each other and expose the Poly1305 one-time key. The design's own concurrency
-scenario — two people saving at the same save counter — is exactly the case a
+scenario - two people saving at the same save counter - is exactly the case a
 counter-derived nonce would break.
 
 **The header is bound as associated data.** Format version, document id, key
@@ -290,8 +290,8 @@ and the admin list are passed to the AEAD as associated data. Anyone holding the
 detects header tampering on decrypt.
 
 **Every write re-seals.** A save rebuilds every recipient entry from the roster rather
-than carrying the old ones forward, so a sealed key that was written wrong — by a bug or a
-tampered app — stops locking its owner out of every later version. Sealing a 32-byte key
+than carrying the old ones forward, so a sealed key that was written wrong - by a bug or a
+tampered app - stops locking its owner out of every later version. Sealing a 32-byte key
 to a handful of devices costs nothing worth saving.
 
 **Every write is signed.** The writer signs the associated data followed by the payload
@@ -303,7 +303,7 @@ verified on its own, without the payload.
 
 **A header verifies its own signature.** It carries its writer's public keys, bound in
 the associated data and checked against the last-writer fingerprint when parsed, so the
-signature is checked the same way everywhere — on open, on download, and in the chain —
+signature is checked the same way everywhere - on open, on download, and in the chain - 
 without looking the writer up anywhere first. *Who* the writer is then comes from the
 roster, or, for a leave, from the header before it: a leaver has just left the roster, and
 the chain proves they were in it. Members check on every open that the payload hash
@@ -311,7 +311,7 @@ matches the payload and the signature verifies, and a version whose header and r
 disagree in any way is refused (see *The payload roster*).
 
 **Roles live in the header.** A removed device can no longer decrypt, so it proves its
-removal from headers alone — and that proof has to show the remover was an admin. The
+removal from headers alone - and that proof has to show the remover was an admin. The
 header therefore carries the admin list in the clear, beside the recipient entries, and
 the payload roster carries the same roles for display. Like member ids, the admin list
 names no one.
@@ -334,19 +334,19 @@ person on the previous header's admin list. The next header is valid when:
    device, reaching the cap would take one device some 1,600 years of continuous
    publishing. The chain itself requires only a rise, because a client walks it with
    headers missing.
-3. Its writer device appears among its own recipients — except in a leave (rule 7).
+3. Its writer device appears among its own recipients - except in a leave (rule 7).
 4. Every device fingerprint belongs to exactly one person and matches the entry's own
    keys; no two entries share an X25519 key or a verify key; a device that appears in
-   both headers has the same member id, X25519 key, and verify key in both — a device's
+   both headers has the same member id, X25519 key, and verify key in both - a device's
    keys never change; every admin is a person in the header; and a header that lists
    anyone lists at least one admin.
 5. A device added to a person who was already present is written by one of that
-   person's devices. Only a person links their own devices — an admin cannot attach a
+   person's devices. Only a person links their own devices - an admin cannot attach a
    device to someone else.
 6. A device dropped while its person remains is dropped by another of that person's
    devices or by an admin, and the key generation increases. A person's last device is
    never dropped this way; that removes the person.
-7. A person dropped entirely — all their devices — is dropped by an admin, and the key
+7. A person dropped entirely - all their devices - is dropped by an admin, and the key
    generation increases; or the writer is that person, leaving: nothing else in the
    membership changes and the key generation stays the same.
 8. A person added is added by an admin.
@@ -363,15 +363,15 @@ app deletes its copies, and the server stops serving them the moment the leave l
 next removal or unlink rotates as usual.
 
 **Only membership changes are kept in the chain.** A header's *membership* is its set of
-recipients — member id, device fingerprint, and verify key — together with its admin
+recipients - member id, device fingerprint, and verify key - together with its admin
 list. A header whose membership matches the previous
 header's changes nothing the rule checks: the next writer is looked up in an identical list, drops are measured against
 an identical list, the key generation cannot have moved, and increasing save counters
 hold across the gap. So the server keeps a header only when membership changed, plus
 the current one, and the chain grows with grants and removals rather than with every
 publish. There is no age limit; a handful of changes a year stays small indefinitely. This is what lets a removed member's app confirm its
-removal — including when the admin who removed it was granted or promoted after its
-last sync — on evidence the server cannot forge.
+removal - including when the admin who removed it was granted or promoted after its
+last sync - on evidence the server cannot forge.
 
 Verify keys are public, and the server needs them anyway to authenticate devices, so
 carrying them in the header reveals nothing new.
@@ -380,11 +380,11 @@ carrying them in the header reveals nothing new.
 `{member id, display name, role, devices}`, each device
 `{device name, X25519 public key, Ed25519 verify key, fingerprint}`. The header's
 recipient entries are an index into it, keyed by device fingerprint. This is what makes
-revocation implementable — a fingerprint is one-way, so re-sealing to the remaining
+revocation implementable - a fingerprint is one-way, so re-sealing to the remaining
 devices requires their actual public keys, and only the roster has them. **The header and the roster must match exactly**: every recipient entry has a roster
 device with the same member id and verify key, and every roster device has exactly one
 entry, and the header's admin list names exactly the roster's admins. A version that
-fails this is refused like any other invalid version — only a bug
+fails this is refused like any other invalid version - only a bug
 or a tampered app could write one, and an unattributable key must never sit on the
 access list.
 
@@ -418,14 +418,14 @@ device and then sign in its name.
 **What header tampering can and cannot do.** Adding a recipient entry requires
 sealing the data key, which requires already holding it, so an outsider cannot add
 themselves. Someone who edits a local file's header to strip entries produces a file
-that fails authentication on the next open. Rollback — presenting an old, internally
-consistent version whose generation predates a revocation — is refused in two places:
+that fails authentication on the next open. Rollback - presenting an old, internally
+consistent version whose generation predates a revocation - is refused in two places:
 
 1. The server never accepts an upload at a lower version or key generation, so the
    shared copy cannot be rolled back at all.
 2. A **key-generation and save-counter high-water mark** per document, kept in the device's keychain
    record beside its keys, so it survives an uninstall and cleared application data and
-   is never deleted — not even when this device is removed from the ward. A local file or
+   is never deleted - not even when this device is removed from the ward. A local file or
    a server version presenting an older generation is refused before it is ever used.
 
 **Post-quantum.** X25519 is exposed to harvest-now-decrypt-later, and hybrid
@@ -434,7 +434,7 @@ holding the file today and a quantum computer later, against data with a
 few-year sensitivity horizon, so this design stays classical. A hybrid entry can be
 added later as a new format version, which every member's app picks up by updating.
 
-**Compression before encryption** is safe here — there is no adaptive
+**Compression before encryption** is safe here - there is no adaptive
 chosen-plaintext channel, so CRIME-style attacks do not apply. It does leak
 approximate ward size to the server, which is accepted.
 
@@ -446,9 +446,9 @@ mis-stating. `crypto_sign` (Ed25519) authenticates the app to the server and sig
 
 **Every signature is tagged with what it is for.** One signing key signs several kinds
 of message, and a signature alone says only that the key approved some bytes. So each
-signed message begins with a short ASCII tag and a single 0x00 byte — `auth` for a
+signed message begins with a short ASCII tag and a single 0x00 byte - `auth` for a
 login challenge, `request` for a mutating request, `header` for a document header,
-`pairing` for what a device tells the device it has just paired with — and verification
+`pairing` for what a device tells the device it has just paired with - and verification
 prepends the tag it expects. The tag is never stored or sent; the signer and verifier
 each supply it. This matters because the server chooses the login challenge: without
 tags, a hostile server could send challenge bytes that are exactly a header of its own
@@ -458,8 +458,8 @@ starts with `auth` 0x00 and can never verify as document evidence.
 
 **Library pin.** CVE-2025-69277 (`ge25519_is_on_main_subgroup` missing a `Y == Z`
 check) does not affect any call this design makes. The build requires libsodium 1.0.22
-or later regardless — the vcpkg baseline this project started from builds 1.0.20,
-which predates the fix — and integration confirms `ad3004e` is an ancestor of the
+or later regardless - the vcpkg baseline this project started from builds 1.0.20,
+which predates the fix - and integration confirms `ad3004e` is an ancestor of the
 release used.
 
 ---
@@ -476,9 +476,9 @@ cost nothing and keep the sealing key and the signing key each doing one job.
 The first screen asks one question: **"Do you already use Ward Planning on another
 device?"**
 
-- **No** — the device creates a new person: a random member id and a display name,
+- **No** - the device creates a new person: a random member id and a display name,
   editable later. It then requests access to a ward as that person.
-- **Yes** — the device joins an existing person by linking. It shows a pairing code;
+- **Yes** - the device joins an existing person by linking. It shows a pairing code;
   the person enters it on a device they already use, confirms that both screens show the
   same six-digit number, and that device adds this one to every ward they belong to.
 
@@ -489,8 +489,8 @@ first Bob's devices and a role of its own.
 **Linking a device.** The two devices pair by **comparing a number shown on both
 screens**, the way Bluetooth devices pair:
 
-1. The new device picks a random value and posts a *commitment* — a hash of its public
-   keys and that value — with its device name, and shows a short pairing code, which is
+1. The new device picks a random value and posts a *commitment* - a hash of its public
+   keys and that value - with its device name, and shows a short pairing code, which is
    only a lookup handle and not a secret.
 2. The person enters that pairing code on a device they already use, which posts its own
    public keys to the pairing.
@@ -499,8 +499,8 @@ screens**, the way Bluetooth devices pair:
 4. Both devices show the same six-digit number, computed from both devices' keys and the
    random value: *Do both screens show 482 193?* The person confirms on both.
 
-Each device keeps the message it read from the other — the existing device keeps the
-commitment before posting its keys, the new device keeps those keys before revealing —
+Each device keeps the message it read from the other - the existing device keeps the
+commitment before posting its keys, the new device keeps those keys before revealing - 
 and checks against what it kept, never against a value re-read later. The server relays
 every step and can substitute keys, but it must commit to a substitute before it sees the
 existing device's keys, and it learns the random value only after that, so it cannot
@@ -508,28 +508,28 @@ search for a match: a substitution succeeds with a one-in-a-million
 chance per attempt, and every failed attempt shows the person two different numbers.
 Each pairing step can be written once only, and a pairing expires after ten minutes.
 
-Once confirmed, the existing device tells the new device who it now is — member id,
-display name, and the wards it is being added to — **signed with the key the new device
+Once confirmed, the existing device tells the new device who it now is - member id,
+display name, and the wards it is being added to - **signed with the key the new device
 just authenticated**, so that identity comes from the pairing and never from the server.
-It then adds the new device under its own person in every ward document it belongs to. A background queue carries the change to each ward — the
+It then adds the new device under its own person in every ward document it belongs to. A background queue carries the change to each ward - the
 open one at once, the others by taking each ward's lease in turn, applying the change on
-top of the server's version, and publishing — retrying until every ward has it, and
+top of the server's version, and publishing - retrying until every ward has it, and
 showing what is still pending. The new device waits for its wards to appear, and learns
 its member id and display name from the first ward's authenticated roster, never from
 the server.
 
-**Unlinking a device** — a lost phone, a retired laptop — is done by the same person
+**Unlinking a device** - a lost phone, a retired laptop - is done by the same person
 from any other of their devices, or by any admin, rotates the key in every ward through the same
-background queue — so a lost phone is cut off everywhere within minutes, not when each
-ward is next opened — and deletes the unlinked device's local copy when it next connects. A person's last device cannot be unlinked; that is
+background queue - so a lost phone is cut off everywhere within minutes, not when each
+ward is next opened - and deletes the unlinked device's local copy when it next connects. A person's last device cannot be unlinked; that is
 leaving. **Unlinking a device also lists every device it linked**, taken from the kept
-headers that recorded each link and its writer — *This phone also added "Dell Laptop" on
-3 September. Unlink it too?* — with **Unlink both** as the default, so a device planted from
+headers that recorded each link and its writer - *This phone also added "Dell Laptop" on
+3 September. Unlink it too?* - with **Unlink both** as the default, so a device planted from
 a stolen phone does not outlive the phone.
 
 **Identity outlives an uninstall.** The keypairs live in the platform credential store,
 which an uninstaller does not touch, so a reinstall finds the same device identity and
-the same access. Application data is less durable, and the ward list sits there — which is
+the same access. Application data is less durable, and the ward list sits there - which is
 why the ward list is fetched from the server rather than kept only locally. The
 key-generation high-water marks live in the keychain record with the keys, for the same
 reason.
@@ -537,8 +537,8 @@ reason.
 There is no passphrase-protected identity export: linking covers new devices, and
 an admin's grant covers losing all of them.
 
-`KeyStore` is a narrow wrapper — `store`, `load`, `remove`, with `load` reporting
-not-found distinctly — over qtkeychain, whose
+`KeyStore` is a narrow wrapper - `store`, `load`, `remove`, with `load` reporting
+not-found distinctly - over qtkeychain, whose
 job is to present that library's asynchronous jobs as something the document-open
 path can sequence cleanly.
 
@@ -549,7 +549,7 @@ no user present. So identity resolution is a startup precondition: until the key
 are loaded or created, no document is created and no save is attempted.
 
 **A failed encrypted save is a modal error.** Today `autoSaveFailed` reaches a
-transient `statusBar()->showMessage(...)` that the next status message overwrites — a
+transient `statusBar()->showMessage(...)` that the next status message overwrites - a
 user would not notice their work had stopped being saved. A failed *upload* is not an
 error and does not interrupt: it is a sync state, described below.
 
@@ -573,10 +573,10 @@ generation counter last seen; pending access requests; and the current lease.
 list: the devices allowed to read and write are exactly the `{member id, device
 fingerprint, verify key}` entries of the latest accepted header. Every accepted header
 has already passed the chain rule, so a grant, link, unlink, removal, or leave takes
-effect on the server in the same upload that makes it — there is no second step to
+effect on the server in the same upload that makes it - there is no second step to
 fail, and no window in which a removed person can still fetch. Separately, short-lived pairings, which belong to no document.
 
-**The interface it must present** — shape rather than a wire specification, which the
+**The interface it must present** - shape rather than a wire specification, which the
 implementation plan carries:
 
 | Endpoint | Purpose |
@@ -591,10 +591,10 @@ implementation plan carries:
 | `GET /pairings/{code}` | Read a pairing's current state; the two parties only |
 | `PUT /pairings/{code}/responder` | The existing device or granter posts its public keys; member authentication; written once |
 | `PUT /pairings/{code}/reveal` | The new device or invitee reveals its keys and random value; written once |
-| `PUT /pairings/{code}/handover` | The existing device posts its signed handover — member id, display name, and wards; written once, and completing it is what permits the new device to be added under that person |
+| `PUT /pairings/{code}/handover` | The existing device posts its signed handover - member id, display name, and wards; written once, and completing it is what permits the new device to be added under that person |
 | `POST /documents/{id}/requests` | Ask for access; device authentication, the only write open to a non-member |
 | `GET` and `DELETE /documents/{id}/requests` | List and clear, for members |
-| `GET /documents/{id}/requests/mine` | The requesting device's own request status — pending, granted, or withdrawn |
+| `GET /documents/{id}/requests/mine` | The requesting device's own request status - pending, granted, or withdrawn |
 | `GET /me/documents` | The documents whose current header lists this device, so a reinstall restores the ward list |
 
 **A download is one consistent snapshot.** The version, its header, and its blob come
@@ -604,7 +604,7 @@ A payload hash that does not match therefore always means something is wrong.
 
 **Two authentication levels.** *Device* authentication proves only that the caller holds
 a key; it is enough to list the documents that key is on, to check one's own access
-request, and to start a pairing or post an access request — all things a device does before it is
+request, and to start a pairing or post an access request - all things a device does before it is
 a member. *Member* authentication also requires the device to be in the document's
 current header, and every other document endpoint requires it.
 
@@ -616,20 +616,20 @@ endpoint's route, the session token, the document id (empty for a pairing), and 
 then not enough to change anything, and a captured signature cannot be replayed against
 a different document, a different endpoint, or in another session. The canonical bodies are part of the protocol
 (`ServerContract.cpp`); an upload's body is its base version and its header's signed
-bytes and signature, which bind the blob through the payload hash. Posting an access request is the only write open to a non-member — by
-definition, since it is how someone asks to become one — and it still carries device
+bytes and signature, which bind the blob through the payload hash. Posting an access request is the only write open to a non-member - by
+definition, since it is how someone asks to become one - and it still carries device
 authentication, which is what rate limiting counts against.
 
 **Rules the server enforces.** Version and key generation never decrease. Writes are
 conditional on the client's starting version. Only devices in the current header read
 the blob or write. Devices that were once in a header may still read the header chain,
 so a removed device's app can fetch and verify the headers that removed it. Every
-uploaded header must extend the chain under the same rule clients apply — so a header
+uploaded header must extend the chain under the same rule clients apply - so a header
 that grants, removes, or changes a role when its writer is not an admin, adds a device to
 another person, or drops another person's device when its writer is not an admin, is
 refused. **A device joins only a document it asked to join.** The server accepts a header that adds
 a device only when that device has a pending access request for this document, or has
-completed a pairing as initiator with a device of the person it is added under — which
+completed a pairing as initiator with a device of the person it is added under - which
 stays valid for adding that device under that person in any of their wards. The first
 header of a new document, listing only its creator, is exempt.
 Anyone who has seen a header knows a device's public keys, so without this a stranger
@@ -658,12 +658,12 @@ central mechanism, and most of the behaviour below follows from it.
 **The local record**, kept per document id alongside the key-generation high-water
 mark, holds the server version this file was last reconciled with and the local save
 counter at that moment. The base version tells "the server moved"; a local file whose
-save counter is above the recorded one tells "I moved" — it has unpublished changes.
+save counter is above the recorded one tells "I moved" - it has unpublished changes.
 Both are exact, neither relies on timestamps, and because they are stored, a pending
 upload survives closing the app.
 
 **The base copy.** Beside the local file, the app keeps the file exactly as it stood
-at the base version — written whenever a download replaces the local file or a publish
+at the base version - written whenever a download replaces the local file or a publish
 succeeds. Its payload hash is recorded in the local record, and a base copy that does
 not match is ignored. The base copy is what lets a merge tell *what changed here* from
 *what changed there*, including deletions, without timestamps on any record.
@@ -692,11 +692,11 @@ version of them ever has to be merged with another.
 assignments, and notifications can be recorded by any member at any time, online or
 offline. An emergency is when several responders work at once, and the response merge
 below is built for exactly that, so the lease would only force all but one of them
-into read-only — or teach them to disconnect in order to record a contact. A response
+into read-only - or teach them to disconnect in order to record a contact. A response
 edit publishes like any other; a refusal takes the refused-publish route and merges.
 
-**While an emergency is active, apps check for newer versions often** — every 30 seconds
-rather than the ordinary slow interval — and fetch or merge what they find, so connected
+**While an emergency is active, apps check for newer versions often** - every 30 seconds
+rather than the ordinary slow interval - and fetch or merge what they find, so connected
 responders see each other's records within about half a minute.
 
 Offline, a member edits anyway, because that is the whole point of the local file. The
@@ -704,26 +704,26 @@ lease is a server construct and cannot speak for a disconnected device, so the p
 it makes is the one it can keep: while the server is reachable, one writer of the
 directory.
 
-**Read-only is enforced in `DocumentManager`, before anything changes**, not by
+**Read-only is enforced in `DocumentSession`, before anything changes**, not by
 disabling widgets. Failing to hold the lease is the only source of read-only once the
 archive overlay is gone, and it never blocks a response edit. A directory edit, undo, or
 redo in a read-only session is refused at its entry point, before the document or undo
 stack moves, and the user is told another member is editing the directory; the single
 write method checks again as a backstop. Refusing only at the write would let the screen
-show an edit that is never saved — or saved later over a newer version once the lease
+show an edit that is never saved - or saved later over a newer version once the lease
 frees. The old overlay shows the other failure: it gated `executeCommand`, `undo`, and
 `redo`, left everything else to scattered UI checks, and none of `EmergencyManager`'s
 mutators consulted it at all.
 
 **A read-only session stays current.** It checks for newer versions on the ordinary
-interval — every 30 seconds during an emergency — and fast-forwards to what the lease
+interval - every 30 seconds during an emergency - and fast-forwards to what the lease
 holder publishes; it has no directory changes of its own, and its response changes
 merge. **Replacing the in-memory document clears the undo stack**, so an undo is never
 applied to a version it was not recorded against.
 
 **Automatic updates are directory edits, and follow the lease.** Geocoding and ward and
 stake lookup change families and ward details on their own, and they run the moment the
-network returns — exactly when a responder reconnects. So they start only on a device
+network returns - exactly when a responder reconnects. So they start only on a device
 that may write the directory: an unshared document, or a shared one whose lease this
 device holds. Results arriving after that stops being true are discarded, and families
 still missing coordinates are picked up by the next batch on a device that holds the
@@ -735,7 +735,7 @@ local file would be replaced by a server version: the header still includes this
 identity, the header chain from the base copy's header holds, the key unseals, the
 payload hash matches, the payload decrypts, the signature verifies against the
 roster, and the key generation passes the local high-water mark. The chain starts at
-the base copy — the last version this machine and the server agreed on — because local
+the base copy - the last version this machine and the server agreed on - because local
 saves never reach the server and so are not in its chain. Without
 a usable base copy the chain check is skipped for a version this identity can decrypt,
 since decryption and the signature check it directly. The operator is in
@@ -744,15 +744,15 @@ serving something wrong; any failure keeps it untouched and is reported as a ser
 fault.
 
 **A refused publish always takes the same route.** The server refuses only when its
-version has moved past this file's base version, so someone else's content is newer —
+version has moved past this file's base version, so someone else's content is newer - 
 and a revocation is itself a new version, so a moved key generation always arrives
 this way. The app:
 
 1. Downloads their version and validates it completely before anything is replaced.
 2. Takes their data key, key generation, and roster exactly. A session's local file
-   never holds an unpublished roster change — every grant, link, unlink, removal, role
+   never holds an unpublished roster change - every grant, link, unlink, removal, role
    change, and leave is built on the server's version and published on its own (see
-   *Revoking access*) — so there is nothing of ours to carry over, and theirs is the one
+   *Revoking access*) - so there is nothing of ours to carry over, and theirs is the one
    consistent with the server's allow-list. Two admins granting at the same time both
    succeed because each grant is re-applied on top of the other's when refused.
 3. Carries this session's content changes through the ordinary paths: the silent
@@ -767,7 +767,7 @@ base copy there is no trusted starting point, and nothing is deleted. If
 every link holds and the chain reaches a header with no entry for this identity, the
 removal is proven: the app deletes the local file and every recorded copy of it still at
 its path, records that it was removed from this document, discards the in-memory session,
-removes the ward from the list, and tells the user their access was removed — naming
+removes the ward from the list, and tells the user their access was removed - naming
 the member when their name is in the roster it holds.
 
 Anything short of that deletes nothing. A broken link, a missing header, or a chain
@@ -797,7 +797,7 @@ rewrites and re-encrypts the whole file. `autoSave()` additionally fires from
 `onFamilyGeocoded` is a silent update and only `onGeocodingFinished` saves.) The
 debounce writes after a few seconds of idle, plus an immediate save on close.
 
-**Ctrl+S forces an immediate flush** — a local save and a publish attempt. It is
+**Ctrl+S forces an immediate flush** - a local save and a publish attempt. It is
 currently a no-op when a path exists, which stops being acceptable once saves are
 deferred.
 
@@ -806,17 +806,17 @@ intact.
 
 ### On conflict
 
-Both sides changed the directory — the one case the merge cannot decide. By the time the
+Both sides changed the directory - the one case the merge cannot decide. By the time the
 dialog appears their key, generation, and roster are already adopted and the emergency
 response already merged; the choice is only whose directory to keep. The app names who
 saved and when, taking the name from the header's last-writer fingerprint looked up in
 the roster, then offers:
 
-1. **Save mine as a copy** (default — destroys nothing): writes this session's version
+1. **Save mine as a copy** (default - destroys nothing): writes this session's version
    as a local copy, then takes theirs. The copy is never uploaded.
 2. **Keep theirs**: takes their directory.
 3. **Keep mine**: publishes a new version on top of theirs with this session's
-   directory, the merged response, and the adopted roster and key — so it passes every
+   directory, the merged response, and the adopted roster and key - so it passes every
    server rule and never restores anyone they removed.
 
 The internet is up whenever this dialog appears, so the two people can talk and settle
@@ -826,8 +826,8 @@ anything finer by hand.
 `Tanglewood Ward (unsaved changes 2026-08-30 1441).wardplanning`, with a fresh document id.
 They land somewhere visible precisely because ordinary documents do
 not: a recovery copy is an artifact to be dealt with, not a document the app manages.
-They are sealed to the **full current roster** — after a refused publish, the roster
-adopted from the server — since they are never published, so re-keying them to one
+They are sealed to the **full current roster** - after a refused publish, the roster
+adopted from the server - since they are never published, so re-keying them to one
 person would buy nothing and would make the copy unreadable if that machine is the
 thing that failed.
 
@@ -851,7 +851,7 @@ half a minute; disconnected, they merge on reconnect.
 **Work is partitioned by convention, not by enforcement.** A response is already
 organised by `ResponseArea` and `Team`, with tasks assigned to a team or a person, so
 responders are working different families to begin with. The app does not restrict a
-device to its assigned area — that would be UI and explanation spent on a rule people
+device to its assigned area - that would be UI and explanation spent on a rule people
 already follow, and it would block the person who steps in to cover someone else.
 
 **When two versions meet, response records merge three ways, silently.** The app compares its
@@ -864,7 +864,7 @@ user to decide at two in the morning.
 | Any record or field changed on one side only | That side's value, including a deletion |
 | Changed on both sides to the same value | That value |
 | Contact attempts | Keyed by `ContactAttemptId`; every attempt from either side is kept, and an attempt edited on one side keeps that edit |
-| A single value changed differently on both sides — a family's contact status, a task field, the response's name or start or end time | The reconnecting device's value |
+| A single value changed differently on both sides - a family's contact status, a task field, the response's name or start or end time | The reconnecting device's value |
 | Task categories | A set: a category added on either side is kept, one removed on either side is removed |
 | An emergency started on one side only | Kept |
 | An emergency started independently on both sides | One response: records merged by family, name and start time from the server's side |
@@ -878,11 +878,11 @@ responders' devices cannot be relied on to agree about the time.
 **Which path a refused publish takes is decided against the base copy.** Everything
 outside the emergency response is compared on each side:
 
-- **At most one side changed it** — typically the lease holder edited a family while a
-  responder recorded contacts — so that side's version of it is taken, and the response
+- **At most one side changed it** - typically the lease holder edited a family while a
+  responder recorded contacts - so that side's version of it is taken, and the response
   records merge as above. Silent.
-- **Both sides changed it** — two people edited the directory, one of them while
-  disconnected — so the ordinary conflict dialog runs. Nobody imports a ward directory
+- **Both sides changed it** - two people edited the directory, one of them while
+  disconnected - so the ordinary conflict dialog runs. Nobody imports a ward directory
   during a disaster, so this is close to hypothetical.
 
 Without the first rule, a responder's contact record would push the lease holder into
@@ -970,14 +970,14 @@ carrying the id, which is not secret, since it grants no access on its own.
 carries a document id. The app offers "Request access", and one click posts a request
 carrying this device's public keys, the person's id and display name, and the device
 name. The next admin to open the document sees the request, grants it, and the app adds
-a new person, as a member, with that one device — sealing the data key to it, adding roster and header
+a new person, as a member, with that one device - sealing the data key to it, adding roster and header
 entries, and uploading, which puts the device on the server's allow-list in the same
-step — and clears the request. The person's
+step - and clears the request. The person's
 other devices join later by linking, with no further grant.
 
 **Every change to who has access is announced.** When a member's app sees versions newer
-than the last it announced, it shows **one** dismissible notice for all of them — *3
-changes to who has access* — expanding to the list: *Bob Wilson added Tom Hale*, *Bob
+than the last it announced, it shows **one** dismissible notice for all of them - *3
+changes to who has access* - expanding to the list: *Bob Wilson added Tom Hale*, *Bob
 Wilson removed Tom Hale*, *Tom Hale left*, *Bob Wilson made Tom Hale an admin*. Only
 changes to people are announced; linking and unlinking a person's own devices shows in
 the access list instead. Announcements are tracked per document by the last version
@@ -985,17 +985,17 @@ announced, so someone granted again after leaving is announced again. This is wh
 a hostile admin's actions visible within minutes rather than silently effective.
 
 **A request whose display name matches a current member** is flagged in the grant
-dialog — *Bob Wilson already has access. If this is Bob's new phone, Bob should link it
-from his other device instead.* — because granting it would make a second Bob.
+dialog - *Bob Wilson already has access. If this is Bob's new phone, Bob should link it
+from his other device instead.* - because granting it would make a second Bob.
 
-The requester's app shows a **pending state** — the request is with the server,
-waiting on an admin to open the document — and notices when access is granted.
+The requester's app shows a **pending state** - the request is with the server,
+waiting on an admin to open the document - and notices when access is granted.
 Without it, a volunteer told "install this and you'll see the ward list" is left
 staring at a failure.
 
 **Remote requests are not verified, by choice.** Anyone holding an invite link can post a
 request bearing any display name and device name, and links get forwarded more broadly
-than intended — and a hostile server could swap the key inside a genuine request. An
+than intended - and a hostile server could swap the key inside a genuine request. An
 admin who grants such a request gives its sender full access. Verifying a remote
 request would mean comparing a code over a separate channel, and that friction is judged
 too high for the primary goal of sharing in a couple of minutes, so it is accepted. What
@@ -1013,7 +1013,7 @@ self-adds a person: granting is always an action taken by an admin.
 
 **Access has to be granted before it is needed.** Both paths run through the server,
 so a bishopric that has not onboarded everyone cannot add anyone once the network is
-down — which is exactly when the document matters most. The user guide says this
+down - which is exactly when the document matters most. The user guide says this
 directly, and the single key holder notice is the standing nudge toward it.
 
 ## Revoking access
@@ -1025,8 +1025,8 @@ the key generation, and publishes. The accepted header is the new allow-list, so
 removed person's devices are refused from that moment. No one else approves, and nothing
 waits. The removal is announced to every member.
 
-**An admin removes one lost device the same way** — a person's stolen phone while they
-keep their laptop — which also rotates the key. The person can do it themselves from any
+**An admin removes one lost device the same way** - a person's stolen phone while they
+keep their laptop - which also rotates the key. The person can do it themselves from any
 other of their devices (see *Identity*).
 
 **Admins manage roles.** Any admin promotes a member to admin or demotes an admin,
@@ -1034,7 +1034,7 @@ including another admin and themselves. Every version that lists anyone lists at
 admin, so the last admin cannot step down while anyone else remains.
 
 **Leaving needs nobody.** Confirming Leave hides the ward at once and publishes the
-version that drops this person — all their devices, off the roster and the admin list.
+version that drops this person - all their devices, off the roster and the admin list.
 Once that version is accepted, this device deletes its copies the same way a proven
 removal does; the leaver's other devices delete theirs when their chain check proves the
 leave. It does not rotate the key: the leaver would generate the new key and so know it,
@@ -1050,7 +1050,7 @@ server lists it for no device, so it does not come back after a reinstall.
 could never grant or remove anyone again, so when the last admin presses Leave while
 others remain, the app asks *Before you leave, choose who will be admin*, and one
 confirmation publishes the promotion and then the leave. If a leave is refused because
-this person has meanwhile become the last admin — two admins leaving at once — the ward
+this person has meanwhile become the last admin - two admins leaving at once - the ward
 reappears with the same question.
 
 **The dialog says what revocation does and does not do.** Future versions are closed
@@ -1167,21 +1167,23 @@ default, which warns that it writes unencrypted member data. `parseJson` and
 | `KeyStore` | qtkeychain wrapper; store, load, and test for this device's key record |
 | `IdentityService` | This device's keypairs and name; the member id and display name it belongs to; creating a person or linking to one |
 | `DocumentCrypto` | Header parse and build, AD binding, header signing and verification, seal and unseal the data key, encrypt and decrypt the payload |
-| `JsonService` | Encrypted read and write; signatures change (below) |
-| `ServerClient` | HTTP, challenge-response authentication, typed results per endpoint |
-| `SyncService` | Base version, publish queue, sync state, lease heartbeat, reconnect reconciliation |
-| `DocumentManager` | Single write method owning debounce, lease, generation adoption, and conflict handling |
+| `DocumentFile` | The encrypted file format: header line and ciphertext, sealing each new version |
+| `JsonService` | Plaintext JSON only, for the developer export |
+| `HttpServerApi` | HTTP transport for the server contract; every call answers through a callback |
+| `ServerConnection` | Challenge-response sign-in and request signing over any `ServerApi` |
+| `DocumentSession` | One open ward: the single write path, debounce, base version, publish queue, lease, generation adoption, conflict routing, removal |
+| `RosterChangeQueue` | Every roster change, for every ward, each built on the server's version and published on its own |
+| `DocumentManager` | Commands, undo, and geocoding over the open `DocumentSession` |
 
 There is deliberately **no storage abstraction with local and remote implementations**.
 The local file is always the local file, and the server is a separate concern layered
 above it; a polymorphic store would model a choice this design does not make.
 
-`JsonService`'s entry points cannot stay as they are. It is a stateless static class
-whose `JsonResult` carries only `success`, `errorMessage`, and `document`. Encryption
-needs identity and key material in, and the parsed header, meaning save counter, key
-generation, roster, and document id, out, because conflict detection lives in
-`DocumentManager`. `saveDocument` needs an expected-counter argument and returns the
-new counter. The implementation plan should carry the concrete signatures.
+Encryption needs identity and key material in, and the parsed header - save counter,
+key generation, roster, and document id - out, so the encrypted format lives in
+`DocumentFile` rather than in `JsonService`'s stateless `JsonResult`. Conflicts are
+detected at publish, against the server's version, so a local write takes no
+expected-counter argument. The implementation plan carries the concrete signatures.
 
 ## Testing
 
@@ -1219,8 +1221,8 @@ Headless tests in `tests/services`:
   the rule, or a save counter that does not increase; a chain whose revoker was granted
   after the anchor verifies
 - grant and revoke changing the roster; rotation making a removed key fail
-- a chain breaks on a device added to a person by any device but that person's own —
-  an admin's included — on a device dropped from a person by a device that is neither
+- a chain breaks on a device added to a person by any device but that person's own - 
+  an admin's included - on a device dropped from a person by a device that is neither
   theirs nor an admin's, on a person's last device dropped as an unlink, on a device
   fingerprint listed under two people, and on a device moved between people; a person
   linking and unlinking their own devices holds, and an admin dropping someone's lost
@@ -1243,8 +1245,8 @@ Headless tests in `tests/services`:
   pairing step cannot be written twice
 - a relay that serves different pairing contents to successive reads is refused, because
   each side checks against the message it first read
-- a leave — a version written by the person it drops, changing nothing else in the
-  membership and keeping the key generation — holds, and every remaining member opens
+- a leave - a version written by the person it drops, changing nothing else in the
+  membership and keeping the key generation - holds, and every remaining member opens
   it; a chain breaks on a writer absent from its own recipients in anything but a leave,
   on a leave that also drops or adds someone else, and on the last admin leaving while
   others remain
@@ -1324,7 +1326,7 @@ Against a fake server:
   offers to unlink what it added; otherwise any admin removes it.
 - **A leaver knows the data key until the next rotation.** Leaving does not rotate, so a
   version written before the next removal or unlink is readable by a leaver who obtains
-  it some way other than from the server, which refuses them — and a leaver colluding
+  it some way other than from the server, which refuses them - and a leaver colluding
   with the operator could forge versions under that key. Collusion with the operator is
   outside what this design defends.
 - **Access must be granted before an emergency**, because granting needs the server.
@@ -1345,8 +1347,8 @@ Against a fake server:
 - **There is no folder-based sharing mode.** Continuity if the server stops rests on
   the project being open source, the format being documented, and every member holding
   a complete file.
-- **Operating the server is ongoing work** — uptime, backups with a tested restore,
-  certificate renewal, and abuse handling — carried by whoever runs it rather than by
+- **Operating the server is ongoing work** - uptime, backups with a tested restore,
+  certificate renewal, and abuse handling - carried by whoever runs it rather than by
   the ward.
 ## Earlier versions
 
@@ -1362,7 +1364,7 @@ and no explanation; a failure is now reported and the record left alone.
 
 Device keys live only in each device's OS keychain. They survive an uninstall and
 reinstall; a reimaged profile or a replaced device loses them. **A person with another
-working device links the new one** — no one else is involved. **A person who has lost
+working device links the new one** - no one else is involved. **A person who has lost
 every device** is removed by an admin and granted again, which re-seals the data key to
 the new device and adds it to the server allow-list. The single-holder and single-admin
 notices, and the suggestion to link a second device, are what keep a ward out of the
@@ -1397,7 +1399,7 @@ exchange for the operator carrying patching, uptime, and restore testing.
 share one implementation of the rules. Checked that day: Cloudflare Containers is
 generally available (April 2026), but a container's disk is ephemeral, so a C++ server
 there could only be a stateless rules sidecar to a TypeScript Durable Object, adding a
-1–3 second cold start to most publishes. A single C++ process on a container platform
+1-3 second cold start to most publishes. A single C++ process on a container platform
 with a persistent volume would work, at the cost of rebuilding and patching the image.
 Cloudflare Workers was kept for its hands-off operation, and the duplicated rules are
 covered instead by the conformance suite described under *Companion work*.
@@ -1417,8 +1419,8 @@ does not.
 | | Cloudflare Workers + Durable Objects | VPS + SQLite + Caddy + Litestream |
 |---|---|---|
 | Reliability | Distributed; rare global incidents, which take much of the web down too | One machine; roughly 99.9%, recovered by the operator |
-| Cost | Free tier, or about $5/month paid (recalled) | About $4–6/month plus cents for backup storage (recalled) |
-| Maintenance | Deploying code | OS updates, monitoring, backup checks, restore tests — about an hour a month plus incidents |
+| Cost | Free tier, or about $5/month paid (recalled) | About $4-6/month plus cents for backup storage (recalled) |
+| Maintenance | Deploying code | OS updates, monitoring, backup checks, restore tests - about an hour a month plus incidents |
 | Backups | Built-in point-in-time recovery, believed 30 days (recalled) | Litestream to object storage, set up and tested by the operator |
 | Portability | Tied to Cloudflare's APIs | Runs anywhere |
 | Abuse handling | Rate limiting and DDoS protection included | Built by the operator |
@@ -1438,8 +1440,8 @@ weekdays well below it:
 | Activity | Requests |
 |---|---|
 | About 40 opens (auth, head, occasional download, lease) | ~200 |
-| Editing sessions totalling 3–4 hours at a 1-minute heartbeat | ~200 |
-| Debounced publishes and access requests | ~50–100 |
+| Editing sessions totalling 3-4 hours at a 1-minute heartbeat | ~200 |
+| Debounced publishes and access requests | ~50-100 |
 | **Total** | **~500** |
 
 - **Free plan: roughly 200 wards.** Limits are daily, so capacity is set by the peak
@@ -1473,8 +1475,8 @@ Running unattended:
 
 **Trust model: hostname plus TLS.** Whoever controls the domain is the server, which is
 exactly what lets a successor take over at the same address. Clients authenticate every
-blob themselves, so a lapsed domain re-registered by a stranger — most plausibly an
-automated drop-catcher parking ads — yields ciphertext and request metadata, and stops
+blob themselves, so a lapsed domain re-registered by a stranger - most plausibly an
+automated drop-catcher parking ads - yields ciphertext and request metadata, and stops
 sharing until a successor acts. The one active attack it enables, injecting spoofed
 access requests, already exists against the live server through any forwarded invite
 link, and is an accepted risk of the remote request path (see *Granting access*).
@@ -1513,13 +1515,13 @@ client depends on, and the client is built and tested against a fake server that
 presents it.
 
 **The fake and the real server are checked against each other.** The server runs
-TypeScript on Cloudflare, so its rules — the chain rule with its roles, invitation-only
-joins, member-id reuse, the lease — are written a second time, in another language. One conformance suite, written against the client's server
+TypeScript on Cloudflare, so its rules - the chain rule with its roles, invitation-only
+joins, member-id reuse, the lease - are written a second time, in another language. One conformance suite, written against the client's server
 interface, runs against both: against the fake in the ordinary test run, and against the
 real server over HTTP. The server's plan treats that suite as its acceptance gate. A
 disagreement is resolved in whichever implementation is wrong, never by loosening a test.
 
 **The real server offers a development clock override.** Session, lease, and pairing
 expiry can only be tested by moving time forward. The server therefore accepts a clock
-offset in local development only — never in a deployed build — so the conformance suite
+offset in local development only - never in a deployed build - so the conformance suite
 covers those rules too rather than leaving them to the fake alone.
