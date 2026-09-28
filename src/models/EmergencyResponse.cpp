@@ -696,11 +696,6 @@ QJsonObject EmergencyResponse::toJson() const
     json["name"] = m_name;
     json["startedAt"] = StrictJson::writeTime(m_startedAt);
 
-    if (m_endedAt.has_value())
-    {
-        json["endedAt"] = StrictJson::writeTime(m_endedAt.value());
-    }
-
     QJsonArray recordsArray;
     for (auto it = m_familyRecords.constBegin(); it != m_familyRecords.constEnd(); ++it)
     {
@@ -725,7 +720,6 @@ std::optional<EmergencyResponse> EmergencyResponse::fromJson(const QJsonObject& 
     if (!StrictJson::hasOnlyKeys(json,
                                  {QLatin1String("name"),
                                   QLatin1String("startedAt"),
-                                  QLatin1String("endedAt"),
                                   QLatin1String("familyRecords"),
                                   QLatin1String("taskCategories")})
         || !StrictJson::readString(json, QLatin1String("name"), response.m_name)
@@ -740,16 +734,6 @@ std::optional<EmergencyResponse> EmergencyResponse::fromJson(const QJsonObject& 
     if (response.m_taskCategories.removeDuplicates() != 0)
     {
         return std::nullopt;
-    }
-
-    if (json.contains("endedAt"))
-    {
-        QDateTime endedAt;
-        if (!StrictJson::readTime(json, QLatin1String("endedAt"), endedAt))
-        {
-            return std::nullopt;
-        }
-        response.m_endedAt = endedAt;
     }
 
     for (const QJsonObject& recordJson : records)
@@ -769,7 +753,6 @@ bool EmergencyResponse::operator==(const EmergencyResponse& other) const
 {
     return m_name == other.m_name
         && m_startedAt == other.m_startedAt
-        && m_endedAt == other.m_endedAt
         && m_familyRecords == other.m_familyRecords
         && m_taskCategories == other.m_taskCategories;
 }

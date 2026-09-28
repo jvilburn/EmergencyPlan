@@ -169,25 +169,17 @@ A family with unresolved tasks automatically shows as "Needs Help".
 
 ### Ending an Emergency
 
+Ending an emergency clears its response data from the document. The summary report is the record that remains.
+
 1. **Emergency > End Emergency**
 2. Choose:
-   - **Archive & End** — Save all response data for future reference
-   - **Discard & End** — Delete response data permanently
-   - **Cancel** — Keep the emergency active
+   - **Save Report & End** - Save the summary report, then end the emergency
+   - **End Without Report** - End the emergency with no record kept
+   - **Cancel** - Keep the emergency active
 
 ### Reports
 
-**Emergency > Generate Report** creates a PDF summary including contact status breakdown, task assignments, and resolution statistics.
-
-### Archives
-
-**Emergency > Open Archive** lets you browse past emergencies:
-
-- **View**: Open in read-only mode (gray banner, no editing)
-- **Reopen**: Resume a previous emergency as active
-- **Delete**: Permanently remove an archive
-
-Close an archive with **Emergency > Close Archive**.
+**Emergency > Generate Report** creates a PDF summary including contact status breakdown, task assignments, and resolution statistics. The report is a PDF saved wherever you choose, and it is not encrypted.
 
 ---
 

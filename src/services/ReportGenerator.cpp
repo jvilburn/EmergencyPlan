@@ -3,6 +3,7 @@
 
 #include <QFont>
 #include <QFontDatabase>
+#include <QFontMetrics>
 #include <QPainter>
 #include <QPrinter>
 #include <QDateTime>
@@ -52,13 +53,21 @@ void ensureSpace(ReportContext& ctx, int needed)
     }
 }
 
-void drawText(ReportContext& ctx, const QString& text, int fontSize, bool bold)
+/// Sets the painter's font and returns its metrics, both in the report's 96 DPI
+/// layout units. A pixel size keeps the glyphs in the same units as the layout;
+/// a point size would resolve against the printer's own DPI and then be scaled again.
+QFontMetrics setReportFont(ReportContext& ctx, int pointSize, bool bold)
 {
-    QFont font(ctx.fontFamily, fontSize);
+    QFont font(ctx.fontFamily);
+    font.setPixelSize(qRound(pointSize * 96.0 / 72.0));
     font.setBold(bold);
     ctx.painter->setFont(font);
+    return ctx.painter->fontMetrics();
+}
 
-    QFontMetrics fm(font);
+void drawText(ReportContext& ctx, const QString& text, int fontSize, bool bold)
+{
+    QFontMetrics fm = setReportFont(ctx, fontSize, bold);
     int textHeight = fm.height();
     ensureSpace(ctx, textHeight);
 
@@ -80,10 +89,7 @@ void drawSpacer(ReportContext& ctx, int height)
 
 void drawKeyValue(ReportContext& ctx, const QString& key, const QString& value)
 {
-    QFont font(ctx.fontFamily, kBodyFontSize);
-    ctx.painter->setFont(font);
-
-    QFontMetrics fm(font);
+    QFontMetrics fm = setReportFont(ctx, kBodyFontSize, false);
     int textHeight = fm.height();
     ensureSpace(ctx, textHeight);
 
@@ -94,10 +100,7 @@ void drawKeyValue(ReportContext& ctx, const QString& key, const QString& value)
 
 void drawBulletItem(ReportContext& ctx, const QString& text)
 {
-    QFont font(ctx.fontFamily, kBodyFontSize);
-    ctx.painter->setFont(font);
-
-    QFontMetrics fm(font);
+    QFontMetrics fm = setReportFont(ctx, kBodyFontSize, false);
     int textHeight = fm.height();
     ensureSpace(ctx, textHeight);
 
@@ -147,6 +150,7 @@ const QList<ContactMethod> kMethodOrder =
 }  // namespace
 
 bool ReportGenerator::generateReport(const EmergencyResponse& response,
+                                     const std::optional<QDateTime>& endedAt,
                                      const QString& wardName,
                                      const QString& filePath)
 {
@@ -188,9 +192,9 @@ bool ReportGenerator::generateReport(const EmergencyResponse& response,
     }
 
     QString dateRange = response.startedAt().toString("MMM d, yyyy h:mm AP");
-    if (response.endedAt())
+    if (endedAt.has_value())
     {
-        dateRange += " - " + response.endedAt()->toString("MMM d, yyyy h:mm AP");
+        dateRange += " - " + endedAt->toString("MMM d, yyyy h:mm AP");
     }
     else
     {

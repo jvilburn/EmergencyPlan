@@ -21,15 +21,7 @@ public:
     // Lifecycle
     bool isActive() const;
     void startEmergency(const QString& name);
-    void endEmergency(bool archive);
-
-    // Archive viewing (read-only mode)
-    bool loadArchive(const QString& filePath, QString* errorMessage = nullptr);
-    void closeArchive();
-    bool isViewingArchive() const;
-
-    // Reopen archived emergency as active
-    bool reopenArchive(const QString& filePath, QString* errorMessage = nullptr);
+    void endEmergency();
 
     // Read access
     const EmergencyResponse& response() const;
@@ -69,8 +61,6 @@ public:
 signals:
     void emergencyStarted();
     void emergencyEnded();
-    void archiveViewOpened();
-    void archiveViewClosed();
     void familyStatusChanged(const FamilyId& familyId);
     void responseDataChanged();  // generic "something changed" for progress bars, counts
 
@@ -79,14 +69,10 @@ private slots:
 
 private:
     void persistResponseData();
-    bool saveArchive();
     void syncFromDocument();
     void syncFamilies();  // add records for new families, called on document changes
 
     std::optional<EmergencyResponse> m_response;
-
-    // Archive viewing state
-    std::optional<EmergencyResponse> m_savedResponse;  // stashed live response during archive view
 
     static EmergencyManager* s_instance;
 };

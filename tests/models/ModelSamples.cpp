@@ -187,7 +187,6 @@ QJsonObject emergencyResponse()
 {
     QJsonObject json = parsed(R"({"name": "Storm", "taskCategories": ["Flooding", "Shelter"]})");
     json["startedAt"] = QString(Time);
-    json["endedAt"] = QString("2026-09-28T08:00:00.000Z");
     json["familyRecords"] = QJsonArray{familyRecord()};
     return json;
 }

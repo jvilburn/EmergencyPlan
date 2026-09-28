@@ -298,7 +298,6 @@ EmergencyResponse mergeResponse(const EmergencyResponse& base,
     EmergencyResponse merged = mine;
     merged.setName(mergeValue(base.name(), mine.name(), theirs.name()));
     merged.setStartedAt(mergeValue(base.startedAt(), mine.startedAt(), theirs.startedAt()));
-    merged.setEndedAt(mergeValue(base.endedAt(), mine.endedAt(), theirs.endedAt()));
     merged.setTaskCategories(
         mergeCategories(base.taskCategories(), mine.taskCategories(), theirs.taskCategories()));
     merged.setFamilyRecords(mergeRecords(base, mine, theirs));

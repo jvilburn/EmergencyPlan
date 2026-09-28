@@ -239,7 +239,7 @@ void ModelParsersTest::familyResponseRecord()
 
 void ModelParsersTest::emergencyResponse()
 {
-    checkReader<EmergencyResponse>(ModelSamples::emergencyResponse(), {"endedAt"});
+    checkReader<EmergencyResponse>(ModelSamples::emergencyResponse(), {});
 
     // Always written, empty or not.
     QVERIFY(reads<EmergencyResponse>(with(ModelSamples::emergencyResponse(), "familyRecords", QJsonArray())));

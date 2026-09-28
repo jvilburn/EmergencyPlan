@@ -138,14 +138,9 @@ void TeamsView::onContextMenu(const QPoint& pos)
 
     QMenu menu;
 
-    bool archiveView = EmergencyManager::instance() && EmergencyManager::instance()->isViewingArchive();
-
     if (!index.isValid())
     {
-        if (!archiveView)
-        {
-            menu.addAction(tr("Add Team..."), this, &TeamsView::addTeam);
-        }
+        menu.addAction(tr("Add Team..."), this, &TeamsView::addTeam);
     }
     else
     {
@@ -222,10 +217,6 @@ void TeamsView::onContextMenu(const QPoint& pos)
 
         case ItemType::TaskRow:
         {
-            if (EmergencyManager::instance() && EmergencyManager::instance()->isViewingArchive())
-            {
-                break;
-            }
             QString taskIdStr = index.data(TeamsTreeModel::TaskIdRole).toString();
             QString familyIdStr = index.data(TeamsTreeModel::FamilyIdRole).toString();
             if (taskIdStr.isEmpty() || familyIdStr.isEmpty())

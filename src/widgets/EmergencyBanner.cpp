@@ -39,18 +39,6 @@ void EmergencyBanner::setEmergencyName(const QString& name)
     show();
 }
 
-void EmergencyBanner::setArchiveName(const QString& name)
-{
-    m_label->setText(tr("ARCHIVED - READ ONLY: %1").arg(name));
-    setStyleSheet(
-        "QFrame {"
-        "  background-color: #78909C;"
-        "  color: #fff;"
-        "  font-weight: bold;"
-        "}");
-    show();
-}
-
 void EmergencyBanner::clearBanner()
 {
     hide();

@@ -1,14 +1,6 @@
 #include "EmergencyManager.h"
-#include "DocumentConstants.h"
 #include "DocumentManager.h"
 #include "DocumentChange.h"
-#include "JsonService.h"
-
-#include <QDir>
-#include <QFile>
-#include <QFileInfo>
-#include <QMessageBox>
-#include <QRegularExpression>
 
 EmergencyManager* EmergencyManager::s_instance = nullptr;
 
@@ -74,149 +66,16 @@ void EmergencyManager::startEmergency(const QString& name)
     emit responseDataChanged();
 }
 
-void EmergencyManager::endEmergency(bool archive)
+void EmergencyManager::endEmergency()
 {
     if (!m_response.has_value())
     {
         return;
     }
 
-    if (archive)
-    {
-        m_response->setEndedAt(QDateTime::currentDateTimeUtc());
-        // Update document with final response data before snapshotting
-        DocumentManager::instance()->setEmergencyResponse(m_response);
-
-        if (!saveArchive())
-        {
-            // Archive save failed — do NOT clear response data
-            // User is notified by saveArchive() and can retry
-            return;
-        }
-    }
-
-    // Clear response data from main document
     m_response.reset();
-    m_savedResponse.reset();
     DocumentManager::instance()->setEmergencyResponse(std::nullopt);
     emit emergencyEnded();
-    emit responseDataChanged();
-}
-
-// ============================================================================
-// Archive viewing
-// ============================================================================
-
-bool EmergencyManager::isViewingArchive() const
-{
-    return DocumentManager::instance()->isViewingArchive();
-}
-
-bool EmergencyManager::loadArchive(const QString& filePath, QString* errorMessage)
-{
-    // Close any existing archive view first
-    if (isViewingArchive())
-    {
-        closeArchive();
-    }
-
-    JsonResult result = JsonService::loadDocument(filePath);
-    if (!result.success)
-    {
-        if (errorMessage)
-        {
-            *errorMessage = tr("Could not load archive:\n%1").arg(result.errorMessage);
-        }
-        return false;
-    }
-
-    const std::optional<EmergencyResponse>& archiveResponse = result.document.emergencyResponse();
-    if (!archiveResponse.has_value())
-    {
-        if (errorMessage)
-        {
-            *errorMessage = tr("This file does not contain emergency response data.");
-        }
-        return false;
-    }
-
-    // Stash current live response (if any) and swap in archive data
-    m_savedResponse = m_response;
-    m_response = archiveResponse;
-    DocumentManager::instance()->setArchiveDocument(std::move(result.document));
-
-    emit archiveViewOpened();
-    emit responseDataChanged();
-    return true;
-}
-
-bool EmergencyManager::reopenArchive(const QString& filePath, QString* errorMessage)
-{
-    // Close any archive view first
-    if (isViewingArchive())
-    {
-        closeArchive();
-    }
-
-    JsonResult result = JsonService::loadDocument(filePath);
-    if (!result.success)
-    {
-        if (errorMessage)
-        {
-            *errorMessage = tr("Could not load archive:\n%1").arg(result.errorMessage);
-        }
-        return false;
-    }
-
-    const std::optional<EmergencyResponse>& archiveResponse = result.document.emergencyResponse();
-    if (!archiveResponse.has_value())
-    {
-        if (errorMessage)
-        {
-            *errorMessage = tr("This file does not contain emergency response data.");
-        }
-        return false;
-    }
-
-    // Set the archived response as the active emergency
-    m_response = archiveResponse;
-    m_response->clearEndedAt();
-
-    // Sync family records with current document (archive may have stale family data)
-    syncFamilies();
-
-    persistResponseData();
-
-    // Delete the archive file only after persistence succeeds
-    if (DocumentManager::instance()->saveDocumentOnly())
-    {
-        if (!QFile::remove(filePath))
-        {
-            qWarning() << "Could not delete archive file:" << filePath;
-        }
-    }
-    else
-    {
-        qWarning() << "Response data save failed — archive file preserved:" << filePath;
-    }
-
-    emit emergencyStarted();
-    emit responseDataChanged();
-    return true;
-}
-
-void EmergencyManager::closeArchive()
-{
-    if (!isViewingArchive())
-    {
-        return;
-    }
-
-    m_response = m_savedResponse;
-    m_savedResponse.reset();
-    DocumentManager::instance()->clearArchiveDocument();
-
-    emit archiveViewClosed();
     emit responseDataChanged();
 }
 
@@ -555,56 +414,6 @@ int EmergencyManager::countByStatus(EffectiveContactStatus status) const
 void EmergencyManager::persistResponseData()
 {
     DocumentManager::instance()->setEmergencyResponse(m_response);
-}
-
-bool EmergencyManager::saveArchive()
-{
-    QString docPath = DocumentManager::instance()->filePath();
-    if (docPath.isEmpty())
-    {
-        QMessageBox::critical(
-            nullptr,
-            tr("Archive Failed"),
-            tr("Cannot archive: document has not been saved yet."));
-        return false;
-    }
-
-    QFileInfo docInfo(docPath);
-    QString archiveDir = docInfo.absolutePath() + "/" + docInfo.completeBaseName() + "_archives";
-
-    QDir().mkpath(archiveDir);
-
-    QString slug = m_response->name().toLower().replace(QRegularExpression("[^a-z0-9]+"), "-");
-    QString date = m_response->startedAt().toString("yyyy-MM-dd");
-    QString archivePath = archiveDir + "/" + date + "-" + slug + DocumentConstants::FileExtension;
-
-    // Avoid overwriting existing archive — append counter if needed
-    if (QFile::exists(archivePath))
-    {
-        int counter = 2;
-        QString basePath = archiveDir + "/" + date + "-" + slug;
-        while (QFile::exists(basePath + "-" + QString::number(counter)
-                             + DocumentConstants::FileExtension))
-        {
-            ++counter;
-        }
-        archivePath = basePath + "-" + QString::number(counter) + DocumentConstants::FileExtension;
-    }
-
-    // Snapshot the entire current document (prep + response)
-    QString errorMessage;
-    bool ok = JsonService::saveDocument(archivePath, DocumentManager::instance()->document(), &errorMessage);
-    if (!ok)
-    {
-        qWarning() << "Archive save failed:" << errorMessage;
-        QMessageBox::critical(
-            nullptr,
-            tr("Archive Failed"),
-            tr("Could not save emergency archive:\n%1\n\nResponse data has been preserved.")
-                .arg(errorMessage));
-        return false;
-    }
-    return true;
 }
 
 void EmergencyManager::syncFromDocument()

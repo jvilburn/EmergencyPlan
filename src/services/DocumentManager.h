@@ -26,12 +26,7 @@ public:
     static DocumentManager* instance();
 
     // Document access
-    const Document& document() const;
-
-    // Archive document overlay (read-only viewing)
-    void setArchiveDocument(Document archiveDoc);
-    void clearArchiveDocument();
-    bool isViewingArchive() const { return m_archiveDocument.has_value(); }
+    const Document& document() const { return m_document; }
 
     // File path
     QString filePath() const { return m_filePath; }
@@ -58,7 +53,6 @@ public:
 
     // Emergency response data (saves without affecting command history dirty state)
     void setEmergencyResponse(const std::optional<EmergencyResponse>& response);
-    bool saveDocumentOnly();
 
     // Geocoding
     void startBatchGeocoding();
@@ -95,9 +89,9 @@ private:
     void autoSave();
     void ensureFilePath();
     void maybeRenameForWard();
+    bool saveDocumentOnly();
 
     Document m_document;
-    std::optional<Document> m_archiveDocument;  // overlay for read-only archive viewing
     CommandHistory m_commandHistory;
     QString m_filePath;
 

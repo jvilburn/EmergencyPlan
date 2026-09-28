@@ -48,10 +48,6 @@ TeamsTreeModel::TeamsTreeModel(Filter* filter,
             this, &TeamsTreeModel::onEmergencyStateChanged);
     connect(EmergencyManager::instance(), &EmergencyManager::emergencyEnded,
             this, &TeamsTreeModel::onEmergencyStateChanged);
-    connect(EmergencyManager::instance(), &EmergencyManager::archiveViewOpened,
-            this, &TeamsTreeModel::onEmergencyStateChanged);
-    connect(EmergencyManager::instance(), &EmergencyManager::archiveViewClosed,
-            this, &TeamsTreeModel::onEmergencyStateChanged);
     connect(EmergencyManager::instance(), &EmergencyManager::responseDataChanged,
             this, &TeamsTreeModel::rebuild);
     rebuild();

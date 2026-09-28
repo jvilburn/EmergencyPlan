@@ -252,14 +252,11 @@ public:
 
     const QString& name() const { return m_name; }
     const QDateTime& startedAt() const { return m_startedAt; }
-    const std::optional<QDateTime>& endedAt() const { return m_endedAt; }
     const QHash<FamilyId, FamilyResponseRecord>& familyRecords() const { return m_familyRecords; }
     const QStringList& taskCategories() const { return m_taskCategories; }
 
     void setName(const QString& name) { m_name = name; }
     void setStartedAt(const QDateTime& startedAt) { m_startedAt = startedAt; }
-    void setEndedAt(const std::optional<QDateTime>& endedAt) { m_endedAt = endedAt; }
-    void clearEndedAt() { m_endedAt.reset(); }
     void setFamilyRecords(const QHash<FamilyId, FamilyResponseRecord>& records) { m_familyRecords = records; }
     void setTaskCategories(const QStringList& categories) { m_taskCategories = categories; }
 
@@ -286,7 +283,6 @@ public:
 private:
     QString m_name;
     QDateTime m_startedAt;
-    std::optional<QDateTime> m_endedAt;          // set when archived
     QHash<FamilyId, FamilyResponseRecord> m_familyRecords;
     QStringList m_taskCategories;
 };

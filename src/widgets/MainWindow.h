@@ -1,7 +1,10 @@
 #pragma once
 
+#include <QDateTime>
 #include <QMainWindow>
 #include <QSplitter>
+
+#include <optional>
 
 #include "DocumentChange.h"
 #include "Id.h"
@@ -59,11 +62,8 @@ private slots:
     void onEndEmergency();
     void onEmergencyStarted();
     void onEmergencyEnded();
-    void onArchiveViewOpened();
-    void onArchiveViewClosed();
     void generateEmergencyReport();
-    bool generateEmergencyReportWithConfirm();
-    void onOpenArchive();
+    bool generateEmergencyReportWithConfirm(const std::optional<QDateTime>& endedAt);
     void updateEmergencyActions();
 
     // Sidebar tabs
@@ -117,8 +117,6 @@ private:
     QAction* m_startEmergencyAction;
     QAction* m_endEmergencyAction;
     QAction* m_generateReportAction;
-    QAction* m_openArchiveAction;
-    QAction* m_closeArchiveAction;
     QAction* m_exitAction;
     QAction* m_undoAction;
     QAction* m_redoAction;
