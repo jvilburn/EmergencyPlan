@@ -261,9 +261,7 @@ other header field, so the origin cannot be edited out without breaking the file
 
 **Copies the app writes are cleaned up with the document.** The app records the path of
 every copy it writes, per original document. When a removal is proven, it deletes each
-recorded copy still at its path along with the document, and remembers that this device
-was removed from that document; **Open a copy** then refuses any copy whose origin is a
-document this device was removed from. A copy the user moved, emailed, or backed up
+recorded copy still at its path along with the document. A copy the user moved, emailed, or backed up
 elsewhere is out of the app's reach, as is anyone decrypting a copy with their own keys
 outside the app.
 
@@ -423,10 +421,11 @@ consistent version whose generation predates a revocation - is refused in two pl
 
 1. The server never accepts an upload at a lower version or key generation, so the
    shared copy cannot be rolled back at all.
-2. A **key-generation and save-counter high-water mark** per document, kept in the device's keychain
-   record beside its keys, so it survives an uninstall and cleared application data and
-   is never deleted - not even when this device is removed from the ward. A local file or
-   a server version presenting an older generation is refused before it is ever used.
+2. A **key-generation and save-counter high-water mark** per document, kept in
+   application data with the document's other records. A local file or a server version
+   presenting an older generation is refused before it is ever used. Clearing
+   application data resets it, so the first version served afterwards is taken as it
+   stands.
 
 **Post-quantum.** X25519 is exposed to harvest-now-decrypt-later, and hybrid
 X25519 + ML-KEM-768 is now in production elsewhere. The exposure needs an attacker
@@ -511,12 +510,11 @@ Each pairing step can be written once only, and a pairing expires after ten minu
 Once confirmed, the existing device tells the new device who it now is - member id,
 display name, and the wards it is being added to - **signed with the key the new device
 just authenticated**, so that identity comes from the pairing and never from the server.
-It then adds the new device under its own person in every ward document it belongs to. A background queue carries the change to each ward - the
-open one at once, the others by taking each ward's lease in turn, applying the change on
-top of the server's version, and publishing - retrying until every ward has it, and
-showing what is still pending. The new device waits for its wards to appear, and learns
-its member id and display name from the first ward's authenticated roster, never from
-the server.
+It then adds the new device under its own person in every ward document it belongs to. A background queue carries the change to each ward -
+applying it on top of the server's version and publishing, with no lease, since a roster
+change never waits on whoever is editing - retrying until every ward has it, and showing
+what is still pending. The new device waits for its wards to appear, having learned its
+member id and display name from the signed handover.
 
 **Unlinking a device** - a lost phone, a retired laptop - is done by the same person
 from any other of their devices, or by any admin, rotates the key in every ward through the same
@@ -530,9 +528,7 @@ a stolen phone does not outlive the phone.
 **Identity outlives an uninstall.** The keypairs live in the platform credential store,
 which an uninstaller does not touch, so a reinstall finds the same device identity and
 the same access. Application data is less durable, and the ward list sits there - which is
-why the ward list is fetched from the server rather than kept only locally. The
-key-generation high-water marks live in the keychain record with the keys, for the same
-reason.
+why the ward list is fetched from the server rather than kept only locally.
 
 There is no passphrase-protected identity export: linking covers new devices, and
 an admin's grant covers losing all of them.
@@ -656,9 +652,9 @@ central mechanism, and most of the behaviour below follows from it.
   It may fail, retry, or sit queued for hours without blocking anyone's work.
 
 **The local record**, kept per document id alongside the key-generation high-water
-mark, holds the server version this file was last reconciled with and the local save
-counter at that moment. The base version tells "the server moved"; a local file whose
-save counter is above the recorded one tells "I moved" - it has unpublished changes.
+mark, holds the server version this file was last reconciled with. The base version
+tells "the server moved"; a local file whose save counter is above the base copy's tells
+"I moved" - it has unpublished changes.
 Both are exact, neither relies on timestamps, and because they are stored, a pending
 upload survives closing the app.
 
@@ -766,7 +762,7 @@ copy's header, whose hash it recorded when that version was agreed. With no usab
 base copy there is no trusted starting point, and nothing is deleted. If
 every link holds and the chain reaches a header with no entry for this identity, the
 removal is proven: the app deletes the local file and every recorded copy of it still at
-its path, records that it was removed from this document, discards the in-memory session,
+its path, discards the in-memory session,
 removes the ward from the list, and tells the user their access was removed - naming
 the member when their name is in the roster it holds.
 
@@ -975,13 +971,13 @@ entries, and uploading, which puts the device on the server's allow-list in the 
 step - and clears the request. The person's
 other devices join later by linking, with no further grant.
 
-**Every change to who has access is announced.** When a member's app sees versions newer
-than the last it announced, it shows **one** dismissible notice for all of them - *3
+**Every change to who has access is announced.** Each time a member's app takes in newer
+versions, it shows **one** dismissible notice for all of them - *3
 changes to who has access* - expanding to the list: *Bob Wilson added Tom Hale*, *Bob
 Wilson removed Tom Hale*, *Tom Hale left*, *Bob Wilson made Tom Hale an admin*. Only
 changes to people are announced; linking and unlinking a person's own devices shows in
-the access list instead. Announcements are tracked per document by the last version
-announced, so someone granted again after leaving is announced again. This is what makes
+the access list instead. Each version is taken in once, so each change is announced
+once, and someone granted again after leaving is announced again. This is what makes
 a hostile admin's actions visible within minutes rather than silently effective.
 
 **A request whose display name matches a current member** is flagged in the grant
@@ -1116,8 +1112,8 @@ and target names, the vcpkg port name, and the installer's product strings, chan
 with it.
 
 `setOrganizationName` is currently empty, which matters beyond cosmetics: it is what
-keys per-user storage locations, and both the key generation high-water mark and the
-per-document base version are records that must land somewhere stable.
+keys per-user storage locations, and the per-document records must land somewhere
+stable.
 
 **`maybeRenameForWard()` becomes a display concern.** It currently renames the file on
 disk once the ward is identified, so `Untitled.wardplanning` becomes
@@ -1150,7 +1146,6 @@ Each gets its own message:
 | Invite link unknown to the server | The document was deleted, or the link is wrong |
 | Server version written by a newer app | This ward was saved by a newer version of Ward Planning. Update to see the latest changes and share your work. Directory read-only; emergency response still editable locally. |
 | Document file missing from app data | Name the ward and offer to fetch it from the server |
-| Opening a copy of a document this device was removed from | Your access to this ward was removed, so its copies cannot be opened here |
 | A member tries to grant, remove, or change a role | Only an admin can change who has access; name the ward's admins |
 | The last admin tries to leave, or be demoted, while others remain | Make someone else an admin first, so the ward can still add and remove people |
 
@@ -1211,8 +1206,6 @@ Headless tests in `tests/services`:
   rejected
 - a header whose key generation skips a number, rather than staying equal or rising by
   one, breaks the chain
-- the high-water mark survives clearing application data and reinstalling, and a proven
-  removal does not erase it
 - a header signature verifies against the writer's roster entry, and fails when any
   bound header byte changes or when the signer is not on the roster; a payload byte
   change fails the payload hash
@@ -1272,7 +1265,7 @@ Headless tests in `tests/services`:
   and Open a copy opens it read-only without touching the shared document
 - editing a copy's origin id breaks authentication
 - a proven removal deletes recorded exported and recovery copies still at their paths,
-  leaves a moved copy alone, and Open a copy then refuses any copy of that document
+  and leaves a moved copy alone
 - Keep mine publishes this session's directory on top of theirs with the adopted roster,
   and a person they granted remains
 
