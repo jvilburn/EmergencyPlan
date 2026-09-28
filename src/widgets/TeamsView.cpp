@@ -234,7 +234,7 @@ void TeamsView::onContextMenu(const QPoint& pos)
 
             if (!taskTeamId)
             {
-                // Unassigned task — offer Assign action
+                // Unassigned task: offer Assign action
                 menu.addAction(tr("Assign to Team..."), this,
                                &TeamsView::assignTaskFromContextMenu);
             }

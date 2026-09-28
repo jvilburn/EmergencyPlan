@@ -10,16 +10,16 @@ Ward Planning is a desktop application for managing ward family data, ministerin
 
 ### Creating or Opening a Document
 
-- **File > New** (Ctrl+N) — Start with an empty document
-- **File > Open** (Ctrl+O) — Open an existing `.wardplanning` file
+- **File > New** (Ctrl+N) - Start with an empty document
+- **File > Open** (Ctrl+O) - Open an existing `.wardplanning` file
 - The app automatically reopens your last document on launch
 
 ### Importing Data
 
 The fastest way to populate your ward data is by importing PDFs from church tools:
 
-1. **File > Import > Ward Directory PDF** — Import families, members, addresses, and contact info
-2. **File > Import > Ministering PDF** — Import EQ or RS ministering districts and assignments
+1. **File > Import > Ward Directory PDF** - Import families, members, addresses, and contact info
+2. **File > Import > Ministering PDF** - Import EQ or RS ministering districts and assignments
 
 After importing, the app automatically geocodes addresses in the background (shown in the status bar).
 
@@ -95,7 +95,7 @@ Track special needs for ward members (e.g., oxygen dependency, mobility issues, 
 
 ### Medical / Communications / Skills & Gear
 
-These three tabs manage emergency assets — people with specific skills or equipment.
+These three tabs manage emergency assets: people with specific skills or equipment.
 
 - **Add**: Create a new asset (e.g., "Generator", "EMT Certified")
 - **Edit**: Rename an asset
@@ -122,7 +122,7 @@ The interactive map shows family locations as markers.
 
 - Click a marker to select that family in the sidebar
 - Marker colors change during emergencies to reflect contact status
-- The **Unmapped** panel (bottom-right) lists families without coordinates — click a name to select it
+- The **Unmapped** panel (bottom-right) lists families without coordinates: click a name to select it
 
 ---
 
@@ -143,10 +143,10 @@ The interactive map shows family locations as markers.
 
 In the Families tab during an emergency, each family has action buttons:
 
-- **OK** (green) — Family has been contacted and is fine
-- **Unable to Reach** (orange) — Contact attempted but no response
-- **Add Task** — Create a task for something the family needs
-- **Log Contact** — Record a contact attempt (method, who contacted, notes)
+- **OK** (green) - Family has been contacted and is fine
+- **Unable to Reach** (orange) - Contact attempted but no response
+- **Add Task** - Create a task for something the family needs
+- **Log Contact** - Record a contact attempt (method, who contacted, notes)
 
 The progress bar at the top updates in real time:
 ```
@@ -201,7 +201,7 @@ Ending an emergency clears its response data from the document. The summary repo
 
 Most actions support undo and redo: family edits, team changes, imports, and more. The Edit menu shows the name of the action that will be undone or redone.
 
-Emergency response actions (contact status, tasks) are **not** part of the undo system — they are event logs. To correct a mistake, edit or delete the entry directly.
+Emergency response actions (contact status, tasks) are **not** part of the undo system: they are event logs. To correct a mistake, edit or delete the entry directly.
 
 ---
 

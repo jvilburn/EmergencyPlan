@@ -583,7 +583,7 @@ void MainWindow::onGeocodingFinished()
 
 void MainWindow::onAutoSaveFailed(const QString& errorMessage)
 {
-    statusBar()->showMessage(tr("Auto-save failed: %1 — use Save As to save manually").arg(errorMessage));
+    statusBar()->showMessage(tr("Auto-save failed: %1. Use Save As to save manually").arg(errorMessage));
 }
 
 void MainWindow::onFilePathChanged()
@@ -942,37 +942,44 @@ void MainWindow::onEndEmergency()
     QAbstractButton* clicked = dialog.clickedButton();
     if (clicked == reportButton)
     {
-        if (!generateEmergencyReportWithConfirm(QDateTime::currentDateTimeUtc()))
+        const std::optional<QString> reportPath = saveEmergencyReport(QDateTime::currentDateTimeUtc());
+        if (!reportPath.has_value())
         {
             return;
         }
+        EmergencyManager::instance()->endEmergency();
+        statusBar()->showMessage(
+            tr("Emergency \"%1\" ended; report saved to %2").arg(emergencyName, reportPath.value()),
+            5000);
     }
-    else if (clicked != endButton)
+    else if (clicked == endButton)
     {
-        return;
+        EmergencyManager::instance()->endEmergency();
+        statusBar()->showMessage(tr("Emergency \"%1\" ended").arg(emergencyName), 5000);
     }
-
-    EmergencyManager::instance()->endEmergency();
-    statusBar()->showMessage(tr("Emergency \"%1\" ended").arg(emergencyName), 5000);
 }
 
 void MainWindow::generateEmergencyReport()
 {
-    generateEmergencyReportWithConfirm(std::nullopt);
+    const std::optional<QString> reportPath = saveEmergencyReport(std::nullopt);
+    if (reportPath.has_value())
+    {
+        statusBar()->showMessage(tr("Report saved to %1").arg(reportPath.value()), 5000);
+    }
 }
 
-bool MainWindow::generateEmergencyReportWithConfirm(const std::optional<QDateTime>& endedAt)
+std::optional<QString> MainWindow::saveEmergencyReport(const std::optional<QDateTime>& endedAt)
 {
     if (!EmergencyManager::instance()->isActive())
     {
-        return false;
+        return std::nullopt;
     }
 
     const EmergencyResponse& response = EmergencyManager::instance()->response();
 
-    // Default filename based on emergency name and date
+    // Default filename based on emergency name and local start date
     QString defaultName = response.name().simplified().replace(' ', '_')
-        + "_" + response.startedAt().toString("yyyy-MM-dd")
+        + "_" + response.startedAt().toLocalTime().toString("yyyy-MM-dd")
         + ".pdf";
 
     QString defaultDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
@@ -982,13 +989,7 @@ bool MainWindow::generateEmergencyReportWithConfirm(const std::optional<QDateTim
 
     if (filePath.isEmpty())
     {
-        // User cancelled — ask if they want to skip the report
-        QMessageBox::StandardButton answer = QMessageBox::question(
-            this, tr("Skip Report"),
-            tr("No report will be generated. Continue?"),
-            QMessageBox::Yes | QMessageBox::No,
-            QMessageBox::No);
-        return answer == QMessageBox::Yes;
+        return std::nullopt;
     }
 
     // Get ward name from document metadata
@@ -1005,13 +1006,12 @@ bool MainWindow::generateEmergencyReportWithConfirm(const std::optional<QDateTim
 
     if (ReportGenerator::generateReport(response, endedAt, wardName, filePath))
     {
-        statusBar()->showMessage(tr("Report saved to %1").arg(filePath), 5000);
-        return true;
+        return filePath;
     }
 
     QMessageBox::warning(this, tr("Report Error"),
                          tr("Failed to generate the report."));
-    return false;
+    return std::nullopt;
 }
 
 void MainWindow::onEmergencyStarted()

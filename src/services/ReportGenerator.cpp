@@ -16,9 +16,10 @@ namespace
 
 const int kPageMargin = 50;
 const int kSectionSpacing = 12;
-const int kHeaderFontSize = 16;
-const int kSubheaderFontSize = 12;
-const int kBodyFontSize = 10;
+// Font sizes in the report's 96 DPI layout units
+const int kHeaderFontPixels = 21;
+const int kSubheaderFontPixels = 16;
+const int kBodyFontPixels = 13;
 
 struct ReportContext
 {
@@ -56,18 +57,18 @@ void ensureSpace(ReportContext& ctx, int needed)
 /// Sets the painter's font and returns its metrics, both in the report's 96 DPI
 /// layout units. A pixel size keeps the glyphs in the same units as the layout;
 /// a point size would resolve against the printer's own DPI and then be scaled again.
-QFontMetrics setReportFont(ReportContext& ctx, int pointSize, bool bold)
+QFontMetrics setReportFont(ReportContext& ctx, int pixelSize, bool bold)
 {
     QFont font(ctx.fontFamily);
-    font.setPixelSize(qRound(pointSize * 96.0 / 72.0));
+    font.setPixelSize(pixelSize);
     font.setBold(bold);
     ctx.painter->setFont(font);
     return ctx.painter->fontMetrics();
 }
 
-void drawText(ReportContext& ctx, const QString& text, int fontSize, bool bold)
+void drawText(ReportContext& ctx, const QString& text, int pixelSize, bool bold)
 {
-    QFontMetrics fm = setReportFont(ctx, fontSize, bold);
+    QFontMetrics fm = setReportFont(ctx, pixelSize, bold);
     int textHeight = fm.height();
     ensureSpace(ctx, textHeight);
 
@@ -89,7 +90,7 @@ void drawSpacer(ReportContext& ctx, int height)
 
 void drawKeyValue(ReportContext& ctx, const QString& key, const QString& value)
 {
-    QFontMetrics fm = setReportFont(ctx, kBodyFontSize, false);
+    QFontMetrics fm = setReportFont(ctx, kBodyFontPixels, false);
     int textHeight = fm.height();
     ensureSpace(ctx, textHeight);
 
@@ -100,7 +101,7 @@ void drawKeyValue(ReportContext& ctx, const QString& key, const QString& value)
 
 void drawBulletItem(ReportContext& ctx, const QString& text)
 {
-    QFontMetrics fm = setReportFont(ctx, kBodyFontSize, false);
+    QFontMetrics fm = setReportFont(ctx, kBodyFontPixels, false);
     int textHeight = fm.height();
     ensureSpace(ctx, textHeight);
 
@@ -182,25 +183,25 @@ bool ReportGenerator::generateReport(const EmergencyResponse& response,
     ctx.fontFamily = selectFontFamily();
 
     // === 1. Header ===
-    drawText(ctx, QObject::tr("Emergency Response Report"), kHeaderFontSize, true);
+    drawText(ctx, QObject::tr("Emergency Response Report"), kHeaderFontPixels, true);
     drawSpacer(ctx, 4);
-    drawText(ctx, response.name(), kSubheaderFontSize, false);
+    drawText(ctx, response.name(), kSubheaderFontPixels, false);
 
     if (!wardName.isEmpty())
     {
-        drawText(ctx, wardName, kBodyFontSize, false);
+        drawText(ctx, wardName, kBodyFontPixels, false);
     }
 
-    QString dateRange = response.startedAt().toString("MMM d, yyyy h:mm AP");
+    QString dateRange = response.startedAt().toLocalTime().toString("MMM d, yyyy h:mm AP");
     if (endedAt.has_value())
     {
-        dateRange += " - " + endedAt->toString("MMM d, yyyy h:mm AP");
+        dateRange += " - " + endedAt->toLocalTime().toString("MMM d, yyyy h:mm AP");
     }
     else
     {
         dateRange += QObject::tr(" - Ongoing");
     }
-    drawText(ctx, dateRange, kBodyFontSize, false);
+    drawText(ctx, dateRange, kBodyFontPixels, false);
     drawLine(ctx);
 
     // === 2. Overview Statistics ===
@@ -211,14 +212,14 @@ bool ReportGenerator::generateReport(const EmergencyResponse& response,
     int notContactedCount = response.countByStatus(EffectiveContactStatus::NotContacted);
     int contactedCount = total - notContactedCount;
 
-    drawText(ctx, QObject::tr("Overview"), kSubheaderFontSize, true);
+    drawText(ctx, QObject::tr("Overview"), kSubheaderFontPixels, true);
     drawKeyValue(ctx, QObject::tr("Total families"), QString::number(total));
     drawKeyValue(ctx, QObject::tr("Contacted"),
                  QString::number(contactedCount) + " (" + percentString(contactedCount, total) + ")");
     drawSpacer(ctx, kSectionSpacing);
 
     // === 3. Status Breakdown ===
-    drawText(ctx, QObject::tr("Status Breakdown"), kSubheaderFontSize, true);
+    drawText(ctx, QObject::tr("Status Breakdown"), kSubheaderFontPixels, true);
     drawKeyValue(ctx, QObject::tr("OK"),
                  QString::number(okCount) + " (" + percentString(okCount, total) + ")");
     drawKeyValue(ctx, QObject::tr("Needs Help"),
@@ -264,7 +265,7 @@ bool ReportGenerator::generateReport(const EmergencyResponse& response,
         }
     }
 
-    drawText(ctx, QObject::tr("Task Summary"), kSubheaderFontSize, true);
+    drawText(ctx, QObject::tr("Task Summary"), kSubheaderFontPixels, true);
     drawKeyValue(ctx, QObject::tr("Total tasks"), QString::number(totalTasks));
     drawKeyValue(ctx, QObject::tr("Resolved"),
                  QString::number(resolvedTasks) + " (" + percentString(resolvedTasks, totalTasks) + ")");
@@ -276,7 +277,7 @@ bool ReportGenerator::generateReport(const EmergencyResponse& response,
     // Tasks by category
     if (!tasksByCategory.isEmpty())
     {
-        drawText(ctx, QObject::tr("Tasks by Category"), kBodyFontSize, true);
+        drawText(ctx, QObject::tr("Tasks by Category"), kBodyFontPixels, true);
         QList<QString> categories = tasksByCategory.keys();
         std::sort(categories.begin(), categories.end());
         for (const QString& cat : categories)
@@ -287,7 +288,7 @@ bool ReportGenerator::generateReport(const EmergencyResponse& response,
     drawSpacer(ctx, kSectionSpacing);
 
     // === 5. Response Activity ===
-    drawText(ctx, QObject::tr("Response Activity"), kSubheaderFontSize, true);
+    drawText(ctx, QObject::tr("Response Activity"), kSubheaderFontPixels, true);
     drawKeyValue(ctx, QObject::tr("Total contact attempts"), QString::number(totalAttempts));
 
     // List contact methods in fixed order for consistent reports
@@ -325,12 +326,12 @@ bool ReportGenerator::generateReport(const EmergencyResponse& response,
 
     if (!needsHelpFamilies.isEmpty() || !notContactedFamilies.isEmpty())
     {
-        drawText(ctx, QObject::tr("Unresolved Items"), kSubheaderFontSize, true);
+        drawText(ctx, QObject::tr("Unresolved Items"), kSubheaderFontPixels, true);
 
         if (!needsHelpFamilies.isEmpty())
         {
             drawText(ctx, QObject::tr("Families Needing Help (%1)").arg(needsHelpFamilies.size()),
-                     kBodyFontSize, true);
+                     kBodyFontPixels, true);
             for (const QString& name : needsHelpFamilies)
             {
                 drawBulletItem(ctx, name);
@@ -341,7 +342,7 @@ bool ReportGenerator::generateReport(const EmergencyResponse& response,
         if (!notContactedFamilies.isEmpty())
         {
             drawText(ctx, QObject::tr("Families Not Contacted (%1)").arg(notContactedFamilies.size()),
-                     kBodyFontSize, true);
+                     kBodyFontPixels, true);
             for (const QString& name : notContactedFamilies)
             {
                 drawBulletItem(ctx, name);

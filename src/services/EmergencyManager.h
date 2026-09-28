@@ -3,7 +3,6 @@
 #include <QObject>
 #include <optional>
 
-#include "Document.h"
 #include "EmergencyResponse.h"
 
 struct DocumentChange;

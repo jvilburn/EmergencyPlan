@@ -402,7 +402,7 @@ void DocumentManager::maybeRenameForWard()
     {
         if (!QFile::rename(m_filePath, newPath))
         {
-            return;  // Rename failed — keep the old path, no harm done
+            return;  // Rename failed: keep the old path, no harm done
         }
     }
 

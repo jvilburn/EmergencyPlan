@@ -63,7 +63,6 @@ private slots:
     void onEmergencyStarted();
     void onEmergencyEnded();
     void generateEmergencyReport();
-    bool generateEmergencyReportWithConfirm(const std::optional<QDateTime>& endedAt);
     void updateEmergencyActions();
 
     // Sidebar tabs
@@ -83,6 +82,10 @@ private:
     void initializeDefaultLocation();
     void openEditPanel(const FamilyId& familyId);
     void closeEditPanelInternal();
+
+    /// Asks where to save the emergency report and writes it. Returns the saved
+    /// path, or nullopt when the user cancels or the report cannot be written.
+    std::optional<QString> saveEmergencyReport(const std::optional<QDateTime>& endedAt);
 
     // Settings helpers
     static QString settingsFilePath();

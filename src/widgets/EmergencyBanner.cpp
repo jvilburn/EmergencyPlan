@@ -30,12 +30,6 @@ EmergencyBanner::EmergencyBanner(QWidget* parent)
 void EmergencyBanner::setEmergencyName(const QString& name)
 {
     m_label->setText(tr("EMERGENCY: %1").arg(name));
-    setStyleSheet(
-        "QFrame {"
-        "  background-color: #FFA726;"
-        "  color: #333;"
-        "  font-weight: bold;"
-        "}");
     show();
 }
 
