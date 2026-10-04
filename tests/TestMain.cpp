@@ -5,8 +5,10 @@
 #include "DocumentChainTest.h"
 #include "DocumentCrypto.h"
 #include "DocumentCryptoTest.h"
+#include "DocumentFileTest.h"
 #include "DocumentHeaderTest.h"
 #include "DocumentParseTest.h"
+#include "DocumentSessionTest.h"
 #include "FakeServer.h"
 #include "FakeServerTest.h"
 #include "FormatVectorsTest.h"
@@ -14,7 +16,9 @@
 #include "PairingTest.h"
 #include "ReconcileTest.h"
 #include "ResponseMergeTest.h"
+#include "RosterChangeQueueTest.h"
 #include "ServerConformanceTest.h"
+#include "ServerConnectionTest.h"
 #include "SmokeTest.h"
 #include "WardDirectoryImportTest.h"
 
@@ -79,6 +83,10 @@ int main(int argc, char** argv)
     status |= run<ReconcileTest>(argc, argv);
     status |= run<ResponseMergeTest>(argc, argv);
     status |= run<PairingTest>(argc, argv);
+    status |= run<ServerConnectionTest>(argc, argv);
+    status |= run<DocumentFileTest>(argc, argv);
+    status |= run<DocumentSessionTest>(argc, argv);
+    status |= run<RosterChangeQueueTest>(argc, argv);
 
     return status;
 }

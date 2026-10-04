@@ -61,12 +61,13 @@ private slots:
     void onlyCurrentDevicesReadOrWrite();
     void anAcceptedUploadChangesTheAllowListAtOnce();
     void aDownloadIsOneConsistentSnapshot();
+    void aSnapshotEndsWithTheHeaderOfItsVersion();
 
     // The chain
     void everyUploadMustExtendTheChain();
     void keepsOnlyHeadersThatChangedMembership();
-    void theChainEndsWithTheRequestedVersion();
     void aFormerDeviceReadsTheChainOnlyThroughItsRemoval();
+    void aRemovedDeviceReadsItsRemovalWithoutTheHead();
     void aDeviceNeverListedCannotReadTheChain();
 
     // Members and devices joining

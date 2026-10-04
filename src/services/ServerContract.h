@@ -6,10 +6,12 @@
 
 #include <QByteArray>
 #include <QDateTime>
+#include <QJsonObject>
 #include <QList>
 #include <QString>
 #include <QStringList>
 
+#include <functional>
 #include <optional>
 
 /// What the Ward Planning server accepts and returns - types only, no transport.
@@ -60,6 +62,12 @@ struct Result
     static Result failure(ServerError reason) { return Result{std::nullopt, reason}; }
 };
 
+/// How every call answers. Called exactly once, and never before the call that
+/// was given it returns, so a caller may start a request from inside its own
+/// state change without being re-entered halfway through it.
+template<typename T>
+using Reply = std::function<void(const Result<T>&)>;
+
 /// The value of a call that returns nothing but success.
 struct Done
 {
@@ -73,30 +81,39 @@ struct Session
     QString token;
 };
 
-/// GET /documents/{id}/head
+/// GET /documents/{id}/head - member authentication.
 struct Head
 {
     qint64 version = 0;
-    int keyGeneration = 0;
     std::optional<Fingerprint> leaseHolder;
-    DocumentHeader header;
 };
 
-/// GET /documents/{id} - version, header, and blob from one consistent state, so
-/// a publish landing mid-download can never pair a header with another version's
-/// blob.
+// Reads carry headers as the server stored them. A reader parses them with
+// Reconcile::readHeaders, so a header in a later format reaches the client as
+// NeedsNewerVersion rather than being lost in transit.
+
+/// GET /documents/{id}?after={base} - member authentication. One consistent
+/// state: the kept headers newer than base, then the current header, and the
+/// current blob, so a publish landing mid-download can never pair a header with
+/// another version's blob.
+///
+/// after runs from 0 to the current version. 0 is a device with no base: the
+/// whole kept chain. The current version itself is a device whose base is
+/// current: the current header alone.
 struct Snapshot
 {
     qint64 version = 0;
-    DocumentHeader header;
+    QList<QJsonObject> headers;     ///< never empty; ends with the header of version
     QByteArray blob;
 };
 
-/// GET /documents/{id}/headers?after={base}&through={version} - the kept headers
-/// newer than base, then the header of the requested version, in order.
+/// GET /documents/{id}/headers?after={base} - device authentication. The kept
+/// headers newer than base, then the current header; for a former device, up to
+/// and including the header that removed it, so it can prove its removal without
+/// knowing the current version, which the server no longer tells it.
 struct HeaderChain
 {
-    QList<DocumentHeader> headers;
+    QList<QJsonObject> headers;
 };
 
 /// POST /documents and PUT /documents/{id}: the plaintext header and the opaque
@@ -197,7 +214,11 @@ bool requestVerifies(Endpoint endpoint,
                      const QByteArray& signature,
                      const VerifyKey& key);
 
-/// The server, one method per endpoint.
+/// The server, one method per endpoint, each answering through its reply.
+///
+/// The real server answers over the network and the window must not freeze while
+/// it does, so no call returns its result. Every implementation keeps the two
+/// rules on Reply: called exactly once, never before the call returns.
 ///
 /// FakeServer implements it in memory. The conformance suite is written against
 /// this interface only, so the same tests run against the fake and - through an
@@ -211,107 +232,123 @@ public:
     // --- Authentication ---
 
     /// Single-use bytes to sign under SignatureTag::Auth.
-    virtual Result<QByteArray> challenge() = 0;
+    virtual void challenge(Reply<QByteArray> reply) = 0;
 
-    virtual Result<Session> authenticate(const VerifyKey& device,
-                                         const QByteArray& challenge,
-                                         const QByteArray& signature) = 0;
+    virtual void authenticate(const VerifyKey& device,
+                              const QByteArray& challenge,
+                              const QByteArray& signature,
+                              Reply<Session> reply) = 0;
 
     // --- Documents ---
 
     /// POST /documents. Device authentication: the document does not exist yet.
-    virtual Result<qint64> registerDocument(const Session& session,
-                                            const Upload& upload,
-                                            const QByteArray& requestSignature) = 0;
-
-    virtual Result<Head> head(const Session& session, const QString& documentId) = 0;
-
-    virtual Result<HeaderChain> headers(const Session& session,
-                                        const QString& documentId,
-                                        qint64 after,
-                                        qint64 through) = 0;
-
-    virtual Result<Snapshot> download(const Session& session, const QString& documentId) = 0;
-
-    /// PUT /documents/{id}, conditional on baseVersion. Returns the new version.
-    virtual Result<qint64> upload(const Session& session,
-                                  const QString& documentId,
-                                  qint64 baseVersion,
+    virtual void registerDocument(const Session& session,
                                   const Upload& upload,
-                                  const QByteArray& requestSignature) = 0;
+                                  const QByteArray& requestSignature,
+                                  Reply<qint64> reply) = 0;
+
+    virtual void head(const Session& session, const QString& documentId, Reply<Head> reply) = 0;
+
+    virtual void headers(const Session& session,
+                         const QString& documentId,
+                         qint64 after,
+                         Reply<HeaderChain> reply) = 0;
+
+    virtual void download(const Session& session,
+                          const QString& documentId,
+                          qint64 after,
+                          Reply<Snapshot> reply) = 0;
+
+    /// PUT /documents/{id}, conditional on baseVersion. Answers the new version.
+    virtual void upload(const Session& session,
+                        const QString& documentId,
+                        qint64 baseVersion,
+                        const Upload& upload,
+                        const QByteArray& requestSignature,
+                        Reply<qint64> reply) = 0;
 
     // --- Lease ---
 
     /// Takes the lease, or refreshes it when this device already holds it.
-    virtual Result<Lease> takeLease(const Session& session,
-                                    const QString& documentId,
-                                    const QByteArray& requestSignature) = 0;
-    virtual Result<Done> releaseLease(const Session& session,
-                                      const QString& documentId,
-                                      const QByteArray& requestSignature) = 0;
+    virtual void takeLease(const Session& session,
+                           const QString& documentId,
+                           const QByteArray& requestSignature,
+                           Reply<Lease> reply) = 0;
+    virtual void releaseLease(const Session& session,
+                              const QString& documentId,
+                              const QByteArray& requestSignature,
+                              Reply<Done> reply) = 0;
 
     // --- Access requests ---
 
     /// Device authentication: the one write open to a non-member.
-    virtual Result<Done> requestAccess(const Session& session,
-                                       const QString& documentId,
-                                       const AccessRequest& request,
-                                       const QByteArray& requestSignature) = 0;
+    virtual void requestAccess(const Session& session,
+                               const QString& documentId,
+                               const AccessRequest& request,
+                               const QByteArray& requestSignature,
+                               Reply<Done> reply) = 0;
 
-    virtual Result<QList<AccessRequest>> accessRequests(const Session& session,
-                                                        const QString& documentId) = 0;
+    virtual void accessRequests(const Session& session,
+                                const QString& documentId,
+                                Reply<QList<AccessRequest>> reply) = 0;
 
-    virtual Result<Done> clearAccessRequest(const Session& session,
-                                            const QString& documentId,
-                                            const Fingerprint& device,
-                                            const QByteArray& requestSignature) = 0;
+    virtual void clearAccessRequest(const Session& session,
+                                    const QString& documentId,
+                                    const Fingerprint& device,
+                                    const QByteArray& requestSignature,
+                                    Reply<Done> reply) = 0;
 
     /// Device authentication: the requester's own request only.
-    virtual Result<RequestStatus> myRequestStatus(const Session& session,
-                                                  const QString& documentId) = 0;
+    virtual void myRequestStatus(const Session& session,
+                                 const QString& documentId,
+                                 Reply<RequestStatus> reply) = 0;
 
     // --- This device ---
 
     /// Device authentication: the documents whose current header lists this
     /// device, so a reinstall restores the ward list.
-    virtual Result<QStringList> myDocuments(const Session& session) = 0;
+    virtual void myDocuments(const Session& session, Reply<QStringList> reply) = 0;
 
     // --- Pairings ---
 
-    /// Device authentication. Returns the pairing code.
-    virtual Result<QString> startPairing(const Session& session,
-                                         const QString& deviceName,
-                                         const QByteArray& commitment,
-                                         const QByteArray& requestSignature) = 0;
+    /// Device authentication. Answers the pairing code.
+    virtual void startPairing(const Session& session,
+                              const QString& deviceName,
+                              const QByteArray& commitment,
+                              const QByteArray& requestSignature,
+                              Reply<QString> reply) = 0;
 
-    virtual Result<PairingState> pairing(const Session& session, const QString& code) = 0;
+    virtual void pairing(const Session& session, const QString& code, Reply<PairingState> reply) = 0;
 
     /// Member authentication on some document; written once.
-    virtual Result<Done> respondToPairing(const Session& session,
-                                          const QString& code,
-                                          const DeviceKeys& responder,
-                                          const QByteArray& requestSignature) = 0;
+    virtual void respondToPairing(const Session& session,
+                                  const QString& code,
+                                  const DeviceKeys& responder,
+                                  const QByteArray& requestSignature,
+                                  Reply<Done> reply) = 0;
 
     /// The initiator only, after the responder; written once.
-    virtual Result<Done> revealPairing(const Session& session,
-                                       const QString& code,
-                                       const DeviceKeys& initiator,
-                                       const QByteArray& nonce,
-                                       const QByteArray& requestSignature) = 0;
+    virtual void revealPairing(const Session& session,
+                               const QString& code,
+                               const DeviceKeys& initiator,
+                               const QByteArray& nonce,
+                               const QByteArray& requestSignature,
+                               Reply<Done> reply) = 0;
 
     /// The responder only, after the reveal; written once. Completing it is what
     /// lets the initiator's device be added under the responder's person.
-    virtual Result<Done> handOver(const Session& session,
-                                  const QString& code,
-                                  const QByteArray& handover,
-                                  const QByteArray& requestSignature) = 0;
+    virtual void handOver(const Session& session,
+                          const QString& code,
+                          const QByteArray& handover,
+                          const QByteArray& requestSignature,
+                          Reply<Done> reply) = 0;
 
     // --- Development only ---
 
     /// Moves the server's clock forward. The fake always honours it; the real
     /// server only in local development, never in a deployed build. It exists so
     /// the conformance suite can check session, lease, and pairing expiry.
-    virtual Result<Done> advanceClock(qint64 seconds) = 0;
+    virtual void advanceClock(qint64 seconds, Reply<Done> reply) = 0;
 };
 
 } // namespace ServerContract

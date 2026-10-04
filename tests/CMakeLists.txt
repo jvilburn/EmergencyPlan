@@ -21,15 +21,20 @@ set(TEST_SOURCES
     services/CryptoTypesTest.cpp
     services/DocumentChainTest.cpp
     services/DocumentCryptoTest.cpp
+    services/DocumentFileTest.cpp
     services/DocumentHeaderTest.cpp
+    services/DocumentSessionTest.cpp
     services/FakeServer.cpp
     services/FakeServerTest.cpp
     services/FormatVectorsTest.cpp
     services/PairingTest.cpp
     services/ReconcileTest.cpp
     services/ResponseMergeTest.cpp
+    services/RosterChangeQueueTest.cpp
     services/ServerConformanceTest.cpp
+    services/ServerConnectionTest.cpp
     services/ServerTestSupport.cpp
+    services/SessionTestSupport.cpp
     services/SmokeTest.cpp
     services/WardDirectoryImportTest.cpp
 )

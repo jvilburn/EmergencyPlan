@@ -1669,6 +1669,43 @@ Existing `*_archives/` folders are left on disk; the app stops reading them.
 
 ### Task 6: The sync-and-save core
 
+> **Done.** Committed at Task 7. Where the code differs from the sections below, the
+> code is the reference:
+> - **`ServerVersion.h/.cpp`** holds what the session and the queue share: reading and
+>   writing the base copy, forgetting a ward, fetching and validating the server's
+>   version, and the removal proof. `DocumentSession::forget` is `ServerVersion::forget`.
+> - **The high-water mark is the base version's header.** It rises when the local file
+>   takes in a server version or a publish is accepted, and only then; the queue does not
+>   raise it, since a closed ward's local file would then fail to open after a rotation.
+>   "Unpublished changes" is the local counter above the mark, which needs no base copy.
+> - **A session owns its timers**, passed to `create` and `open`, and the queue owns its
+>   own. The backoff constants are `SessionTimers::FirstRetryMilliseconds` and
+>   `LastRetryMilliseconds`.
+> - **Destroying a session closes it** - the scheduled save is written and the lease
+>   released, and every reply still on its way is dropped - so there is no `close()`.
+>   `flush()` reports whether that save succeeds; a failed save stays scheduled.
+> - `documentReplaced` is emitted in one place: whenever the local file takes in a
+>   document other than the one in memory.
+> - Every head check asked while another operation is in flight runs when it ends.
+>   Registration is one of those operations.
+> - `syncState()` comes with `faultReason()`; `open` returns a refusal's reason.
+> - The write-path backstop is gone: `m_document` changes only through `edit()`, which
+>   refuses first.
+> - **The queue keeps the open ward current.** `setOpenSession` names it; after a publish
+>   to it the session checks the server, and when this device is proven off it the
+>   session finishes removed and writes nothing more. `shareOpenWard` shares it with the
+>   pending Links, which then finish through `changeFinished`; `DocumentSession::share`
+>   takes the devices to link.
+> - `RosterChange` has no document id; the record that keeps it, and the queue's calls,
+>   name the ward. `DocumentRecords::documentIds()` lets a queue resume.
+> - A ward that cannot publish now waits for the next Retry while the others go ahead. A
+>   fetch that got no answer to judge is retried; `ValidationFailed` is a version that did
+>   not validate, or one the server refused as malformed.
+> - `download(after)` runs from 0 to the current version; the current version itself
+>   serves the current header alone, and a snapshot at the base version is judged by
+>   itself and must equal the held base header. `FakeServer::withholdHeader` never drops
+>   the last header a read serves, and `substituteHeader` reaches downloads too.
+
 **Everything that decides how a document is saved, published, and kept safe at run time,
 written as one artifact.** Task 1 made the decisions as pure functions over values. This
 task is the orchestration that carries them out: the file on disk, the open ward's state
@@ -3440,3 +3477,6 @@ the kind of feature whose failures are invisible in unit tests.
 - A version written by a newer app is refused; until the server again serves an understood
   version, or the app is updated, the directory stays read-only and nothing publishes,
   while emergency response edits save locally.
+- The rollback check follows the server's versions: a local file rolled back to an
+  unpublished save above the base goes unnoticed, and an unshared ward has no rollback
+  check at all.

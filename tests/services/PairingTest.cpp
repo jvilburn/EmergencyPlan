@@ -252,11 +252,17 @@ void PairingTest::theResponderKeepsTheFirstCommitmentItReads()
 
     // The responder, driven by what the server returns.
     Pairing::Responder responder(keysOf(w.alice));
-    const PairingState first = server.pairing(w.aliceSession, code.value.value()).value.value();
+    const PairingState first = wait<PairingState>([&](Reply<PairingState> reply)
+    {
+        server.pairing(w.aliceSession, code.value.value(), reply);
+    }).value.value();
     QVERIFY(responder.keepCommitment(first.commitment));
     QVERIFY(signedRespondToPairing(server, w.aliceSession, code.value.value(), keysOf(w.alice)).ok());
 
-    const PairingState second = server.pairing(w.aliceSession, code.value.value()).value.value();
+    const PairingState second = wait<PairingState>([&](Reply<PairingState> reply)
+    {
+        server.pairing(w.aliceSession, code.value.value(), reply);
+    }).value.value();
     QVERIFY(!responder.keepCommitment(second.commitment));
     QVERIFY(!responder.acceptReveal(second.initiator.value(), second.nonce).has_value());
 

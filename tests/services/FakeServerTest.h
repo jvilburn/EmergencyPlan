@@ -21,4 +21,10 @@ private slots:
     void aSubstitutedHeaderIsServedInItsPlace();
     void scriptedPairingReadsAreServedInOrder();
     void limitsAreConfigurable();
+
+    // Replies
+    void aReplyNeverArrivesBeforeTheCallReturns();
+    void heldRepliesArriveInCallOrderOneAtATime();
+    void anUploadTakesEffectWhileItsReplyIsHeld();
+    void aLostReplysUploadIsStillTheCurrentVersion();
 };

@@ -204,6 +204,15 @@ set(SERVICE_SOURCES
     src/services/Reconcile.cpp
     src/services/ResponseMerge.cpp
     src/services/ServerContract.cpp
+    src/services/DeviceIdentity.cpp
+    src/services/DocumentFile.cpp
+    src/services/DocumentRecords.cpp
+    src/services/DocumentSession.cpp
+    src/services/RosterChange.cpp
+    src/services/RosterChangeQueue.cpp
+    src/services/ServerConnection.cpp
+    src/services/ServerVersion.cpp
+    src/services/SessionTimers.cpp
     # src/services/StatisticsService.cpp
     # src/services/ResourceService.cpp
     # src/services/SearchService.cpp
@@ -241,6 +250,15 @@ set(SERVICE_HEADERS
     src/services/Reconcile.h
     src/services/ResponseMerge.h
     src/services/ServerContract.h
+    src/services/DeviceIdentity.h
+    src/services/DocumentFile.h
+    src/services/DocumentRecords.h
+    src/services/DocumentSession.h
+    src/services/RosterChange.h
+    src/services/RosterChangeQueue.h
+    src/services/ServerConnection.h
+    src/services/ServerVersion.h
+    src/services/SessionTimers.h
     # src/services/StatisticsService.h
     # src/services/ResourceService.h
     # src/services/SearchService.h

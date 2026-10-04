@@ -3,9 +3,14 @@
 #include "ChainTestSupport.h"
 #include "ServerContract.h"
 
+#include <QEventLoop>
 #include <QList>
+#include <QPointer>
 #include <QString>
+#include <QTimer>
 
+#include <functional>
+#include <memory>
 #include <optional>
 
 /// Driving a ServerApi the way a client does, for the server test suites.
@@ -17,6 +22,42 @@ namespace ServerTestSupport
 {
 
 using ChainTestSupport::TestDevice;
+
+/// Runs call with a reply that stores the result, then spins a QEventLoop until
+/// it arrives. Ten seconds without one is ServerError::Unreachable. Waiting on the
+/// event loop serves the fake and a real server alike.
+template<typename T>
+ServerContract::Result<T> wait(const std::function<void(ServerContract::Reply<T>)>& call)
+{
+    constexpr int TimeoutMilliseconds = 10 * 1000;
+
+    // Shared with the reply, which may still arrive after a timeout has returned.
+    const std::shared_ptr<std::optional<ServerContract::Result<T>>> result =
+        std::make_shared<std::optional<ServerContract::Result<T>>>();
+    QEventLoop loop;
+    QPointer<QEventLoop> waiting(&loop);
+
+    call([result, waiting](const ServerContract::Result<T>& answer)
+    {
+        *result = answer;
+        if (waiting)
+        {
+            waiting->quit();
+        }
+    });
+
+    if (!result->has_value())
+    {
+        QTimer::singleShot(TimeoutMilliseconds, &loop, &QEventLoop::quit);
+        loop.exec();
+    }
+
+    if (!result->has_value())
+    {
+        return ServerContract::Result<T>::failure(ServerContract::ServerError::Unreachable);
+    }
+    return result->value();
+}
 
 /// One ward on the server, and what the test knows about it.
 struct SharedDocument

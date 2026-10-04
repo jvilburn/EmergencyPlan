@@ -32,7 +32,8 @@ namespace ServerTestSupport
 
 std::optional<Session> signIn(ServerApi& server, const TestDevice& device)
 {
-    const Result<QByteArray> challenge = server.challenge();
+    const Result<QByteArray> challenge =
+        wait<QByteArray>([&](Reply<QByteArray> reply) { server.challenge(reply); });
     if (!challenge.ok())
     {
         return std::nullopt;
@@ -42,7 +43,10 @@ std::optional<Session> signIn(ServerApi& server, const TestDevice& device)
                                                       challenge.value.value(),
                                                       device.signing.signingKey);
     const std::optional<Session> session =
-        server.authenticate(device.signing.verifyKey, challenge.value.value(), signature).value;
+        wait<Session>([&](Reply<Session> reply)
+        {
+            server.authenticate(device.signing.verifyKey, challenge.value.value(), signature, reply);
+        }).value;
     if (session.has_value())
     {
         signers().insert(session.value().token, device);
@@ -62,10 +66,12 @@ const TestDevice& signerOf(const Session& session)
 
 Result<qint64> signedRegisterDocument(ServerApi& server, const Session& session, const Upload& upload)
 {
-    return server.registerDocument(
-        session,
-        upload,
-        signAs(session, Endpoint::RegisterDocument, upload.header.documentId, registerBody(upload)));
+    const QByteArray signature =
+        signAs(session, Endpoint::RegisterDocument, upload.header.documentId, registerBody(upload));
+    return wait<qint64>([&](Reply<qint64> reply)
+    {
+        server.registerDocument(session, upload, signature, reply);
+    });
 }
 
 Result<qint64> signedUpload(ServerApi& server,
@@ -74,25 +80,23 @@ Result<qint64> signedUpload(ServerApi& server,
                             qint64 baseVersion,
                             const Upload& upload)
 {
-    return server.upload(session,
-                         documentId,
-                         baseVersion,
-                         upload,
-                         signAs(session, Endpoint::Upload, documentId, uploadBody(baseVersion, upload)));
+    const QByteArray signature = signAs(session, Endpoint::Upload, documentId, uploadBody(baseVersion, upload));
+    return wait<qint64>([&](Reply<qint64> reply)
+    {
+        server.upload(session, documentId, baseVersion, upload, signature, reply);
+    });
 }
 
 Result<Lease> signedTakeLease(ServerApi& server, const Session& session, const QString& documentId)
 {
-    return server.takeLease(session,
-                            documentId,
-                            signAs(session, Endpoint::TakeLease, documentId, emptyBody()));
+    const QByteArray signature = signAs(session, Endpoint::TakeLease, documentId, emptyBody());
+    return wait<Lease>([&](Reply<Lease> reply) { server.takeLease(session, documentId, signature, reply); });
 }
 
 Result<Done> signedReleaseLease(ServerApi& server, const Session& session, const QString& documentId)
 {
-    return server.releaseLease(session,
-                               documentId,
-                               signAs(session, Endpoint::ReleaseLease, documentId, emptyBody()));
+    const QByteArray signature = signAs(session, Endpoint::ReleaseLease, documentId, emptyBody());
+    return wait<Done>([&](Reply<Done> reply) { server.releaseLease(session, documentId, signature, reply); });
 }
 
 Result<Done> signedRequestAccess(ServerApi& server,
@@ -100,11 +104,12 @@ Result<Done> signedRequestAccess(ServerApi& server,
                                  const QString& documentId,
                                  const AccessRequest& request)
 {
-    return server.requestAccess(
-        session,
-        documentId,
-        request,
-        signAs(session, Endpoint::RequestAccess, documentId, requestAccessBody(request)));
+    const QByteArray signature =
+        signAs(session, Endpoint::RequestAccess, documentId, requestAccessBody(request));
+    return wait<Done>([&](Reply<Done> reply)
+    {
+        server.requestAccess(session, documentId, request, signature, reply);
+    });
 }
 
 Result<Done> signedClearAccessRequest(ServerApi& server,
@@ -112,11 +117,12 @@ Result<Done> signedClearAccessRequest(ServerApi& server,
                                       const QString& documentId,
                                       const Fingerprint& device)
 {
-    return server.clearAccessRequest(
-        session,
-        documentId,
-        device,
-        signAs(session, Endpoint::ClearAccessRequest, documentId, clearAccessRequestBody(device)));
+    const QByteArray signature =
+        signAs(session, Endpoint::ClearAccessRequest, documentId, clearAccessRequestBody(device));
+    return wait<Done>([&](Reply<Done> reply)
+    {
+        server.clearAccessRequest(session, documentId, device, signature, reply);
+    });
 }
 
 Result<QString> signedStartPairing(ServerApi& server,
@@ -124,11 +130,12 @@ Result<QString> signedStartPairing(ServerApi& server,
                                    const QString& deviceName,
                                    const QByteArray& commitment)
 {
-    return server.startPairing(
-        session,
-        deviceName,
-        commitment,
-        signAs(session, Endpoint::StartPairing, QString(), startPairingBody(deviceName, commitment)));
+    const QByteArray signature =
+        signAs(session, Endpoint::StartPairing, QString(), startPairingBody(deviceName, commitment));
+    return wait<QString>([&](Reply<QString> reply)
+    {
+        server.startPairing(session, deviceName, commitment, signature, reply);
+    });
 }
 
 Result<Done> signedRespondToPairing(ServerApi& server,
@@ -136,11 +143,12 @@ Result<Done> signedRespondToPairing(ServerApi& server,
                                     const QString& code,
                                     const DeviceKeys& responder)
 {
-    return server.respondToPairing(
-        session,
-        code,
-        responder,
-        signAs(session, Endpoint::RespondToPairing, QString(), respondToPairingBody(code, responder)));
+    const QByteArray signature =
+        signAs(session, Endpoint::RespondToPairing, QString(), respondToPairingBody(code, responder));
+    return wait<Done>([&](Reply<Done> reply)
+    {
+        server.respondToPairing(session, code, responder, signature, reply);
+    });
 }
 
 Result<Done> signedRevealPairing(ServerApi& server,
@@ -149,12 +157,12 @@ Result<Done> signedRevealPairing(ServerApi& server,
                                  const DeviceKeys& initiator,
                                  const QByteArray& nonce)
 {
-    return server.revealPairing(
-        session,
-        code,
-        initiator,
-        nonce,
-        signAs(session, Endpoint::RevealPairing, QString(), revealPairingBody(code, initiator, nonce)));
+    const QByteArray signature =
+        signAs(session, Endpoint::RevealPairing, QString(), revealPairingBody(code, initiator, nonce));
+    return wait<Done>([&](Reply<Done> reply)
+    {
+        server.revealPairing(session, code, initiator, nonce, signature, reply);
+    });
 }
 
 Result<Done> signedHandOver(ServerApi& server,
@@ -162,10 +170,8 @@ Result<Done> signedHandOver(ServerApi& server,
                             const QString& code,
                             const QByteArray& handover)
 {
-    return server.handOver(session,
-                           code,
-                           handover,
-                           signAs(session, Endpoint::HandOver, QString(), handOverBody(code, handover)));
+    const QByteArray signature = signAs(session, Endpoint::HandOver, QString(), handOverBody(code, handover));
+    return wait<Done>([&](Reply<Done> reply) { server.handOver(session, code, handover, signature, reply); });
 }
 
 DeviceKeys keysOf(const TestDevice& device)
@@ -214,7 +220,8 @@ bool signInAll(ServerApi& server, SharedDocument& ward)
 
 bool advance(ServerApi& server, SharedDocument& ward, qint64 seconds)
 {
-    return server.advanceClock(seconds).ok() && signInAll(server, ward);
+    return wait<Done>([&](Reply<Done> reply) { server.advanceClock(seconds, reply); }).ok()
+        && signInAll(server, ward);
 }
 
 std::optional<SharedDocument> registerWardWith(ServerApi& server,
@@ -329,7 +336,12 @@ bool completePairing(ServerApi& server,
         return false;
     }
 
-    return server.pairing(responderSession, code.value.value()).ok()
+    const Result<PairingState> read = wait<PairingState>([&](Reply<PairingState> reply)
+    {
+        server.pairing(responderSession, code.value.value(), reply);
+    });
+
+    return read.ok()
         && signedRespondToPairing(server, responderSession, code.value.value(), keysOf(responder)).ok()
         && signedRevealPairing(server, initiatorSession, code.value.value(), keysOf(initiator), Pairing::newNonce())
                .ok()

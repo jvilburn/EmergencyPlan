@@ -4,6 +4,8 @@
 #include "HexCodec.h"
 #include "Pairing.h"
 
+#include <QTimer>
+
 using namespace ServerContract;
 
 namespace
@@ -74,9 +76,167 @@ FakeServer::FakeServer(const Limits& limits)
 {
 }
 
+// --- ServerApi: decided at call time, answered later ---------------------------
+//
+// Each call changes the server's state when it is made, as a request does when it
+// reaches a real server, and its reply waits in the queue for a later turn of the
+// event loop.
+
+void FakeServer::challenge(Reply<QByteArray> reply)
+{
+    answer(decideChallenge(), reply);
+}
+
+void FakeServer::authenticate(const VerifyKey& device,
+                              const QByteArray& challenge,
+                              const QByteArray& signature,
+                              Reply<Session> reply)
+{
+    answer(decideAuthenticate(device, challenge, signature), reply);
+}
+
+void FakeServer::registerDocument(const Session& session,
+                                  const Upload& upload,
+                                  const QByteArray& requestSignature,
+                                  Reply<qint64> reply)
+{
+    answer(decideRegisterDocument(session, upload, requestSignature), reply);
+}
+
+void FakeServer::head(const Session& session, const QString& documentId, Reply<Head> reply)
+{
+    answer(decideHead(session, documentId), reply);
+}
+
+void FakeServer::headers(const Session& session,
+                         const QString& documentId,
+                         qint64 after,
+                         Reply<HeaderChain> reply)
+{
+    answer(decideHeaders(session, documentId, after), reply);
+}
+
+void FakeServer::download(const Session& session,
+                          const QString& documentId,
+                          qint64 after,
+                          Reply<Snapshot> reply)
+{
+    answer(decideDownload(session, documentId, after), reply);
+}
+
+void FakeServer::upload(const Session& session,
+                        const QString& documentId,
+                        qint64 baseVersion,
+                        const Upload& upload,
+                        const QByteArray& requestSignature,
+                        Reply<qint64> reply)
+{
+    answer(decideUpload(session, documentId, baseVersion, upload, requestSignature), reply);
+}
+
+void FakeServer::takeLease(const Session& session,
+                           const QString& documentId,
+                           const QByteArray& requestSignature,
+                           Reply<Lease> reply)
+{
+    answer(decideTakeLease(session, documentId, requestSignature), reply);
+}
+
+void FakeServer::releaseLease(const Session& session,
+                              const QString& documentId,
+                              const QByteArray& requestSignature,
+                              Reply<Done> reply)
+{
+    answer(decideReleaseLease(session, documentId, requestSignature), reply);
+}
+
+void FakeServer::requestAccess(const Session& session,
+                               const QString& documentId,
+                               const AccessRequest& request,
+                               const QByteArray& requestSignature,
+                               Reply<Done> reply)
+{
+    answer(decideRequestAccess(session, documentId, request, requestSignature), reply);
+}
+
+void FakeServer::accessRequests(const Session& session,
+                                const QString& documentId,
+                                Reply<QList<AccessRequest>> reply)
+{
+    answer(decideAccessRequests(session, documentId), reply);
+}
+
+void FakeServer::clearAccessRequest(const Session& session,
+                                    const QString& documentId,
+                                    const Fingerprint& device,
+                                    const QByteArray& requestSignature,
+                                    Reply<Done> reply)
+{
+    answer(decideClearAccessRequest(session, documentId, device, requestSignature), reply);
+}
+
+void FakeServer::myRequestStatus(const Session& session,
+                                 const QString& documentId,
+                                 Reply<RequestStatus> reply)
+{
+    answer(decideMyRequestStatus(session, documentId), reply);
+}
+
+void FakeServer::myDocuments(const Session& session, Reply<QStringList> reply)
+{
+    answer(decideMyDocuments(session), reply);
+}
+
+void FakeServer::startPairing(const Session& session,
+                              const QString& deviceName,
+                              const QByteArray& commitment,
+                              const QByteArray& requestSignature,
+                              Reply<QString> reply)
+{
+    answer(decideStartPairing(session, deviceName, commitment, requestSignature), reply);
+}
+
+void FakeServer::pairing(const Session& session, const QString& code, Reply<PairingState> reply)
+{
+    answer(decidePairing(session, code), reply);
+}
+
+void FakeServer::respondToPairing(const Session& session,
+                                  const QString& code,
+                                  const DeviceKeys& responder,
+                                  const QByteArray& requestSignature,
+                                  Reply<Done> reply)
+{
+    answer(decideRespondToPairing(session, code, responder, requestSignature), reply);
+}
+
+void FakeServer::revealPairing(const Session& session,
+                               const QString& code,
+                               const DeviceKeys& initiator,
+                               const QByteArray& nonce,
+                               const QByteArray& requestSignature,
+                               Reply<Done> reply)
+{
+    answer(decideRevealPairing(session, code, initiator, nonce, requestSignature), reply);
+}
+
+void FakeServer::handOver(const Session& session,
+                          const QString& code,
+                          const QByteArray& handover,
+                          const QByteArray& requestSignature,
+                          Reply<Done> reply)
+{
+    answer(decideHandOver(session, code, handover, requestSignature), reply);
+}
+
+void FakeServer::advanceClock(qint64 seconds, Reply<Done> reply)
+{
+    answer(decideAdvanceClock(seconds), reply);
+}
+
 // --- Authentication ------------------------------------------------------------
 
-Result<QByteArray> FakeServer::challenge()
+Result<QByteArray> FakeServer::decideChallenge()
 {
     if (m_offline)
     {
@@ -85,12 +245,13 @@ Result<QByteArray> FakeServer::challenge()
 
     const QByteArray challenge = DocumentCrypto::generateDataKey().bytes;
     m_challenges.insert(challenge);
+    ++m_challengesIssued;
     return Result<QByteArray>::success(challenge);
 }
 
-Result<Session> FakeServer::authenticate(const VerifyKey& device,
-                                         const QByteArray& challenge,
-                                         const QByteArray& signature)
+Result<Session> FakeServer::decideAuthenticate(const VerifyKey& device,
+                                               const QByteArray& challenge,
+                                               const QByteArray& signature)
 {
     if (m_offline)
     {
@@ -113,9 +274,9 @@ Result<Session> FakeServer::authenticate(const VerifyKey& device,
 
 // --- Documents -----------------------------------------------------------------
 
-Result<qint64> FakeServer::registerDocument(const Session& session,
-                                            const Upload& upload,
-                                            const QByteArray& requestSignature)
+Result<qint64> FakeServer::decideRegisterDocument(const Session& session,
+                                                  const Upload& upload,
+                                                  const QByteArray& requestSignature)
 {
     VerifyKey device;
     const ServerError failure = authenticated(session, device);
@@ -201,7 +362,7 @@ Result<qint64> FakeServer::registerDocument(const Session& session,
     return Result<qint64>::success(1);
 }
 
-Result<Head> FakeServer::head(const Session& session, const QString& documentId)
+Result<Head> FakeServer::decideHead(const Session& session, const QString& documentId)
 {
     VerifyKey device;
     StoredDocument* document = nullptr;
@@ -213,8 +374,6 @@ Result<Head> FakeServer::head(const Session& session, const QString& documentId)
 
     Head head;
     head.version = document->version;
-    head.keyGeneration = document->current().keyGeneration;
-    head.header = document->current();
 
     if (document->lease.has_value() && document->lease.value().expires > m_now)
     {
@@ -224,10 +383,9 @@ Result<Head> FakeServer::head(const Session& session, const QString& documentId)
     return Result<Head>::success(head);
 }
 
-Result<HeaderChain> FakeServer::headers(const Session& session,
-                                        const QString& documentId,
-                                        qint64 after,
-                                        qint64 through)
+Result<HeaderChain> FakeServer::decideHeaders(const Session& session,
+                                              const QString& documentId,
+                                              qint64 after)
 {
     VerifyKey device;
     const ServerError failure = authenticated(session, device);
@@ -243,15 +401,10 @@ Result<HeaderChain> FakeServer::headers(const Session& session,
     }
     const StoredDocument& document = found.value();
 
-    if (after < 0 || through < 1 || through > document.version || after >= through)
-    {
-        return Result<HeaderChain>::failure(ServerError::InvalidRequest);
-    }
-
-    // A current device reads the chain to any version. A former device reads it
-    // only up to and including the header that removed it, which is exactly the
-    // evidence it needs and nothing written after.
-    qint64 cap = through;
+    // A current device reads the chain to the current version. A former device
+    // reads it only up to and including the header that removed it, which is
+    // exactly the evidence it needs and nothing written after.
+    qint64 cap = document.version;
     if (!entryByVerifyKey(document.current(), device).has_value())
     {
         std::optional<qint64> removedAt;
@@ -274,41 +427,20 @@ Result<HeaderChain> FakeServer::headers(const Session& session,
             return Result<HeaderChain>::failure(ServerError::NotAllowListed);
         }
 
-        cap = qMin(through, removedAt.value());
-        if (after >= cap)
-        {
-            return Result<HeaderChain>::failure(ServerError::InvalidRequest);
-        }
+        cap = removedAt.value();
     }
 
-    // The kept headers newer than the base, then the header of the version asked
-    // for. A header whose membership did not change is not kept: verifyLink gives
-    // the same answer across it, which is what makes dropping it safe.
-    HeaderChain chain;
-    for (const StoredVersion& stored : document.history)
+    if (after < 0 || after >= cap)
     {
-        if (stored.version <= after || stored.version > cap)
-        {
-            continue;
-        }
-
-        if (!stored.kept && stored.version != cap)
-        {
-            continue;
-        }
-
-        if (document.withheld.contains(stored.version))
-        {
-            continue;
-        }
-
-        chain.headers.append(document.substituted.value(stored.version, stored.header));
+        return Result<HeaderChain>::failure(ServerError::InvalidRequest);
     }
 
+    HeaderChain chain;
+    chain.headers = chainOf(document, after, cap);
     return Result<HeaderChain>::success(chain);
 }
 
-Result<Snapshot> FakeServer::download(const Session& session, const QString& documentId)
+Result<Snapshot> FakeServer::decideDownload(const Session& session, const QString& documentId, qint64 after)
 {
     VerifyKey device;
     StoredDocument* document = nullptr;
@@ -318,19 +450,26 @@ Result<Snapshot> FakeServer::download(const Session& session, const QString& doc
         return Result<Snapshot>::failure(failure);
     }
 
-    // One state, so the header always belongs to the blob beside it.
+    // At the current version itself the chain is that one header, which is how a
+    // device whose base is current fetches the file again.
+    if (after < 0 || after > document->version)
+    {
+        return Result<Snapshot>::failure(ServerError::InvalidRequest);
+    }
+
+    // One state, so the last header always belongs to the blob beside it.
     Snapshot snapshot;
     snapshot.version = document->version;
-    snapshot.header = document->current();
+    snapshot.headers = chainOf(*document, after, document->version);
     snapshot.blob = document->blob;
     return Result<Snapshot>::success(snapshot);
 }
 
-Result<qint64> FakeServer::upload(const Session& session,
-                                  const QString& documentId,
-                                  qint64 baseVersion,
-                                  const Upload& upload,
-                                  const QByteArray& requestSignature)
+Result<qint64> FakeServer::decideUpload(const Session& session,
+                                        const QString& documentId,
+                                        qint64 baseVersion,
+                                        const Upload& upload,
+                                        const QByteArray& requestSignature)
 {
     VerifyKey device;
     StoredDocument* document = nullptr;
@@ -455,9 +594,9 @@ Result<qint64> FakeServer::upload(const Session& session,
 
 // --- Lease ---------------------------------------------------------------------
 
-Result<Lease> FakeServer::takeLease(const Session& session,
-                                    const QString& documentId,
-                                    const QByteArray& requestSignature)
+Result<Lease> FakeServer::decideTakeLease(const Session& session,
+                                          const QString& documentId,
+                                          const QByteArray& requestSignature)
 {
     VerifyKey device;
     StoredDocument* document = nullptr;
@@ -490,9 +629,9 @@ Result<Lease> FakeServer::takeLease(const Session& session,
     return Result<Lease>::success(document->lease.value());
 }
 
-Result<Done> FakeServer::releaseLease(const Session& session,
-                                      const QString& documentId,
-                                      const QByteArray& requestSignature)
+Result<Done> FakeServer::decideReleaseLease(const Session& session,
+                                            const QString& documentId,
+                                            const QByteArray& requestSignature)
 {
     VerifyKey device;
     StoredDocument* document = nullptr;
@@ -527,10 +666,10 @@ Result<Done> FakeServer::releaseLease(const Session& session,
 
 // --- Access requests -----------------------------------------------------------
 
-Result<Done> FakeServer::requestAccess(const Session& session,
-                                       const QString& documentId,
-                                       const AccessRequest& request,
-                                       const QByteArray& requestSignature)
+Result<Done> FakeServer::decideRequestAccess(const Session& session,
+                                             const QString& documentId,
+                                             const AccessRequest& request,
+                                             const QByteArray& requestSignature)
 {
     VerifyKey device;
     const ServerError failure = authenticated(session, device);
@@ -609,8 +748,8 @@ Result<Done> FakeServer::requestAccess(const Session& session,
     return Result<Done>::success(Done());
 }
 
-Result<QList<AccessRequest>> FakeServer::accessRequests(const Session& session,
-                                                        const QString& documentId)
+Result<QList<AccessRequest>> FakeServer::decideAccessRequests(const Session& session,
+                                                              const QString& documentId)
 {
     VerifyKey device;
     StoredDocument* document = nullptr;
@@ -631,10 +770,10 @@ Result<QList<AccessRequest>> FakeServer::accessRequests(const Session& session,
     return Result<QList<AccessRequest>>::success(pending);
 }
 
-Result<Done> FakeServer::clearAccessRequest(const Session& session,
-                                            const QString& documentId,
-                                            const Fingerprint& requester,
-                                            const QByteArray& requestSignature)
+Result<Done> FakeServer::decideClearAccessRequest(const Session& session,
+                                                  const QString& documentId,
+                                                  const Fingerprint& requester,
+                                                  const QByteArray& requestSignature)
 {
     VerifyKey device;
     StoredDocument* document = nullptr;
@@ -665,7 +804,7 @@ Result<Done> FakeServer::clearAccessRequest(const Session& session,
     return Result<Done>::success(Done());
 }
 
-Result<RequestStatus> FakeServer::myRequestStatus(const Session& session, const QString& documentId)
+Result<RequestStatus> FakeServer::decideMyRequestStatus(const Session& session, const QString& documentId)
 {
     VerifyKey device;
     const ServerError failure = authenticated(session, device);
@@ -693,7 +832,7 @@ Result<RequestStatus> FakeServer::myRequestStatus(const Session& session, const 
 
 // --- This device ---------------------------------------------------------------
 
-Result<QStringList> FakeServer::myDocuments(const Session& session)
+Result<QStringList> FakeServer::decideMyDocuments(const Session& session)
 {
     VerifyKey device;
     const ServerError failure = authenticated(session, device);
@@ -719,10 +858,10 @@ Result<QStringList> FakeServer::myDocuments(const Session& session)
 
 // --- Pairings ------------------------------------------------------------------
 
-Result<QString> FakeServer::startPairing(const Session& session,
-                                         const QString& deviceName,
-                                         const QByteArray& commitment,
-                                         const QByteArray& requestSignature)
+Result<QString> FakeServer::decideStartPairing(const Session& session,
+                                               const QString& deviceName,
+                                               const QByteArray& commitment,
+                                               const QByteArray& requestSignature)
 {
     VerifyKey device;
     const ServerError failure = authenticated(session, device);
@@ -771,7 +910,7 @@ Result<QString> FakeServer::startPairing(const Session& session,
     return Result<QString>::success(code);
 }
 
-Result<PairingState> FakeServer::pairing(const Session& session, const QString& code)
+Result<PairingState> FakeServer::decidePairing(const Session& session, const QString& code)
 {
     VerifyKey device;
     const ServerError failure = authenticated(session, device);
@@ -812,10 +951,10 @@ Result<PairingState> FakeServer::pairing(const Session& session, const QString& 
     return Result<PairingState>::success(stored.state);
 }
 
-Result<Done> FakeServer::respondToPairing(const Session& session,
-                                          const QString& code,
-                                          const DeviceKeys& responder,
-                                          const QByteArray& requestSignature)
+Result<Done> FakeServer::decideRespondToPairing(const Session& session,
+                                                const QString& code,
+                                                const DeviceKeys& responder,
+                                                const QByteArray& requestSignature)
 {
     VerifyKey device;
     const ServerError failure = authenticated(session, device);
@@ -867,11 +1006,11 @@ Result<Done> FakeServer::respondToPairing(const Session& session,
     return Result<Done>::success(Done());
 }
 
-Result<Done> FakeServer::revealPairing(const Session& session,
-                                       const QString& code,
-                                       const DeviceKeys& initiator,
-                                       const QByteArray& nonce,
-                                       const QByteArray& requestSignature)
+Result<Done> FakeServer::decideRevealPairing(const Session& session,
+                                             const QString& code,
+                                             const DeviceKeys& initiator,
+                                             const QByteArray& nonce,
+                                             const QByteArray& requestSignature)
 {
     VerifyKey device;
     const ServerError failure = authenticated(session, device);
@@ -929,10 +1068,10 @@ Result<Done> FakeServer::revealPairing(const Session& session,
     return Result<Done>::success(Done());
 }
 
-Result<Done> FakeServer::handOver(const Session& session,
-                                  const QString& code,
-                                  const QByteArray& handover,
-                                  const QByteArray& requestSignature)
+Result<Done> FakeServer::decideHandOver(const Session& session,
+                                        const QString& code,
+                                        const QByteArray& handover,
+                                        const QByteArray& requestSignature)
 {
     VerifyKey device;
     const ServerError failure = authenticated(session, device);
@@ -998,7 +1137,7 @@ Result<Done> FakeServer::handOver(const Session& session,
 
 // --- Development only ----------------------------------------------------------
 
-Result<Done> FakeServer::advanceClock(qint64 seconds)
+Result<Done> FakeServer::decideAdvanceClock(qint64 seconds)
 {
     if (seconds < 0)
     {
@@ -1060,7 +1199,80 @@ void FakeServer::scriptPairingReads(const QString& code, const QList<PairingStat
     }
 }
 
+void FakeServer::holdReplies(bool hold)
+{
+    m_holdReplies = hold;
+    scheduleDelivery();
+}
+
+bool FakeServer::deliverNext()
+{
+    if (m_replies.isEmpty())
+    {
+        return false;
+    }
+
+    // Taken off the queue before it runs, so a call made from inside the reply
+    // queues behind everything already waiting.
+    const std::function<void()> reply = m_replies.takeFirst();
+    reply();
+    return true;
+}
+
 // --- Private -------------------------------------------------------------------
+
+void FakeServer::scheduleDelivery()
+{
+    if (m_holdReplies || m_deliveryScheduled || m_replies.isEmpty())
+    {
+        return;
+    }
+
+    m_deliveryScheduled = true;
+    QTimer::singleShot(0, &m_replyContext, std::bind(&FakeServer::deliverWaiting, this));
+}
+
+void FakeServer::deliverWaiting()
+{
+    m_deliveryScheduled = false;
+
+    // Only the replies already waiting: one queued by a call made from inside a
+    // reply arrives on a later turn, like any other.
+    qsizetype waiting = m_replies.size();
+    while (waiting > 0 && !m_holdReplies && deliverNext())
+    {
+        --waiting;
+    }
+
+    scheduleDelivery();
+}
+
+QList<QJsonObject> FakeServer::chainOf(const StoredDocument& document, qint64 after, qint64 last) const
+{
+    // The kept headers newer than after, then the header of last - always, even
+    // when last is after itself. A header whose membership did not change is not
+    // kept: verifyLink gives the same answer across it, which is what makes
+    // dropping it safe. Headers travel as the server stored them, so a substituted
+    // one in a later format reaches the client as that format.
+    QList<QJsonObject> chain;
+    for (const StoredVersion& stored : document.history)
+    {
+        if (stored.version > last)
+        {
+            continue;
+        }
+
+        const bool between = stored.version > after && stored.version < last;
+        const bool kept = stored.kept && !document.withheld.contains(stored.version);
+        if (stored.version != last && !(between && kept))
+        {
+            continue;
+        }
+
+        chain.append(document.substituted.value(stored.version, stored.header).toJson());
+    }
+    return chain;
+}
 
 ServerError FakeServer::authenticated(const Session& session, VerifyKey& device) const
 {
