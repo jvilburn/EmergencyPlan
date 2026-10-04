@@ -192,6 +192,7 @@ set(SERVICE_SOURCES
     src/services/AppSettings.cpp
     src/services/SingleInstance.cpp
     src/services/IdentityFile.cpp
+    src/services/IdentityService.cpp
     # src/services/StatisticsService.cpp
     # src/services/ResourceService.cpp
     # src/services/SearchService.cpp
@@ -241,6 +242,7 @@ set(SERVICE_HEADERS
     src/services/AppSettings.h
     src/services/SingleInstance.h
     src/services/IdentityFile.h
+    src/services/IdentityService.h
     # src/services/StatisticsService.h
     # src/services/ResourceService.h
     # src/services/SearchService.h

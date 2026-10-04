@@ -8,6 +8,7 @@
 #include "DocumentCrypto.h"
 #include "DocumentManager.h"
 #include "EmergencyManager.h"
+#include "IdentityService.h"
 #include "MainWindow.h"
 #include "SingleInstance.h"
 #include "TileService.h"
@@ -53,13 +54,24 @@ int main(int argc, char *argv[])
         styleFile.close();
     }
 
+    // This device's state, in local app data, which does not roam.
+    const QDir deviceData(QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation));
+
     QString settingsError;
-    const QString settingsPath =
-        QDir(QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation)).filePath("settings.json");
-    std::unique_ptr<AppSettings> settings = AppSettings::open(settingsPath, &settingsError);
+    std::unique_ptr<AppSettings> settings = AppSettings::open(deviceData.filePath("settings.json"), &settingsError);
     if (!settings)
     {
         QMessageBox::critical(nullptr, QObject::tr("Ward Planning"), settingsError);
+        return 1;
+    }
+
+    // Resolved before any document exists: there is no document without an identity.
+    QString identityError;
+    std::unique_ptr<IdentityService> identity =
+        IdentityService::open(deviceData.filePath("identity.json"), &identityError);
+    if (!identity)
+    {
+        QMessageBox::critical(nullptr, QObject::tr("Ward Planning"), identityError);
         return 1;
     }
 

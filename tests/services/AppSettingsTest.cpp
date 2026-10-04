@@ -64,7 +64,6 @@ void AppSettingsTest::aMissingFileIsAnEmptyStore()
     QVERIFY(settings);
     QVERIFY(error.isEmpty());
     QVERIFY(settings->documentIds().isEmpty());
-    QVERIFY(settings->displayName().isEmpty());
     QVERIFY(!settings->developerExport());
     QVERIFY(!settings->defaultLocation().has_value());
     QVERIFY(!settings->writeFailed());
@@ -83,7 +82,6 @@ void AppSettingsTest::everyValueReadsBackThroughASecondInstance()
 
     {
         std::unique_ptr<AppSettings> settings = openAt(path);
-        settings->setDisplayName("Alice Adams");
         settings->setDeveloperExport(true);
         settings->setServerAddressOverride("https://example.test");
         settings->setDefaultLocation(AppSettings::Location{40.5, -111.25});
@@ -93,7 +91,6 @@ void AppSettingsTest::everyValueReadsBackThroughASecondInstance()
 
     const std::unique_ptr<AppSettings> reread = openAt(path);
     QVERIFY(reread);
-    QCOMPARE(reread->displayName(), QString("Alice Adams"));
     QVERIFY(reread->developerExport());
     QCOMPARE(reread->serverAddress(), QString("https://example.test"));
     QCOMPARE(reread->defaultLocation()->latitude, 40.5);
@@ -200,7 +197,7 @@ void AppSettingsTest::removingARecordLeavesTheOthers()
         std::unique_ptr<AppSettings> settings = openAt(path);
         settings->setRecord(gone, fullRecord());
         settings->setRecord(kept, fullRecord());
-        settings->setDisplayName("Alice");
+        settings->setServerAddressOverride("https://kept.test");
         settings->removeRecord(gone);
     }
 
@@ -208,7 +205,7 @@ void AppSettingsTest::removingARecordLeavesTheOthers()
     QCOMPARE(reread->documentIds(), QStringList{kept});
     QVERIFY(reread->record(kept) == fullRecord());
     QVERIFY(reread->record(gone) == DocumentRecord());
-    QCOMPARE(reread->displayName(), QString("Alice"));
+    QCOMPARE(reread->serverAddress(), QString("https://kept.test"));
 }
 
 void AppSettingsTest::aMalformedFileIsReportedAndLeftAlone_data()
@@ -220,10 +217,10 @@ void AppSettingsTest::aMalformedFileIsReportedAndLeftAlone_data()
     QTest::addColumn<QByteArray>("bytes");
     QTest::newRow("not json") << QByteArray("{ not json");
     QTest::newRow("not an object") << QByteArray("[]");
-    QTest::newRow("no records") << QByteArray(R"({"displayName": "Alice"})");
+    QTest::newRow("no records") << QByteArray(R"({"serverAddress": "https://example.test"})");
     QTest::newRow("unknown key") << QByteArray(R"({"records": {}, "favouriteColour": "blue"})");
     QTest::newRow("developer export false") << QByteArray(R"({"records": {}, "developerExport": false})");
-    QTest::newRow("empty display name") << QByteArray(R"({"records": {}, "displayName": ""})");
+    QTest::newRow("empty server address") << QByteArray(R"({"records": {}, "serverAddress": ""})");
     QTest::newRow("latitude as text") << QByteArray(R"({"records": {}, "map": {"defaultLat": "40", "defaultLng": 1}})");
     QTest::newRow("empty document id") << QString(R"({"records": {"": {%1, "pendingChanges": []}}})").arg(mark).toUtf8();
     QTest::newRow("record not an object") << QString(R"({"records": {"%1": 7}})").arg(id).toUtf8();
@@ -279,8 +276,8 @@ void AppSettingsTest::aFailedWriteKeepsTheValuesAndSaysSo()
     QVERIFY(settings);
 
     QTest::ignoreMessage(QtWarningMsg, QRegularExpression("Settings could not be written"));
-    settings->setDisplayName("Alice");
+    settings->setServerAddressOverride("https://example.test");
     QVERIFY(settings->writeFailed());
-    QCOMPARE(settings->displayName(), QString("Alice"));
+    QCOMPARE(settings->serverAddress(), QString("https://example.test"));
     QVERIFY(!QFile::exists(blocker + "/settings.json"));
 }

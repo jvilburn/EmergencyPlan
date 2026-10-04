@@ -29,6 +29,7 @@ set(TEST_SOURCES
     services/FakeServerTest.cpp
     services/FormatVectorsTest.cpp
     services/IdentityFileTest.cpp
+    services/IdentityServiceTest.cpp
     services/PairingTest.cpp
     services/ReconcileTest.cpp
     services/ResponseMergeTest.cpp

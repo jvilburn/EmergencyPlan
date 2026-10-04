@@ -20,7 +20,7 @@ IdentityRecord newRecord()
     IdentityRecord record;
     record.sealing = DocumentCrypto::generateKeypair();
     record.signing = DocumentCrypto::generateSigningKeypair();
-    record.member = ChainTestSupport::newMember();
+    record.person = IdentityRecord::Person{ChainTestSupport::newMember(), "Alice Adams", "Laptop"};
     return record;
 }
 
@@ -45,10 +45,10 @@ void IdentityFileTest::aRecordRoundTripsWithAndWithoutAPerson()
     QVERIFY(IdentityRecord::fromBytes(withPerson.toBytes()) == withPerson);
 
     IdentityRecord keysOnly = withPerson;
-    keysOnly.member.reset();
+    keysOnly.person.reset();
     const std::optional<IdentityRecord> back = IdentityRecord::fromBytes(keysOnly.toBytes());
     QVERIFY(back == keysOnly);
-    QVERIFY(!back->member.has_value());
+    QVERIFY(!back->person.has_value());
 
     // Each part counts: a record differing in only one of them reads back as itself
     // and not as the other.
@@ -65,7 +65,7 @@ void IdentityFileTest::onlyTheSecretHalvesAreWritten()
     const IdentityRecord record = newRecord();
     const QJsonObject json = QJsonDocument::fromJson(record.toBytes()).object();
 
-    QCOMPARE(json.keys(), (QStringList{"member", "sealingSecret", "signingSeed"}));
+    QCOMPARE(json.keys(), (QStringList{"person", "sealingSecret", "signingSeed"}));
     QCOMPARE(json["sealingSecret"].toString(), HexCodec::encode(record.sealing.secretKey.bytes));
     QCOMPARE(json["signingSeed"].toString(), HexCodec::encode(DocumentCrypto::seedOf(record.signing.signingKey)));
 
@@ -78,7 +78,7 @@ void IdentityFileTest::onlyTheSecretHalvesAreWritten()
 void IdentityFileTest::aRecordWithASecretOfTheWrongSizeIsRefused()
 {
     const IdentityRecord record = newRecord();
-    for (const char* key : {"sealingSecret", "signingSeed", "member"})
+    for (const char* key : {"sealingSecret", "signingSeed"})
     {
         QJsonObject json = QJsonDocument::fromJson(record.toBytes()).object();
         json[key] = HexCodec::encode(QByteArray(5, 'x'));
@@ -86,6 +86,28 @@ void IdentityFileTest::aRecordWithASecretOfTheWrongSizeIsRefused()
     }
 
     QVERIFY(!IdentityRecord::fromBytes("not json").has_value());
+
+    // The person whole or not at all: a member id of the wrong size, an empty name,
+    // or a missing one.
+    const QJsonObject full = QJsonDocument::fromJson(record.toBytes()).object();
+    const QList<QPair<QString, QJsonValue>> damaged = {
+        {"member", HexCodec::encode(QByteArray(5, 'x'))},
+        {"displayName", QString()},
+        {"deviceName", QString()},
+    };
+    for (const QPair<QString, QJsonValue>& change : damaged)
+    {
+        QJsonObject json = full;
+        QJsonObject person = json["person"].toObject();
+        person[change.first] = change.second;
+        json["person"] = person;
+        QVERIFY2(!IdentityRecord::fromBytes(QJsonDocument(json).toJson()).has_value(), qPrintable(change.first));
+    }
+    QJsonObject withoutName = full;
+    QJsonObject person = withoutName["person"].toObject();
+    person.remove("deviceName");
+    withoutName["person"] = person;
+    QVERIFY(!IdentityRecord::fromBytes(QJsonDocument(withoutName).toJson()).has_value());
 
     // A required field missing, or of the wrong type.
     QJsonObject missing = QJsonDocument::fromJson(record.toBytes()).object();

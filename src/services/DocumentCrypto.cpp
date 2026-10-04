@@ -281,6 +281,13 @@ SigningKeypair DocumentCrypto::signingKeypairFromSeed(const QByteArray& seed)
     return keys;
 }
 
+QByteArray DocumentCrypto::randomBytes(int size)
+{
+    QByteArray bytes(size, '\0');
+    randombytes_buf(asUnsigned(bytes), bytes.size());
+    return bytes;
+}
+
 DataKey DocumentCrypto::generateDataKey()
 {
     QByteArray bytes(DataKey::Size, '\0');

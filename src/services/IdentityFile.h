@@ -8,13 +8,26 @@
 
 #include <optional>
 
-/// This device's secret identity: both keypairs, and the person they belong to
-/// once there is one.
+/// This device's identity: both keypairs, and the person they belong to once there
+/// is one. One record, so the keys, the person, and the names fixed with them can
+/// never get out of step.
 struct IdentityRecord
 {
+    /// Who this device belongs to, and what it is called. Set once, when the person
+    /// is created or joined; the names reach other members only through the roster.
+    struct Person
+    {
+        MemberId member;
+        QString displayName;
+        QString deviceName;
+
+        bool operator==(const Person& other) const;
+        bool operator!=(const Person& other) const { return !(*this == other); }
+    };
+
     Keypair sealing;
     SigningKeypair signing;
-    std::optional<MemberId> member;
+    std::optional<Person> person;
 
     /// Only the secret halves are written - the sealing secret key and the signing
     /// seed - and the public ones are derived on reading, so a record can never

@@ -112,6 +112,9 @@ public:
 
     static DataKey generateDataKey();
 
+    /// Cryptographically random bytes, for ids no one may guess or repeat.
+    static QByteArray randomBytes(int size);
+
     /// Personalised BLAKE2b. Returns an empty array when outputSize is outside
     /// BLAKE2b's range. Every hash in this codebase goes through here, so no two
     /// purposes can share a digest.

@@ -17,7 +17,10 @@ namespace
 // Part of the identity file's format.
 const QLatin1String KeySealingSecret("sealingSecret");
 const QLatin1String KeySigningSeed("signingSeed");
+const QLatin1String KeyPerson("person");
 const QLatin1String KeyMember("member");
+const QLatin1String KeyDisplayName("displayName");
+const QLatin1String KeyDeviceName("deviceName");
 
 /// Owner read and write only. On Windows the file inherits local app data's access
 /// list - this user, the administrators, and the system, as for a home folder on
@@ -33,9 +36,13 @@ QByteArray IdentityRecord::toBytes() const
     QJsonObject json;
     json[KeySealingSecret] = HexCodec::encode(sealing.secretKey.bytes);
     json[KeySigningSeed] = HexCodec::encode(DocumentCrypto::seedOf(signing.signingKey));
-    if (member.has_value())
+    if (person.has_value())
     {
-        json[KeyMember] = member.value().toHex();
+        QJsonObject personJson;
+        personJson[KeyMember] = person.value().member.toHex();
+        personJson[KeyDisplayName] = person.value().displayName;
+        personJson[KeyDeviceName] = person.value().deviceName;
+        json[KeyPerson] = personJson;
     }
     return QJsonDocument(json).toJson(QJsonDocument::Indented);
 }
@@ -52,7 +59,7 @@ std::optional<IdentityRecord> IdentityRecord::fromBytes(const QByteArray& bytes)
     const QJsonObject json = document.object();
     QString sealingText;
     QString seedText;
-    if (!StrictJson::hasOnlyKeys(json, {KeySealingSecret, KeySigningSeed, KeyMember})
+    if (!StrictJson::hasOnlyKeys(json, {KeySealingSecret, KeySigningSeed, KeyPerson})
         || !StrictJson::readString(json, KeySealingSecret, sealingText)
         || !StrictJson::readString(json, KeySigningSeed, seedText))
     {
@@ -71,19 +78,25 @@ std::optional<IdentityRecord> IdentityRecord::fromBytes(const QByteArray& bytes)
         return std::nullopt;
     }
 
-    if (json.contains(KeyMember))
+    if (json.contains(KeyPerson))
     {
+        QJsonObject personJson;
         QString memberText;
-        if (!StrictJson::readString(json, KeyMember, memberText))
+        Person person;
+        if (!StrictJson::readObject(json, KeyPerson, personJson)
+            || !StrictJson::hasOnlyKeys(personJson, {KeyMember, KeyDisplayName, KeyDeviceName})
+            || !StrictJson::readString(personJson, KeyMember, memberText)
+            || !StrictJson::readNonEmptyString(personJson, KeyDisplayName, person.displayName)
+            || !StrictJson::readNonEmptyString(personJson, KeyDeviceName, person.deviceName))
         {
             return std::nullopt;
         }
-        const MemberId member = MemberId::fromHex(memberText);
-        if (!member.isValid())
+        person.member = MemberId::fromHex(memberText);
+        if (!person.member.isValid())
         {
             return std::nullopt;
         }
-        record.member = member;
+        record.person = person;
     }
 
     return record;
@@ -95,7 +108,14 @@ bool IdentityRecord::operator==(const IdentityRecord& other) const
         && sealing.secretKey == other.sealing.secretKey
         && signing.verifyKey == other.signing.verifyKey
         && signing.signingKey == other.signing.signingKey
-        && member == other.member;
+        && person == other.person;
+}
+
+bool IdentityRecord::Person::operator==(const Person& other) const
+{
+    return member == other.member
+        && displayName == other.displayName
+        && deviceName == other.deviceName;
 }
 
 // --- The file --------------------------------------------------------------------

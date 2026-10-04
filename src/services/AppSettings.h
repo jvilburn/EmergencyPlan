@@ -35,9 +35,6 @@ public:
 
     // --- This device ---
 
-    QString displayName() const { return m_displayName; }
-    void setDisplayName(const QString& displayName);
-
     bool developerExport() const { return m_developerExport; }
     void setDeveloperExport(bool enabled);
 
@@ -69,7 +66,6 @@ private:
 
     QString m_path;
     QHash<QString, DocumentRecord> m_records;
-    QString m_displayName;
     bool m_developerExport = false;
     QString m_serverAddressOverride;
     std::optional<Location> m_defaultLocation;

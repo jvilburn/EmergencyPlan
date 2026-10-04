@@ -14,6 +14,7 @@
 #include "FakeServerTest.h"
 #include "FormatVectorsTest.h"
 #include "IdentityFileTest.h"
+#include "IdentityServiceTest.h"
 #include "ModelParsersTest.h"
 #include "PairingTest.h"
 #include "ReconcileTest.h"
@@ -91,6 +92,7 @@ int main(int argc, char** argv)
     status |= run<RosterChangeQueueTest>(argc, argv);
     status |= run<AppSettingsTest>(argc, argv);
     status |= run<IdentityFileTest>(argc, argv);
+    status |= run<IdentityServiceTest>(argc, argv);
 
     return status;
 }

@@ -2459,7 +2459,7 @@ Three groups of state:
 
 | Group | Holds |
 |---|---|
-| Device | Display name, the developer-export toggle, the server address override |
+| Device | The developer-export toggle, the server address override |
 | Per document, keyed by **document id** | The `DocumentRecord` (the library's entry and copy paths are Task 11's) |
 | Map | `defaultLat`, `defaultLng` |
 
@@ -2524,6 +2524,17 @@ Commit as `feat: device identity in a local file`.
 ---
 
 ### Task 10: IdentityService
+
+> **Done**, with these differences from the text below:
+> - The display name and device name are in the identity file with the keys and member
+>   id - one record, `IdentityRecord::Person`, set once - rather than in `AppSettings`,
+>   so the person and its names can never get out of step.
+> - `IdentityService::open(path, errorMessage)` loads or creates the identity, as
+>   `AppSettings::open` does, so there is no `initialise`, `isReady`, or `lastError`.
+>   `createPerson` and `joinPerson` report a refusal through their own error message.
+> - `deviceKeys()` gives the public keys pairing presents before a person exists.
+> - Tests use files in a `QTemporaryDir`; nothing else needs an `IdentityService`, since
+>   the core takes a `DeviceIdentity` value, so there is no test constructor.
 
 **Files:** `src/services/IdentityService.h/.cpp`, `src/main.cpp:24-33`,
 `tests/services/IdentityServiceTest.h/.cpp`

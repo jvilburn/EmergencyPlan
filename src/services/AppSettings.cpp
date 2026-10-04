@@ -18,7 +18,6 @@ const QString DefaultServerAddress;
 
 // Part of the settings format.
 const QLatin1String KeyRecords("records");
-const QLatin1String KeyDisplayName("displayName");
 const QLatin1String KeyDeveloperExport("developerExport");
 const QLatin1String KeyServerAddress("serverAddress");
 const QLatin1String KeyMap("map");
@@ -91,12 +90,6 @@ QStringList AppSettings::documentIds() const
 
 // --- This device -----------------------------------------------------------------
 
-void AppSettings::setDisplayName(const QString& displayName)
-{
-    m_displayName = displayName;
-    save();
-}
-
 void AppSettings::setDeveloperExport(bool enabled)
 {
     m_developerExport = enabled;
@@ -133,9 +126,8 @@ bool AppSettings::read(const QByteArray& bytes)
 
     const QJsonObject json = document.object();
     QJsonObject records;
-    if (!StrictJson::hasOnlyKeys(json, {KeyRecords, KeyDisplayName, KeyDeveloperExport, KeyServerAddress, KeyMap})
+    if (!StrictJson::hasOnlyKeys(json, {KeyRecords, KeyDeveloperExport, KeyServerAddress, KeyMap})
         || !StrictJson::readObject(json, KeyRecords, records)
-        || !StrictJson::readOptionalNonEmptyString(json, KeyDisplayName, m_displayName)
         || !StrictJson::readOptionalNonEmptyString(json, KeyServerAddress, m_serverAddressOverride))
     {
         return false;
@@ -192,10 +184,6 @@ QByteArray AppSettings::write() const
 
     QJsonObject json;
     json[KeyRecords] = records;
-    if (!m_displayName.isEmpty())
-    {
-        json[KeyDisplayName] = m_displayName;
-    }
     if (m_developerExport)
     {
         json[KeyDeveloperExport] = true;
