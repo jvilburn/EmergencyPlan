@@ -1,12 +1,15 @@
 #include <QApplication>
+#include <QDir>
 #include <QFile>
 #include <QIcon>
 #include <QMessageBox>
-#include "DocumentConstants.h"
+#include <QStandardPaths>
+#include "AppSettings.h"
 #include "DocumentCrypto.h"
 #include "DocumentManager.h"
 #include "EmergencyManager.h"
 #include "MainWindow.h"
+#include "SingleInstance.h"
 #include "TileService.h"
 
 int main(int argc, char *argv[])
@@ -16,6 +19,14 @@ int main(int argc, char *argv[])
     app.setOrganizationName("Church");
     app.setApplicationVersion(WARD_PLANNING_VERSION);
     app.setWindowIcon(QIcon(":/markers/marker_chapel.svg"));
+
+    // One instance per user, settled before settings or identity load. A later
+    // launch hands its arguments to the running one and exits.
+    SingleInstance instance(nullptr);
+    if (!instance.claim(app.arguments()))
+    {
+        return 0;
+    }
 
     // Before anything that might touch a document: libsodium must be initialised
     // before its first use, and without it no shared document can be opened.
@@ -35,6 +46,16 @@ int main(int argc, char *argv[])
         styleFile.close();
     }
 
+    QString settingsError;
+    const QString settingsPath =
+        QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)).filePath("settings.json");
+    std::unique_ptr<AppSettings> settings = AppSettings::open(settingsPath, &settingsError);
+    if (!settings)
+    {
+        QMessageBox::critical(nullptr, QObject::tr("Ward Planning"), settingsError);
+        return 1;
+    }
+
     // Initialize core services (singletons)
     DocumentManager documentManager(nullptr);
     EmergencyManager emergencyManager(nullptr);
@@ -44,16 +65,13 @@ int main(int argc, char *argv[])
     TileService::setInstance(&tileService);
     tileService.initialize();
 
-    MainWindow window(nullptr);
+    MainWindow window(*settings, nullptr);
     window.show();
 
-    // Open file passed as command-line argument (e.g. from file association)
-    const QStringList args = app.arguments();
-    if (args.size() > 1
-        && args[1].endsWith(DocumentConstants::FileExtension, Qt::CaseInsensitive))
-    {
-        window.openFile(args[1]);
-    }
+    // A file passed on the command line (a file association), and those a later
+    // launch hands over.
+    window.handleArguments(app.arguments());
+    QObject::connect(&instance, &SingleInstance::argumentsReceived, &window, &MainWindow::handleArguments);
 
     return app.exec();
 }

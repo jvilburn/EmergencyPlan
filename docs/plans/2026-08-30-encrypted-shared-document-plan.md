@@ -2491,6 +2491,16 @@ shown to the user. Commit as `feat: sync-and-save core` once all of this is sett
 
 ### Task 8: Settings store
 
+> **Done**, with these differences from the text below:
+> - `AppSettings::open(path, errorMessage)` makes the one instance `main()` owns, at
+>   `<AppDataLocation>/settings.json`; tests open their own over a `QTemporaryDir`, so
+>   there is no global path to set.
+> - The library's per-document entry is stored now - ward name, last opened, copy paths -
+>   beside the record, and `removeRecord` forgets all of it.
+> - The app no longer reopens a document at startup; `lastDocumentId` is kept for Task 11.
+> - A failed settings write is logged and the values in memory stand.
+> - The built-in server address is empty until the companion server has one.
+
 Before identity, because identity stores a display name in it.
 
 **Files:** `src/services/AppSettings.h/.cpp`, `src/services/SingleInstance.h/.cpp`,

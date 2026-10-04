@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "AppSettings.h"
 #include "EmergencyBanner.h"
 #include "WardListView.h"
 #include "MinisteringView.h"
@@ -38,42 +39,33 @@
 #include <QLabel>
 #include <QProgressBar>
 #include <QStandardPaths>
-#include <QFile>
-#include <QDir>
-#include <QJsonDocument>
-#include <QJsonObject>
+#include <QFileInfo>
 
-MainWindow::MainWindow(QWidget* parent)
+MainWindow::MainWindow(AppSettings& settings, QWidget* parent)
     : QMainWindow(parent)
+    , m_settings(settings)
 {
     setupUi();
     setupMenus();
     setupConnections();
 
-    // Auto-load last document
-    bool documentLoaded = false;
-    QString lastPath = loadLastDocumentPath();
-    if (!lastPath.isEmpty() && QFile::exists(lastPath))
-    {
-        if (DocumentManager::instance()->openDocument(lastPath, nullptr))
-        {
-            // Center on chapel immediately; defer fit until widget has size
-            m_mapWidget->centerOnChapel();
-            m_mapWidget->requestFitAllFamilies();
-            documentLoaded = true;
-        }
-        else
-        {
-            saveLastDocumentPath(QString());
-        }
-    }
-
-    if (!documentLoaded)
-    {
-        initializeDefaultLocation();
-    }
+    initializeDefaultLocation();
     updateWindowTitle();
     updateUndoRedoActions();
+}
+
+void MainWindow::handleArguments(const QStringList& arguments)
+{
+    // A later launch handed its arguments here: bring this window forward.
+    setWindowState(windowState() & ~Qt::WindowMinimized);
+    raise();
+    activateWindow();
+
+    if (arguments.size() > 1
+        && arguments.at(1).endsWith(DocumentConstants::FileExtension, Qt::CaseInsensitive))
+    {
+        openFile(arguments.at(1));
+    }
 }
 
 MainWindow::~MainWindow()
@@ -588,7 +580,6 @@ void MainWindow::onAutoSaveFailed(const QString& errorMessage)
 
 void MainWindow::onFilePathChanged()
 {
-    saveLastDocumentPath(DocumentManager::instance()->filePath());
     updateEmergencyActions();
 }
 
@@ -596,76 +587,12 @@ void MainWindow::onFilePathChanged()
 // Default Location / Settings
 // ============================================================================
 
-static QJsonObject loadSettingsJson(const QString& path)
-{
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly))
-    {
-        return {};
-    }
-    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-    return doc.isObject() ? doc.object() : QJsonObject{};
-}
-
-static void saveSettingsJson(const QString& path, const QJsonObject& json)
-{
-    QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
-    QDir().mkpath(cacheDir);
-
-    QFile file(path);
-    if (file.open(QIODevice::WriteOnly))
-    {
-        file.write(QJsonDocument(json).toJson());
-    }
-}
-
-QString MainWindow::settingsFilePath()
-{
-    QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
-    return cacheDir + "/settings.json";
-}
-
-bool MainWindow::loadDefaultLocation(double& lat, double& lng)
-{
-    QJsonObject json = loadSettingsJson(settingsFilePath());
-    if (!json.contains("defaultLat") || !json.contains("defaultLng"))
-    {
-        return false;
-    }
-
-    lat = json["defaultLat"].toDouble();
-    lng = json["defaultLng"].toDouble();
-    return true;
-}
-
-void MainWindow::saveDefaultLocation(double lat, double lng)
-{
-    QJsonObject json = loadSettingsJson(settingsFilePath());
-    json["defaultLat"] = lat;
-    json["defaultLng"] = lng;
-    saveSettingsJson(settingsFilePath(), json);
-}
-
-void MainWindow::saveLastDocumentPath(const QString& filePath)
-{
-    QJsonObject json = loadSettingsJson(settingsFilePath());
-    json["lastDocumentPath"] = filePath;
-    saveSettingsJson(settingsFilePath(), json);
-}
-
-QString MainWindow::loadLastDocumentPath()
-{
-    QJsonObject json = loadSettingsJson(settingsFilePath());
-    return json["lastDocumentPath"].toString();
-}
-
 void MainWindow::initializeDefaultLocation()
 {
-    double lat, lng;
-    if (loadDefaultLocation(lat, lng))
+    const std::optional<AppSettings::Location> location = m_settings.defaultLocation();
+    if (location.has_value())
     {
-        // Use saved location
-        m_mapWidget->setCenter(lat, lng);
+        m_mapWidget->setCenter(location.value().latitude, location.value().longitude);
     }
     else
     {
@@ -682,7 +609,7 @@ void MainWindow::initializeDefaultLocation()
 void MainWindow::onLocationReady(double latitude, double longitude)
 {
     m_mapWidget->setCenter(latitude, longitude);
-    saveDefaultLocation(latitude, longitude);
+    m_settings.setDefaultLocation(AppSettings::Location{latitude, longitude});
 
     // Clean up the GeoLocation object
     sender()->deleteLater();

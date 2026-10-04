@@ -1,5 +1,6 @@
 #include "AccessControlTest.h"
 #include "AccessRosterTest.h"
+#include "AppSettingsTest.h"
 #include "CryptoLinkTest.h"
 #include "CryptoTypesTest.h"
 #include "DocumentChainTest.h"
@@ -87,6 +88,7 @@ int main(int argc, char** argv)
     status |= run<DocumentFileTest>(argc, argv);
     status |= run<DocumentSessionTest>(argc, argv);
     status |= run<RosterChangeQueueTest>(argc, argv);
+    status |= run<AppSettingsTest>(argc, argv);
 
     return status;
 }

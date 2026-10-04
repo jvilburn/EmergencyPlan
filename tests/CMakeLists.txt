@@ -16,6 +16,7 @@ set(TEST_SOURCES
     models/ModelParsersTest.cpp
     models/ModelSamples.cpp
     services/AccessControlTest.cpp
+    services/AppSettingsTest.cpp
     services/ChainTestSupport.cpp
     services/CryptoLinkTest.cpp
     services/CryptoTypesTest.cpp

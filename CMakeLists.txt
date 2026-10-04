@@ -213,6 +213,8 @@ set(SERVICE_SOURCES
     src/services/ServerConnection.cpp
     src/services/ServerVersion.cpp
     src/services/SessionTimers.cpp
+    src/services/AppSettings.cpp
+    src/services/SingleInstance.cpp
     # src/services/StatisticsService.cpp
     # src/services/ResourceService.cpp
     # src/services/SearchService.cpp
@@ -259,6 +261,8 @@ set(SERVICE_HEADERS
     src/services/ServerConnection.h
     src/services/ServerVersion.h
     src/services/SessionTimers.h
+    src/services/AppSettings.h
+    src/services/SingleInstance.h
     # src/services/StatisticsService.h
     # src/services/ResourceService.h
     # src/services/SearchService.h

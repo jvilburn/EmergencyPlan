@@ -3,12 +3,14 @@
 #include <QDateTime>
 #include <QMainWindow>
 #include <QSplitter>
+#include <QStringList>
 
 #include <optional>
 
 #include "DocumentChange.h"
 #include "Id.h"
 
+class AppSettings;
 class QLabel;
 class QProgressBar;
 class EmergencyAssetView;
@@ -28,10 +30,13 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    explicit MainWindow(QWidget* parent);
+    MainWindow(AppSettings& settings, QWidget* parent);
     ~MainWindow();
 
     bool openFile(const QString& filePath);
+
+    /// The arguments a later launch handed to this one.
+    void handleArguments(const QStringList& arguments);
 
 private slots:
     void onNewDocument();
@@ -87,12 +92,7 @@ private:
     /// path, or nullopt when the user cancels or the report cannot be written.
     std::optional<QString> saveEmergencyReport(const std::optional<QDateTime>& endedAt);
 
-    // Settings helpers
-    static QString settingsFilePath();
-    static bool loadDefaultLocation(double& lat, double& lng);
-    static void saveDefaultLocation(double lat, double lng);
-    static void saveLastDocumentPath(const QString& filePath);
-    static QString loadLastDocumentPath();
+    AppSettings& m_settings;
 
     // Widgets
     QSplitter* m_splitter;

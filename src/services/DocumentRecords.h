@@ -4,6 +4,7 @@
 #include "RosterChange.h"
 
 #include <QByteArray>
+#include <QJsonObject>
 #include <QList>
 #include <QString>
 #include <QStringList>
@@ -26,6 +27,11 @@ struct DocumentRecord
 
     /// Roster changes waiting to publish, oldest first.
     QList<RosterChange> pendingChanges;
+
+    QJsonObject toJson() const;
+
+    /// Exactly what toJson writes; nullopt for anything else.
+    static std::optional<DocumentRecord> fromJson(const QJsonObject& json);
 
     bool operator==(const DocumentRecord& other) const;
     bool operator!=(const DocumentRecord& other) const { return !(*this == other); }
