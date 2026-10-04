@@ -2,7 +2,7 @@
 
 #include <QObject>
 
-/// Task 8: the one settings file.
+/// The one settings file.
 class AppSettingsTest : public QObject
 {
     Q_OBJECT
@@ -15,6 +15,8 @@ private slots:
     void numbersRoundTripAsNumbers();
     void recordsForTwoIdsStaySeparate();
     void aRecordWithPendingRosterChangesRoundTrips();
-    void removingARecordForgetsTheWholeDocument();
+    void removingARecordLeavesTheOthers();
+    void aMalformedFileIsReportedAndLeftAlone_data();
     void aMalformedFileIsReportedAndLeftAlone();
+    void aFailedWriteKeepsTheValuesAndSaysSo();
 };

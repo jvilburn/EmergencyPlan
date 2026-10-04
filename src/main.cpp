@@ -23,9 +23,16 @@ int main(int argc, char *argv[])
     // One instance per user, settled before settings or identity load. A later
     // launch hands its arguments to the running one and exits.
     SingleInstance instance(nullptr);
-    if (!instance.claim(app.arguments()))
+    QString instanceError;
+    switch (instance.claim(app.arguments(), &instanceError))
     {
+    case SingleInstance::Claim::Claimed:
+        break;
+    case SingleInstance::Claim::HandedOver:
         return 0;
+    case SingleInstance::Claim::Failed:
+        QMessageBox::critical(nullptr, QObject::tr("Ward Planning"), instanceError);
+        return 1;
     }
 
     // Before anything that might touch a document: libsodium must be initialised

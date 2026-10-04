@@ -2495,10 +2495,15 @@ shown to the user. Commit as `feat: sync-and-save core` once all of this is sett
 > - `AppSettings::open(path, errorMessage)` makes the one instance `main()` owns, at
 >   `<AppDataLocation>/settings.json`; tests open their own over a `QTemporaryDir`, so
 >   there is no global path to set.
-> - The library's per-document entry is stored now - ward name, last opened, copy paths -
->   beside the record, and `removeRecord` forgets all of it.
-> - The app no longer reopens a document at startup; `lastDocumentId` is kept for Task 11.
-> - A failed settings write is logged and the values in memory stand.
+> - It holds the document records, the device settings, and the map. The library's
+>   entries - ward name, last opened, copy paths - and the last-opened ward are Task 11's,
+>   with a lifetime of their own: removing a record leaves them for `forgetRemoved` to read.
+> - The app no longer reopens a document at startup until Task 11 restores it by id.
+> - A failed write leaves the values in memory and sets `writeFailed()`, for Task 25's
+>   messages.
+> - `SingleInstance::claim` answers `Claimed`, `HandedOver`, or `Failed`; a lock it cannot
+>   create, or a running instance that does not answer within three seconds, is a message
+>   rather than a silent exit.
 > - The built-in server address is empty until the companion server has one.
 
 Before identity, because identity stores a display name in it.
@@ -2533,9 +2538,9 @@ processes can connect, raises and activates its window, and handles the forwarde
 arguments. A stale lock left by a crash is taken over (`QLockFile::setStaleLockTime`, plus
 `removeStaleLockFile` when the owning process is gone).
 
-**The path is set in one place.** `AppSettings::setFilePath` is called once at startup
-with the real path, and once by the test runner with a file inside a fresh
-`QTemporaryDir`, so every run starts empty and nothing touches the developer's own
+**The path is given in one place.** `main()` opens the one `AppSettings` with
+`AppSettings::open(path, errorMessage)` at the real path; each test opens its own over a
+fresh `QTemporaryDir`, so every test starts empty and nothing touches the developer's own
 settings.
 
 Three groups of state:
@@ -2543,14 +2548,14 @@ Three groups of state:
 | Group | Holds |
 |---|---|
 | Device | Display name, the developer-export toggle, the server address override |
-| Per document, keyed by **document id** | The `DocumentRecord`; cached ward-list entry; **paths of copies written from it** |
+| Per document, keyed by **document id** | The `DocumentRecord` (the library's entry and copy paths are Task 11's) |
 | Map | `defaultLat`, `defaultLng` |
 
 **Per-document state is keyed by document id, not by file path.** Documents move between
 machines and are named by id in app data (Task 11), and a path-keyed record would lose the
 high-water mark the first time either changed.
 
-`lastDocumentPath` becomes `lastDocumentId`.
+`lastDocumentPath` goes; Task 11 reopens the last ward by id.
 
 **The server address comes from here.** `AppSettings::serverAddress()` returns the
 override when one is set and the built-in default otherwise. The default is a compile-time
@@ -2722,6 +2727,12 @@ public:
     void forgetRemoved(const QString& documentId);
 };
 ```
+
+**The library's entries live in `AppSettings`, beside the records but not inside them** -
+ward name, last opened, the paths of copies written from it, and the last ward opened.
+Their lifetime is the library's: a removal deletes the record first (Task 6), and
+`forgetRemoved` then reads the copy paths, deletes the copies, and drops the entry. At
+startup the app reopens the last ward opened, by id, when its entry is still there.
 
 `ensureFilePath()` (`DocumentManager.cpp:392-407`) and the untitled-document dance go
 away: a new ward gets its id and paths up front, then `DocumentSession::create`, so there is

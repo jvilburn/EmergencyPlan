@@ -61,8 +61,8 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    // Keeps every settings write and every QStandardPaths location out of the
-    // developer's real profile, so no test depends on state left by a previous run.
+    // Keeps any QStandardPaths location a test touches out of the developer's
+    // real profile.
     QStandardPaths::setTestModeEnabled(true);
 
     int status = 0;

@@ -1,7 +1,10 @@
 #pragma once
 
-#include <QLockFile>
+#include <QByteArray>
+#include <QHash>
 #include <QLocalServer>
+#include <QLocalSocket>
+#include <QLockFile>
 #include <QObject>
 #include <QString>
 #include <QStringList>
@@ -20,11 +23,16 @@ class SingleInstance : public QObject
     Q_OBJECT
 
 public:
+    enum class Claim
+    {
+        Claimed,        ///< this process is the one instance
+        HandedOver,     ///< the running instance has the arguments; exit
+        Failed          ///< neither: the reason is in errorMessage
+    };
+
     explicit SingleInstance(QObject* parent);
 
-    /// True when this process is now the one instance. Otherwise arguments have
-    /// gone to the running one, and this process should exit.
-    bool claim(const QStringList& arguments);
+    Claim claim(const QStringList& arguments, QString* errorMessage);
 
 signals:
     /// A later launch's arguments, handed over by it.
@@ -32,7 +40,12 @@ signals:
 
 private:
     void onNewConnection();
+    void onReadyRead();
     void onHandedOver();
+
+    /// Gives the running instance the arguments, allowing it a moment to finish
+    /// starting if it has only just taken the lock.
+    static bool handOver(const QStringList& arguments);
 
     /// Named for this user's app data, so two users on one machine each have
     /// their own.
@@ -40,4 +53,5 @@ private:
 
     std::unique_ptr<QLockFile> m_lock;
     QLocalServer m_server;
+    QHash<QLocalSocket*, QByteArray> m_received;
 };

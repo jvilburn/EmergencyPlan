@@ -3,11 +3,13 @@
 #include "AppSettings.h"
 #include "ChainTestSupport.h"
 #include "DocumentCrypto.h"
+#include "HexCodec.h"
 #include "SessionTestSupport.h"
 
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRegularExpression>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -32,6 +34,18 @@ DocumentRecord fullRecord()
     return record;
 }
 
+bool writeFile(const QString& path, const QByteArray& bytes)
+{
+    QFile file(path);
+    return file.open(QIODevice::WriteOnly | QIODevice::Truncate) && file.write(bytes) == bytes.size();
+}
+
+QByteArray readFile(const QString& path)
+{
+    QFile file(path);
+    return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray();
+}
+
 } // namespace
 
 void AppSettingsTest::initTestCase()
@@ -42,6 +56,7 @@ void AppSettingsTest::initTestCase()
 void AppSettingsTest::aMissingFileIsAnEmptyStore()
 {
     QTemporaryDir folder;
+    QVERIFY(folder.isValid());
     const QString path = folder.filePath("settings.json");
 
     QString error;
@@ -52,7 +67,7 @@ void AppSettingsTest::aMissingFileIsAnEmptyStore()
     QVERIFY(settings->displayName().isEmpty());
     QVERIFY(!settings->developerExport());
     QVERIFY(!settings->defaultLocation().has_value());
-    QVERIFY(settings->lastDocumentId().isEmpty());
+    QVERIFY(!settings->writeFailed());
     QVERIFY(settings->record("anything") == DocumentRecord());
 
     // Reading writes nothing.
@@ -62,9 +77,9 @@ void AppSettingsTest::aMissingFileIsAnEmptyStore()
 void AppSettingsTest::everyValueReadsBackThroughASecondInstance()
 {
     QTemporaryDir folder;
+    QVERIFY(folder.isValid());
     const QString path = folder.filePath("nested/settings.json");
     const QString documentId = ChainTestSupport::newDocumentId();
-    const QDateTime opened = QDateTime::fromString("2026-10-04T15:30:12.345Z", Qt::ISODateWithMs);
 
     {
         std::unique_ptr<AppSettings> settings = openAt(path);
@@ -73,10 +88,7 @@ void AppSettingsTest::everyValueReadsBackThroughASecondInstance()
         settings->setServerAddressOverride("https://example.test");
         settings->setDefaultLocation(AppSettings::Location{40.5, -111.25});
         settings->setRecord(documentId, fullRecord());
-        settings->setWardName(documentId, "Tanglewood Ward");
-        settings->setLastOpened(documentId, opened);
-        settings->setCopyPaths(documentId, {"C:/copies/one.wardplanning", "C:/copies/two.wardplanning"});
-        settings->setLastDocumentId(documentId);
+        QVERIFY(!settings->writeFailed());
     }
 
     const std::unique_ptr<AppSettings> reread = openAt(path);
@@ -87,21 +99,21 @@ void AppSettingsTest::everyValueReadsBackThroughASecondInstance()
     QCOMPARE(reread->defaultLocation()->latitude, 40.5);
     QCOMPARE(reread->defaultLocation()->longitude, -111.25);
     QVERIFY(reread->record(documentId) == fullRecord());
-    QCOMPARE(reread->wardName(documentId), QString("Tanglewood Ward"));
-    QVERIFY(reread->lastOpened(documentId) == opened);
-    QCOMPARE(reread->copyPaths(documentId),
-             (QStringList{"C:/copies/one.wardplanning", "C:/copies/two.wardplanning"}));
-    QCOMPARE(reread->lastDocumentId(), documentId);
     QCOMPARE(reread->documentIds(), QStringList{documentId});
 
-    // Clearing the override falls back to the built-in address.
+    // Cleared, each falls back: the override to the built-in address, the toggle off.
     reread->setServerAddressOverride(QString());
-    QVERIFY(openAt(path)->serverAddress() != QString("https://example.test"));
+    reread->setDeveloperExport(false);
+    const std::unique_ptr<AppSettings> cleared = openAt(path);
+    QVERIFY(cleared);
+    QVERIFY(cleared->serverAddress() != QString("https://example.test"));
+    QVERIFY(!cleared->developerExport());
 }
 
 void AppSettingsTest::numbersRoundTripAsNumbers()
 {
     QTemporaryDir folder;
+    QVERIFY(folder.isValid());
     const QString path = folder.filePath("settings.json");
     const QString documentId = ChainTestSupport::newDocumentId();
 
@@ -120,11 +132,9 @@ void AppSettingsTest::numbersRoundTripAsNumbers()
     QVERIFY(reread->record(documentId) == record);
 
     // Numbers in the file, not strings.
-    QFile file(path);
-    QVERIFY(file.open(QIODevice::ReadOnly));
-    const QJsonObject json = QJsonDocument::fromJson(file.readAll()).object();
+    const QJsonObject json = QJsonDocument::fromJson(readFile(path)).object();
     QVERIFY(json["map"].toObject()["defaultLat"].isDouble());
-    const QJsonObject stored = json["documents"].toObject()[documentId].toObject()["record"].toObject();
+    const QJsonObject stored = json["records"].toObject()[documentId].toObject();
     QVERIFY(stored["baseVersion"].isDouble());
     QVERIFY(stored["highWaterMark"].toObject()["saveCounter"].isDouble());
 }
@@ -132,6 +142,7 @@ void AppSettingsTest::numbersRoundTripAsNumbers()
 void AppSettingsTest::recordsForTwoIdsStaySeparate()
 {
     QTemporaryDir folder;
+    QVERIFY(folder.isValid());
     const QString path = folder.filePath("settings.json");
     const QString first = ChainTestSupport::newDocumentId();
     const QString second = ChainTestSupport::newDocumentId();
@@ -143,19 +154,17 @@ void AppSettingsTest::recordsForTwoIdsStaySeparate()
         std::unique_ptr<AppSettings> settings = openAt(path);
         settings->setRecord(first, fullRecord());
         settings->setRecord(second, other);
-        settings->setWardName(first, "First Ward");
     }
 
     const std::unique_ptr<AppSettings> reread = openAt(path);
     QVERIFY(reread->record(first) == fullRecord());
     QVERIFY(reread->record(second) == other);
-    QCOMPARE(reread->wardName(first), QString("First Ward"));
-    QVERIFY(reread->wardName(second).isEmpty());
 }
 
 void AppSettingsTest::aRecordWithPendingRosterChangesRoundTrips()
 {
     QTemporaryDir folder;
+    QVERIFY(folder.isValid());
     const QString path = folder.filePath("settings.json");
     const QString documentId = ChainTestSupport::newDocumentId();
     const DeviceIdentity bob = newIdentity("Bob", "Phone");
@@ -180,57 +189,98 @@ void AppSettingsTest::aRecordWithPendingRosterChangesRoundTrips()
     QVERIFY(reread == record);
 }
 
-void AppSettingsTest::removingARecordForgetsTheWholeDocument()
+void AppSettingsTest::removingARecordLeavesTheOthers()
 {
     QTemporaryDir folder;
+    QVERIFY(folder.isValid());
     const QString path = folder.filePath("settings.json");
-    const QString documentId = ChainTestSupport::newDocumentId();
+    const QString gone = ChainTestSupport::newDocumentId();
+    const QString kept = ChainTestSupport::newDocumentId();
     {
         std::unique_ptr<AppSettings> settings = openAt(path);
-        settings->setRecord(documentId, fullRecord());
-        settings->setWardName(documentId, "Gone Ward");
-        settings->setCopyPaths(documentId, {"C:/copies/one.wardplanning"});
-        settings->setLastDocumentId(documentId);
-        settings->removeRecord(documentId);
+        settings->setRecord(gone, fullRecord());
+        settings->setRecord(kept, fullRecord());
+        settings->setDisplayName("Alice");
+        settings->removeRecord(gone);
     }
 
     const std::unique_ptr<AppSettings> reread = openAt(path);
-    QVERIFY(reread->documentIds().isEmpty());
-    QVERIFY(reread->wardName(documentId).isEmpty());
-    QVERIFY(reread->copyPaths(documentId).isEmpty());
-    QVERIFY(reread->lastDocumentId().isEmpty());
+    QCOMPARE(reread->documentIds(), QStringList{kept});
+    QVERIFY(reread->record(kept) == fullRecord());
+    QVERIFY(reread->record(gone) == DocumentRecord());
+    QCOMPARE(reread->displayName(), QString("Alice"));
+}
+
+void AppSettingsTest::aMalformedFileIsReportedAndLeftAlone_data()
+{
+    const QString id = ChainTestSupport::newDocumentId();
+    const QString hash = HexCodec::encode(DocumentCrypto::payloadHash("a base copy"));
+    const QString mark = R"("highWaterMark": {"keyGeneration": 1, "saveCounter": 2})";
+
+    QTest::addColumn<QByteArray>("bytes");
+    QTest::newRow("not json") << QByteArray("{ not json");
+    QTest::newRow("not an object") << QByteArray("[]");
+    QTest::newRow("no records") << QByteArray(R"({"displayName": "Alice"})");
+    QTest::newRow("unknown key") << QByteArray(R"({"records": {}, "favouriteColour": "blue"})");
+    QTest::newRow("developer export false") << QByteArray(R"({"records": {}, "developerExport": false})");
+    QTest::newRow("empty display name") << QByteArray(R"({"records": {}, "displayName": ""})");
+    QTest::newRow("latitude as text") << QByteArray(R"({"records": {}, "map": {"defaultLat": "40", "defaultLng": 1}})");
+    QTest::newRow("empty document id") << QString(R"({"records": {"": {%1, "pendingChanges": []}}})").arg(mark).toUtf8();
+    QTest::newRow("record not an object") << QString(R"({"records": {"%1": 7}})").arg(id).toUtf8();
+    QTest::newRow("no high-water mark") << QString(R"({"records": {"%1": {"pendingChanges": []}}})").arg(id).toUtf8();
+    QTest::newRow("base version without hash")
+        << QString(R"({"records": {"%1": {"baseVersion": 3, %2, "pendingChanges": []}}})").arg(id, mark).toUtf8();
+    QTest::newRow("hash of the wrong size")
+        << QString(R"({"records": {"%1": {"baseVersion": 3, "baseHash": "abcd", %2, "pendingChanges": []}}})")
+               .arg(id, mark)
+               .toUtf8();
+    QTest::newRow("a pending change of no kind")
+        << QString(R"({"records": {"%1": {%2, "pendingChanges": [{"kind": "promote"}]}}})").arg(id, mark).toUtf8();
+
+    // Anchor: the same shapes, well formed, read.
+    QTest::newRow("well formed") << QString(R"({"records": {"%1": {"baseVersion": 3, "baseHash": "%2", %3, "pendingChanges": []}}})")
+                                        .arg(id, hash, mark)
+                                        .toUtf8();
 }
 
 void AppSettingsTest::aMalformedFileIsReportedAndLeftAlone()
 {
+    QFETCH(QByteArray, bytes);
+
     QTemporaryDir folder;
+    QVERIFY(folder.isValid());
     const QString path = folder.filePath("settings.json");
+    QVERIFY(writeFile(path, bytes));
 
-    // Anchor: a well-formed file opens.
-    openAt(path)->setDisplayName("Alice");
-    QVERIFY(openAt(path));
-
-    const QList<QByteArray> broken = {
-        "{ not json",
-        "[]",
-        R"({"documents": {}, "favouriteColour": "blue"})",
-        R"({"documents": {}, "map": {"defaultLat": "40"}})",
-        R"({"documents": {"abc": {"record": {"highWaterMark": {"keyGeneration": 1}, "pendingChanges": []}}}})",
-    };
-    for (const QByteArray& bytes : broken)
+    QString error;
+    const std::unique_ptr<AppSettings> settings = AppSettings::open(path, &error);
+    if (QByteArray(QTest::currentDataTag()) == "well formed")
     {
-        QFile file(path);
-        QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
-        file.write(bytes);
-        file.close();
-
-        QString error;
-        QVERIFY2(!AppSettings::open(path, &error), bytes.constData());
-        QVERIFY(!error.isEmpty());
-
-        // Reported, not replaced: the file is as it was.
-        QFile check(path);
-        QVERIFY(check.open(QIODevice::ReadOnly));
-        QCOMPARE(check.readAll(), bytes);
+        QVERIFY2(settings, qPrintable(error));
+        return;
     }
+
+    QVERIFY(!settings);
+    QVERIFY(!error.isEmpty());
+
+    // Reported, not replaced: the file is as it was.
+    QCOMPARE(readFile(path), bytes);
+}
+
+void AppSettingsTest::aFailedWriteKeepsTheValuesAndSaysSo()
+{
+    QTemporaryDir folder;
+    QVERIFY(folder.isValid());
+
+    // The settings file's folder is a file, so nothing can be written there.
+    const QString blocker = folder.filePath("blocker");
+    QVERIFY(writeFile(blocker, "a file, not a folder"));
+    const std::unique_ptr<AppSettings> settings = openAt(blocker + "/settings.json");
+    QVERIFY(settings);
+
+    QTest::ignoreMessage(QtWarningMsg, QRegularExpression("Settings could not be written"));
+    settings->setDisplayName("Alice");
+    QVERIFY(settings->writeFailed());
+    QCOMPARE(settings->displayName(), QString("Alice"));
+    QVERIFY(!QFile::exists(blocker + "/settings.json"));
 }

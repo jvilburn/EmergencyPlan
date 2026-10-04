@@ -6,7 +6,6 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
-#include <QJsonArray>
 #include <QJsonDocument>
 #include <QObject>
 #include <QSaveFile>
@@ -18,12 +17,7 @@ namespace
 const QString DefaultServerAddress;
 
 // Part of the settings format.
-const QLatin1String KeyDocuments("documents");
-const QLatin1String KeyRecord("record");
-const QLatin1String KeyWardName("wardName");
-const QLatin1String KeyLastOpened("lastOpened");
-const QLatin1String KeyCopyPaths("copyPaths");
-const QLatin1String KeyLastDocumentId("lastDocumentId");
+const QLatin1String KeyRecords("records");
 const QLatin1String KeyDisplayName("displayName");
 const QLatin1String KeyDeveloperExport("developerExport");
 const QLatin1String KeyServerAddress("serverAddress");
@@ -43,16 +37,27 @@ std::unique_ptr<AppSettings> AppSettings::open(const QString& path, QString* err
         return settings;
     }
 
-    if (!file.open(QIODevice::ReadOnly) || !settings->read(file.readAll()))
+    QString problem;
+    if (!file.open(QIODevice::ReadOnly))
     {
-        if (errorMessage != nullptr)
-        {
-            *errorMessage = QObject::tr("The settings file %1 could not be read.").arg(path);
-        }
-        return nullptr;
+        problem = QObject::tr("The settings file %1 could not be opened: %2.").arg(path, file.errorString());
+    }
+    else if (!settings->read(file.readAll()))
+    {
+        problem = QObject::tr("The settings file %1 is not in a form this version of Ward Planning reads.").arg(path);
     }
 
-    return settings;
+    if (problem.isEmpty())
+    {
+        return settings;
+    }
+
+    if (errorMessage != nullptr)
+    {
+        *errorMessage = problem + QLatin1Char(' ')
+            + QObject::tr("Moving the file somewhere else starts Ward Planning with fresh settings.");
+    }
+    return nullptr;
 }
 
 AppSettings::AppSettings(const QString& path)
@@ -64,69 +69,24 @@ AppSettings::AppSettings(const QString& path)
 
 DocumentRecord AppSettings::record(const QString& documentId) const
 {
-    return m_documents.value(documentId).record;
+    return m_records.value(documentId);
 }
 
 void AppSettings::setRecord(const QString& documentId, const DocumentRecord& record)
 {
-    m_documents[documentId].record = record;
+    m_records.insert(documentId, record);
     save();
 }
 
 void AppSettings::removeRecord(const QString& documentId)
 {
-    m_documents.remove(documentId);
-    if (m_lastDocumentId == documentId)
-    {
-        m_lastDocumentId.clear();
-    }
+    m_records.remove(documentId);
     save();
 }
 
 QStringList AppSettings::documentIds() const
 {
-    return m_documents.keys();
-}
-
-// --- Library entries -------------------------------------------------------------
-
-QString AppSettings::wardName(const QString& documentId) const
-{
-    return m_documents.value(documentId).wardName;
-}
-
-void AppSettings::setWardName(const QString& documentId, const QString& wardName)
-{
-    m_documents[documentId].wardName = wardName;
-    save();
-}
-
-std::optional<QDateTime> AppSettings::lastOpened(const QString& documentId) const
-{
-    return m_documents.value(documentId).lastOpened;
-}
-
-void AppSettings::setLastOpened(const QString& documentId, const QDateTime& lastOpened)
-{
-    m_documents[documentId].lastOpened = lastOpened;
-    save();
-}
-
-QStringList AppSettings::copyPaths(const QString& documentId) const
-{
-    return m_documents.value(documentId).copyPaths;
-}
-
-void AppSettings::setCopyPaths(const QString& documentId, const QStringList& paths)
-{
-    m_documents[documentId].copyPaths = paths;
-    save();
-}
-
-void AppSettings::setLastDocumentId(const QString& documentId)
-{
-    m_lastDocumentId = documentId;
-    save();
+    return m_records.keys();
 }
 
 // --- This device -----------------------------------------------------------------
@@ -172,21 +132,22 @@ bool AppSettings::read(const QByteArray& bytes)
     }
 
     const QJsonObject json = document.object();
-    QJsonObject documents;
-    if (!StrictJson::hasOnlyKeys(json,
-                                 {KeyDocuments,
-                                  KeyLastDocumentId,
-                                  KeyDisplayName,
-                                  KeyDeveloperExport,
-                                  KeyServerAddress,
-                                  KeyMap})
-        || !StrictJson::readObject(json, KeyDocuments, documents)
-        || !StrictJson::readOptionalNonEmptyString(json, KeyLastDocumentId, m_lastDocumentId)
+    QJsonObject records;
+    if (!StrictJson::hasOnlyKeys(json, {KeyRecords, KeyDisplayName, KeyDeveloperExport, KeyServerAddress, KeyMap})
+        || !StrictJson::readObject(json, KeyRecords, records)
         || !StrictJson::readOptionalNonEmptyString(json, KeyDisplayName, m_displayName)
-        || !StrictJson::readOptionalNonEmptyString(json, KeyServerAddress, m_serverAddressOverride)
-        || (json.contains(KeyDeveloperExport) && !StrictJson::readBool(json, KeyDeveloperExport, m_developerExport)))
+        || !StrictJson::readOptionalNonEmptyString(json, KeyServerAddress, m_serverAddressOverride))
     {
         return false;
+    }
+
+    // Written only when set, so present means true.
+    if (json.contains(KeyDeveloperExport))
+    {
+        if (!StrictJson::readBool(json, KeyDeveloperExport, m_developerExport) || !m_developerExport)
+        {
+            return false;
+        }
     }
 
     if (json.contains(KeyMap))
@@ -203,42 +164,19 @@ bool AppSettings::read(const QByteArray& bytes)
         m_defaultLocation = location;
     }
 
-    for (auto entry = documents.constBegin(); entry != documents.constEnd(); ++entry)
+    for (auto entry = records.constBegin(); entry != records.constEnd(); ++entry)
     {
-        if (!entry.value().isObject())
+        if (entry.key().isEmpty() || !entry.value().isObject())
         {
             return false;
         }
 
-        const QJsonObject stateJson = entry.value().toObject();
-        QJsonObject recordJson;
-        QStringList copyPaths;
-        DocumentState state;
-        if (!StrictJson::hasOnlyKeys(stateJson, {KeyRecord, KeyWardName, KeyLastOpened, KeyCopyPaths})
-            || !StrictJson::readObject(stateJson, KeyRecord, recordJson)
-            || !StrictJson::readOptionalNonEmptyString(stateJson, KeyWardName, state.wardName)
-            || (stateJson.contains(KeyCopyPaths) && !StrictJson::readStringArray(stateJson, KeyCopyPaths, state.copyPaths)))
-        {
-            return false;
-        }
-
-        if (stateJson.contains(KeyLastOpened))
-        {
-            QDateTime lastOpened;
-            if (!StrictJson::readTime(stateJson, KeyLastOpened, lastOpened))
-            {
-                return false;
-            }
-            state.lastOpened = lastOpened;
-        }
-
-        const std::optional<DocumentRecord> record = DocumentRecord::fromJson(recordJson);
+        const std::optional<DocumentRecord> record = DocumentRecord::fromJson(entry.value().toObject());
         if (!record.has_value())
         {
             return false;
         }
-        state.record = record.value();
-        m_documents.insert(entry.key(), state);
+        m_records.insert(entry.key(), record.value());
     }
 
     return true;
@@ -246,33 +184,14 @@ bool AppSettings::read(const QByteArray& bytes)
 
 QByteArray AppSettings::write() const
 {
-    QJsonObject documents;
-    for (auto entry = m_documents.constBegin(); entry != m_documents.constEnd(); ++entry)
+    QJsonObject records;
+    for (auto entry = m_records.constBegin(); entry != m_records.constEnd(); ++entry)
     {
-        const DocumentState& state = entry.value();
-        QJsonObject stateJson;
-        stateJson[KeyRecord] = state.record.toJson();
-        if (!state.wardName.isEmpty())
-        {
-            stateJson[KeyWardName] = state.wardName;
-        }
-        if (state.lastOpened.has_value())
-        {
-            stateJson[KeyLastOpened] = StrictJson::writeTime(state.lastOpened.value());
-        }
-        if (!state.copyPaths.isEmpty())
-        {
-            stateJson[KeyCopyPaths] = QJsonArray::fromStringList(state.copyPaths);
-        }
-        documents[entry.key()] = stateJson;
+        records[entry.key()] = entry.value().toJson();
     }
 
     QJsonObject json;
-    json[KeyDocuments] = documents;
-    if (!m_lastDocumentId.isEmpty())
-    {
-        json[KeyLastDocumentId] = m_lastDocumentId;
-    }
+    json[KeyRecords] = records;
     if (!m_displayName.isEmpty())
     {
         json[KeyDisplayName] = m_displayName;
@@ -296,13 +215,14 @@ QByteArray AppSettings::write() const
     return QJsonDocument(json).toJson(QJsonDocument::Indented);
 }
 
-void AppSettings::save() const
+void AppSettings::save()
 {
     QDir().mkpath(QFileInfo(m_path).absolutePath());
 
     QSaveFile file(m_path);
     const QByteArray bytes = write();
-    if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit())
+    m_writeFailed = !file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit();
+    if (m_writeFailed)
     {
         qWarning() << "Settings could not be written to" << m_path << ":" << file.errorString();
     }
