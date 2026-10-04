@@ -12,6 +12,7 @@
 static_assert(DocumentCrypto::SignatureSize == crypto_sign_BYTES);
 static_assert(DocumentCrypto::SealedDataKeySize == DataKey::Size + crypto_box_SEALBYTES);
 static_assert(DocumentCrypto::NonceSize == crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+static_assert(DocumentCrypto::SigningSeedSize == crypto_sign_SEEDBYTES);
 static_assert(DocumentCrypto::PayloadHashSize >= crypto_generichash_blake2b_BYTES_MIN);
 static_assert(DocumentCrypto::PayloadHashSize <= crypto_generichash_blake2b_BYTES_MAX);
 
@@ -232,6 +233,49 @@ SigningKeypair DocumentCrypto::generateSigningKeypair()
     crypto_sign_keypair(asUnsigned(verifyBytes), asUnsigned(signingBytes));
 
     SigningKeypair keys;
+    keys.verifyKey.bytes = verifyBytes;
+    keys.signingKey.bytes = signingBytes;
+    return keys;
+}
+
+Keypair DocumentCrypto::keypairFromSecret(const SecretKey& secretKey)
+{
+    Keypair keys;
+    if (!secretKey.isValid())
+    {
+        return keys;
+    }
+
+    QByteArray publicBytes(PublicKey::Size, '\0');
+    crypto_scalarmult_base(asUnsigned(publicBytes), asUnsigned(secretKey.bytes));
+    keys.publicKey.bytes = publicBytes;
+    keys.secretKey = secretKey;
+    return keys;
+}
+
+QByteArray DocumentCrypto::seedOf(const SigningKey& signingKey)
+{
+    if (!signingKey.isValid())
+    {
+        return QByteArray();
+    }
+
+    QByteArray seed(SigningSeedSize, '\0');
+    crypto_sign_ed25519_sk_to_seed(asUnsigned(seed), asUnsigned(signingKey.bytes));
+    return seed;
+}
+
+SigningKeypair DocumentCrypto::signingKeypairFromSeed(const QByteArray& seed)
+{
+    SigningKeypair keys;
+    if (seed.size() != SigningSeedSize)
+    {
+        return keys;
+    }
+
+    QByteArray verifyBytes(VerifyKey::Size, '\0');
+    QByteArray signingBytes(SigningKey::Size, '\0');
+    crypto_sign_seed_keypair(asUnsigned(verifyBytes), asUnsigned(signingBytes), asUnsigned(seed));
     keys.verifyKey.bytes = verifyBytes;
     keys.signingKey.bytes = signingBytes;
     return keys;

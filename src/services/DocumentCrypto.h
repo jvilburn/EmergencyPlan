@@ -90,6 +90,9 @@ public:
     /// BLAKE2b over the ciphertext.
     static constexpr int PayloadHashSize = 32;
 
+    /// The seed an Ed25519 signing keypair is made from.
+    static constexpr int SigningSeedSize = 32;
+
     /// Wraps sodium_init(). Must run before any other call here - libsodium's
     /// failure mode without it is platform-dependent, not a clean crash. Called
     /// once at startup by main(), and by the test runner.
@@ -97,6 +100,18 @@ public:
 
     static Keypair generateKeypair();
     static SigningKeypair generateSigningKeypair();
+
+    // A device keeps only its secret halves; the public ones are derived from them,
+    // so a stored identity can never pair a secret with someone else's public key.
+
+    /// The sealing keypair a secret key belongs to. Invalid keys for an invalid secret.
+    static Keypair keypairFromSecret(const SecretKey& secretKey);
+
+    /// The seed a signing key was made from; empty for an invalid key.
+    static QByteArray seedOf(const SigningKey& signingKey);
+
+    /// The signing keypair a seed makes. Invalid keys for a seed of the wrong size.
+    static SigningKeypair signingKeypairFromSeed(const QByteArray& seed);
     static DataKey generateDataKey();
 
     /// Personalised BLAKE2b. Returns an empty array when outputSize is outside

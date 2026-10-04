@@ -69,7 +69,7 @@ Two related ideas surfaced during design and are deferred to their own work:
 | Write attribution | Every header signed by its writer's Ed25519 key |
 | Revocation | Rotates the data key; the removed member's app deletes its local copy once the signed header chain proves the removal |
 | What the server holds | Ciphertext, public keys, and write metadata. No key material. |
-| Private key storage | qtkeychain (Windows Credential Store, macOS/iOS Keychain, Android Keystore, Linux Secret Service), built from source against the system Qt |
+| Private key storage | A file in local app data, readable only by its user, holding the secret halves - as SSH keys are kept. Local app data does not roam. |
 | Crypto library | libsodium 1.0.22 or later from vcpkg, confirmed to contain commit `ad3004e` |
 | Who is on the roster | People. Each person has one or more linked devices; keys never leave the device that made them. |
 | Roles | Each person is an **admin** or a **member**. The ward's creator is its first admin, and every version that lists anyone lists at least one admin. |
@@ -525,18 +525,16 @@ headers that recorded each link and its writer - *This phone also added "Dell La
 3 September. Unlink it too?* - with **Unlink both** as the default, so a device planted from
 a stolen phone does not outlive the phone.
 
-**Identity outlives an uninstall.** The keypairs live in the platform credential store,
-which an uninstaller does not touch, so a reinstall finds the same device identity and
-the same access. Application data is less durable, and the ward list sits there - which is
-why the ward list is fetched from the server rather than kept only locally.
+**Identity outlives a reinstall.** The keypairs live in a file in local app data, which
+the uninstaller leaves in place, so a reinstall finds the same device identity and the same
+access. Clearing local app data makes the machine a new device, which links again; the
+ward list is fetched from the server, so it comes back with it.
 
 There is no passphrase-protected identity export: linking covers new devices, and
 an admin's grant covers losing all of them.
 
-`KeyStore` is a narrow wrapper - `store`, `load`, `remove`, with `load` reporting
-not-found distinctly - over qtkeychain, whose
-job is to present that library's asynchronous jobs as something the document-open
-path can sequence cleanly.
+`IdentityFile` is a narrow pair - `load` and `store` - with `load` reporting a missing
+file distinctly from one it cannot read, so a damaged file never looks like a first run.
 
 **Identity resolves before any document exists.** `main.cpp` constructs
 `DocumentManager` before `MainWindow`, and `ensureFilePath()` will invent a path and
@@ -549,9 +547,8 @@ transient `statusBar()->showMessage(...)` that the next status message overwrite
 user would not notice their work had stopped being saved. A failed *upload* is not an
 error and does not interrupt: it is a sync state, described below.
 
-On Linux with no Secret Service running, qtkeychain has no fallback and the app has
-no identity. The startup path reports this specifically rather than failing as a
-damaged file.
+An identity file that cannot be read stops startup with a message naming the file,
+rather than minting a second identity over it.
 
 ---
 
@@ -1159,7 +1156,7 @@ default, which warns that it writes unencrypted member data. `parseJson` and
 
 | Component | Responsibility |
 |---|---|
-| `KeyStore` | qtkeychain wrapper; store, load, and test for this device's key record |
+| `IdentityFile` | This device's key record as a local file; load tells a first run from a damaged file |
 | `IdentityService` | This device's keypairs and name; the member id and display name it belongs to; creating a person or linking to one |
 | `DocumentCrypto` | Header parse and build, AD binding, header signing and verification, seal and unseal the data key, encrypt and decrypt the payload |
 | `DocumentFile` | The encrypted file format: header line and ciphertext, sealing each new version |
@@ -1355,8 +1352,8 @@ and no explanation; a failure is now reported and the record left alone.
 
 ## Identity recovery
 
-Device keys live only in each device's OS keychain. They survive an uninstall and
-reinstall; a reimaged profile or a replaced device loses them. **A person with another
+Device keys live only in each device's local app data. They survive an uninstall and
+reinstall; clearing local app data, a reimaged profile, or a replaced device loses them. **A person with another
 working device links the new one** - no one else is involved. **A person who has lost
 every device** is removed by an admin and granted again, which re-seals the data key to
 the new device and adds it to the server allow-list. The single-holder and single-admin

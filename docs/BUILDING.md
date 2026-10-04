@@ -41,18 +41,6 @@
    brew install qt@6 cmake ninja
    ```
 
-### Linux
-
-qtkeychain stores device keys in the desktop's secret service, so it needs the Qt
-DBus module and the libsecret development headers (for example `libsecret-1-dev`
-on Debian and Ubuntu).
-
-### Fetched at configure time
-
-qtkeychain is built from source rather than taken from vcpkg, whose port would
-build a second copy of Qt. CMake downloads it from GitHub at a pinned commit the
-first time it configures, so that configure needs network access.
-
 ---
 
 ## Building

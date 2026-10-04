@@ -49,30 +49,6 @@ find_package(unofficial-libmupdf CONFIG REQUIRED)
 find_package(unofficial-sodium CONFIG REQUIRED)
 
 # ============================================================================
-# qtkeychain for the device's secret keys (built from source)
-# ============================================================================
-# Built against the system Qt. The vcpkg port would build a second Qt 6 from
-# source and link it beside this one. Linked statically into the executable and
-# excluded from install, so nothing of it ships separately.
-include(FetchContent)
-FetchContent_Declare(qtkeychain
-    GIT_REPOSITORY https://github.com/frankosterfeld/qtkeychain.git
-    GIT_TAG 875f77d9f61bd97fd84cca47ce3bc71186dfbd09  # 0.17.0
-    EXCLUDE_FROM_ALL
-)
-#
-# BUILD_SHARED_LIBS OFF also lands in this project's cache, through qtkeychain's
-# cmake_dependent_option; OFF is what every target here builds with anyway.
-set(BUILD_SHARED_LIBS OFF)
-set(BUILD_TRANSLATIONS OFF)
-set(BUILD_TEST_APPLICATION OFF)
-FetchContent_MakeAvailable(qtkeychain)
-
-# Built static, so its classes are neither exported nor imported. keychain.h reads
-# this in place of its generated export header, for the library and every user.
-target_compile_definitions(qt6keychain PUBLIC QTKEYCHAIN_NO_EXPORT)
-
-# ============================================================================
 # Compiler Warnings
 # ============================================================================
 if(MSVC)
@@ -215,7 +191,7 @@ set(SERVICE_SOURCES
     src/services/SessionTimers.cpp
     src/services/AppSettings.cpp
     src/services/SingleInstance.cpp
-    src/services/KeyStore.cpp
+    src/services/IdentityFile.cpp
     # src/services/StatisticsService.cpp
     # src/services/ResourceService.cpp
     # src/services/SearchService.cpp
@@ -264,7 +240,7 @@ set(SERVICE_HEADERS
     src/services/SessionTimers.h
     src/services/AppSettings.h
     src/services/SingleInstance.h
-    src/services/KeyStore.h
+    src/services/IdentityFile.h
     # src/services/StatisticsService.h
     # src/services/ResourceService.h
     # src/services/SearchService.h
@@ -465,7 +441,6 @@ target_link_libraries(WardPlanningLib PUBLIC
     Qt6::PrintSupport
     unofficial::libmupdf::libmupdf
     unofficial-sodium::sodium
-    qt6keychain
 )
 
 target_compile_definitions(WardPlanningLib PUBLIC HAVE_MUPDF)

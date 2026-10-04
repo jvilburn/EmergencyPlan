@@ -55,11 +55,8 @@ Note: MuPDF uses `fz_try/fz_catch/fz_always` macros (setjmp/longjmp) for error h
 - **Wrapper**: `DocumentCrypto.h/cpp` - every other file reaches libsodium through it, apart from `CryptoTypes.cpp` (size checks), `Pairing.cpp` (random values and constant-time compare), and the tests
 - `DocumentCrypto::initialise()` runs in `main()` and in the test runner before any other call
 
-### qtkeychain (device keys in the OS keychain)
-- **Source**: built from GitHub by `FetchContent`, pinned to the 0.17.0 commit; the vcpkg port would build a second Qt
-- **Target**: `qt6keychain`, static, with `QTKEYCHAIN_NO_EXPORT` defined for it and every user
-- **Include**: `#include <qtkeychain/keychain.h>`
-- Linux needs Qt DBus and the libsecret development headers
+### Device identity
+- `IdentityFile.h/cpp` keeps this device's secret halves in `identity.json` in `AppLocalDataLocation`, owner-only, as SSH keys are kept; public halves are derived on load
 
 ## Key Design Decisions
 

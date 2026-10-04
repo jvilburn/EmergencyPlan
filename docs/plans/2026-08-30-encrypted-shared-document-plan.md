@@ -4,9 +4,9 @@
 
 **Goal:** Encrypt the ward document, hold the authoritative copy on a Ward Planning server the app talks to directly, and keep a complete local file that works with no network at all.
 
-**Architecture:** Envelope encryption. Each document holds one random data key, sealed separately to each device's X25519 public key via libsodium `crypto_box_seal`. The payload - today's document JSON, compressed - is encrypted with XChaCha20-Poly1305 under that data key, as one payload, with the plaintext header bound as associated data. The roster lists people, each with linked devices; every device holds two keypairs, X25519 for sealing and Ed25519 for signing, generated silently on first run and held in the OS keychain through qtkeychain. A signed header chain proves membership changes; each person is an admin or a member, and any admin grants and removes alone. Saving writes the local file; publishing uploads it conditionally on the version this session started from. All local writes funnel through one `DocumentSession` path, and every server call answers through a callback.
+**Architecture:** Envelope encryption. Each document holds one random data key, sealed separately to each device's X25519 public key via libsodium `crypto_box_seal`. The payload - today's document JSON, compressed - is encrypted with XChaCha20-Poly1305 under that data key, as one payload, with the plaintext header bound as associated data. The roster lists people, each with linked devices; every device holds two keypairs, X25519 for sealing and Ed25519 for signing, generated silently on first run and held in a file in local app data, readable only by its user. A signed header chain proves membership changes; each person is an admin or a member, and any admin grants and removes alone. Saving writes the local file; publishing uploads it conditionally on the version this session started from. All local writes funnel through one `DocumentSession` path, and every server call answers through a callback.
 
-**Tech Stack:** Qt 6.11 (Widgets, Network, Test), C++17, MSVC 2022, Ninja. libsodium from vcpkg; qtkeychain built from source via `FetchContent` against the system Qt.
+**Tech Stack:** Qt 6.11 (Widgets, Network, Test), C++17, MSVC 2022, Ninja. libsodium from vcpkg.
 
 **Design document:** [2026-08-30-encrypted-shared-document-design.md](2026-08-30-encrypted-shared-document-design.md) - read it before starting. This plan implements it and does not restate its rationale.
 
@@ -222,7 +222,7 @@ access control, the server contract and its fake, the reconciliation decisions t
 protect the local file, the emergency response merge, and the device pairing that
 authenticates linking and invites. Each has its tests.
 
-It is pure computation over values: no UI, no settings, no keychain, no network, no
+It is pure computation over values: no UI, no settings, no identity file, no network, no
 `DocumentManager`. Every later task is a consequence - plumbing, storage, transport,
 wiring, and UI around these pieces.
 
@@ -1374,7 +1374,7 @@ int main(int argc, char** argv)
 
 `QApplication` is required, not optional: `QTest::qExec` does not create one, and
 without it `QSettings` has no organization, `QStandardPaths` misbehaves, and
-qtkeychain's asynchronous jobs have no event loop to complete on.
+nothing asynchronous has an event loop to complete on.
 
 `SmokeTest.h` declares a `QObject` subclass with `Q_OBJECT` and a private slot;
 `SmokeTest.cpp` defines it. AUTOMOC handles the header - `CMAKE_AUTOMOC` is set at
@@ -1399,6 +1399,7 @@ Fix the assertion, confirm PASS, commit as `test: add Qt Test harness`.
 > into its own installed `export.h`, so no compile definition is needed. qtkeychain is
 > 0.17.0, chosen over 0.15.0 by the user. Moving the baseline changed zlib's static
 > library name, so the first build needed a fresh configure (delete `CMakeCache.txt`).
+> qtkeychain left the build at Task 9, when the identity moved to a file.
 
 **libsodium comes from vcpkg; qtkeychain does not.** The vcpkg port `qtkeychain-qt6`
 declares `{"name": "qtbase", "default-features": false}` and `qttools`, so taking it
@@ -1715,7 +1716,7 @@ change queue. Every later task is storage, transport, wiring, or UI around it.
 It runs against small seams rather than the real services. Identity is a value; the
 per-document records sit behind an interface that tests keep in memory; files go to paths
 the caller names; the server is `ServerApi`, with `FakeServer` in the tests; and timers
-fire when the test says so. No settings file, keychain, network, `DocumentManager`, or
+fire when the test says so. No settings file, identity file, network, `DocumentManager`, or
 widget is touched.
 
 **The tree is not expected to build while this lands.** Write the sections in order; each
@@ -2574,49 +2575,39 @@ Commit as `refactor: unify settings storage`.
 
 ---
 
-### Task 9: KeyStore
+### Task 9: The identity file
 
-**Files:** `src/services/KeyStore.h/.cpp`, `tests/services/KeyStoreTest.h/.cpp`
+> **Done.** It replaced a `KeyStore` over qtkeychain, and qtkeychain left the build with
+> it: on Windows qtkeychain persists credentials as `CRED_PERSIST_ENTERPRISE`, which roams
+> with a domain profile, and a file in local app data is how SSH keys are kept anyway.
 
-```cpp
-class KeyStore : public QObject
-{
-    Q_OBJECT
+**Files:** `src/services/IdentityFile.h/.cpp`, `src/services/DocumentCrypto.h/.cpp`,
+`tests/services/IdentityFileTest.h/.cpp`
 
-public:
-    explicit KeyStore(const QString& account, QObject* parent = nullptr);
+**The identity is a file in `AppLocalDataLocation`**, `identity.json`, readable only by its
+user - the way an SSH key sits in `~/.ssh`. Local app data does not roam, so the private
+keys stay on the machine. Protection at rest is the user's account and the disk's own
+encryption, as for SSH keys.
 
-    void store(const QByteArray& secret);
-    void load();
-    void remove();
+**One file holds both keypairs and the member id.** Two stores could get out of step - a
+machine holding a sealing key it cannot authenticate with is a state with no recovery path.
 
-signals:
-    void stored();
-    void loaded(const QByteArray& secret);
-    void notFound();
-    void failed(const QString& errorMessage);
-};
-```
+**Only the secret halves are written:** the X25519 secret key and the Ed25519 seed. The
+public halves are derived on reading (`DocumentCrypto::keypairFromSecret`,
+`signingKeypairFromSeed`), so a record can never pair a secret with someone else's public
+key.
 
-Service string `"Ward Planning"`, account passed in so tests use their own.
-`ReadPasswordJob`, `WritePasswordJob`, and `DeletePasswordJob`, secret as base64.
-
-**One keychain entry holds both keypairs.** The identity is an X25519 pair and an Ed25519
-pair, serialised together as one JSON object and stored as a single secret, together with the member id (Task 10), which must outlive cleared application data so a
-reinstall keeps the device attached to its person.
-Two entries could get out of step - a machine holding a sealing key it cannot authenticate
-with is a state with no recovery path and no useful error.
-
-**Distinguish `notFound` from `failed`.** The first is a first run; the second is a locked
-keychain or a Linux box with no Secret Service. Conflating them makes a locked keychain
-look like a first run and silently mints a second identity, orphaning the user's
+**`IdentityFile::load` tells `NotFound` from `Failed`.** The first is a first run; the
+second is a file that cannot be read or understood. Conflating them would make a damaged
+file look like a first run and silently mint a second identity, orphaning the user's
 documents.
 
-**Tests** need a real keychain: use account `"identity-test"`, remove it in `cleanup()`,
-`QSKIP` on `failed()`. A stored secret loads back; a missing secret reports `notFound`; a
-stored identity record round-trips both keypairs.
+**Tests:** a record round-trips with and without a person; only the secret halves are in
+the file, and the derived public halves equal the generated ones; a secret of the wrong
+size and an unknown field are refused; a missing file is `NotFound`; a damaged file is
+`Failed` and left as it was; the file is owner-only.
 
-Commit as `feat: KeyStore over qtkeychain`.
+Commit as `feat: device identity in a local file`.
 
 ---
 
@@ -2635,7 +2626,7 @@ class IdentityService : public QObject
     Q_OBJECT
 
 public:
-    bool initialiseBlocking();          ///< true when an identity is loaded or created
+    bool initialise();                  ///< true when an identity is loaded or created
 
     bool isReady() const;
     std::optional<DeviceIdentity> identity() const;     ///< empty until ready and a person exists
@@ -2652,17 +2643,16 @@ public:
 };
 ```
 
-**`KeyStore` is signal-based, so `main()` cannot call it and continue.**
-`initialiseBlocking()` runs a local `QEventLoop`, quit by whichever of `loaded`,
-`notFound`, or `failed` arrives, with a timeout so a wedged keychain cannot hang startup.
-On `notFound` it generates **both** keypairs and stores them as one record.
+**The identity file is read synchronously**, so `initialise()` simply loads it at startup.
+On `NotFound` it generates **both** keypairs and stores them as one record.
 
-On failure `main()` shows a modal naming the platform store and exits - there is no
-document without an identity. Task 14 asks the first-screen question below before
+On `Failed` `main()` shows a modal naming the file and exits - there is no document
+without an identity, and a damaged file is never replaced by a new one unasked. Task 14 asks the first-screen question below before
 building any service that takes the identity.
 
-**The member id is stored in the keychain record with the keypairs**, so a reinstall or
-cleared application data keeps the device attached to its person. Display name and device name live in `AppSettings`. The device name defaults to the
+**The member id is stored in the identity file with the keypairs**, so a reinstall keeps
+the device attached to its person; clearing local app data makes it a new device, which
+then links again. Display name and device name live in `AppSettings`. The device name defaults to the
 system host name and is offered for editing on the first screen, since "DESKTOP-4F2K9" is
 not how Bob knows his laptop.
 
@@ -2677,9 +2667,10 @@ accepts. This order is what keeps Bob from becoming two people by tapping Reques
 his phone.
 
 **Tests** use a test constructor, `IdentityService(const DeviceIdentity&)`, that is ready
-at once and never reads or writes `KeyStore`: `identity()` is empty before initialisation
-and before a person exists; `createPerson` yields a fresh member id; `joinPerson` keeps the
-given id; the member id survives a reload of the keychain record. Only `KeyStore`'s own tests use a keychain.
+at once; the file-backed one reads and writes an identity file in a `QTemporaryDir`:
+`identity()` is empty before initialisation and before a person exists; `createPerson`
+yields a fresh member id; `joinPerson` keeps the given id; the member id survives a reload
+of the identity file.
 
 Commit as `feat: device identity service`.
 

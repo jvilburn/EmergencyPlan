@@ -13,7 +13,7 @@
 #include "FakeServer.h"
 #include "FakeServerTest.h"
 #include "FormatVectorsTest.h"
-#include "KeyStoreTest.h"
+#include "IdentityFileTest.h"
 #include "ModelParsersTest.h"
 #include "PairingTest.h"
 #include "ReconcileTest.h"
@@ -90,7 +90,7 @@ int main(int argc, char** argv)
     status |= run<DocumentSessionTest>(argc, argv);
     status |= run<RosterChangeQueueTest>(argc, argv);
     status |= run<AppSettingsTest>(argc, argv);
-    status |= run<KeyStoreTest>(argc, argv);
+    status |= run<IdentityFileTest>(argc, argv);
 
     return status;
 }

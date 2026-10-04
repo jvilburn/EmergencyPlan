@@ -2,13 +2,11 @@
 
 #include <QObject>
 
-/// Proves libsodium and qtkeychain are linked into this build, at the versions the
-/// format depends on.
+/// Proves libsodium is linked into this build, at the version the format depends on.
 class CryptoLinkTest : public QObject
 {
     Q_OBJECT
 
 private slots:
     void sodiumIsAtLeastTheFixedRelease();
-    void keychainLinks();
 };
