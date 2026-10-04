@@ -14,7 +14,8 @@
 /// The file is loaded once into memory, and every change rewrites it through
 /// QSaveFile, so a crash mid-write leaves the previous file whole - the
 /// high-water mark in each document record is part of the rollback defence.
-/// It lives in AppDataLocation, which the OS keeps.
+/// It lives in local app data, which the OS keeps and which does not roam, beside
+/// the identity and documents it describes.
 ///
 /// Document records are keyed by document id: documents move between machines
 /// and are named by id in app data, and an id outlives any path.

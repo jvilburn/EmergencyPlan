@@ -56,7 +56,8 @@ Note: MuPDF uses `fz_try/fz_catch/fz_always` macros (setjmp/longjmp) for error h
 - `DocumentCrypto::initialise()` runs in `main()` and in the test runner before any other call
 
 ### Device identity
-- `IdentityFile.h/cpp` keeps this device's secret halves in `identity.json` in `AppLocalDataLocation`, owner-only, as SSH keys are kept; public halves are derived on load
+- `IdentityFile.h/cpp` reads and writes the identity file: this device's secret halves, owner-only, as SSH keys are kept; public halves are derived on load
+- Device state lives in `AppLocalDataLocation`, which does not roam: settings, the single-instance lock, and the identity file
 
 ## Key Design Decisions
 

@@ -5,6 +5,7 @@
 #include "HexCodec.h"
 #include "IdentityFile.h"
 
+#include <QDir>
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -85,6 +86,15 @@ void IdentityFileTest::aRecordWithASecretOfTheWrongSizeIsRefused()
     }
 
     QVERIFY(!IdentityRecord::fromBytes("not json").has_value());
+
+    // A required field missing, or of the wrong type.
+    QJsonObject missing = QJsonDocument::fromJson(record.toBytes()).object();
+    missing.remove("signingSeed");
+    QVERIFY(!IdentityRecord::fromBytes(QJsonDocument(missing).toJson()).has_value());
+
+    QJsonObject number = QJsonDocument::fromJson(record.toBytes()).object();
+    number["sealingSecret"] = 5;
+    QVERIFY(!IdentityRecord::fromBytes(QJsonDocument(number).toJson()).has_value());
 }
 
 void IdentityFileTest::aRecordWithAnUnknownFieldIsRefused()
@@ -158,13 +168,72 @@ void IdentityFileTest::theFileIsReadableOnlyByItsOwner()
     const QString path = folder.filePath("identity.json");
     QVERIFY(IdentityFile::store(path, newRecord(), nullptr));
 
+#ifdef Q_OS_WIN
+    // Read from the file's access list rather than its read-only flag.
+    QNtfsPermissionCheckGuard ntfsPermissions;
+#endif
     const QFileDevice::Permissions permissions = QFile::permissions(path);
     QVERIFY(permissions.testFlag(QFileDevice::ReadOwner));
     QVERIFY(permissions.testFlag(QFileDevice::WriteOwner));
 #ifndef Q_OS_WIN
-    // Windows reports these from the read-only flag alone; its folder's access
-    // list is what keeps the file to its user there.
+    // On Windows a file's group is its owner's primary group, often the owner
+    // itself, so there the access list's other entries are the ones to check.
     QVERIFY(!permissions.testFlag(QFileDevice::ReadGroup));
-    QVERIFY(!permissions.testFlag(QFileDevice::ReadOther));
+    QVERIFY(!permissions.testFlag(QFileDevice::WriteGroup));
 #endif
+    QVERIFY(!permissions.testFlag(QFileDevice::ReadOther));
+    QVERIFY(!permissions.testFlag(QFileDevice::WriteOther));
+}
+
+void IdentityFileTest::aPathThatCannotBeOpenedFails()
+{
+    QTemporaryDir folder;
+    QVERIFY(folder.isValid());
+
+    // There, but a folder: not a first run, and not a file to read.
+    const QString path = folder.filePath("identity.json");
+    QVERIFY(QDir().mkpath(path));
+
+    IdentityRecord record;
+    QString error;
+    QCOMPARE(IdentityFile::load(path, record, &error), IdentityFile::Load::Failed);
+    QVERIFY(!error.isEmpty());
+}
+
+void IdentityFileTest::aStoreThatCannotWriteFails()
+{
+    QTemporaryDir folder;
+    QVERIFY(folder.isValid());
+
+    // The identity's folder is a file, so nothing can be written there.
+    const QString blocker = folder.filePath("blocker");
+    QFile file(blocker);
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    file.close();
+
+    QString error;
+    QVERIFY(!IdentityFile::store(blocker + "/identity.json", newRecord(), &error));
+    QVERIFY(!error.isEmpty());
+}
+
+void IdentityFileTest::aRecordThatIsNotWholeIsNotStored()
+{
+    QTemporaryDir folder;
+    QVERIFY(folder.isValid());
+    const QString path = folder.filePath("identity.json");
+
+    // A public half that is not its secret's would be lost on writing, and the
+    // stored identity would not be this one.
+    IdentityRecord mismatched = newRecord();
+    mismatched.sealing.publicKey = DocumentCrypto::generateKeypair().publicKey;
+    QString error;
+    QVERIFY(!IdentityFile::store(path, mismatched, &error));
+    QVERIFY(!error.isEmpty());
+
+    IdentityRecord invalid = newRecord();
+    invalid.signing.signingKey = SigningKey();
+    QVERIFY(!IdentityFile::store(path, invalid, nullptr));
+
+    QVERIFY(!QFile::exists(path));
+    QVERIFY(IdentityFile::store(path, newRecord(), nullptr));
 }

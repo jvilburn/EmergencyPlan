@@ -24,7 +24,7 @@ SingleInstance::SingleInstance(QObject* parent)
 
 SingleInstance::Claim SingleInstance::claim(const QStringList& arguments, QString* errorMessage)
 {
-    const QString directory = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    const QString directory = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
     QDir().mkpath(directory);
 
     // Held by a live process only: a lock left by a crash is taken over, judged
@@ -131,6 +131,6 @@ void SingleInstance::onHandedOver()
 
 QString SingleInstance::socketName()
 {
-    const QByteArray place = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation).toUtf8();
+    const QByteArray place = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation).toUtf8();
     return QString("WardPlanning-") + QCryptographicHash::hash(place, QCryptographicHash::Sha256).toHex().left(16);
 }

@@ -1392,109 +1392,20 @@ Fix the assertion, confirm PASS, commit as `test: add Qt Test harness`.
 
 ---
 
-### Task 4: Add libsodium and qtkeychain
+### Task 4: Add libsodium
 
 > **Done.** Commit `1a222a2`. vcpkg baseline `07f4812` (vcpkg tool re-bootstrapped to
 > 2026-07-27), libsodium 1.0.22 port-version 1. The static port writes `SODIUM_STATIC`
-> into its own installed `export.h`, so no compile definition is needed. qtkeychain is
-> 0.17.0, chosen over 0.15.0 by the user. Moving the baseline changed zlib's static
-> library name, so the first build needed a fresh configure (delete `CMakeCache.txt`).
-> qtkeychain left the build at Task 9, when the identity moved to a file.
+> into its own installed `export.h`, so no compile definition is needed. Moving the
+> baseline changed zlib's static library name, so the first build needed a fresh
+> configure (delete `CMakeCache.txt`).
 
-**libsodium comes from vcpkg; qtkeychain does not.** The vcpkg port `qtkeychain-qt6`
-declares `{"name": "qtbase", "default-features": false}` and `qttools`, so taking it
-would build a second Qt 6 from source and link it beside the system Qt at
-`C:/Qt/6.11.0/msvc2022_64` - hours of build time and an ABI hazard.
+**libsodium comes from vcpkg**, as `libsodium` 1.0.22 or later, pinned in `vcpkg.json`,
+with the static triplet `x64-windows-static-md`. `find_package(unofficial-sodium CONFIG
+REQUIRED)`, then add `unofficial-sodium::sodium` to `WardPlanningLib`'s link libraries.
+`CryptoLinkTest` checks the linked version is at least the fixed release.
 
-**Files:** `vcpkg.json`, `CMakeLists.txt`, `tests/services/CryptoLinkTest.h/.cpp`,
-`tests/TestMain.cpp`
-
-**Step 1: Translations off.** qtkeychain's own CMake uses `Qt6LinguistTools` for its
-`.ts` files unless translations are disabled; with them off (Step 3) the system Qt needs
-no Linguist Tools. If the fetched `CMakeLists.txt` has no such option, confirm
-`C:/Qt/6.11.0/msvc2022_64/lib/cmake/Qt6LinguistTools` exists before building - a missing
-one fails at *configure* time, which under `build.bat` looks like a total build failure.
-
-**Step 2: libsodium**
-
-```json
-{
-    "name": "wardplanning",
-    "version": "1.1.0",
-    "builtin-baseline": "<vcpkg commit sha>",
-    "dependencies": [
-        "libmupdf",
-        { "name": "libsodium", "version>=": "1.0.22" }
-    ]
-}
-```
-
-A bare `"libsodium"` string pins nothing, and the current baseline does not help: the
-local vcpkg clone at `245eb91` (Dec 22 2025, already in `vcpkg.json`) builds libsodium
-1.0.20 port-version 3 from the `1.0.20-RELEASE` tag, which predates the CVE-2025-69277
-fix commit `ad3004e`. Upstream vcpkg ships libsodium 1.0.22 (checked 2026-09-13).
-
-1. Ask the user to update the local vcpkg clone (`git -C $VCPKG_ROOT pull`), then set
-   `builtin-baseline` to `git -C $VCPKG_ROOT rev-parse HEAD` and confirm
-   `$VCPKG_ROOT/ports/libsodium/vcpkg.json` reports 1.0.22 or later.
-2. **Confirm the fix is in that release.** Verified 2026-09-27: `ad3004e` itself sits
-   on a side branch and is not an ancestor of `1.0.22-RELEASE`, but the same patch
-   landed as `f2da4cd8`, which is an ancestor of both `1.0.21-RELEASE` and
-   `1.0.22-RELEASE`. The source agrees: `ge25519_is_on_main_subgroup` in 1.0.21 and
-   1.0.22 adds the `Y == Z` check that 1.0.20 lacks. The user accepted 1.0.22 on that
-   evidence. `CryptoLinkTest` asserts the linked library is at least 1.0.22.
-3. **Warn the user before they build:** moving the baseline re-resolves `libmupdf` and
-   its whole transitive tree (freetype, harfbuzz, openjpeg, libjpeg, libpng, zlib,
-   jbig2dec, gumbo, brotli, bz2). That can be a long rebuild. After it, have the user
-   import a ward directory PDF and a ministering PDF to confirm `PdfExtractor` still
-   works.
-
-**Step 3: qtkeychain via FetchContent**
-
-```cmake
-include(FetchContent)
-FetchContent_Declare(qtkeychain
-    GIT_REPOSITORY https://github.com/frankosterfeld/qtkeychain.git
-    GIT_TAG 875f77d9f61bd97fd84cca47ce3bc71186dfbd09  # 0.17.0
-    EXCLUDE_FROM_ALL
-)
-set(BUILD_SHARED_LIBS OFF)
-set(BUILD_TRANSLATIONS OFF)
-set(BUILD_TEST_APPLICATION OFF)
-FetchContent_MakeAvailable(qtkeychain)
-target_compile_definitions(qt6keychain PUBLIC QTKEYCHAIN_NO_EXPORT)
-```
-
-Checked against the fetched source: the tag has no `v` prefix; 0.17.0 builds for Qt 6 by
-default; `QTKEYCHAIN_STATIC` is deprecated in favour of `BUILD_SHARED_LIBS`, which
-qtkeychain's `cmake_dependent_option` writes to the cache; `BUILD_TRANSLATIONS OFF`
-skips `LinguistTools`. The generated export header marks a static build's classes
-`dllimport` unless told otherwise, which `QTKEYCHAIN_NO_EXPORT` does. On Linux it needs
-Qt DBus and the libsecret development headers.
-
-**Step 4: Find and link**
-
-```cmake
-find_package(unofficial-sodium CONFIG REQUIRED)
-```
-
-then add `unofficial-sodium::sodium` and `qt6keychain` to
-`target_link_libraries(WardPlanningLib PUBLIC ...)`. On the `x64-windows-static-md`
-triplet static libsodium needs:
-
-```cmake
-target_compile_definitions(WardPlanningLib PUBLIC SODIUM_STATIC)
-```
-
-or MSVC emits `dllimport` references. Correct the imported target names from the
-actual vcpkg and FetchContent output.
-
-**Step 5: Run the core.** `CryptoLinkTest` asserts `sodium_init() >= 0`. Add the Task 1
-sources to `SERVICE_SOURCES`/`MODEL_SOURCES`, register every Task 1 test suite in
-`TestMain.cpp` (with `DocumentCrypto::initialise()` right after `QApplication`, per
-Task 1.2), build, and have the user run the tests. **Every core test must pass before
-Task 5 starts**; a failure here is a core defect, fixed in the core and shown to the
-user, not worked around in a later task. Commit as `build: add libsodium and qtkeychain`.
+Commit as `build: add libsodium`.
 
 ---
 
@@ -2494,7 +2405,7 @@ shown to the user. Commit as `feat: sync-and-save core` once all of this is sett
 
 > **Done**, with these differences from the text below:
 > - `AppSettings::open(path, errorMessage)` makes the one instance `main()` owns, at
->   `<AppDataLocation>/settings.json`; tests open their own over a `QTemporaryDir`, so
+>   `<AppLocalDataLocation>/settings.json`; tests open their own over a `QTemporaryDir`, so
 >   there is no global path to set.
 > - It holds the document records, the device settings, and the map. The library's
 >   entries - ward name, last opened, copy paths - and the last-opened ward are Task 11's,
@@ -2517,7 +2428,7 @@ holding `defaultLat` and `defaultLng` (`:644-645`) and `lastDocumentPath` (`:660
 task replaces it; **nothing is migrated** from earlier versions, and the old file and its
 `MainWindow` helpers (`:607-668`) are deleted.
 
-**`AppSettings` is a JSON file at an explicit path**, `<AppDataLocation>/settings.json`.
+**`AppSettings` is a JSON file at an explicit path**, `<AppLocalDataLocation>/settings.json`.
 It loads the file once into memory, and every change rewrites it through `QSaveFile`, so a
 crash mid-write leaves the previous file intact - the high-water mark is security-relevant and must never be half-written. JSON fits the data:
 sets of fingerprints and ids, and a record per document id with a list of copy paths, map
@@ -2531,7 +2442,7 @@ without the core knowing where.
 **Only one instance of the app runs per user.** The settings file, documents, base copies,
 and lease heartbeat all assume a single writer, and JSON has no cross-process locking. At
 the top of `main()`, before settings or identity load, take a `QLockFile` in
-`AppDataLocation`. If it is held, connect to the running instance through a
+`AppLocalDataLocation`. If it is held, connect to the running instance through a
 `QLocalSocket` named for the application, send the command-line arguments (so a
 double-clicked `.wardplanning` file opens there), and exit. The running instance listens
 on a `QLocalServer` created with `QLocalServer::UserAccessOption`, so only the same user's
@@ -2577,9 +2488,10 @@ Commit as `refactor: unify settings storage`.
 
 ### Task 9: The identity file
 
-> **Done.** It replaced a `KeyStore` over qtkeychain, and qtkeychain left the build with
-> it: on Windows qtkeychain persists credentials as `CRED_PERSIST_ENTERPRISE`, which roams
-> with a domain profile, and a file in local app data is how SSH keys are kept anyway.
+> **Done.** A file rather than the OS keychain: Windows credential storage roams with a
+> domain profile, and local app data does not; a file there is how SSH keys are kept.
+> Settings and the single-instance lock sit in local app data too, so a device's state is
+> in one place.
 
 **Files:** `src/services/IdentityFile.h/.cpp`, `src/services/DocumentCrypto.h/.cpp`,
 `tests/services/IdentityFileTest.h/.cpp`
@@ -2683,7 +2595,7 @@ Commit as `feat: device identity service`.
 `tests/services/DocumentLibraryTest.h/.cpp`
 
 **The app owns the file, and the user never chooses a path.** Documents live in
-`QStandardPaths::AppDataLocation`, named by document id. "Open" becomes a list of wards,
+`QStandardPaths::AppLocalDataLocation`, named by document id. "Open" becomes a list of wards,
 not a file dialog.
 
 ```cpp

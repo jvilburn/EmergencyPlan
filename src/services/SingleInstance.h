@@ -14,7 +14,7 @@
 /// One running app per user. The settings file, documents, base copies, and lease
 /// heartbeat all assume a single writer.
 ///
-/// The first instance holds a lock file in AppDataLocation and listens on a local
+/// The first instance holds a lock file in local app data and listens on a local
 /// socket only the same user can reach. A later launch finds the lock held, hands
 /// its command-line arguments to the running instance - so a double-clicked
 /// .wardplanning file opens there - and exits.

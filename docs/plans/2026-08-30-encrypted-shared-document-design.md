@@ -422,10 +422,9 @@ consistent version whose generation predates a revocation - is refused in two pl
 1. The server never accepts an upload at a lower version or key generation, so the
    shared copy cannot be rolled back at all.
 2. A **key-generation and save-counter high-water mark** per document, kept in
-   application data with the document's other records. A local file or a server version
-   presenting an older generation is refused before it is ever used. Clearing
-   application data resets it, so the first version served afterwards is taken as it
-   stands.
+   local app data with the document's other records. A local file or a server version
+   presenting an older generation is refused before it is ever used. Clearing local app
+   data resets it, so the first version served afterwards is taken as it stands.
 
 **Post-quantum.** X25519 is exposed to harvest-now-decrypt-later, and hybrid
 X25519 + ML-KEM-768 is now in production elsewhere. The exposure needs an attacker
@@ -468,7 +467,7 @@ release used.
 **An identity is a person with devices.** On first run a device generates **two
 keypairs**: an X25519 pair that documents are sealed to, and an Ed25519 pair that
 authenticates this device to the server and signs its writes. They are created
-together, stored together as one record through `KeyStore`, and loaded together.
+together, stored together as one record in the identity file, and loaded together.
 libsodium can derive one from the other, and this design does not: two independent keys
 cost nothing and keep the sealing key and the signing key each doing one job.
 
@@ -893,16 +892,16 @@ than folded in.
 
 ## Where documents live
 
-The app owns the file. Documents are stored in the application data directory, named
+The app owns the file. Documents are stored in the local app data directory, named
 by document id, and **the user never chooses or sees a path in the normal flow.**
 "Open" is a list of the wards this identity has access to, not a file browser. This is
 the largest of the ease-of-setup simplifications, and it is available only because the
 server gives a document an identity independent of where its bytes sit.
 
 **The list comes from the server**, cached locally so it is there offline. A member
-who reinstalls, or whose application data is cleared, signs nothing and configures
-nothing: the same credential-store identity asks the server which documents it is on,
-and the app downloads them again. Re-downloading is the ordinary cost of a document
+who reinstalls signs nothing and configures nothing: the same device identity asks the
+server which documents it is on, and the app downloads them again. One whose local app
+data is cleared is a new device, which links to their other devices first. Re-downloading is the ordinary cost of a document
 having changed, which happens anyway.
 
 `ensureFilePath()` and the untitled-document dance go with it. A new document is
@@ -1132,7 +1131,7 @@ Each gets its own message:
 | Header unreadable | File is damaged |
 | Payload authentication fails | File was altered or truncated |
 | Key generation below the local high-water mark | This file is an older version; do not use it |
-| Keystore unavailable | Name the platform store and how to unlock it |
+| Identity file unreadable | Name the file; Ward Planning will not start a new identity over it |
 | Server unreachable | Working from your local copy; changes upload when it returns |
 | Verified revocation of this identity | Your access to the ward was removed by *name*; the local copy has been deleted |
 | Verified leave by this person, seen on their other device | You left this ward; its copy on this device has been deleted |
@@ -1290,8 +1289,8 @@ Against a fake server:
   refused immediately
 - a version with a header recipient that has no roster device, a roster device with no
   header entry, or a verify key that differs between them is refused
-- clearing local application data restores the ward list from the server, and the
-  documents on it download again
+- a reinstall restores the ward list from the server, and the documents on it download
+  again
 
 ---
 

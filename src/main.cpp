@@ -55,7 +55,7 @@ int main(int argc, char *argv[])
 
     QString settingsError;
     const QString settingsPath =
-        QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)).filePath("settings.json");
+        QDir(QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation)).filePath("settings.json");
     std::unique_ptr<AppSettings> settings = AppSettings::open(settingsPath, &settingsError);
     if (!settings)
     {

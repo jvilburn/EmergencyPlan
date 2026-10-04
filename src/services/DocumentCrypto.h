@@ -101,9 +101,6 @@ public:
     static Keypair generateKeypair();
     static SigningKeypair generateSigningKeypair();
 
-    // A device keeps only its secret halves; the public ones are derived from them,
-    // so a stored identity can never pair a secret with someone else's public key.
-
     /// The sealing keypair a secret key belongs to. Invalid keys for an invalid secret.
     static Keypair keypairFromSecret(const SecretKey& secretKey);
 
@@ -112,6 +109,7 @@ public:
 
     /// The signing keypair a seed makes. Invalid keys for a seed of the wrong size.
     static SigningKeypair signingKeypairFromSeed(const QByteArray& seed);
+
     static DataKey generateDataKey();
 
     /// Personalised BLAKE2b. Returns an empty array when outputSize is outside

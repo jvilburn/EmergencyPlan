@@ -16,6 +16,8 @@ private slots:
     void hashRefusesAnOutputSizeOutsideBlake2bRange();
     void fingerprintIsStableAndDistinct();
     void fingerprintRefusesInvalidKeys();
+    void publicHalvesDeriveFromTheSecretHalves();
+    void derivingRefusesInvalidInput();
     // Sealing the data key
     void theHolderUnsealsTheDataKey();
     void anotherKeypairDoesNotUnseal();

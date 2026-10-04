@@ -19,8 +19,9 @@ const QLatin1String KeySealingSecret("sealingSecret");
 const QLatin1String KeySigningSeed("signingSeed");
 const QLatin1String KeyMember("member");
 
-/// Owner read and write only. On Windows the folder's access list already keeps
-/// it to this user, and this only clears the read-only flag.
+/// Owner read and write only. On Windows the file inherits local app data's access
+/// list - this user, the administrators, and the system, as for a home folder on
+/// Unix - and this only clears the read-only flag.
 const QFileDevice::Permissions OwnerOnly = QFileDevice::ReadOwner | QFileDevice::WriteOwner;
 
 } // namespace
@@ -110,19 +111,28 @@ Load load(const QString& path, IdentityRecord& out, QString* errorMessage)
         return Load::NotFound;
     }
 
+    QString problem;
     std::optional<IdentityRecord> record;
-    if (file.open(QIODevice::ReadOnly))
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        problem = QObject::tr("This device's identity file %1 could not be opened: %2.").arg(path, file.errorString());
+    }
+    else
     {
         record = IdentityRecord::fromBytes(file.readAll());
+        if (!record.has_value())
+        {
+            problem = QObject::tr("This device's identity file %1 is not in a form Ward Planning reads.").arg(path);
+        }
     }
 
     if (!record.has_value())
     {
         if (errorMessage != nullptr)
         {
-            *errorMessage = QObject::tr("This device's identity file %1 could not be read. "
-                                        "Ward Planning will not start a new identity while it is there.")
-                                .arg(path);
+            *errorMessage = problem + QLatin1Char(' ')
+                + QObject::tr("Ward Planning will not start a new identity while it is there. Restore the file, "
+                              "or remove it to start this device afresh and link it to your other devices again.");
         }
         return Load::Failed;
     }
@@ -135,7 +145,18 @@ bool store(const QString& path, const IdentityRecord& record, QString* errorMess
 {
     QDir().mkpath(QFileInfo(path).absolutePath());
 
+    // Written only when it reads back as itself, so a record with an invalid key, or a
+    // public half that is not its secret's, never becomes a file the next start refuses.
     const QByteArray bytes = record.toBytes();
+    if (IdentityRecord::fromBytes(bytes) != record)
+    {
+        if (errorMessage != nullptr)
+        {
+            *errorMessage = QObject::tr("This device's identity is not whole, so it was not saved.");
+        }
+        return false;
+    }
+
     QSaveFile file(path);
     const bool written = file.open(QIODevice::WriteOnly)
         && file.setPermissions(OwnerOnly)
@@ -151,8 +172,6 @@ bool store(const QString& path, const IdentityRecord& record, QString* errorMess
         return false;
     }
 
-    // Set again on the committed file, in case the platform gave it the folder's.
-    QFile::setPermissions(path, OwnerOnly);
     return true;
 }
 

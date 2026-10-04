@@ -21,4 +21,7 @@ private slots:
     void aStoredIdentityLoadsBack();
     void aDamagedFileFailsAndIsLeftAlone();
     void theFileIsReadableOnlyByItsOwner();
+    void aPathThatCannotBeOpenedFails();
+    void aStoreThatCannotWriteFails();
+    void aRecordThatIsNotWholeIsNotStored();
 };

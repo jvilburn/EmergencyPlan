@@ -125,6 +125,33 @@ void DocumentCryptoTest::fingerprintRefusesInvalidKeys()
     QVERIFY(!DocumentCrypto::fingerprintOf(keys.publicKey, VerifyKey()).isValid());
 }
 
+void DocumentCryptoTest::publicHalvesDeriveFromTheSecretHalves()
+{
+    const Keypair sealing = DocumentCrypto::generateKeypair();
+    const Keypair derived = DocumentCrypto::keypairFromSecret(sealing.secretKey);
+    QVERIFY(derived.publicKey == sealing.publicKey);
+    QVERIFY(derived.secretKey == sealing.secretKey);
+
+    const SigningKeypair signing = DocumentCrypto::generateSigningKeypair();
+    const QByteArray seed = DocumentCrypto::seedOf(signing.signingKey);
+    QCOMPARE(seed.size(), qsizetype(DocumentCrypto::SigningSeedSize));
+    const SigningKeypair fromSeed = DocumentCrypto::signingKeypairFromSeed(seed);
+    QVERIFY(fromSeed.verifyKey == signing.verifyKey);
+    QVERIFY(fromSeed.signingKey == signing.signingKey);
+
+    // A different secret derives a different public key.
+    QVERIFY(DocumentCrypto::keypairFromSecret(DocumentCrypto::generateKeypair().secretKey).publicKey
+            != sealing.publicKey);
+}
+
+void DocumentCryptoTest::derivingRefusesInvalidInput()
+{
+    QVERIFY(!DocumentCrypto::keypairFromSecret(SecretKey()).publicKey.isValid());
+    QVERIFY(DocumentCrypto::seedOf(SigningKey()).isEmpty());
+    QVERIFY(!DocumentCrypto::signingKeypairFromSeed(QByteArray(5, 'x')).signingKey.isValid());
+    QVERIFY(!DocumentCrypto::signingKeypairFromSeed(QByteArray()).verifyKey.isValid());
+}
+
 void DocumentCryptoTest::theHolderUnsealsTheDataKey()
 {
     const Keypair keys = DocumentCrypto::generateKeypair();
