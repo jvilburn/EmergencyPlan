@@ -6,6 +6,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QObject>
 #include <QSaveFile>
@@ -18,6 +19,11 @@ const QString DefaultServerAddress;
 
 // Part of the settings format.
 const QLatin1String KeyRecords("records");
+const QLatin1String KeyWards("wards");
+const QLatin1String KeyWardName("wardName");
+const QLatin1String KeyLastOpened("lastOpened");
+const QLatin1String KeyCopyPaths("copyPaths");
+const QLatin1String KeyLastWard("lastWard");
 const QLatin1String KeyDeveloperExport("developerExport");
 const QLatin1String KeyServerAddress("serverAddress");
 const QLatin1String KeyMap("map");
@@ -88,6 +94,47 @@ QStringList AppSettings::documentIds() const
     return m_records.keys();
 }
 
+// --- The document library's wards -------------------------------------------------
+
+bool AppSettings::WardEntry::operator==(const WardEntry& other) const
+{
+    return wardName == other.wardName
+        && lastOpened == other.lastOpened
+        && copyPaths == other.copyPaths;
+}
+
+std::optional<AppSettings::WardEntry> AppSettings::ward(const QString& documentId) const
+{
+    const auto found = m_wards.constFind(documentId);
+    if (found == m_wards.constEnd())
+    {
+        return std::nullopt;
+    }
+    return found.value();
+}
+
+void AppSettings::setWard(const QString& documentId, const WardEntry& entry)
+{
+    m_wards.insert(documentId, entry);
+    save();
+}
+
+void AppSettings::removeWard(const QString& documentId)
+{
+    m_wards.remove(documentId);
+    if (m_lastWardId == documentId)
+    {
+        m_lastWardId.clear();
+    }
+    save();
+}
+
+void AppSettings::setLastWardId(const QString& documentId)
+{
+    m_lastWardId = documentId;
+    save();
+}
+
 // --- This device -----------------------------------------------------------------
 
 void AppSettings::setDeveloperExport(bool enabled)
@@ -126,8 +173,11 @@ bool AppSettings::read(const QByteArray& bytes)
 
     const QJsonObject json = document.object();
     QJsonObject records;
-    if (!StrictJson::hasOnlyKeys(json, {KeyRecords, KeyDeveloperExport, KeyServerAddress, KeyMap})
+    QJsonObject wards;
+    if (!StrictJson::hasOnlyKeys(json, {KeyRecords, KeyWards, KeyLastWard, KeyDeveloperExport, KeyServerAddress, KeyMap})
         || !StrictJson::readObject(json, KeyRecords, records)
+        || !StrictJson::readObject(json, KeyWards, wards)
+        || !StrictJson::readOptionalNonEmptyString(json, KeyLastWard, m_lastWardId)
         || !StrictJson::readOptionalNonEmptyString(json, KeyServerAddress, m_serverAddressOverride))
     {
         return false;
@@ -171,6 +221,47 @@ bool AppSettings::read(const QByteArray& bytes)
         m_records.insert(entry.key(), record.value());
     }
 
+    for (auto entry = wards.constBegin(); entry != wards.constEnd(); ++entry)
+    {
+        if (entry.key().isEmpty() || !entry.value().isObject())
+        {
+            return false;
+        }
+
+        const QJsonObject wardJson = entry.value().toObject();
+        WardEntry ward;
+        if (!StrictJson::hasOnlyKeys(wardJson, {KeyWardName, KeyLastOpened, KeyCopyPaths})
+            || !StrictJson::readNonEmptyString(wardJson, KeyWardName, ward.wardName))
+        {
+            return false;
+        }
+
+        if (wardJson.contains(KeyLastOpened))
+        {
+            QDateTime lastOpened;
+            if (!StrictJson::readTime(wardJson, KeyLastOpened, lastOpened))
+            {
+                return false;
+            }
+            ward.lastOpened = lastOpened;
+        }
+
+        // Written only when there are some, so present means not empty.
+        if (wardJson.contains(KeyCopyPaths)
+            && (!StrictJson::readStringArray(wardJson, KeyCopyPaths, ward.copyPaths) || ward.copyPaths.isEmpty()))
+        {
+            return false;
+        }
+
+        m_wards.insert(entry.key(), ward);
+    }
+
+    // The last ward is one in the library.
+    if (!m_lastWardId.isEmpty() && !m_wards.contains(m_lastWardId))
+    {
+        return false;
+    }
+
     return true;
 }
 
@@ -182,8 +273,29 @@ QByteArray AppSettings::write() const
         records[entry.key()] = entry.value().toJson();
     }
 
+    QJsonObject wards;
+    for (auto entry = m_wards.constBegin(); entry != m_wards.constEnd(); ++entry)
+    {
+        QJsonObject wardJson;
+        wardJson[KeyWardName] = entry.value().wardName;
+        if (entry.value().lastOpened.has_value())
+        {
+            wardJson[KeyLastOpened] = StrictJson::writeTime(entry.value().lastOpened.value());
+        }
+        if (!entry.value().copyPaths.isEmpty())
+        {
+            wardJson[KeyCopyPaths] = QJsonArray::fromStringList(entry.value().copyPaths);
+        }
+        wards[entry.key()] = wardJson;
+    }
+
     QJsonObject json;
     json[KeyRecords] = records;
+    json[KeyWards] = wards;
+    if (!m_lastWardId.isEmpty())
+    {
+        json[KeyLastWard] = m_lastWardId;
+    }
     if (m_developerExport)
     {
         json[KeyDeveloperExport] = true;

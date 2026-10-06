@@ -2598,6 +2598,27 @@ Commit as `feat: device identity service`.
 
 ### Task 11: The document library
 
+> **Done**, with these differences from the text below:
+> - `add(documentId)` lists a new ward as *Untitled*. `noteDocument(documentId, document)`
+>   takes the place of `setWardName`: it names the entry from `suggestedFilename()` when
+>   that is non-empty and differs. Task 14's `DocumentManager` calls it on each change.
+> - `markOpened` records when a ward was opened and makes it the one to reopen;
+>   `lastOpenedId()` reads it back. `AppSettings` keeps `wards` and `lastWard` beside
+>   `records`.
+> - `entries()` carries `shared` (the ward's record has a base version), for the dialog.
+>   The library has no `documentIds()`; `entries()` serves.
+> - `exportCopy` takes the ward's id. `openCopy` returns the document with its origin, or
+>   a message saying why this device cannot open it.
+> - `forget` leaves exported copies for the person to keep. `forgetRemoved` deletes a
+>   recorded copy only when the file at that path still names the ward as its origin.
+> - The File menu reads New Ward, Open Ward..., Save Now, Save a Copy..., Open a Copy...,
+>   and Show in Folder. `MainWindow::openFile` and the path handling in
+>   `handleArguments` are gone; Task 12 routes paths.
+> - The menu calls `DocumentManager::openDocument(id)`, `publishNow`, `documentId`, and
+>   `showCopy`, which Task 14 provides along with the read-only banner, `main.cpp`
+>   building the library, reopening the last ward at startup, and deleting
+>   `ensureFilePath` and `maybeRenameForWard`. The tree builds again at Task 14.
+
 **Files:** `src/services/DocumentLibrary.h/.cpp`, `src/widgets/OpenWardDialog.h/.cpp`,
 `src/widgets/MainWindow.h/.cpp` (File menu, `:287,343,351`, `openFile` at `:306`),
 `tests/services/DocumentLibraryTest.h/.cpp`

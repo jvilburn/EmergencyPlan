@@ -24,6 +24,7 @@ set(TEST_SOURCES
     services/DocumentCryptoTest.cpp
     services/DocumentFileTest.cpp
     services/DocumentHeaderTest.cpp
+    services/DocumentLibraryTest.cpp
     services/DocumentSessionTest.cpp
     services/FakeServer.cpp
     services/FakeServerTest.cpp

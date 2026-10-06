@@ -11,6 +11,7 @@
 #include <QJsonObject>
 #include <QRegularExpression>
 #include <QTemporaryDir>
+#include <QTimeZone>
 #include <QtTest>
 
 using namespace SessionTestSupport;
@@ -208,6 +209,75 @@ void AppSettingsTest::removingARecordLeavesTheOthers()
     QCOMPARE(reread->serverAddress(), QString("https://kept.test"));
 }
 
+void AppSettingsTest::wardEntriesReadBackThroughASecondInstance()
+{
+    QTemporaryDir folder;
+    QVERIFY(folder.isValid());
+    const QString path = folder.filePath("settings.json");
+    const QString opened = ChainTestSupport::newDocumentId();
+    const QString fresh = ChainTestSupport::newDocumentId();
+
+    AppSettings::WardEntry openedWard;
+    openedWard.wardName = "Tanglewood Ward";
+    openedWard.lastOpened = QDateTime(QDate(2026, 10, 6), QTime(9, 30, 15, 250), QTimeZone::UTC);
+    openedWard.copyPaths = {"C:/Users/someone/Desktop/Tanglewood.wardplanning", "E:/Tanglewood.wardplanning"};
+    AppSettings::WardEntry freshWard;
+    freshWard.wardName = "Untitled";
+    {
+        std::unique_ptr<AppSettings> settings = openAt(path);
+        settings->setWard(opened, openedWard);
+        settings->setWard(fresh, freshWard);
+        settings->setLastWardId(opened);
+    }
+
+    const std::unique_ptr<AppSettings> reread = openAt(path);
+    QVERIFY(reread);
+    QVERIFY(reread->ward(opened) == openedWard);
+    QVERIFY(reread->ward(fresh) == freshWard);
+    QVERIFY(!reread->ward(fresh)->lastOpened.has_value());
+    QCOMPARE(reread->lastWardId(), opened);
+    QStringList ids = reread->wardIds();
+    ids.sort();
+    QStringList expected{opened, fresh};
+    expected.sort();
+    QCOMPARE(ids, expected);
+
+    // Wards and records are separate: a ward alone has no record.
+    QVERIFY(reread->documentIds().isEmpty());
+}
+
+void AppSettingsTest::removingAWardLeavesItsRecordAndClearsTheLastWard()
+{
+    QTemporaryDir folder;
+    QVERIFY(folder.isValid());
+    const QString path = folder.filePath("settings.json");
+    const QString gone = ChainTestSupport::newDocumentId();
+    const QString kept = ChainTestSupport::newDocumentId();
+
+    AppSettings::WardEntry ward;
+    ward.wardName = "Tanglewood Ward";
+    {
+        std::unique_ptr<AppSettings> settings = openAt(path);
+        settings->setWard(gone, ward);
+        settings->setWard(kept, ward);
+        settings->setRecord(gone, fullRecord());
+        settings->setLastWardId(kept);
+
+        // Removing another ward leaves the last ward.
+        settings->removeWard(gone);
+        QCOMPARE(settings->lastWardId(), kept);
+
+        settings->removeWard(kept);
+        QVERIFY(settings->lastWardId().isEmpty());
+    }
+
+    const std::unique_ptr<AppSettings> reread = openAt(path);
+    QVERIFY(reread);
+    QVERIFY(reread->wardIds().isEmpty());
+    QVERIFY(reread->lastWardId().isEmpty());
+    QVERIFY(reread->record(gone) == fullRecord());
+}
+
 void AppSettingsTest::aMalformedFileIsReportedAndLeftAlone_data()
 {
     const QString id = ChainTestSupport::newDocumentId();
@@ -217,27 +287,53 @@ void AppSettingsTest::aMalformedFileIsReportedAndLeftAlone_data()
     QTest::addColumn<QByteArray>("bytes");
     QTest::newRow("not json") << QByteArray("{ not json");
     QTest::newRow("not an object") << QByteArray("[]");
-    QTest::newRow("no records") << QByteArray(R"({"serverAddress": "https://example.test"})");
-    QTest::newRow("unknown key") << QByteArray(R"({"records": {}, "favouriteColour": "blue"})");
-    QTest::newRow("developer export false") << QByteArray(R"({"records": {}, "developerExport": false})");
-    QTest::newRow("empty server address") << QByteArray(R"({"records": {}, "serverAddress": ""})");
-    QTest::newRow("latitude as text") << QByteArray(R"({"records": {}, "map": {"defaultLat": "40", "defaultLng": 1}})");
-    QTest::newRow("empty document id") << QString(R"({"records": {"": {%1, "pendingChanges": []}}})").arg(mark).toUtf8();
-    QTest::newRow("record not an object") << QString(R"({"records": {"%1": 7}})").arg(id).toUtf8();
-    QTest::newRow("no high-water mark") << QString(R"({"records": {"%1": {"pendingChanges": []}}})").arg(id).toUtf8();
+    QTest::newRow("no records") << QByteArray(R"({"wards": {}, "serverAddress": "https://example.test"})");
+    QTest::newRow("no wards") << QByteArray(R"({"records": {}, "serverAddress": "https://example.test"})");
+    QTest::newRow("unknown key") << QByteArray(R"({"records": {}, "wards": {}, "favouriteColour": "blue"})");
+    QTest::newRow("developer export false") << QByteArray(R"({"records": {}, "wards": {}, "developerExport": false})");
+    QTest::newRow("empty server address") << QByteArray(R"({"records": {}, "wards": {}, "serverAddress": ""})");
+    QTest::newRow("latitude as text")
+        << QByteArray(R"({"records": {}, "wards": {}, "map": {"defaultLat": "40", "defaultLng": 1}})");
+    QTest::newRow("empty document id")
+        << QString(R"({"records": {"": {%1, "pendingChanges": []}}, "wards": {}})").arg(mark).toUtf8();
+    QTest::newRow("record not an object") << QString(R"({"records": {"%1": 7}, "wards": {}})").arg(id).toUtf8();
+    QTest::newRow("no high-water mark")
+        << QString(R"({"records": {"%1": {"pendingChanges": []}}, "wards": {}})").arg(id).toUtf8();
     QTest::newRow("base version without hash")
-        << QString(R"({"records": {"%1": {"baseVersion": 3, %2, "pendingChanges": []}}})").arg(id, mark).toUtf8();
+        << QString(R"({"records": {"%1": {"baseVersion": 3, %2, "pendingChanges": []}}, "wards": {}})").arg(id, mark).toUtf8();
     QTest::newRow("hash of the wrong size")
-        << QString(R"({"records": {"%1": {"baseVersion": 3, "baseHash": "abcd", %2, "pendingChanges": []}}})")
+        << QString(R"({"records": {"%1": {"baseVersion": 3, "baseHash": "abcd", %2, "pendingChanges": []}}, "wards": {}})")
                .arg(id, mark)
                .toUtf8();
     QTest::newRow("a pending change of no kind")
-        << QString(R"({"records": {"%1": {%2, "pendingChanges": [{"kind": "promote"}]}}})").arg(id, mark).toUtf8();
+        << QString(R"({"records": {"%1": {%2, "pendingChanges": [{"kind": "promote"}]}}, "wards": {}})").arg(id, mark).toUtf8();
+
+    QTest::newRow("ward not an object") << QString(R"({"records": {}, "wards": {"%1": 7}})").arg(id).toUtf8();
+    QTest::newRow("empty ward id") << QByteArray(R"({"records": {}, "wards": {"": {"wardName": "Tanglewood Ward"}}})");
+    QTest::newRow("no ward name") << QString(R"({"records": {}, "wards": {"%1": {}}})").arg(id).toUtf8();
+    QTest::newRow("empty ward name") << QString(R"({"records": {}, "wards": {"%1": {"wardName": ""}}})").arg(id).toUtf8();
+    QTest::newRow("unknown ward key")
+        << QString(R"({"records": {}, "wards": {"%1": {"wardName": "Tanglewood Ward", "colour": "blue"}}})").arg(id).toUtf8();
+    QTest::newRow("last opened not a time")
+        << QString(R"({"records": {}, "wards": {"%1": {"wardName": "Tanglewood Ward", "lastOpened": "yesterday"}}})")
+               .arg(id)
+               .toUtf8();
+    QTest::newRow("empty copy paths")
+        << QString(R"({"records": {}, "wards": {"%1": {"wardName": "Tanglewood Ward", "copyPaths": []}}})").arg(id).toUtf8();
+    QTest::newRow("empty last ward")
+        << QString(R"({"records": {}, "wards": {"%1": {"wardName": "Tanglewood Ward"}}, "lastWard": ""})").arg(id).toUtf8();
+    QTest::newRow("last ward not in the library")
+        << QString(R"({"records": {}, "wards": {"%1": {"wardName": "Tanglewood Ward"}}, "lastWard": "%2"})")
+               .arg(id, ChainTestSupport::newDocumentId())
+               .toUtf8();
 
     // Anchor: the same shapes, well formed, read.
-    QTest::newRow("well formed") << QString(R"({"records": {"%1": {"baseVersion": 3, "baseHash": "%2", %3, "pendingChanges": []}}})")
-                                        .arg(id, hash, mark)
-                                        .toUtf8();
+    QTest::newRow("well formed")
+        << QString(R"({"records": {"%1": {"baseVersion": 3, "baseHash": "%2", %3, "pendingChanges": []}},)"
+                   R"( "wards": {"%1": {"wardName": "Tanglewood Ward", "lastOpened": "2026-10-06T09:30:15.250Z",)"
+                   R"( "copyPaths": ["E:/Tanglewood.wardplanning"]}}, "lastWard": "%1"})")
+               .arg(id, hash, mark)
+               .toUtf8();
 }
 
 void AppSettingsTest::aMalformedFileIsReportedAndLeftAlone()

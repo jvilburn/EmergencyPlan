@@ -193,6 +193,7 @@ set(SERVICE_SOURCES
     src/services/SingleInstance.cpp
     src/services/IdentityFile.cpp
     src/services/IdentityService.cpp
+    src/services/DocumentLibrary.cpp
     # src/services/StatisticsService.cpp
     # src/services/ResourceService.cpp
     # src/services/SearchService.cpp
@@ -243,6 +244,7 @@ set(SERVICE_HEADERS
     src/services/SingleInstance.h
     src/services/IdentityFile.h
     src/services/IdentityService.h
+    src/services/DocumentLibrary.h
     # src/services/StatisticsService.h
     # src/services/ResourceService.h
     # src/services/SearchService.h
@@ -262,6 +264,7 @@ set(WIDGET_SOURCES
     src/widgets/ActionButtonsWidget.cpp
     src/widgets/ContactAttemptDialog.cpp
     src/widgets/NotifyDialog.cpp
+    src/widgets/OpenWardDialog.cpp
     src/widgets/TaskDialog.cpp
     src/widgets/TaskListView.cpp
     src/widgets/CallingsEditor.cpp
@@ -313,6 +316,7 @@ set(WIDGET_HEADERS
     src/widgets/ActionButtonsWidget.h
     src/widgets/ContactAttemptDialog.h
     src/widgets/NotifyDialog.h
+    src/widgets/OpenWardDialog.h
     src/widgets/TaskDialog.h
     src/widgets/TaskListView.h
     src/widgets/CallingsEditor.h

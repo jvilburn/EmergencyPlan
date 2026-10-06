@@ -2,6 +2,7 @@
 
 #include "DocumentRecords.h"
 
+#include <QDateTime>
 #include <QHash>
 #include <QString>
 #include <QStringList>
@@ -32,6 +33,33 @@ public:
     void setRecord(const QString& documentId, const DocumentRecord& record) override;
     void removeRecord(const QString& documentId) override;
     QStringList documentIds() const override;
+
+    // --- The document library's wards ---
+
+    /// One ward in this device's library: what the ward list shows of it, and the
+    /// copies written from it. Kept beside the ward's record with a lifetime of its
+    /// own, so a removal that deletes the record still leaves the copy paths for the
+    /// library to delete.
+    struct WardEntry
+    {
+        QString wardName;
+        std::optional<QDateTime> lastOpened;
+        QStringList copyPaths;
+
+        bool operator==(const WardEntry& other) const;
+        bool operator!=(const WardEntry& other) const { return !(*this == other); }
+    };
+
+    QStringList wardIds() const { return m_wards.keys(); }
+    std::optional<WardEntry> ward(const QString& documentId) const;
+    void setWard(const QString& documentId, const WardEntry& entry);
+
+    /// Also clears the last ward when it is this one.
+    void removeWard(const QString& documentId);
+
+    /// The ward opened last, which the app reopens at startup; empty for none.
+    QString lastWardId() const { return m_lastWardId; }
+    void setLastWardId(const QString& documentId);
 
     // --- This device ---
 
@@ -66,6 +94,8 @@ private:
 
     QString m_path;
     QHash<QString, DocumentRecord> m_records;
+    QHash<QString, WardEntry> m_wards;
+    QString m_lastWardId;
     bool m_developerExport = false;
     QString m_serverAddressOverride;
     std::optional<Location> m_defaultLocation;

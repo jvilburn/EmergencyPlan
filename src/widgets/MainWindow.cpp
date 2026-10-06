@@ -1,5 +1,7 @@
 #include "MainWindow.h"
 #include "AppSettings.h"
+#include "DocumentLibrary.h"
+#include "OpenWardDialog.h"
 #include "EmergencyBanner.h"
 #include "WardListView.h"
 #include "MinisteringView.h"
@@ -39,11 +41,14 @@
 #include <QLabel>
 #include <QProgressBar>
 #include <QStandardPaths>
+#include <QDesktopServices>
 #include <QFileInfo>
+#include <QUrl>
 
-MainWindow::MainWindow(AppSettings& settings, QWidget* parent)
+MainWindow::MainWindow(AppSettings& settings, DocumentLibrary& library, QWidget* parent)
     : QMainWindow(parent)
     , m_settings(settings)
+    , m_library(library)
 {
     setupUi();
     setupMenus();
@@ -56,16 +61,12 @@ MainWindow::MainWindow(AppSettings& settings, QWidget* parent)
 
 void MainWindow::handleArguments(const QStringList& arguments)
 {
+    Q_UNUSED(arguments);
+
     // A later launch handed its arguments here: bring this window forward.
     setWindowState(windowState() & ~Qt::WindowMinimized);
     raise();
     activateWindow();
-
-    if (arguments.size() > 1
-        && arguments.at(1).endsWith(DocumentConstants::FileExtension, Qt::CaseInsensitive))
-    {
-        openFile(arguments.at(1));
-    }
 }
 
 MainWindow::~MainWindow()
@@ -157,19 +158,20 @@ void MainWindow::setupMenus()
     // File menu
     QMenu* fileMenu = menuBar()->addMenu(tr("&File"));
 
-    m_newAction = fileMenu->addAction(tr("&New"), this, &MainWindow::onNewDocument);
+    m_newAction = fileMenu->addAction(tr("&New Ward"), this, &MainWindow::onNewWard);
     m_newAction->setShortcut(QKeySequence::New);
 
-    m_openAction = fileMenu->addAction(tr("&Open..."), this, &MainWindow::onOpenDocument);
+    m_openAction = fileMenu->addAction(tr("&Open Ward..."), this, &MainWindow::onOpenWard);
     m_openAction->setShortcut(QKeySequence::Open);
+
+    m_saveAction = fileMenu->addAction(tr("&Save Now"), this, &MainWindow::onSaveNow);
+    m_saveAction->setShortcut(QKeySequence::Save);
 
     fileMenu->addSeparator();
 
-    m_saveAction = fileMenu->addAction(tr("&Save"), this, &MainWindow::onSaveDocument);
-    m_saveAction->setShortcut(QKeySequence::Save);
-
-    m_saveAsAction = fileMenu->addAction(tr("Save &As..."), this, &MainWindow::onSaveDocumentAs);
-    m_saveAsAction->setShortcut(QKeySequence::SaveAs);
+    fileMenu->addAction(tr("Save a &Copy..."), this, &MainWindow::onSaveCopy);
+    fileMenu->addAction(tr("Open a Cop&y..."), this, &MainWindow::onOpenCopy);
+    fileMenu->addAction(tr("Show in &Folder"), this, &MainWindow::onShowFolder);
 
     fileMenu->addSeparator();
 
@@ -256,98 +258,93 @@ void MainWindow::setupConnections()
             this, &MainWindow::onAutoSaveFailed);
 }
 
-void MainWindow::onNewDocument()
+void MainWindow::onNewWard()
 {
     DocumentManager::instance()->newDocument();
-    statusBar()->showMessage(tr("New document created"), 3000);
+    statusBar()->showMessage(tr("New ward created"), 3000);
 }
 
-void MainWindow::onOpenDocument()
+void MainWindow::onOpenWard()
 {
-    QString filePath = QFileDialog::getOpenFileName(
+    OpenWardDialog dialog(m_library.entries(), this);
+    if (dialog.exec() != QDialog::Accepted || dialog.selectedDocumentId().isEmpty())
+    {
+        return;
+    }
+
+    switch (DocumentManager::instance()->openDocument(dialog.selectedDocumentId()))
+    {
+    case LoadFailure::None:
+        statusBar()->showMessage(tr("Ward opened"), 3000);
+        m_mapWidget->fitAllFamilies();
+        break;
+    case LoadFailure::NotFound:
+        QMessageBox::warning(this, tr("Open Ward"), tr("This ward's file is missing from this device."));
+        break;
+    case LoadFailure::NeedsNewerVersion:
+        QMessageBox::warning(this, tr("Open Ward"), tr("This ward was saved by a newer version of Ward Planning."));
+        break;
+    case LoadFailure::Refused:
+        QMessageBox::warning(this, tr("Open Ward"), tr("This ward's file on this device cannot be opened."));
+        break;
+    }
+}
+
+void MainWindow::onSaveNow()
+{
+    DocumentManager::instance()->publishNow();
+}
+
+void MainWindow::onSaveCopy()
+{
+    const QString suggested = DocumentManager::instance()->document().suggestedFilename();
+    const QString targetPath = QFileDialog::getSaveFileName(
         this,
-        tr("Open Document"),
+        tr("Save a Copy"),
+        suggested.isEmpty() ? QString() : suggested + DocumentConstants::FileExtension,
+        tr("Ward Planning Files (%1)").arg(DocumentConstants::FileGlob));
+    if (targetPath.isEmpty())
+    {
+        return;
+    }
+
+    QString error;
+    if (!m_library.exportCopy(DocumentManager::instance()->documentId(),
+                              DocumentManager::instance()->document(),
+                              targetPath,
+                              &error))
+    {
+        QMessageBox::warning(this, tr("Save a Copy"), error);
+        return;
+    }
+    statusBar()->showMessage(tr("Copy saved to %1").arg(targetPath), 5000);
+}
+
+void MainWindow::onOpenCopy()
+{
+    const QString sourcePath = QFileDialog::getOpenFileName(
+        this,
+        tr("Open a Copy"),
         QString(),
-        tr("Ward Planning Files (%1);;All Files (*)").arg(DocumentConstants::FileGlob));
-
-    if (filePath.isEmpty())
+        tr("Ward Planning Files (%1)").arg(DocumentConstants::FileGlob));
+    if (sourcePath.isEmpty())
     {
         return;
     }
 
-    QString errorMessage;
-    if (DocumentManager::instance()->openDocument(filePath, &errorMessage))
+    QString error;
+    const std::optional<DocumentLibrary::Copy> copy = m_library.openCopy(sourcePath, &error);
+    if (!copy.has_value())
     {
-        statusBar()->showMessage(tr("Document opened"), 3000);
-        m_mapWidget->fitAllFamilies();
-    }
-    else
-    {
-        QMessageBox::warning(this, tr("Error"), errorMessage);
-    }
-}
-
-bool MainWindow::openFile(const QString& filePath)
-{
-    QString errorMessage;
-    if (DocumentManager::instance()->openDocument(filePath, &errorMessage))
-    {
-        statusBar()->showMessage(tr("Document opened"), 3000);
-        m_mapWidget->fitAllFamilies();
-        return true;
-    }
-    else
-    {
-        QMessageBox::warning(this, tr("Error"), errorMessage);
-        return false;
-    }
-}
-
-void MainWindow::onSaveDocument()
-{
-    if (DocumentManager::instance()->filePath().isEmpty())
-    {
-        onSaveDocumentAs();
-    }
-}
-
-void MainWindow::onSaveDocumentAs()
-{
-    // Build suggested path: use existing path, or suggested filename
-    QString suggestedPath;
-    if (!DocumentManager::instance()->filePath().isEmpty())
-    {
-        suggestedPath = DocumentManager::instance()->filePath();
-    }
-    else
-    {
-        QString suggested = DocumentManager::instance()->document().suggestedFilename();
-        if (!suggested.isEmpty())
-        {
-            suggestedPath = suggested + DocumentConstants::FileExtension;
-        }
-    }
-
-    QString filePath = QFileDialog::getSaveFileName(
-        this,
-        tr("Save Document As"),
-        suggestedPath,
-        tr("Ward Planning Files (%1);;All Files (*)").arg(DocumentConstants::FileGlob));
-
-    if (filePath.isEmpty())
-    {
+        QMessageBox::warning(this, tr("Open a Copy"), error);
         return;
     }
+    DocumentManager::instance()->showCopy(copy.value());
+}
 
-    QString errorMessage;
-    if (DocumentManager::instance()->saveDocumentAs(filePath, &errorMessage))
-    {
-        statusBar()->showMessage(tr("Document saved"), 3000);
-    }
-    else
-    {
-        QMessageBox::warning(this, tr("Error"), errorMessage);
-    }
+void MainWindow::onShowFolder()
+{
+    QDesktopServices::openUrl(QUrl::fromLocalFile(m_library.directory()));
 }
 
 void MainWindow::onImportPdf()

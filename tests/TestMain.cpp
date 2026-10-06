@@ -8,6 +8,7 @@
 #include "DocumentCryptoTest.h"
 #include "DocumentFileTest.h"
 #include "DocumentHeaderTest.h"
+#include "DocumentLibraryTest.h"
 #include "DocumentParseTest.h"
 #include "DocumentSessionTest.h"
 #include "FakeServer.h"
@@ -93,6 +94,7 @@ int main(int argc, char** argv)
     status |= run<AppSettingsTest>(argc, argv);
     status |= run<IdentityFileTest>(argc, argv);
     status |= run<IdentityServiceTest>(argc, argv);
+    status |= run<DocumentLibraryTest>(argc, argv);
 
     return status;
 }

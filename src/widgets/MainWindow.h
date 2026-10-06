@@ -11,6 +11,7 @@
 #include "Id.h"
 
 class AppSettings;
+class DocumentLibrary;
 class QLabel;
 class QProgressBar;
 class EmergencyAssetView;
@@ -30,19 +31,19 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    MainWindow(AppSettings& settings, QWidget* parent);
+    MainWindow(AppSettings& settings, DocumentLibrary& library, QWidget* parent);
     ~MainWindow();
-
-    bool openFile(const QString& filePath);
 
     /// The arguments a later launch handed to this one.
     void handleArguments(const QStringList& arguments);
 
 private slots:
-    void onNewDocument();
-    void onOpenDocument();
-    void onSaveDocument();
-    void onSaveDocumentAs();
+    void onNewWard();
+    void onOpenWard();
+    void onSaveNow();
+    void onSaveCopy();
+    void onOpenCopy();
+    void onShowFolder();
     void onImportPdf();
     void onImportMinisteringPdf();
     void onUndo();
@@ -93,6 +94,7 @@ private:
     std::optional<QString> saveEmergencyReport(const std::optional<QDateTime>& endedAt);
 
     AppSettings& m_settings;
+    DocumentLibrary& m_library;
 
     // Widgets
     QSplitter* m_splitter;
@@ -114,7 +116,6 @@ private:
     QAction* m_newAction;
     QAction* m_openAction;
     QAction* m_saveAction;
-    QAction* m_saveAsAction;
     QAction* m_importPdfAction;
     QAction* m_importMinisteringPdfAction;
     QAction* m_startEmergencyAction;

@@ -16,6 +16,8 @@ private slots:
     void recordsForTwoIdsStaySeparate();
     void aRecordWithPendingRosterChangesRoundTrips();
     void removingARecordLeavesTheOthers();
+    void wardEntriesReadBackThroughASecondInstance();
+    void removingAWardLeavesItsRecordAndClearsTheLastWard();
     void aMalformedFileIsReportedAndLeftAlone_data();
     void aMalformedFileIsReportedAndLeftAlone();
     void aFailedWriteKeepsTheValuesAndSaysSo();
