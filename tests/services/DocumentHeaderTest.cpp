@@ -1,5 +1,6 @@
 #include "DocumentHeaderTest.h"
 
+#include "ChainTestSupport.h"
 #include "DocumentCrypto.h"
 #include "DocumentHeader.h"
 
@@ -11,12 +12,7 @@
 namespace
 {
 
-MemberId newMember()
-{
-    MemberId member;
-    member.bytes = DocumentCrypto::generateDataKey().bytes.left(MemberId::Size);
-    return member;
-}
+using ChainTestSupport::newMember;
 
 QString newDocumentId()
 {

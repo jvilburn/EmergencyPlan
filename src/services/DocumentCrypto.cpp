@@ -290,11 +290,8 @@ QByteArray DocumentCrypto::randomBytes(int size)
 
 DataKey DocumentCrypto::generateDataKey()
 {
-    QByteArray bytes(DataKey::Size, '\0');
-    randombytes_buf(asUnsigned(bytes), bytes.size());
-
     DataKey key;
-    key.bytes = bytes;
+    key.bytes = randomBytes(DataKey::Size);
     return key;
 }
 

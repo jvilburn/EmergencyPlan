@@ -5,6 +5,7 @@
 #include "EmergencyResponse.h"
 #include "Family.h"
 #include "Document.h"
+#include "ChainTestSupport.h"
 #include "DocumentCrypto.h"
 #include "HexCodec.h"
 #include "RosterDevice.h"
@@ -16,12 +17,7 @@
 namespace
 {
 
-MemberId newMember()
-{
-    MemberId member;
-    member.bytes = DocumentCrypto::generateDataKey().bytes.left(MemberId::Size);
-    return member;
-}
+using ChainTestSupport::newMember;
 
 RosterDevice newDevice(const QString& name)
 {

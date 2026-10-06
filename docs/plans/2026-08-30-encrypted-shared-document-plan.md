@@ -2418,7 +2418,7 @@ shown to the user. Commit as `feat: sync-and-save core` once all of this is sett
 >   rather than a silent exit.
 > - The built-in server address is empty until the companion server has one.
 
-Before identity, because identity stores a display name in it.
+Before identity and the library, which keep their state beside it in local app data.
 
 **Files:** `src/services/AppSettings.h/.cpp`, `src/services/SingleInstance.h/.cpp`,
 `src/main.cpp`, `src/widgets/MainWindow.cpp:607-668`, `tests/services/AppSettingsTest.h/.cpp`
@@ -2525,75 +2525,72 @@ Commit as `feat: device identity in a local file`.
 
 ### Task 10: IdentityService
 
-> **Done**, with these differences from the text below:
-> - The display name and device name are in the identity file with the keys and member
->   id - one record, `IdentityRecord::Person`, set once - rather than in `AppSettings`,
->   so the person and its names can never get out of step.
-> - `IdentityService::open(path, errorMessage)` loads or creates the identity, as
->   `AppSettings::open` does, so there is no `initialise`, `isReady`, or `lastError`.
->   `createPerson` and `joinPerson` report a refusal through their own error message.
-> - `deviceKeys()` gives the public keys pairing presents before a person exists.
-> - Tests use files in a `QTemporaryDir`; nothing else needs an `IdentityService`, since
->   the core takes a `DeviceIdentity` value, so there is no test constructor.
+> **Done.** Commit `983102e` and the review fixes after it.
 
-**Files:** `src/services/IdentityService.h/.cpp`, `src/main.cpp:24-33`,
-`tests/services/IdentityServiceTest.h/.cpp`
+**Files:** `src/services/IdentityService.h/.cpp`, `src/services/IdentityFile.h/.cpp`,
+`src/main.cpp`, `tests/services/IdentityServiceTest.h/.cpp`
 
-Owns this device's two keypairs and device name, and the person this device belongs to -
-member id and display name - and resolves **before any document exists**. Its product is
-the `DeviceIdentity` value the core takes (Task 6.2).
+Owns this device's two keypairs, and the person this device belongs to - member id,
+display name, and device name - and resolves **before any document exists**. Its product
+is the `DeviceIdentity` value the core takes (Task 6.2).
 
 ```cpp
-class IdentityService : public QObject
+class IdentityService
 {
-    Q_OBJECT
-
 public:
-    bool initialise();                  ///< true when an identity is loaded or created
+    /// Loads the identity, or creates the keys on a first run. nullptr for a newer
+    /// version's file, a damaged one, or a first identity that cannot be stored.
+    static std::unique_ptr<IdentityService> open(const QString& path,
+                                                 IdentityFile::Load& outcome,
+                                                 QString* errorMessage);
 
-    bool isReady() const;
-    std::optional<DeviceIdentity> identity() const;     ///< empty until ready and a person exists
+    /// A fresh identity, the old file moved aside rather than deleted.
+    static std::unique_ptr<IdentityService> startOver(const QString& path, QString* errorMessage);
 
-        QString defaultDeviceName() const;          ///< QSysInfo::machineHostName()
+    std::optional<DeviceIdentity> identity() const;    ///< empty until a person exists
+    DeviceKeys deviceKeys() const;                      ///< what pairing presents before then
+    static QString defaultDeviceName();                 ///< QSysInfo::machineHostName()
 
-    /// A fresh random member id.
-    void createPerson(const QString& displayName, const QString& deviceName);
-    /// On link: the member id and display name from the responder's handover.
-    void joinPerson(const MemberId& memberId, const QString& displayName, const QString& deviceName);
-
-    QString lastError() const;
-
+    bool createPerson(const QString& displayName, const QString& deviceName, QString* errorMessage);
+    bool joinPerson(const MemberId& member,
+                    const QString& displayName,
+                    const QString& deviceName,
+                    QString* errorMessage);
 };
 ```
 
-**The identity file is read synchronously**, so `initialise()` simply loads it at startup.
-On `NotFound` it generates **both** keypairs and stores them as one record.
+**One record holds everything.** The keys, the member id, the display name, and the device
+name are one `IdentityRecord` in the identity file (Task 9), the person one optional value
+set once, so the person and its names can never get out of step with the keys.
 
-On `Failed` `main()` shows a modal naming the file and exits - there is no document
-without an identity, and a damaged file is never replaced by a new one unasked. Task 14 asks the first-screen question below before
-building any service that takes the identity.
-
-**The member id is stored in the identity file with the keypairs**, so a reinstall keeps
-the device attached to its person; clearing local app data makes it a new device, which
-then links again. Display name and device name live in `AppSettings`. The device name defaults to the
+**Names are fixed once a person exists.** The display name is set when the person is
+created or joined, and the device name with it; both reach other members only through the
+roster, and a rename would be a roster change that no chain rule carries. `createPerson`
+trims the names a person typed; `joinPerson` keeps the display name exactly as the linked
+device handed it over, since the roster carries it so. The device name defaults to the
 system host name and is offered for editing on the first screen, since "DESKTOP-4F2K9" is
 not how Bob knows his laptop.
 
-**Names are fixed once a person exists.** The display name is set when the person is
-created or joined, and the device name when the device is; both reach other members only
-through the roster, and a rename would be a roster change that no chain rule carries.
+**A file that will not read is never replaced unasked.** `main()` resolves the identity
+before any document service:
+- **A newer version's file** (its `version` above this build's): a message to install the
+  latest version, and quit. Starting afresh would orphan it for nothing.
+- **A damaged file:** the message offers **Quit**, the default, or **Start This Device
+  Afresh...**, which confirms plainly that wards shared with others come back once the
+  device links again or is granted access, and that wards never shared from this device
+  will not open unless the old file is restored. `startOver` moves the file aside, named
+  with the time, and creates new keys.
+- **A first identity that cannot be stored:** a message, and quit.
 
 **The first screen asks one question** when no person exists yet: *Do you already use Ward
 Planning on another device?* **No** calls `createPerson` after asking for a display name.
 **Yes** starts linking (Task 23), which calls `joinPerson` once the existing device
 accepts. This order is what keeps Bob from becoming two people by tapping Request access on
-his phone.
+his phone. A device set up with the wrong answer, before it belongs to any ward, is put
+right through the same `startOver`, offered by Task 14 only while the library is empty.
 
-**Tests** use a test constructor, `IdentityService(const DeviceIdentity&)`, that is ready
-at once; the file-backed one reads and writes an identity file in a `QTemporaryDir`:
-`identity()` is empty before initialisation and before a person exists; `createPerson`
-yields a fresh member id; `joinPerson` keeps the given id; the member id survives a reload
-of the identity file.
+**Tests** use identity files in a `QTemporaryDir`; nothing else needs an
+`IdentityService`, since the core takes a `DeviceIdentity` value.
 
 Commit as `feat: device identity service`.
 
@@ -2772,13 +2769,13 @@ Commit as `feat: HTTP server transport`.
 ### Task 14: Wire the app to the core
 
 **Files:** `src/main.cpp`, `src/services/DocumentManager.h/.cpp`,
-`src/services/EmergencyManager.h/.cpp`, `src/services/QtSessionTimers.h/.cpp`,
+`src/services/EmergencyManager.h/.cpp`,
 `src/widgets/MainWindow.h/.cpp`, `tests/services/DocumentManagerTest.h/.cpp`
 
-**Wiring in `main.cpp`**, in order, after the `DocumentCrypto::initialise()` already at
-the top of `main()`: single-instance lock (Task 8), `AppSettings`,
-`IdentityService::initialiseBlocking()` (Task 10), **the first-screen question when no
-person exists yet**, then `HttpServerApi`, `ServerConnection`, `DocumentLibrary`,
+**Wiring in `main.cpp`**, in order: the single-instance lock (Task 8),
+`DocumentCrypto::initialise()`, `AppSettings`, the identity through `IdentityService::open`
+(Task 10, with its damaged-file choice), **the first-screen question when no person exists
+yet**, then `HttpServerApi`, `ServerConnection`, `DocumentLibrary`,
 `RosterChangeQueue`, `DocumentManager`, `EmergencyManager`, `TileService`, `MainWindow`,
 and the startup file argument through Task 12's router. Every service that takes the
 identity is built after it exists, and takes it by value. `DocumentManager` is constructed

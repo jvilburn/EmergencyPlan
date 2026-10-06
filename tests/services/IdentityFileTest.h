@@ -15,6 +15,7 @@ private slots:
     void onlyTheSecretHalvesAreWritten();
     void aRecordWithASecretOfTheWrongSizeIsRefused();
     void aRecordWithAnUnknownFieldIsRefused();
+    void onlyThisBuildsVersionReads();
 
     // The file
     void aMissingFileIsNotFound();
@@ -24,4 +25,6 @@ private slots:
     void aPathThatCannotBeOpenedFails();
     void aStoreThatCannotWriteFails();
     void aRecordThatIsNotWholeIsNotStored();
+    void aNewerVersionIsToldFromADamagedFile();
+    void movingAsideKeepsTheFileBesideItself();
 };

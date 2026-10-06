@@ -25,6 +25,10 @@ struct IdentityRecord
         bool operator!=(const Person& other) const { return !(*this == other); }
     };
 
+    /// The format this build writes and reads. A file of a later version is a newer
+    /// app's, never a damaged one.
+    static constexpr int CurrentVersion = 1;
+
     Keypair sealing;
     SigningKeypair signing;
     std::optional<Person> person;
@@ -34,8 +38,8 @@ struct IdentityRecord
     /// pair a secret with someone else's public key.
     QByteArray toBytes() const;
 
-    /// The fields toBytes writes and no others, each secret the right size;
-    /// nullopt otherwise.
+    /// The fields toBytes writes and no others, at this build's version, each secret
+    /// the right size; nullopt otherwise.
     static std::optional<IdentityRecord> fromBytes(const QByteArray& bytes);
 
     bool operator==(const IdentityRecord& other) const;
@@ -51,14 +55,20 @@ namespace IdentityFile
 enum class Load
 {
     Loaded,
-    NotFound,   ///< no file: a first run
-    Failed      ///< a file that cannot be read or understood; never taken for a first run
+    NotFound,           ///< no file: a first run
+    NeedsNewerVersion,  ///< written by a later version of the app; left alone
+    Failed              ///< damaged or unreadable; never taken for a first run
 };
 
-/// Keeping NotFound and Failed apart is what stops a damaged file from looking
-/// like a first run and minting a second identity.
+/// Keeping NotFound apart from the rest is what stops a damaged file from looking
+/// like a first run and minting a second identity unasked.
 Load load(const QString& path, IdentityRecord& out, QString* errorMessage);
 
 bool store(const QString& path, const IdentityRecord& record, QString* errorMessage);
+
+/// Renames the file beside itself with the time in its name, so it can be restored
+/// by hand: a ward never shared is sealed only to the keys in it. The new path, or
+/// empty when it could not be moved.
+QString moveAside(const QString& path, QString* errorMessage);
 
 } // namespace IdentityFile

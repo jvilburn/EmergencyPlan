@@ -3,6 +3,7 @@
 #include "HexCodec.h"
 #include "StrictJson.h"
 
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -15,6 +16,7 @@ namespace
 {
 
 // Part of the identity file's format.
+const QLatin1String KeyVersion("version");
 const QLatin1String KeySealingSecret("sealingSecret");
 const QLatin1String KeySigningSeed("signingSeed");
 const QLatin1String KeyPerson("person");
@@ -27,6 +29,15 @@ const QLatin1String KeyDeviceName("deviceName");
 /// Unix - and this only clears the read-only flag.
 const QFileDevice::Permissions OwnerOnly = QFileDevice::ReadOwner | QFileDevice::WriteOwner;
 
+/// Whether the bytes are an identity file a later version of the app wrote: an
+/// object whose version is above this build's, whatever else is in it.
+bool isFromANewerVersion(const QByteArray& bytes)
+{
+    const QJsonObject json = QJsonDocument::fromJson(bytes).object();
+    int version = 0;
+    return StrictJson::readInt(json, KeyVersion, version) && version > IdentityRecord::CurrentVersion;
+}
+
 } // namespace
 
 // --- IdentityRecord --------------------------------------------------------------
@@ -34,6 +45,7 @@ const QFileDevice::Permissions OwnerOnly = QFileDevice::ReadOwner | QFileDevice:
 QByteArray IdentityRecord::toBytes() const
 {
     QJsonObject json;
+    json[KeyVersion] = CurrentVersion;
     json[KeySealingSecret] = HexCodec::encode(sealing.secretKey.bytes);
     json[KeySigningSeed] = HexCodec::encode(DocumentCrypto::seedOf(signing.signingKey));
     if (person.has_value())
@@ -57,9 +69,12 @@ std::optional<IdentityRecord> IdentityRecord::fromBytes(const QByteArray& bytes)
     }
 
     const QJsonObject json = document.object();
+    int version = 0;
     QString sealingText;
     QString seedText;
-    if (!StrictJson::hasOnlyKeys(json, {KeySealingSecret, KeySigningSeed, KeyPerson})
+    if (!StrictJson::hasOnlyKeys(json, {KeyVersion, KeySealingSecret, KeySigningSeed, KeyPerson})
+        || !StrictJson::readInt(json, KeyVersion, version)
+        || version != CurrentVersion
         || !StrictJson::readString(json, KeySealingSecret, sealingText)
         || !StrictJson::readString(json, KeySigningSeed, seedText))
     {
@@ -131,34 +146,39 @@ Load load(const QString& path, IdentityRecord& out, QString* errorMessage)
         return Load::NotFound;
     }
 
-    QString problem;
-    std::optional<IdentityRecord> record;
     if (!file.open(QIODevice::ReadOnly))
-    {
-        problem = QObject::tr("This device's identity file %1 could not be opened: %2.").arg(path, file.errorString());
-    }
-    else
-    {
-        record = IdentityRecord::fromBytes(file.readAll());
-        if (!record.has_value())
-        {
-            problem = QObject::tr("This device's identity file %1 is not in a form Ward Planning reads.").arg(path);
-        }
-    }
-
-    if (!record.has_value())
     {
         if (errorMessage != nullptr)
         {
-            *errorMessage = problem + QLatin1Char(' ')
-                + QObject::tr("Ward Planning will not start a new identity while it is there. Restore the file, "
-                              "or remove it to start this device afresh and link it to your other devices again.");
+            *errorMessage = QObject::tr("This device's identity file %1 could not be opened: %2.")
+                                .arg(path, file.errorString());
         }
         return Load::Failed;
     }
 
-    out = record.value();
-    return Load::Loaded;
+    const QByteArray bytes = file.readAll();
+    const std::optional<IdentityRecord> record = IdentityRecord::fromBytes(bytes);
+    if (record.has_value())
+    {
+        out = record.value();
+        return Load::Loaded;
+    }
+
+    if (isFromANewerVersion(bytes))
+    {
+        if (errorMessage != nullptr)
+        {
+            *errorMessage = QObject::tr("This device's identity was saved by a newer version of Ward Planning. "
+                                        "Install the latest version to go on using it.");
+        }
+        return Load::NeedsNewerVersion;
+    }
+
+    if (errorMessage != nullptr)
+    {
+        *errorMessage = QObject::tr("This device's identity file %1 is damaged.").arg(path);
+    }
+    return Load::Failed;
 }
 
 bool store(const QString& path, const IdentityRecord& record, QString* errorMessage)
@@ -193,6 +213,26 @@ bool store(const QString& path, const IdentityRecord& record, QString* errorMess
     }
 
     return true;
+}
+
+QString moveAside(const QString& path, QString* errorMessage)
+{
+    const QFileInfo info(path);
+    const QString aside = info.dir().filePath(
+        QString("%1-set-aside-%2.%3")
+            .arg(info.completeBaseName(),
+                 QDateTime::currentDateTimeUtc().toString("yyyyMMdd-HHmmss"),
+                 info.suffix()));
+
+    if (!QFile::rename(path, aside))
+    {
+        if (errorMessage != nullptr)
+        {
+            *errorMessage = QObject::tr("The identity file %1 could not be moved aside.").arg(path);
+        }
+        return QString();
+    }
+    return aside;
 }
 
 } // namespace IdentityFile

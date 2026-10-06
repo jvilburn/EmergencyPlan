@@ -62,9 +62,7 @@ namespace Pairing
 
 QByteArray newNonce()
 {
-    QByteArray nonce(NonceSize, '\0');
-    randombytes_buf(nonce.data(), size_t(nonce.size()));
-    return nonce;
+    return DocumentCrypto::randomBytes(NonceSize);
 }
 
 QByteArray commit(const DeviceKeys& initiator, const QByteArray& nonce)

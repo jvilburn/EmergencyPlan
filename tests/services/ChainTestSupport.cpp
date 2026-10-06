@@ -14,7 +14,7 @@ Fingerprint TestDevice::fingerprint() const
 MemberId newMember()
 {
     MemberId member;
-    member.bytes = DocumentCrypto::generateDataKey().bytes.left(MemberId::Size);
+    member.bytes = DocumentCrypto::randomBytes(MemberId::Size);
     return member;
 }
 

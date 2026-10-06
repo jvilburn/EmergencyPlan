@@ -3,10 +3,27 @@
 #include <QObject>
 #include <QSysInfo>
 
-std::unique_ptr<IdentityService> IdentityService::open(const QString& path, QString* errorMessage)
+namespace
+{
+
+bool refuse(const QString& reason, QString* errorMessage)
+{
+    if (errorMessage != nullptr)
+    {
+        *errorMessage = reason;
+    }
+    return false;
+}
+
+} // namespace
+
+std::unique_ptr<IdentityService> IdentityService::open(const QString& path,
+                                                       IdentityFile::Load& outcome,
+                                                       QString* errorMessage)
 {
     IdentityRecord record;
-    switch (IdentityFile::load(path, record, errorMessage))
+    outcome = IdentityFile::load(path, record, errorMessage);
+    switch (outcome)
     {
     case IdentityFile::Load::Loaded:
         break;
@@ -18,11 +35,23 @@ std::unique_ptr<IdentityService> IdentityService::open(const QString& path, QStr
             return nullptr;
         }
         break;
+    case IdentityFile::Load::NeedsNewerVersion:
     case IdentityFile::Load::Failed:
         return nullptr;
     }
 
     return std::unique_ptr<IdentityService>(new IdentityService(path, record));
+}
+
+std::unique_ptr<IdentityService> IdentityService::startOver(const QString& path, QString* errorMessage)
+{
+    if (IdentityFile::moveAside(path, errorMessage).isEmpty())
+    {
+        return nullptr;
+    }
+
+    IdentityFile::Load outcome = IdentityFile::Load::NotFound;
+    return open(path, outcome, errorMessage);
 }
 
 IdentityService::IdentityService(const QString& path, const IdentityRecord& record)
@@ -69,28 +98,22 @@ bool IdentityService::joinPerson(const MemberId& member,
                                  const QString& deviceName,
                                  QString* errorMessage)
 {
-    return setPerson(IdentityRecord::Person{member, displayName.trimmed(), deviceName.trimmed()}, errorMessage);
+    if (!member.isValid())
+    {
+        return refuse(QObject::tr("The other device did not hand over a valid person."), errorMessage);
+    }
+    return setPerson(IdentityRecord::Person{member, displayName, deviceName.trimmed()}, errorMessage);
 }
 
 bool IdentityService::setPerson(const IdentityRecord::Person& person, QString* errorMessage)
 {
-    QString problem;
     if (m_record.person.has_value())
     {
-        problem = QObject::tr("This device already belongs to a person.");
+        return refuse(QObject::tr("This device already belongs to a person."), errorMessage);
     }
-    else if (!person.member.isValid() || person.displayName.isEmpty() || person.deviceName.isEmpty())
+    if (person.displayName.trimmed().isEmpty() || person.deviceName.isEmpty())
     {
-        problem = QObject::tr("A name for you and for this device are both needed.");
-    }
-
-    if (!problem.isEmpty())
-    {
-        if (errorMessage != nullptr)
-        {
-            *errorMessage = problem;
-        }
-        return false;
+        return refuse(QObject::tr("A name for you and for this device are both needed."), errorMessage);
     }
 
     // Stored before it is taken, so the person in memory is always the one on disk.

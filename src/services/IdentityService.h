@@ -21,15 +21,21 @@ class IdentityService
 {
 public:
     /// The identity at path. A first run generates both keypairs and stores them
-    /// at once. nullptr with errorMessage set when the file is there and cannot be
-    /// read, or the first identity cannot be stored: a damaged file is never
-    /// replaced by a new identity unasked.
-    static std::unique_ptr<IdentityService> open(const QString& path, QString* errorMessage);
+    /// at once. nullptr when the file is a newer version's, is damaged, or the first
+    /// identity cannot be stored; outcome says which, and errorMessage why. A file
+    /// that is there is never replaced unasked.
+    static std::unique_ptr<IdentityService> open(const QString& path,
+                                                 IdentityFile::Load& outcome,
+                                                 QString* errorMessage);
+
+    /// A fresh identity in place of the one at path, which is moved aside rather
+    /// than deleted. Asked for by the person: a damaged file, or a device that was
+    /// set up as the wrong person before it joined any ward. nullptr when the old
+    /// file cannot be moved or the new one stored.
+    static std::unique_ptr<IdentityService> startOver(const QString& path, QString* errorMessage);
 
     /// Empty until a person exists.
     std::optional<DeviceIdentity> identity() const;
-
-    bool hasPerson() const { return m_record.person.has_value(); }
 
     /// This device's public keys, which pairing presents before a person exists.
     DeviceKeys deviceKeys() const;
@@ -37,12 +43,13 @@ public:
     /// The machine's host name, offered for editing on the first screen.
     static QString defaultDeviceName();
 
-    /// A new person, under a fresh member id. Refused once a person exists, and
-    /// for an empty name.
+    /// A new person, under a fresh member id, with the names a person typed. Refused
+    /// once a person exists, and for an empty name.
     bool createPerson(const QString& displayName, const QString& deviceName, QString* errorMessage);
 
     /// An existing person, by the member id and display name a linked device handed
-    /// over. Refused once a person exists, and for an empty name or invalid id.
+    /// over - the display name exactly as handed over, since the roster carries it
+    /// so. Refused once a person exists, and for an invalid id or an empty name.
     bool joinPerson(const MemberId& member,
                     const QString& displayName,
                     const QString& deviceName,

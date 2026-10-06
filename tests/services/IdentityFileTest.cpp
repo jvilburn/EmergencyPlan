@@ -7,6 +7,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QTemporaryDir>
@@ -65,7 +66,8 @@ void IdentityFileTest::onlyTheSecretHalvesAreWritten()
     const IdentityRecord record = newRecord();
     const QJsonObject json = QJsonDocument::fromJson(record.toBytes()).object();
 
-    QCOMPARE(json.keys(), (QStringList{"person", "sealingSecret", "signingSeed"}));
+    QCOMPARE(json.keys(), (QStringList{"person", "sealingSecret", "signingSeed", "version"}));
+    QCOMPARE(json["version"].toInt(), IdentityRecord::CurrentVersion);
     QCOMPARE(json["sealingSecret"].toString(), HexCodec::encode(record.sealing.secretKey.bytes));
     QCOMPARE(json["signingSeed"].toString(), HexCodec::encode(DocumentCrypto::seedOf(record.signing.signingKey)));
 
@@ -121,14 +123,87 @@ void IdentityFileTest::aRecordWithASecretOfTheWrongSizeIsRefused()
 
 void IdentityFileTest::aRecordWithAnUnknownFieldIsRefused()
 {
-    // A public key written beside its secret is refused too: there is one place
-    // each key comes from.
+    // A public key written beside its secret is refused too, since there is one
+    // place each key comes from, and so is a name outside the person.
     for (const char* key : {"displayName", "verifyKey"})
     {
         QJsonObject json = QJsonDocument::fromJson(newRecord().toBytes()).object();
         json[key] = "something";
         QVERIFY2(!IdentityRecord::fromBytes(QJsonDocument(json).toJson()).has_value(), key);
     }
+
+    // Inside the person as well.
+    QJsonObject json = QJsonDocument::fromJson(newRecord().toBytes()).object();
+    QJsonObject person = json["person"].toObject();
+    person["extra"] = "something";
+    json["person"] = person;
+    QVERIFY(!IdentityRecord::fromBytes(QJsonDocument(json).toJson()).has_value());
+}
+
+void IdentityFileTest::onlyThisBuildsVersionReads()
+{
+    const QJsonObject json = QJsonDocument::fromJson(newRecord().toBytes()).object();
+    QVERIFY(IdentityRecord::fromBytes(QJsonDocument(json).toJson()).has_value());
+
+    for (int version : {0, IdentityRecord::CurrentVersion + 1})
+    {
+        QJsonObject other = json;
+        other["version"] = version;
+        QVERIFY2(!IdentityRecord::fromBytes(QJsonDocument(other).toJson()).has_value(),
+                 qPrintable(QString::number(version)));
+    }
+
+    QJsonObject missing = json;
+    missing.remove("version");
+    QVERIFY(!IdentityRecord::fromBytes(QJsonDocument(missing).toJson()).has_value());
+}
+
+void IdentityFileTest::aNewerVersionIsToldFromADamagedFile()
+{
+    QTemporaryDir folder;
+    QVERIFY(folder.isValid());
+    const QString path = folder.filePath("identity.json");
+
+    QJsonObject json = QJsonDocument::fromJson(newRecord().toBytes()).object();
+    json["version"] = IdentityRecord::CurrentVersion + 1;
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    file.write(QJsonDocument(json).toJson());
+    file.close();
+
+    IdentityRecord record;
+    QString error;
+    QCOMPARE(IdentityFile::load(path, record, &error), IdentityFile::Load::NeedsNewerVersion);
+    QVERIFY(!error.isEmpty());
+
+    // A version this build reads, but damaged, is Failed, not newer.
+    json["version"] = IdentityRecord::CurrentVersion;
+    json["sealingSecret"] = "not hex";
+    QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    file.write(QJsonDocument(json).toJson());
+    file.close();
+    QCOMPARE(IdentityFile::load(path, record, nullptr), IdentityFile::Load::Failed);
+}
+
+void IdentityFileTest::movingAsideKeepsTheFileBesideItself()
+{
+    QTemporaryDir folder;
+    QVERIFY(folder.isValid());
+    const QString path = folder.filePath("identity.json");
+    QVERIFY(IdentityFile::store(path, newRecord(), nullptr));
+    const QByteArray bytes = readFile(path);
+
+    const QString aside = IdentityFile::moveAside(path, nullptr);
+    QVERIFY(!aside.isEmpty());
+    QVERIFY(!QFile::exists(path));
+    QCOMPARE(QFileInfo(aside).absolutePath(), QFileInfo(path).absolutePath());
+    QVERIFY(QFileInfo(aside).fileName().startsWith("identity-set-aside-"));
+    QCOMPARE(readFile(aside), bytes);
+
+    // Nothing there to move.
+    QString error;
+    QVERIFY(IdentityFile::moveAside(path, &error).isEmpty());
+    QVERIFY(!error.isEmpty());
 }
 
 // --- The file --------------------------------------------------------------------

@@ -13,6 +13,76 @@
 #include "SingleInstance.h"
 #include "TileService.h"
 
+#include <QPushButton>
+
+namespace
+{
+
+/// This device's identity, or nullptr once the person has been told why there is
+/// none and chosen to quit. A damaged file is offered a fresh start; one a newer
+/// version wrote is left alone, since starting afresh would orphan it for nothing.
+std::unique_ptr<IdentityService> resolveIdentity(const QString& path)
+{
+    IdentityFile::Load outcome = IdentityFile::Load::NotFound;
+    QString error;
+    std::unique_ptr<IdentityService> identity = IdentityService::open(path, outcome, &error);
+    if (identity)
+    {
+        return identity;
+    }
+
+    if (outcome != IdentityFile::Load::Failed)
+    {
+        QMessageBox::critical(nullptr, QObject::tr("Ward Planning"), error);
+        return nullptr;
+    }
+
+    QMessageBox damaged(QMessageBox::Critical,
+                        QObject::tr("Ward Planning"),
+                        error,
+                        QMessageBox::NoButton,
+                        nullptr);
+    damaged.setInformativeText(
+        QObject::tr("You can start this device afresh. The damaged file is kept beside it, so it can "
+                    "still be restored."));
+    QPushButton* quit = damaged.addButton(QObject::tr("Quit"), QMessageBox::RejectRole);
+    QPushButton* afresh = damaged.addButton(QObject::tr("Start This Device Afresh..."), QMessageBox::AcceptRole);
+    damaged.setDefaultButton(quit);
+    damaged.exec();
+    if (damaged.clickedButton() != afresh)
+    {
+        return nullptr;
+    }
+
+    QMessageBox confirm(QMessageBox::Warning,
+                        QObject::tr("Start This Device Afresh"),
+                        QObject::tr("This device will get a new identity."),
+                        QMessageBox::NoButton,
+                        nullptr);
+    confirm.setInformativeText(
+        QObject::tr("Wards shared with others come back once you link this device to one of your other "
+                    "devices, or someone grants it access again.\n\n"
+                    "Wards that were never shared from this device will not open, unless the damaged "
+                    "file is restored."));
+    QPushButton* cancel = confirm.addButton(QMessageBox::Cancel);
+    QPushButton* start = confirm.addButton(QObject::tr("Start Afresh"), QMessageBox::DestructiveRole);
+    confirm.setDefaultButton(cancel);
+    confirm.exec();
+    if (confirm.clickedButton() != start)
+    {
+        return nullptr;
+    }
+
+    identity = IdentityService::startOver(path, &error);
+    if (!identity)
+    {
+        QMessageBox::critical(nullptr, QObject::tr("Ward Planning"), error);
+    }
+    return identity;
+}
+
+} // namespace
+
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
@@ -66,12 +136,9 @@ int main(int argc, char *argv[])
     }
 
     // Resolved before any document exists: there is no document without an identity.
-    QString identityError;
-    std::unique_ptr<IdentityService> identity =
-        IdentityService::open(deviceData.filePath("identity.json"), &identityError);
+    std::unique_ptr<IdentityService> identity = resolveIdentity(deviceData.filePath("identity.json"));
     if (!identity)
     {
-        QMessageBox::critical(nullptr, QObject::tr("Ward Planning"), identityError);
         return 1;
     }
 

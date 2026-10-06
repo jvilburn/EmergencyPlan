@@ -12,12 +12,15 @@ private slots:
     void initTestCase();
 
     void aFirstRunCreatesKeysAndNoPerson();
+    void aFirstRunThatCannotStoreFails();
     void theKeysSurviveReopening();
     void createPersonGivesAFreshMemberId();
-    void joinPersonKeepsTheGivenMemberId();
+    void joinPersonKeepsTheGivenIdAndNameAndSurvivesAReload();
     void thePersonAndNamesSurviveAReload();
     void aPersonIsSetOnce();
-    void namesAndAMemberIdAreRequired();
+    void namesAndAMemberIdAreRequiredAndARefusalWritesNothing();
+    void aPersonThatCannotBeStoredIsNotTaken();
     void aDamagedFileIsReportedAndNotReplaced();
-    void theDefaultDeviceNameIsTheHostName();
+    void aNewerVersionsFileIsReportedAndNotReplaced();
+    void startingOverKeepsTheOldFileAndMakesANewDevice();
 };
