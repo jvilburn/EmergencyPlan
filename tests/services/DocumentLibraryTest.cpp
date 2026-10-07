@@ -158,6 +158,37 @@ void DocumentLibraryTest::addingAWardTwiceKeepsItsEntry()
     QVERIFY(fixture.settings->ward(documentId) == before);
 }
 
+void DocumentLibraryTest::aWardAddedFromAFileIsCopiedIn()
+{
+    Fixture fixture;
+    QVERIFY(fixture.folder.isValid());
+
+    // A ward's own file, found outside the library.
+    const QString documentId = DocumentLibrary::newDocumentId();
+    DocumentHeader first;
+    first.documentId = documentId;
+    first.saveCounter = 0;
+    const QByteArray bytes = DocumentFile::encode(DocumentFile::seal(wardDocument(fixture.alice, "Tanglewood"),
+                                                                     first,
+                                                                     DocumentCrypto::generateDataKey(),
+                                                                     fixture.alice)
+                                                      .value());
+    const QString found = fixture.folder.filePath("found.wardplanning");
+    QVERIFY(writeFile(found, bytes));
+
+    QString error;
+    QVERIFY2(fixture.library.addFromFile(documentId, found, &error), qPrintable(error));
+    QVERIFY(fixture.library.contains(documentId));
+    QCOMPARE(readFile(fixture.library.pathsFor(documentId).file), bytes);
+    QCOMPARE(readFile(found), bytes);
+
+    // A source that cannot be read adds nothing.
+    const QString missingId = DocumentLibrary::newDocumentId();
+    QVERIFY(!fixture.library.addFromFile(missingId, fixture.folder.filePath("missing.wardplanning"), &error));
+    QVERIFY(!error.isEmpty());
+    QVERIFY(!fixture.library.contains(missingId));
+}
+
 void DocumentLibraryTest::entriesSortByWardNameThenId()
 {
     Fixture fixture;

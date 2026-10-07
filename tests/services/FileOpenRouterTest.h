@@ -10,5 +10,6 @@ class FileOpenRouterTest : public QObject
 private slots:
     void initTestCase();
 
+    void eachFileTakesItsRoute_data();
     void eachFileTakesItsRoute();
 };

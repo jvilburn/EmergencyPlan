@@ -55,6 +55,14 @@ std::optional<Sealed> seal(const Document& document,
 /// nullopt when the file is missing or unreadable.
 std::optional<QByteArray> readAll(const QString& path);
 
+/// The header line and its newline, without the payload, for deciding what a file
+/// is; decode reads it as a version with no ciphertext. A file with no newline in
+/// its first MaxHeaderBytes gives those bytes, which decode calls malformed.
+/// nullopt when the file is missing or unreadable.
+std::optional<QByteArray> readHeader(const QString& path);
+
+constexpr qint64 MaxHeaderBytes = 1024 * 1024;
+
 /// Through QSaveFile, so a crash mid-write leaves the previous file intact.
 bool write(const QString& path, const QByteArray& bytes, QString* errorMessage);
 

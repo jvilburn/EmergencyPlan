@@ -1,5 +1,7 @@
 #include "SingleInstance.h"
 
+#include "DocumentConstants.h"
+
 #include <QCryptographicHash>
 #include <QDebug>
 #include <QDir>
@@ -77,7 +79,10 @@ bool SingleInstance::handOver(const QStringList& arguments)
     QStringList absolute = arguments;
     for (qsizetype i = 1; i < absolute.size(); ++i)
     {
-        absolute[i] = QFileInfo(absolute.at(i)).absoluteFilePath();
+        if (absolute.at(i).endsWith(DocumentConstants::FileExtension, Qt::CaseInsensitive))
+        {
+            absolute[i] = QFileInfo(absolute.at(i)).absoluteFilePath();
+        }
     }
 
     QLocalSocket socket;

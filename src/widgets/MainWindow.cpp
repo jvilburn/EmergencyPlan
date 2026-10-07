@@ -78,7 +78,8 @@ void MainWindow::handleArguments(const QStringList& arguments)
 
 void MainWindow::openPath(const QString& path)
 {
-    const FileOpenRouter::Route route = FileOpenRouter::route(path, m_library);
+    const FileOpenRouter::Route route =
+        FileOpenRouter::route(path, m_library, DocumentManager::instance()->identity());
     switch (route.action)
     {
     case FileOpenRouter::Action::OpenWard:
@@ -87,6 +88,28 @@ void MainWindow::openPath(const QString& path)
     case FileOpenRouter::Action::OpenCopy:
         openCopy(path);
         break;
+    case FileOpenRouter::Action::AddWard:
+    {
+        QString error;
+        if (!m_library.addFromFile(route.documentId, path, &error))
+        {
+            QMessageBox::warning(this, tr("Ward Planning"), error);
+            break;
+        }
+        openWard(route.documentId);
+        break;
+    }
+    case FileOpenRouter::Action::LinkDevice:
+    {
+        QMessageBox message(QMessageBox::Information,
+                            tr("Ward Planning"),
+                            tr("This ward is on another of your devices."),
+                            QMessageBox::Ok,
+                            this);
+        message.setInformativeText(tr("Link this device from that one to open it here."));
+        message.exec();
+        break;
+    }
     case FileOpenRouter::Action::RequestAccess:
     {
         QMessageBox message(QMessageBox::Information,
@@ -102,7 +125,7 @@ void MainWindow::openPath(const QString& path)
         QMessageBox::warning(this, tr("Ward Planning"), tr("%1 was written by a newer version of Ward Planning.").arg(path));
         break;
     case FileOpenRouter::Action::NotAWardPlanningFile:
-        QMessageBox::warning(this, tr("Ward Planning"), tr("%1 is not a Ward Planning document.").arg(path));
+        QMessageBox::warning(this, tr("Ward Planning"), tr("%1 is not a Ward Planning file.").arg(path));
         break;
     case FileOpenRouter::Action::Unreadable:
         QMessageBox::warning(this, tr("Ward Planning"), tr("%1 could not be read.").arg(path));

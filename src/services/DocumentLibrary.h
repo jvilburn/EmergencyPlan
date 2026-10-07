@@ -56,6 +56,11 @@ public:
     /// already in the library keeps its entry.
     void add(const QString& documentId);
 
+    /// Adds a ward from a file written for this device, found outside the library -
+    /// its entry lost with the settings, say - by copying the file in as the ward's
+    /// own. The source is left where it is.
+    bool addFromFile(const QString& documentId, const QString& sourcePath, QString* errorMessage);
+
     /// Names the ward from the document once it can - its suggested file name, the
     /// ward it holds - so the list never has to decrypt a document to show it.
     void noteDocument(const QString& documentId, const Document& document);

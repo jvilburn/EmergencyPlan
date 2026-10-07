@@ -30,7 +30,7 @@ bool sortsBefore(const DocumentLibrary::Entry& left, const DocumentLibrary::Entr
 /// Whether the file at the copy's path is still that copy.
 bool isStillThere(const AppSettings::ExportedCopy& copy)
 {
-    const std::optional<QByteArray> bytes = DocumentFile::readAll(copy.path);
+    const std::optional<QByteArray> bytes = DocumentFile::readHeader(copy.path);
     DocumentFile::Sealed sealed;
     return bytes.has_value()
         && DocumentFile::decode(bytes.value(), sealed) == DocumentFile::Read::Ok
@@ -87,6 +87,27 @@ void DocumentLibrary::add(const QString& documentId)
 
     QDir().mkpath(m_directory);
     m_settings.setWard(documentId, AppSettings::WardEntry());
+}
+
+bool DocumentLibrary::addFromFile(const QString& documentId, const QString& sourcePath, QString* errorMessage)
+{
+    const std::optional<QByteArray> bytes = DocumentFile::readAll(sourcePath);
+    if (!bytes.has_value())
+    {
+        if (errorMessage != nullptr)
+        {
+            *errorMessage = QObject::tr("%1 could not be read.").arg(sourcePath);
+        }
+        return false;
+    }
+
+    add(documentId);
+    if (!DocumentFile::write(pathsFor(documentId).file, bytes.value(), errorMessage))
+    {
+        m_settings.removeWard(documentId);
+        return false;
+    }
+    return true;
 }
 
 void DocumentLibrary::noteDocument(const QString& documentId, const Document& document)

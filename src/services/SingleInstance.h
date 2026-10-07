@@ -43,9 +43,9 @@ private:
     void onReadyRead();
     void onHandedOver();
 
-    /// Gives the running instance the arguments, each after the program's own as an
-    /// absolute path, allowing it a moment to finish starting if it has only just
-    /// taken the lock.
+    /// Gives the running instance the arguments, each .wardplanning file among them
+    /// as an absolute path, allowing it a moment to finish starting if it has only
+    /// just taken the lock.
     static bool handOver(const QStringList& arguments);
 
     /// Named for this user's app data, so two users on one machine each have

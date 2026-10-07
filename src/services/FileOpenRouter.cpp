@@ -1,14 +1,17 @@
 #include "FileOpenRouter.h"
 
+#include "DeviceIdentity.h"
 #include "DocumentFile.h"
 #include "DocumentLibrary.h"
+
+#include <algorithm>
 
 namespace FileOpenRouter
 {
 
-Route route(const QString& path, const DocumentLibrary& library)
+Route route(const QString& path, const DocumentLibrary& library, const DeviceIdentity& identity)
 {
-    const std::optional<QByteArray> bytes = DocumentFile::readAll(path);
+    const std::optional<QByteArray> bytes = DocumentFile::readHeader(path);
     if (!bytes.has_value())
     {
         return Route{Action::Unreadable, QString()};
@@ -34,7 +37,15 @@ Route route(const QString& path, const DocumentLibrary& library)
     {
         return Route{Action::OpenCopy, QString()};
     }
-    return Route{Action::RequestAccess, header.documentId};
+    if (header.entryFor(identity.fingerprint()).has_value())
+    {
+        return Route{Action::AddWard, header.documentId};
+    }
+
+    const bool thisPerson = std::any_of(header.recipients.cbegin(),
+                                        header.recipients.cend(),
+                                        [&](const RecipientEntry& entry) { return entry.member == identity.member; });
+    return Route{thisPerson ? Action::LinkDevice : Action::RequestAccess, header.documentId};
 }
 
 } // namespace FileOpenRouter

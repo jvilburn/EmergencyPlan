@@ -13,6 +13,7 @@ private slots:
     void newIdsAreDistinctAndPathsAreUnderTheDirectory();
     void pathsForAnUnknownIdAreEmpty();
     void addingAWardTwiceKeepsItsEntry();
+    void aWardAddedFromAFileIsCopiedIn();
     void entriesSortByWardNameThenId();
     void aDocumentThatNamesItsWardNamesTheEntry();
     void openingAWardMarksItToReopen();

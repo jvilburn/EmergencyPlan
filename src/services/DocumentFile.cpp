@@ -104,6 +104,16 @@ std::optional<QByteArray> readAll(const QString& path)
     return file.readAll();
 }
 
+std::optional<QByteArray> readHeader(const QString& path)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        return std::nullopt;
+    }
+    return file.readLine(MaxHeaderBytes);
+}
+
 bool write(const QString& path, const QByteArray& bytes, QString* errorMessage)
 {
     QSaveFile file(path);

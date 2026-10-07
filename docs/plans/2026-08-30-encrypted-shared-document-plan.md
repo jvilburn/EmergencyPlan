@@ -2728,19 +2728,24 @@ Commit as `feat: document library in app data`.
 > `FileOpenRouter`.**
 >
 > **Done**, with these differences from the text below:
-> - `FileOpenRouter::route(path, library)` returns the action and, for a ward, its id;
->   `MainWindow::handleArguments` acts on it, for the startup arguments and those a later
->   launch hands over alike, so `main.cpp` is unchanged.
-> - Two more rows: a header from a newer version says so, and a file that cannot be read
->   says that, rather than either being called not a Ward Planning document.
-> - Until Task 21, a ward this device does not have gets a message that someone with
->   access can grant it; Task 21 replaces the message with the offer.
+> - `FileOpenRouter::route(path, library, identity)` reads only the header line
+>   (`DocumentFile::readHeader`) and returns the action and, for a ward, its id;
+>   `MainWindow::openPath` acts on it, for the startup arguments and those a later launch
+>   hands over alike, so `main.cpp` is unchanged.
+> - The table gains rows. A ward not in the library is told apart by its recipients:
+>   written for this device, it is added to the library from the file
+>   (`DocumentLibrary::addFromFile`) and opened; written for another of this person's
+>   devices, it is linking (Task 23); otherwise it is Request access. A header from a
+>   newer version says so, and a file that cannot be read says that.
+> - Until Tasks 21 and 23, Request access and linking each show a message; those tasks
+>   replace the messages in `MainWindow::openPath`.
 > - `SingleInstance::handOver` makes each path absolute before handing it over, since
 >   the running instance has its own working directory.
 > - The by-hand check waits for Task 14, when the app builds again.
 
-**Files:** `src/services/FileOpenRouter.h/.cpp`, `src/main.cpp:38`,
-`src/services/SingleInstance.cpp`, `tests/services/FileOpenRouterTest.h/.cpp`
+**Files:** `src/services/FileOpenRouter.h/.cpp`, `src/services/DocumentFile.h/.cpp`,
+`src/services/DocumentLibrary.h/.cpp`, `src/services/SingleInstance.h/.cpp`,
+`src/widgets/MainWindow.h/.cpp`, `tests/services/FileOpenRouterTest.h/.cpp`
 
 With documents held in app data the extension governs **exported copies, recovery copies,
 and file association** rather than an everyday Open dialog. Files with any other extension,
@@ -3059,10 +3064,12 @@ Commit as `feat: share a document`.
 
 ### Task 21: Request access
 
-**Files:** `src/widgets/RequestAccessDialog.h/.cpp`, `src/services/ServerConnection.h/.cpp`
+**Files:** `src/widgets/RequestAccessDialog.h/.cpp`, `src/services/ServerConnection.h/.cpp`,
+`src/widgets/MainWindow.cpp`
 
 Someone opens an invite link, or opens an `.wardplanning` file that carries a document
-id. Offer "Request access". One click posts a request to the server carrying this
+id - `FileOpenRouter`'s `RequestAccess`, whose message in `MainWindow::openPath` this
+replaces. Offer "Request access". One click posts a request to the server carrying this
 device's public keys, the member id and display name, and the device name. A device
 that already belongs to a person of this document never offers it; that is linking.
 
@@ -3121,7 +3128,12 @@ Commit as `feat: grant document access`.
 
 **Files:** `src/widgets/LinkDeviceDialog.h/.cpp`, `src/widgets/PairingDialog.h/.cpp`,
 `src/widgets/InviteDialog.h/.cpp`, `src/widgets/AccessDialog.cpp`,
-`src/services/ServerConnection.h/.cpp`, `tests/services/LinkingTest.h/.cpp`
+`src/services/ServerConnection.h/.cpp`, `src/widgets/MainWindow.cpp`,
+`tests/services/LinkingTest.h/.cpp`
+
+A file of this person's ward written for another of their devices routes to
+`FileOpenRouter`'s `LinkDevice`; its message in `MainWindow::openPath` gives way to
+starting the link from here.
 
 **Pairing is the core's `Pairing` (Task 1.11).** This task builds the flows on it. One
 `PairingDialog` serves both roles and both uses: the initiator shows the pairing code and
