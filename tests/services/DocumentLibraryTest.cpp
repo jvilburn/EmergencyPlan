@@ -15,6 +15,7 @@
 #include <QtTest>
 
 #include <memory>
+#include <utility>
 
 using namespace SessionTestSupport;
 
@@ -58,14 +59,14 @@ QByteArray readFile(const QString& path)
     return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray();
 }
 
-DocumentHeader headerAt(const QString& path)
+DocumentFile::Sealed sealedAt(const QString& path)
 {
     DocumentFile::Sealed sealed;
     if (DocumentFile::decode(readFile(path), sealed) != DocumentFile::Read::Ok)
     {
-        return DocumentHeader();
+        return DocumentFile::Sealed();
     }
-    return sealed.header;
+    return sealed;
 }
 
 /// Adds a ward with both its files on disk and a record, as a ward that has been
@@ -116,7 +117,6 @@ void DocumentLibraryTest::newIdsAreDistinctAndPathsAreUnderTheDirectory()
     const QDir wards(fixture.folder.filePath("wards"));
     QCOMPARE(paths.file, wards.filePath(documentId + ".wardplanning"));
     QCOMPARE(paths.base, wards.filePath(documentId + ".base"));
-    QVERIFY(paths.file != paths.base);
 
     // Adding makes the directory, so the first save has somewhere to go.
     QVERIFY(wards.exists());
@@ -136,7 +136,29 @@ void DocumentLibraryTest::pathsForAnUnknownIdAreEmpty()
     QVERIFY(unknown.base.isEmpty());
 }
 
-void DocumentLibraryTest::entriesSortByWardName()
+void DocumentLibraryTest::addingAWardTwiceKeepsItsEntry()
+{
+    Fixture fixture;
+    QVERIFY(fixture.folder.isValid());
+
+    const QString documentId = DocumentLibrary::newDocumentId();
+    fixture.library.add(documentId);
+    fixture.library.noteDocument(documentId, wardDocument(fixture.alice, "Tanglewood"));
+    fixture.library.markOpened(documentId);
+    QVERIFY(fixture.library.exportCopy(documentId,
+                                       wardDocument(fixture.alice, "Tanglewood"),
+                                       fixture.folder.filePath("copy.wardplanning"),
+                                       nullptr));
+    const AppSettings::WardEntry before = fixture.settings->ward(documentId).value();
+    QVERIFY(before.lastOpened.has_value());
+    QCOMPARE(before.copies.size(), qsizetype(1));
+
+    fixture.library.add(documentId);
+
+    QVERIFY(fixture.settings->ward(documentId) == before);
+}
+
+void DocumentLibraryTest::entriesSortByWardNameThenId()
 {
     Fixture fixture;
     QVERIFY(fixture.folder.isValid());
@@ -144,12 +166,23 @@ void DocumentLibraryTest::entriesSortByWardName()
     const QString beta = DocumentLibrary::newDocumentId();
     const QString alpha = DocumentLibrary::newDocumentId();
     const QString gamma = DocumentLibrary::newDocumentId();
-    fixture.library.add(beta);
-    fixture.library.add(alpha);
-    fixture.library.add(gamma);
+    QString twinLow = DocumentLibrary::newDocumentId();
+    QString twinHigh = DocumentLibrary::newDocumentId();
+    if (twinHigh < twinLow)
+    {
+        std::swap(twinLow, twinHigh);
+    }
+
+    // Added out of order, so the order read back is the sort's.
+    for (const QString& id : {twinHigh, beta, gamma, alpha, twinLow})
+    {
+        fixture.library.add(id);
+    }
     fixture.library.noteDocument(beta, wardDocument(fixture.alice, "beta"));
     fixture.library.noteDocument(alpha, wardDocument(fixture.alice, "Alpha"));
     fixture.library.noteDocument(gamma, wardDocument(fixture.alice, "Gamma"));
+    fixture.library.noteDocument(twinHigh, wardDocument(fixture.alice, "Delta"));
+    fixture.library.noteDocument(twinLow, wardDocument(fixture.alice, "Delta"));
 
     // A ward with a base version is shared.
     DocumentRecord shared;
@@ -158,16 +191,19 @@ void DocumentLibraryTest::entriesSortByWardName()
     fixture.settings->setRecord(beta, shared);
 
     const QList<DocumentLibrary::Entry> entries = fixture.library.entries();
-    QCOMPARE(entries.size(), qsizetype(3));
+    QCOMPARE(entries.size(), qsizetype(5));
     QCOMPARE(entries.at(0).documentId, alpha);
     QCOMPARE(entries.at(0).wardName, QString("Alpha Ward"));
     QVERIFY(!entries.at(0).shared);
     QCOMPARE(entries.at(1).documentId, beta);
     QCOMPARE(entries.at(1).wardName, QString("beta Ward"));
     QVERIFY(entries.at(1).shared);
-    QCOMPARE(entries.at(2).documentId, gamma);
-    QCOMPARE(entries.at(2).wardName, QString("Gamma Ward"));
-    QVERIFY(!entries.at(2).shared);
+    QCOMPARE(entries.at(2).documentId, twinLow);
+    QCOMPARE(entries.at(3).documentId, twinHigh);
+    QCOMPARE(entries.at(3).wardName, QString("Delta Ward"));
+    QCOMPARE(entries.at(4).documentId, gamma);
+    QCOMPARE(entries.at(4).wardName, QString("Gamma Ward"));
+    QVERIFY(!entries.at(4).shared);
 }
 
 void DocumentLibraryTest::aDocumentThatNamesItsWardNamesTheEntry()
@@ -179,9 +215,13 @@ void DocumentLibraryTest::aDocumentThatNamesItsWardNamesTheEntry()
     fixture.library.add(documentId);
     QCOMPARE(fixture.library.entries().at(0).wardName, QString("Untitled"));
 
+    // The placeholder is for display only; nothing is stored until the ward is named.
+    QVERIFY(!fixture.settings->ward(documentId)->wardName.has_value());
+
     // A document that does not yet identify its ward leaves the name.
     fixture.library.noteDocument(documentId, wardDocument(fixture.alice, QString()));
     QCOMPARE(fixture.library.entries().at(0).wardName, QString("Untitled"));
+    QVERIFY(!fixture.settings->ward(documentId)->wardName.has_value());
 
     fixture.library.noteDocument(documentId, wardDocument(fixture.alice, "Tanglewood"));
     QCOMPARE(fixture.library.entries().at(0).wardName, QString("Tanglewood Ward"));
@@ -189,7 +229,7 @@ void DocumentLibraryTest::aDocumentThatNamesItsWardNamesTheEntry()
     // And it is kept.
     const std::unique_ptr<AppSettings> reread = AppSettings::open(fixture.folder.filePath("settings.json"), nullptr);
     QVERIFY(reread);
-    QCOMPARE(reread->ward(documentId)->wardName, QString("Tanglewood Ward"));
+    QCOMPARE(reread->ward(documentId)->wardName.value(), QString("Tanglewood Ward"));
 
     // A ward not in the library is not added by naming it.
     const QString stranger = DocumentLibrary::newDocumentId();
@@ -225,9 +265,15 @@ void DocumentLibraryTest::openingAWardMarksItToReopen()
     fixture.library.markOpened(DocumentLibrary::newDocumentId());
     QCOMPARE(fixture.library.lastOpenedId(), first);
 
+    // Both survive a write and a reread.
     const std::unique_ptr<AppSettings> reread = AppSettings::open(fixture.folder.filePath("settings.json"), nullptr);
     QVERIFY(reread);
     QCOMPARE(reread->lastWardId(), first);
+    QVERIFY(reread->ward(first)->lastOpened == lastOpened);
+
+    // A last ward that has left the library is not offered.
+    fixture.settings->setLastWardId(DocumentLibrary::newDocumentId());
+    QVERIFY(fixture.library.lastOpenedId().isEmpty());
 }
 
 void DocumentLibraryTest::anExportedCopyHasAFreshIdAndTheWardAsItsOrigin()
@@ -245,8 +291,8 @@ void DocumentLibraryTest::anExportedCopyHasAFreshIdAndTheWardAsItsOrigin()
     QVERIFY2(fixture.library.exportCopy(documentId, document, firstPath, &error), qPrintable(error));
     QVERIFY2(fixture.library.exportCopy(documentId, document, secondPath, &error), qPrintable(error));
 
-    const DocumentHeader first = headerAt(firstPath);
-    const DocumentHeader second = headerAt(secondPath);
+    const DocumentHeader first = sealedAt(firstPath).header;
+    const DocumentHeader second = sealedAt(secondPath).header;
     QCOMPARE(first.documentId.size(), qsizetype(DocumentHeader::DocumentIdLength));
     QVERIFY(first.documentId != documentId);
     QVERIFY(second.documentId != documentId);
@@ -254,50 +300,132 @@ void DocumentLibraryTest::anExportedCopyHasAFreshIdAndTheWardAsItsOrigin()
     QCOMPARE(first.originDocumentId, documentId);
     QCOMPARE(second.originDocumentId, documentId);
 
-    // Each opens with this device's keys, as the document it was written from.
+    // Sealed to the document's roster: Alice's device and no one else.
+    QCOMPARE(first.recipients.size(), qsizetype(1));
+    QVERIFY(first.recipients.at(0).fingerprint == fixture.alice.fingerprint());
+
+    // It opens with this device's keys, as the document it was written from.
     const std::optional<DocumentLibrary::Copy> copy = fixture.library.openCopy(firstPath, &error);
     QVERIFY2(copy.has_value(), qPrintable(error));
     QCOMPARE(copy->originDocumentId, documentId);
     QVERIFY(copy->document == document);
 
-    // Both are recorded under the ward, once each, however often written.
+    // Each is recorded under the ward with its own id.
+    QVERIFY(fixture.settings->ward(documentId)->copies
+            == (QList<AppSettings::ExportedCopy>{{firstPath, first.documentId}, {secondPath, second.documentId}}));
+
+    // Written again at the same path, the record follows the new copy.
     QVERIFY(fixture.library.exportCopy(documentId, document, firstPath, &error));
-    QCOMPARE(fixture.settings->ward(documentId)->copyPaths, (QStringList{firstPath, secondPath}));
+    const QString rewritten = sealedAt(firstPath).header.documentId;
+    QVERIFY(rewritten != first.documentId);
+    QVERIFY(fixture.settings->ward(documentId)->copies
+            == (QList<AppSettings::ExportedCopy>{{secondPath, second.documentId}, {firstPath, rewritten}}));
 
     // A copy is never in the library.
     QCOMPARE(fixture.library.entries().size(), qsizetype(1));
 }
 
-void DocumentLibraryTest::aCopyForAnotherDeviceIsRefused()
+void DocumentLibraryTest::aCopyOfAWardNotInTheLibraryIsRefused()
+{
+    Fixture fixture;
+    QVERIFY(fixture.folder.isValid());
+
+    const QString target = fixture.folder.filePath("copy.wardplanning");
+    for (const QString& documentId : {QString(), DocumentLibrary::newDocumentId()})
+    {
+        QString error;
+        QVERIFY(!fixture.library.exportCopy(documentId, wardDocument(fixture.alice, "Tanglewood"), target, &error));
+        QCOMPARE(error, QString("Only a ward on this device can be copied."));
+        QVERIFY(!QFile::exists(target));
+    }
+
+    // Nothing was written that would stop the settings opening.
+    QVERIFY(fixture.settings->wardIds().isEmpty());
+    QVERIFY(AppSettings::open(fixture.folder.filePath("settings.json"), nullptr));
+}
+
+void DocumentLibraryTest::aCopyIntoTheWardsDirectoryIsRefused()
+{
+    Fixture fixture;
+    QVERIFY(fixture.folder.isValid());
+
+    const QString documentId = addWardWithFiles(fixture);
+    const QString wardFile = fixture.library.pathsFor(documentId).file;
+    const QByteArray wardBytes = readFile(wardFile);
+    const Document document = wardDocument(fixture.alice, "Tanglewood");
+
+    for (const QString& target : {wardFile, QDir(fixture.folder.filePath("wards")).filePath("copy.wardplanning")})
+    {
+        QString error;
+        QVERIFY(!fixture.library.exportCopy(documentId, document, target, &error));
+        QCOMPARE(error, QString("A copy cannot be saved among the wards' own files. Choose another folder."));
+    }
+    QCOMPARE(readFile(wardFile), wardBytes);
+    QVERIFY(fixture.settings->ward(documentId)->copies.isEmpty());
+
+    // Anchor: the folder beside it is fine.
+    QVERIFY(fixture.library.exportCopy(documentId, document, fixture.folder.filePath("copy.wardplanning"), nullptr));
+}
+
+void DocumentLibraryTest::openCopySaysWhyItCannotOpenAFile()
 {
     Fixture fixture;
     QVERIFY(fixture.folder.isValid());
 
     const QString documentId = DocumentLibrary::newDocumentId();
     fixture.library.add(documentId);
+    const Document document = wardDocument(fixture.alice, "Tanglewood");
     const QString copyPath = fixture.folder.filePath("copy.wardplanning");
-    QVERIFY(fixture.library.exportCopy(documentId, wardDocument(fixture.alice, "Tanglewood"), copyPath, nullptr));
+    QVERIFY(fixture.library.exportCopy(documentId, document, copyPath, nullptr));
+    const DocumentFile::Sealed copy = sealedAt(copyPath);
 
     // Anchor: Alice opens it.
     QString error;
     QVERIFY2(fixture.library.openCopy(copyPath, &error).has_value(), qPrintable(error));
 
+    // Bob is not among its recipients.
     QTemporaryDir bobFolder;
     QVERIFY(bobFolder.isValid());
     const std::unique_ptr<AppSettings> bobSettings = AppSettings::open(bobFolder.filePath("settings.json"), nullptr);
     const DocumentLibrary bob(*bobSettings, bobFolder.filePath("wards"), newIdentity("Bob", "Phone"));
     QVERIFY(!bob.openCopy(copyPath, &error).has_value());
-    QVERIFY(error.contains(copyPath));
+    QCOMPARE(error, QString("This device is not among those %1 was written for.").arg(copyPath));
+
+    // One payload byte changed.
+    DocumentFile::Sealed flipped = copy;
+    flipped.ciphertext[flipped.ciphertext.size() / 2] = char(flipped.ciphertext.at(flipped.ciphertext.size() / 2) ^ 0x01);
+    const QString flippedPath = fixture.folder.filePath("flipped.wardplanning");
+    QVERIFY(writeFile(flippedPath, DocumentFile::encode(flipped)));
+    QVERIFY(!fixture.library.openCopy(flippedPath, &error).has_value());
+    QCOMPARE(error, QString("%1 is damaged, or was changed after it was written.").arg(flippedPath));
+
+    // A ward's own file: no origin.
+    DocumentHeader own;
+    own.documentId = DocumentLibrary::newDocumentId();
+    own.saveCounter = 0;
+    const QString ownPath = fixture.folder.filePath("own.wardplanning");
+    QVERIFY(writeFile(ownPath,
+                      DocumentFile::encode(
+                          DocumentFile::seal(document, own, DocumentCrypto::generateDataKey(), fixture.alice).value())));
+    QVERIFY(!fixture.library.openCopy(ownPath, &error).has_value());
+    QCOMPARE(error, QString("%1 is a ward's own file, not a copy.").arg(ownPath));
+
+    // A later format.
+    DocumentFile::Sealed later = copy;
+    later.header.formatVersion = DocumentHeader::CurrentFormatVersion + 1;
+    const QString laterPath = fixture.folder.filePath("later.wardplanning");
+    QVERIFY(writeFile(laterPath, DocumentFile::encode(later)));
+    QVERIFY(!fixture.library.openCopy(laterPath, &error).has_value());
+    QCOMPARE(error, QString("%1 was written by a newer version of Ward Planning.").arg(laterPath));
 
     const QString notAWard = fixture.folder.filePath("notes.wardplanning");
     QVERIFY(writeFile(notAWard, "shopping list"));
-    error.clear();
     QVERIFY(!fixture.library.openCopy(notAWard, &error).has_value());
-    QVERIFY(error.contains(notAWard));
+    QCOMPARE(error, QString("%1 is not a Ward Planning file.").arg(notAWard));
 
-    error.clear();
-    QVERIFY(!fixture.library.openCopy(fixture.folder.filePath("missing.wardplanning"), &error).has_value());
-    QVERIFY(!error.isEmpty());
+    const QString missing = fixture.folder.filePath("missing.wardplanning");
+    QVERIFY(!fixture.library.openCopy(missing, &error).has_value());
+    QCOMPARE(error, QString("%1 could not be read.").arg(missing));
 }
 
 void DocumentLibraryTest::forgetRemovesTheFilesRecordAndEntryAndKeepsCopies()
@@ -344,23 +472,33 @@ void DocumentLibraryTest::forgetRemovedDeletesCopiesStillAtTheirPaths()
     const QString stillThere = fixture.folder.filePath("still there.wardplanning");
     const QString movedFrom = fixture.folder.filePath("moved from.wardplanning");
     const QString movedTo = fixture.folder.filePath("moved to.wardplanning");
-    const QString replaced = fixture.folder.filePath("replaced.wardplanning");
+    const QString otherWard = fixture.folder.filePath("other ward.wardplanning");
+    const QString sameWard = fixture.folder.filePath("same ward.wardplanning");
     QVERIFY(fixture.library.exportCopy(removed, document, stillThere, nullptr));
     QVERIFY(fixture.library.exportCopy(removed, document, movedFrom, nullptr));
-    QVERIFY(fixture.library.exportCopy(removed, document, replaced, nullptr));
+    QVERIFY(fixture.library.exportCopy(removed, document, otherWard, nullptr));
+    QVERIFY(fixture.library.exportCopy(removed, document, sameWard, nullptr));
 
-    // One copy moved by the person; another path now holds a copy of a different ward.
+    // One copy moved by the person. One path now holds a copy of a different ward,
+    // another a different copy of this same ward, such as one sent by another member.
     QVERIFY(QFile::rename(movedFrom, movedTo));
-    QVERIFY(QFile::remove(replaced));
-    QVERIFY(fixture.library.exportCopy(other, document, replaced, nullptr));
-    const QByteArray otherCopy = readFile(replaced);
+    QVERIFY(QFile::remove(otherWard));
+    QVERIFY(fixture.library.exportCopy(other, document, otherWard, nullptr));
+    const QByteArray otherWardBytes = readFile(otherWard);
+    const QString sentPath = fixture.folder.filePath("sent.wardplanning");
+    QVERIFY(fixture.library.exportCopy(removed, document, sentPath, nullptr));
+    QVERIFY(QFile::remove(sameWard));
+    QVERIFY(QFile::rename(sentPath, sameWard));
+    const QByteArray sameWardBytes = readFile(sameWard);
+    QCOMPARE(sealedAt(sameWard).header.originDocumentId, removed);
 
     fixture.library.forgetRemoved(removed);
 
     QVERIFY(!QFile::exists(stillThere));
     QVERIFY(QFile::exists(movedTo));
-    QCOMPARE(headerAt(movedTo).originDocumentId, removed);
-    QCOMPARE(readFile(replaced), otherCopy);
+    QCOMPARE(sealedAt(movedTo).header.originDocumentId, removed);
+    QCOMPARE(readFile(otherWard), otherWardBytes);
+    QCOMPARE(readFile(sameWard), sameWardBytes);
 
     QVERIFY(!QFile::exists(paths.file));
     QVERIFY(!QFile::exists(paths.base));
@@ -368,5 +506,6 @@ void DocumentLibraryTest::forgetRemovedDeletesCopiesStillAtTheirPaths()
     QVERIFY(!fixture.settings->ward(removed).has_value());
 
     // The other ward keeps its entry and the copy recorded under it.
-    QCOMPARE(fixture.settings->ward(other)->copyPaths, QStringList{replaced});
+    QCOMPARE(fixture.settings->ward(other)->copies.size(), qsizetype(1));
+    QCOMPARE(fixture.settings->ward(other)->copies.at(0).path, otherWard);
 }

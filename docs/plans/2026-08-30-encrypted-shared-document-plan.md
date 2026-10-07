@@ -2599,18 +2599,24 @@ Commit as `feat: device identity service`.
 ### Task 11: The document library
 
 > **Done**, with these differences from the text below:
-> - `add(documentId)` lists a new ward as *Untitled*. `noteDocument(documentId, document)`
->   takes the place of `setWardName`: it names the entry from `suggestedFilename()` when
->   that is non-empty and differs. Task 14's `DocumentManager` calls it on each change.
+> - `add(documentId)` adds a ward with no name stored, and leaves a ward already listed
+>   as it is; `entries()` shows an unnamed ward as *Untitled*.
+>   `noteDocument(documentId, document)` takes the place of `setWardName`: it names the
+>   entry from `suggestedFilename()` when that is non-empty and differs. Task 14's
+>   `DocumentManager` calls it on each change.
 > - `markOpened` records when a ward was opened and makes it the one to reopen;
->   `lastOpenedId()` reads it back. `AppSettings` keeps `wards` and `lastWard` beside
->   `records`.
+>   `lastOpenedId()` reads it back, empty when that ward has left the library.
+>   `AppSettings` keeps `wards` and `lastWard` beside `records`.
 > - `entries()` carries `shared` (the ward's record has a base version), for the dialog.
 >   The library has no `documentIds()`; `entries()` serves.
-> - `exportCopy` takes the ward's id. `openCopy` returns the document with its origin, or
->   a message saying why this device cannot open it.
+> - `exportCopy` takes the ward's id, and refuses a ward not in the library and a target
+>   in the library's own directory. Each copy is recorded as its path and its own
+>   document id.
+> - `openCopy` returns the document with its origin, or a message saying why: unreadable,
+>   a newer format, not a Ward Planning file, a ward's own file rather than a copy, not
+>   written for this device, or damaged.
 > - `forget` leaves exported copies for the person to keep. `forgetRemoved` deletes a
->   recorded copy only when the file at that path still names the ward as its origin.
+>   recorded copy only when the file at that path still carries that copy's id.
 > - The File menu reads New Ward, Open Ward..., Save Now, Save a Copy..., Open a Copy...,
 >   and Show in Folder. `MainWindow::openFile` and the path handling in
 >   `handleArguments` are gone; Task 12 routes paths.

@@ -42,7 +42,6 @@
 #include <QProgressBar>
 #include <QStandardPaths>
 #include <QDesktopServices>
-#include <QFileInfo>
 #include <QUrl>
 
 MainWindow::MainWindow(AppSettings& settings, DocumentLibrary& library, QWidget* parent)
@@ -508,28 +507,9 @@ void MainWindow::onDocumentChanged(const DocumentChange& change)
 
 void MainWindow::updateWindowTitle()
 {
-    QString title = "Ward Planning";
-
-    QString filePath = DocumentManager::instance()->filePath();
-    if (!filePath.isEmpty())
-    {
-        QFileInfo fileInfo(filePath);
-        title = fileInfo.completeBaseName() + " - " + title;
-    }
-    else
-    {
-        QString suggested = DocumentManager::instance()->document().suggestedFilename();
-        if (!suggested.isEmpty())
-        {
-            title = suggested + " - " + title;
-        }
-        else
-        {
-            title = "Untitled - " + title;
-        }
-    }
-
-    setWindowTitle(title);
+    // The ward's own name, as the ward list shows it; its file is named by id.
+    const QString suggested = DocumentManager::instance()->document().suggestedFilename();
+    setWindowTitle(tr("%1 - Ward Planning").arg(suggested.isEmpty() ? tr("Untitled") : suggested));
 }
 
 void MainWindow::updateUndoRedoActions()
@@ -572,7 +552,7 @@ void MainWindow::onGeocodingFinished()
 
 void MainWindow::onAutoSaveFailed(const QString& errorMessage)
 {
-    statusBar()->showMessage(tr("Auto-save failed: %1. Use Save As to save manually").arg(errorMessage));
+    statusBar()->showMessage(tr("Auto-save failed: %1").arg(errorMessage));
 }
 
 void MainWindow::onFilePathChanged()

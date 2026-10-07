@@ -36,15 +36,26 @@ public:
 
     // --- The document library's wards ---
 
+    /// A copy written from a ward: where it was written, and its own document id, so
+    /// the file at that path can be told from anything else put there since.
+    struct ExportedCopy
+    {
+        QString path;
+        QString documentId;
+
+        bool operator==(const ExportedCopy& other) const { return path == other.path && documentId == other.documentId; }
+        bool operator!=(const ExportedCopy& other) const { return !(*this == other); }
+    };
+
     /// One ward in this device's library: what the ward list shows of it, and the
     /// copies written from it. Kept beside the ward's record with a lifetime of its
-    /// own, so a removal that deletes the record still leaves the copy paths for the
+    /// own, so a removal that deletes the record still leaves the copies for the
     /// library to delete.
     struct WardEntry
     {
-        QString wardName;
+        std::optional<QString> wardName;    ///< absent until the document names its ward
         std::optional<QDateTime> lastOpened;
-        QStringList copyPaths;
+        QList<ExportedCopy> copies;
 
         bool operator==(const WardEntry& other) const;
         bool operator!=(const WardEntry& other) const { return !(*this == other); }

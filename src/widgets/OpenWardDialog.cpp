@@ -3,6 +3,7 @@
 #include <QDialogButtonBox>
 #include <QLabel>
 #include <QListWidget>
+#include <QLocale>
 #include <QPushButton>
 #include <QVBoxLayout>
 
@@ -30,6 +31,7 @@ OpenWardDialog::OpenWardDialog(const QList<DocumentLibrary::Entry>& entries, QWi
     if (entries.isEmpty())
     {
         layout->addWidget(new QLabel(tr("There are no wards on this device yet."), this));
+        m_list->hide();
     }
     layout->addWidget(m_list);
 
@@ -46,17 +48,17 @@ OpenWardDialog::OpenWardDialog(const QList<DocumentLibrary::Entry>& entries, QWi
 
 void OpenWardDialog::onSelectionChanged()
 {
-    m_openButton->setEnabled(m_list->currentItem() != nullptr);
+    m_openButton->setEnabled(!m_list->selectedItems().isEmpty());
 }
 
 void OpenWardDialog::onAccepted()
 {
-    const QListWidgetItem* item = m_list->currentItem();
-    if (item == nullptr)
+    const QList<QListWidgetItem*> selected = m_list->selectedItems();
+    if (selected.isEmpty())
     {
         return;
     }
 
-    m_selected = item->data(Qt::UserRole).toString();
+    m_selected = selected.first()->data(Qt::UserRole).toString();
     accept();
 }

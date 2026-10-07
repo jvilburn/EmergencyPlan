@@ -220,9 +220,11 @@ void AppSettingsTest::wardEntriesReadBackThroughASecondInstance()
     AppSettings::WardEntry openedWard;
     openedWard.wardName = "Tanglewood Ward";
     openedWard.lastOpened = QDateTime(QDate(2026, 10, 6), QTime(9, 30, 15, 250), QTimeZone::UTC);
-    openedWard.copyPaths = {"C:/Users/someone/Desktop/Tanglewood.wardplanning", "E:/Tanglewood.wardplanning"};
-    AppSettings::WardEntry freshWard;
-    freshWard.wardName = "Untitled";
+    openedWard.copies = {{"C:/Users/someone/Desktop/Tanglewood.wardplanning", ChainTestSupport::newDocumentId()},
+                         {"E:/Tanglewood.wardplanning", ChainTestSupport::newDocumentId()}};
+
+    // A ward not yet named, never opened, with no copies.
+    const AppSettings::WardEntry freshWard;
     {
         std::unique_ptr<AppSettings> settings = openAt(path);
         settings->setWard(opened, openedWard);
@@ -234,6 +236,7 @@ void AppSettingsTest::wardEntriesReadBackThroughASecondInstance()
     QVERIFY(reread);
     QVERIFY(reread->ward(opened) == openedWard);
     QVERIFY(reread->ward(fresh) == freshWard);
+    QVERIFY(!reread->ward(fresh)->wardName.has_value());
     QVERIFY(!reread->ward(fresh)->lastOpened.has_value());
     QCOMPARE(reread->lastWardId(), opened);
     QStringList ids = reread->wardIds();
@@ -310,7 +313,6 @@ void AppSettingsTest::aMalformedFileIsReportedAndLeftAlone_data()
 
     QTest::newRow("ward not an object") << QString(R"({"records": {}, "wards": {"%1": 7}})").arg(id).toUtf8();
     QTest::newRow("empty ward id") << QByteArray(R"({"records": {}, "wards": {"": {"wardName": "Tanglewood Ward"}}})");
-    QTest::newRow("no ward name") << QString(R"({"records": {}, "wards": {"%1": {}}})").arg(id).toUtf8();
     QTest::newRow("empty ward name") << QString(R"({"records": {}, "wards": {"%1": {"wardName": ""}}})").arg(id).toUtf8();
     QTest::newRow("unknown ward key")
         << QString(R"({"records": {}, "wards": {"%1": {"wardName": "Tanglewood Ward", "colour": "blue"}}})").arg(id).toUtf8();
@@ -318,21 +320,24 @@ void AppSettingsTest::aMalformedFileIsReportedAndLeftAlone_data()
         << QString(R"({"records": {}, "wards": {"%1": {"wardName": "Tanglewood Ward", "lastOpened": "yesterday"}}})")
                .arg(id)
                .toUtf8();
-    QTest::newRow("empty copy paths")
-        << QString(R"({"records": {}, "wards": {"%1": {"wardName": "Tanglewood Ward", "copyPaths": []}}})").arg(id).toUtf8();
+    QTest::newRow("empty copies")
+        << QString(R"({"records": {}, "wards": {"%1": {"wardName": "Tanglewood Ward", "copies": []}}})").arg(id).toUtf8();
+    QTest::newRow("a copy without its id")
+        << QString(R"({"records": {}, "wards": {"%1": {"copies": [{"path": "E:/Tanglewood.wardplanning"}]}}})")
+               .arg(id)
+               .toUtf8();
+    QTest::newRow("a copy with an empty path")
+        << QString(R"({"records": {}, "wards": {"%1": {"copies": [{"path": "", "documentId": "%1"}]}}})").arg(id).toUtf8();
     QTest::newRow("empty last ward")
         << QString(R"({"records": {}, "wards": {"%1": {"wardName": "Tanglewood Ward"}}, "lastWard": ""})").arg(id).toUtf8();
-    QTest::newRow("last ward not in the library")
-        << QString(R"({"records": {}, "wards": {"%1": {"wardName": "Tanglewood Ward"}}, "lastWard": "%2"})")
-               .arg(id, ChainTestSupport::newDocumentId())
-               .toUtf8();
 
     // Anchor: the same shapes, well formed, read.
     QTest::newRow("well formed")
         << QString(R"({"records": {"%1": {"baseVersion": 3, "baseHash": "%2", %3, "pendingChanges": []}},)"
                    R"( "wards": {"%1": {"wardName": "Tanglewood Ward", "lastOpened": "2026-10-06T09:30:15.250Z",)"
-                   R"( "copyPaths": ["E:/Tanglewood.wardplanning"]}}, "lastWard": "%1"})")
-               .arg(id, hash, mark)
+                   R"( "copies": [{"path": "E:/Tanglewood.wardplanning", "documentId": "%4"}]}, "%4": {}},)"
+                   R"( "lastWard": "%1"})")
+               .arg(id, hash, mark, ChainTestSupport::newDocumentId())
                .toUtf8();
 }
 

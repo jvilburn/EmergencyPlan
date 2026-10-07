@@ -22,7 +22,9 @@ const QLatin1String KeyRecords("records");
 const QLatin1String KeyWards("wards");
 const QLatin1String KeyWardName("wardName");
 const QLatin1String KeyLastOpened("lastOpened");
-const QLatin1String KeyCopyPaths("copyPaths");
+const QLatin1String KeyCopies("copies");
+const QLatin1String KeyCopyPath("path");
+const QLatin1String KeyCopyDocumentId("documentId");
 const QLatin1String KeyLastWard("lastWard");
 const QLatin1String KeyDeveloperExport("developerExport");
 const QLatin1String KeyServerAddress("serverAddress");
@@ -100,7 +102,7 @@ bool AppSettings::WardEntry::operator==(const WardEntry& other) const
 {
     return wardName == other.wardName
         && lastOpened == other.lastOpened
-        && copyPaths == other.copyPaths;
+        && copies == other.copies;
 }
 
 std::optional<AppSettings::WardEntry> AppSettings::ward(const QString& documentId) const
@@ -230,10 +232,19 @@ bool AppSettings::read(const QByteArray& bytes)
 
         const QJsonObject wardJson = entry.value().toObject();
         WardEntry ward;
-        if (!StrictJson::hasOnlyKeys(wardJson, {KeyWardName, KeyLastOpened, KeyCopyPaths})
-            || !StrictJson::readNonEmptyString(wardJson, KeyWardName, ward.wardName))
+        if (!StrictJson::hasOnlyKeys(wardJson, {KeyWardName, KeyLastOpened, KeyCopies}))
         {
             return false;
+        }
+
+        if (wardJson.contains(KeyWardName))
+        {
+            QString wardName;
+            if (!StrictJson::readNonEmptyString(wardJson, KeyWardName, wardName))
+            {
+                return false;
+            }
+            ward.wardName = wardName;
         }
 
         if (wardJson.contains(KeyLastOpened))
@@ -247,19 +258,27 @@ bool AppSettings::read(const QByteArray& bytes)
         }
 
         // Written only when there are some, so present means not empty.
-        if (wardJson.contains(KeyCopyPaths)
-            && (!StrictJson::readStringArray(wardJson, KeyCopyPaths, ward.copyPaths) || ward.copyPaths.isEmpty()))
+        if (wardJson.contains(KeyCopies))
         {
-            return false;
+            QList<QJsonObject> copies;
+            if (!StrictJson::readObjectArray(wardJson, KeyCopies, copies) || copies.isEmpty())
+            {
+                return false;
+            }
+            for (const QJsonObject& copyJson : copies)
+            {
+                ExportedCopy copy;
+                if (!StrictJson::hasOnlyKeys(copyJson, {KeyCopyPath, KeyCopyDocumentId})
+                    || !StrictJson::readNonEmptyString(copyJson, KeyCopyPath, copy.path)
+                    || !StrictJson::readNonEmptyString(copyJson, KeyCopyDocumentId, copy.documentId))
+                {
+                    return false;
+                }
+                ward.copies.append(copy);
+            }
         }
 
         m_wards.insert(entry.key(), ward);
-    }
-
-    // The last ward is one in the library.
-    if (!m_lastWardId.isEmpty() && !m_wards.contains(m_lastWardId))
-    {
-        return false;
     }
 
     return true;
@@ -277,14 +296,25 @@ QByteArray AppSettings::write() const
     for (auto entry = m_wards.constBegin(); entry != m_wards.constEnd(); ++entry)
     {
         QJsonObject wardJson;
-        wardJson[KeyWardName] = entry.value().wardName;
+        if (entry.value().wardName.has_value())
+        {
+            wardJson[KeyWardName] = entry.value().wardName.value();
+        }
         if (entry.value().lastOpened.has_value())
         {
             wardJson[KeyLastOpened] = StrictJson::writeTime(entry.value().lastOpened.value());
         }
-        if (!entry.value().copyPaths.isEmpty())
+        if (!entry.value().copies.isEmpty())
         {
-            wardJson[KeyCopyPaths] = QJsonArray::fromStringList(entry.value().copyPaths);
+            QJsonArray copies;
+            for (const ExportedCopy& copy : entry.value().copies)
+            {
+                QJsonObject copyJson;
+                copyJson[KeyCopyPath] = copy.path;
+                copyJson[KeyCopyDocumentId] = copy.documentId;
+                copies.append(copyJson);
+            }
+            wardJson[KeyCopies] = copies;
         }
         wards[entry.key()] = wardJson;
     }

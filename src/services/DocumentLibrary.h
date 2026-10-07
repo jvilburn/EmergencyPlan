@@ -23,7 +23,7 @@ public:
     struct Entry
     {
         QString documentId;
-        QString wardName;
+        QString wardName;           ///< Untitled until the document names its ward
         std::optional<QDateTime> lastOpened;
         bool shared = false;
     };
@@ -33,7 +33,7 @@ public:
     struct Copy
     {
         Document document;
-        QString originDocumentId;   ///< the ward it was written from; empty for a ward's own file
+        QString originDocumentId;   ///< the ward it was written from
     };
 
     DocumentLibrary(AppSettings& settings, const QString& directory, const DeviceIdentity& identity);
@@ -50,7 +50,8 @@ public:
     /// 128 random bits, as hex.
     static QString newDocumentId();
 
-    /// Adds a ward under the name the list shows until the document names itself.
+    /// Adds a ward, listed as Untitled until the document names itself. A ward
+    /// already in the library keeps its entry.
     void add(const QString& documentId);
 
     /// Names the ward from the document once it can - its suggested file name, the
@@ -60,8 +61,8 @@ public:
     /// Marks the ward opened now, and as the one to reopen at startup.
     void markOpened(const QString& documentId);
 
-    /// The ward to reopen at startup; empty for none.
-    QString lastOpenedId() const { return m_settings.lastWardId(); }
+    /// The ward to reopen at startup; empty for none, or when it has left the library.
+    QString lastOpenedId() const;
 
     /// An unshared ward the person deletes: its files, record, and entry. Copies
     /// written from it are theirs to keep.
@@ -69,24 +70,25 @@ public:
 
     /// After this device was removed from a ward, or left it: every recorded copy
     /// still at its path goes too, then the files, record, and entry. A file now at a
-    /// copy's path that is not that copy is left alone.
+    /// copy's path that is not that copy, by its document id, is left alone.
     void forgetRemoved(const QString& documentId);
 
     /// Writes a copy to targetPath under a fresh document id and a fresh data key,
     /// with documentId as its origin, sealed to the same roster - a fresh key, so no
     /// one who once held the ward's can read it, and a fresh id, so it can never
-    /// publish itself into the ward. Its path is recorded under the ward.
+    /// publish itself into the ward. Its path and id are recorded under the ward.
+    /// Refused for a ward not in the library, and for a target in the library's own
+    /// directory, where it could replace a ward's file.
     bool exportCopy(const QString& documentId,
                     const Document& document,
                     const QString& targetPath,
                     QString* errorMessage);
 
-    /// Opens a copy read-only; nullopt when this device cannot open it.
+    /// Opens a copy read-only; nullopt, with the reason, when the file is not a copy
+    /// this device can open. A ward's own file is not a copy.
     std::optional<Copy> openCopy(const QString& sourcePath, QString* errorMessage) const;
 
 private:
-    AppSettings::WardEntry entryOf(const QString& documentId) const;
-
     AppSettings& m_settings;
     QString m_directory;
     DeviceIdentity m_identity;
