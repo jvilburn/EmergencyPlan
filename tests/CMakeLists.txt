@@ -29,6 +29,7 @@ set(TEST_SOURCES
     services/FakeServer.cpp
     services/FakeServerTest.cpp
     services/FileOpenRouterTest.cpp
+    services/HttpServerApiTest.cpp
     services/FormatVectorsTest.cpp
     services/IdentityFileTest.cpp
     services/IdentityServiceTest.cpp

@@ -1,4 +1,5 @@
 #include "AccessControlTest.h"
+#include "AppSettings.h"
 #include "AccessRosterTest.h"
 #include "AppSettingsTest.h"
 #include "CryptoLinkTest.h"
@@ -14,6 +15,8 @@
 #include "FakeServer.h"
 #include "FakeServerTest.h"
 #include "FileOpenRouterTest.h"
+#include "HttpServerApi.h"
+#include "HttpServerApiTest.h"
 #include "FormatVectorsTest.h"
 #include "IdentityFileTest.h"
 #include "IdentityServiceTest.h"
@@ -29,6 +32,7 @@
 
 #include <QApplication>
 #include <QStandardPaths>
+#include <QTemporaryDir>
 #include <QtTest>
 
 #include <memory>
@@ -40,6 +44,11 @@ std::unique_ptr<ServerContract::ServerApi> makeFakeServer()
 {
     return std::make_unique<FakeServer>();
 }
+
+/// The real server's address for the conformance run, from the environment;
+/// locally, the companion server under `wrangler dev` with its development clock
+/// enabled. Unset, the run is skipped.
+const char* const ServerAddressVariable = "WARD_PLANNING_SERVER_URL";
 
 template<typename Suite, typename... Args>
 int run(int argc, char** argv, Args&&... args)
@@ -85,6 +94,22 @@ int main(int argc, char** argv)
     status |= run<AccessControlTest>(argc, argv);
     status |= run<FakeServerTest>(argc, argv);
     status |= run<ServerConformanceTest>(argc, argv, makeFakeServer);
+
+    if (qEnvironmentVariableIsSet(ServerAddressVariable))
+    {
+        QTemporaryDir folder;
+        std::unique_ptr<AppSettings> settings = AppSettings::open(folder.filePath("settings.json"), nullptr);
+        settings->setServerAddressOverride(qEnvironmentVariable(ServerAddressVariable));
+        AppSettings& real = *settings;
+        status |= run<ServerConformanceTest>(argc, argv, [&real]()
+        {
+            return std::unique_ptr<ServerContract::ServerApi>(std::make_unique<HttpServerApi>(real, nullptr));
+        });
+    }
+    else
+    {
+        qInfo("%s is not set: the conformance run against a real server is skipped.", ServerAddressVariable);
+    }
     status |= run<ReconcileTest>(argc, argv);
     status |= run<ResponseMergeTest>(argc, argv);
     status |= run<PairingTest>(argc, argv);
@@ -97,6 +122,7 @@ int main(int argc, char** argv)
     status |= run<IdentityServiceTest>(argc, argv);
     status |= run<DocumentLibraryTest>(argc, argv);
     status |= run<FileOpenRouterTest>(argc, argv);
+    status |= run<HttpServerApiTest>(argc, argv);
 
     return status;
 }

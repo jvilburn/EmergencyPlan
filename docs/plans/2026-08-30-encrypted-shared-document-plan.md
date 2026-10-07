@@ -2778,6 +2778,22 @@ Commit as `feat: route documents opened by path through their header`.
 
 ### Task 13: HTTP server
 
+> **Done**, with these differences from the text below:
+> - The design left the wire format to this plan, and this task sets it: `HttpWire.h`
+>   holds the route, request body, and answer of every call, the encodings, the
+>   `Authorization: Bearer` and `X-Request-Signature` headers, and the error names. It is
+>   the companion server's reference for the wire.
+> - The codecs are `HttpWire`, apart from the transport, so the tests pin each request's
+>   exact JSON and read each answer from literal JSON rather than round-tripping through
+>   two directions of this build's own code.
+> - An error answer names its `ServerError`; the status decides only when it names none
+>   this build knows. A 5xx, an answer in a shape this build cannot read, and no answer
+>   at all are each `Unreachable`.
+> - A local one-shot HTTP responder in the test checks the method, path, token, signature,
+>   and body that reach the wire.
+> - The conformance run reads `WARD_PLANNING_SERVER_URL` in `tests/TestMain.cpp`, so
+>   `ServerConformanceTest.cpp` is unchanged.
+
 **Files:** `src/services/HttpServerApi.h/.cpp`, `tests/services/HttpServerApiTest.h/.cpp`,
 `tests/services/ServerConformanceTest.cpp`, `CMakeLists.txt`
 
