@@ -4,6 +4,7 @@
 #include <QDebug>
 #include <QDir>
 #include <QElapsedTimer>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QStandardPaths>
@@ -72,13 +73,20 @@ bool SingleInstance::handOver(const QStringList& arguments)
     QElapsedTimer elapsed;
     elapsed.start();
 
+    // Paths resolved here: the running instance has its own working directory.
+    QStringList absolute = arguments;
+    for (qsizetype i = 1; i < absolute.size(); ++i)
+    {
+        absolute[i] = QFileInfo(absolute.at(i)).absoluteFilePath();
+    }
+
     QLocalSocket socket;
     while (elapsed.elapsed() < HandOverMilliseconds)
     {
         socket.connectToServer(socketName());
         if (socket.waitForConnected(ConnectAttemptMilliseconds))
         {
-            socket.write(QJsonDocument(QJsonArray::fromStringList(arguments)).toJson(QJsonDocument::Compact));
+            socket.write(QJsonDocument(QJsonArray::fromStringList(absolute)).toJson(QJsonDocument::Compact));
             const bool written = socket.waitForBytesWritten(HandOverMilliseconds);
             socket.disconnectFromServer();
             return written;

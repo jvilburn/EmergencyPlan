@@ -63,7 +63,7 @@ QList<DocumentLibrary::Entry> DocumentLibrary::entries() const
 
 DocumentPaths DocumentLibrary::pathsFor(const QString& documentId) const
 {
-    if (!m_settings.ward(documentId).has_value())
+    if (!contains(documentId))
     {
         return DocumentPaths();
     }

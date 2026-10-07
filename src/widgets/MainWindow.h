@@ -34,7 +34,8 @@ public:
     MainWindow(AppSettings& settings, DocumentLibrary& library, QWidget* parent);
     ~MainWindow();
 
-    /// The arguments a later launch handed to this one.
+    /// This launch's arguments, or those a later launch handed to this one: each
+    /// .wardplanning file among them is opened by FileOpenRouter's route.
     void handleArguments(const QStringList& arguments);
 
 private slots:
@@ -87,6 +88,9 @@ private:
     void setupConnections();
     void initializeDefaultLocation();
     void openEditPanel(const FamilyId& familyId);
+    void openPath(const QString& path);
+    void openWard(const QString& documentId);
+    void openCopy(const QString& sourcePath);
     void closeEditPanelInternal();
 
     /// Asks where to save the emergency report and writes it. Returns the saved

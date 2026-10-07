@@ -2726,6 +2726,18 @@ Commit as `feat: document library in app data`.
 > in `1a222a2`. `src/services/DocumentConstants.h` holds `FileExtension` and `FileGlob`, and
 > the installer retires the 1.0.x `.emergencyplan` association. **What remains here is
 > `FileOpenRouter`.**
+>
+> **Done**, with these differences from the text below:
+> - `FileOpenRouter::route(path, library)` returns the action and, for a ward, its id;
+>   `MainWindow::handleArguments` acts on it, for the startup arguments and those a later
+>   launch hands over alike, so `main.cpp` is unchanged.
+> - Two more rows: a header from a newer version says so, and a file that cannot be read
+>   says that, rather than either being called not a Ward Planning document.
+> - Until Task 21, a ward this device does not have gets a message that someone with
+>   access can grant it; Task 21 replaces the message with the offer.
+> - `SingleInstance::handOver` makes each path absolute before handing it over, since
+>   the running instance has its own working directory.
+> - The by-hand check waits for Task 14, when the app builds again.
 
 **Files:** `src/services/FileOpenRouter.h/.cpp`, `src/main.cpp:38`,
 `src/services/SingleInstance.cpp`, `tests/services/FileOpenRouterTest.h/.cpp`

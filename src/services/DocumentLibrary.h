@@ -41,6 +41,8 @@ public:
     /// Sorted by ward name, then id, so two wards sharing a name keep their order.
     QList<Entry> entries() const;
 
+    bool contains(const QString& documentId) const { return m_settings.ward(documentId).has_value(); }
+
     /// Where the wards' files are, for Show in Folder.
     const QString& directory() const { return m_directory; }
 

@@ -28,6 +28,7 @@ set(TEST_SOURCES
     services/DocumentSessionTest.cpp
     services/FakeServer.cpp
     services/FakeServerTest.cpp
+    services/FileOpenRouterTest.cpp
     services/FormatVectorsTest.cpp
     services/IdentityFileTest.cpp
     services/IdentityServiceTest.cpp

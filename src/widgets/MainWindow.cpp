@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 #include "AppSettings.h"
 #include "DocumentLibrary.h"
+#include "FileOpenRouter.h"
 #include "OpenWardDialog.h"
 #include "EmergencyBanner.h"
 #include "WardListView.h"
@@ -60,12 +61,53 @@ MainWindow::MainWindow(AppSettings& settings, DocumentLibrary& library, QWidget*
 
 void MainWindow::handleArguments(const QStringList& arguments)
 {
-    Q_UNUSED(arguments);
-
-    // A later launch handed its arguments here: bring this window forward.
+    // Bring this window forward, for a later launch that handed its arguments here.
     setWindowState(windowState() & ~Qt::WindowMinimized);
     raise();
     activateWindow();
+
+    // Files of any other extension are other applications'.
+    for (qsizetype i = 1; i < arguments.size(); ++i)
+    {
+        if (arguments.at(i).endsWith(DocumentConstants::FileExtension, Qt::CaseInsensitive))
+        {
+            openPath(arguments.at(i));
+        }
+    }
+}
+
+void MainWindow::openPath(const QString& path)
+{
+    const FileOpenRouter::Route route = FileOpenRouter::route(path, m_library);
+    switch (route.action)
+    {
+    case FileOpenRouter::Action::OpenWard:
+        openWard(route.documentId);
+        break;
+    case FileOpenRouter::Action::OpenCopy:
+        openCopy(path);
+        break;
+    case FileOpenRouter::Action::RequestAccess:
+    {
+        QMessageBox message(QMessageBox::Information,
+                            tr("Ward Planning"),
+                            tr("This ward is not on this device yet."),
+                            QMessageBox::Ok,
+                            this);
+        message.setInformativeText(tr("Someone who already has access to it can grant this device access."));
+        message.exec();
+        break;
+    }
+    case FileOpenRouter::Action::NeedsNewerVersion:
+        QMessageBox::warning(this, tr("Ward Planning"), tr("%1 was written by a newer version of Ward Planning.").arg(path));
+        break;
+    case FileOpenRouter::Action::NotAWardPlanningFile:
+        QMessageBox::warning(this, tr("Ward Planning"), tr("%1 is not a Ward Planning document.").arg(path));
+        break;
+    case FileOpenRouter::Action::Unreadable:
+        QMessageBox::warning(this, tr("Ward Planning"), tr("%1 could not be read.").arg(path));
+        break;
+    }
 }
 
 MainWindow::~MainWindow()
@@ -266,12 +308,15 @@ void MainWindow::onNewWard()
 void MainWindow::onOpenWard()
 {
     OpenWardDialog dialog(m_library.entries(), this);
-    if (dialog.exec() != QDialog::Accepted || dialog.selectedDocumentId().isEmpty())
+    if (dialog.exec() == QDialog::Accepted && !dialog.selectedDocumentId().isEmpty())
     {
-        return;
+        openWard(dialog.selectedDocumentId());
     }
+}
 
-    switch (DocumentManager::instance()->openDocument(dialog.selectedDocumentId()))
+void MainWindow::openWard(const QString& documentId)
+{
+    switch (DocumentManager::instance()->openDocument(documentId))
     {
     case LoadFailure::None:
         statusBar()->showMessage(tr("Ward opened"), 3000);
@@ -326,11 +371,14 @@ void MainWindow::onOpenCopy()
         tr("Open a Copy"),
         QString(),
         tr("Ward Planning Files (%1)").arg(DocumentConstants::FileGlob));
-    if (sourcePath.isEmpty())
+    if (!sourcePath.isEmpty())
     {
-        return;
+        openCopy(sourcePath);
     }
+}
 
+void MainWindow::openCopy(const QString& sourcePath)
+{
     QString error;
     const std::optional<DocumentLibrary::Copy> copy = m_library.openCopy(sourcePath, &error);
     if (!copy.has_value())

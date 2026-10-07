@@ -194,6 +194,7 @@ set(SERVICE_SOURCES
     src/services/IdentityFile.cpp
     src/services/IdentityService.cpp
     src/services/DocumentLibrary.cpp
+    src/services/FileOpenRouter.cpp
     # src/services/StatisticsService.cpp
     # src/services/ResourceService.cpp
     # src/services/SearchService.cpp
@@ -245,6 +246,7 @@ set(SERVICE_HEADERS
     src/services/IdentityFile.h
     src/services/IdentityService.h
     src/services/DocumentLibrary.h
+    src/services/FileOpenRouter.h
     # src/services/StatisticsService.h
     # src/services/ResourceService.h
     # src/services/SearchService.h
