@@ -12,7 +12,6 @@ class CommandHistory : public QObject
     Q_OBJECT
     Q_PROPERTY(bool canUndo READ canUndo NOTIFY canUndoChanged)
     Q_PROPERTY(bool canRedo READ canRedo NOTIFY canRedoChanged)
-    Q_PROPERTY(bool isDirty READ isDirty NOTIFY dirtyChanged)
 
 public:
     explicit CommandHistory(QObject* parent);
@@ -32,10 +31,6 @@ public:
     QString undoDescription() const;
     QString redoDescription() const;
 
-    // Dirty state tracking
-    void markSaved();
-    bool isDirty() const;
-
     // Clear all history
     void clear();
 
@@ -46,12 +41,10 @@ public:
 signals:
     void canUndoChanged();
     void canRedoChanged();
-    void dirtyChanged();
 
 private:
-    void emitStateChanges(bool couldUndo, bool couldRedo, bool wasDirty);
+    void emitStateChanges(bool couldUndo, bool couldRedo);
 
     std::vector<CommandPtr> m_undoStack;
     std::vector<CommandPtr> m_redoStack;
-    size_t m_savedPosition = 0;
 };

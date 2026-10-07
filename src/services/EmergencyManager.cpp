@@ -2,6 +2,8 @@
 #include "DocumentManager.h"
 #include "DocumentChange.h"
 
+#include <algorithm>
+
 EmergencyManager* EmergencyManager::s_instance = nullptr;
 
 EmergencyManager::EmergencyManager(QObject* parent)
@@ -10,6 +12,7 @@ EmergencyManager::EmergencyManager(QObject* parent)
     Q_ASSERT(!s_instance);
     s_instance = this;
 
+    m_wasActive = current().has_value();
     connect(DocumentManager::instance(), &DocumentManager::documentChanged,
             this, &EmergencyManager::onDocumentChanged);
 }
@@ -21,13 +24,29 @@ EmergencyManager* EmergencyManager::instance()
 
 void EmergencyManager::onDocumentChanged(const DocumentChange& change)
 {
-    if (change.action == ChangeAction::Full)
-    {
-        syncFromDocument();
-    }
-    else if (m_response.has_value())
+    const bool active = current().has_value();
+    if (active)
     {
         syncFamilies();
+    }
+
+    if (active != m_wasActive)
+    {
+        m_wasActive = active;
+        if (active)
+        {
+            emit emergencyStarted();
+        }
+        else
+        {
+            emit emergencyEnded();
+        }
+        emit responseDataChanged();
+    }
+    else if (active && change.action == ChangeAction::Full)
+    {
+        // A replaced document may carry the other side's records.
+        emit responseDataChanged();
     }
 }
 
@@ -37,44 +56,56 @@ void EmergencyManager::onDocumentChanged(const DocumentChange& change)
 
 bool EmergencyManager::isActive() const
 {
-    return m_response.has_value();
+    return current().has_value();
 }
 
 void EmergencyManager::startEmergency(const QString& name)
 {
-    if (m_response.has_value())
+    if (current().has_value())
     {
         return;
     }
 
-    m_response = EmergencyResponse::create(name);
-
-    // Create FamilyResponseRecord for each family in the document
     const QHash<FamilyId, Family>& families = DocumentManager::instance()->document().families();
-    for (auto it = families.constBegin(); it != families.constEnd(); ++it)
+    const bool started = DocumentManager::instance()->editResponse([&](std::optional<EmergencyResponse>& response)
     {
-        const Family& family = it.value();
-        FamilyResponseRecord record = FamilyResponseRecord::create(
-            family.id(),
-            family.displayName(),
-            family.address().full());
-        m_response->addFamilyRecord(record);
+        response = EmergencyResponse::create(name);
+
+        // Create FamilyResponseRecord for each family in the document
+        for (auto it = families.constBegin(); it != families.constEnd(); ++it)
+        {
+            const Family& family = it.value();
+            response->addFamilyRecord(FamilyResponseRecord::create(family.id(),
+                                                                   family.displayName(),
+                                                                   family.address().full()));
+        }
+    });
+    if (!started)
+    {
+        return;
     }
 
-    persistResponseData();
+    m_wasActive = true;
     emit emergencyStarted();
     emit responseDataChanged();
 }
 
 void EmergencyManager::endEmergency()
 {
-    if (!m_response.has_value())
+    if (!current().has_value())
     {
         return;
     }
 
-    m_response.reset();
-    DocumentManager::instance()->setEmergencyResponse(std::nullopt);
+    if (!DocumentManager::instance()->editResponse([](std::optional<EmergencyResponse>& response)
+        {
+            response.reset();
+        }))
+    {
+        return;
+    }
+
+    m_wasActive = false;
     emit emergencyEnded();
     emit responseDataChanged();
 }
@@ -85,26 +116,22 @@ void EmergencyManager::endEmergency()
 
 const EmergencyResponse& EmergencyManager::response() const
 {
-    Q_ASSERT(m_response.has_value());
-    return *m_response;
+    Q_ASSERT(current().has_value());
+    return *current();
 }
 
 const FamilyResponseRecord* EmergencyManager::recordForFamily(const FamilyId& familyId) const
 {
-    if (!m_response.has_value())
+    if (!current().has_value())
     {
         return nullptr;
     }
-    return m_response->findRecord(familyId);
+    return current()->findRecord(familyId);
 }
 
 EffectiveContactStatus EmergencyManager::familyStatus(const FamilyId& familyId) const
 {
-    if (!m_response.has_value())
-    {
-        return EffectiveContactStatus::NotContacted;
-    }
-    const FamilyResponseRecord* record = m_response->findRecord(familyId);
+    const FamilyResponseRecord* record = recordForFamily(familyId);
     if (!record)
     {
         return EffectiveContactStatus::NotContacted;
@@ -118,19 +145,11 @@ EffectiveContactStatus EmergencyManager::familyStatus(const FamilyId& familyId) 
 
 void EmergencyManager::setContactStatus(const FamilyId& familyId, ContactStatus status)
 {
-    if (!m_response.has_value())
+    if (changeRecord(familyId, [&](FamilyResponseRecord& record) { record.setContactStatus(status); }))
     {
-        return;
+        emit familyStatusChanged(familyId);
+        emit responseDataChanged();
     }
-    FamilyResponseRecord* record = m_response->mutableRecord(familyId);
-    if (!record)
-    {
-        return;
-    }
-    record->setContactStatus(status);
-    persistResponseData();
-    emit familyStatusChanged(familyId);
-    emit responseDataChanged();
 }
 
 // ============================================================================
@@ -139,36 +158,20 @@ void EmergencyManager::setContactStatus(const FamilyId& familyId, ContactStatus 
 
 void EmergencyManager::addContactAttempt(const FamilyId& familyId, const ContactAttempt& attempt)
 {
-    if (!m_response.has_value())
+    if (changeRecord(familyId, [&](FamilyResponseRecord& record) { record.addContactAttempt(attempt); }))
     {
-        return;
+        emit familyStatusChanged(familyId);
+        emit responseDataChanged();
     }
-    FamilyResponseRecord* record = m_response->mutableRecord(familyId);
-    if (!record)
-    {
-        return;
-    }
-    record->addContactAttempt(attempt);
-    persistResponseData();
-    emit familyStatusChanged(familyId);
-    emit responseDataChanged();
 }
 
 void EmergencyManager::removeContactAttempt(const FamilyId& familyId, const ContactAttemptId& attemptId)
 {
-    if (!m_response.has_value())
+    if (changeRecord(familyId, [&](FamilyResponseRecord& record) { record.removeContactAttempt(attemptId); }))
     {
-        return;
+        emit familyStatusChanged(familyId);
+        emit responseDataChanged();
     }
-    FamilyResponseRecord* record = m_response->mutableRecord(familyId);
-    if (!record)
-    {
-        return;
-    }
-    record->removeContactAttempt(attemptId);
-    persistResponseData();
-    emit familyStatusChanged(familyId);
-    emit responseDataChanged();
 }
 
 // ============================================================================
@@ -177,97 +180,47 @@ void EmergencyManager::removeContactAttempt(const FamilyId& familyId, const Cont
 
 void EmergencyManager::addTask(const FamilyId& familyId, const ResponseTask& task)
 {
-    if (!m_response.has_value())
+    if (changeRecord(familyId, [&](FamilyResponseRecord& record) { record.addTask(task); }))
     {
-        return;
+        emit familyStatusChanged(familyId);
+        emit responseDataChanged();
     }
-    FamilyResponseRecord* record = m_response->mutableRecord(familyId);
-    if (!record)
-    {
-        return;
-    }
-    record->addTask(task);
-    persistResponseData();
-    emit familyStatusChanged(familyId);
-    emit responseDataChanged();
 }
 
 void EmergencyManager::updateTask(const FamilyId& familyId, const ResponseTask& task)
 {
-    if (!m_response.has_value())
+    if (changeRecord(familyId, [&](FamilyResponseRecord& record) { record.updateTask(task); }))
     {
-        return;
+        emit familyStatusChanged(familyId);
+        emit responseDataChanged();
     }
-    FamilyResponseRecord* record = m_response->mutableRecord(familyId);
-    if (!record)
-    {
-        return;
-    }
-    record->updateTask(task);
-    persistResponseData();
-    emit familyStatusChanged(familyId);
-    emit responseDataChanged();
 }
 
 void EmergencyManager::removeTask(const FamilyId& familyId, const TaskId& taskId)
 {
-    if (!m_response.has_value())
+    if (changeRecord(familyId, [&](FamilyResponseRecord& record) { record.removeTask(taskId); }))
     {
-        return;
+        emit familyStatusChanged(familyId);
+        emit responseDataChanged();
     }
-    FamilyResponseRecord* record = m_response->mutableRecord(familyId);
-    if (!record)
-    {
-        return;
-    }
-    record->removeTask(taskId);
-    persistResponseData();
-    emit familyStatusChanged(familyId);
-    emit responseDataChanged();
 }
 
 void EmergencyManager::resolveTask(const FamilyId& familyId, const TaskId& taskId, const QString& notes)
 {
-    if (!m_response.has_value())
+    if (changeTask(familyId, taskId, [&](ResponseTask& task) { task.resolve(notes); }))
     {
-        return;
+        emit familyStatusChanged(familyId);
+        emit responseDataChanged();
     }
-    FamilyResponseRecord* record = m_response->mutableRecord(familyId);
-    if (!record)
-    {
-        return;
-    }
-    ResponseTask* task = record->mutableTask(taskId);
-    if (!task)
-    {
-        return;
-    }
-    task->resolve(notes);
-    persistResponseData();
-    emit familyStatusChanged(familyId);
-    emit responseDataChanged();
 }
 
 void EmergencyManager::reopenTask(const FamilyId& familyId, const TaskId& taskId)
 {
-    if (!m_response.has_value())
+    if (changeTask(familyId, taskId, [](ResponseTask& task) { task.reopen(); }))
     {
-        return;
+        emit familyStatusChanged(familyId);
+        emit responseDataChanged();
     }
-    FamilyResponseRecord* record = m_response->mutableRecord(familyId);
-    if (!record)
-    {
-        return;
-    }
-    ResponseTask* task = record->mutableTask(taskId);
-    if (!task)
-    {
-        return;
-    }
-    task->reopen();
-    persistResponseData();
-    emit familyStatusChanged(familyId);
-    emit responseDataChanged();
 }
 
 // ============================================================================
@@ -276,65 +229,26 @@ void EmergencyManager::reopenTask(const FamilyId& familyId, const TaskId& taskId
 
 void EmergencyManager::assignTaskToTeam(const FamilyId& familyId, const TaskId& taskId, const TeamId& teamId, const QString& notes)
 {
-    if (!m_response.has_value())
+    if (changeTask(familyId, taskId, [&](ResponseTask& task) { task.assignToTeam(teamId, notes); }))
     {
-        return;
+        emit responseDataChanged();
     }
-    FamilyResponseRecord* record = m_response->mutableRecord(familyId);
-    if (!record)
-    {
-        return;
-    }
-    ResponseTask* task = record->mutableTask(taskId);
-    if (!task)
-    {
-        return;
-    }
-    task->assignToTeam(teamId, notes);
-    persistResponseData();
-    emit responseDataChanged();
 }
 
 void EmergencyManager::assignTaskToPerson(const FamilyId& familyId, const TaskId& taskId, const PersonId& personId, const QString& notes)
 {
-    if (!m_response.has_value())
+    if (changeTask(familyId, taskId, [&](ResponseTask& task) { task.assignToPerson(personId, notes); }))
     {
-        return;
+        emit responseDataChanged();
     }
-    FamilyResponseRecord* record = m_response->mutableRecord(familyId);
-    if (!record)
-    {
-        return;
-    }
-    ResponseTask* task = record->mutableTask(taskId);
-    if (!task)
-    {
-        return;
-    }
-    task->assignToPerson(personId, notes);
-    persistResponseData();
-    emit responseDataChanged();
 }
 
 void EmergencyManager::unassignTask(const FamilyId& familyId, const TaskId& taskId)
 {
-    if (!m_response.has_value())
+    if (changeTask(familyId, taskId, [](ResponseTask& task) { task.clearAssignment(); }))
     {
-        return;
+        emit responseDataChanged();
     }
-    FamilyResponseRecord* record = m_response->mutableRecord(familyId);
-    if (!record)
-    {
-        return;
-    }
-    ResponseTask* task = record->mutableTask(taskId);
-    if (!task)
-    {
-        return;
-    }
-    task->clearAssignment();
-    persistResponseData();
-    emit responseDataChanged();
 }
 
 // ============================================================================
@@ -343,23 +257,10 @@ void EmergencyManager::unassignTask(const FamilyId& familyId, const TaskId& task
 
 void EmergencyManager::notifyAssignee(const FamilyId& familyId, const TaskId& taskId, const TaskNotification& notification)
 {
-    if (!m_response.has_value())
+    if (changeTask(familyId, taskId, [&](ResponseTask& task) { task.setNotification(notification); }))
     {
-        return;
+        emit responseDataChanged();
     }
-    FamilyResponseRecord* record = m_response->mutableRecord(familyId);
-    if (!record)
-    {
-        return;
-    }
-    ResponseTask* task = record->mutableTask(taskId);
-    if (!task)
-    {
-        return;
-    }
-    task->setNotification(notification);
-    persistResponseData();
-    emit responseDataChanged();
 }
 
 // ============================================================================
@@ -368,21 +269,26 @@ void EmergencyManager::notifyAssignee(const FamilyId& familyId, const TaskId& ta
 
 QStringList EmergencyManager::taskCategories() const
 {
-    if (!m_response.has_value())
+    if (!current().has_value())
     {
         return {};
     }
-    return m_response->taskCategories();
+    return current()->taskCategories();
 }
 
 void EmergencyManager::addTaskCategory(const QString& category)
 {
-    if (!m_response.has_value())
+    if (!current().has_value())
     {
         return;
     }
-    m_response->addTaskCategory(category);
-    persistResponseData();
+    DocumentManager::instance()->editResponse([&](std::optional<EmergencyResponse>& response)
+    {
+        if (response.has_value())
+        {
+            response->addTaskCategory(category);
+        }
+    });
 }
 
 // ============================================================================
@@ -391,82 +297,103 @@ void EmergencyManager::addTaskCategory(const QString& category)
 
 int EmergencyManager::totalFamilies() const
 {
-    if (!m_response.has_value())
+    if (!current().has_value())
     {
         return 0;
     }
-    return m_response->totalFamilies();
+    return current()->totalFamilies();
 }
 
 int EmergencyManager::countByStatus(EffectiveContactStatus status) const
 {
-    if (!m_response.has_value())
+    if (!current().has_value())
     {
         return 0;
     }
-    return m_response->countByStatus(status);
+    return current()->countByStatus(status);
 }
 
 // ============================================================================
 // Private
 // ============================================================================
 
-void EmergencyManager::persistResponseData()
+const std::optional<EmergencyResponse>& EmergencyManager::current() const
 {
-    DocumentManager::instance()->setEmergencyResponse(m_response);
+    return DocumentManager::instance()->document().emergencyResponse();
 }
 
-void EmergencyManager::syncFromDocument()
+bool EmergencyManager::changeRecord(const FamilyId& familyId,
+                                    const std::function<void(FamilyResponseRecord&)>& change)
 {
-    const std::optional<EmergencyResponse>& response = DocumentManager::instance()->document().emergencyResponse();
-    if (response.has_value())
+    if (recordForFamily(familyId) == nullptr)
     {
-        bool wasActive = m_response.has_value();
-        m_response = response;
-        syncFamilies();
-        if (!wasActive)
+        return false;
+    }
+
+    return DocumentManager::instance()->editResponse([&](std::optional<EmergencyResponse>& response)
+    {
+        FamilyResponseRecord* record = response.has_value() ? response->mutableRecord(familyId) : nullptr;
+        if (record != nullptr)
         {
-            emit emergencyStarted();
+            change(*record);
         }
-        emit responseDataChanged();
-    }
-    else if (m_response.has_value())
+    });
+}
+
+bool EmergencyManager::changeTask(const FamilyId& familyId,
+                                  const TaskId& taskId,
+                                  const std::function<void(ResponseTask&)>& change)
+{
+    const FamilyResponseRecord* existing = recordForFamily(familyId);
+    if (existing == nullptr
+        || std::none_of(existing->tasks().cbegin(),
+                        existing->tasks().cend(),
+                        [&](const ResponseTask& task) { return task.id() == taskId; }))
     {
-        m_response.reset();
-        emit emergencyEnded();
-        emit responseDataChanged();
+        return false;
     }
+
+    return changeRecord(familyId, [&](FamilyResponseRecord& record)
+    {
+        ResponseTask* task = record.mutableTask(taskId);
+        if (task != nullptr)
+        {
+            change(*task);
+        }
+    });
 }
 
 void EmergencyManager::syncFamilies()
 {
-    if (!m_response.has_value())
-    {
-        return;
-    }
-
     const QHash<FamilyId, Family>& families = DocumentManager::instance()->document().families();
-    const QHash<FamilyId, FamilyResponseRecord>& records = m_response->familyRecords();
+    const QHash<FamilyId, FamilyResponseRecord>& records = current()->familyRecords();
 
-    // Add records for families that don't have one yet
-    bool added = false;
+    // Add records for families that don't have one yet. Removed families keep
+    // theirs: snapshot data useful for the current emergency.
+    QList<Family> missing;
     for (auto it = families.constBegin(); it != families.constEnd(); ++it)
     {
         if (!records.contains(it.key()))
         {
-            const Family& family = it.value();
-            FamilyResponseRecord record = FamilyResponseRecord::create(
-                family.id(),
-                family.displayName(),
-                family.address().full());
-            m_response->addFamilyRecord(record);
-            added = true;
+            missing.append(it.value());
         }
     }
-    // Removed families: leave their records (snapshot data useful for current emergency)
-
-    if (added)
+    if (missing.isEmpty())
     {
-        persistResponseData();
+        return;
     }
+
+    DocumentManager::instance()->editResponse([&](std::optional<EmergencyResponse>& response)
+    {
+        if (!response.has_value())
+        {
+            return;
+        }
+        for (const Family& family : missing)
+        {
+            response->addFamilyRecord(FamilyResponseRecord::create(family.id(),
+                                                                   family.displayName(),
+                                                                   family.address().full()));
+        }
+    });
 }

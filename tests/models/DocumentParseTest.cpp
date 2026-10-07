@@ -2,12 +2,10 @@
 
 #include "Document.h"
 #include "DocumentCrypto.h"
-#include "JsonService.h"
 #include "ModelSamples.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <QTemporaryDir>
 #include <QtTest>
 
 namespace
@@ -130,21 +128,4 @@ void DocumentParseTest::anIdNamingSomethingNotInTheDocumentIsRead()
     QVERIFY(reads(withFirst(payload, "tags", withField(ModelSamples::tag(), "personIds", QJsonArray{"p9"}))));
     QVERIFY(reads(withFirst(payload, "teams", withField(ModelSamples::team(), "leaderId", "p9"))));
     QVERIFY(reads(withFirst(payload, "eqDistricts", ModelSamples::district("d1", "m9"))));
-}
-
-void DocumentParseTest::jsonServiceReadsWhatItWrites()
-{
-    const std::optional<Document> document = Document::parse(ModelSamples::document());
-    QVERIFY(document.has_value());
-
-    QTemporaryDir directory;
-    QVERIFY(directory.isValid());
-    const QString path = directory.filePath("ward.wardplanning");
-
-    QString error;
-    QVERIFY2(JsonService::saveDocument(path, document.value(), &error), qPrintable(error));
-
-    const JsonResult loaded = JsonService::loadDocument(path);
-    QVERIFY2(loaded.success, qPrintable(loaded.errorMessage));
-    QVERIFY(loaded.document == document.value());
 }

@@ -10,6 +10,7 @@
 #include "DocumentFileTest.h"
 #include "DocumentHeaderTest.h"
 #include "DocumentLibraryTest.h"
+#include "DocumentManagerTest.h"
 #include "DocumentParseTest.h"
 #include "DocumentSessionTest.h"
 #include "FakeServer.h"
@@ -121,6 +122,7 @@ int main(int argc, char** argv)
     status |= run<IdentityFileTest>(argc, argv);
     status |= run<IdentityServiceTest>(argc, argv);
     status |= run<DocumentLibraryTest>(argc, argv);
+    status |= run<DocumentManagerTest>(argc, argv);
     status |= run<FileOpenRouterTest>(argc, argv);
     status |= run<HttpServerApiTest>(argc, argv);
 

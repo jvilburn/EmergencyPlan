@@ -44,6 +44,8 @@
 #include <QStandardPaths>
 #include <QDesktopServices>
 #include <QUrl>
+#include <QCloseEvent>
+#include <QLocale>
 
 MainWindow::MainWindow(AppSettings& settings, DocumentLibrary& library, QWidget* parent)
     : QMainWindow(parent)
@@ -148,9 +150,15 @@ void MainWindow::setupUi()
     centralLayout->setSpacing(0);
 
     m_emergencyBanner = new EmergencyBanner(centralContainer);
+    m_copyBanner = new QLabel(centralContainer);
+    m_copyBanner->setObjectName("copyBanner");
+    m_copyBanner->setWordWrap(true);
+    m_copyBanner->setContentsMargins(12, 6, 12, 6);
+    m_copyBanner->hide();
     m_splitter = new QSplitter(Qt::Horizontal, centralContainer);
 
     centralLayout->addWidget(m_emergencyBanner);
+    centralLayout->addWidget(m_copyBanner);
     centralLayout->addWidget(m_splitter, 1);
     setCentralWidget(centralContainer);
 
@@ -245,6 +253,15 @@ void MainWindow::setupMenus()
 
     fileMenu->addSeparator();
 
+    // Only before this device holds any ward: a device set up as the wrong person.
+    m_startOverAction = fileMenu->addAction(tr("Set Up This Device Again..."), this, &MainWindow::onStartOver);
+    connect(fileMenu, &QMenu::aboutToShow, this, [this]()
+    {
+        m_startOverAction->setEnabled(m_library.entries().isEmpty());
+    });
+
+    fileMenu->addSeparator();
+
     m_exitAction = fileMenu->addAction(tr("E&xit"), this, &QMainWindow::close);
     m_exitAction->setShortcut(QKeySequence::Quit);
 
@@ -274,10 +291,18 @@ void MainWindow::setupConnections()
 {
     connect(DocumentManager::instance(), &DocumentManager::documentChanged,
             this, &MainWindow::onDocumentChanged);
-    connect(DocumentManager::instance(), &DocumentManager::filePathChanged,
+    connect(DocumentManager::instance(), &DocumentManager::documentOpened,
             this, &MainWindow::updateWindowTitle);
-    connect(DocumentManager::instance(), &DocumentManager::filePathChanged,
-            this, &MainWindow::onFilePathChanged);
+    connect(DocumentManager::instance(), &DocumentManager::documentOpened,
+            this, &MainWindow::onDocumentOpened);
+    connect(DocumentManager::instance(), &DocumentManager::editRefused, this, [this](const QString& message)
+    {
+        statusBar()->showMessage(message, 8000);
+    });
+    connect(DocumentManager::instance(), &DocumentManager::accessRemoved,
+            this, &MainWindow::onAccessRemoved);
+    connect(DocumentManager::instance(), &DocumentManager::fetchFailed,
+            this, &MainWindow::onFetchFailed);
     connect(DocumentManager::instance(), &DocumentManager::canUndoChanged,
             this, &MainWindow::updateUndoRedoActions);
     connect(DocumentManager::instance(), &DocumentManager::canRedoChanged,
@@ -317,14 +342,19 @@ void MainWindow::setupConnections()
     connect(DocumentManager::instance(), &DocumentManager::geocodingFinished,
             this, &MainWindow::onGeocodingFinished);
 
-    // Auto-save
-    connect(DocumentManager::instance(), &DocumentManager::autoSaveFailed,
-            this, &MainWindow::onAutoSaveFailed);
+    // A local write that failed is the one modal failure.
+    connect(DocumentManager::instance(), &DocumentManager::saveFailed,
+            this, &MainWindow::onSaveFailed);
 }
 
 void MainWindow::onNewWard()
 {
-    DocumentManager::instance()->newDocument();
+    QString error;
+    if (!DocumentManager::instance()->newDocument(&error))
+    {
+        QMessageBox::warning(this, tr("New Ward"), error);
+        return;
+    }
     statusBar()->showMessage(tr("New ward created"), 3000);
 }
 
@@ -339,27 +369,38 @@ void MainWindow::onOpenWard()
 
 void MainWindow::openWard(const QString& documentId)
 {
-    switch (DocumentManager::instance()->openDocument(documentId))
+    QString reason;
+    switch (DocumentManager::instance()->openDocument(documentId, &reason))
     {
-    case LoadFailure::None:
+    case DocumentManager::Open::Opened:
         statusBar()->showMessage(tr("Ward opened"), 3000);
-        m_mapWidget->fitAllFamilies();
         break;
-    case LoadFailure::NotFound:
+    case DocumentManager::Open::Fetching:
+        statusBar()->showMessage(tr("Fetching the ward from the server..."));
+        break;
+    case DocumentManager::Open::NotFound:
         QMessageBox::warning(this, tr("Open Ward"), tr("This ward's file is missing from this device."));
         break;
-    case LoadFailure::NeedsNewerVersion:
+    case DocumentManager::Open::NeedsNewerVersion:
         QMessageBox::warning(this, tr("Open Ward"), tr("This ward was saved by a newer version of Ward Planning."));
         break;
-    case LoadFailure::Refused:
-        QMessageBox::warning(this, tr("Open Ward"), tr("This ward's file on this device cannot be opened."));
+    case DocumentManager::Open::Refused:
+        QMessageBox::warning(this, tr("Open Ward"), tr("This ward's file on this device cannot be opened. %1").arg(reason));
+        break;
+    case DocumentManager::Open::NotClosed:
+        QMessageBox::warning(this, tr("Open Ward"), tr("The open ward could not be saved, so it stays open. %1").arg(reason));
         break;
     }
 }
 
 void MainWindow::onSaveNow()
 {
-    DocumentManager::instance()->publishNow();
+    // Only a local failure is reported here; the sync indicator says the rest.
+    QString error;
+    if (!DocumentManager::instance()->publishNow(&error))
+    {
+        QMessageBox::warning(this, tr("Save"), error);
+    }
 }
 
 void MainWindow::onSaveCopy()
@@ -409,7 +450,10 @@ void MainWindow::openCopy(const QString& sourcePath)
         QMessageBox::warning(this, tr("Open a Copy"), error);
         return;
     }
-    DocumentManager::instance()->showCopy(copy.value());
+    if (!DocumentManager::instance()->showCopy(copy.value(), &error))
+    {
+        QMessageBox::warning(this, tr("Open a Copy"), tr("The open ward could not be saved, so it stays open. %1").arg(error));
+    }
 }
 
 void MainWindow::onShowFolder()
@@ -621,14 +665,124 @@ void MainWindow::onGeocodingFinished()
     m_geocodingProgress->hide();
 }
 
-void MainWindow::onAutoSaveFailed(const QString& errorMessage)
+void MainWindow::onSaveFailed(const QString& errorMessage)
 {
-    statusBar()->showMessage(tr("Auto-save failed: %1").arg(errorMessage));
+    QMessageBox::warning(this,
+                         tr("Not Saved"),
+                         tr("Your changes could not be saved on this device: %1\n\n"
+                            "They are kept while Ward Planning stays open, and saving is tried again "
+                            "with your next change.").arg(errorMessage));
 }
 
-void MainWindow::onFilePathChanged()
+void MainWindow::onDocumentOpened()
 {
     updateEmergencyActions();
+    updateCopyBanner();
+    m_mapWidget->fitAllFamilies();
+}
+
+void MainWindow::updateCopyBanner()
+{
+    const std::optional<DocumentLibrary::Copy>& copy = DocumentManager::instance()->copy();
+    if (!copy.has_value())
+    {
+        m_copyBanner->hide();
+        return;
+    }
+
+    QStringList people;
+    for (const RosterPerson& person : copy.value().document.accessRoster().people())
+    {
+        people.append(person.displayName());
+    }
+    m_copyBanner->setText(tr("A read-only copy, readable by %1. Changes go in the ward itself.")
+                              .arg(QLocale().createSeparatedList(people)));
+    m_copyBanner->show();
+}
+
+void MainWindow::onAccessRemoved(const QString& wardName, const QString& byWhom, bool left)
+{
+    const QString ward = wardName.isEmpty() ? tr("a ward") : wardName;
+    QString message;
+    if (left)
+    {
+        message = tr("You left %1 from another device, so it is no longer on this one.").arg(ward);
+    }
+    else if (!byWhom.isEmpty())
+    {
+        message = tr("%1 removed your access to %2, so it is no longer on this device.").arg(byWhom, ward);
+    }
+    else
+    {
+        message = tr("Your access to %1 was removed, so it is no longer on this device.").arg(ward);
+    }
+    QMessageBox::information(this, tr("Ward Planning"), message);
+}
+
+void MainWindow::onFetchFailed(const QString& documentId, DocumentSession::Download outcome)
+{
+    Q_UNUSED(documentId);
+    statusBar()->clearMessage();
+    switch (outcome)
+    {
+    case DocumentSession::Download::Unreachable:
+        QMessageBox::warning(this,
+                             tr("Open Ward"),
+                             tr("The server could not be reached to fetch this ward. Try again when you are online."));
+        break;
+    case DocumentSession::Download::NeedsNewerVersion:
+        QMessageBox::warning(this, tr("Open Ward"), tr("This ward was saved by a newer version of Ward Planning."));
+        break;
+    case DocumentSession::Download::Done:
+    case DocumentSession::Download::Removed:
+    case DocumentSession::Download::ServerFault:
+        QMessageBox::warning(this,
+                             tr("Open Ward"),
+                             tr("The server's copy of this ward could not be checked, so it was not opened."));
+        break;
+    }
+}
+
+void MainWindow::onStartOver()
+{
+    const QMessageBox::StandardButton answer = QMessageBox::question(
+        this,
+        tr("Set Up This Device Again"),
+        tr("This device will get a new identity, and Ward Planning will close. Start it again to "
+           "answer the first question afresh.\n\nThis is for a device set up as the wrong person "
+           "before it held any ward."),
+        QMessageBox::Ok | QMessageBox::Cancel,
+        QMessageBox::Cancel);
+    if (answer == QMessageBox::Ok)
+    {
+        emit startOverRequested();
+    }
+}
+
+void MainWindow::closeEvent(QCloseEvent* event)
+{
+    // Flushes the pending save and releases the lease.
+    QString error;
+    if (DocumentManager::instance()->close(&error))
+    {
+        event->accept();
+        return;
+    }
+
+    const QMessageBox::StandardButton answer = QMessageBox::warning(
+        this,
+        tr("Not Saved"),
+        tr("Your latest changes could not be saved: %1\n\nClose anyway and lose them?").arg(error),
+        QMessageBox::Discard | QMessageBox::Cancel,
+        QMessageBox::Cancel);
+    if (answer == QMessageBox::Discard)
+    {
+        event->accept();
+    }
+    else
+    {
+        event->ignore();
+    }
 }
 
 // ============================================================================

@@ -16,6 +16,13 @@ BackgroundGeocodingService::~BackgroundGeocodingService() = default;
 
 void BackgroundGeocodingService::queueFamily(const Family& family)
 {
+    // Only the device that may write the directory looks addresses up; another
+    // member holding the lease is doing it.
+    if (!DocumentManager::instance()->mayWriteDirectory())
+    {
+        return;
+    }
+
     // Skip if already queued
     if (m_queuedIds.contains(family.id()))
     {

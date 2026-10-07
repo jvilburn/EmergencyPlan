@@ -25,6 +25,7 @@ set(TEST_SOURCES
     services/DocumentFileTest.cpp
     services/DocumentHeaderTest.cpp
     services/DocumentLibraryTest.cpp
+    services/DocumentManagerTest.cpp
     services/DocumentSessionTest.cpp
     services/FakeServer.cpp
     services/FakeServerTest.cpp

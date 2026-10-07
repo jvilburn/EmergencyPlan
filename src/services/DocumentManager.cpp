@@ -1,48 +1,68 @@
 #include "DocumentManager.h"
-#include "DocumentConstants.h"
-#include "JsonService.h"
-#include "UnitLookupService.h"
 #include "BackgroundGeocodingService.h"
+#include "RosterChangeQueue.h"
+#include "ServerConnection.h"
+#include "UnitLookupService.h"
 
 #include <QDebug>
-#include <QStandardPaths>
-#include <QFile>
-#include <QFileInfo>
-
-static QString buildUniquePath(const QString& dir, const QString& basename, const QString& extension)
-{
-    QString filePath = dir + "/" + basename + extension;
-    if (!QFile::exists(filePath))
-    {
-        return filePath;
-    }
-
-    int counter = 2;
-    while (QFile::exists(dir + "/" + basename + " (" + QString::number(counter) + ")" + extension))
-    {
-        counter++;
-    }
-    return dir + "/" + basename + " (" + QString::number(counter) + ")" + extension;
-}
 
 DocumentManager* DocumentManager::s_instance = nullptr;
 
-DocumentManager::DocumentManager(QObject* parent)
+DocumentManager::DocumentManager(const DeviceIdentity& identity,
+                                 DocumentRecords& records,
+                                 ServerConnection& server,
+                                 DocumentLibrary& library,
+                                 RosterChangeQueue& queue,
+                                 QObject* parent)
     : QObject(parent)
-    , m_document(Document::empty())
+    , m_identity(identity)
+    , m_records(&records)
+    , m_server(&server)
+    , m_library(&library)
+    , m_queue(&queue)
+    , m_empty(Document::empty())
     , m_commandHistory(this)
-    , m_unitLookupService(new UnitLookupService(this))
-    , m_geocodingService(nullptr)
+{
+    connectServices();
+
+    connect(m_queue, &RosterChangeQueue::removed, this, &DocumentManager::onQueueRemoved);
+}
+
+DocumentManager::DocumentManager(const DeviceIdentity& identity,
+                                 std::unique_ptr<DocumentSession> session,
+                                 QObject* parent)
+    : QObject(parent)
+    , m_identity(identity)
+    , m_empty(Document::empty())
+    , m_commandHistory(this)
+{
+    connectServices();
+    install(std::move(session));
+}
+
+DocumentManager::~DocumentManager()
+{
+    // The session closes as it goes: a scheduled save is written and the lease
+    // released.
+    if (m_queue != nullptr)
+    {
+        m_queue->setOpenSession(nullptr);
+    }
+    m_session.reset();
+    s_instance = nullptr;
+}
+
+void DocumentManager::connectServices()
 {
     Q_ASSERT(!s_instance);
     s_instance = this;
 
-    // Create after s_instance is set so BackgroundGeocodingService can use instance()
+    // Made after s_instance is set, since both reach the manager through instance().
+    m_unitLookupService = new UnitLookupService(this);
     m_geocodingService = new BackgroundGeocodingService(this);
 
     connect(&m_commandHistory, &CommandHistory::canUndoChanged, this, &DocumentManager::canUndoChanged);
     connect(&m_commandHistory, &CommandHistory::canRedoChanged, this, &DocumentManager::canRedoChanged);
-    connect(&m_commandHistory, &CommandHistory::dirtyChanged, this, &DocumentManager::dirtyChanged);
 
     connect(m_unitLookupService, &UnitLookupService::wardLookupComplete,
             this, &DocumentManager::onWardLookupComplete);
@@ -64,120 +84,477 @@ DocumentManager* DocumentManager::instance()
     return s_instance;
 }
 
+const Document& DocumentManager::document() const
+{
+    if (m_copy.has_value())
+    {
+        return m_copy.value().document;
+    }
+    if (m_session)
+    {
+        return m_session->document();
+    }
+    return m_empty;
+}
+
+QString DocumentManager::documentId() const
+{
+    return m_session ? m_session->documentId() : QString();
+}
+
+// ============================================================================
+// Editing
+// ============================================================================
+
 void DocumentManager::executeCommand(CommandPtr command)
 {
-    DocumentChange change = command->documentChange();
+    DocumentSession* session = sessionForEdit();
+    if (session == nullptr)
+    {
+        return;
+    }
 
-    m_commandHistory.execute(std::move(command), m_document);
-    m_document.onDocumentChanged(change);
-    emit documentChanged(change);
-    checkForIncompleteWards();
-    autoSave();
+    const DocumentChange change = command->documentChange();
+    const DocumentSession::Refusal refusal = session->edit(DocumentSession::Edit::Directory, [&](Document& document)
+    {
+        m_commandHistory.execute(std::move(command), document);
+        document.onDocumentChanged(change);
+    });
+    if (refusal != DocumentSession::Refusal::None)
+    {
+        refuse(refusal);
+        return;
+    }
+    afterChange(change);
 }
 
 void DocumentManager::undo()
 {
-    if (!canUndo())
+    if (!canUndo() || !m_session)
     {
         return;
     }
-    DocumentChange change = m_commandHistory.undo(m_document);
-    m_document.onDocumentChanged(change);
-    emit documentChanged(change);
-    autoSave();
+
+    DocumentChange change = DocumentChange::full();
+    const DocumentSession::Refusal refusal =
+        m_session->edit(DocumentSession::Edit::Directory, [&](Document& document)
+    {
+        change = m_commandHistory.undo(document);
+        document.onDocumentChanged(change);
+    });
+    if (refusal != DocumentSession::Refusal::None)
+    {
+        refuse(refusal);
+        return;
+    }
+    afterChange(change);
 }
 
 void DocumentManager::redo()
 {
-    if (!canRedo())
+    if (!canRedo() || !m_session)
     {
         return;
     }
-    DocumentChange change = m_commandHistory.redo(m_document);
-    m_document.onDocumentChanged(change);
+
+    DocumentChange change = DocumentChange::full();
+    const DocumentSession::Refusal refusal =
+        m_session->edit(DocumentSession::Edit::Directory, [&](Document& document)
+    {
+        change = m_commandHistory.redo(document);
+        document.onDocumentChanged(change);
+    });
+    if (refusal != DocumentSession::Refusal::None)
+    {
+        refuse(refusal);
+        return;
+    }
+    afterChange(change);
+}
+
+bool DocumentManager::editResponse(const std::function<void(std::optional<EmergencyResponse>&)>& change)
+{
+    DocumentSession* session = sessionForEdit();
+    if (session == nullptr)
+    {
+        return false;
+    }
+
+    const DocumentSession::Refusal refusal = session->edit(DocumentSession::Edit::Response, [&](Document& document)
+    {
+        std::optional<EmergencyResponse> response = document.emergencyResponse();
+        change(response);
+        document.setEmergencyResponse(response);
+    });
+    if (refusal != DocumentSession::Refusal::None)
+    {
+        refuse(refusal);
+        return false;
+    }
+    session->setEmergencyActive(session->document().emergencyResponse().has_value());
+    return true;
+}
+
+DocumentSession* DocumentManager::sessionForEdit()
+{
+    if (m_copy.has_value())
+    {
+        emit editRefused(tr("This is a read-only copy. Open the ward itself to make changes."));
+        return nullptr;
+    }
+    if (!m_session)
+    {
+        QString error;
+        if (!newDocument(&error))
+        {
+            emit saveFailed(error);
+            return nullptr;
+        }
+    }
+    return m_session.get();
+}
+
+void DocumentManager::refuse(DocumentSession::Refusal refusal)
+{
+    switch (refusal)
+    {
+    case DocumentSession::Refusal::None:
+        break;
+    case DocumentSession::Refusal::DirectoryReadOnly:
+        emit editRefused(tr("Another member is editing the directory."));
+        break;
+    case DocumentSession::Refusal::RequiresUpdate:
+        emit editRefused(tr("This ward was changed by a newer version of Ward Planning. Update to make changes."));
+        break;
+    }
+}
+
+void DocumentManager::afterChange(const DocumentChange& change)
+{
     emit documentChanged(change);
-    autoSave();
-}
-
-void DocumentManager::newDocument()
-{
-    stopGeocoding();
-    m_commandHistory.clear();
-    m_pendingWardLookups.clear();
-    m_pendingStakeLookups.clear();
-    setDocument(Document::empty());
-    setFilePath(QString());
-}
-
-bool DocumentManager::openDocument(const QString& filePath, QString* errorMessage)
-{
-    JsonResult result = JsonService::loadDocument(filePath);
-
-    if (!result.success)
+    if (m_library != nullptr && m_session)
     {
-        if (errorMessage)
-        {
-            *errorMessage = result.errorMessage;
-        }
-        return false;
+        m_library->noteDocument(m_session->documentId(), m_session->document());
     }
-
-    stopGeocoding();
-    m_commandHistory.clear();
-    m_pendingWardLookups.clear();
-    m_pendingStakeLookups.clear();
-    setDocument(result.document);
-    setFilePath(filePath);
     checkForIncompleteWards();
+}
+
+// ============================================================================
+// Wards
+// ============================================================================
+
+DocumentSession::Context DocumentManager::context() const
+{
+    return DocumentSession::Context{m_identity, *m_records, *m_server};
+}
+
+bool DocumentManager::newDocument(QString* errorMessage)
+{
+    if (m_library == nullptr || !closeCurrent(errorMessage))
+    {
+        return false;
+    }
+
+    const QString documentId = DocumentLibrary::newDocumentId();
+    m_library->add(documentId);
+    std::unique_ptr<DocumentSession> session = DocumentSession::create(context(),
+                                                                       std::make_unique<QtSessionTimers>(),
+                                                                       documentId,
+                                                                       m_library->pathsFor(documentId),
+                                                                       errorMessage);
+    if (!session)
+    {
+        m_library->forget(documentId);
+        resetWard();
+        return false;
+    }
+
+    m_library->markOpened(documentId);
+    install(std::move(session));
     return true;
 }
 
-bool DocumentManager::saveDocument(QString* errorMessage)
+DocumentManager::Open DocumentManager::openDocument(const QString& documentId, QString* refusal)
 {
-    if (m_filePath.isEmpty())
+    if (m_library == nullptr || !m_library->contains(documentId))
     {
-        if (errorMessage)
+        return Open::NotFound;
+    }
+    if (!closeCurrent(refusal))
+    {
+        return Open::NotClosed;
+    }
+
+    LoadFailure failure = LoadFailure::None;
+    std::unique_ptr<DocumentSession> session = DocumentSession::open(context(),
+                                                                     std::make_unique<QtSessionTimers>(),
+                                                                     documentId,
+                                                                     m_library->pathsFor(documentId),
+                                                                     failure,
+                                                                     refusal);
+    if (session)
+    {
+        m_library->markOpened(documentId);
+        install(std::move(session));
+        return Open::Opened;
+    }
+
+    resetWard();
+    const bool shared = m_records->record(documentId).baseVersion.has_value();
+    switch (failure)
+    {
+    case LoadFailure::None:
+        break;
+    case LoadFailure::NeedsNewerVersion:
+        return Open::NeedsNewerVersion;
+    case LoadFailure::NotFound:
+        if (shared)
         {
-            *errorMessage = tr("No file path set. Use Save As.");
+            fetch(documentId);
+            return Open::Fetching;
         }
-        return false;
+        return Open::NotFound;
+    case LoadFailure::Refused:
+        if (shared)
+        {
+            fetch(documentId);
+            return Open::Fetching;
+        }
+        return Open::Refused;
     }
-
-    return saveDocumentAs(m_filePath, errorMessage);
+    return Open::Refused;
 }
 
-bool DocumentManager::saveDocumentAs(const QString& filePath, QString* errorMessage)
+void DocumentManager::fetch(const QString& documentId)
 {
-    if (!JsonService::saveDocument(filePath, m_document, errorMessage))
+    DocumentSession::download(context(),
+                              documentId,
+                              m_library->pathsFor(documentId),
+                              this,
+                              [this, documentId](DocumentSession::Download outcome)
+    {
+        switch (outcome)
+        {
+        case DocumentSession::Download::Done:
+        {
+            QString refusal;
+            if (openDocument(documentId, &refusal) != Open::Opened)
+            {
+                emit fetchFailed(documentId, DocumentSession::Download::ServerFault);
+            }
+            return;
+        }
+        case DocumentSession::Download::Removed:
+            onQueueRemoved(documentId, false);
+            return;
+        case DocumentSession::Download::Unreachable:
+        case DocumentSession::Download::NeedsNewerVersion:
+        case DocumentSession::Download::ServerFault:
+            emit fetchFailed(documentId, outcome);
+            return;
+        }
+    });
+}
+
+void DocumentManager::openLastWard()
+{
+    if (m_library == nullptr)
+    {
+        return;
+    }
+
+    const QString documentId = m_library->lastOpenedId();
+    if (!documentId.isEmpty())
+    {
+        QString refusal;
+        openDocument(documentId, &refusal);
+    }
+}
+
+bool DocumentManager::showCopy(const DocumentLibrary::Copy& copy, QString* errorMessage)
+{
+    if (!closeCurrent(errorMessage))
     {
         return false;
     }
 
-    setFilePath(filePath);
-    m_commandHistory.markSaved();
+    m_copy = copy;
+    onDocumentReplaced();
+    emit documentOpened();
+    emit readOnlyChanged();
     return true;
 }
 
-void DocumentManager::setDocument(const Document& document)
+bool DocumentManager::publishNow(QString* errorMessage)
 {
-    m_document = document;
-    m_document.onDocumentChanged(DocumentChange::full());
-    emit documentChanged(DocumentChange::full());
+    if (!m_session)
+    {
+        return true;
+    }
+    if (!m_session->flush(errorMessage))
+    {
+        return false;
+    }
+    m_session->publishNow();
+    return true;
 }
 
-void DocumentManager::setFilePath(const QString& filePath)
+bool DocumentManager::close(QString* errorMessage)
 {
-    if (m_filePath != filePath)
+    if (!closeCurrent(errorMessage))
     {
-        m_filePath = filePath;
-        emit filePathChanged();
+        return false;
+    }
+    resetWard();
+    return true;
+}
+
+bool DocumentManager::closeCurrent(QString* errorMessage)
+{
+    m_copy.reset();
+    if (!m_session)
+    {
+        return true;
+    }
+    if (!m_session->flush(errorMessage))
+    {
+        return false;
+    }
+
+    stopGeocoding();
+    if (m_queue != nullptr)
+    {
+        m_queue->setOpenSession(nullptr);
+    }
+    m_session.reset();
+    return true;
+}
+
+void DocumentManager::resetWard()
+{
+    m_copy.reset();
+    m_pendingWardLookups.clear();
+    m_pendingStakeLookups.clear();
+    onDocumentReplaced();
+    emit documentOpened();
+    emit readOnlyChanged();
+}
+
+void DocumentManager::install(std::unique_ptr<DocumentSession> session)
+{
+    m_copy.reset();
+    m_session = std::move(session);
+    m_pendingWardLookups.clear();
+    m_pendingStakeLookups.clear();
+
+    DocumentSession* opened = m_session.get();
+    connect(opened, &DocumentSession::documentReplaced, this, &DocumentManager::onDocumentReplaced);
+    connect(opened, &DocumentSession::readOnlyChanged, this, &DocumentManager::onReadOnlyChanged);
+    connect(opened, &DocumentSession::syncStateChanged, this, &DocumentManager::syncStateChanged);
+    connect(opened, &DocumentSession::conflictRaised, this, &DocumentManager::conflictRaised);
+    connect(opened, &DocumentSession::saveFailed, this, &DocumentManager::saveFailed);
+    connect(opened, &DocumentSession::removed, this, &DocumentManager::onSessionRemoved);
+    if (m_queue != nullptr)
+    {
+        m_queue->setOpenSession(opened);
+    }
+
+    opened->setEmergencyActive(opened->document().emergencyResponse().has_value());
+    onDocumentReplaced();
+    emit documentOpened();
+    emit readOnlyChanged();
+    emit syncStateChanged(opened->syncState());
+    if (mayWriteDirectory())
+    {
+        startBatchGeocoding();
     }
 }
+
+void DocumentManager::onDocumentReplaced()
+{
+    // Undo applies to the document it was recorded on, which this no longer is.
+    m_commandHistory.clear();
+    if (m_session)
+    {
+        m_session->setEmergencyActive(m_session->document().emergencyResponse().has_value());
+    }
+    afterChange(DocumentChange::full());
+}
+
+void DocumentManager::onReadOnlyChanged()
+{
+    if (mayWriteDirectory())
+    {
+        // Taking the lease is when families still lacking coordinates get them.
+        startBatchGeocoding();
+        checkForIncompleteWards();
+    }
+    else
+    {
+        stopGeocoding();
+        m_pendingWardLookups.clear();
+        m_pendingStakeLookups.clear();
+    }
+    emit readOnlyChanged();
+}
+
+void DocumentManager::onSessionRemoved(const QString& byWhom, bool left)
+{
+    const QString documentId = m_session->documentId();
+    const QString wardName = m_session->document().suggestedFilename();
+
+    // Finished from inside its own signal, so it goes once that returns.
+    if (m_queue != nullptr)
+    {
+        m_queue->setOpenSession(nullptr);
+    }
+    m_session.release()->deleteLater();
+    if (m_library != nullptr)
+    {
+        m_library->forgetRemoved(documentId);
+    }
+    resetWard();
+    emit accessRemoved(wardName, byWhom, left);
+}
+
+void DocumentManager::onQueueRemoved(const QString& documentId, bool left)
+{
+    // The open ward finishes through its session.
+    if (m_session && m_session->documentId() == documentId)
+    {
+        return;
+    }
+
+    QString wardName;
+    for (const DocumentLibrary::Entry& entry : m_library->entries())
+    {
+        if (entry.documentId == documentId)
+        {
+            wardName = entry.wardName;
+        }
+    }
+    m_library->forgetRemoved(documentId);
+    emit accessRemoved(wardName, QString(), left);
+}
+
+bool DocumentManager::mayWriteDirectory() const
+{
+    return m_session && !m_copy.has_value() && m_session->mayWriteDirectory();
+}
+
+// ============================================================================
+// Unit lookups
+// ============================================================================
 
 void DocumentManager::checkForIncompleteWards()
 {
+    if (!mayWriteDirectory())
+    {
+        return;
+    }
+
     // Find wards that need lookup (no chapel address means incomplete)
-    for (const Ward& ward : m_document.wards())
+    for (const Ward& ward : document().wards())
     {
         QString unitNumber = ward.unitNumber();
         if (!ward.chapelAddress().has_value()
@@ -192,67 +569,84 @@ void DocumentManager::checkForIncompleteWards()
 
 void DocumentManager::onWardLookupComplete(const QString& wardUnitNumber, const Ward& wardInfo)
 {
-    m_pendingWardLookups.remove(wardUnitNumber);
-
-    // Update ward with chapel info
-    std::optional<Ward> existing = m_document.metadata().findWardByUnit(wardUnitNumber);
-    if (existing.has_value())
+    if (!m_pendingWardLookups.remove(wardUnitNumber) || !mayWriteDirectory())
     {
-        Ward updated = *existing;
+        return;
+    }
 
-        // Merge in the lookup results (don't overwrite existing data)
-        if (wardInfo.chapelAddress().has_value())
-        {
-            updated.setChapelAddress(wardInfo.chapelAddress());
-        }
-        if (wardInfo.chapelLat().has_value())
-        {
-            updated.setChapelLat(wardInfo.chapelLat());
-        }
-        if (wardInfo.chapelLng().has_value())
-        {
-            updated.setChapelLng(wardInfo.chapelLng());
-        }
-        if (wardInfo.chapelPhone().has_value())
-        {
-            updated.setChapelPhone(wardInfo.chapelPhone());
-        }
-        if (wardInfo.meetingTime().has_value())
-        {
-            updated.setMeetingTime(wardInfo.meetingTime());
-        }
-        if (!wardInfo.stakeUnitNumber().isEmpty())
-        {
-            updated.setStakeUnitNumber(wardInfo.stakeUnitNumber());
-        }
+    std::optional<Ward> existing = document().metadata().findWardByUnit(wardUnitNumber);
+    if (!existing.has_value())
+    {
+        checkForIncompleteWards();
+        return;
+    }
 
-        m_document.metadata().updateWard(updated);
-        emit documentChanged(DocumentChange::metadata().updated(wardUnitNumber));
+    // Merge in the lookup results (don't overwrite existing data)
+    Ward updated = *existing;
+    if (wardInfo.chapelAddress().has_value())
+    {
+        updated.setChapelAddress(wardInfo.chapelAddress());
+    }
+    if (wardInfo.chapelLat().has_value())
+    {
+        updated.setChapelLat(wardInfo.chapelLat());
+    }
+    if (wardInfo.chapelLng().has_value())
+    {
+        updated.setChapelLng(wardInfo.chapelLng());
+    }
+    if (wardInfo.chapelPhone().has_value())
+    {
+        updated.setChapelPhone(wardInfo.chapelPhone());
+    }
+    if (wardInfo.meetingTime().has_value())
+    {
+        updated.setMeetingTime(wardInfo.meetingTime());
+    }
+    if (!wardInfo.stakeUnitNumber().isEmpty())
+    {
+        updated.setStakeUnitNumber(wardInfo.stakeUnitNumber());
+    }
 
-        // Trigger stake lookup if we got stake unit number and don't already have it
-        QString stakeUnit = wardInfo.stakeUnitNumber();
-        if (!stakeUnit.isEmpty()
-            && !m_pendingStakeLookups.contains(stakeUnit)
-            && !m_document.metadata().findStakeByUnit(stakeUnit).has_value())
+    if (m_session->edit(DocumentSession::Edit::Directory, [&](Document& document)
         {
-            m_pendingStakeLookups.insert(stakeUnit);
-            m_unitLookupService->lookupStake(stakeUnit);
-        }
+            document.metadata().updateWard(updated);
+        })
+        != DocumentSession::Refusal::None)
+    {
+        return;
+    }
+    emit documentChanged(DocumentChange::metadata().updated(wardUnitNumber));
+
+    // Trigger stake lookup if we got stake unit number and don't already have it
+    QString stakeUnit = wardInfo.stakeUnitNumber();
+    if (!stakeUnit.isEmpty()
+        && !m_pendingStakeLookups.contains(stakeUnit)
+        && !document().metadata().findStakeByUnit(stakeUnit).has_value())
+    {
+        m_pendingStakeLookups.insert(stakeUnit);
+        m_unitLookupService->lookupStake(stakeUnit);
     }
 
     // Process next incomplete ward
     checkForIncompleteWards();
-    autoSave();
 }
 
 void DocumentManager::onStakeLookupComplete(const QString& stakeUnitNumber, const Stake& stakeInfo)
 {
-    m_pendingStakeLookups.remove(stakeUnitNumber);
+    if (!m_pendingStakeLookups.remove(stakeUnitNumber) || !mayWriteDirectory())
+    {
+        return;
+    }
 
-    // Add or update stake
-    m_document.metadata().updateStake(stakeInfo);
-    emit documentChanged(DocumentChange::metadata().updated(stakeUnitNumber));
-    autoSave();
+    if (m_session->edit(DocumentSession::Edit::Directory, [&](Document& document)
+        {
+            document.metadata().updateStake(stakeInfo);
+        })
+        == DocumentSession::Refusal::None)
+    {
+        emit documentChanged(DocumentChange::metadata().updated(stakeUnitNumber));
+    }
 }
 
 void DocumentManager::onLookupFailed(const QString& unitNumber, const QString& error)
@@ -269,8 +663,13 @@ void DocumentManager::onLookupFailed(const QString& unitNumber, const QString& e
 
 void DocumentManager::startBatchGeocoding()
 {
+    if (!mayWriteDirectory())
+    {
+        return;
+    }
+
     // Queue all families that need geocoding
-    for (const auto& family : m_document.families())
+    for (const auto& family : document().families())
     {
         if (!family.address().isEmpty() && !family.isMapped())
         {
@@ -291,120 +690,26 @@ bool DocumentManager::isGeocoding() const
 
 void DocumentManager::onFamilyGeocoded(const FamilyId& id, double latitude, double longitude)
 {
-    // Silent update - no undo/redo, no signal (nothing needs to rebuild for coord changes)
-    auto existing = m_document.findFamilyById(id);
-    if (existing.has_value())
+    // A result for a directory this device may no longer write is dropped.
+    if (!mayWriteDirectory())
     {
-        Family updated = *existing;
-        updated.setLocation(latitude, longitude);
-        m_document.updateFamily(updated);
+        return;
     }
+
+    // Silent update - no undo/redo, no signal (nothing needs to rebuild for coord changes)
+    m_session->edit(DocumentSession::Edit::Directory, [&](Document& document)
+    {
+        std::optional<Family> existing = document.findFamilyById(id);
+        if (existing.has_value())
+        {
+            Family updated = *existing;
+            updated.setLocation(latitude, longitude);
+            document.updateFamily(updated);
+        }
+    });
 }
 
 void DocumentManager::onGeocodingFinished()
 {
     emit geocodingFinished();
-    autoSave();
-}
-
-// ============================================================================
-// Emergency Response Data
-// ============================================================================
-
-void DocumentManager::setEmergencyResponse(const std::optional<EmergencyResponse>& response)
-{
-    m_document.setEmergencyResponse(response);
-    saveDocumentOnly();
-}
-
-bool DocumentManager::saveDocumentOnly()
-{
-    if (m_filePath.isEmpty())
-    {
-        return false;
-    }
-    QString errorMessage;
-    if (!JsonService::saveDocument(m_filePath, m_document, &errorMessage))
-    {
-        qWarning() << "Response data save failed:" << errorMessage;
-        emit autoSaveFailed(errorMessage);
-        return false;
-    }
-    return true;
-}
-
-// ============================================================================
-// Auto-Save
-// ============================================================================
-
-void DocumentManager::autoSave()
-{
-    ensureFilePath();
-    maybeRenameForWard();
-
-    if (m_filePath.isEmpty())
-    {
-        return;
-    }
-
-    QString errorMessage;
-    if (!saveDocument(&errorMessage))
-    {
-        qWarning() << "Auto-save failed:" << errorMessage;
-        emit autoSaveFailed(errorMessage);
-    }
-}
-
-void DocumentManager::ensureFilePath()
-{
-    if (!m_filePath.isEmpty())
-    {
-        return;
-    }
-
-    QString filename = m_document.suggestedFilename();
-    if (filename.isEmpty())
-    {
-        filename = tr("Untitled");
-    }
-
-    QString documentsDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
-    setFilePath(buildUniquePath(documentsDir, filename, DocumentConstants::FileExtension));
-}
-
-void DocumentManager::maybeRenameForWard()
-{
-    if (m_filePath.isEmpty())
-    {
-        return;
-    }
-
-    QString suggestedName = m_document.suggestedFilename();
-    if (suggestedName.isEmpty())
-    {
-        return;
-    }
-
-    QFileInfo fileInfo(m_filePath);
-    QString currentBaseName = fileInfo.completeBaseName();
-
-    // Only rename if the file is still "Untitled" (or "Untitled (N)")
-    if (!currentBaseName.startsWith(tr("Untitled")))
-    {
-        return;
-    }
-
-    QString newPath = buildUniquePath(fileInfo.absolutePath(), suggestedName,
-                                      DocumentConstants::FileExtension);
-
-    // Rename the file on disk (if it exists yet)
-    if (QFile::exists(m_filePath))
-    {
-        if (!QFile::rename(m_filePath, newPath))
-        {
-            return;  // Rename failed: keep the old path, no harm done
-        }
-    }
-
-    setFilePath(newPath);
 }

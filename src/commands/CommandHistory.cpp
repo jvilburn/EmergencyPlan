@@ -10,7 +10,6 @@ void CommandHistory::execute(CommandPtr command, Document& document)
 {
     bool couldUndo = canUndo();
     bool couldRedo = canRedo();
-    bool wasDirty = isDirty();
 
     // Execute the command
     command->execute(document);
@@ -21,7 +20,7 @@ void CommandHistory::execute(CommandPtr command, Document& document)
     // Clear redo stack (new action invalidates redo history)
     m_redoStack.clear();
 
-    emitStateChanges(couldUndo, couldRedo, wasDirty);
+    emitStateChanges(couldUndo, couldRedo);
 }
 
 DocumentChange CommandHistory::undo(Document& document)
@@ -33,7 +32,6 @@ DocumentChange CommandHistory::undo(Document& document)
 
     bool couldUndo = canUndo();
     bool couldRedo = canRedo();
-    bool wasDirty = isDirty();
 
     // Pop from undo stack
     CommandPtr command = std::move(m_undoStack.back());
@@ -48,7 +46,7 @@ DocumentChange CommandHistory::undo(Document& document)
     // Push to redo stack
     m_redoStack.push_back(std::move(command));
 
-    emitStateChanges(couldUndo, couldRedo, wasDirty);
+    emitStateChanges(couldUndo, couldRedo);
 
     return change;
 }
@@ -62,7 +60,6 @@ DocumentChange CommandHistory::redo(Document& document)
 
     bool couldUndo = canUndo();
     bool couldRedo = canRedo();
-    bool wasDirty = isDirty();
 
     // Pop from redo stack
     CommandPtr command = std::move(m_redoStack.back());
@@ -77,7 +74,7 @@ DocumentChange CommandHistory::redo(Document& document)
     // Push to undo stack
     m_undoStack.push_back(std::move(command));
 
-    emitStateChanges(couldUndo, couldRedo, wasDirty);
+    emitStateChanges(couldUndo, couldRedo);
 
     return change;
 }
@@ -100,36 +97,18 @@ QString CommandHistory::redoDescription() const
     return m_redoStack.back()->description();
 }
 
-void CommandHistory::markSaved()
-{
-    bool wasDirty = isDirty();
-    m_savedPosition = m_undoStack.size();
-
-    if (wasDirty != isDirty())
-    {
-        emit dirtyChanged();
-    }
-}
-
-bool CommandHistory::isDirty() const
-{
-    return m_undoStack.size() != m_savedPosition;
-}
-
 void CommandHistory::clear()
 {
     bool couldUndo = canUndo();
     bool couldRedo = canRedo();
-    bool wasDirty = isDirty();
 
     m_undoStack.clear();
     m_redoStack.clear();
-    m_savedPosition = 0;
 
-    emitStateChanges(couldUndo, couldRedo, wasDirty);
+    emitStateChanges(couldUndo, couldRedo);
 }
 
-void CommandHistory::emitStateChanges(bool couldUndo, bool couldRedo, bool wasDirty)
+void CommandHistory::emitStateChanges(bool couldUndo, bool couldRedo)
 {
     if (couldUndo != canUndo())
     {
@@ -138,9 +117,5 @@ void CommandHistory::emitStateChanges(bool couldUndo, bool couldRedo, bool wasDi
     if (couldRedo != canRedo())
     {
         emit canRedoChanged();
-    }
-    if (wasDirty != isDirty())
-    {
-        emit dirtyChanged();
     }
 }

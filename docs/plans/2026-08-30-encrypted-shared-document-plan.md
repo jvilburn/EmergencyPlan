@@ -2828,6 +2828,28 @@ Commit as `feat: HTTP server transport`.
 
 ### Task 14: Wire the app to the core
 
+> **Done**, with these differences from the text below:
+> - `openDocument(id)` answers `DocumentManager::Open`: `Opened`, `Fetching` (a shared ward
+>   being downloaded, reported later through `fetchFailed` if it cannot be), `NotFound`,
+>   `NeedsNewerVersion`, `Refused` with its reason, or `NotClosed` when the open ward could
+>   not be saved first.
+> - With no ward open the window shows an empty document, and the first edit makes it a
+>   new ward. At startup `openLastWard` reopens the last ward when it is still in the
+>   library.
+> - A copy opened read-only (Task 11) is shown in place of the ward with a banner naming
+>   the people its roster lets read it; every edit to it is refused.
+> - The first screen is `FirstRunDialog`. Its **Yes** shows a message until Task 23
+>   builds linking. **Set Up This Device Again...** in the File menu, enabled only while
+>   the library is empty, is the `startOver` route.
+> - Batch geocoding is gated in `BackgroundGeocodingService::queueFamily` as well as in
+>   `DocumentManager`, since the service also queues families on its own document
+>   changes.
+> - `JsonService` goes entirely, and `CommandHistory` loses its saved position and
+>   `dirtyChanged`, each with its last caller.
+> - The test constructor takes the identity and an open session and makes no library,
+>   server, or queue; the geocoding and unit lookup services exist but are never asked
+>   to send.
+
 **Files:** `src/main.cpp`, `src/services/DocumentManager.h/.cpp`,
 `src/services/EmergencyManager.h/.cpp`,
 `src/widgets/MainWindow.h/.cpp`, `tests/services/DocumentManagerTest.h/.cpp`

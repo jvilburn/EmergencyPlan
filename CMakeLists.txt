@@ -153,7 +153,6 @@ set(COMMAND_HEADERS
 
 set(SERVICE_SOURCES
     src/services/DocumentManager.cpp
-    src/services/JsonService.cpp
     src/services/PdfExtractor.cpp
     src/services/PdfFieldUtils.cpp
     src/services/PersonMatching.cpp
@@ -206,7 +205,6 @@ set(SERVICE_SOURCES
 
 set(SERVICE_HEADERS
     src/services/DocumentManager.h
-    src/services/JsonService.h
     src/services/PdfExtractor.h
     src/services/PersonMatching.h
     src/services/WardDirectoryImportService.h
@@ -270,6 +268,7 @@ set(WIDGET_SOURCES
     src/widgets/ActionButtonsWidget.cpp
     src/widgets/ContactAttemptDialog.cpp
     src/widgets/NotifyDialog.cpp
+    src/widgets/FirstRunDialog.cpp
     src/widgets/OpenWardDialog.cpp
     src/widgets/TaskDialog.cpp
     src/widgets/TaskListView.cpp
@@ -322,6 +321,7 @@ set(WIDGET_HEADERS
     src/widgets/ActionButtonsWidget.h
     src/widgets/ContactAttemptDialog.h
     src/widgets/NotifyDialog.h
+    src/widgets/FirstRunDialog.h
     src/widgets/OpenWardDialog.h
     src/widgets/TaskDialog.h
     src/widgets/TaskListView.h

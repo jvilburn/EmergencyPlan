@@ -1,12 +1,18 @@
 #pragma once
 
 #include <QObject>
+
+#include <functional>
 #include <optional>
 
 #include "EmergencyResponse.h"
 
 struct DocumentChange;
 
+/// The emergency response, read from the open document and changed in place
+/// through DocumentManager::editResponse. It keeps no copy of its own, so a
+/// document replaced by a fast-forward or a merge is what the next change builds
+/// on, and the other side's records are never overwritten by a stale one.
 class EmergencyManager : public QObject
 {
     Q_OBJECT
@@ -67,11 +73,23 @@ private slots:
     void onDocumentChanged(const DocumentChange& change);
 
 private:
-    void persistResponseData();
-    void syncFromDocument();
+    const std::optional<EmergencyResponse>& current() const;
+
+    /// Changes one family's record in place; false when there is no response, no
+    /// such record, or the change was refused.
+    bool changeRecord(const FamilyId& familyId, const std::function<void(FamilyResponseRecord&)>& change);
+
+    /// Changes one task of a family's record in place; false as changeRecord, or
+    /// when there is no such task.
+    bool changeTask(const FamilyId& familyId,
+                    const TaskId& taskId,
+                    const std::function<void(ResponseTask&)>& change);
+
     void syncFamilies();  // add records for new families, called on document changes
 
-    std::optional<EmergencyResponse> m_response;
+    /// Whether the response was active at the last document change, so a change
+    /// that starts or ends it is told apart.
+    bool m_wasActive = false;
 
     static EmergencyManager* s_instance;
 };

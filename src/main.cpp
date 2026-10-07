@@ -6,10 +6,16 @@
 #include <QStandardPaths>
 #include "AppSettings.h"
 #include "DocumentCrypto.h"
+#include "DocumentLibrary.h"
 #include "DocumentManager.h"
 #include "EmergencyManager.h"
+#include "FirstRunDialog.h"
+#include "HttpServerApi.h"
 #include "IdentityService.h"
 #include "MainWindow.h"
+#include "RosterChangeQueue.h"
+#include "ServerConnection.h"
+#include "SessionTimers.h"
 #include "SingleInstance.h"
 #include "TileService.h"
 
@@ -136,14 +142,38 @@ int main(int argc, char *argv[])
     }
 
     // Resolved before any document exists: there is no document without an identity.
-    std::unique_ptr<IdentityService> identity = resolveIdentity(deviceData.filePath("identity.json"));
-    if (!identity)
+    const QString identityPath = deviceData.filePath("identity.json");
+    std::unique_ptr<IdentityService> identityService = resolveIdentity(identityPath);
+    if (!identityService)
     {
         return 1;
     }
 
-    // Initialize core services (singletons)
-    DocumentManager documentManager(nullptr);
+    // The first screen, while no person exists on this device.
+    if (!identityService->identity().has_value())
+    {
+        FirstRunDialog firstRun(*identityService, nullptr);
+        if (firstRun.exec() != QDialog::Accepted)
+        {
+            return 0;
+        }
+    }
+    const DeviceIdentity identity = identityService->identity().value();
+
+    // Every service that takes the identity is built after it exists, and takes it
+    // by value.
+    HttpServerApi serverApi(*settings, nullptr);
+    ServerConnection server(serverApi, identity);
+    DocumentLibrary library(*settings, deviceData.filePath("wards"), identity);
+    RosterChangeQueue queue(identity,
+                            *settings,
+                            server,
+                            std::make_unique<QtSessionTimers>(),
+                            [&library](const QString& documentId) { return library.pathsFor(documentId); },
+                            nullptr);
+
+    // Stack locals, so the window goes first and the manager outlives it.
+    DocumentManager documentManager(identity, *settings, server, library, queue, nullptr);
     EmergencyManager emergencyManager(nullptr);
 
     // Initialize tile service for map rendering
@@ -151,8 +181,19 @@ int main(int argc, char *argv[])
     TileService::setInstance(&tileService);
     tileService.initialize();
 
-    MainWindow window(*settings, nullptr);
+    MainWindow window(*settings, library, nullptr);
+    QObject::connect(&window, &MainWindow::startOverRequested, &app, [&identityPath, &app]()
+    {
+        QString error;
+        if (!IdentityService::startOver(identityPath, &error))
+        {
+            QMessageBox::critical(nullptr, QObject::tr("Ward Planning"), error);
+        }
+        app.quit();
+    });
     window.show();
+
+    documentManager.openLastWard();
 
     // A file passed on the command line (a file association), and those a later
     // launch hands over.
