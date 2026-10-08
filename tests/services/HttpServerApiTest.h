@@ -18,6 +18,8 @@ private slots:
     void errorsAreReadByNameThenStatus();
 
     void aCallTravelsWithItsTokenSignatureAndBody();
+    void everyCallTakesItsRoute_data();
+    void everyCallTakesItsRoute();
     void aFailedAnswerIsItsNamedError();
     void anUnreadableOrFailingServerIsUnreachable();
     void noAddressIsUnreachableAfterTheCallReturns();

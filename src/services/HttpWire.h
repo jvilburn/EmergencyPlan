@@ -31,21 +31,52 @@
 /// | upload | `PUT /documents/{id}` | `{baseVersion, header, blob}` | `{version}` |
 /// | takeLease | `POST /documents/{id}/lease` | - | `{holder, expires}` |
 /// | releaseLease | `DELETE /documents/{id}/lease` | - | - |
-/// | requestAccess | `POST /documents/{id}/requests` | an access request | - |
-/// | accessRequests | `GET /documents/{id}/requests` | - | `{requests}` |
+/// | requestAccess | `POST /documents/{id}/requests` | an access request, below | - |
+/// | accessRequests | `GET /documents/{id}/requests` | - | `{requests: [access request]}` |
 /// | clearAccessRequest | `DELETE /documents/{id}/requests?device={fingerprint}` | - | - |
-/// | myRequestStatus | `GET /documents/{id}/requests/mine` | - | `{status}` |
+/// | myRequestStatus | `GET /documents/{id}/requests/mine` | - | `{status}`: `pending`, `granted`, or `withdrawn` |
 /// | myDocuments | `GET /me/documents` | - | `{documents}` |
 /// | startPairing | `POST /pairings` | `{deviceName, commitment}` | `{code}` |
-/// | pairing | `GET /pairings/{code}` | - | a pairing state |
+/// | pairing | `GET /pairings/{code}` | - | a pairing state, below |
 /// | respondToPairing | `PUT /pairings/{code}/responder` | `{publicKey, verifyKey}` | - |
 /// | revealPairing | `PUT /pairings/{code}/reveal` | `{publicKey, verifyKey, nonce}` | - |
 /// | handOver | `PUT /pairings/{code}/handover` | `{handover}` | - |
 /// | advanceClock | `POST /dev/clock` | `{seconds}` | - |
 ///
-/// A request that fails answers a non-2xx status with `{error}`, the ServerError's
-/// name with a lowercase first letter - `versionConflict`, `leaseHeld`. A reply
-/// that does not arrive, or a 5xx, is Unreachable.
+/// In the answers, `version` is a positive integer; `leaseHolder` and `holder` are
+/// fingerprints; `expires` is a time; `headers` is never empty and ends with the
+/// header of `version`; `documents` holds document ids.
+///
+/// An access request is `{member, displayName, deviceName, publicKey, verifyKey,
+/// pairingCode?}`: the member id in hex, the two names as text, the device's two
+/// public keys in base64, and the pairing code of an in-person invite. A request
+/// without one leaves `pairingCode` out, and its canonical body
+/// (ServerContract::requestAccessBody) signs it as empty text.
+///
+/// A pairing state is `{code, initiatorDeviceName, commitment, responder?, initiator?,
+/// nonce?, handover?, expires}`: `responder` and `initiator` are each
+/// `{publicKey, verifyKey}`, present once written; `commitment`, `nonce`, and
+/// `handover` are base64, the last two present once written.
+///
+/// A request that fails answers with `{error}`, the ServerError's name with a
+/// lowercase first letter, and this status:
+///
+/// | Status | Errors |
+/// |---|---|
+/// | 400 | `invalidRequest` |
+/// | 401 | `unauthenticated` |
+/// | 403 | `notAllowListed`, `deviceNotInvited` |
+/// | 404 | `unknownDocument`, `notFound` |
+/// | 409 | `versionConflict`, `idTaken`, `alreadyWritten`, `outOfOrder` |
+/// | 410 | `expired` |
+/// | 422 | `chainRefused`, `payloadMismatch`, `counterJump` |
+/// | 423 | `leaseHeld` |
+/// | 429 | `rateLimited` |
+///
+/// The client reads the name. An answer naming none it knows is `invalidRequest`.
+/// One with no `{error}` at all - a proxy's page, a wrong address - is Unreachable,
+/// except a bare 401 or 429, which a front end may send for the server. A redirect, a
+/// 5xx, and no answer are Unreachable.
 namespace HttpWire
 {
 
@@ -76,8 +107,8 @@ std::optional<QStringList> readDocumentIds(const QJsonObject& json);
 std::optional<QString> readPairingCode(const QJsonObject& json);
 std::optional<ServerContract::PairingState> readPairingState(const QJsonObject& json);
 
-/// The error a failed request names, or by its status when it names none this
-/// build knows. 5xx is Unreachable: the server is there but not answering.
+/// The error a failed request names; see the table above for an answer that names
+/// none.
 ServerContract::ServerError readError(int httpStatus, const QByteArray& body);
 
 } // namespace HttpWire

@@ -11,9 +11,52 @@
 #include <QUrl>
 
 using namespace ServerContract;
+using namespace std::placeholders;
 
 namespace
 {
+
+/// Answers reply from a finished request: read's reading of a 2xx body, or why
+/// there is none. route names the call in a warning without anything it carried.
+template<typename T>
+void answerFrom(QNetworkReply* answer,
+                const std::function<std::optional<T>(const QJsonObject&)>& read,
+                const Reply<T>& reply,
+                const QString& route)
+{
+    answer->deleteLater();
+
+    // No HTTP answer at all - refused, timed out, no route, a TLS failure - or a
+    // success cut off partway. A 4xx carries an error too, and its body says which.
+    const QVariant status = answer->attribute(QNetworkRequest::HttpStatusCodeAttribute);
+    const int code = status.isValid() ? status.toInt() : 0;
+    const bool success = code >= 200 && code < 300;
+    if (code == 0 || (success && answer->error() != QNetworkReply::NoError))
+    {
+        reply(Result<T>::failure(ServerError::Unreachable));
+        return;
+    }
+
+    const QByteArray bytes = answer->readAll();
+    if (!success)
+    {
+        reply(Result<T>::failure(HttpWire::readError(code, bytes)));
+        return;
+    }
+
+    const QJsonDocument document = QJsonDocument::fromJson(bytes);
+    const QJsonObject json = bytes.isEmpty() ? QJsonObject() : document.object();
+    const std::optional<T> value = (bytes.isEmpty() || document.isObject()) ? read(json) : std::nullopt;
+    if (!value.has_value())
+    {
+        // A server that answers in a shape this build cannot read is as good as
+        // absent.
+        qWarning() << "Unreadable server answer to" << route;
+        reply(Result<T>::failure(ServerError::Unreachable));
+        return;
+    }
+    reply(Result<T>::success(value.value()));
+}
 
 QString documentPath(const QString& documentId)
 {
@@ -79,43 +122,26 @@ void HttpServerApi::send(const Call& call,
         body = QJsonDocument(call.body.value()).toJson(QJsonDocument::Compact);
     }
 
-    QNetworkReply* answer = m_network.sendCustomRequest(request, call.method, body);
+    QNetworkReply* answer = nullptr;
+    if (call.method == "GET")
+    {
+        answer = m_network.get(request);
+    }
+    else if (call.method == "DELETE")
+    {
+        answer = m_network.deleteResource(request);
+    }
+    else
+    {
+        // A POST or PUT always says its length, an empty body included.
+        request.setHeader(QNetworkRequest::ContentLengthHeader, body.size());
+        answer = call.method == "PUT" ? m_network.put(request, body) : m_network.post(request, body);
+    }
+
     // For a warning: the method and first segment only, since a path can carry a
     // pairing code.
     const QString route = QString::fromLatin1(call.method) + " /" + call.path.section('/', 1, 1);
-    connect(answer, &QNetworkReply::finished, this, [answer, read, reply, route]()
-    {
-        answer->deleteLater();
-
-        const QVariant status = answer->attribute(QNetworkRequest::HttpStatusCodeAttribute);
-        if (!status.isValid())
-        {
-            // No HTTP answer at all: refused, timed out, no route, a TLS failure.
-            reply(Result<T>::failure(ServerError::Unreachable));
-            return;
-        }
-
-        const int code = status.toInt();
-        const QByteArray bytes = answer->readAll();
-        if (code < 200 || code >= 300)
-        {
-            reply(Result<T>::failure(HttpWire::readError(code, bytes)));
-            return;
-        }
-
-        const QJsonDocument document = QJsonDocument::fromJson(bytes);
-        const QJsonObject json = bytes.isEmpty() ? QJsonObject() : document.object();
-        const std::optional<T> value = (bytes.isEmpty() || document.isObject()) ? read(json) : std::nullopt;
-        if (!value.has_value())
-        {
-            // A server that answers in a shape this build cannot read is as good
-            // as absent; the route names it without anything it carried.
-            qWarning() << "Unreadable server answer to" << route;
-            reply(Result<T>::failure(ServerError::Unreachable));
-            return;
-        }
-        reply(Result<T>::success(value.value()));
-    });
+    connect(answer, &QNetworkReply::finished, this, std::bind(&answerFrom<T>, answer, read, reply, route));
 }
 
 void HttpServerApi::sendForDone(const Call& call, Reply<Done> reply)

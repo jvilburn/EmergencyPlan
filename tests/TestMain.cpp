@@ -1,6 +1,6 @@
 #include "AccessControlTest.h"
-#include "AppSettings.h"
 #include "AccessRosterTest.h"
+#include "AppSettings.h"
 #include "AppSettingsTest.h"
 #include "CryptoLinkTest.h"
 #include "CryptoTypesTest.h"
@@ -16,9 +16,9 @@
 #include "FakeServer.h"
 #include "FakeServerTest.h"
 #include "FileOpenRouterTest.h"
+#include "FormatVectorsTest.h"
 #include "HttpServerApi.h"
 #include "HttpServerApiTest.h"
-#include "FormatVectorsTest.h"
 #include "IdentityFileTest.h"
 #include "IdentityServiceTest.h"
 #include "ModelParsersTest.h"
@@ -36,6 +36,7 @@
 #include <QTemporaryDir>
 #include <QtTest>
 
+#include <functional>
 #include <memory>
 
 namespace
@@ -44,6 +45,11 @@ namespace
 std::unique_ptr<ServerContract::ServerApi> makeFakeServer()
 {
     return std::make_unique<FakeServer>();
+}
+
+std::unique_ptr<ServerContract::ServerApi> makeHttpServer(const AppSettings& settings)
+{
+    return std::make_unique<HttpServerApi>(settings, nullptr);
 }
 
 /// The real server's address for the conformance run, from the environment;
@@ -98,14 +104,16 @@ int main(int argc, char** argv)
 
     if (qEnvironmentVariableIsSet(ServerAddressVariable))
     {
+        // The run's settings live in a folder of their own, never the working one.
         QTemporaryDir folder;
+        if (!folder.isValid())
+        {
+            qCritical("No temporary folder for the conformance run's settings");
+            return 1;
+        }
         std::unique_ptr<AppSettings> settings = AppSettings::open(folder.filePath("settings.json"), nullptr);
         settings->setServerAddressOverride(qEnvironmentVariable(ServerAddressVariable));
-        AppSettings& real = *settings;
-        status |= run<ServerConformanceTest>(argc, argv, [&real]()
-        {
-            return std::unique_ptr<ServerContract::ServerApi>(std::make_unique<HttpServerApi>(real, nullptr));
-        });
+        status |= run<ServerConformanceTest>(argc, argv, std::bind(&makeHttpServer, std::ref(*settings)));
     }
     else
     {

@@ -2785,16 +2785,21 @@ Commit as `feat: route documents opened by path through their header`.
 > - The codecs are `HttpWire`, apart from the transport, so the tests pin each request's
 >   exact JSON and read each answer from literal JSON rather than round-tripping through
 >   two directions of this build's own code.
-> - An error answer names its `ServerError`; the status decides only when it names none
->   this build knows. A 5xx, an answer in a shape this build cannot read, and no answer
->   at all are each `Unreachable`.
+> - An error answer names its `ServerError`, and `HttpWire.h` gives the status each is
+>   sent with. A name this build does not know is `InvalidRequest`. An answer naming
+>   none is `Unreachable`, except a bare 401 or 429; so are a redirect, a 5xx, an answer
+>   this build cannot read, a transfer cut off, and no answer at all.
+> - Every call is checked on the wire - method, path and query, token, signature, body,
+>   and a POST or PUT's length - and every test that expects `Unreachable` waits for the
+>   reply itself, so a reply that never came cannot pass for one.
 > - A local one-shot HTTP responder in the test checks the method, path, token, signature,
 >   and body that reach the wire.
 > - The conformance run reads `WARD_PLANNING_SERVER_URL` in `tests/TestMain.cpp`, so
 >   `ServerConformanceTest.cpp` is unchanged.
 
-**Files:** `src/services/HttpServerApi.h/.cpp`, `tests/services/HttpServerApiTest.h/.cpp`,
-`tests/services/ServerConformanceTest.cpp`, `CMakeLists.txt`
+**Files:** `src/services/HttpServerApi.h/.cpp`, `src/services/HttpWire.h/.cpp`,
+`tests/services/HttpServerApiTest.h/.cpp`, `tests/TestMain.cpp`, `CMakeLists.txt`,
+`tests/CMakeLists.txt`
 
 `HttpServerApi` implements `ServerApi` (Task 6.1) over `QNetworkAccessManager`, in the same
 shape as the existing geocoding services (`Qt6::Network` is already linked,

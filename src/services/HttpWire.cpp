@@ -201,26 +201,18 @@ std::optional<ServerError> errorNamed(const QString& name)
     return std::nullopt;
 }
 
+/// For an answer that names no error: only the statuses a front end may send on
+/// the server's behalf mean anything without one.
 ServerError errorForStatus(int httpStatus)
 {
     switch (httpStatus)
     {
     case 401:
         return ServerError::Unauthenticated;
-    case 403:
-        return ServerError::NotAllowListed;
-    case 404:
-        return ServerError::NotFound;
-    case 409:
-        return ServerError::VersionConflict;
-    case 410:
-        return ServerError::Expired;
-    case 423:
-        return ServerError::LeaseHeld;
     case 429:
         return ServerError::RateLimited;
     default:
-        return httpStatus >= 500 ? ServerError::Unreachable : ServerError::InvalidRequest;
+        return ServerError::Unreachable;
     }
 }
 
@@ -466,21 +458,18 @@ std::optional<ServerContract::PairingState> readPairingState(const QJsonObject& 
 
 ServerError readError(int httpStatus, const QByteArray& body)
 {
-    if (httpStatus >= 500)
+    // A redirect not followed, or a server failing, is a server not there.
+    if (httpStatus < 400 || httpStatus >= 500)
     {
         return ServerError::Unreachable;
     }
 
     const QJsonDocument document = QJsonDocument::fromJson(body);
-    if (document.isObject())
+    if (!document.isObject() || !document.object().value(KeyError).isString())
     {
-        const std::optional<ServerError> named = errorNamed(document.object().value(KeyError).toString());
-        if (named.has_value())
-        {
-            return named.value();
-        }
+        return errorForStatus(httpStatus);
     }
-    return errorForStatus(httpStatus);
+    return errorNamed(document.object().value(KeyError).toString()).value_or(ServerError::InvalidRequest);
 }
 
 } // namespace HttpWire

@@ -11,7 +11,8 @@
 
 class AppSettings;
 
-/// ServerApi over HTTPS, in HttpWire's format. Transport only: routes, bodies, the
+/// ServerApi over HTTP(S), in HttpWire's format. Plain http is for a development
+/// server on this machine; anywhere else the address is https. Transport only: routes, bodies, the
 /// session token and request signature in headers, and HTTP status mapped onto
 /// ServerError. Signing in and signing requests are ServerConnection's.
 ///

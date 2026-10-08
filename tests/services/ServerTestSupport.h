@@ -24,12 +24,13 @@ namespace ServerTestSupport
 using ChainTestSupport::TestDevice;
 
 /// Runs call with a reply that stores the result, then spins a QEventLoop until
-/// it arrives. Ten seconds without one is ServerError::Unreachable. Waiting on the
-/// event loop serves the fake and a real server alike.
+/// it arrives. Seventy seconds without one is ServerError::Unreachable: past
+/// HttpServerApi's own transfer timeout, so a slow real server still answers
+/// inside it. Waiting on the event loop serves the fake and a real server alike.
 template<typename T>
 ServerContract::Result<T> wait(const std::function<void(ServerContract::Reply<T>)>& call)
 {
-    constexpr int TimeoutMilliseconds = 10 * 1000;
+    constexpr int TimeoutMilliseconds = 70 * 1000;
 
     // Shared with the reply, which may still arrive after a timeout has returned.
     const std::shared_ptr<std::optional<ServerContract::Result<T>>> result =

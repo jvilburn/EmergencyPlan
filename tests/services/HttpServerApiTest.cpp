@@ -1,11 +1,11 @@
 #include "HttpServerApiTest.h"
 
 #include "AppSettings.h"
+#include "ChainTestSupport.h"
 #include "DocumentCrypto.h"
 #include "DocumentFile.h"
 #include "HttpServerApi.h"
 #include "HttpWire.h"
-#include "ServerTestSupport.h"
 #include "SessionTestSupport.h"
 
 #include <QHash>
@@ -22,7 +22,6 @@
 #include <memory>
 
 using namespace ServerContract;
-using ServerTestSupport::wait;
 
 namespace
 {
@@ -81,9 +80,10 @@ public:
         : m_response(response)
     {
         m_server.listen(QHostAddress::LocalHost);
-        QObject::connect(&m_server, &QTcpServer::newConnection, &m_server, [this]() { accept(); });
+        QObject::connect(&m_server, &QTcpServer::newConnection, &m_server, std::bind(&CannedServer::accept, this));
     }
 
+    bool isListening() const { return m_server.isListening(); }
     QString address() const { return QString("http://127.0.0.1:%1").arg(m_server.serverPort()); }
     const std::optional<Captured>& captured() const { return m_captured; }
 
@@ -96,12 +96,14 @@ private:
             return;
         }
         std::shared_ptr<QByteArray> buffer = std::make_shared<QByteArray>();
-        QObject::connect(socket, &QTcpSocket::readyRead, socket, [this, socket, buffer]()
-        {
-            buffer->append(socket->readAll());
-            answerOnceComplete(socket, *buffer);
-        });
+        QObject::connect(socket, &QTcpSocket::readyRead, socket, std::bind(&CannedServer::read, this, socket, buffer));
         QObject::connect(socket, &QTcpSocket::disconnected, socket, &QObject::deleteLater);
+    }
+
+    void read(QTcpSocket* socket, const std::shared_ptr<QByteArray>& buffer)
+    {
+        buffer->append(socket->readAll());
+        answerOnceComplete(socket, *buffer);
     }
 
     void answerOnceComplete(QTcpSocket* socket, const QByteArray& buffer)
@@ -142,6 +144,23 @@ private:
     QByteArray m_response;
     std::optional<Captured> m_captured;
 };
+
+/// Longer than any answer from a local responder takes; a reply not in by then
+/// never came.
+constexpr int AnswerMilliseconds = 15 * 1000;
+
+/// Records a reply's answer, and that it came.
+template<typename T>
+void record(std::optional<Result<T>>& out, const Result<T>& result)
+{
+    out = result;
+}
+
+template<typename T>
+Reply<T> recordTo(std::optional<Result<T>>& out)
+{
+    return std::bind(&record<T>, std::ref(out), std::placeholders::_1);
+}
 
 /// Settings over a fresh folder, pointing at address.
 std::unique_ptr<AppSettings> settingsFor(const QTemporaryDir& folder, const QString& address)
@@ -327,6 +346,30 @@ void HttpServerApiTest::illFormedAnswersAreRefused_data()
     QTest::newRow("empty document id") << "documents" << QByteArray(R"({"documents": [""]})");
     QTest::newRow("pairing with no expiry")
         << "pairing" << QByteArray(R"({"code": "K7Q2M9", "initiatorDeviceName": "Phone", "commitment": "BQU="})");
+    QTest::newRow("pairing expiry without milliseconds")
+        << "pairing"
+        << QByteArray(R"({"code": "K7Q2M9", "initiatorDeviceName": "Phone", "commitment": "BQU=",)"
+                      R"( "expires": "2026-10-07T12:10:00Z"})");
+    QTest::newRow("pairing responder with a short key")
+        << "pairing"
+        << QByteArray(R"({"code": "K7Q2M9", "initiatorDeviceName": "Phone", "commitment": "BQU=",)"
+                      R"( "responder": {"publicKey": "AwM=",)"
+                      R"( "verifyKey": "BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ="},)"
+                      R"( "expires": "2026-10-07T12:10:00.000Z"})");
+    QTest::newRow("pairing initiator not an object")
+        << "pairing"
+        << QByteArray(R"({"code": "K7Q2M9", "initiatorDeviceName": "Phone", "commitment": "BQU=",)"
+                      R"( "initiator": "keys", "expires": "2026-10-07T12:10:00.000Z"})");
+    QTest::newRow("pairing nonce not base64")
+        << "pairing"
+        << QByteArray(R"({"code": "K7Q2M9", "initiatorDeviceName": "Phone", "commitment": "BQU=",)"
+                      R"( "nonce": "not base64!", "expires": "2026-10-07T12:10:00.000Z"})");
+    QTest::newRow("holder in capitals")
+        << "lease"
+        << QByteArray(R"({"holder": "00112233445566778899AABBCCDDEEFF", "expires": "2026-10-07T12:00:00.000Z"})");
+    QTest::newRow("no headers in a chain") << "chain" << QByteArray(R"({"headers": []})");
+    QTest::newRow("no pairing code") << "code" << QByteArray(R"({})");
+    QTest::newRow("empty pairing code") << "code" << QByteArray(R"({"code": ""})");
 }
 
 void HttpServerApiTest::illFormedAnswersAreRefused()
@@ -375,6 +418,14 @@ void HttpServerApiTest::illFormedAnswersAreRefused()
     {
         QVERIFY(!HttpWire::readPairingState(object).has_value());
     }
+    else if (reader == "chain")
+    {
+        QVERIFY(!HttpWire::readHeaderChain(object).has_value());
+    }
+    else if (reader == "code")
+    {
+        QVERIFY(!HttpWire::readPairingCode(object).has_value());
+    }
     else
     {
         QFAIL("no such reader");
@@ -411,17 +462,18 @@ void HttpServerApiTest::errorsAreReadByNameThenStatus_data()
         QTest::newRow(name.first) << 400 << (QByteArray(R"({"error": ")") + name.first + R"("})") << name.second;
     }
 
-    // With no name this build knows, the status.
-    QTest::newRow("401") << 401 << QByteArray() << ServerError::Unauthenticated;
-    QTest::newRow("403") << 403 << QByteArray() << ServerError::NotAllowListed;
-    QTest::newRow("404") << 404 << QByteArray("not json") << ServerError::NotFound;
-    QTest::newRow("409") << 409 << QByteArray(R"({"error": "somethingNew"})") << ServerError::VersionConflict;
-    QTest::newRow("410") << 410 << QByteArray() << ServerError::Expired;
-    QTest::newRow("423") << 423 << QByteArray() << ServerError::LeaseHeld;
-    QTest::newRow("429") << 429 << QByteArray() << ServerError::RateLimited;
-    QTest::newRow("418") << 418 << QByteArray() << ServerError::InvalidRequest;
+    // A name this build does not know is not acted on as another.
+    QTest::newRow("unknown name") << 409 << QByteArray(R"({"error": "somethingNew"})") << ServerError::InvalidRequest;
 
-    // A server failing is not there, whatever it names.
+    // With no name, only what a front end may send for the server means anything.
+    QTest::newRow("bare 401") << 401 << QByteArray() << ServerError::Unauthenticated;
+    QTest::newRow("bare 429") << 429 << QByteArray() << ServerError::RateLimited;
+    QTest::newRow("bare 403") << 403 << QByteArray() << ServerError::Unreachable;
+    QTest::newRow("a page, not json") << 404 << QByteArray("<html>Not Found</html>") << ServerError::Unreachable;
+    QTest::newRow("an error that is not text") << 409 << QByteArray(R"({"error": 7})") << ServerError::Unreachable;
+
+    // A redirect not followed, or a server failing, whatever it names.
+    QTest::newRow("302") << 302 << QByteArray() << ServerError::Unreachable;
     QTest::newRow("500") << 500 << QByteArray(R"({"error": "leaseHeld"})") << ServerError::Unreachable;
     QTest::newRow("503") << 503 << QByteArray() << ServerError::Unreachable;
 }
@@ -437,58 +489,246 @@ void HttpServerApiTest::errorsAreReadByNameThenStatus()
 void HttpServerApiTest::aCallTravelsWithItsTokenSignatureAndBody()
 {
     CannedServer canned(httpResponse(200, R"({"version": 8})"));
+    QVERIFY(canned.isListening());
     QTemporaryDir folder;
     QVERIFY(folder.isValid());
     const std::unique_ptr<AppSettings> settings = settingsFor(folder, canned.address() + "/");
     HttpServerApi api(*settings, nullptr);
 
     const Upload upload = firstUpload();
-    const Session session{"session-token"};
-    const QByteArray signature(64, '\x07');
-    const Result<qint64> result = wait<qint64>([&](Reply<qint64> reply)
-    {
-        api.upload(session, upload.header.documentId, 7, upload, signature, reply);
-    });
+    std::optional<Result<qint64>> result;
+    api.upload(Session{"session-token"}, upload.header.documentId, 7, upload, QByteArray(64, '\x07'), recordTo(result));
+    QTRY_VERIFY_WITH_TIMEOUT(result.has_value(), AnswerMilliseconds);
 
-    QVERIFY(result.ok());
-    QCOMPARE(result.value.value(), qint64(8));
-    QVERIFY(canned.captured().has_value());
+    QVERIFY(result->ok());
+    QCOMPARE(result->value.value(), qint64(8));
     const Captured& request = canned.captured().value();
     QCOMPARE(request.method, QByteArray("PUT"));
     QCOMPARE(request.path, "/documents/" + upload.header.documentId.toLatin1());
     QCOMPARE(request.headers.value("authorization"), QByteArray("Bearer session-token"));
-    QCOMPARE(request.headers.value("x-request-signature"), signature.toBase64());
+    QCOMPARE(request.headers.value("x-request-signature"), QByteArray(64, '\x07').toBase64());
+    QCOMPARE(request.headers.value("content-type"), QByteArray("application/json"));
     QCOMPARE(QJsonDocument::fromJson(request.body).object(), HttpWire::uploadRequest(7, upload));
-
-    // A read carries the token, no signature, and its query. The canned answer is
-    // not a snapshot.
-    QTest::ignoreMessage(QtWarningMsg, QRegularExpression("Unreadable server answer"));
-    const Result<Snapshot> download = wait<Snapshot>([&](Reply<Snapshot> reply)
-    {
-        api.download(session, upload.header.documentId, 4, reply);
-    });
-    QVERIFY(!download.ok());
-    QCOMPARE(canned.captured()->method, QByteArray("GET"));
-    QCOMPARE(canned.captured()->path, "/documents/" + upload.header.documentId.toLatin1() + "?after=4");
-    QCOMPARE(canned.captured()->headers.value("authorization"), QByteArray("Bearer session-token"));
-    QVERIFY(!canned.captured()->headers.contains("x-request-signature"));
 }
 
-void HttpServerApiTest::aFailedAnswerIsItsNamedError()
+void HttpServerApiTest::everyCallTakesItsRoute_data()
 {
-    CannedServer canned(httpResponse(409, R"({"error": "leaseHeld"})"));
+    QTest::addColumn<QString>("call");
+    QTest::addColumn<QByteArray>("method");
+    QTest::addColumn<QString>("path");
+    QTest::addColumn<bool>("withToken");
+    QTest::addColumn<bool>("signedRequest");
+
+    // %1 is the document id, %2 the pairing code, %3 a device fingerprint.
+    QTest::newRow("challenge") << "challenge" << QByteArray("POST") << "/auth/challenge" << false << false;
+    QTest::newRow("authenticate") << "authenticate" << QByteArray("POST") << "/auth/session" << false << false;
+    QTest::newRow("registerDocument") << "registerDocument" << QByteArray("POST") << "/documents" << true << true;
+    QTest::newRow("head") << "head" << QByteArray("GET") << "/documents/%1/head" << true << false;
+    QTest::newRow("headers") << "headers" << QByteArray("GET") << "/documents/%1/headers?after=3" << true << false;
+    QTest::newRow("download") << "download" << QByteArray("GET") << "/documents/%1?after=3" << true << false;
+    QTest::newRow("upload") << "upload" << QByteArray("PUT") << "/documents/%1" << true << true;
+    QTest::newRow("takeLease") << "takeLease" << QByteArray("POST") << "/documents/%1/lease" << true << true;
+    QTest::newRow("releaseLease") << "releaseLease" << QByteArray("DELETE") << "/documents/%1/lease" << true << true;
+    QTest::newRow("requestAccess") << "requestAccess" << QByteArray("POST") << "/documents/%1/requests" << true << true;
+    QTest::newRow("accessRequests") << "accessRequests" << QByteArray("GET") << "/documents/%1/requests" << true << false;
+    QTest::newRow("clearAccessRequest")
+        << "clearAccessRequest" << QByteArray("DELETE") << "/documents/%1/requests?device=%3" << true << true;
+    QTest::newRow("myRequestStatus")
+        << "myRequestStatus" << QByteArray("GET") << "/documents/%1/requests/mine" << true << false;
+    QTest::newRow("myDocuments") << "myDocuments" << QByteArray("GET") << "/me/documents" << true << false;
+    QTest::newRow("startPairing") << "startPairing" << QByteArray("POST") << "/pairings" << true << true;
+    QTest::newRow("pairing") << "pairing" << QByteArray("GET") << "/pairings/%2" << true << false;
+    QTest::newRow("respondToPairing")
+        << "respondToPairing" << QByteArray("PUT") << "/pairings/%2/responder" << true << true;
+    QTest::newRow("revealPairing") << "revealPairing" << QByteArray("PUT") << "/pairings/%2/reveal" << true << true;
+    QTest::newRow("handOver") << "handOver" << QByteArray("PUT") << "/pairings/%2/handover" << true << true;
+    QTest::newRow("advanceClock") << "advanceClock" << QByteArray("POST") << "/dev/clock" << false << false;
+}
+
+void HttpServerApiTest::everyCallTakesItsRoute()
+{
+    QFETCH(QString, call);
+    QFETCH(QByteArray, method);
+    QFETCH(QString, path);
+    QFETCH(bool, withToken);
+    QFETCH(bool, signedRequest);
+
+    // Every call is refused, so each reply comes with no answer to read.
+    CannedServer canned(httpResponse(409, R"({"error": "versionConflict"})"));
+    QVERIFY(canned.isListening());
     QTemporaryDir folder;
     QVERIFY(folder.isValid());
     const std::unique_ptr<AppSettings> settings = settingsFor(folder, canned.address());
     HttpServerApi api(*settings, nullptr);
 
-    const Result<Lease> result = wait<Lease>([&](Reply<Lease> reply)
+    const QString documentId = ChainTestSupport::newDocumentId();
+    const QString code = "K7Q2M9";
+    const Session session{"session-token"};
+    const QByteArray signature(64, '\x07');
+    const Upload upload = firstUpload();
+    DeviceKeys keys;
+    keys.publicKey.bytes = QByteArray(32, '\x03');
+    keys.verifyKey.bytes = QByteArray(32, '\x04');
+    const Fingerprint device = DocumentCrypto::fingerprintOf(keys.publicKey, keys.verifyKey);
+    AccessRequest request;
+    request.member = MemberId::fromHex("00112233445566778899aabbccddeeff");
+    request.displayName = "Bob";
+    request.device = RosterDevice::create("Phone", keys.publicKey, keys.verifyKey);
+
+    // The body each call sends; none for a call that sends none.
+    std::optional<QJsonObject> body;
+    std::optional<ServerError> error;
+    std::optional<Result<Done>> done;
+    std::optional<Result<QByteArray>> bytes;
+    std::optional<Result<Session>> signedIn;
+    std::optional<Result<qint64>> version;
+    std::optional<Result<Head>> head;
+    std::optional<Result<HeaderChain>> chain;
+    std::optional<Result<Snapshot>> snapshot;
+    std::optional<Result<Lease>> lease;
+    std::optional<Result<QList<AccessRequest>>> requests;
+    std::optional<Result<RequestStatus>> status;
+    std::optional<Result<QStringList>> documents;
+    std::optional<Result<QString>> pairingCode;
+    std::optional<Result<PairingState>> pairing;
+
+    if (call == "challenge")
     {
-        api.takeLease(Session{"token"}, ChainTestSupport::newDocumentId(), QByteArray(64, '\x01'), reply);
-    });
-    QVERIFY(!result.ok());
-    QCOMPARE(result.error, ServerError::LeaseHeld);
-    QCOMPARE(canned.captured()->method, QByteArray("POST"));
+        api.challenge(recordTo(bytes));
+    }
+    else if (call == "authenticate")
+    {
+        body = HttpWire::authenticateRequest(keys.verifyKey, "challenge", signature);
+        api.authenticate(keys.verifyKey, "challenge", signature, recordTo(signedIn));
+    }
+    else if (call == "registerDocument")
+    {
+        body = HttpWire::registerRequest(upload);
+        api.registerDocument(session, upload, signature, recordTo(version));
+    }
+    else if (call == "head")
+    {
+        api.head(session, documentId, recordTo(head));
+    }
+    else if (call == "headers")
+    {
+        api.headers(session, documentId, 3, recordTo(chain));
+    }
+    else if (call == "download")
+    {
+        api.download(session, documentId, 3, recordTo(snapshot));
+    }
+    else if (call == "upload")
+    {
+        body = HttpWire::uploadRequest(5, upload);
+        api.upload(session, documentId, 5, upload, signature, recordTo(version));
+    }
+    else if (call == "takeLease")
+    {
+        api.takeLease(session, documentId, signature, recordTo(lease));
+    }
+    else if (call == "releaseLease")
+    {
+        api.releaseLease(session, documentId, signature, recordTo(done));
+    }
+    else if (call == "requestAccess")
+    {
+        body = HttpWire::accessRequestRequest(request);
+        api.requestAccess(session, documentId, request, signature, recordTo(done));
+    }
+    else if (call == "accessRequests")
+    {
+        api.accessRequests(session, documentId, recordTo(requests));
+    }
+    else if (call == "clearAccessRequest")
+    {
+        api.clearAccessRequest(session, documentId, device, signature, recordTo(done));
+    }
+    else if (call == "myRequestStatus")
+    {
+        api.myRequestStatus(session, documentId, recordTo(status));
+    }
+    else if (call == "myDocuments")
+    {
+        api.myDocuments(session, recordTo(documents));
+    }
+    else if (call == "startPairing")
+    {
+        body = HttpWire::startPairingRequest("Phone", QByteArray(32, '\x05'));
+        api.startPairing(session, "Phone", QByteArray(32, '\x05'), signature, recordTo(pairingCode));
+    }
+    else if (call == "pairing")
+    {
+        api.pairing(session, code, recordTo(pairing));
+    }
+    else if (call == "respondToPairing")
+    {
+        body = HttpWire::deviceKeysRequest(keys);
+        api.respondToPairing(session, code, keys, signature, recordTo(done));
+    }
+    else if (call == "revealPairing")
+    {
+        body = HttpWire::revealPairingRequest(keys, QByteArray(32, '\x06'));
+        api.revealPairing(session, code, keys, QByteArray(32, '\x06'), signature, recordTo(done));
+    }
+    else if (call == "handOver")
+    {
+        body = HttpWire::handOverRequest("signed handover");
+        api.handOver(session, code, "signed handover", signature, recordTo(done));
+    }
+    else if (call == "advanceClock")
+    {
+        body = HttpWire::advanceClockRequest(60);
+        api.advanceClock(60, recordTo(done));
+    }
+    else
+    {
+        QFAIL("no such call");
+    }
+
+    // The reply comes, once the server has answered.
+    QTRY_VERIFY_WITH_TIMEOUT(canned.captured().has_value(), AnswerMilliseconds);
+    QTRY_VERIFY_WITH_TIMEOUT(done || bytes || signedIn || version || head || chain || snapshot || lease || requests
+                                 || status || documents || pairingCode || pairing,
+                             AnswerMilliseconds);
+
+    const Captured& sent = canned.captured().value();
+    QCOMPARE(sent.method, method);
+    QString expected = path;
+    expected.replace("%1", documentId).replace("%2", code).replace("%3", device.toHex());
+    QCOMPARE(QString::fromLatin1(sent.path), expected);
+    QCOMPARE(sent.headers.value("authorization"), withToken ? QByteArray("Bearer session-token") : QByteArray());
+    QCOMPARE(sent.headers.value("x-request-signature"), signedRequest ? signature.toBase64() : QByteArray());
+    if (body.has_value())
+    {
+        QCOMPARE(QJsonDocument::fromJson(sent.body).object(), body.value());
+    }
+    else
+    {
+        QVERIFY(sent.body.isEmpty());
+    }
+
+    // A POST or PUT says its length, an empty body included.
+    if (method == "POST" || method == "PUT")
+    {
+        QCOMPARE(sent.headers.value("content-length"), QByteArray::number(sent.body.size()));
+    }
+}
+
+void HttpServerApiTest::aFailedAnswerIsItsNamedError()
+{
+    CannedServer canned(httpResponse(409, R"({"error": "leaseHeld"})"));
+    QVERIFY(canned.isListening());
+    QTemporaryDir folder;
+    QVERIFY(folder.isValid());
+    const std::unique_ptr<AppSettings> settings = settingsFor(folder, canned.address());
+    HttpServerApi api(*settings, nullptr);
+
+    std::optional<Result<Lease>> result;
+    api.takeLease(Session{"token"}, ChainTestSupport::newDocumentId(), QByteArray(64, '\x01'), recordTo(result));
+    QTRY_VERIFY_WITH_TIMEOUT(result.has_value(), AnswerMilliseconds);
+    QVERIFY(!result->ok());
+    QCOMPARE(result->error, ServerError::LeaseHeld);
 }
 
 void HttpServerApiTest::anUnreadableOrFailingServerIsUnreachable()
@@ -497,10 +737,12 @@ void HttpServerApiTest::anUnreadableOrFailingServerIsUnreachable()
         {httpResponse(200, "not json"), true},
         {httpResponse(200, R"({"version": "eight"})"), true},
         {httpResponse(503, R"({"error": "versionConflict"})"), false},
+        {httpResponse(404, "<html>Not Found</html>"), false},
     };
     for (const auto& [response, unreadable] : responses)
     {
         CannedServer canned(response);
+        QVERIFY(canned.isListening());
         QTemporaryDir folder;
         QVERIFY(folder.isValid());
         const std::unique_ptr<AppSettings> settings = settingsFor(folder, canned.address());
@@ -510,26 +752,25 @@ void HttpServerApiTest::anUnreadableOrFailingServerIsUnreachable()
         {
             QTest::ignoreMessage(QtWarningMsg, QRegularExpression("Unreadable server answer to \"POST /documents\""));
         }
-        const Result<qint64> result = wait<qint64>([&](Reply<qint64> reply)
-        {
-            api.registerDocument(Session{"token"}, firstUpload(), QByteArray(64, '\x01'), reply);
-        });
-        QCOMPARE(result.error, ServerError::Unreachable);
-        QVERIFY(canned.captured().has_value());
+        std::optional<Result<qint64>> result;
+        api.registerDocument(Session{"token"}, firstUpload(), QByteArray(64, '\x01'), recordTo(result));
+
+        // The reply comes: Unreachable here is the answer, not a wait that gave up.
+        QTRY_VERIFY_WITH_TIMEOUT(result.has_value(), AnswerMilliseconds);
+        QCOMPARE(result->error, ServerError::Unreachable);
     }
 
     // Anchor: a success with nothing to read is Done.
     CannedServer canned(httpResponse(204, QByteArray()));
+    QVERIFY(canned.isListening());
     QTemporaryDir folder;
     QVERIFY(folder.isValid());
     const std::unique_ptr<AppSettings> settings = settingsFor(folder, canned.address());
     HttpServerApi api(*settings, nullptr);
-    const Result<Done> released = wait<Done>([&](Reply<Done> reply)
-    {
-        api.releaseLease(Session{"token"}, ChainTestSupport::newDocumentId(), QByteArray(64, '\x01'), reply);
-    });
-    QVERIFY(released.ok());
-    QCOMPARE(canned.captured()->method, QByteArray("DELETE"));
+    std::optional<Result<Done>> released;
+    api.releaseLease(Session{"token"}, ChainTestSupport::newDocumentId(), QByteArray(64, '\x01'), recordTo(released));
+    QTRY_VERIFY_WITH_TIMEOUT(released.has_value(), AnswerMilliseconds);
+    QVERIFY(released->ok());
 }
 
 void HttpServerApiTest::noAddressIsUnreachableAfterTheCallReturns()
@@ -540,19 +781,11 @@ void HttpServerApiTest::noAddressIsUnreachableAfterTheCallReturns()
     QVERIFY(settings->serverAddress().isEmpty());
     HttpServerApi api(*settings, nullptr);
 
-    bool returned = false;
-    bool answeredBeforeReturn = false;
     std::optional<Result<QByteArray>> answer;
-    api.challenge([&](const Result<QByteArray>& result)
-    {
-        answeredBeforeReturn = !returned;
-        answer = result;
-    });
-    returned = true;
+    api.challenge(recordTo(answer));
     QVERIFY(!answer.has_value());
 
     QTRY_VERIFY(answer.has_value());
-    QVERIFY(!answeredBeforeReturn);
     QCOMPARE(answer->error, ServerError::Unreachable);
 }
 
@@ -569,9 +802,8 @@ void HttpServerApiTest::aRefusedConnectionIsUnreachable()
     const std::unique_ptr<AppSettings> settings = settingsFor(folder, address);
     HttpServerApi api(*settings, nullptr);
 
-    const Result<Head> result = wait<Head>([&](Reply<Head> reply)
-    {
-        api.head(Session{"token"}, ChainTestSupport::newDocumentId(), reply);
-    });
-    QCOMPARE(result.error, ServerError::Unreachable);
+    std::optional<Result<Head>> result;
+    api.head(Session{"token"}, ChainTestSupport::newDocumentId(), recordTo(result));
+    QTRY_VERIFY_WITH_TIMEOUT(result.has_value(), AnswerMilliseconds);
+    QCOMPARE(result->error, ServerError::Unreachable);
 }
