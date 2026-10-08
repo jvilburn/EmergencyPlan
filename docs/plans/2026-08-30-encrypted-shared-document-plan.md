@@ -2936,6 +2936,18 @@ Commit as `feat: run the app on the sync-and-save core`.
 
 ### Task 15: Restore the ward list and missing files
 
+> **Done**, with these differences from the text below:
+> - `DocumentLibrary::restore` runs at every startup, not only on an empty list: it adds
+>   whatever ward the server lists for this device that the library lacks, which also
+>   brings in a ward granted while the app was closed. A ward that cannot be fetched
+>   leaves the library again, so the next startup tries it afresh. When no ward is open,
+>   the first that arrives opens.
+> - `DocumentLibrary::fetchWard` fetches one ward and names its entry from what arrived;
+>   `DocumentManager` opens a shared ward with no usable file through it, so restore,
+>   open, and Task 21's grant share one path.
+> - `Entry::onDevice` lets the Open Ward dialog list a shared ward whose file is gone as
+>   not yet on this device, with **Fetch Tanglewood Ward from the Server** as its button.
+
 **Files:** `src/services/DocumentLibrary.cpp`, `src/widgets/OpenWardDialog.cpp`,
 `tests/services/DocumentLibraryTest.cpp`
 

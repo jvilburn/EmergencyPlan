@@ -18,9 +18,15 @@ OpenWardDialog::OpenWardDialog(const QList<DocumentLibrary::Entry>& entries, QWi
     m_list = new QListWidget(this);
     for (const DocumentLibrary::Entry& entry : entries)
     {
-        const QString where = entry.shared ? tr("Shared") : tr("On this device only");
+        QString where = entry.shared ? tr("Shared") : tr("On this device only");
+        if (entry.shared && !entry.onDevice)
+        {
+            where = tr("Shared, not yet on this device");
+        }
         QListWidgetItem* item = new QListWidgetItem(tr("%1  -  %2").arg(entry.wardName, where), m_list);
         item->setData(Qt::UserRole, entry.documentId);
+        item->setData(FetchRole, entry.shared && !entry.onDevice);
+        item->setData(NameRole, entry.wardName);
         if (entry.lastOpened.has_value())
         {
             item->setToolTip(tr("Last opened %1").arg(QLocale().toString(entry.lastOpened.value().toLocalTime(),
@@ -48,7 +54,18 @@ OpenWardDialog::OpenWardDialog(const QList<DocumentLibrary::Entry>& entries, QWi
 
 void OpenWardDialog::onSelectionChanged()
 {
-    m_openButton->setEnabled(!m_list->selectedItems().isEmpty());
+    const QList<QListWidgetItem*> selected = m_list->selectedItems();
+    m_openButton->setEnabled(!selected.isEmpty());
+
+    // A shared ward whose file is not here is fetched to open.
+    if (!selected.isEmpty() && selected.first()->data(FetchRole).toBool())
+    {
+        m_openButton->setText(tr("Fetch %1 from the Server").arg(selected.first()->data(NameRole).toString()));
+    }
+    else
+    {
+        m_openButton->setText(tr("Open"));
+    }
 }
 
 void OpenWardDialog::onAccepted()

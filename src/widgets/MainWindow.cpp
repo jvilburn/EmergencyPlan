@@ -370,6 +370,20 @@ void MainWindow::openWard(const QString& documentId)
     reportOpen(DocumentManager::instance()->openDocument(documentId, &reason), reason);
 }
 
+void MainWindow::onWardsRestored(const QStringList& documentIds)
+{
+    if (documentIds.isEmpty())
+    {
+        return;
+    }
+
+    statusBar()->showMessage(tr("%n ward(s) restored from the server", "", int(documentIds.size())), 5000);
+    if (DocumentManager::instance()->documentId().isEmpty() && !DocumentManager::instance()->copy().has_value())
+    {
+        openWard(documentIds.first());
+    }
+}
+
 void MainWindow::onFetchFinished(const QString& documentId, DocumentManager::Open result, const QString& reason)
 {
     Q_UNUSED(documentId);

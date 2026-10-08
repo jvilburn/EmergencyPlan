@@ -342,11 +342,7 @@ DocumentManager::Open DocumentManager::open(const QString& documentId, QString* 
 void DocumentManager::fetch(const QString& documentId)
 {
     m_fetching = documentId;
-    DocumentSession::download(context(),
-                              documentId,
-                              m_library->pathsFor(documentId),
-                              this,
-                              std::bind(&DocumentManager::onFetched, this, documentId, _1));
+    m_library->fetchWard(documentId, *m_server, this, std::bind(&DocumentManager::onFetched, this, documentId, _1));
 }
 
 void DocumentManager::onFetched(const QString& documentId, DocumentSession::Download outcome)

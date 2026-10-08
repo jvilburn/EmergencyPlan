@@ -43,6 +43,9 @@ public:
     /// Opens a ward by id and tells the person how it went.
     void openWard(const QString& documentId);
 
+    /// Wards the server listed for this device have arrived in the library.
+    void onWardsRestored(const QStringList& documentIds);
+
 signals:
     /// The person asked to set this device up afresh and confirmed it; the app
     /// replaces the identity and closes.

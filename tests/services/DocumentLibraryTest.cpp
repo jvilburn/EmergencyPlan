@@ -18,6 +18,7 @@
 #include <utility>
 
 using namespace SessionTestSupport;
+using namespace std::placeholders;
 
 namespace
 {
@@ -87,6 +88,78 @@ QString addWardWithFiles(Fixture& fixture)
     record.highWaterMark.saveCounter = 7;
     fixture.settings->setRecord(documentId, record);
     return documentId;
+}
+
+void keepRestored(std::optional<QStringList>& out, const QStringList& documentIds)
+{
+    out = documentIds;
+}
+
+void keepFetched(std::optional<DocumentSession::Download>& out, DocumentSession::Download outcome)
+{
+    out = outcome;
+}
+
+void nameTanglewood(Document& document)
+{
+    document.metadata().addOrUpdateWard("123456", "Tanglewood", "654321", "Riverside Stake");
+}
+
+/// Alice's two shared wards on the server, the first naming its ward.
+struct ServerWards
+{
+    TestWard ward;
+    Device* alice = nullptr;
+    QString named;
+    QString unnamed;
+    std::vector<std::unique_ptr<DocumentSession>> sessions;
+};
+
+bool shareTwoWards(ServerWards& wards)
+{
+    wards.alice = &wards.ward.add(newIdentity("Alice", "Laptop"));
+
+    std::unique_ptr<DocumentSession> named = wards.ward.createShared(*wards.alice);
+    if (!named)
+    {
+        return false;
+    }
+    wards.named = wards.ward.documentId;
+    named->edit(DocumentSession::Edit::Directory, nameTanglewood);
+    named->publishNow();
+    wards.ward.settle();
+    wards.sessions.push_back(std::move(named));
+
+    std::unique_ptr<DocumentSession> unnamed = wards.ward.createShared(*wards.alice);
+    if (!unnamed)
+    {
+        return false;
+    }
+    wards.unnamed = wards.ward.documentId;
+    wards.sessions.push_back(std::move(unnamed));
+
+    // Closed, as an app would be before its data was cleared.
+    wards.sessions.clear();
+    wards.ward.settle();
+    return true;
+}
+
+bool opens(DocumentLibrary& library, AppSettings& settings, Device& device, const QString& documentId)
+{
+    LoadFailure failure = LoadFailure::None;
+    QString refusal;
+    const std::unique_ptr<DocumentSession> session =
+        DocumentSession::open(DocumentSession::Context{device.identity, settings, device.connection},
+                              std::make_unique<ManualTimers>(),
+                              documentId,
+                              library.pathsFor(documentId),
+                              failure,
+                              &refusal);
+    if (!session)
+    {
+        qWarning() << "Did not open:" << refusal;
+    }
+    return session != nullptr;
 }
 
 } // namespace
@@ -539,4 +612,77 @@ void DocumentLibraryTest::forgetRemovedDeletesCopiesStillAtTheirPaths()
     // The other ward keeps its entry and the copy recorded under it.
     QCOMPARE(fixture.settings->ward(other)->copies.size(), qsizetype(1));
     QCOMPARE(fixture.settings->ward(other)->copies.at(0).path, otherWard);
+}
+
+void DocumentLibraryTest::aClearedLibraryIsRestoredFromTheServerAndEachOpens()
+{
+    ServerWards wards;
+    QVERIFY(shareTwoWards(wards));
+
+    // The same device, its settings and library cleared.
+    QTemporaryDir folder;
+    QVERIFY(folder.isValid());
+    const std::unique_ptr<AppSettings> settings = AppSettings::open(folder.filePath("settings.json"), nullptr);
+    DocumentLibrary library(*settings, folder.filePath("wards"), wards.alice->identity);
+    QVERIFY(library.entries().isEmpty());
+
+    QObject receiver;
+    std::optional<QStringList> restored;
+    library.restore(wards.alice->connection, &receiver, std::bind(&keepRestored, std::ref(restored), _1));
+    wards.ward.settle();
+
+    QVERIFY(restored.has_value());
+    QStringList arrived = restored.value();
+    arrived.sort();
+    QStringList expected{wards.named, wards.unnamed};
+    expected.sort();
+    QCOMPARE(arrived, expected);
+
+    const QList<DocumentLibrary::Entry> entries = library.entries();
+    QCOMPARE(entries.size(), qsizetype(2));
+    for (const DocumentLibrary::Entry& entry : entries)
+    {
+        QVERIFY(entry.shared);
+        QVERIFY(entry.onDevice);
+        QCOMPARE(entry.wardName, entry.documentId == wards.named ? QString("Tanglewood Ward") : QString("Untitled"));
+        QVERIFY(opens(library, *settings, *wards.alice, entry.documentId));
+    }
+
+    // Once restored, nothing more arrives.
+    restored.reset();
+    library.restore(wards.alice->connection, &receiver, std::bind(&keepRestored, std::ref(restored), _1));
+    wards.ward.settle();
+    QVERIFY(restored.has_value());
+    QVERIFY(restored->isEmpty());
+}
+
+void DocumentLibraryTest::aListedWardWhoseFileWasDeletedIsFetchedOnRequest()
+{
+    ServerWards wards;
+    QVERIFY(shareTwoWards(wards));
+
+    QTemporaryDir folder;
+    QVERIFY(folder.isValid());
+    const std::unique_ptr<AppSettings> settings = AppSettings::open(folder.filePath("settings.json"), nullptr);
+    DocumentLibrary library(*settings, folder.filePath("wards"), wards.alice->identity);
+    QObject receiver;
+    std::optional<QStringList> restored;
+    library.restore(wards.alice->connection, &receiver, std::bind(&keepRestored, std::ref(restored), _1));
+    wards.ward.settle();
+    QVERIFY(restored.has_value());
+
+    const QString file = library.pathsFor(wards.named).file;
+    QVERIFY(QFile::remove(file));
+    for (const DocumentLibrary::Entry& entry : library.entries())
+    {
+        QCOMPARE(entry.onDevice, entry.documentId != wards.named);
+    }
+
+    std::optional<DocumentSession::Download> fetched;
+    library.fetchWard(wards.named, wards.alice->connection, &receiver, std::bind(&keepFetched, std::ref(fetched), _1));
+    wards.ward.settle();
+
+    QVERIFY(fetched == DocumentSession::Download::Done);
+    QVERIFY(QFile::exists(file));
+    QVERIFY(opens(library, *settings, *wards.alice, wards.named));
 }

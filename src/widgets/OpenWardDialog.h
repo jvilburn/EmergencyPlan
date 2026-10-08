@@ -26,6 +26,9 @@ private slots:
     void onAccepted();
 
 private:
+    static constexpr int FetchRole = Qt::UserRole + 1;
+    static constexpr int NameRole = Qt::UserRole + 2;
+
     QListWidget* m_list = nullptr;
     QPushButton* m_openButton = nullptr;
     QString m_selected;

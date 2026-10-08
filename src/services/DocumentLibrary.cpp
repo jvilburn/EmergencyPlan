@@ -3,6 +3,7 @@
 #include "DocumentConstants.h"
 #include "DocumentCrypto.h"
 #include "DocumentFile.h"
+#include "ServerConnection.h"
 #include "ServerVersion.h"
 
 #include <QDir>
@@ -11,6 +12,8 @@
 #include <QObject>
 
 #include <algorithm>
+
+using namespace std::placeholders;
 
 namespace
 {
@@ -55,7 +58,8 @@ QList<DocumentLibrary::Entry> DocumentLibrary::entries() const
         entries.append(Entry{documentId,
                              ward.wardName.value_or(QObject::tr("Untitled")),
                              ward.lastOpened,
-                             m_settings.record(documentId).baseVersion.has_value()});
+                             m_settings.record(documentId).baseVersion.has_value(),
+                             QFile::exists(pathsFor(documentId).file)});
     }
     std::sort(entries.begin(), entries.end(), sortsBefore);
     return entries;
@@ -273,4 +277,124 @@ std::optional<DocumentLibrary::Copy> DocumentLibrary::openCopy(const QString& so
         *errorMessage = problem;
     }
     return std::nullopt;
+}
+
+// --- From the server -------------------------------------------------------------
+
+/// One restore in flight: the wards still being fetched, and those that arrived.
+struct DocumentLibrary::Restore
+{
+    QStringList pending;
+    QStringList arrived;
+    Restored done;
+};
+
+void DocumentLibrary::restore(ServerConnection& server, QObject* receiver, const Restored& done)
+{
+    std::shared_ptr<Restore> restore = std::make_shared<Restore>();
+    restore->done = done;
+    server.myDocuments(receiver, std::bind(&DocumentLibrary::onListed, this, std::ref(server), receiver, restore, _1));
+}
+
+void DocumentLibrary::onListed(ServerConnection& server,
+                               QObject* receiver,
+                               const std::shared_ptr<Restore>& restore,
+                               const ServerContract::Result<QStringList>& listed)
+{
+    if (listed.ok())
+    {
+        for (const QString& documentId : listed.value.value())
+        {
+            if (!contains(documentId))
+            {
+                restore->pending.append(documentId);
+            }
+        }
+    }
+
+    if (restore->pending.isEmpty())
+    {
+        restore->done(QStringList());
+        return;
+    }
+
+    const QStringList toFetch = restore->pending;
+    for (const QString& documentId : toFetch)
+    {
+        fetchWard(documentId, server, receiver, std::bind(&DocumentLibrary::onRestored, this, restore, documentId, _1));
+    }
+}
+
+void DocumentLibrary::onRestored(const std::shared_ptr<Restore>& restore,
+                                 const QString& documentId,
+                                 DocumentSession::Download outcome)
+{
+    restore->pending.removeOne(documentId);
+    if (outcome == DocumentSession::Download::Done)
+    {
+        restore->arrived.append(documentId);
+    }
+    else
+    {
+        // Not listed until it arrives, so the next restore tries it afresh.
+        forget(documentId);
+    }
+
+    if (restore->pending.isEmpty())
+    {
+        restore->done(restore->arrived);
+    }
+}
+
+void DocumentLibrary::fetchWard(const QString& documentId,
+                                ServerConnection& server,
+                                QObject* receiver,
+                                const Fetched& done)
+{
+    add(documentId);
+    DocumentSession::download(DocumentSession::Context{m_identity, m_settings, server},
+                              documentId,
+                              pathsFor(documentId),
+                              receiver,
+                              std::bind(&DocumentLibrary::onWardFetched, this, documentId, done, _1));
+}
+
+void DocumentLibrary::onWardFetched(const QString& documentId, const Fetched& done, DocumentSession::Download outcome)
+{
+    switch (outcome)
+    {
+    case DocumentSession::Download::Done:
+        noteFromFile(documentId);
+        break;
+    case DocumentSession::Download::Removed:
+        // The download has already deleted its files and record.
+        m_settings.removeWard(documentId);
+        break;
+    case DocumentSession::Download::Unreachable:
+    case DocumentSession::Download::NeedsNewerVersion:
+    case DocumentSession::Download::ServerFault:
+        break;
+    }
+    done(outcome);
+}
+
+void DocumentLibrary::noteFromFile(const QString& documentId)
+{
+    const std::optional<QByteArray> bytes = DocumentFile::readAll(pathsFor(documentId).file);
+    DocumentFile::Sealed sealed;
+    if (!bytes.has_value() || DocumentFile::decode(bytes.value(), sealed) != DocumentFile::Read::Ok)
+    {
+        return;
+    }
+
+    const Reconcile::DownloadCheck check = Reconcile::validateDownload(documentId,
+                                                                       std::nullopt,
+                                                                       {sealed.header},
+                                                                       sealed.ciphertext,
+                                                                       m_identity.self(),
+                                                                       m_settings.record(documentId).highWaterMark);
+    if (check.verdict == Reconcile::Verdict::Accept)
+    {
+        noteDocument(documentId, check.document.value());
+    }
 }

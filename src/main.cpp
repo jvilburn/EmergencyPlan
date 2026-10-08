@@ -223,6 +223,10 @@ int main(int argc, char *argv[])
     {
         window.openWard(library.lastOpenedId());
     }
+
+    // Every ward the server lists for this device and the library lacks: after a
+    // reinstall, cleared app data, or a grant.
+    library.restore(server, &window, std::bind(&MainWindow::onWardsRestored, &window, std::placeholders::_1));
     QObject::connect(&instance, &SingleInstance::argumentsReceived, &window, &MainWindow::handleArguments);
 
     return app.exec();

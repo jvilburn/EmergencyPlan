@@ -23,4 +23,6 @@ private slots:
     void openCopySaysWhyItCannotOpenAFile();
     void forgetRemovesTheFilesRecordAndEntryAndKeepsCopies();
     void forgetRemovedDeletesCopiesStillAtTheirPaths();
+    void aClearedLibraryIsRestoredFromTheServerAndEachOpens();
+    void aListedWardWhoseFileWasDeletedIsFetchedOnRequest();
 };

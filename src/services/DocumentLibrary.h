@@ -4,12 +4,19 @@
 #include "DeviceIdentity.h"
 #include "Document.h"
 #include "DocumentRecords.h"
+#include "DocumentSession.h"
 
 #include <QDateTime>
 #include <QList>
+#include <QObject>
 #include <QString>
+#include <QStringList>
 
+#include <functional>
+#include <memory>
 #include <optional>
+
+class ServerConnection;
 
 /// The wards on this device. The app owns their files, in local app data, named by
 /// document id; the person never chooses a path. "Open" is this list, not a file
@@ -26,6 +33,7 @@ public:
         QString wardName;           ///< Untitled until the document names its ward
         std::optional<QDateTime> lastOpened;
         bool shared = false;
+        bool onDevice = true;       ///< its file is here; a shared ward without one is fetched to open
     };
 
     /// An exported copy, opened read-only: never the live document, never in the
@@ -95,7 +103,35 @@ public:
     /// this device can open. A ward's own file is not a copy.
     std::optional<Copy> openCopy(const QString& sourcePath, QString* errorMessage) const;
 
+    using Restored = std::function<void(const QStringList& documentIds)>;
+    using Fetched = std::function<void(DocumentSession::Download outcome)>;
+
+    /// Adds every ward the server lists for this device that the library lacks,
+    /// and fetches each: after a reinstall, cleared app data, or a grant. done gets
+    /// the wards that arrived; one that could not be fetched leaves the library
+    /// again, so the next restore tries it afresh. Replies come only while receiver
+    /// lives.
+    void restore(ServerConnection& server, QObject* receiver, const Restored& done);
+
+    /// Fetches one shared ward from the server, adding it to the library when it is
+    /// not there, and names its entry from what arrived.
+    void fetchWard(const QString& documentId, ServerConnection& server, QObject* receiver, const Fetched& done);
+
 private:
+    struct Restore;
+
+    void onListed(ServerConnection& server,
+                  QObject* receiver,
+                  const std::shared_ptr<Restore>& restore,
+                  const ServerContract::Result<QStringList>& listed);
+    void onRestored(const std::shared_ptr<Restore>& restore,
+                    const QString& documentId,
+                    DocumentSession::Download outcome);
+    void onWardFetched(const QString& documentId, const Fetched& done, DocumentSession::Download outcome);
+
+    /// Names the entry from the ward's own file, so the list shows what arrived.
+    void noteFromFile(const QString& documentId);
+
     AppSettings& m_settings;
     QString m_directory;
     DeviceIdentity m_identity;
