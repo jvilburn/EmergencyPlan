@@ -38,6 +38,9 @@ public:
     /// Result will be emitted via geocodingComplete signal.
     void geocodeAddress(const QString& address);
 
+    /// Drops every address not yet sent; a request already sent completes.
+    void cancel();
+
     /// Check if there are pending requests.
     bool hasPendingRequests() const;
 

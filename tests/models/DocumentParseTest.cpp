@@ -129,3 +129,13 @@ void DocumentParseTest::anIdNamingSomethingNotInTheDocumentIsRead()
     QVERIFY(reads(withFirst(payload, "teams", withField(ModelSamples::team(), "leaderId", "p9"))));
     QVERIFY(reads(withFirst(payload, "eqDistricts", ModelSamples::district("d1", "m9"))));
 }
+
+void DocumentParseTest::aParsedDocumentAnswersItsLookups()
+{
+    const std::optional<Document> document = Document::parse(ModelSamples::document());
+    QVERIFY(document.has_value());
+
+    // Read, not edited: the lookups answer before any command has run.
+    QVERIFY(document->familyIdForPerson(PersonId::fromString("p1")) == FamilyId::fromString("f1"));
+    QVERIFY(!document->familyIdForPerson(PersonId::fromString("p9")).has_value());
+}

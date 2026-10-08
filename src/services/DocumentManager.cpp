@@ -6,6 +6,8 @@
 
 #include <QDebug>
 
+using namespace std::placeholders;
+
 DocumentManager* DocumentManager::s_instance = nullptr;
 
 DocumentManager::DocumentManager(const DeviceIdentity& identity,
@@ -106,12 +108,12 @@ QString DocumentManager::documentId() const
 // Editing
 // ============================================================================
 
-void DocumentManager::executeCommand(CommandPtr command)
+bool DocumentManager::executeCommand(CommandPtr command)
 {
     DocumentSession* session = sessionForEdit();
     if (session == nullptr)
     {
-        return;
+        return false;
     }
 
     const DocumentChange change = command->documentChange();
@@ -123,9 +125,10 @@ void DocumentManager::executeCommand(CommandPtr command)
     if (refusal != DocumentSession::Refusal::None)
     {
         refuse(refusal);
-        return;
+        return false;
     }
     afterChange(change);
+    return true;
 }
 
 void DocumentManager::undo()
@@ -254,6 +257,7 @@ bool DocumentManager::newDocument(QString* errorMessage)
     {
         return false;
     }
+    m_fetching.clear();
 
     const QString documentId = DocumentLibrary::newDocumentId();
     m_library->add(documentId);
@@ -275,6 +279,16 @@ bool DocumentManager::newDocument(QString* errorMessage)
 }
 
 DocumentManager::Open DocumentManager::openDocument(const QString& documentId, QString* refusal)
+{
+    if (m_session && !m_copy.has_value() && m_session->documentId() == documentId)
+    {
+        return Open::Opened;
+    }
+    m_fetching.clear();
+    return open(documentId, refusal, true);
+}
+
+DocumentManager::Open DocumentManager::open(const QString& documentId, QString* refusal, bool mayFetch)
 {
     if (m_library == nullptr || !m_library->contains(documentId))
     {
@@ -300,7 +314,7 @@ DocumentManager::Open DocumentManager::openDocument(const QString& documentId, Q
     }
 
     resetWard();
-    const bool shared = m_records->record(documentId).baseVersion.has_value();
+    const bool fetchable = mayFetch && m_records->record(documentId).baseVersion.has_value();
     switch (failure)
     {
     case LoadFailure::None:
@@ -308,14 +322,14 @@ DocumentManager::Open DocumentManager::openDocument(const QString& documentId, Q
     case LoadFailure::NeedsNewerVersion:
         return Open::NeedsNewerVersion;
     case LoadFailure::NotFound:
-        if (shared)
+        if (fetchable)
         {
             fetch(documentId);
             return Open::Fetching;
         }
         return Open::NotFound;
     case LoadFailure::Refused:
-        if (shared)
+        if (fetchable)
         {
             fetch(documentId);
             return Open::Fetching;
@@ -327,47 +341,41 @@ DocumentManager::Open DocumentManager::openDocument(const QString& documentId, Q
 
 void DocumentManager::fetch(const QString& documentId)
 {
+    m_fetching = documentId;
     DocumentSession::download(context(),
                               documentId,
                               m_library->pathsFor(documentId),
                               this,
-                              [this, documentId](DocumentSession::Download outcome)
-    {
-        switch (outcome)
-        {
-        case DocumentSession::Download::Done:
-        {
-            QString refusal;
-            if (openDocument(documentId, &refusal) != Open::Opened)
-            {
-                emit fetchFailed(documentId, DocumentSession::Download::ServerFault);
-            }
-            return;
-        }
-        case DocumentSession::Download::Removed:
-            onQueueRemoved(documentId, false);
-            return;
-        case DocumentSession::Download::Unreachable:
-        case DocumentSession::Download::NeedsNewerVersion:
-        case DocumentSession::Download::ServerFault:
-            emit fetchFailed(documentId, outcome);
-            return;
-        }
-    });
+                              std::bind(&DocumentManager::onFetched, this, documentId, _1));
 }
 
-void DocumentManager::openLastWard()
+void DocumentManager::onFetched(const QString& documentId, DocumentSession::Download outcome)
 {
-    if (m_library == nullptr)
+    // Another ward was shown meanwhile; this one waits in the library.
+    if (m_fetching != documentId)
     {
         return;
     }
+    m_fetching.clear();
 
-    const QString documentId = m_library->lastOpenedId();
-    if (!documentId.isEmpty())
+    switch (outcome)
     {
-        QString refusal;
-        openDocument(documentId, &refusal);
+    case DocumentSession::Download::Done:
+    {
+        // What was fetched opens directly: a refusal now is reported, not fetched again.
+        QString reason;
+        const Open result = open(documentId, &reason, false);
+        emit fetchFinished(documentId, result, reason);
+        return;
+    }
+    case DocumentSession::Download::Removed:
+        forgetRemovedWard(documentId, QString(), false);
+        return;
+    case DocumentSession::Download::Unreachable:
+    case DocumentSession::Download::NeedsNewerVersion:
+    case DocumentSession::Download::ServerFault:
+        emit fetchFailed(documentId, outcome);
+        return;
     }
 }
 
@@ -377,6 +385,7 @@ bool DocumentManager::showCopy(const DocumentLibrary::Copy& copy, QString* error
     {
         return false;
     }
+    m_fetching.clear();
 
     m_copy = copy;
     onDocumentReplaced();
@@ -501,40 +510,53 @@ void DocumentManager::onReadOnlyChanged()
 void DocumentManager::onSessionRemoved(const QString& byWhom, bool left)
 {
     const QString documentId = m_session->documentId();
-    const QString wardName = m_session->document().suggestedFilename();
 
     // Finished from inside its own signal, so it goes once that returns.
+    stopGeocoding();
     if (m_queue != nullptr)
     {
         m_queue->setOpenSession(nullptr);
     }
     m_session.release()->deleteLater();
-    if (m_library != nullptr)
-    {
-        m_library->forgetRemoved(documentId);
-    }
     resetWard();
-    emit accessRemoved(wardName, byWhom, left);
+    forgetRemovedWard(documentId, byWhom, left);
 }
 
 void DocumentManager::onQueueRemoved(const QString& documentId, bool left)
 {
-    // The open ward finishes through its session.
-    if (m_session && m_session->documentId() == documentId)
+    // The open ward finishes through its session, which has already told the
+    // person; a ward no longer in the library has gone that way.
+    if ((m_session && m_session->documentId() == documentId) || !m_library->contains(documentId))
     {
         return;
     }
+    forgetRemovedWard(documentId, QString(), left);
+}
 
-    QString wardName;
+void DocumentManager::forgetRemovedWard(const QString& documentId, const QString& byWhom, bool left)
+{
+    const QString wardName = wardNameOf(documentId);
+    if (m_library != nullptr)
+    {
+        m_library->forgetRemoved(documentId);
+    }
+    emit accessRemoved(wardName, byWhom, left);
+}
+
+QString DocumentManager::wardNameOf(const QString& documentId) const
+{
+    if (m_library == nullptr)
+    {
+        return QString();
+    }
     for (const DocumentLibrary::Entry& entry : m_library->entries())
     {
         if (entry.documentId == documentId)
         {
-            wardName = entry.wardName;
+            return entry.wardName;
         }
     }
-    m_library->forgetRemoved(documentId);
-    emit accessRemoved(wardName, QString(), left);
+    return QString();
 }
 
 bool DocumentManager::mayWriteDirectory() const
@@ -680,7 +702,12 @@ void DocumentManager::startBatchGeocoding()
 
 void DocumentManager::stopGeocoding()
 {
+    const bool wasRunning = m_geocodingService->isRunning();
     m_geocodingService->stop();
+    if (wasRunning)
+    {
+        emit geocodingFinished();
+    }
 }
 
 bool DocumentManager::isGeocoding() const

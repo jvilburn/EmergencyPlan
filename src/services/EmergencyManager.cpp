@@ -4,6 +4,35 @@
 
 #include <algorithm>
 
+using namespace std::placeholders;
+
+namespace
+{
+
+/// A record for each family, as an emergency starts with or a family added during
+/// one gets.
+void addRecords(std::optional<EmergencyResponse>& response, const QList<Family>& families)
+{
+    if (!response.has_value())
+    {
+        return;
+    }
+    for (const Family& family : families)
+    {
+        response->addFamilyRecord(FamilyResponseRecord::create(family.id(),
+                                                               family.displayName(),
+                                                               family.address().full()));
+    }
+}
+
+void startResponse(std::optional<EmergencyResponse>& response, const QString& name, const QList<Family>& families)
+{
+    response = EmergencyResponse::create(name);
+    addRecords(response, families);
+}
+
+} // namespace
+
 EmergencyManager* EmergencyManager::s_instance = nullptr;
 
 EmergencyManager::EmergencyManager(QObject* parent)
@@ -17,6 +46,11 @@ EmergencyManager::EmergencyManager(QObject* parent)
             this, &EmergencyManager::onDocumentChanged);
 }
 
+EmergencyManager::~EmergencyManager()
+{
+    s_instance = nullptr;
+}
+
 EmergencyManager* EmergencyManager::instance()
 {
     return s_instance;
@@ -24,8 +58,9 @@ EmergencyManager* EmergencyManager::instance()
 
 void EmergencyManager::onDocumentChanged(const DocumentChange& change)
 {
+    // A copy shown read-only takes no records.
     const bool active = current().has_value();
-    if (active)
+    if (active && !DocumentManager::instance()->copy().has_value())
     {
         syncFamilies();
     }
@@ -59,55 +94,43 @@ bool EmergencyManager::isActive() const
     return current().has_value();
 }
 
-void EmergencyManager::startEmergency(const QString& name)
+bool EmergencyManager::startEmergency(const QString& name)
 {
     if (current().has_value())
     {
-        return;
+        return false;
     }
 
-    const QHash<FamilyId, Family>& families = DocumentManager::instance()->document().families();
-    const bool started = DocumentManager::instance()->editResponse([&](std::optional<EmergencyResponse>& response)
-    {
-        response = EmergencyResponse::create(name);
-
-        // Create FamilyResponseRecord for each family in the document
-        for (auto it = families.constBegin(); it != families.constEnd(); ++it)
-        {
-            const Family& family = it.value();
-            response->addFamilyRecord(FamilyResponseRecord::create(family.id(),
-                                                                   family.displayName(),
-                                                                   family.address().full()));
-        }
-    });
+    // A record for each family in the document.
+    const QList<Family> families = DocumentManager::instance()->document().families().values();
+    const bool started = DocumentManager::instance()->editResponse(std::bind(&startResponse, _1, name, families));
     if (!started)
     {
-        return;
+        return false;
     }
 
     m_wasActive = true;
     emit emergencyStarted();
     emit responseDataChanged();
+    return true;
 }
 
-void EmergencyManager::endEmergency()
+bool EmergencyManager::endEmergency()
 {
     if (!current().has_value())
     {
-        return;
+        return false;
     }
 
-    if (!DocumentManager::instance()->editResponse([](std::optional<EmergencyResponse>& response)
-        {
-            response.reset();
-        }))
+    if (!DocumentManager::instance()->editResponse([](std::optional<EmergencyResponse>& response) { response.reset(); }))
     {
-        return;
+        return false;
     }
 
     m_wasActive = false;
     emit emergencyEnded();
     emit responseDataChanged();
+    return true;
 }
 
 // ============================================================================
@@ -383,17 +406,8 @@ void EmergencyManager::syncFamilies()
         return;
     }
 
-    DocumentManager::instance()->editResponse([&](std::optional<EmergencyResponse>& response)
+    if (DocumentManager::instance()->editResponse(std::bind(&addRecords, _1, missing)))
     {
-        if (!response.has_value())
-        {
-            return;
-        }
-        for (const Family& family : missing)
-        {
-            response->addFamilyRecord(FamilyResponseRecord::create(family.id(),
-                                                                   family.displayName(),
-                                                                   family.address().full()));
-        }
-    });
+        emit responseDataChanged();
+    }
 }

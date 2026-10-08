@@ -76,8 +76,10 @@ public:
     /// The copy shown read-only, if any.
     const std::optional<DocumentLibrary::Copy>& copy() const { return m_copy; }
 
-    // Command execution
-    void executeCommand(CommandPtr command);
+    /// Runs command on the open ward, making the empty document a new ward when
+    /// none is open. False when it was refused, with editRefused saying why, and
+    /// nothing changed.
+    bool executeCommand(CommandPtr command);
 
     // Undo/Redo
     void undo();
@@ -88,18 +90,17 @@ public:
     QString redoDescription() const { return m_commandHistory.redoDescription(); }
 
     /// The emergency response, changed in place through the session. Any member
-    /// may record one at any time, so only a document that requires an update
-    /// refuses it. False when refused or there is no response.
+    /// may record one at any time, even while another holds the lease; only a copy
+    /// shown read-only refuses it. False when refused.
     bool editResponse(const std::function<void(std::optional<EmergencyResponse>&)>& change);
 
     // Wards
     /// A new ward, its id and files made up front. False, with the reason, when it
     /// cannot be written or the open ward cannot be saved first.
     bool newDocument(QString* errorMessage);
+    /// Opening the ward already open leaves it open. A shared ward with no usable
+    /// local file is fetched, and fetchFinished reports how opening it went.
     Open openDocument(const QString& documentId, QString* refusal);
-
-    /// The last ward opened, when it is still in the library.
-    void openLastWard();
 
     /// Shows a copy read-only in place of the open ward, which is closed.
     bool showCopy(const DocumentLibrary::Copy& copy, QString* errorMessage);
@@ -144,6 +145,10 @@ signals:
     /// A shared ward being fetched could not be.
     void fetchFailed(const QString& documentId, DocumentSession::Download outcome);
 
+    /// A shared ward was fetched, and opening it went as result says. Not reported
+    /// when another ward was opened while it was fetched.
+    void fetchFinished(const QString& documentId, DocumentManager::Open result, const QString& reason);
+
     // Geocoding progress
     void geocodingProgressChanged(int completed, int total);
     void geocodingFinished();
@@ -159,6 +164,10 @@ private slots:
 
 private:
     void connectServices();
+
+    /// Opens a ward from its local file; a shared ward whose file will not open is
+    /// fetched when mayFetch is set.
+    Open open(const QString& documentId, QString* refusal, bool mayFetch);
 
     /// Takes session as the open ward, with nothing else shown.
     void install(std::unique_ptr<DocumentSession> session);
@@ -177,7 +186,13 @@ private:
     void onReadOnlyChanged();
     void onSessionRemoved(const QString& byWhom, bool left);
     void onQueueRemoved(const QString& documentId, bool left);
+
+    /// The ward's files, copies, record, and entry go, and the person is told.
+    void forgetRemovedWard(const QString& documentId, const QString& byWhom, bool left);
+    QString wardNameOf(const QString& documentId) const;
+
     void fetch(const QString& documentId);
+    void onFetched(const QString& documentId, DocumentSession::Download outcome);
     void refuse(DocumentSession::Refusal refusal);
     void resetWard();
 
@@ -191,6 +206,9 @@ private:
 
     std::unique_ptr<DocumentSession> m_session;
     std::optional<DocumentLibrary::Copy> m_copy;
+
+    /// The shared ward being fetched to open, until it opens or another is shown.
+    QString m_fetching;
     Document m_empty;
     CommandHistory m_commandHistory;
 

@@ -19,14 +19,18 @@ class EmergencyManager : public QObject
 
 public:
     explicit EmergencyManager(QObject* parent);
+    ~EmergencyManager() override;
 
     /// Global accessor. Valid after construction.
     static EmergencyManager* instance();
 
     // Lifecycle
     bool isActive() const;
-    void startEmergency(const QString& name);
-    void endEmergency();
+    /// False when there is already one, or the change was refused.
+    bool startEmergency(const QString& name);
+
+    /// False when there is none, or the change was refused.
+    bool endEmergency();
 
     // Read access
     const EmergencyResponse& response() const;

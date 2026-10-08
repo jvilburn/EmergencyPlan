@@ -1147,9 +1147,9 @@ Each gets its own message:
 
 ## Debugging
 
-`toJsonString` stays, with a developer-only "export decrypted JSON" action, off by
-default, which warns that it writes unencrypted member data. `parseJson` and
-`toJsonString` remain plaintext-only and serve this path.
+The document's plain JSON (`Document::toJson`) serves a developer-only "export
+decrypted JSON" action, off by default, which warns that it writes unencrypted member
+data.
 
 ## Component changes
 

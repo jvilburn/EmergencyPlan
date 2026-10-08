@@ -255,10 +255,7 @@ void MainWindow::setupMenus()
 
     // Only before this device holds any ward: a device set up as the wrong person.
     m_startOverAction = fileMenu->addAction(tr("Set Up This Device Again..."), this, &MainWindow::onStartOver);
-    connect(fileMenu, &QMenu::aboutToShow, this, [this]()
-    {
-        m_startOverAction->setEnabled(m_library.entries().isEmpty());
-    });
+    connect(fileMenu, &QMenu::aboutToShow, this, &MainWindow::updateFileActions);
 
     fileMenu->addSeparator();
 
@@ -295,10 +292,10 @@ void MainWindow::setupConnections()
             this, &MainWindow::updateWindowTitle);
     connect(DocumentManager::instance(), &DocumentManager::documentOpened,
             this, &MainWindow::onDocumentOpened);
-    connect(DocumentManager::instance(), &DocumentManager::editRefused, this, [this](const QString& message)
-    {
-        statusBar()->showMessage(message, 8000);
-    });
+    connect(DocumentManager::instance(), &DocumentManager::editRefused,
+            this, &MainWindow::onEditRefused);
+    connect(DocumentManager::instance(), &DocumentManager::fetchFinished,
+            this, &MainWindow::onFetchFinished);
     connect(DocumentManager::instance(), &DocumentManager::accessRemoved,
             this, &MainWindow::onAccessRemoved);
     connect(DocumentManager::instance(), &DocumentManager::fetchFailed,
@@ -370,7 +367,19 @@ void MainWindow::onOpenWard()
 void MainWindow::openWard(const QString& documentId)
 {
     QString reason;
-    switch (DocumentManager::instance()->openDocument(documentId, &reason))
+    reportOpen(DocumentManager::instance()->openDocument(documentId, &reason), reason);
+}
+
+void MainWindow::onFetchFinished(const QString& documentId, DocumentManager::Open result, const QString& reason)
+{
+    Q_UNUSED(documentId);
+    statusBar()->clearMessage();
+    reportOpen(result, reason);
+}
+
+void MainWindow::reportOpen(DocumentManager::Open result, const QString& reason)
+{
+    switch (result)
     {
     case DocumentManager::Open::Opened:
         statusBar()->showMessage(tr("Ward opened"), 3000);
@@ -502,13 +511,16 @@ void MainWindow::onImportPdf()
             .arg(result.wardName)
             .arg(result.families.size());
 
-    DocumentManager::instance()->executeCommand(std::make_unique<ImportWardDirectoryCommand>(
-        result.families,
-        result.removedFamilyIds,
-        result.wardUnitNumber,
-        result.wardName,
-        result.pdfDate,
-        description));
+    if (!DocumentManager::instance()->executeCommand(std::make_unique<ImportWardDirectoryCommand>(
+            result.families,
+            result.removedFamilyIds,
+            result.wardUnitNumber,
+            result.wardName,
+            result.pdfDate,
+            description)))
+    {
+        return;
+    }
 
     // Update UI
     QString message = tr("Imported %1 families").arg(result.families.size());
@@ -578,13 +590,16 @@ void MainWindow::onImportMinisteringPdf()
     MinisteringOrg org = result.isRSFormat
         ? MinisteringOrg::ReliefSociety
         : MinisteringOrg::EldersQuorum;
-    DocumentManager::instance()->executeCommand(std::make_unique<ImportMinisteringCommand>(
-        org,
-        result.districts,
-        result.groups,
-        result.families,
-        result.pdfDate,
-        description));
+    if (!DocumentManager::instance()->executeCommand(std::make_unique<ImportMinisteringCommand>(
+            org,
+            result.districts,
+            result.groups,
+            result.families,
+            result.pdfDate,
+            description)))
+    {
+        return;
+    }
 
     QString message = tr("Imported %1 ministering: %2 districts, %3 groups")
         .arg(orgType)
@@ -615,9 +630,15 @@ void MainWindow::onRedo()
 
 void MainWindow::onDocumentChanged(const DocumentChange& change)
 {
-    Q_UNUSED(change)
     int count = DocumentManager::instance()->document().families().size();
     statusBar()->showMessage(tr("%1 families").arg(count));
+
+    // The undo text names the latest command; a replaced document may name its ward.
+    updateUndoRedoActions();
+    if (change.action == ChangeAction::Full)
+    {
+        updateWindowTitle();
+    }
 }
 
 void MainWindow::updateWindowTitle()
@@ -743,6 +764,16 @@ void MainWindow::onFetchFailed(const QString& documentId, DocumentSession::Downl
     }
 }
 
+void MainWindow::updateFileActions()
+{
+    m_startOverAction->setEnabled(m_library.entries().isEmpty());
+}
+
+void MainWindow::onEditRefused(const QString& message)
+{
+    statusBar()->showMessage(message, 8000);
+}
+
 void MainWindow::onStartOver()
 {
     const QMessageBox::StandardButton answer = QMessageBox::question(
@@ -761,6 +792,20 @@ void MainWindow::onStartOver()
 
 void MainWindow::closeEvent(QCloseEvent* event)
 {
+    if (m_editPanel->isVisible() && m_editPanel->isDirty())
+    {
+        const QMessageBox::StandardButton discard = QMessageBox::question(
+            this,
+            tr("Discard Changes"),
+            tr("Discard changes to %1?").arg(m_editPanel->family().displayName()),
+            QMessageBox::Yes | QMessageBox::No);
+        if (discard != QMessageBox::Yes)
+        {
+            event->ignore();
+            return;
+        }
+    }
+
     // Flushes the pending save and releases the lease.
     QString error;
     if (DocumentManager::instance()->close(&error))
@@ -911,12 +956,11 @@ void MainWindow::onSaveFamily()
 
     Family originalFamily = it.value();
 
-    // Execute update command
-    DocumentManager::instance()->executeCommand(std::make_unique<UpdateFamilyCommand>(
-        originalFamily,
-        editedFamily));
-
-    closeEditPanelInternal();
+    // A refused update keeps the panel open, with what was typed.
+    if (DocumentManager::instance()->executeCommand(std::make_unique<UpdateFamilyCommand>(originalFamily, editedFamily)))
+    {
+        closeEditPanelInternal();
+    }
 }
 
 void MainWindow::onCancelEdit()
@@ -1044,8 +1088,10 @@ void MainWindow::onStartEmergency()
         return;
     }
 
-    EmergencyManager::instance()->startEmergency(name.trimmed());
-    statusBar()->showMessage(tr("Emergency \"%1\" started").arg(name.trimmed()), 5000);
+    if (EmergencyManager::instance()->startEmergency(name.trimmed()))
+    {
+        statusBar()->showMessage(tr("Emergency \"%1\" started").arg(name.trimmed()), 5000);
+    }
 }
 
 void MainWindow::onEndEmergency()
@@ -1076,15 +1122,19 @@ void MainWindow::onEndEmergency()
         {
             return;
         }
-        EmergencyManager::instance()->endEmergency();
-        statusBar()->showMessage(
-            tr("Emergency \"%1\" ended; report saved to %2").arg(emergencyName, reportPath.value()),
-            5000);
+        if (EmergencyManager::instance()->endEmergency())
+        {
+            statusBar()->showMessage(
+                tr("Emergency \"%1\" ended; report saved to %2").arg(emergencyName, reportPath.value()),
+                5000);
+        }
     }
     else if (clicked == endButton)
     {
-        EmergencyManager::instance()->endEmergency();
-        statusBar()->showMessage(tr("Emergency \"%1\" ended").arg(emergencyName), 5000);
+        if (EmergencyManager::instance()->endEmergency())
+        {
+            statusBar()->showMessage(tr("Emergency \"%1\" ended").arg(emergencyName), 5000);
+        }
     }
 }
 

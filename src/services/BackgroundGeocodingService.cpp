@@ -53,13 +53,14 @@ void BackgroundGeocodingService::queueFamily(const Family& family)
 void BackgroundGeocodingService::stop()
 {
     // Clear pending state
+    m_geocodingService->cancel();
     m_addressToFamilyId.clear();
     m_queuedIds.clear();
     m_completed = 0;
     m_total = 0;
 
-    // Note: GeocodingService will complete its current request,
-    // but we won't process the result since the maps are cleared
+    // A request already sent completes, but its result is not applied since the
+    // maps are cleared.
 }
 
 bool BackgroundGeocodingService::isRunning() const

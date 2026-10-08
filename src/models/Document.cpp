@@ -694,6 +694,8 @@ std::optional<Document> Document::parse(const QJsonObject& json)
         }
     }
 
+    // A document read is complete: its lookups answer before any command runs.
+    document.onDocumentChanged(DocumentChange::full());
     return document;
 }
 

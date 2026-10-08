@@ -238,13 +238,10 @@ public:
 
     bool canUndo() const;
     bool canRedo() const;
-    bool isDirty() const;
-    void markSaved();
 
 signals:
     void canUndoChanged();
     void canRedoChanged();
-    void dirtyChanged();
 };
 ```
 
@@ -280,7 +277,10 @@ public:
 
 ### DocumentManager
 
-Central coordinator that owns the Document and CommandHistory:
+The ward open in the window: it holds that ward's `DocumentSession`, which saves
+and publishes, and keeps the CommandHistory. Every change reaches the document
+through the session's edit, which refuses a directory change while another member
+holds the lease:
 
 ```cpp
 class DocumentManager : public QObject
@@ -290,21 +290,20 @@ class DocumentManager : public QObject
 public:
     const Document& document() const;
 
-    // Command execution
-    void executeCommand(CommandPtr command);
+    // Command execution; false when refused
+    bool executeCommand(CommandPtr command);
     void undo();
     void redo();
 
-    // File operations
-    void newDocument();
-    bool openDocument(const QString& path);
-    bool saveDocument();
-    bool saveDocumentAs(const QString& path);
+    // Wards, by document id, from the DocumentLibrary
+    bool newDocument(QString* errorMessage);
+    Open openDocument(const QString& documentId, QString* refusal);
+    bool publishNow(QString* errorMessage);
 
 signals:
     void documentChanged(const DocumentChange& change);
-    void dirtyChanged();
-    void filePathChanged();
+    void documentOpened();
+    void editRefused(const QString& message);
 };
 ```
 

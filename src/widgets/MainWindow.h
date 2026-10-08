@@ -8,6 +8,7 @@
 #include <optional>
 
 #include "DocumentChange.h"
+#include "DocumentManager.h"
 #include "DocumentSession.h"
 #include "Id.h"
 
@@ -38,6 +39,9 @@ public:
     /// This launch's arguments, or those a later launch handed to this one: each
     /// .wardplanning file among them is opened by FileOpenRouter's route.
     void handleArguments(const QStringList& arguments);
+
+    /// Opens a ward by id and tells the person how it went.
+    void openWard(const QString& documentId);
 
 signals:
     /// The person asked to set this device up afresh and confirmed it; the app
@@ -73,6 +77,9 @@ private slots:
     void onAccessRemoved(const QString& wardName, const QString& byWhom, bool left);
     void onFetchFailed(const QString& documentId, DocumentSession::Download outcome);
     void onStartOver();
+    void onEditRefused(const QString& message);
+    void onFetchFinished(const QString& documentId, DocumentManager::Open result, const QString& reason);
+    void updateFileActions();
 
     // GeoLocation
     void onLocationReady(double latitude, double longitude);
@@ -103,7 +110,7 @@ private:
     void initializeDefaultLocation();
     void openEditPanel(const FamilyId& familyId);
     void openPath(const QString& path);
-    void openWard(const QString& documentId);
+    void reportOpen(DocumentManager::Open result, const QString& reason);
     void openCopy(const QString& sourcePath);
     void closeEditPanelInternal();
 

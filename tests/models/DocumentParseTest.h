@@ -17,4 +17,5 @@ private slots:
     void aCollectionPresentButEmptyIsRefused();
     void anIllFormedImportDateIsRefused();
     void anIdNamingSomethingNotInTheDocumentIsRead();
+    void aParsedDocumentAnswersItsLookups();
 };

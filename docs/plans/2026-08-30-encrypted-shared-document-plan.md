@@ -1956,9 +1956,8 @@ A shared ward whose local file is missing or refused is downloaded with
 `DocumentSession::download` (6.5) and then opened, so a damaged or rolled-back file costs
 nothing while the server is reachable.
 
-**`JsonService` becomes plaintext-only.** `toJsonString` and `parseJson` serve the
-developer export (Task 26); `loadDocument` and `saveDocument` are deleted with their last
-callers in `DocumentManager` (Task 14).
+**`JsonService` is deleted** with its last callers in `DocumentManager` (Task 14); the
+developer export (Task 26) writes `Document::toJson` directly.
 
 **Tests:** a round trip with two recipients opens for either; a third keypair is refused; a
 flipped payload byte is refused; the document id survives a round trip and is covered by
@@ -2829,13 +2828,20 @@ Commit as `feat: HTTP server transport`.
 ### Task 14: Wire the app to the core
 
 > **Done**, with these differences from the text below:
-> - `openDocument(id)` answers `DocumentManager::Open`: `Opened`, `Fetching` (a shared ward
->   being downloaded, reported later through `fetchFailed` if it cannot be), `NotFound`,
+> - `openDocument(id)` answers `DocumentManager::Open`: `Opened`, `Fetching`, `NotFound`,
 >   `NeedsNewerVersion`, `Refused` with its reason, or `NotClosed` when the open ward could
->   not be saved first.
+>   not be saved first. A fetched ward then opens directly and `fetchFinished` reports how;
+>   it is never fetched twice, and is dropped when another ward is opened meanwhile.
+> - `executeCommand` answers whether it applied, as do `startEmergency` and `endEmergency`,
+>   so a refused edit keeps the edit panel open and reports no success.
 > - With no ward open the window shows an empty document, and the first edit makes it a
->   new ward. At startup `openLastWard` reopens the last ward when it is still in the
->   library.
+>   new ward. At startup the window opens the last ward through `MainWindow::openWard`,
+>   which reports every outcome, unless a file was given to open instead.
+> - `Document::parse` builds the document's lookup caches, so every document read - opened,
+>   fetched, merged, or a copy - answers its lookups before any command runs.
+> - Not covered by tests: the `RequiresUpdate` refusal message, a batch starting when the
+>   lease is taken (each would send a real geocoding request), and the library, fetch,
+>   and removal paths through the full constructor.
 > - A copy opened read-only (Task 11) is shown in place of the ward with a banner naming
 >   the people its roster lets read it; every edit to it is refused.
 > - The first screen is `FirstRunDialog`. Its **Yes** shows a message until Task 23
@@ -3330,7 +3336,7 @@ Commit as `fix: explain document load and save failures`.
 **Files:** `src/widgets/MainWindow.cpp`
 
 A menu action, off by default behind an `AppSettings` toggle, writing plaintext JSON
-via the existing `toJsonString`. It warns that the output contains unencrypted member
+from `Document::toJson`, indented. It warns that the output contains unencrypted member
 data and defaults to a location outside any synced folder. This is how you inspect a
 document when helping a user.
 

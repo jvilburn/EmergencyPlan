@@ -283,6 +283,11 @@ bool DocumentSession::mayWriteDirectory() const
 
 void DocumentSession::setEmergencyActive(bool active)
 {
+    // Unchanged, the head check keeps its schedule.
+    if (active == m_emergencyActive)
+    {
+        return;
+    }
     m_emergencyActive = active;
     if (isShared() && !m_removed)
     {

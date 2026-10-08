@@ -5,6 +5,7 @@
 #include <QMessageBox>
 #include <QStandardPaths>
 #include "AppSettings.h"
+#include "DocumentConstants.h"
 #include "DocumentCrypto.h"
 #include "DocumentLibrary.h"
 #include "DocumentManager.h"
@@ -20,6 +21,8 @@
 #include "TileService.h"
 
 #include <QPushButton>
+
+#include <functional>
 
 namespace
 {
@@ -85,6 +88,31 @@ std::unique_ptr<IdentityService> resolveIdentity(const QString& path)
         QMessageBox::critical(nullptr, QObject::tr("Ward Planning"), error);
     }
     return identity;
+}
+
+/// A fresh identity in place of this device's, then the app closes so the next
+/// launch asks the first question afresh.
+void startOver(const QString& identityPath)
+{
+    QString error;
+    if (!IdentityService::startOver(identityPath, &error))
+    {
+        QMessageBox::critical(nullptr, QObject::tr("Ward Planning"), error);
+    }
+    QApplication::quit();
+}
+
+/// Whether the arguments after the program's own name a Ward Planning file.
+bool namesADocument(const QStringList& arguments)
+{
+    for (qsizetype i = 1; i < arguments.size(); ++i)
+    {
+        if (arguments.at(i).endsWith(DocumentConstants::FileExtension, Qt::CaseInsensitive))
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 } // namespace
@@ -182,22 +210,19 @@ int main(int argc, char *argv[])
     tileService.initialize();
 
     MainWindow window(*settings, library, nullptr);
-    QObject::connect(&window, &MainWindow::startOverRequested, &app, [&identityPath, &app]()
-    {
-        QString error;
-        if (!IdentityService::startOver(identityPath, &error))
-        {
-            QMessageBox::critical(nullptr, QObject::tr("Ward Planning"), error);
-        }
-        app.quit();
-    });
+    QObject::connect(&window, &MainWindow::startOverRequested, &app, std::bind(&startOver, identityPath));
     window.show();
 
-    documentManager.openLastWard();
-
-    // A file passed on the command line (a file association), and those a later
-    // launch hands over.
-    window.handleArguments(app.arguments());
+    // A file passed on the command line (a file association) opens in place of the
+    // last ward; so do those a later launch hands over.
+    if (namesADocument(app.arguments()))
+    {
+        window.handleArguments(app.arguments());
+    }
+    else if (!library.lastOpenedId().isEmpty())
+    {
+        window.openWard(library.lastOpenedId());
+    }
     QObject::connect(&instance, &SingleInstance::argumentsReceived, &window, &MainWindow::handleArguments);
 
     return app.exec();
