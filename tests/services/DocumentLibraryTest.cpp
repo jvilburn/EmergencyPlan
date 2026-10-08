@@ -9,6 +9,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QRegularExpression>
 #include <QSet>
 #include <QTemporaryDir>
@@ -685,4 +686,48 @@ void DocumentLibraryTest::aListedWardWhoseFileWasDeletedIsFetchedOnRequest()
     QVERIFY(fetched == DocumentSession::Download::Done);
     QVERIFY(QFile::exists(file));
     QVERIFY(opens(library, *settings, *wards.alice, wards.named));
+}
+
+void DocumentLibraryTest::aRecoveryCopyOpensForEveryRosterDeviceAndIsRecorded()
+{
+    Fixture fixture;
+    QVERIFY(fixture.folder.isValid());
+
+    const QString documentId = DocumentLibrary::newDocumentId();
+    fixture.library.add(documentId);
+    fixture.library.noteDocument(documentId, wardDocument(fixture.alice, "Tanglewood"));
+
+    // The roster after a refused publish: Alice and the Bob they granted.
+    const DeviceIdentity bob = newIdentity("Bob", "Phone");
+    Document document = wardDocument(fixture.alice, "Tanglewood");
+    AccessRoster roster = document.accessRoster();
+    RosterPerson bobPerson = bob.asNewPerson();
+    bobPerson.setRole(RosterPerson::Role::Member);
+    QVERIFY(roster.addPerson(bobPerson));
+    document.setAccessRoster(roster);
+
+    QString path;
+    QString error;
+    QVERIFY2(fixture.library.writeRecoveryCopy(documentId, document, fixture.folder.filePath("Documents"), &path, &error),
+             qPrintable(error));
+    QVERIFY(QFileInfo(path).fileName().startsWith("Tanglewood Ward (unsaved changes "));
+    QVERIFY(path.endsWith(".wardplanning"));
+    QCOMPARE(QFileInfo(path).absolutePath(), QFileInfo(fixture.folder.filePath("Documents")).absoluteFilePath());
+
+    const DocumentHeader header = sealedAt(path).header;
+    QVERIFY(header.documentId != documentId);
+    QCOMPARE(header.originDocumentId, documentId);
+    QCOMPARE(header.recipients.size(), qsizetype(2));
+
+    // Every device on the roster opens it.
+    QVERIFY2(fixture.library.openCopy(path, &error).has_value(), qPrintable(error));
+    QTemporaryDir bobFolder;
+    QVERIFY(bobFolder.isValid());
+    const std::unique_ptr<AppSettings> bobSettings = AppSettings::open(bobFolder.filePath("settings.json"), nullptr);
+    const DocumentLibrary bobLibrary(*bobSettings, bobFolder.filePath("wards"), bob);
+    QVERIFY2(bobLibrary.openCopy(path, &error).has_value(), qPrintable(error));
+
+    // Recorded like an exported copy, so a removal deletes it too.
+    QCOMPARE(fixture.settings->ward(documentId)->copies.size(), qsizetype(1));
+    QCOMPARE(fixture.settings->ward(documentId)->copies.at(0).path, path);
 }

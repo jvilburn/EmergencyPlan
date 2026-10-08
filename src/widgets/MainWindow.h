@@ -80,6 +80,7 @@ private slots:
     void onAccessRemoved(const QString& wardName, const QString& byWhom, bool left);
     void onFetchFailed(const QString& documentId, DocumentSession::Download outcome);
     void onStartOver();
+    void onConflictRaised(const DocumentSession::Conflict& conflict);
     void onEditRefused(const QString& message);
     void onFetchFinished(const QString& documentId, DocumentManager::Open result, const QString& reason);
     void updateFileActions();

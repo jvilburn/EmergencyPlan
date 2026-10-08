@@ -3,6 +3,7 @@
 #include "DocumentLibrary.h"
 #include "FileOpenRouter.h"
 #include "OpenWardDialog.h"
+#include "ConflictDialog.h"
 #include "SyncStatusWidget.h"
 #include "EmergencyBanner.h"
 #include "WardListView.h"
@@ -302,6 +303,8 @@ void MainWindow::setupConnections()
             this, &MainWindow::onAccessRemoved);
     connect(DocumentManager::instance(), &DocumentManager::fetchFailed,
             this, &MainWindow::onFetchFailed);
+    connect(DocumentManager::instance(), &DocumentManager::conflictRaised,
+            this, &MainWindow::onConflictRaised);
     connect(DocumentManager::instance(), &DocumentManager::canUndoChanged,
             this, &MainWindow::updateUndoRedoActions);
     connect(DocumentManager::instance(), &DocumentManager::canRedoChanged,
@@ -788,6 +791,39 @@ void MainWindow::updateFileActions()
 void MainWindow::onEditRefused(const QString& message)
 {
     statusBar()->showMessage(message, 8000);
+}
+
+void MainWindow::onConflictRaised(const DocumentSession::Conflict& conflict)
+{
+    ConflictDialog dialog(conflict, this);
+    dialog.exec();
+
+    QString recoveryPath;
+    QString error;
+    switch (dialog.choice())
+    {
+    case ConflictDialog::Choice::SaveMineAsCopy:
+        if (!DocumentManager::instance()->resolveConflict(DocumentSession::Resolution::KeepTheirs, &recoveryPath, &error))
+        {
+            QMessageBox::warning(this,
+                                 tr("Changes Not Saved"),
+                                 tr("Your version could not be saved as a copy, so nothing was changed: %1\n\n"
+                                    "You will be asked again.").arg(error));
+            return;
+        }
+        QMessageBox::information(this,
+                                 tr("Your Version Was Saved"),
+                                 tr("Your version is saved as a copy at:\n%1\n\nUse File > Open a Copy to "
+                                    "look at it; anything you want from it has to be entered again by hand.")
+                                     .arg(recoveryPath));
+        break;
+    case ConflictDialog::Choice::KeepTheirs:
+        DocumentManager::instance()->resolveConflict(DocumentSession::Resolution::KeepTheirs, nullptr, &error);
+        break;
+    case ConflictDialog::Choice::KeepMine:
+        DocumentManager::instance()->resolveConflict(DocumentSession::Resolution::KeepMine, nullptr, &error);
+        break;
+    }
 }
 
 void MainWindow::onStartOver()

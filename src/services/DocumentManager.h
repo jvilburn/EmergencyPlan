@@ -105,6 +105,12 @@ public:
     /// Shows a copy read-only in place of the open ward, which is closed.
     bool showCopy(const DocumentLibrary::Copy& copy, QString* errorMessage);
 
+    /// Settles a conflict the session raised. Keeping theirs first writes this
+    /// session's document as a recovery copy in the person's Documents folder when
+    /// recoveryPath is given; false, with the reason, when that copy cannot be
+    /// written, and nothing is resolved.
+    bool resolveConflict(DocumentSession::Resolution resolution, QString* recoveryPath, QString* errorMessage);
+
     /// Saves now and publishes. A local failure is the one reported.
     bool publishNow(QString* errorMessage);
 

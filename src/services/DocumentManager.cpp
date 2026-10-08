@@ -5,6 +5,7 @@
 #include "UnitLookupService.h"
 
 #include <QDebug>
+#include <QStandardPaths>
 
 using namespace std::placeholders;
 
@@ -387,6 +388,29 @@ bool DocumentManager::showCopy(const DocumentLibrary::Copy& copy, QString* error
     onDocumentReplaced();
     emit documentOpened();
     emit readOnlyChanged();
+    return true;
+}
+
+bool DocumentManager::resolveConflict(DocumentSession::Resolution resolution,
+                                      QString* recoveryPath,
+                                      QString* errorMessage)
+{
+    if (!m_session)
+    {
+        return false;
+    }
+
+    if (recoveryPath != nullptr
+        && !m_library->writeRecoveryCopy(m_session->documentId(),
+                                         m_session->document(),
+                                         QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
+                                         recoveryPath,
+                                         errorMessage))
+    {
+        return false;
+    }
+
+    m_session->resolve(resolution);
     return true;
 }
 

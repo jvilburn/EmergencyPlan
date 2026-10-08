@@ -2990,6 +2990,13 @@ Commit as `feat: sync status indicator`.
 
 ### Task 17: Conflict resolution dialog
 
+> **Done**, with these differences from the text below:
+> - `DocumentLibrary::writeRecoveryCopy` names and writes the copy through `exportCopy`, in
+>   a folder it is given; `DocumentManager::resolveConflict` passes Documents and resolves
+>   only once the copy is written, so a copy that cannot be written leaves the conflict
+>   to be asked again.
+> - Closing the dialog is the default choice, which destroys nothing.
+
 **Files:** `src/widgets/ConflictDialog.h/.cpp`, `src/widgets/MainWindow.cpp`,
 `src/services/DocumentLibrary.cpp`, `tests/services/DocumentLibraryTest.cpp`
 

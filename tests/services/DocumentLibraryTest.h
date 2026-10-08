@@ -20,6 +20,7 @@ private slots:
     void anExportedCopyHasAFreshIdAndTheWardAsItsOrigin();
     void aCopyOfAWardNotInTheLibraryIsRefused();
     void aCopyIntoTheWardsDirectoryIsRefused();
+    void aRecoveryCopyOpensForEveryRosterDeviceAndIsRecorded();
     void openCopySaysWhyItCannotOpenAFile();
     void forgetRemovesTheFilesRecordAndEntryAndKeepsCopies();
     void forgetRemovedDeletesCopiesStillAtTheirPaths();

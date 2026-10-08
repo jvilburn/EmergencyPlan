@@ -9,6 +9,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QRegularExpression>
 #include <QObject>
 
 #include <algorithm>
@@ -220,6 +221,36 @@ bool DocumentLibrary::exportCopy(const QString& documentId,
     copies.removeIf([&](const AppSettings::ExportedCopy& copy) { return copy.path == targetPath; });
     copies.append(AppSettings::ExportedCopy{targetPath, sealed.value().header.documentId});
     m_settings.setWard(documentId, ward.value());
+    return true;
+}
+
+bool DocumentLibrary::writeRecoveryCopy(const QString& documentId,
+                                        const Document& document,
+                                        const QString& directory,
+                                        QString* path,
+                                        QString* errorMessage)
+{
+    // A name the file system takes on any platform.
+    QString wardName = m_settings.ward(documentId).value_or(AppSettings::WardEntry()).wardName.value_or(
+        QObject::tr("Untitled"));
+    wardName.replace(QRegularExpression("[\\\\/:*?\"<>|]"), "-");
+
+    const QString stamp = QDateTime::currentDateTime().toString("yyyy-MM-dd HHmm");
+    const QString target = QDir(directory).filePath(
+        QObject::tr("%1 (unsaved changes %2)").arg(wardName, stamp) + DocumentConstants::FileExtension);
+    if (!QDir().mkpath(directory) || !exportCopy(documentId, document, target, errorMessage))
+    {
+        if (errorMessage != nullptr && errorMessage->isEmpty())
+        {
+            *errorMessage = QObject::tr("%1 could not be written.").arg(target);
+        }
+        return false;
+    }
+
+    if (path != nullptr)
+    {
+        *path = target;
+    }
     return true;
 }
 

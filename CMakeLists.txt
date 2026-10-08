@@ -269,6 +269,7 @@ set(WIDGET_SOURCES
     src/widgets/ContactAttemptDialog.cpp
     src/widgets/NotifyDialog.cpp
     src/widgets/FirstRunDialog.cpp
+    src/widgets/ConflictDialog.cpp
     src/widgets/SyncStatusWidget.cpp
     src/widgets/OpenWardDialog.cpp
     src/widgets/TaskDialog.cpp
@@ -323,6 +324,7 @@ set(WIDGET_HEADERS
     src/widgets/ContactAttemptDialog.h
     src/widgets/NotifyDialog.h
     src/widgets/FirstRunDialog.h
+    src/widgets/ConflictDialog.h
     src/widgets/SyncStatusWidget.h
     src/widgets/OpenWardDialog.h
     src/widgets/TaskDialog.h

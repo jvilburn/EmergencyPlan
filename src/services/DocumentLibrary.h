@@ -99,6 +99,17 @@ public:
                     const QString& targetPath,
                     QString* errorMessage);
 
+    /// Writes document, which a conflict would otherwise lose, as a copy in
+    /// directory named for the ward and the time - `Tanglewood Ward (unsaved changes
+    /// 2026-10-08 1430).wardplanning` - and gives its path. An ordinary exported
+    /// copy otherwise: a fresh id and key, sealed to the document's whole roster, and
+    /// recorded under the ward.
+    bool writeRecoveryCopy(const QString& documentId,
+                           const Document& document,
+                           const QString& directory,
+                           QString* path,
+                           QString* errorMessage);
+
     /// Opens a copy read-only; nullopt, with the reason, when the file is not a copy
     /// this device can open. A ward's own file is not a copy.
     std::optional<Copy> openCopy(const QString& sourcePath, QString* errorMessage) const;
