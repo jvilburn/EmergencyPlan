@@ -3,6 +3,7 @@
 #include "DocumentLibrary.h"
 #include "FileOpenRouter.h"
 #include "OpenWardDialog.h"
+#include "SyncStatusWidget.h"
 #include "EmergencyBanner.h"
 #include "WardListView.h"
 #include "MinisteringView.h"
@@ -221,6 +222,7 @@ void MainWindow::setupUi()
     m_geocodingProgress->setTextVisible(false);
     statusBar()->addPermanentWidget(m_geocodingLabel);
     statusBar()->addPermanentWidget(m_geocodingProgress);
+    statusBar()->addPermanentWidget(new SyncStatusWidget(this));
     m_geocodingLabel->hide();
     m_geocodingProgress->hide();
 }

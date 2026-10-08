@@ -2968,6 +2968,10 @@ Commit as `feat: restore the ward list from the server`.
 
 ### Task 16: The sync indicator
 
+> **Done.** `SyncStatusWidget` follows `DocumentManager`'s `documentOpened`,
+> `syncStateChanged`, and `readOnlyChanged`; the explanation of each state is its tooltip,
+> with the fault's reason for *Could not check the server's copy*.
+
 **Files:** `src/widgets/SyncStatusWidget.h/.cpp`, `src/widgets/MainWindow.cpp`
 
 **Quiet and persistent**, in the status bar, following `DocumentSession::syncState()` and
