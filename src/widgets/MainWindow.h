@@ -16,6 +16,7 @@
 class AppSettings;
 class DocumentLibrary;
 class QLabel;
+class AccessDialog;
 class WardNotices;
 class QProgressBar;
 class EmergencyAssetView;
@@ -112,6 +113,7 @@ private slots:
 
 private:
     void updateCopyBanner();
+    void refreshAccessDialog(AccessDialog* dialog);
     bool settleConflict(ConflictDialog::Choice choice, QString* errorMessage);
     void setupUi();
     void setupMenus();

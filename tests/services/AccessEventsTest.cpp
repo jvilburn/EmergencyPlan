@@ -133,8 +133,22 @@ void AccessEventsTest::steppingDownIsToldApartFromBeingMadeAMember()
     const QList<AccessEvents::Event> events =
         AccessEvents::between(bothAdmins, {header(p.bob, 1, {p.alice, p.bob}, {p.alice})}, roster, roster);
     QCOMPARE(events.size(), qsizetype(1));
-    QCOMPARE(events.at(0).kind, Kind::MadeMember);
+    QCOMPARE(events.at(0).kind, Kind::SteppedDown);
     QCOMPARE(events.at(0).describe(), QString("Bob Wilson stepped down as admin"));
+
+    // Two people sharing a name are still told apart: one demoting the other is not
+    // stepping down, which is the case the shared-name warning is there to catch.
+    const DeviceIdentity otherBob = newIdentity("Bob Wilson", "Laptop");
+    AccessRoster twoBobs = roster;
+    twoBobs.addPerson(otherBob.asNewPerson());
+    const QList<AccessEvents::Event> demoted =
+        AccessEvents::between(header(p.alice, 2, {p.alice, p.bob, otherBob}, {p.alice, p.bob, otherBob}),
+                              {header(otherBob, 3, {p.alice, p.bob, otherBob}, {p.alice, otherBob})},
+                              twoBobs,
+                              twoBobs);
+    QCOMPARE(demoted.size(), qsizetype(1));
+    QCOMPARE(demoted.at(0).kind, Kind::MadeMember);
+    QCOMPARE(demoted.at(0).describe(), QString("Bob Wilson made Bob Wilson a member"));
 }
 
 void AccessEventsTest::aGrantThenARemovalBetweenTwoSyncsYieldsBoth()
@@ -186,6 +200,14 @@ void AccessEventsTest::namesComeFromTheCurrentRosterThenTheBaseThenAFormerMember
     QCOMPARE(events.size(), qsizetype(2));
     QVERIFY(described(events).contains("Alice Reed removed Bob Wilson"));
     QVERIFY(described(events).contains("Alice Reed removed a former member"));
+
+    // A writer listed in neither header is a former member too.
+    const QList<AccessEvents::Event> unlisted =
+        AccessEvents::between(header(p.alice, 2, {p.alice}, {p.alice}),
+                              {header(p.tom, 3, {p.alice, p.bob}, {p.alice})},
+                              current,
+                              base);
+    QCOMPARE(described(unlisted), QStringList{"a former member added Bob Wilson"});
 }
 
 void AccessEventsTest::eachDeviceIsAddedByTheWriterOfTheHeaderThatFirstListsIt()
@@ -204,11 +226,17 @@ void AccessEventsTest::eachDeviceIsAddedByTheWriterOfTheHeaderThatFirstListsIt()
     QVERIFY(origins.value(p.bobTablet.fingerprint().toHex()).addedBy == p.bob.fingerprint());
     QCOMPARE(origins.value(p.bobTablet.fingerprint().toHex()).addedAt, linked.lastWriteTime);
 
-    // Unlinked and linked again, a device was added by the later link.
+    // Unlinked, a device is gone from the result.
     const DocumentHeader unlinked = header(p.bob, 10, {p.alice, p.bob}, {p.alice});
-    const DocumentHeader relinked = header(p.alice, 12, {p.alice, p.bob, p.bobTablet}, {p.alice});
+    const QHash<QString, AccessEvents::Origin> gone = AccessEvents::deviceOrigins({created, granted, linked, unlinked});
+    QCOMPARE(gone.size(), qsizetype(2));
+    QVERIFY(!gone.contains(p.bobTablet.fingerprint().toHex()));
+
+    // Linked again - by Bob's phone, since only Bob adds Bob's devices - it was added
+    // by the later link.
+    const DocumentHeader relinked = header(p.bob, 12, {p.alice, p.bob, p.bobTablet}, {p.alice});
     const QHash<QString, AccessEvents::Origin> again =
         AccessEvents::deviceOrigins({created, granted, linked, unlinked, relinked});
-    QVERIFY(again.value(p.bobTablet.fingerprint().toHex()).addedBy == p.alice.fingerprint());
+    QVERIFY(again.value(p.bobTablet.fingerprint().toHex()).addedBy == p.bob.fingerprint());
     QCOMPARE(again.value(p.bobTablet.fingerprint().toHex()).addedAt, relinked.lastWriteTime);
 }

@@ -97,7 +97,8 @@ void appendStep(QList<AccessEvents::Event>& events,
     }
     for (const QString& member : sorted((adminsBefore - adminsAfter) & stayed))
     {
-        events.append({Kind::MadeMember, actor, nameOf(member, current, base), header.lastWriteTime});
+        events.append({member == writer ? Kind::SteppedDown : Kind::MadeMember, actor, nameOf(member, current, base),
+                       header.lastWriteTime});
     }
 }
 
@@ -119,8 +120,9 @@ QString Event::describe() const
     case Kind::MadeAdmin:
         return QObject::tr("%1 made %2 an admin").arg(actor, subject);
     case Kind::MadeMember:
-        return actor == subject ? QObject::tr("%1 stepped down as admin").arg(subject)
-                                : QObject::tr("%1 made %2 a member").arg(actor, subject);
+        return QObject::tr("%1 made %2 a member").arg(actor, subject);
+    case Kind::SteppedDown:
+        return QObject::tr("%1 stepped down as admin").arg(subject);
     }
     return QString();
 }

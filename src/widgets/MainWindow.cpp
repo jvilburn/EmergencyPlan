@@ -895,8 +895,21 @@ void MainWindow::onShowAccess()
     }
 
     AccessDialog dialog(manager->document().accessRoster(), manager->identity(), manager->session()->isShared(), this);
-    manager->fetchDeviceOrigins(&dialog, std::bind(&AccessDialog::setOrigins, &dialog, std::placeholders::_1));
+    manager->fetchDeviceOrigins(&dialog,
+                                std::bind(&AccessDialog::setOrigins, &dialog, std::placeholders::_1, std::placeholders::_2));
+
+    // Current while it is open: a sync's changes show, and another ward closes it.
+    connect(manager, &DocumentManager::accessChanged, &dialog, std::bind(&MainWindow::refreshAccessDialog, this, &dialog));
+    connect(manager, &DocumentManager::documentOpened, &dialog, &QDialog::reject);
     dialog.exec();
+}
+
+void MainWindow::refreshAccessDialog(AccessDialog* dialog)
+{
+    dialog->setRoster(DocumentManager::instance()->document().accessRoster());
+    DocumentManager::instance()->fetchDeviceOrigins(
+        dialog,
+        std::bind(&AccessDialog::setOrigins, dialog, std::placeholders::_1, std::placeholders::_2));
 }
 
 void MainWindow::onStartOver()

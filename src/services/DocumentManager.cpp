@@ -1,5 +1,6 @@
 #include "DocumentManager.h"
 #include "BackgroundGeocodingService.h"
+#include "DocumentCrypto.h"
 #include "Reconcile.h"
 #include "RosterChangeQueue.h"
 #include "ServerConnection.h"
@@ -9,6 +10,24 @@
 #include <QStandardPaths>
 
 using namespace std::placeholders;
+
+namespace
+{
+
+/// Who a header lets in, person and device, sorted: what two headers agree on when
+/// they list the same devices, whatever else differs between them.
+QStringList listedDevices(const DocumentHeader& header)
+{
+    QStringList devices;
+    for (const RecipientEntry& entry : header.recipients)
+    {
+        devices.append(entry.member.toHex() + "/" + entry.fingerprint.toHex());
+    }
+    devices.sort();
+    return devices;
+}
+
+} // namespace
 
 DocumentManager* DocumentManager::s_instance = nullptr;
 
@@ -502,7 +521,6 @@ void DocumentManager::install(std::unique_ptr<DocumentSession> session)
     connect(opened, &DocumentSession::conflictRaised, this, &DocumentManager::conflictRaised);
     connect(opened, &DocumentSession::requiresUpdateChanged, this, &DocumentManager::requiresUpdateChanged);
     connect(opened, &DocumentSession::versionAdopted, this, &DocumentManager::onVersionAdopted);
-    m_knownRoster = opened->document().accessRoster();
     connect(opened, &DocumentSession::saveFailed, this, &DocumentManager::saveFailed);
     connect(opened, &DocumentSession::removed, this, &DocumentManager::onSessionRemoved);
     if (m_queue != nullptr)
@@ -532,12 +550,13 @@ void DocumentManager::onDocumentReplaced()
     afterChange(DocumentChange::full());
 }
 
-void DocumentManager::onVersionAdopted(const DocumentHeader& previousBase, const QList<DocumentHeader>& laterHeaders)
+void DocumentManager::onVersionAdopted(const DocumentHeader& previousBase,
+                                       const QList<DocumentHeader>& laterHeaders,
+                                       const AccessRoster& previousRoster)
 {
     // Every version taken in passes here once, so each change is told once.
-    const AccessRoster current = m_session->document().accessRoster();
-    const QList<AccessEvents::Event> events = AccessEvents::between(previousBase, laterHeaders, current, m_knownRoster);
-    m_knownRoster = current;
+    const QList<AccessEvents::Event> events =
+        AccessEvents::between(previousBase, laterHeaders, m_session->document().accessRoster(), previousRoster);
     if (!events.isEmpty())
     {
         emit accessChanged(events);
@@ -552,7 +571,7 @@ void DocumentManager::fetchDeviceOrigins(QObject* receiver, const OriginsFetched
     }
     if (!m_session->isShared() || m_server == nullptr)
     {
-        done(AccessEvents::deviceOrigins({m_session->header()}));
+        done(AccessEvents::deviceOrigins({m_session->header()}), true);
         return;
     }
     m_server->headers(m_session->documentId(),
@@ -563,11 +582,18 @@ void DocumentManager::fetchDeviceOrigins(QObject* receiver, const OriginsFetched
 
 void DocumentManager::onChainFetched(const OriginsFetched& done, const ServerContract::Result<ServerContract::HeaderChain>& chain)
 {
+    // The server's word is not enough for what this shows - it is how a device
+    // planted under someone is spotted - so every link must hold and the chain must
+    // end in the devices this ward lists.
     QList<DocumentHeader> headers;
-    if (chain.ok() && Reconcile::readHeaders(chain.value.value().headers, headers) == Reconcile::Verdict::Accept)
+    bool checked = m_session && chain.ok()
+                && Reconcile::readHeaders(chain.value.value().headers, headers) == Reconcile::Verdict::Accept
+                && !headers.isEmpty() && listedDevices(headers.last()) == listedDevices(m_session->header());
+    for (qsizetype i = 1; checked && i < headers.size(); ++i)
     {
-        done(AccessEvents::deviceOrigins(headers));
+        checked = DocumentCrypto::verifyLink(headers.at(i - 1), headers.at(i));
     }
+    done(checked ? AccessEvents::deviceOrigins(headers) : QHash<QString, AccessEvents::Origin>(), checked);
 }
 
 void DocumentManager::onReadOnlyChanged()

@@ -120,11 +120,14 @@ public:
     /// The ward's name as the library lists it; empty for one not there.
     QString wardNameOf(const QString& documentId) const;
 
-    using OriginsFetched = std::function<void(const QHash<QString, AccessEvents::Origin>& origins)>;
+    /// Which device added each device, and whether that could be checked.
+    using OriginsFetched = std::function<void(const QHash<QString, AccessEvents::Origin>& origins, bool checked)>;
 
     /// Which device added each device of the open ward, and when, from its kept
     /// headers - fetched for a shared ward, and this device's own for one that is
-    /// not. Answered only while receiver lives.
+    /// not. A chain whose links do not hold, or that does not end in the devices this
+    /// ward lists, is not checked and says nothing. Answered only while receiver
+    /// lives.
     void fetchDeviceOrigins(QObject* receiver, const OriginsFetched& done);
 
     /// A shared ward is being fetched to open.
@@ -218,7 +221,9 @@ private:
     void onDocumentReplaced();
     void afterChange(const DocumentChange& change);
     void onReadOnlyChanged();
-    void onVersionAdopted(const DocumentHeader& previousBase, const QList<DocumentHeader>& laterHeaders);
+    void onVersionAdopted(const DocumentHeader& previousBase,
+                          const QList<DocumentHeader>& laterHeaders,
+                          const AccessRoster& previousRoster);
     void onChainFetched(const OriginsFetched& done, const ServerContract::Result<ServerContract::HeaderChain>& chain);
     void onSessionRemoved(const QString& byWhom, bool left);
     void onQueueRemoved(const QString& documentId, bool left);
@@ -244,10 +249,6 @@ private:
 
     /// The shared ward being fetched to open, until it opens or another is shown.
     QString m_fetching;
-
-    /// The roster as of the last version taken in, which names people a later
-    /// version removed.
-    AccessRoster m_knownRoster;
     Document m_empty;
     CommandHistory m_commandHistory;
 

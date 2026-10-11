@@ -23,7 +23,8 @@ struct Event
         Removed,
         Left,
         MadeAdmin,
-        MadeMember
+        MadeMember,
+        SteppedDown     ///< made a member by their own device
     };
 
     Kind kind;
@@ -43,8 +44,8 @@ QList<Event> between(const DocumentHeader& previousBase,
                      const AccessRoster& current,
                      const AccessRoster& base);
 
-/// Which device added a device, and when: the writer of the first header that
-/// lists it.
+/// Which device added a device, and when: the writer of the header that last added
+/// it - the first since it was last absent.
 struct Origin
 {
     Fingerprint addedBy;

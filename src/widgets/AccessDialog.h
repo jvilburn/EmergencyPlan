@@ -36,8 +36,12 @@ class AccessDialog : public QDialog
 public:
     AccessDialog(const AccessRoster& roster, const DeviceIdentity& self, bool shared, QWidget* parent);
 
-    /// Which device added each device, once the kept headers have been read.
-    void setOrigins(const QHash<QString, AccessEvents::Origin>& origins);
+    /// Which device added each device, once the kept headers have been read; when
+    /// they could not be checked, the dialog says so instead.
+    void setOrigins(const QHash<QString, AccessEvents::Origin>& origins, bool checked);
+
+    /// The roster after a sync while the dialog is open; the selection is kept.
+    void setRoster(const AccessRoster& roster);
 
 signals:
     void shareRequested();
@@ -63,7 +67,8 @@ private:
     std::optional<RosterDevice> selectedDevice() const;
 
     bool selfIsAdmin() const;
-    bool isLastAdminAmongOthers() const;
+    bool isOnlyAdmin() const;
+    void updateAddedColumn();
     QString addedText(const RosterDevice& device) const;
 
     AccessRoster m_roster;
@@ -72,6 +77,8 @@ private:
     QHash<QString, AccessEvents::Origin> m_origins;
 
     QTreeWidget* m_tree = nullptr;
+    QLabel* m_sharedNames = nullptr;
+    QLabel* m_originsUnchecked = nullptr;
     QPushButton* m_remove = nullptr;
     QPushButton* m_role = nullptr;
     QPushButton* m_unlink = nullptr;

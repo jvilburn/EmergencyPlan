@@ -198,9 +198,12 @@ signals:
     /// a merge, a resolve, an adopted roster: undo no longer applies.
     void documentReplaced();
 
-    /// The base moved to a server version: the old base's header and the headers
-    /// fetched after it.
-    void versionAdopted(const DocumentHeader& previousBase, const QList<DocumentHeader>& laterHeaders);
+    /// A server version was taken in - by a fast-forward, a merge, or the roster a
+    /// conflict adopts before it is settled - once per version: the old base's
+    /// header and roster, and the headers fetched after it.
+    void versionAdopted(const DocumentHeader& previousBase,
+                        const QList<DocumentHeader>& laterHeaders,
+                        const AccessRoster& previousRoster);
 
     void syncStateChanged(SyncState state);
 
@@ -269,6 +272,10 @@ private:
     void raiseConflict(const ServerVersion::Fetched& theirs);
     bool moveBase(const ServerVersion::Fetched& theirs, QString* errorMessage);
     QString nameOf(const Fingerprint& device) const;
+
+    /// The roster of the version the base holds, which names people a later one
+    /// removed; this session's own when there is no base.
+    AccessRoster baseRoster() const;
 
     // --- The lease ---
 

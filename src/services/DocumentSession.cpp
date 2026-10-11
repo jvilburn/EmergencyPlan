@@ -724,6 +724,7 @@ void DocumentSession::adopt(const Fetched& theirs)
 void DocumentSession::fastForward(const Fetched& theirs)
 {
     const DocumentHeader previousBase = m_base.has_value() ? m_base.value().sealed.header : m_header;
+    const AccessRoster previousRoster = baseRoster();
 
     if (!writeLocal(theirs))
     {
@@ -738,12 +739,13 @@ void DocumentSession::fastForward(const Fetched& theirs)
     }
 
     settleSyncState();
-    emit versionAdopted(previousBase, theirs.laterHeaders);
+    emit versionAdopted(previousBase, theirs.laterHeaders, previousRoster);
 }
 
 void DocumentSession::mergeWith(const Fetched& theirs, const Document& merged)
 {
     const DocumentHeader previousBase = m_base.value().sealed.header;
+    const AccessRoster previousRoster = baseRoster();
 
     // The local file first, then the base, so unpublished work is never covered by
     // a base that moved over a file that did not.
@@ -759,7 +761,7 @@ void DocumentSession::mergeWith(const Fetched& theirs, const Document& merged)
         return;
     }
 
-    emit versionAdopted(previousBase, theirs.laterHeaders);
+    emit versionAdopted(previousBase, theirs.laterHeaders, previousRoster);
     publish();
 }
 
@@ -779,6 +781,9 @@ void DocumentSession::raiseConflict(const Fetched& theirs)
     m_conflict = theirs;
     m_timers->stop(SessionTimers::Timer::Retry);
     settleSyncState();
+    emit versionAdopted(m_base.has_value() ? m_base.value().sealed.header : m_header,
+                        theirs.laterHeaders,
+                        baseRoster());
     emit conflictRaised(Conflict{nameOf(theirs.sealed.header.lastWriter), theirs.sealed.header.lastWriteTime});
 }
 
@@ -802,7 +807,6 @@ bool DocumentSession::resolve(Resolution resolution, QString* errorMessage)
     const Fetched theirs = m_conflict.value();
     m_conflict.reset();
 
-    const DocumentHeader previousBase = m_base.has_value() ? m_base.value().sealed.header : m_header;
     std::optional<EmergencyResponse> baseResponse;
     if (m_base.has_value())
     {
@@ -848,7 +852,6 @@ bool DocumentSession::resolve(Resolution resolution, QString* errorMessage)
         return false;
     }
 
-    emit versionAdopted(previousBase, theirs.laterHeaders);
     settleSyncState();
     publish();
     return true;
@@ -879,6 +882,11 @@ void DocumentSession::finishRemoved(const Fingerprint& remover, bool left)
     m_saveScheduled = false;
     ServerVersion::forget(m_context.records, m_documentId, m_paths);
     emit removed(byWhom, left);
+}
+
+AccessRoster DocumentSession::baseRoster() const
+{
+    return m_base.has_value() ? m_base.value().document.accessRoster() : m_document.accessRoster();
 }
 
 QString DocumentSession::nameOf(const Fingerprint& device) const
