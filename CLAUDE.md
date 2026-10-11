@@ -22,9 +22,17 @@ See [CODING_STYLE.md](docs/CODING_STYLE.md) for complete details:
 - **Generator**: Ninja
 - **Qt Version**: 6.11.0 (msvc2022_64)
 - **Build**: Use **Ctrl+Shift+B** in VS Code, or run `build.bat` directly
-- **Testing**: User builds and runs the app manually - do NOT attempt to build/run from Claude
+- **Running the app**: the user runs it manually
 
-**IMPORTANT**: Do NOT run cmake builds from Git Bash or MSYS terminals. The MSVC environment is not set up in those shells, causing errors like "Cannot open include file: 'type_traits'". Use `build.bat` instead, which sets up the Visual Studio environment properly.
+**Building and testing from Claude's shell:**
+```bash
+cmd //c "build.bat debug" > build.log 2>&1
+PATH="/c/Qt/6.11.0/msvc2022_64/bin:$PATH" QT_FORCE_STDERR_LOGGING=1 \
+    build/windows-debug/bin/WardPlanningTests.exe > test.log 2>&1
+```
+Write both logs to the scratchpad. Summarize the test log with `grep -n "^FAIL\|QFATAL"` and the summed `Totals` lines. The test binary runs only with Qt's `bin` on `PATH`, and prints only with `QT_FORCE_STDERR_LOGGING=1`, because Claude's shell has no console and Qt otherwise logs to the debugger. The conformance run against a real server is skipped unless `WARD_PLANNING_SERVER_URL` is set.
+
+**IMPORTANT**: Do NOT run `cmake` directly from Git Bash or MSYS terminals. The MSVC environment is not set up in those shells, causing errors like "Cannot open include file: 'type_traits'". `build.bat` calls `vcvars64.bat` itself, which is why it works through `cmd`.
 
 **IntelliSense**: Error squiggles are disabled in settings.json because they get stale after Claude Code edits. The compiler is the source of truth for errors.
 
