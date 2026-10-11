@@ -164,7 +164,7 @@ std::unique_ptr<DocumentSession> DocumentSession::open(const Context& context,
 
     // One statement of the rules serves the local file and every download alike.
     const Reconcile::DownloadCheck check =
-        Reconcile::validate(documentId, sealed.header, sealed.ciphertext, context.identity.self());
+        Reconcile::validate(documentId, sealed.header, sealed.ciphertext, context.identity.self(), {});
     if (check.verdict != Reconcile::Verdict::Accept)
     {
         failure = LoadFailure::Refused;
@@ -197,7 +197,8 @@ void DocumentSession::download(const Context& context,
                                QObject* receiver,
                                Downloaded done)
 {
-    ServerVersion::fetch(context.identity,
+    ServerVersion::fetch(context.identity.self(),
+                         ServerVersion::trustedKeys(documentId, paths, context.records, context.identity.self()),
                          context.server,
                          documentId,
                          receiver,
@@ -297,7 +298,15 @@ void DocumentSession::onTimer(SessionTimers::Timer timer)
         break;
     }
     case SessionTimers::Timer::Retry:
-        publish();
+        // After a refusal over the allow-list, a fresh head first; its publish follows.
+        if (m_allowListRefusals > 0)
+        {
+            checkHead();
+        }
+        else
+        {
+            publish();
+        }
         break;
     case SessionTimers::Timer::Heartbeat:
         takeLease();
@@ -320,18 +329,16 @@ bool DocumentSession::writeSave(QString* errorMessage)
         return true;
     }
 
-    // The sealing-set rule, applied to the document in memory: who it is sealed to
-    // is not content, so an edit's undo still applies.
-    DataKey dataKey = m_dataKey;
+    // The sealing-set rule. The new set and key reach memory only once written, so a
+    // failed save leaves the old pair, and the next save rotates afresh.
+    ServerVersion::Resealed resealed{m_document, m_dataKey};
     const std::optional<ServerVersion::Access> allowed = access();
     if (allowed.has_value())
     {
-        const ServerVersion::Resealed resealed = ServerVersion::reseal(m_document, m_dataKey, allowed.value());
-        m_document.setSealingSet(resealed.document.sealingSet());
-        dataKey = resealed.dataKey;
+        resealed = ServerVersion::reseal(m_document, m_dataKey, allowed.value());
     }
 
-    if (!writeLocal(m_document, m_header, dataKey))
+    if (!writeLocal(resealed.document, m_header, resealed.dataKey))
     {
         if (errorMessage != nullptr)
         {
@@ -391,7 +398,10 @@ void DocumentSession::install(const Document& document)
         return;
     }
 
-    const bool replaced = document != m_document;
+    // Who the document is sealed to is not content, so a reseal keeps undo.
+    Document content = document;
+    content.setSealingSet(m_document.sealingSet());
+    const bool replaced = content != m_document;
     m_document = document;
     if (replaced)
     {
@@ -454,6 +464,14 @@ void DocumentSession::onHead(const Result<Head>& head)
         return;
     }
 
+    // Applying it would seal this device out of its own local file.
+    if (!ServerVersion::listsDevice(head.value.value(), m_context.identity.fingerprint()))
+    {
+        setFault(tr("The server's list of who has access leaves out this device."));
+        finishOperation();
+        return;
+    }
+
     const bool changed = !m_head.has_value() || m_head.value().members != head.value->members
                       || m_head.value().leaseHolder != head.value->leaseHolder
                       || m_head.value().history != head.value->history;
@@ -493,8 +511,15 @@ void DocumentSession::fetchTheirs()
         emit saveFailed(error);
     }
 
+    QList<DataKey> trusted{m_dataKey};
+    if (m_base.has_value())
+    {
+        trusted.append(m_base.value().dataKey);
+    }
+
     m_busy = true;
-    ServerVersion::fetch(m_context.identity,
+    ServerVersion::fetch(m_context.identity.self(),
+                         trusted,
                          m_context.server,
                          m_documentId,
                          this,
@@ -545,6 +570,7 @@ void DocumentSession::publish()
         m_publishAgain = true;
         return;
     }
+    m_publishAgain = false;
 
     // A local file the rule would seal differently is saved again first.
     const std::optional<ServerVersion::Access> allowed = access();
@@ -577,7 +603,6 @@ void DocumentSession::publish()
     // One pending upload, never a list: the local file is the latest save, so it
     // supersedes every earlier one.
     m_busy = true;
-    m_publishAgain = false;
     setSyncState(SyncState::PendingUpload);
     m_context.server.upload(m_documentId,
                             m_context.records.record(m_documentId).baseVersion.value(),
@@ -606,6 +631,7 @@ void DocumentSession::onPublished(const Result<qint64>& result, const DocumentFi
         }
 
         m_retryDelay = SessionTimers::FirstRetryMilliseconds;
+        m_allowListRefusals = 0;
         m_timers->stop(SessionTimers::Timer::Retry);
         settleSyncState();
 
@@ -626,7 +652,14 @@ void DocumentSession::onPublished(const Result<qint64>& result, const DocumentFi
 
     case ServerError::NotOnAllowList:
         // Someone was dropped since the last head; the next one prunes them, and
-        // the publish that follows it goes out sealed without them.
+        // the publish that follows it goes out sealed without them. Refused again
+        // on a fresh head, the server disagrees with itself, so it waits for Retry.
+        if (++m_allowListRefusals > 1)
+        {
+            scheduleRetry();
+            finishOperation();
+            return;
+        }
         finishOperation();
         checkHead();
         return;
@@ -725,6 +758,10 @@ void DocumentSession::fastForward(const Fetched& theirs)
     }
 
     settleSyncState();
+
+    // Nothing to send unless the rule now seals differently - a device this one
+    // approved that their version lacks, or one the server has dropped.
+    m_publishAgain = true;
 }
 
 void DocumentSession::mergeWith(const Fetched& theirs, const Document& merged)
@@ -807,8 +844,10 @@ bool DocumentSession::resolve(Resolution resolution, QString* errorMessage)
     }
     else
     {
-        const DocumentHeader& previous = resolution == Resolution::KeepMine ? m_header : theirs.sealed.header;
-        written = writeLocal(resolved, previous, theirs.dataKey);
+        // Each document with the key it is sealed by: an edit made while the conflict
+        // waited may have rotated this session's key.
+        written = resolution == Resolution::KeepMine ? writeLocal(resolved, m_header, m_dataKey)
+                                                     : writeLocal(resolved, theirs.sealed.header, theirs.dataKey);
     }
 
     // The local file first, as in a merge; the base then moves to theirs. A base

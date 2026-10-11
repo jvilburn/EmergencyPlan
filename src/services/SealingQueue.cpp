@@ -108,6 +108,13 @@ void SealingQueue::onHead(const QString& documentId, const Result<Head>& head)
         return;
     }
 
+    // Not a head to seal by; the open session reports it, and the next check tries again.
+    if (!ServerVersion::listsDevice(head.value.value(), m_identity.fingerprint()))
+    {
+        finish(documentId);
+        return;
+    }
+
     const ServerVersion::Access access =
         ServerVersion::accessFor(head.value.value(), m_records.record(documentId), m_records.linkedDevices());
 
@@ -121,7 +128,6 @@ void SealingQueue::onHead(const QString& documentId, const Result<Head>& head)
 
     if (!owesASeal(header, access))
     {
-        ServerVersion::settleGranted(m_records, documentId, header, access);
         finish(documentId);
         return;
     }
@@ -136,7 +142,8 @@ void SealingQueue::onHead(const QString& documentId, const Result<Head>& head)
     }
 
     m_busy = true;
-    ServerVersion::fetch(m_identity,
+    ServerVersion::fetch(m_identity.self(),
+                         ServerVersion::trustedKeys(documentId, m_pathsFor(documentId), m_records, m_identity.self()),
                          m_server,
                          documentId,
                          this,
@@ -195,10 +202,12 @@ void SealingQueue::onUploaded(const QString& documentId,
         finish(documentId);
         return;
     case ServerError::VersionConflict:
-    case ServerError::NotOnAllowList:
-        // Someone published, or someone was dropped, since the head: start over on
-        // the server's newer state.
+        // Someone published since the head: start over on the server's newer state.
         again(documentId);
+        return;
+    case ServerError::NotOnAllowList:
+        // Someone was dropped since the head; the next try reads a fresh one.
+        defer(documentId);
         return;
     case ServerError::AccessLost:
         lose(documentId, result.lost.value());

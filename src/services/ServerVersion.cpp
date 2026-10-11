@@ -18,7 +18,8 @@ Fetched outcomeOnly(Fetched::Outcome outcome)
     return fetched;
 }
 
-void onSnapshot(const DeviceIdentity& identity,
+void onSnapshot(const Reconcile::Self& self,
+                const QList<DataKey>& trusted,
                 const QString& documentId,
                 const ServerVersion::FetchDone& done,
                 const Result<Snapshot>& snapshot)
@@ -40,7 +41,7 @@ void onSnapshot(const DeviceIdentity& identity,
     }
 
     const Reconcile::DownloadCheck check =
-        Reconcile::validateDownload(documentId, snapshot.value->header, snapshot.value->blob, identity.self());
+        Reconcile::validateDownload(documentId, snapshot.value->header, snapshot.value->blob, self, trusted);
     switch (check.verdict)
     {
     case Reconcile::Verdict::Accept:
@@ -90,7 +91,7 @@ std::optional<BaseCopy> readBase(const QString& documentId,
         return std::nullopt;
     }
 
-    const Reconcile::DownloadCheck check = Reconcile::validate(documentId, sealed.header, sealed.ciphertext, self);
+    const Reconcile::DownloadCheck check = Reconcile::validate(documentId, sealed.header, sealed.ciphertext, self, {});
     if (check.verdict != Reconcile::Verdict::Accept)
     {
         return std::nullopt;
@@ -126,6 +127,46 @@ void forget(DocumentRecords& records, const QString& documentId, const DocumentP
     records.removeRecord(documentId);
 }
 
+QList<DataKey> trustedKeys(const QString& documentId,
+                           const DocumentPaths& paths,
+                           const DocumentRecords& records,
+                           const Reconcile::Self& self)
+{
+    QList<DataKey> keys;
+    const std::optional<BaseCopy> base = readBase(documentId, paths, records, self);
+    if (base.has_value())
+    {
+        keys.append(base.value().dataKey);
+    }
+
+    DocumentFile::Sealed local;
+    const std::optional<QByteArray> bytes = DocumentFile::readAll(paths.file);
+    if (bytes.has_value() && DocumentFile::decode(bytes.value(), local) == DocumentFile::Read::Ok)
+    {
+        const Reconcile::DownloadCheck check = Reconcile::validate(documentId, local.header, local.ciphertext, self, {});
+        if (check.verdict == Reconcile::Verdict::Accept)
+        {
+            keys.append(check.dataKey.value());
+        }
+    }
+    return keys;
+}
+
+bool listsDevice(const Head& head, const Fingerprint& device)
+{
+    for (const Member& member : head.members)
+    {
+        for (const Device& listed : member.person.devices)
+        {
+            if (listed.fingerprint == device)
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 Access accessFor(const Head& head, const DocumentRecord& record, const QList<DeviceKeys>& linked)
 {
     Access access;
@@ -145,11 +186,13 @@ Resealed reseal(const Document& document, const DataKey& dataKey, const Access& 
     const SealingSet::Next next = document.sealingSet().next(access.allowList, access.approved);
 
     Resealed resealed{document, dataKey};
-    resealed.document.setSealingSet(next.devices);
+    SealingSet sealingSet = next.devices;
     if (next.rotate)
     {
+        sealingSet.addFormerKey(dataKey);
         resealed.dataKey = DocumentCrypto::generateDataKey();
     }
+    resealed.document.setSealingSet(sealingSet);
     return resealed;
 }
 
@@ -182,13 +225,14 @@ void settleGranted(DocumentRecords& records,
     }
 }
 
-void fetch(const DeviceIdentity& identity,
+void fetch(const Reconcile::Self& self,
+           const QList<DataKey>& trusted,
            ServerConnection& server,
            const QString& documentId,
            QObject* receiver,
            FetchDone done)
 {
-    server.download(documentId, receiver, std::bind(&onSnapshot, identity, documentId, done, _1));
+    server.download(documentId, receiver, std::bind(&onSnapshot, self, trusted, documentId, done, _1));
 }
 
 } // namespace ServerVersion

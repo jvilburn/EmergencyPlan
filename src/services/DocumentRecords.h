@@ -28,6 +28,10 @@ struct DocumentRecord
     /// version seals to it or the server stops listing it.
     QList<DeviceKeys> granted;
 
+    /// The newest access-history entry this device has shown and had dismissed, so
+    /// the notice shows only what is newer - across syncs, ward switches, and runs.
+    qint64 historySeen = 0;
+
     QJsonObject toJson() const;
 
     /// Exactly what toJson writes; nullopt for anything else.

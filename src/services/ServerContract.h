@@ -342,7 +342,9 @@ public:
     /// The request's person becomes a member.
     virtual void grant(const Session& session, const QString& documentId, qint64 index, Reply<Done> reply) = 0;
 
-    /// An admin removing a person, or the person leaving.
+    /// An admin removing a person, or the person leaving. When the last person
+    /// leaves, the ward keeps only who lost access: its id stays taken, its other
+    /// devices hear AccessLost, and everyone else hears NotMember.
     virtual void removeMember(const Session& session,
                               const QString& documentId,
                               const MemberId& member,

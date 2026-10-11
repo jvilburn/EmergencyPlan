@@ -14,6 +14,7 @@ const QLatin1String KeyBaseVersion("baseVersion");
 const QLatin1String KeyBaseHash("baseHash");
 const QLatin1String KeyBaseSaveCounter("baseSaveCounter");
 const QLatin1String KeyGranted("granted");
+const QLatin1String KeyHistorySeen("historySeen");
 
 } // namespace
 
@@ -27,6 +28,7 @@ QJsonObject DocumentRecord::toJson() const
     }
 
     json[KeyBaseSaveCounter] = baseSaveCounter;
+    json[KeyHistorySeen] = historySeen;
 
     QJsonArray grantedArray;
     for (const DeviceKeys& device : granted)
@@ -42,8 +44,9 @@ std::optional<DocumentRecord> DocumentRecord::fromJson(const QJsonObject& json)
 {
     DocumentRecord record;
     QList<QJsonObject> grantedJson;
-    if (!StrictJson::hasOnlyKeys(json, {KeyBaseVersion, KeyBaseHash, KeyBaseSaveCounter, KeyGranted})
+    if (!StrictJson::hasOnlyKeys(json, {KeyBaseVersion, KeyBaseHash, KeyBaseSaveCounter, KeyGranted, KeyHistorySeen})
         || !StrictJson::readInt64(json, KeyBaseSaveCounter, record.baseSaveCounter)
+        || !StrictJson::readInt64(json, KeyHistorySeen, record.historySeen)
         || !StrictJson::readObjectArray(json, KeyGranted, grantedJson))
     {
         return std::nullopt;
@@ -89,5 +92,6 @@ bool DocumentRecord::operator==(const DocumentRecord& other) const
     return baseVersion == other.baseVersion
         && baseHash == other.baseHash
         && baseSaveCounter == other.baseSaveCounter
-        && granted == other.granted;
+        && granted == other.granted
+        && historySeen == other.historySeen;
 }

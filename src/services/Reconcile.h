@@ -7,6 +7,7 @@
 
 #include <QByteArray>
 #include <QJsonObject>
+#include <QList>
 #include <QString>
 
 #include <optional>
@@ -45,17 +46,24 @@ struct Self
 /// A version this device can take: the header is of documentId and lists this
 /// device, its key unseals, the payload decrypts and parses, and the header matches
 /// the payload's sealing set.
+///
+/// trusted holds the keys of the versions this device already holds of the ward. A
+/// version under any other key must name one of them among its former keys, which
+/// only someone who held it can do - so a server cannot hand this device a ward of
+/// its own making. With none held, the first version is taken as it stands.
 DownloadCheck validate(const QString& documentId,
                        const DocumentHeader& header,
                        const QByteArray& ciphertext,
-                       const Self& self);
+                       const Self& self,
+                       const QList<DataKey>& trusted);
 
 /// validate, for a header as the server stored it: one in a later format is
 /// NeedsNewerVersion, and one that does not parse is ServerFault.
 DownloadCheck validateDownload(const QString& documentId,
                                const QJsonObject& header,
                                const QByteArray& ciphertext,
-                               const Self& self);
+                               const Self& self,
+                               const QList<DataKey>& trusted);
 
 /// Every recipient entry's fingerprint is one device in the set, and every device
 /// in the set has exactly one entry. The agreement the server cannot check, since it

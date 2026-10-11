@@ -133,6 +133,9 @@ private:
     DeviceIdentity m_identity;
 
     std::optional<ServerContract::Session> m_session;
+
+    /// Set once registration says this device was unlinked; every call answers it.
+    std::optional<ServerContract::LostAccess> m_lost;
     bool m_signingIn = false;
     QList<SessionReady> m_waiting;
 

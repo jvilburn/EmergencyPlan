@@ -12,6 +12,12 @@
 #include <QTreeWidgetItemIterator>
 #include <QVBoxLayout>
 
+#include <algorithm>
+
+using ServerContract::Device;
+using ServerContract::Member;
+using ServerContract::Role;
+
 namespace
 {
 
@@ -20,15 +26,15 @@ constexpr int DeviceRole = Qt::UserRole + 1;
 
 /// "2 people are named Bob Wilson" for each name more than one person shares, as a
 /// reader would compare them: case and spacing aside.
-QStringList sharedNames(const QList<RosterPerson>& people)
+QStringList sharedNames(const QList<Member>& members)
 {
     QHash<QString, int> counts;
     QHash<QString, QString> spelling;
-    for (const RosterPerson& person : people)
+    for (const Member& member : members)
     {
-        const QString key = person.displayName().simplified().toCaseFolded();
+        const QString key = member.person.displayName.simplified().toCaseFolded();
         counts[key] += 1;
-        spelling.insert(key, person.displayName().simplified());
+        spelling.insert(key, member.person.displayName.simplified());
     }
 
     QStringList warnings;
@@ -43,11 +49,19 @@ QStringList sharedNames(const QList<RosterPerson>& people)
     return warnings;
 }
 
+/// Case-insensitive by name, then by member id, so two people sharing a name keep
+/// one order.
+bool sortsBefore(const Member& left, const Member& right)
+{
+    const int byName = QString::compare(left.person.displayName, right.person.displayName, Qt::CaseInsensitive);
+    return byName != 0 ? byName < 0 : left.person.member.toHex() < right.person.member.toHex();
+}
+
 } // namespace
 
-AccessDialog::AccessDialog(const AccessRoster& roster, const DeviceIdentity& self, bool shared, QWidget* parent)
+AccessDialog::AccessDialog(const QList<Member>& members, const DeviceIdentity& self, bool shared, QWidget* parent)
     : QDialog(parent)
-    , m_roster(roster)
+    , m_members(members)
     , m_self(self)
     , m_shared(shared)
 {
@@ -56,7 +70,6 @@ AccessDialog::AccessDialog(const AccessRoster& roster, const DeviceIdentity& sel
 
     QVBoxLayout* layout = new QVBoxLayout(this);
 
-    // At the top: sharing a ward that is not yet shared, or inviting, for admins.
     if (!m_shared)
     {
         QHBoxLayout* top = new QHBoxLayout();
@@ -67,42 +80,23 @@ AccessDialog::AccessDialog(const AccessRoster& roster, const DeviceIdentity& sel
         layout->addLayout(top);
         connect(share, &QPushButton::clicked, this, &AccessDialog::shareRequested);
     }
-    else if (selfIsAdmin())
-    {
-        QHBoxLayout* top = new QHBoxLayout();
-        top->addStretch(1);
-        QPushButton* invite = new QPushButton(tr("Invite Someone..."), this);
-        top->addWidget(invite);
-        layout->addLayout(top);
-        connect(invite, &QPushButton::clicked, this, &AccessDialog::inviteRequested);
-    }
+
+    m_offline = new QLabel(tr("Who has access shows once the server answers."), this);
+    m_offline->setWordWrap(true);
+    layout->addWidget(m_offline);
 
     m_sharedNames = new QLabel(this);
     m_sharedNames->setWordWrap(true);
     layout->addWidget(m_sharedNames);
 
-    if (!selfIsAdmin())
-    {
-        QStringList admins;
-        for (const MemberId& admin : m_roster.admins())
-        {
-            const std::optional<RosterPerson> person = m_roster.person(admin);
-            if (person.has_value())
-            {
-                admins.append(person.value().displayName());
-            }
-        }
-        QLabel* askAdmins = new QLabel(tr("To add or remove people, ask an admin: %1.")
-                                           .arg(QLocale().createSeparatedList(admins)),
-                                       this);
-        askAdmins->setWordWrap(true);
-        layout->addWidget(askAdmins);
-    }
+    m_askAdmins = new QLabel(this);
+    m_askAdmins->setWordWrap(true);
+    layout->addWidget(m_askAdmins);
 
     QHBoxLayout* body = new QHBoxLayout();
     m_tree = new QTreeWidget(this);
     m_tree->setColumnCount(2);
-    m_tree->setHeaderLabels({tr("Person or device"), tr("Role, or added by")});
+    m_tree->setHeaderLabels({tr("Person or device"), tr("Role, or linked by")});
     m_tree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
     body->addWidget(m_tree, 1);
 
@@ -121,18 +115,8 @@ AccessDialog::AccessDialog(const AccessRoster& roster, const DeviceIdentity& sel
     body->addLayout(buttons);
     layout->addLayout(body, 1);
 
-    m_originsUnchecked = new QLabel(tr("Who added each device could not be checked just now."), this);
-    m_originsUnchecked->hide();
-    layout->addWidget(m_originsUnchecked);
-
     QDialogButtonBox* close = new QDialogButtonBox(QDialogButtonBox::Close, this);
     layout->addWidget(close);
-
-    // Linking and leaving belong to a shared ward; an unshared one has only you.
-    m_link->setVisible(m_shared);
-    m_leave->setVisible(m_shared);
-    m_remove->setVisible(selfIsAdmin());
-    m_role->setVisible(selfIsAdmin());
 
     connect(m_tree, &QTreeWidget::itemSelectionChanged, this, &AccessDialog::onSelectionChanged);
     connect(m_link, &QPushButton::clicked, this, &AccessDialog::linkRequested);
@@ -144,24 +128,16 @@ AccessDialog::AccessDialog(const AccessRoster& roster, const DeviceIdentity& sel
     connect(close, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
     fillTree();
-    onSelectionChanged();
 }
 
-void AccessDialog::setOrigins(const QHash<QString, AccessEvents::Origin>& origins, bool checked)
-{
-    m_origins = origins;
-    m_originsUnchecked->setVisible(!checked);
-    updateAddedColumn();
-}
-
-void AccessDialog::setRoster(const AccessRoster& roster)
+void AccessDialog::setMembers(const QList<Member>& members)
 {
     // Kept across the refill by what it names, not by row.
     const QList<QTreeWidgetItem*> selected = m_tree->selectedItems();
     const QString member = selected.isEmpty() ? QString() : selected.first()->data(0, MemberRole).toString();
     const QString device = selected.isEmpty() ? QString() : selected.first()->data(0, DeviceRole).toString();
 
-    m_roster = roster;
+    m_members = members;
     fillTree();
 
     for (QTreeWidgetItemIterator it(m_tree); *it != nullptr; ++it)
@@ -173,107 +149,136 @@ void AccessDialog::setRoster(const AccessRoster& roster)
     }
 }
 
-void AccessDialog::updateAddedColumn()
-{
-    for (QTreeWidgetItemIterator it(m_tree); *it != nullptr; ++it)
-    {
-        const std::optional<RosterDevice> device =
-            m_roster.deviceFor(Fingerprint::fromHex((*it)->data(0, DeviceRole).toString()));
-        if (device.has_value())
-        {
-            (*it)->setText(1, addedText(device.value()));
-        }
-    }
-}
-
 void AccessDialog::fillTree()
 {
-    const QStringList warnings = sharedNames(m_roster.people());
+    const bool known = !m_members.isEmpty();
+    m_offline->setVisible(m_shared && !known);
+
+    const QStringList warnings = sharedNames(m_members);
     m_sharedNames->setText(warnings.join(" ") + " " + tr("Check each is who you expect."));
     m_sharedNames->setVisible(!warnings.isEmpty());
 
-    m_tree->clear();
-    for (const RosterPerson& person : m_roster.people())
+    QStringList admins;
+    for (const Member& member : m_members)
     {
-        const bool isSelf = person.member() == m_self.member;
-        const QString name = isSelf ? tr("%1 (you)").arg(person.displayName()) : person.displayName();
-        QTreeWidgetItem* row = new QTreeWidgetItem(m_tree, {name, person.isAdmin() ? tr("Admin") : tr("Member")});
-        row->setData(0, MemberRole, person.member().toHex());
-
-        for (const RosterDevice& device : person.devices())
+        if (member.isAdmin())
         {
-            const bool thisDevice = device.fingerprint() == m_self.fingerprint();
-            const QString deviceName = thisDevice ? tr("%1 (this device)").arg(device.deviceName()) : device.deviceName();
-            QTreeWidgetItem* deviceRow = new QTreeWidgetItem(row, {deviceName, addedText(device)});
-            deviceRow->setData(0, MemberRole, person.member().toHex());
-            deviceRow->setData(0, DeviceRole, device.fingerprint().toHex());
+            admins.append(member.person.displayName);
+        }
+    }
+    m_askAdmins->setText(tr("To add or remove people, ask an admin: %1.").arg(QLocale().createSeparatedList(admins)));
+    m_askAdmins->setVisible(known && !selfIsAdmin());
+
+    // Linking and leaving belong to a shared ward the server has answered for; an
+    // unshared one has only you.
+    m_link->setVisible(m_shared && known);
+    m_leave->setVisible(m_shared && known);
+    m_unlink->setVisible(m_shared && known);
+    m_remove->setVisible(selfIsAdmin());
+    m_role->setVisible(selfIsAdmin());
+
+    QList<Member> sorted = m_members;
+    std::sort(sorted.begin(), sorted.end(), &sortsBefore);
+
+    m_tree->clear();
+    for (const Member& member : sorted)
+    {
+        const ServerContract::Person& person = member.person;
+        const bool isSelf = person.member == m_self.member;
+        const QString name = isSelf ? tr("%1 (you)").arg(person.displayName) : person.displayName;
+        QTreeWidgetItem* row = new QTreeWidgetItem(m_tree, {name, member.isAdmin() ? tr("Admin") : tr("Member")});
+        row->setData(0, MemberRole, person.member.toHex());
+
+        for (const Device& device : person.devices)
+        {
+            const bool thisDevice = device.fingerprint == m_self.fingerprint();
+            const QString deviceName = thisDevice ? tr("%1 (this device)").arg(device.name) : device.name;
+            QTreeWidgetItem* deviceRow = new QTreeWidgetItem(row, {deviceName, linkedText(person, device)});
+            deviceRow->setData(0, MemberRole, person.member.toHex());
+            deviceRow->setData(0, DeviceRole, device.fingerprint.toHex());
         }
     }
     m_tree->expandAll();
     onSelectionChanged();
 }
 
-QString AccessDialog::addedText(const RosterDevice& device) const
+QString AccessDialog::linkedText(const ServerContract::Person& person, const Device& device) const
 {
-    const auto origin = m_origins.constFind(device.fingerprint().toHex());
-    if (origin == m_origins.constEnd())
+    if (!device.linkedBy.has_value())
     {
-        return QString();
+        return tr("First device");
     }
 
-    // A device listed by its own header is where the chain begins: no date the
-    // header gives is when the ward began.
-    if (origin.value().addedBy == device.fingerprint())
+    const QString when = QLocale().toString(device.linkedAt.toLocalTime().date(), QLocale::ShortFormat);
+    for (const Device& linker : person.devices)
     {
-        return tr("Created the ward");
+        if (linker.fingerprint == device.linkedBy.value())
+        {
+            return tr("Linked by %1, %2").arg(linker.name, when);
+        }
     }
-    const QString when = QLocale().toString(origin.value().addedAt.toLocalTime().date(), QLocale::ShortFormat);
-
-    const std::optional<RosterPerson> person = m_roster.personFor(origin.value().addedBy);
-    const std::optional<RosterDevice> adder = m_roster.deviceFor(origin.value().addedBy);
-    if (!person.has_value() || !adder.has_value())
-    {
-        return tr("Added by a former device, %1").arg(when);
-    }
-    return tr("Added by %1's %2, %3").arg(person.value().displayName(), adder.value().deviceName(), when);
+    return tr("Linked by a former device, %1").arg(when);
 }
 
-std::optional<RosterPerson> AccessDialog::selectedPerson() const
+std::optional<Member> AccessDialog::member(const MemberId& id) const
+{
+    for (const Member& member : m_members)
+    {
+        if (member.person.member == id)
+        {
+            return member;
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<Member> AccessDialog::selectedMember() const
 {
     const QList<QTreeWidgetItem*> selected = m_tree->selectedItems();
     if (selected.isEmpty())
     {
         return std::nullopt;
     }
-    return m_roster.person(MemberId::fromHex(selected.first()->data(0, MemberRole).toString()));
+    return member(MemberId::fromHex(selected.first()->data(0, MemberRole).toString()));
 }
 
-std::optional<RosterDevice> AccessDialog::selectedDevice() const
+std::optional<Device> AccessDialog::selectedDevice() const
 {
+    const std::optional<Member> person = selectedMember();
     const QList<QTreeWidgetItem*> selected = m_tree->selectedItems();
-    if (selected.isEmpty() || selected.first()->data(0, DeviceRole).toString().isEmpty())
+    if (!person.has_value() || selected.first()->data(0, DeviceRole).toString().isEmpty())
     {
         return std::nullopt;
     }
-    return m_roster.deviceFor(Fingerprint::fromHex(selected.first()->data(0, DeviceRole).toString()));
+
+    const QString fingerprint = selected.first()->data(0, DeviceRole).toString();
+    for (const Device& device : person.value().person.devices)
+    {
+        if (device.fingerprint.toHex() == fingerprint)
+        {
+            return device;
+        }
+    }
+    return std::nullopt;
 }
 
 bool AccessDialog::selfIsAdmin() const
 {
-    const std::optional<RosterPerson> self = m_roster.person(m_self.member);
+    const std::optional<Member> self = member(m_self.member);
     return self.has_value() && self.value().isAdmin();
 }
 
 bool AccessDialog::isOnlyAdmin() const
 {
-    return selfIsAdmin() && m_roster.admins().size() == 1;
+    return selfIsAdmin()
+        && std::count_if(m_members.cbegin(), m_members.cend(), [](const Member& member) { return member.isAdmin(); }) == 1;
 }
 
 void AccessDialog::onSelectionChanged()
 {
-    const std::optional<RosterPerson> person = selectedPerson();
-    const std::optional<RosterDevice> device = selectedDevice();
-    const bool isSelf = person.has_value() && person.value().member() == m_self.member;
+    const std::optional<Member> person = selectedMember();
+    const std::optional<Device> device = selectedDevice();
+    const bool isSelf = person.has_value() && person.value().person.member == m_self.member;
     const bool admin = selfIsAdmin();
 
     m_details->setEnabled(person.has_value());
@@ -284,9 +289,10 @@ void AccessDialog::onSelectionChanged()
     // Make Member on yourself steps down - never as the only admin, since a ward
     // always has one.
     m_role->setToolTip(QString());
-    if (person.has_value() && !device.has_value() && (isSelf ? person.value().isAdmin() : admin))
+    const bool personRow = person.has_value() && !device.has_value();
+    m_role->setText(person.has_value() && person.value().isAdmin() ? tr("Make Member") : tr("Make Admin"));
+    if (personRow && (isSelf ? person.value().isAdmin() : admin))
     {
-        m_role->setText(person.value().isAdmin() ? tr("Make Member") : tr("Make Admin"));
         const bool blocked = isSelf && isOnlyAdmin();
         m_role->setEnabled(!blocked);
         if (blocked)
@@ -296,63 +302,55 @@ void AccessDialog::onSelectionChanged()
     }
     else
     {
-        m_role->setText(person.has_value() && person.value().isAdmin() ? tr("Make Member") : tr("Make Admin"));
         m_role->setEnabled(false);
     }
 
-    // Unlink: your own devices but this one; another person's, as an admin, but their last.
-    bool mayUnlink = false;
-    if (device.has_value())
-    {
-        mayUnlink = isSelf ? device.value().fingerprint() != m_self.fingerprint()
-                           : admin && person.value().deviceCount() > 1;
-    }
-    m_unlink->setEnabled(mayUnlink);
+    // Unlink: your own devices but this one. Another person's lost device is theirs
+    // to unlink, or an admin removes the person.
+    m_unlink->setEnabled(isSelf && device.has_value() && device.value().fingerprint != m_self.fingerprint());
 }
 
 void AccessDialog::onRemove()
 {
-    const std::optional<RosterPerson> person = selectedPerson();
+    const std::optional<Member> person = selectedMember();
     if (person.has_value())
     {
-        emit removeRequested(person.value().member());
+        emit removeRequested(person.value().person.member);
     }
 }
 
 void AccessDialog::onRole()
 {
-    const std::optional<RosterPerson> person = selectedPerson();
+    const std::optional<Member> person = selectedMember();
     if (person.has_value())
     {
-        emit roleRequested(person.value().member(),
-                           person.value().isAdmin() ? RosterPerson::Role::Member : RosterPerson::Role::Admin);
+        emit roleRequested(person.value().person.member, person.value().isAdmin() ? Role::Member : Role::Admin);
     }
 }
 
 void AccessDialog::onUnlink()
 {
-    const std::optional<RosterPerson> person = selectedPerson();
-    const std::optional<RosterDevice> device = selectedDevice();
-    if (person.has_value() && device.has_value())
+    const std::optional<Device> device = selectedDevice();
+    if (device.has_value())
     {
-        emit unlinkRequested(person.value().member(), device.value().fingerprint());
+        emit unlinkRequested(device.value().fingerprint);
     }
 }
 
 void AccessDialog::onDetails()
 {
-    const std::optional<RosterPerson> person = selectedPerson();
+    const std::optional<Member> person = selectedMember();
     if (!person.has_value())
     {
         return;
     }
 
     QStringList lines;
-    lines.append(tr("%1 (%2)").arg(person.value().displayName(),
+    lines.append(tr("%1 (%2)").arg(person.value().person.displayName,
                                    person.value().isAdmin() ? tr("Admin") : tr("Member")));
-    for (const RosterDevice& device : person.value().devices())
+    for (const Device& device : person.value().person.devices)
     {
-        lines.append(tr("%1: %2").arg(device.deviceName(), device.fingerprint().toGroupedHex()));
+        lines.append(tr("%1: %2").arg(device.name, device.fingerprint.toGroupedHex()));
     }
     QMessageBox::information(this, tr("Details"), lines.join("\n"));
 }

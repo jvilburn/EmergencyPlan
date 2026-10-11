@@ -14,9 +14,9 @@
 #include "HttpServerApi.h"
 #include "IdentityService.h"
 #include "MainWindow.h"
-#include "RosterChangeQueue.h"
 #include "ServerConnection.h"
 #include "SessionTimers.h"
+#include "SealingQueue.h"
 #include "SingleInstance.h"
 #include "TileService.h"
 
@@ -193,12 +193,12 @@ int main(int argc, char *argv[])
     HttpServerApi serverApi(*settings, nullptr);
     ServerConnection server(serverApi, identity);
     DocumentLibrary library(*settings, deviceData.filePath("wards"), identity);
-    RosterChangeQueue queue(identity,
-                            *settings,
-                            server,
-                            std::make_unique<QtSessionTimers>(),
-                            [&library](const QString& documentId) { return library.pathsFor(documentId); },
-                            nullptr);
+    SealingQueue queue(identity,
+                       *settings,
+                       server,
+                       std::make_unique<QtSessionTimers>(),
+                       [&library](const QString& documentId) { return library.pathsFor(documentId); },
+                       nullptr);
 
     // Stack locals, so the window goes first and the manager outlives it.
     DocumentManager documentManager(identity, *settings, server, library, queue, nullptr);
@@ -230,6 +230,10 @@ int main(int argc, char *argv[])
                     &window,
                     std::bind(&MainWindow::onWardRestored, &window, std::placeholders::_1, std::placeholders::_2));
     QObject::connect(&instance, &SingleInstance::argumentsReceived, &window, &MainWindow::handleArguments);
+
+    // Whatever this device owes a ward it holds - a device it linked, a person it
+    // granted - since it last ran.
+    queue.sealEverywhere();
 
     return app.exec();
 }

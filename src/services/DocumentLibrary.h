@@ -82,13 +82,14 @@ public:
     /// written from it are theirs to keep.
     void forget(const QString& documentId);
 
-    /// After this device was removed from a ward, or left it: every recorded copy
-    /// still at its path goes too, then the files, record, and entry. A file now at a
-    /// copy's path that is not that copy, by its document id, is left alone.
-    void forgetRemoved(const QString& documentId);
+    /// After this device lost access to a ward - removed, left, or unlinked: every
+    /// recorded copy still at its path goes too, then the files, record, and entry. A
+    /// file now at a copy's path that is not that copy, by its document id, is left
+    /// alone.
+    void forgetLost(const QString& documentId);
 
     /// Writes a copy to targetPath under a fresh document id and a fresh data key,
-    /// with documentId as its origin, sealed to the same roster - a fresh key, so no
+    /// with documentId as its origin, sealed to the same devices - a fresh key, so no
     /// one who once held the ward's can read it, and a fresh id, so it can never
     /// publish itself into the ward. Its path and id are recorded under the ward.
     /// Refused for a ward not in the library, and for a target in the library's own
@@ -101,8 +102,8 @@ public:
     /// Writes document, which a conflict would otherwise lose, as a copy in
     /// directory named for the ward and the time - `Tanglewood Ward (unsaved changes
     /// 2026-10-08 1430).wardplanning` - and gives its path. An ordinary exported
-    /// copy otherwise: a fresh id and key, sealed to the document's whole roster, and
-    /// recorded under the ward.
+    /// copy otherwise: a fresh id and key, sealed to the document's whole sealing set,
+    /// and recorded under the ward.
     bool writeRecoveryCopy(const QString& documentId,
                            const Document& document,
                            const QString& directory,
@@ -116,7 +117,7 @@ public:
     /// How fetching one ward went.
     using WardFetched = std::function<void(const QString& documentId, DocumentSession::Download outcome)>;
 
-    /// Fetches every ward the server lists for this device that the library lacks:
+    /// Fetches every ward the server lists for this person that the library lacks:
     /// after a reinstall, cleared app data, or a grant. Each reports through
     /// fetched as it ends. Only a ward that arrives is added, so one that does not
     /// is tried afresh by the next restore. A listed id that is not a document id
@@ -125,8 +126,8 @@ public:
 
     /// Fetches one shared ward from the server. On arrival it is added to the
     /// library, if it was not there, and its entry named from what arrived. A ward
-    /// proven removed keeps its entry, so the caller can name it and delete its
-    /// copies through forgetRemoved.
+    /// this device lost access to keeps its entry, so the caller can name it and
+    /// delete its copies through forgetLost.
     void fetchWard(const QString& documentId, ServerConnection& server, QObject* receiver, const WardFetched& fetched);
 
 private:
@@ -136,7 +137,7 @@ private:
     void onListed(ServerConnection& server,
                   QObject* receiver,
                   const WardFetched& fetched,
-                  const ServerContract::Result<QStringList>& listed);
+                  const ServerContract::Result<ServerContract::Me>& listed);
     void onWardFetched(const QString& documentId,
                        const WardFetched& fetched,
                        DocumentSession::Download outcome,

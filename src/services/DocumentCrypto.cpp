@@ -22,9 +22,11 @@ namespace
 /// personalisation would do its damage.
 constexpr char FingerprintDomain[] = "wp-fingerprint";
 constexpr char PayloadDomain[] = "wp-payload";
+constexpr char FormerKeyDomain[] = "wp-former-key";
 
 static_assert(sizeof(FingerprintDomain) - 1 <= crypto_generichash_blake2b_PERSONALBYTES);
 static_assert(sizeof(PayloadDomain) - 1 <= crypto_generichash_blake2b_PERSONALBYTES);
+static_assert(sizeof(FormerKeyDomain) - 1 <= crypto_generichash_blake2b_PERSONALBYTES);
 
 const char* domainText(HashDomain domain)
 {
@@ -34,6 +36,8 @@ const char* domainText(HashDomain domain)
         return FingerprintDomain;
     case HashDomain::Payload:
         return PayloadDomain;
+    case HashDomain::FormerKey:
+        return FormerKeyDomain;
     }
 
     // Unreachable for a value of the enumeration. A new domain added without a

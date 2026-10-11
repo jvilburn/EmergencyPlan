@@ -1,11 +1,10 @@
 #pragma once
 
-#include "AccessEvents.h"
-#include "AccessRoster.h"
 #include "DeviceIdentity.h"
+#include "ServerContract.h"
 
 #include <QDialog>
-#include <QHash>
+#include <QList>
 
 #include <optional>
 
@@ -14,12 +13,12 @@ class QPushButton;
 class QTreeWidget;
 class QTreeWidgetItem;
 
-/// Who has access to the open ward: each person with their role, this person
-/// marked, each expandable to their devices by name, and which device added each
-/// one and when. Every action is a visible button, enabled only where it applies:
+/// Who has access to the open ward, as the server last said: each person with their
+/// role, this person marked, each expandable to their devices by name, and which
+/// device linked each one and when. Every action is a visible button, enabled only
+/// where it applies:
 ///
-/// - on another person, for an admin: Remove, Make Admin or Make Member, and Unlink
-///   on each of their devices but the last
+/// - on another person, for an admin: Remove, and Make Admin or Make Member
 /// - on this person: Link a Device, Unlink on each of their devices but this one,
 ///   Make Member for an admin stepping down (not the last admin while anyone else
 ///   remains), and Leave
@@ -34,23 +33,19 @@ class AccessDialog : public QDialog
     Q_OBJECT
 
 public:
-    AccessDialog(const AccessRoster& roster, const DeviceIdentity& self, bool shared, QWidget* parent);
+    /// members is empty for a ward not shared, or one whose server has not answered.
+    AccessDialog(const QList<ServerContract::Member>& members, const DeviceIdentity& self, bool shared, QWidget* parent);
 
-    /// Which device added each device, once the kept headers have been read; when
-    /// they could not be checked, the dialog says so instead.
-    void setOrigins(const QHash<QString, AccessEvents::Origin>& origins, bool checked);
-
-    /// The roster after a sync while the dialog is open; the selection is kept.
-    void setRoster(const AccessRoster& roster);
+    /// The members after a head check while the dialog is open; the selection is kept.
+    void setMembers(const QList<ServerContract::Member>& members);
 
 signals:
     void shareRequested();
-    void inviteRequested();
     void linkRequested();
     void leaveRequested();
     void removeRequested(const MemberId& member);
-    void roleRequested(const MemberId& member, RosterPerson::Role role);
-    void unlinkRequested(const MemberId& member, const Fingerprint& device);
+    void roleRequested(const MemberId& member, ServerContract::Role role);
+    void unlinkRequested(const Fingerprint& device);
 
 private slots:
     void onSelectionChanged();
@@ -63,22 +58,22 @@ private:
     void fillTree();
 
     /// The person a row is about, and the device when it is a device's row.
-    std::optional<RosterPerson> selectedPerson() const;
-    std::optional<RosterDevice> selectedDevice() const;
+    std::optional<ServerContract::Member> selectedMember() const;
+    std::optional<ServerContract::Device> selectedDevice() const;
+    std::optional<ServerContract::Member> member(const MemberId& id) const;
 
     bool selfIsAdmin() const;
     bool isOnlyAdmin() const;
-    void updateAddedColumn();
-    QString addedText(const RosterDevice& device) const;
+    QString linkedText(const ServerContract::Person& person, const ServerContract::Device& device) const;
 
-    AccessRoster m_roster;
+    QList<ServerContract::Member> m_members;
     DeviceIdentity m_self;
     bool m_shared;
-    QHash<QString, AccessEvents::Origin> m_origins;
 
     QTreeWidget* m_tree = nullptr;
     QLabel* m_sharedNames = nullptr;
-    QLabel* m_originsUnchecked = nullptr;
+    QLabel* m_askAdmins = nullptr;
+    QLabel* m_offline = nullptr;
     QPushButton* m_remove = nullptr;
     QPushButton* m_role = nullptr;
     QPushButton* m_unlink = nullptr;

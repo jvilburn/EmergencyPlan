@@ -80,7 +80,7 @@ private slots:
     // Wards
     void onSaveFailed(const QString& errorMessage);
     void onDocumentOpened();
-    void onAccessRemoved(const QString& wardName, const QString& byWhom, bool left);
+    void onAccessLost(const QString& wardName, const ServerContract::LostAccess& lost);
     void onFetchFailed(const QString& documentId, DocumentSession::Download outcome);
     void onStartOver();
     void onShowAccess();
@@ -114,6 +114,9 @@ private slots:
 private:
     void updateCopyBanner();
     void refreshAccessDialog(AccessDialog* dialog);
+
+    /// The open ward's members as the server last said; empty with none.
+    QList<ServerContract::Member> currentMembers() const;
     bool settleConflict(ConflictDialog::Choice choice, QString* errorMessage);
     void setupUi();
     void setupMenus();

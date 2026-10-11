@@ -105,17 +105,6 @@ void MainWindow::openPath(const QString& path)
         openWard(route.documentId);
         break;
     }
-    case FileOpenRouter::Action::LinkDevice:
-    {
-        QMessageBox message(QMessageBox::Information,
-                            tr("Ward Planning"),
-                            tr("This ward is on another of your devices."),
-                            QMessageBox::Ok,
-                            this);
-        message.setInformativeText(tr("Link this device from that one to open it here."));
-        message.exec();
-        break;
-    }
     case FileOpenRouter::Action::RequestAccess:
     {
         QMessageBox message(QMessageBox::Information,
@@ -314,8 +303,8 @@ void MainWindow::setupConnections()
             this, &MainWindow::onEditRefused);
     connect(DocumentManager::instance(), &DocumentManager::fetchFinished,
             this, &MainWindow::onFetchFinished);
-    connect(DocumentManager::instance(), &DocumentManager::accessRemoved,
-            this, &MainWindow::onAccessRemoved);
+    connect(DocumentManager::instance(), &DocumentManager::accessLost,
+            this, &MainWindow::onAccessLost);
     connect(DocumentManager::instance(), &DocumentManager::fetchFailed,
             this, &MainWindow::onFetchFailed);
     connect(DocumentManager::instance(), &DocumentManager::conflictRaised,
@@ -414,7 +403,7 @@ void MainWindow::onWardRestored(const QString& documentId, DocumentSession::Down
         statusBar()->showMessage(tr("A ward shared with you could not be saved on this device."), 10000);
         break;
     case DocumentSession::Download::Unreachable:
-    case DocumentSession::Download::Removed:
+    case DocumentSession::Download::AccessLost:
     case DocumentSession::Download::ServerFault:
         // Tried afresh at the next start.
         break;
@@ -762,31 +751,29 @@ void MainWindow::updateCopyBanner()
         return;
     }
 
-    QStringList people;
-    for (const RosterPerson& person : copy.value().document.accessRoster().people())
-    {
-        people.append(person.displayName());
-    }
-    m_copyBanner->setText(tr("A read-only copy, readable by %1. Changes go in the ward itself.")
-                              .arg(QLocale().createSeparatedList(people)));
+    m_copyBanner->setText(tr("A read-only copy. Changes go in the ward itself."));
     m_copyBanner->show();
 }
 
-void MainWindow::onAccessRemoved(const QString& wardName, const QString& byWhom, bool left)
+void MainWindow::onAccessLost(const QString& wardName, const ServerContract::LostAccess& lost)
 {
     const QString ward = wardName.isEmpty() ? tr("a ward") : wardName;
     QString message;
-    if (left)
+    switch (lost.how)
     {
-        message = tr("You left %1 from another device, so it is no longer on this one.").arg(ward);
-    }
-    else if (!byWhom.isEmpty())
-    {
-        message = tr("%1 removed your access to %2, so it is no longer on this device.").arg(byWhom, ward);
-    }
-    else
-    {
-        message = tr("Your access to %1 was removed, so it is no longer on this device.").arg(ward);
+    case ServerContract::LostAccess::How::Left:
+        message = tr("You left %1, so it is no longer on this device.").arg(ward);
+        break;
+    case ServerContract::LostAccess::How::Unlinked:
+        message = lost.byWhom.isEmpty()
+                      ? tr("This device was unlinked, so %1 is no longer on it.").arg(ward)
+                      : tr("This device was unlinked by %1, so %2 is no longer on it.").arg(lost.byWhom, ward);
+        break;
+    case ServerContract::LostAccess::How::Removed:
+        message = lost.byWhom.isEmpty()
+                      ? tr("Your access to %1 was removed, so it is no longer on this device.").arg(ward)
+                      : tr("%1 removed your access to %2, so it is no longer on this device.").arg(lost.byWhom, ward);
+        break;
     }
     QMessageBox::information(this, tr("Ward Planning"), message);
 }
@@ -811,7 +798,7 @@ void MainWindow::onFetchFailed(const QString& documentId, DocumentSession::Downl
                              tr("This ward arrived from the server but could not be saved on this device."));
         break;
     case DocumentSession::Download::Done:
-    case DocumentSession::Download::Removed:
+    case DocumentSession::Download::AccessLost:
     case DocumentSession::Download::ServerFault:
         QMessageBox::warning(this,
                              tr("Open Ward"),
@@ -894,22 +881,27 @@ void MainWindow::onShowAccess()
         return;
     }
 
-    AccessDialog dialog(manager->document().accessRoster(), manager->identity(), manager->session()->isShared(), this);
-    manager->fetchDeviceOrigins(&dialog,
-                                std::bind(&AccessDialog::setOrigins, &dialog, std::placeholders::_1, std::placeholders::_2));
+    AccessDialog dialog(currentMembers(), manager->identity(), manager->session()->isShared(), this);
 
-    // Current while it is open: a sync's changes show, and another ward closes it.
-    connect(manager, &DocumentManager::accessChanged, &dialog, std::bind(&MainWindow::refreshAccessDialog, this, &dialog));
+    // Current while it is open: a head check's changes show, and another ward closes it.
+    connect(manager, &DocumentManager::headChanged, &dialog, std::bind(&MainWindow::refreshAccessDialog, this, &dialog));
     connect(manager, &DocumentManager::documentOpened, &dialog, &QDialog::reject);
     dialog.exec();
 }
 
 void MainWindow::refreshAccessDialog(AccessDialog* dialog)
 {
-    dialog->setRoster(DocumentManager::instance()->document().accessRoster());
-    DocumentManager::instance()->fetchDeviceOrigins(
-        dialog,
-        std::bind(&AccessDialog::setOrigins, dialog, std::placeholders::_1, std::placeholders::_2));
+    dialog->setMembers(currentMembers());
+}
+
+QList<ServerContract::Member> MainWindow::currentMembers() const
+{
+    const DocumentSession* session = DocumentManager::instance()->session();
+    if (session == nullptr || !session->lastHead().has_value())
+    {
+        return {};
+    }
+    return session->lastHead().value().members;
 }
 
 void MainWindow::onStartOver()

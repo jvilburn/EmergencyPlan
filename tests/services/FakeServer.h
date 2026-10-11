@@ -299,6 +299,9 @@ private:
     QSet<QString> allowListOf(const StoredDocument& document) const;
     QList<ServerContract::Member> membersOf(const StoredDocument& document) const;
     bool keepsAnAdmin(const StoredDocument& document) const;
+
+    /// A device off the allow-list holds no lease anywhere.
+    void releaseLeasesOf(const Fingerprint& device);
     void record(StoredDocument& document,
                 ServerContract::HistoryEntry::Kind kind,
                 const QString& actor,
@@ -326,6 +329,7 @@ private:
     QHash<QString, ServerContract::Person> m_people;        ///< by member id hex
     QHash<QByteArray, QString> m_personOfDevice;            ///< verify key bytes to member id hex
     QHash<QByteArray, ServerContract::LostAccess> m_unlinked;   ///< verify key bytes
+    QHash<QByteArray, QString> m_unlinkedFrom;                  ///< verify key bytes to member id hex
     QHash<QString, StoredDocument> m_documents;
     QHash<QString, StoredLink> m_links;
     QHash<QString, SessionRecord> m_sessions;

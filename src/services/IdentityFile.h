@@ -14,7 +14,7 @@
 struct IdentityRecord
 {
     /// Who this device belongs to, and what it is called. Set once, when the person
-    /// is created or joined; the names reach other members only through the roster.
+    /// is created or joined; the names reach other members through the server.
     struct Person
     {
         MemberId member;

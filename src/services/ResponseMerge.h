@@ -27,7 +27,7 @@
 namespace ResponseMerge
 {
 
-/// True when doc differs from base outside the emergency response and roster.
+/// True when doc differs from base outside the emergency response and sealing set.
 bool directoryChanged(const Document& doc, const Document& base);
 
 /// Three-way merge. Absence is a value: an emergency started on one side is kept;
@@ -39,7 +39,7 @@ std::optional<EmergencyResponse> merge(const std::optional<EmergencyResponse>& b
 
 /// The whole decision: nullopt when both sides changed the directory differently
 /// (the conflict dialog); otherwise the directory from whichever side changed it
-/// (theirs when neither did) with the response merged. The roster is theirs, taken
+/// (theirs when neither did) with the response merged. The sealing set is theirs, taken
 /// as validated.
 std::optional<Document> mergeDocuments(const Document& base,
                                        const Document& mine,

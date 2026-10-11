@@ -314,6 +314,7 @@ private:
     bool m_publishAgain = false;
     bool m_checkAgain = false;
     int m_retryDelay = SessionTimers::FirstRetryMilliseconds;
+    int m_allowListRefusals = 0;
     bool m_holdsLease = false;
     bool m_leaseHeldElsewhere = false;
     bool m_leaseRequested = false;

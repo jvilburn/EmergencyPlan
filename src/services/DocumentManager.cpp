@@ -1,8 +1,6 @@
 #include "DocumentManager.h"
 #include "BackgroundGeocodingService.h"
-#include "DocumentCrypto.h"
-#include "Reconcile.h"
-#include "RosterChangeQueue.h"
+#include "SealingQueue.h"
 #include "ServerConnection.h"
 #include "UnitLookupService.h"
 
@@ -11,31 +9,13 @@
 
 using namespace std::placeholders;
 
-namespace
-{
-
-/// Who a header lets in, person and device, sorted: what two headers agree on when
-/// they list the same devices, whatever else differs between them.
-QStringList listedDevices(const DocumentHeader& header)
-{
-    QStringList devices;
-    for (const RecipientEntry& entry : header.recipients)
-    {
-        devices.append(entry.member.toHex() + "/" + entry.fingerprint.toHex());
-    }
-    devices.sort();
-    return devices;
-}
-
-} // namespace
-
 DocumentManager* DocumentManager::s_instance = nullptr;
 
 DocumentManager::DocumentManager(const DeviceIdentity& identity,
                                  DocumentRecords& records,
                                  ServerConnection& server,
                                  DocumentLibrary& library,
-                                 RosterChangeQueue& queue,
+                                 SealingQueue& queue,
                                  QObject* parent)
     : QObject(parent)
     , m_identity(identity)
@@ -48,7 +28,7 @@ DocumentManager::DocumentManager(const DeviceIdentity& identity,
 {
     connectServices();
 
-    connect(m_queue, &RosterChangeQueue::removed, this, &DocumentManager::onQueueRemoved);
+    connect(m_queue, &SealingQueue::accessLost, this, &DocumentManager::onQueueLost);
 }
 
 DocumentManager::DocumentManager(const DeviceIdentity& identity,
@@ -385,8 +365,8 @@ void DocumentManager::onFetched(const QString& documentId, DocumentSession::Down
         emit fetchFinished(documentId, result, reason);
         return;
     }
-    case DocumentSession::Download::Removed:
-        forgetRemovedWard(documentId, QString(), false);
+    case DocumentSession::Download::AccessLost:
+        forgetLostWard(documentId, ServerContract::LostAccess());
         return;
     case DocumentSession::Download::Unreachable:
     case DocumentSession::Download::NeedsNewerVersion:
@@ -500,6 +480,7 @@ bool DocumentManager::closeCurrent(QString* errorMessage)
 void DocumentManager::resetWard()
 {
     m_copy.reset();
+    m_unseenHistory.clear();
     m_pendingWardLookups.clear();
     m_pendingStakeLookups.clear();
     onDocumentReplaced();
@@ -511,6 +492,7 @@ void DocumentManager::install(std::unique_ptr<DocumentSession> session)
 {
     m_copy.reset();
     m_session = std::move(session);
+    m_unseenHistory.clear();
     m_pendingWardLookups.clear();
     m_pendingStakeLookups.clear();
 
@@ -520,9 +502,9 @@ void DocumentManager::install(std::unique_ptr<DocumentSession> session)
     connect(opened, &DocumentSession::syncStateChanged, this, &DocumentManager::syncStateChanged);
     connect(opened, &DocumentSession::conflictRaised, this, &DocumentManager::conflictRaised);
     connect(opened, &DocumentSession::requiresUpdateChanged, this, &DocumentManager::requiresUpdateChanged);
-    connect(opened, &DocumentSession::versionAdopted, this, &DocumentManager::onVersionAdopted);
+    connect(opened, &DocumentSession::headChanged, this, &DocumentManager::onHeadChanged);
     connect(opened, &DocumentSession::saveFailed, this, &DocumentManager::saveFailed);
-    connect(opened, &DocumentSession::removed, this, &DocumentManager::onSessionRemoved);
+    connect(opened, &DocumentSession::accessLost, this, &DocumentManager::onSessionLost);
     if (m_queue != nullptr)
     {
         m_queue->setOpenSession(opened);
@@ -550,52 +532,6 @@ void DocumentManager::onDocumentReplaced()
     afterChange(DocumentChange::full());
 }
 
-void DocumentManager::onVersionAdopted(const DocumentHeader& previousBase,
-                                       const QList<DocumentHeader>& laterHeaders,
-                                       const AccessRoster& previousRoster)
-{
-    // Every version taken in passes here once, so each change is told once.
-    const QList<AccessEvents::Event> events =
-        AccessEvents::between(previousBase, laterHeaders, m_session->document().accessRoster(), previousRoster);
-    if (!events.isEmpty())
-    {
-        emit accessChanged(events);
-    }
-}
-
-void DocumentManager::fetchDeviceOrigins(QObject* receiver, const OriginsFetched& done)
-{
-    if (!m_session)
-    {
-        return;
-    }
-    if (!m_session->isShared() || m_server == nullptr)
-    {
-        done(AccessEvents::deviceOrigins({m_session->header()}), true);
-        return;
-    }
-    m_server->headers(m_session->documentId(),
-                      0,
-                      receiver,
-                      std::bind(&DocumentManager::onChainFetched, this, done, _1));
-}
-
-void DocumentManager::onChainFetched(const OriginsFetched& done, const ServerContract::Result<ServerContract::HeaderChain>& chain)
-{
-    // The server's word is not enough for what this shows - it is how a device
-    // planted under someone is spotted - so every link must hold and the chain must
-    // end in the devices this ward lists.
-    QList<DocumentHeader> headers;
-    bool checked = m_session && chain.ok()
-                && Reconcile::readHeaders(chain.value.value().headers, headers) == Reconcile::Verdict::Accept
-                && !headers.isEmpty() && listedDevices(headers.last()) == listedDevices(m_session->header());
-    for (qsizetype i = 1; checked && i < headers.size(); ++i)
-    {
-        checked = DocumentCrypto::verifyLink(headers.at(i - 1), headers.at(i));
-    }
-    done(checked ? AccessEvents::deviceOrigins(headers) : QHash<QString, AccessEvents::Origin>(), checked);
-}
-
 void DocumentManager::onReadOnlyChanged()
 {
     if (mayWriteDirectory())
@@ -613,7 +549,49 @@ void DocumentManager::onReadOnlyChanged()
     emit readOnlyChanged();
 }
 
-void DocumentManager::onSessionRemoved(const QString& byWhom, bool left)
+void DocumentManager::onHeadChanged()
+{
+    emit headChanged();
+
+    // Fetched only when the server has entries newer than the last one dismissed here.
+    const std::optional<ServerContract::Head>& head = m_session->lastHead();
+    const qint64 seen = m_records->record(m_session->documentId()).historySeen;
+    if (m_server != nullptr && head.has_value() && head.value().history > seen)
+    {
+        m_server->history(m_session->documentId(),
+                          seen,
+                          this,
+                          std::bind(&DocumentManager::onHistory, this, m_session->documentId(), _1));
+    }
+}
+
+void DocumentManager::onHistory(const QString& documentId,
+                                const ServerContract::Result<QList<ServerContract::HistoryEntry>>& history)
+{
+    // Another ward opened meanwhile reads its own.
+    if (!history.ok() || !m_session || m_session->documentId() != documentId)
+    {
+        return;
+    }
+    m_unseenHistory = history.value.value();
+    emit accessChanged();
+}
+
+void DocumentManager::dismissHistory()
+{
+    if (!m_session || m_unseenHistory.isEmpty())
+    {
+        return;
+    }
+
+    DocumentRecord record = m_records->record(m_session->documentId());
+    record.historySeen = qMax(record.historySeen, m_unseenHistory.last().index);
+    m_records->setRecord(m_session->documentId(), record);
+    m_unseenHistory.clear();
+    emit accessChanged();
+}
+
+void DocumentManager::onSessionLost(const ServerContract::LostAccess& lost)
 {
     const QString documentId = m_session->documentId();
 
@@ -625,28 +603,26 @@ void DocumentManager::onSessionRemoved(const QString& byWhom, bool left)
     }
     m_session.release()->deleteLater();
     resetWard();
-    forgetRemovedWard(documentId, byWhom, left);
+    forgetLostWard(documentId, lost);
 }
 
-void DocumentManager::onQueueRemoved(const QString& documentId, bool left)
+void DocumentManager::onQueueLost(const QString& documentId, const ServerContract::LostAccess& lost)
 {
-    // The open ward finishes through its session, which has already told the
-    // person; a ward no longer in the library has gone that way.
-    if ((m_session && m_session->documentId() == documentId) || !m_library->contains(documentId))
+    // A ward no longer in the library has already gone.
+    if (m_library->contains(documentId))
     {
-        return;
+        forgetLostWard(documentId, lost);
     }
-    forgetRemovedWard(documentId, QString(), left);
 }
 
-void DocumentManager::forgetRemovedWard(const QString& documentId, const QString& byWhom, bool left)
+void DocumentManager::forgetLostWard(const QString& documentId, const ServerContract::LostAccess& lost)
 {
     const QString wardName = wardNameOf(documentId);
     if (m_library != nullptr)
     {
-        m_library->forgetRemoved(documentId);
+        m_library->forgetLost(documentId);
     }
-    emit accessRemoved(wardName, byWhom, left);
+    emit accessLost(wardName, lost);
 }
 
 QString DocumentManager::wardNameOf(const QString& documentId) const

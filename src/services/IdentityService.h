@@ -14,9 +14,7 @@
 /// DeviceIdentity value the core takes.
 ///
 /// The keys exist from the first run; the person from the moment it is created
-/// here or joined through linking. The names are fixed from then on: they reach
-/// other members only through the roster, and a rename would be a roster change no
-/// chain rule carries.
+/// here or joined through linking.
 class IdentityService
 {
 public:
@@ -37,7 +35,7 @@ public:
     /// Empty until a person exists.
     std::optional<DeviceIdentity> identity() const;
 
-    /// This device's public keys, which pairing presents before a person exists.
+    /// This device's public keys, which linking presents before a person exists.
     DeviceKeys deviceKeys() const;
 
     /// The machine's host name, offered for editing on the first screen.
@@ -47,9 +45,9 @@ public:
     /// once a person exists, and for an empty name.
     bool createPerson(const QString& displayName, const QString& deviceName, QString* errorMessage);
 
-    /// An existing person, by the member id and display name a linked device handed
-    /// over - the display name exactly as handed over, since the roster carries it
-    /// so. Refused once a person exists, and for an invalid id or an empty name.
+    /// An existing person, by the member id and display name the server gave when
+    /// another of their devices approved this one's link. Refused once a person
+    /// exists, and for an invalid id or an empty name.
     bool joinPerson(const MemberId& member,
                     const QString& displayName,
                     const QString& deviceName,

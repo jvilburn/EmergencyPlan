@@ -63,8 +63,8 @@ std::optional<Sealed> seal(const Document& document, const DocumentHeader& previ
     header.originDocumentId = previous.originDocumentId;
     header.saveCounter = previous.saveCounter + 1;
 
-    // Rebuilt from the sealing set on every seal rather than carried forward, so a
-    // mis-sealed entry cannot lock its owner out of every later version.
+    // Every entry is sealed afresh from the sealing set, so a mis-sealed entry
+    // reaches no later version.
     for (const DeviceKeys& device : document.sealingSet().devices())
     {
         const QByteArray sealedKey = DocumentCrypto::sealDataKey(dataKey, device.publicKey);

@@ -148,7 +148,7 @@ void DocumentLibrary::forget(const QString& documentId)
     m_settings.removeWard(documentId);
 }
 
-void DocumentLibrary::forgetRemoved(const QString& documentId)
+void DocumentLibrary::forgetLost(const QString& documentId)
 {
     const std::optional<AppSettings::WardEntry> ward = m_settings.ward(documentId);
     if (ward.has_value())
@@ -191,11 +191,9 @@ bool DocumentLibrary::exportCopy(const QString& documentId,
     DocumentHeader first;
     first.documentId = newDocumentId();
     first.originDocumentId = documentId;
-    first.keyGeneration = 1;
-    first.saveCounter = 0;
 
     const std::optional<DocumentFile::Sealed> sealed =
-        DocumentFile::seal(document, first, DocumentCrypto::generateDataKey(), m_identity);
+        DocumentFile::seal(document, first, DocumentCrypto::generateDataKey());
     if (!sealed.has_value())
     {
         if (errorMessage != nullptr)
@@ -294,12 +292,8 @@ std::optional<DocumentLibrary::Copy> DocumentLibrary::openCopy(const QString& so
 
     if (problem.isEmpty())
     {
-        const Reconcile::DownloadCheck check = Reconcile::validateDownload(sealed.header.documentId,
-                                                                           std::nullopt,
-                                                                           {sealed.header},
-                                                                           sealed.ciphertext,
-                                                                           m_identity.self(),
-                                                                           Reconcile::HighWaterMark());
+        const Reconcile::DownloadCheck check =
+            Reconcile::validate(sealed.header.documentId, sealed.header, sealed.ciphertext, m_identity.self(), {});
         if (check.verdict == Reconcile::Verdict::Accept)
         {
             return Copy{check.document.value(), sealed.header.originDocumentId};
@@ -318,13 +312,13 @@ std::optional<DocumentLibrary::Copy> DocumentLibrary::openCopy(const QString& so
 
 void DocumentLibrary::restore(ServerConnection& server, QObject* receiver, const WardFetched& fetched)
 {
-    server.myDocuments(receiver, std::bind(&DocumentLibrary::onListed, this, std::ref(server), receiver, fetched, _1));
+    server.me(receiver, std::bind(&DocumentLibrary::onListed, this, std::ref(server), receiver, fetched, _1));
 }
 
 void DocumentLibrary::onListed(ServerConnection& server,
                                QObject* receiver,
                                const WardFetched& fetched,
-                               const ServerContract::Result<QStringList>& listed)
+                               const ServerContract::Result<ServerContract::Me>& listed)
 {
     if (!listed.ok())
     {
@@ -332,7 +326,7 @@ void DocumentLibrary::onListed(ServerConnection& server,
     }
 
     // Ids name files here, so only a real document id is taken from the server.
-    QStringList documentIds = listed.value.value();
+    QStringList documentIds = listed.value.value().documents;
     documentIds.removeDuplicates();
     for (const QString& documentId : documentIds)
     {

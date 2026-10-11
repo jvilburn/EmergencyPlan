@@ -40,7 +40,8 @@ void answerFrom(QNetworkReply* answer,
     const QByteArray bytes = answer->readAll();
     if (!success)
     {
-        reply(Result<T>::failure(HttpWire::readError(code, bytes)));
+        const HttpWire::Failure failure = HttpWire::readFailure(code, bytes);
+        reply(Result<T>{std::nullopt, failure.error, failure.lost});
         return;
     }
 
@@ -63,9 +64,14 @@ QString documentPath(const QString& documentId)
     return "/documents/" + QString::fromLatin1(QUrl::toPercentEncoding(documentId));
 }
 
-QString pairingPath(const QString& code)
+QString linkPath(const QString& code)
 {
-    return "/pairings/" + QString::fromLatin1(QUrl::toPercentEncoding(code));
+    return "/links/" + QString::fromLatin1(QUrl::toPercentEncoding(code));
+}
+
+QString memberPath(const QString& documentId, const MemberId& member)
+{
+    return documentPath(documentId) + "/members/" + member.toHex();
 }
 
 QString withQuery(const QString& path, const QString& key, const QString& value)
@@ -110,10 +116,6 @@ void HttpServerApi::send(const Call& call,
     {
         request.setRawHeader("Authorization", "Bearer " + call.token.toUtf8());
     }
-    if (!call.requestSignature.isEmpty())
-    {
-        request.setRawHeader("X-Request-Signature", call.requestSignature.toBase64());
-    }
 
     QByteArray body;
     if (call.body.has_value())
@@ -139,7 +141,7 @@ void HttpServerApi::send(const Call& call,
     }
 
     // For a warning: the method and first segment only, since a path can carry a
-    // pairing code.
+    // link code.
     const QString route = QString::fromLatin1(call.method) + " /" + call.path.section('/', 1, 1);
     connect(answer, &QNetworkReply::finished, this, std::bind(&answerFrom<T>, answer, read, reply, route));
 }
@@ -149,13 +151,11 @@ void HttpServerApi::sendForDone(const Call& call, Reply<Done> reply)
     send<Done>(call, readDone, reply);
 }
 
-// --- Authentication --------------------------------------------------------------
+// --- Signing in ------------------------------------------------------------------
 
 void HttpServerApi::challenge(Reply<QByteArray> reply)
 {
-    send<QByteArray>(Call{"POST", "/auth/challenge", std::nullopt, QString(), QByteArray()},
-                     HttpWire::readChallenge,
-                     reply);
+    send<QByteArray>(Call{"POST", "/auth/challenge", std::nullopt, QString()}, HttpWire::readChallenge, reply);
 }
 
 void HttpServerApi::authenticate(const VerifyKey& device,
@@ -163,214 +163,159 @@ void HttpServerApi::authenticate(const VerifyKey& device,
                                  const QByteArray& signature,
                                  Reply<Session> reply)
 {
-    send<Session>(Call{"POST",
-                       "/auth/session",
-                       HttpWire::authenticateRequest(device, challenge, signature),
-                       QString(),
-                       QByteArray()},
+    send<Session>(Call{"POST", "/auth/token", HttpWire::authenticateRequest(device, challenge, signature), QString()},
                   HttpWire::readSession,
                   reply);
 }
 
+// --- This device's person --------------------------------------------------------
+
+void HttpServerApi::registerPerson(const Session& session, const Registration& registration, Reply<Done> reply)
+{
+    sendForDone(Call{"PUT", "/me", HttpWire::registerPersonRequest(registration), session.token}, reply);
+}
+
+void HttpServerApi::me(const Session& session, Reply<Me> reply)
+{
+    send<Me>(Call{"GET", "/me", std::nullopt, session.token}, HttpWire::readMe, reply);
+}
+
+void HttpServerApi::unlinkDevice(const Session& session, const Fingerprint& device, Reply<Done> reply)
+{
+    sendForDone(Call{"DELETE", "/me/devices/" + device.toHex(), std::nullopt, session.token}, reply);
+}
+
+// --- Linking ---------------------------------------------------------------------
+
+void HttpServerApi::startLink(const Session& session,
+                              const PublicKey& publicKey,
+                              const QString& deviceName,
+                              Reply<QString> reply)
+{
+    send<QString>(Call{"POST", "/links", HttpWire::startLinkRequest(publicKey, deviceName), session.token},
+                  HttpWire::readLinkCode,
+                  reply);
+}
+
+void HttpServerApi::link(const Session& session, const QString& code, Reply<LinkState> reply)
+{
+    send<LinkState>(Call{"GET", linkPath(code), std::nullopt, session.token}, HttpWire::readLinkState, reply);
+}
+
+void HttpServerApi::approveLink(const Session& session, const QString& code, Reply<Done> reply)
+{
+    sendForDone(Call{"POST", linkPath(code) + "/approve", std::nullopt, session.token}, reply);
+}
+
 // --- Documents -------------------------------------------------------------------
 
-void HttpServerApi::registerDocument(const Session& session,
-                                     const Upload& upload,
-                                     const QByteArray& requestSignature,
-                                     Reply<qint64> reply)
+void HttpServerApi::registerDocument(const Session& session, const Upload& upload, Reply<qint64> reply)
 {
-    send<qint64>(Call{"POST", "/documents", HttpWire::registerRequest(upload), session.token, requestSignature},
+    send<qint64>(Call{"POST", "/documents", HttpWire::registerRequest(upload), session.token},
                  HttpWire::readVersion,
                  reply);
 }
 
 void HttpServerApi::head(const Session& session, const QString& documentId, Reply<Head> reply)
 {
-    send<Head>(Call{"GET", documentPath(documentId) + "/head", std::nullopt, session.token, QByteArray()},
-               HttpWire::readHead,
-               reply);
+    send<Head>(Call{"GET", documentPath(documentId) + "/head", std::nullopt, session.token}, HttpWire::readHead, reply);
 }
 
-void HttpServerApi::headers(const Session& session, const QString& documentId, qint64 after, Reply<HeaderChain> reply)
+void HttpServerApi::download(const Session& session, const QString& documentId, Reply<Snapshot> reply)
 {
-    send<HeaderChain>(Call{"GET",
-                           withQuery(documentPath(documentId) + "/headers", "after", QString::number(after)),
-                           std::nullopt,
-                           session.token,
-                           QByteArray()},
-                      HttpWire::readHeaderChain,
-                      reply);
-}
-
-void HttpServerApi::download(const Session& session, const QString& documentId, qint64 after, Reply<Snapshot> reply)
-{
-    send<Snapshot>(Call{"GET",
-                        withQuery(documentPath(documentId), "after", QString::number(after)),
-                        std::nullopt,
-                        session.token,
-                        QByteArray()},
-                   HttpWire::readSnapshot,
-                   reply);
+    send<Snapshot>(Call{"GET", documentPath(documentId), std::nullopt, session.token}, HttpWire::readSnapshot, reply);
 }
 
 void HttpServerApi::upload(const Session& session,
                            const QString& documentId,
                            qint64 baseVersion,
                            const Upload& upload,
-                           const QByteArray& requestSignature,
                            Reply<qint64> reply)
 {
-    send<qint64>(Call{"PUT",
-                      documentPath(documentId),
-                      HttpWire::uploadRequest(baseVersion, upload),
-                      session.token,
-                      requestSignature},
+    send<qint64>(Call{"PUT", documentPath(documentId), HttpWire::uploadRequest(baseVersion, upload), session.token},
                  HttpWire::readVersion,
                  reply);
 }
 
 // --- Lease -----------------------------------------------------------------------
 
-void HttpServerApi::takeLease(const Session& session,
-                              const QString& documentId,
-                              const QByteArray& requestSignature,
-                              Reply<Lease> reply)
+void HttpServerApi::takeLease(const Session& session, const QString& documentId, Reply<Lease> reply)
 {
-    send<Lease>(Call{"POST", documentPath(documentId) + "/lease", std::nullopt, session.token, requestSignature},
+    send<Lease>(Call{"POST", documentPath(documentId) + "/lease", std::nullopt, session.token},
                 HttpWire::readLease,
                 reply);
 }
 
-void HttpServerApi::releaseLease(const Session& session,
-                                 const QString& documentId,
-                                 const QByteArray& requestSignature,
-                                 Reply<Done> reply)
+void HttpServerApi::releaseLease(const Session& session, const QString& documentId, Reply<Done> reply)
 {
-    sendForDone(Call{"DELETE", documentPath(documentId) + "/lease", std::nullopt, session.token, requestSignature},
-                reply);
+    sendForDone(Call{"DELETE", documentPath(documentId) + "/lease", std::nullopt, session.token}, reply);
 }
 
-// --- Access requests -------------------------------------------------------------
+// --- Who has access --------------------------------------------------------------
 
-void HttpServerApi::requestAccess(const Session& session,
-                                  const QString& documentId,
-                                  const AccessRequest& request,
-                                  const QByteArray& requestSignature,
-                                  Reply<Done> reply)
+void HttpServerApi::history(const Session& session,
+                            const QString& documentId,
+                            qint64 after,
+                            Reply<QList<HistoryEntry>> reply)
 {
-    sendForDone(Call{"POST",
-                     documentPath(documentId) + "/requests",
-                     HttpWire::accessRequestRequest(request),
-                     session.token,
-                     requestSignature},
-                reply);
+    send<QList<HistoryEntry>>(
+        Call{"GET", withQuery(documentPath(documentId) + "/history", "after", QString::number(after)), std::nullopt,
+             session.token},
+        HttpWire::readHistory,
+        reply);
+}
+
+void HttpServerApi::requestAccess(const Session& session, const QString& documentId, Reply<Done> reply)
+{
+    sendForDone(Call{"POST", documentPath(documentId) + "/requests", std::nullopt, session.token}, reply);
 }
 
 void HttpServerApi::accessRequests(const Session& session,
                                    const QString& documentId,
                                    Reply<QList<AccessRequest>> reply)
 {
-    send<QList<AccessRequest>>(
-        Call{"GET", documentPath(documentId) + "/requests", std::nullopt, session.token, QByteArray()},
-        HttpWire::readAccessRequests,
-        reply);
+    send<QList<AccessRequest>>(Call{"GET", documentPath(documentId) + "/requests", std::nullopt, session.token},
+                               HttpWire::readAccessRequests,
+                               reply);
 }
 
-void HttpServerApi::clearAccessRequest(const Session& session,
-                                       const QString& documentId,
-                                       const Fingerprint& device,
-                                       const QByteArray& requestSignature,
-                                       Reply<Done> reply)
+void HttpServerApi::declineRequest(const Session& session, const QString& documentId, qint64 index, Reply<Done> reply)
 {
     sendForDone(Call{"DELETE",
-                     withQuery(documentPath(documentId) + "/requests", "device", device.toHex()),
+                     documentPath(documentId) + "/requests/" + QString::number(index),
                      std::nullopt,
-                     session.token,
-                     requestSignature},
+                     session.token},
                 reply);
 }
 
 void HttpServerApi::myRequestStatus(const Session& session, const QString& documentId, Reply<RequestStatus> reply)
 {
-    send<RequestStatus>(
-        Call{"GET", documentPath(documentId) + "/requests/mine", std::nullopt, session.token, QByteArray()},
-        HttpWire::readRequestStatus,
-        reply);
+    send<RequestStatus>(Call{"GET", documentPath(documentId) + "/requests/mine", std::nullopt, session.token},
+                        HttpWire::readRequestStatus,
+                        reply);
 }
 
-// --- This device -----------------------------------------------------------------
-
-void HttpServerApi::myDocuments(const Session& session, Reply<QStringList> reply)
+void HttpServerApi::grant(const Session& session, const QString& documentId, qint64 index, Reply<Done> reply)
 {
-    send<QStringList>(Call{"GET", "/me/documents", std::nullopt, session.token, QByteArray()},
-                      HttpWire::readDocumentIds,
-                      reply);
-}
-
-// --- Pairings --------------------------------------------------------------------
-
-void HttpServerApi::startPairing(const Session& session,
-                                 const QString& deviceName,
-                                 const QByteArray& commitment,
-                                 const QByteArray& requestSignature,
-                                 Reply<QString> reply)
-{
-    send<QString>(Call{"POST",
-                       "/pairings",
-                       HttpWire::startPairingRequest(deviceName, commitment),
-                       session.token,
-                       requestSignature},
-                  HttpWire::readPairingCode,
-                  reply);
-}
-
-void HttpServerApi::pairing(const Session& session, const QString& code, Reply<PairingState> reply)
-{
-    send<PairingState>(Call{"GET", pairingPath(code), std::nullopt, session.token, QByteArray()},
-                       HttpWire::readPairingState,
-                       reply);
-}
-
-void HttpServerApi::respondToPairing(const Session& session,
-                                     const QString& code,
-                                     const DeviceKeys& responder,
-                                     const QByteArray& requestSignature,
-                                     Reply<Done> reply)
-{
-    sendForDone(Call{"PUT",
-                     pairingPath(code) + "/responder",
-                     HttpWire::deviceKeysRequest(responder),
-                     session.token,
-                     requestSignature},
+    sendForDone(Call{"POST", documentPath(documentId) + "/members", HttpWire::grantRequest(index), session.token},
                 reply);
 }
 
-void HttpServerApi::revealPairing(const Session& session,
-                                  const QString& code,
-                                  const DeviceKeys& initiator,
-                                  const QByteArray& nonce,
-                                  const QByteArray& requestSignature,
-                                  Reply<Done> reply)
+void HttpServerApi::removeMember(const Session& session,
+                                 const QString& documentId,
+                                 const MemberId& member,
+                                 Reply<Done> reply)
 {
-    sendForDone(Call{"PUT",
-                     pairingPath(code) + "/reveal",
-                     HttpWire::revealPairingRequest(initiator, nonce),
-                     session.token,
-                     requestSignature},
-                reply);
+    sendForDone(Call{"DELETE", memberPath(documentId, member), std::nullopt, session.token}, reply);
 }
 
-void HttpServerApi::handOver(const Session& session,
-                             const QString& code,
-                             const QByteArray& handover,
-                             const QByteArray& requestSignature,
-                             Reply<Done> reply)
+void HttpServerApi::setRole(const Session& session,
+                            const QString& documentId,
+                            const MemberId& member,
+                            Role role,
+                            Reply<Done> reply)
 {
-    sendForDone(Call{"PUT",
-                     pairingPath(code) + "/handover",
-                     HttpWire::handOverRequest(handover),
-                     session.token,
-                     requestSignature},
+    sendForDone(Call{"PUT", memberPath(documentId, member) + "/role", HttpWire::setRoleRequest(role), session.token},
                 reply);
 }
 
@@ -378,5 +323,5 @@ void HttpServerApi::handOver(const Session& session,
 
 void HttpServerApi::advanceClock(qint64 seconds, Reply<Done> reply)
 {
-    sendForDone(Call{"POST", "/dev/clock", HttpWire::advanceClockRequest(seconds), QString(), QByteArray()}, reply);
+    sendForDone(Call{"POST", "/dev/clock", HttpWire::advanceClockRequest(seconds), QString()}, reply);
 }

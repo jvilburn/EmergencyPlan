@@ -2,11 +2,42 @@
 
 #include "DocumentManager.h"
 
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
 #include <QToolButton>
 #include <QVBoxLayout>
+
+#include <functional>
+
+using ServerContract::HistoryEntry;
+using ServerContract::Member;
+
+namespace
+{
+
+/// One line for the list: "Bob Wilson added Tom Hale", "Tom Hale left".
+QString describe(const HistoryEntry& entry)
+{
+    switch (entry.kind)
+    {
+    case HistoryEntry::Kind::Added:
+        return QObject::tr("%1 added %2").arg(entry.actor, entry.subject);
+    case HistoryEntry::Kind::Removed:
+        return QObject::tr("%1 removed %2").arg(entry.actor, entry.subject);
+    case HistoryEntry::Kind::Left:
+        return QObject::tr("%1 left").arg(entry.subject);
+    case HistoryEntry::Kind::MadeAdmin:
+        return QObject::tr("%1 made %2 an admin").arg(entry.actor, entry.subject);
+    case HistoryEntry::Kind::MadeMember:
+        return entry.actor == entry.subject ? QObject::tr("%1 stepped down as admin").arg(entry.actor)
+                                            : QObject::tr("%1 made %2 a member").arg(entry.actor, entry.subject);
+    }
+    return QString();
+}
+
+} // namespace
 
 WardNotices::WardNotices(QWidget* parent)
     : QWidget(parent)
@@ -16,30 +47,100 @@ WardNotices::WardNotices(QWidget* parent)
     m_layout->setSpacing(0);
 
     DocumentManager* manager = DocumentManager::instance();
-    connect(manager, &DocumentManager::documentOpened, this, &WardNotices::onDocumentOpened);
+    connect(manager, &DocumentManager::documentOpened, this, &WardNotices::refresh);
     connect(manager, &DocumentManager::requiresUpdateChanged, this, &WardNotices::refresh);
-    connect(manager, &DocumentManager::accessChanged, this, &WardNotices::onAccessChanged);
-    connect(manager, &DocumentManager::documentChanged, this, &WardNotices::refresh);
+    connect(manager, &DocumentManager::headChanged, this, &WardNotices::refresh);
+    connect(manager, &DocumentManager::accessChanged, this, &WardNotices::refresh);
     refresh();
 }
 
-void WardNotices::onDocumentOpened()
+QList<WardNotices::Notice> WardNotices::currentNotices() const
 {
-    // Another ward's changes are not this one's.
-    m_accessEvents.clear();
-    refresh();
-}
+    const DocumentManager* manager = DocumentManager::instance();
+    const DocumentSession* session = manager->session();
+    if (session == nullptr || manager->copy().has_value())
+    {
+        return {};
+    }
 
-void WardNotices::onAccessChanged(const QList<AccessEvents::Event>& events)
-{
-    // A new sync's changes are news even after the last notice was dismissed.
-    m_accessEvents = events;
-    m_dismissed.remove(dismissKey(Kind::AccessChanged));
-    refresh();
+    QList<Notice> notices;
+    if (session->requiresUpdate())
+    {
+        notices.append(Notice{Kind::RequiresUpdate,
+                              tr("This ward was saved by a newer version of Ward Planning. Update to see the latest "
+                                 "changes and share your work."),
+                              QString()});
+    }
+
+    // An unshared ward is this person's alone; a shared one counts what the server
+    // last said, and says nothing until it has.
+    QList<Member> members;
+    if (session->lastHead().has_value())
+    {
+        members = session->lastHead().value().members;
+    }
+    std::optional<Member> self;
+    int admins = 0;
+    for (const Member& member : members)
+    {
+        if (member.person.member == manager->identity().member)
+        {
+            self = member;
+        }
+        admins += member.isAdmin() ? 1 : 0;
+    }
+
+    if (!session->isShared() || members.size() == 1)
+    {
+        notices.append(Notice{Kind::OnlyKeyHolder,
+                              tr("Only you can open this ward. If you lose your devices, it cannot be recovered. "
+                                 "Add someone now."),
+                              QString()});
+    }
+    else if (self.has_value() && self->isAdmin() && admins == 1)
+    {
+        notices.append(Notice{Kind::OnlyAdmin,
+                              tr("You are the only admin. If you lose your devices, nobody can add or remove people. "
+                                 "Make someone else an admin."),
+                              QString()});
+    }
+
+    if (self.has_value() && self->person.devices.size() == 1)
+    {
+        notices.append(Notice{Kind::OneDevice,
+                              tr("This ward is on one of your devices. Linking a second keeps it if this one is lost."),
+                              QString()});
+    }
+
+    const QList<HistoryEntry> history = manager->unseenHistory();
+    if (!history.isEmpty())
+    {
+        QStringList lines;
+        for (const HistoryEntry& entry : history)
+        {
+            lines.append(describe(entry));
+        }
+        notices.append(Notice{Kind::AccessChanged,
+                              tr("%n change(s) to who has access", "", int(history.size())),
+                              lines.join("\n")});
+    }
+
+    const QSet<Kind> dismissed = m_dismissed.value(manager->documentId());
+    notices.removeIf([&dismissed](const Notice& notice) { return dismissed.contains(notice.kind); });
+    return notices;
 }
 
 void WardNotices::refresh()
 {
+    // Rebuilt only when what shows changes, so a button under the mouse survives
+    // every refresh that changes nothing.
+    const QList<Notice> notices = currentNotices();
+    if (notices == m_shown)
+    {
+        return;
+    }
+    m_shown = notices;
+
     // Later, since the button pressed to dismiss a notice is inside it.
     while (QLayoutItem* item = m_layout->takeAt(0))
     {
@@ -48,129 +149,85 @@ void WardNotices::refresh()
         delete item;
     }
 
-    const DocumentManager* manager = DocumentManager::instance();
-    const DocumentSession* session = manager->session();
-    if (session == nullptr || manager->copy().has_value())
+    for (const Notice& notice : notices)
     {
-        hide();
-        return;
+        m_layout->addWidget(makeNotice(notice));
     }
-
-    const AccessRoster& roster = manager->document().accessRoster();
-    const std::optional<RosterPerson> self = roster.person(manager->identity().member);
-    QList<QWidget*> notices;
-
-    if (session->requiresUpdate())
-    {
-        notices.append(makeNotice(Kind::RequiresUpdate,
-                                  tr("This ward was saved by a newer version of Ward Planning. Update to see the "
-                                     "latest changes and share your work."),
-                                  QString(),
-                                  nullptr));
-    }
-
-    if (roster.personCount() == 1)
-    {
-        notices.append(makeNotice(Kind::OnlyKeyHolder,
-                                  tr("Only you can open this ward. If you lose your devices, it cannot be "
-                                     "recovered. Add someone now."),
-                                  tr("Add Someone..."),
-                                  &WardNotices::accessRequested));
-    }
-    else if (self.has_value() && self.value().isAdmin() && roster.admins().size() == 1)
-    {
-        notices.append(makeNotice(Kind::OnlyAdmin,
-                                  tr("You are the only admin. If you lose your devices, nobody can add or remove "
-                                     "people. Make someone else an admin."),
-                                  tr("Make Someone an Admin..."),
-                                  &WardNotices::accessRequested));
-    }
-
-    if (self.has_value() && self.value().deviceCount() == 1 && session->isShared())
-    {
-        notices.append(makeNotice(Kind::OneDevice,
-                                  tr("This ward is on one of your devices. Linking a second keeps it if this one "
-                                     "is lost."),
-                                  tr("Link a Device..."),
-                                  &WardNotices::linkRequested));
-    }
-
-    if (!m_accessEvents.isEmpty())
-    {
-        QStringList lines;
-        for (const AccessEvents::Event& event : m_accessEvents)
-        {
-            lines.append(event.describe());
-        }
-        QWidget* notice = makeNotice(Kind::AccessChanged,
-                                     tr("%n change(s) to who has access", "", int(m_accessEvents.size())),
-                                     QString(),
-                                     nullptr);
-        notice->setToolTip(lines.join("\n"));
-
-        // The list itself, under the count, so it is read without a click.
-        QLabel* list = new QLabel(lines.join("\n"), notice);
-        list->setContentsMargins(24, 0, 12, 6);
-        static_cast<QVBoxLayout*>(notice->layout())->addWidget(list);
-        notices.append(notice);
-    }
-
-    for (QWidget* notice : notices)
-    {
-        if (notice != nullptr)
-        {
-            m_layout->addWidget(notice);
-        }
-    }
-    setVisible(m_layout->count() > 0);
+    setVisible(!notices.isEmpty());
 }
 
-QWidget* WardNotices::makeNotice(Kind kind, const QString& text, const QString& button, void (WardNotices::*pressed)())
+QWidget* WardNotices::makeNotice(const Notice& notice)
 {
-    if (m_dismissed.contains(dismissKey(kind)))
-    {
-        return nullptr;
-    }
-
-    QWidget* notice = new QWidget(this);
-    notice->setObjectName("wardNotice");
-    QVBoxLayout* column = new QVBoxLayout(notice);
+    QFrame* frame = new QFrame(this);
+    frame->setObjectName("wardNotice");
+    frame->setStyleSheet("QFrame#wardNotice {"
+                         "  background-color: #FFF4CE;"
+                         "  border-bottom: 1px solid #E5D38F;"
+                         "}");
+    QVBoxLayout* column = new QVBoxLayout(frame);
     column->setContentsMargins(0, 0, 0, 0);
     column->setSpacing(0);
 
     QHBoxLayout* row = new QHBoxLayout();
     row->setContentsMargins(12, 6, 6, 6);
-    QLabel* label = new QLabel(text, notice);
+    QLabel* label = new QLabel(notice.text, frame);
     label->setWordWrap(true);
     row->addWidget(label, 1);
-    if (!button.isEmpty() && pressed != nullptr)
+
+    switch (notice.kind)
     {
-        QPushButton* action = new QPushButton(button, notice);
+    case Kind::OnlyKeyHolder:
+    case Kind::OnlyAdmin:
+    {
+        QPushButton* action = new QPushButton(
+            notice.kind == Kind::OnlyKeyHolder ? tr("Add Someone...") : tr("Make Someone an Admin..."), frame);
         row->addWidget(action);
-        connect(action, &QPushButton::clicked, this, pressed);
+        connect(action, &QPushButton::clicked, this, &WardNotices::accessRequested);
+        break;
     }
-    QToolButton* close = new QToolButton(notice);
-    close->setText(QStringLiteral("x"));
-    close->setToolTip(tr("Dismiss"));
-    close->setAutoRaise(true);
-    row->addWidget(close);
+    case Kind::OneDevice:
+    {
+        QPushButton* action = new QPushButton(tr("Link a Device..."), frame);
+        row->addWidget(action);
+        connect(action, &QPushButton::clicked, this, &WardNotices::linkRequested);
+        break;
+    }
+    case Kind::RequiresUpdate:
+    case Kind::AccessChanged:
+        break;
+    }
+
+    // Until the app is updated, which the notice exists to prompt.
+    if (notice.kind != Kind::RequiresUpdate)
+    {
+        QToolButton* close = new QToolButton(frame);
+        close->setText(QStringLiteral("x"));
+        close->setToolTip(tr("Dismiss"));
+        close->setAutoRaise(true);
+        row->addWidget(close);
+        connect(close, &QToolButton::clicked, this, std::bind(&WardNotices::dismiss, this, notice.kind));
+    }
     column->addLayout(row);
 
-    connect(close, &QToolButton::clicked, this, std::bind(&WardNotices::dismiss, this, kind));
-    return notice;
+    // The list itself, under the count, so it is read without a click.
+    if (!notice.details.isEmpty())
+    {
+        QLabel* list = new QLabel(notice.details, frame);
+        list->setContentsMargins(24, 0, 12, 6);
+        column->addWidget(list);
+    }
+    return frame;
 }
 
 void WardNotices::dismiss(Kind kind)
 {
-    m_dismissed.insert(dismissKey(kind));
+    DocumentManager* manager = DocumentManager::instance();
     if (kind == Kind::AccessChanged)
     {
-        m_accessEvents.clear();
+        // Seen for good, on the record, so the next sync shows only what is newer.
+        manager->dismissHistory();
+        return;
     }
+    m_dismissed[manager->documentId()].insert(kind);
     refresh();
-}
-
-QString WardNotices::dismissKey(Kind kind) const
-{
-    return DocumentManager::instance()->documentId() + "/" + QString::number(int(kind));
 }

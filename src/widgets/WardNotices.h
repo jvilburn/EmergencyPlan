@@ -1,23 +1,25 @@
 #pragma once
 
-#include "AccessEvents.h"
-
+#include <QHash>
 #include <QList>
 #include <QSet>
+#include <QString>
 #include <QWidget>
 
 class QVBoxLayout;
 
-/// The open ward's standing notices, under the emergency banner: each persistent
-/// until dismissed, never a per-save interruption.
+/// The open ward's standing notices, between the copy banner and the emergency
+/// banner: each persistent, never a per-save interruption.
 ///
+/// - The ward was saved by a newer version of Ward Planning, until it is updated.
 /// - Only you can open this ward: lose your devices and it cannot be recovered.
 /// - With one device, a gentler suggestion to link a second.
 /// - You are the only admin while others remain.
-/// - The ward was saved by a newer version of Ward Planning.
-/// - Who has access changed: one notice per sync, expanding to the list.
+/// - Who has access changed: the server's history since this device last dismissed
+///   it, expanding to the list.
 ///
-/// A dismissed notice stays dismissed for that ward while the app runs.
+/// The others stay dismissed for that ward while the app runs; the access changes,
+/// once dismissed, stay seen across runs.
 class WardNotices : public QWidget
 {
     Q_OBJECT
@@ -28,14 +30,9 @@ public:
 signals:
     /// The notice's own button: add someone, make someone an admin.
     void accessRequested();
+
+    /// The notice suggesting a second device: link one from here.
     void linkRequested();
-
-public slots:
-    void refresh();
-
-private slots:
-    void onDocumentOpened();
-    void onAccessChanged(const QList<AccessEvents::Event>& events);
 
 private:
     enum class Kind
@@ -47,12 +44,28 @@ private:
         AccessChanged
     };
 
-    /// One notice: its text, an optional button, and a dismiss button.
-    QWidget* makeNotice(Kind kind, const QString& text, const QString& button, void (WardNotices::*pressed)());
+    /// One notice as shown: what makes two refreshes show the same column.
+    struct Notice
+    {
+        Kind kind;
+        QString text;
+        QString details;
+
+        bool operator==(const Notice& other) const
+        {
+            return kind == other.kind && text == other.text && details == other.details;
+        }
+    };
+
+    void refresh();
+
+    /// The notices the open ward needs now, before any is dismissed.
+    QList<Notice> currentNotices() const;
+
+    QWidget* makeNotice(const Notice& notice);
     void dismiss(Kind kind);
-    QString dismissKey(Kind kind) const;
 
     QVBoxLayout* m_layout = nullptr;
-    QSet<QString> m_dismissed;
-    QList<AccessEvents::Event> m_accessEvents;
+    QHash<QString, QSet<Kind>> m_dismissed;     ///< by document id
+    QList<Notice> m_shown;
 };

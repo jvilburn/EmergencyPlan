@@ -6,7 +6,7 @@
 
 #include <functional>
 
-/// A session's timers, or the roster change queue's. The app runs them on
+/// A session's timers, or the sealing queue's. The app runs them on
 /// QTimer; tests fire them by hand, so no test waits on the clock and no
 /// assertion depends on event-loop timing.
 class SessionTimers

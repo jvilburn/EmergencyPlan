@@ -19,6 +19,7 @@ const QString DefaultServerAddress;
 
 // Part of the settings format.
 const QLatin1String KeyRecords("records");
+const QLatin1String KeyLinkedDevices("linkedDevices");
 const QLatin1String KeyWards("wards");
 const QLatin1String KeyWardName("wardName");
 const QLatin1String KeyLastOpened("lastOpened");
@@ -94,6 +95,12 @@ void AppSettings::removeRecord(const QString& documentId)
 QStringList AppSettings::documentIds() const
 {
     return m_records.keys();
+}
+
+void AppSettings::setLinkedDevices(const QList<DeviceKeys>& devices)
+{
+    m_linkedDevices = devices;
+    save();
 }
 
 // --- The document library's wards -------------------------------------------------
@@ -176,7 +183,14 @@ bool AppSettings::read(const QByteArray& bytes)
     const QJsonObject json = document.object();
     QJsonObject records;
     QJsonObject wards;
-    if (!StrictJson::hasOnlyKeys(json, {KeyRecords, KeyWards, KeyLastWard, KeyDeveloperExport, KeyServerAddress, KeyMap})
+    if (!StrictJson::hasOnlyKeys(json,
+                                 {KeyRecords,
+                                  KeyLinkedDevices,
+                                  KeyWards,
+                                  KeyLastWard,
+                                  KeyDeveloperExport,
+                                  KeyServerAddress,
+                                  KeyMap})
         || !StrictJson::readObject(json, KeyRecords, records)
         || !StrictJson::readObject(json, KeyWards, wards)
         || !StrictJson::readOptionalNonEmptyString(json, KeyLastWard, m_lastWardId)
@@ -206,6 +220,25 @@ bool AppSettings::read(const QByteArray& bytes)
             return false;
         }
         m_defaultLocation = location;
+    }
+
+    // Written only when there are any.
+    if (json.contains(KeyLinkedDevices))
+    {
+        QList<QJsonObject> devices;
+        if (!StrictJson::readObjectArray(json, KeyLinkedDevices, devices) || devices.isEmpty())
+        {
+            return false;
+        }
+        for (const QJsonObject& deviceJson : devices)
+        {
+            const std::optional<DeviceKeys> device = DeviceKeys::fromJson(deviceJson);
+            if (!device.has_value())
+            {
+                return false;
+            }
+            m_linkedDevices.append(device.value());
+        }
     }
 
     for (auto entry = records.constBegin(); entry != records.constEnd(); ++entry)
@@ -321,6 +354,15 @@ QByteArray AppSettings::write() const
 
     QJsonObject json;
     json[KeyRecords] = records;
+    if (!m_linkedDevices.isEmpty())
+    {
+        QJsonArray devices;
+        for (const DeviceKeys& device : m_linkedDevices)
+        {
+            devices.append(device.toJson());
+        }
+        json[KeyLinkedDevices] = devices;
+    }
     json[KeyWards] = wards;
     if (!m_lastWardId.isEmpty())
     {

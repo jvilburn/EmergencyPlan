@@ -1,6 +1,7 @@
 #include "SealingSet.h"
 
 #include "DocumentCrypto.h"
+#include "HexCodec.h"
 #include "StrictJson.h"
 
 #include <QJsonArray>
@@ -12,6 +13,14 @@ namespace
 
 // Part of the payload format.
 const QLatin1String KeyDevices("devices");
+const QLatin1String KeyFormerKeys("formerKeys");
+
+constexpr int FormerKeyHashSize = 32;
+
+QString formerKeyHash(const DataKey& key)
+{
+    return HexCodec::encode(DocumentCrypto::hash(HashDomain::FormerKey, key.bytes, FormerKeyHashSize));
+}
 
 QString fingerprintHex(const DeviceKeys& device)
 {
@@ -66,9 +75,20 @@ QList<DeviceKeys> SealingSet::devices() const
     return devices;
 }
 
+void SealingSet::addFormerKey(const DataKey& key)
+{
+    m_formerKeys.append(formerKeyHash(key));
+}
+
+bool SealingSet::descendsFrom(const DataKey& key) const
+{
+    return m_formerKeys.contains(formerKeyHash(key));
+}
+
 SealingSet::Next SealingSet::next(const QSet<QString>& allowList, const QList<DeviceKeys>& approved) const
 {
     Next next;
+    next.devices.m_formerKeys = m_formerKeys;
     for (auto it = m_devices.constBegin(); it != m_devices.constEnd(); ++it)
     {
         if (allowList.contains(it.key()))
@@ -102,17 +122,26 @@ QJsonObject SealingSet::toJson() const
 
     QJsonObject json;
     json[KeyDevices] = devices;
+    json[KeyFormerKeys] = QJsonArray::fromStringList(m_formerKeys);
     return json;
 }
 
 std::optional<SealingSet> SealingSet::fromJson(const QJsonObject& json)
 {
-    if (!StrictJson::hasOnlyKeys(json, {KeyDevices}) || !json.value(KeyDevices).isArray())
+    SealingSet set;
+    if (!StrictJson::hasOnlyKeys(json, {KeyDevices, KeyFormerKeys}) || !json.value(KeyDevices).isArray()
+        || !StrictJson::readStringArray(json, KeyFormerKeys, set.m_formerKeys))
     {
         return std::nullopt;
     }
+    for (const QString& hash : set.m_formerKeys)
+    {
+        if (!HexCodec::isCanonical(hash, 2 * FormerKeyHashSize))
+        {
+            return std::nullopt;
+        }
+    }
 
-    SealingSet set;
     const QJsonArray devices = json.value(KeyDevices).toArray();
     for (const QJsonValue& value : devices)
     {

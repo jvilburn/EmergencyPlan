@@ -50,6 +50,13 @@ bool writeBase(DocumentRecords& records,
 /// Deletes the local file, the base copy, and the record.
 void forget(DocumentRecords& records, const QString& documentId, const DocumentPaths& paths);
 
+/// The data keys of the versions this device holds of a ward - its base copy and
+/// its local file - which a server version must descend from.
+QList<DataKey> trustedKeys(const QString& documentId,
+                           const DocumentPaths& paths,
+                           const DocumentRecords& records,
+                           const Reconcile::Self& self);
+
 /// What one write may seal to: the allow-list from the latest head, and the devices
 /// this client approved for this ward.
 struct Access
@@ -57,6 +64,10 @@ struct Access
     QSet<QString> allowList;        ///< fingerprint hex
     QList<DeviceKeys> approved;
 };
+
+/// Whether a head lists this device. One that does not is never applied: it would
+/// seal this device out of its own local file.
+bool listsDevice(const ServerContract::Head& head, const Fingerprint& device);
 
 /// The allow-list a head names, and this ward's approved devices: its record's
 /// granted devices and this device's linked ones.
@@ -112,9 +123,10 @@ struct Fetched
 
 using FetchDone = std::function<void(const Fetched&)>;
 
-/// Downloads the server's current version and validates it. Nothing is written.
-/// done is called only while receiver is alive.
-void fetch(const DeviceIdentity& identity,
+/// Downloads the server's current version and validates it against the keys this
+/// device trusts. Nothing is written. done is called only while receiver is alive.
+void fetch(const Reconcile::Self& self,
+           const QList<DataKey>& trusted,
            ServerConnection& server,
            const QString& documentId,
            QObject* receiver,

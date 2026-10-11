@@ -1,6 +1,5 @@
 #include "ResponseMerge.h"
 
-#include "AccessRoster.h"
 
 #include <QHash>
 #include <QSet>
@@ -319,7 +318,7 @@ Document directoryOf(const Document& document)
 {
     Document directory = document;
     directory.setEmergencyResponse(std::nullopt);
-    directory.setAccessRoster(AccessRoster());
+    directory.setSealingSet(SealingSet());
     return directory;
 }
 
@@ -356,7 +355,7 @@ std::optional<Document> mergeDocuments(const Document& base, const Document& min
     }
 
     Document merged = mineChanged ? mine : theirs;
-    merged.setAccessRoster(theirs.accessRoster());
+    merged.setSealingSet(theirs.sealingSet());
     merged.setEmergencyResponse(
         merge(base.emergencyResponse(), mine.emergencyResponse(), theirs.emergencyResponse()));
     return merged;

@@ -229,7 +229,7 @@ Result<Done> FakeServer::decideRegisterPerson(const Session& session, const Regi
     }
 
     // An unlinked device claiming its old person hears why it cannot.
-    if (m_unlinked.contains(caller.device.bytes))
+    if (m_unlinkedFrom.value(caller.device.bytes) == registration.member.toHex())
     {
         return Result<Done>::lostAccess(m_unlinked.value(caller.device.bytes));
     }
@@ -261,6 +261,8 @@ Result<Done> FakeServer::decideRegisterPerson(const Session& session, const Regi
 
     m_people.insert(person.member.toHex(), person);
     m_personOfDevice.insert(caller.device.bytes, person.member.toHex());
+    m_unlinked.remove(caller.device.bytes);
+    m_unlinkedFrom.remove(caller.device.bytes);
     return Result<Done>::success(Done());
 }
 
@@ -320,6 +322,8 @@ Result<Done> FakeServer::decideUnlinkDevice(const Session& session, const Finger
         const VerifyKey key = devices.at(index).keys.verifyKey;
         const Device* unlinker = deviceOf(*caller.person, caller.device);
         m_unlinked.insert(key.bytes, LostAccess{LostAccess::How::Unlinked, unlinker->name, m_now});
+        m_unlinkedFrom.insert(key.bytes, caller.person->member.toHex());
+        releaseLeasesOf(devices.at(index).fingerprint);
         m_personOfDevice.remove(key.bytes);
         devices.removeAt(index);
         return Result<Done>::success(Done());
@@ -430,6 +434,7 @@ Result<Done> FakeServer::decideApproveLink(const Session& session, const QString
     caller.person->devices.append(device);
     m_personOfDevice.insert(device.keys.verifyKey.bytes, caller.person->member.toHex());
     m_unlinked.remove(device.keys.verifyKey.bytes);
+    m_unlinkedFrom.remove(device.keys.verifyKey.bytes);
     stored.approvedAs = caller.person->member.toHex();
     return Result<Done>::success(Done());
 }
@@ -826,6 +831,14 @@ Result<Done> FakeServer::decideRemoveMember(const Session& session, const QStrin
         return Result<Done>::failure(ServerError::LastAdmin);
     }
 
+    for (const Device& device : m_people.value(target).devices)
+    {
+        if (document->lease.has_value() && document->lease.value().holder == device.fingerprint)
+        {
+            document->lease.reset();
+        }
+    }
+
     const QString subject = m_people.value(target).displayName;
     if (leaving)
     {
@@ -1076,6 +1089,17 @@ QList<Member> FakeServer::membersOf(const StoredDocument& document) const
         members.append(Member{m_people.value(id), document.members.value(id)});
     }
     return members;
+}
+
+void FakeServer::releaseLeasesOf(const Fingerprint& device)
+{
+    for (StoredDocument& document : m_documents)
+    {
+        if (document.lease.has_value() && document.lease.value().holder == device)
+        {
+            document.lease.reset();
+        }
+    }
 }
 
 bool FakeServer::keepsAnAdmin(const StoredDocument& document) const

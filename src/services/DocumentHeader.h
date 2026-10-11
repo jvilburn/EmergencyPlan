@@ -10,9 +10,7 @@
 #include <optional>
 
 /// One device's claim on a document: its fingerprint, and the data key sealed to
-/// its X25519 public key, which the payload's sealing set holds. Another way of
-/// carrying the key would be a new format version, which an older build refuses
-/// whole.
+/// its X25519 public key, which the payload's sealing set holds.
 struct RecipientEntry
 {
     Fingerprint fingerprint;

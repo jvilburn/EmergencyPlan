@@ -8,7 +8,6 @@
 #include <memory>
 #include <optional>
 
-#include "AccessEvents.h"
 #include "CommandHistory.h"
 #include "DeviceIdentity.h"
 #include "Document.h"
@@ -17,7 +16,7 @@
 #include "DocumentSession.h"
 
 class BackgroundGeocodingService;
-class RosterChangeQueue;
+class SealingQueue;
 class ServerConnection;
 class UnitLookupService;
 
@@ -52,7 +51,7 @@ public:
                     DocumentRecords& records,
                     ServerConnection& server,
                     DocumentLibrary& library,
-                    RosterChangeQueue& queue,
+                    SealingQueue& queue,
                     QObject* parent);
 
     /// For tests: one session, already open, with no library, server, or queue.
@@ -120,18 +119,14 @@ public:
     /// The ward's name as the library lists it; empty for one not there.
     QString wardNameOf(const QString& documentId) const;
 
-    /// Which device added each device, and whether that could be checked.
-    using OriginsFetched = std::function<void(const QHash<QString, AccessEvents::Origin>& origins, bool checked)>;
-
-    /// Which device added each device of the open ward, and when, from its kept
-    /// headers - fetched for a shared ward, and this device's own for one that is
-    /// not. A chain whose links do not hold, or that does not end in the devices this
-    /// ward lists, is not checked and says nothing. Answered only while receiver
-    /// lives.
-    void fetchDeviceOrigins(QObject* receiver, const OriginsFetched& done);
-
     /// A shared ward is being fetched to open.
     bool isFetching() const { return !m_fetching.isEmpty(); }
+
+    /// The open ward's access changes this device has not yet dismissed, oldest first.
+    const QList<ServerContract::HistoryEntry>& unseenHistory() const { return m_unseenHistory; }
+
+    /// Marks every unseen access change seen, on the ward's record.
+    void dismissHistory();
 
     /// Saves now and publishes. A local failure is the one reported.
     bool publishNow(QString* errorMessage);
@@ -170,14 +165,18 @@ signals:
     /// The pending conflict was settled.
     void conflictSettled();
 
-    /// Who has access changed in the versions just taken in: once per sync.
-    void accessChanged(const QList<AccessEvents::Event>& events);
+    /// The open ward's head answered with different members, roles, lease holder,
+    /// or newest access-history entry.
+    void headChanged();
+
+    /// unseenHistory() changed.
+    void accessChanged();
 
     /// The server holds a version this build cannot read, or no longer does.
     void requiresUpdateChanged();
 
-    /// This device is off a ward, which has left the library.
-    void accessRemoved(const QString& wardName, const QString& byWhom, bool left);
+    /// This device lost access to a ward, which has left the library.
+    void accessLost(const QString& wardName, const ServerContract::LostAccess& lost);
 
     /// A shared ward being fetched could not be.
     void fetchFailed(const QString& documentId, DocumentSession::Download outcome);
@@ -221,15 +220,13 @@ private:
     void onDocumentReplaced();
     void afterChange(const DocumentChange& change);
     void onReadOnlyChanged();
-    void onVersionAdopted(const DocumentHeader& previousBase,
-                          const QList<DocumentHeader>& laterHeaders,
-                          const AccessRoster& previousRoster);
-    void onChainFetched(const OriginsFetched& done, const ServerContract::Result<ServerContract::HeaderChain>& chain);
-    void onSessionRemoved(const QString& byWhom, bool left);
-    void onQueueRemoved(const QString& documentId, bool left);
+    void onHeadChanged();
+    void onHistory(const QString& documentId, const ServerContract::Result<QList<ServerContract::HistoryEntry>>& history);
+    void onSessionLost(const ServerContract::LostAccess& lost);
+    void onQueueLost(const QString& documentId, const ServerContract::LostAccess& lost);
 
     /// The ward's files, copies, record, and entry go, and the person is told.
-    void forgetRemovedWard(const QString& documentId, const QString& byWhom, bool left);
+    void forgetLostWard(const QString& documentId, const ServerContract::LostAccess& lost);
 
     void fetch(const QString& documentId);
     void onFetched(const QString& documentId, DocumentSession::Download outcome);
@@ -242,13 +239,15 @@ private:
     DocumentRecords* m_records = nullptr;
     ServerConnection* m_server = nullptr;
     DocumentLibrary* m_library = nullptr;
-    RosterChangeQueue* m_queue = nullptr;
+    SealingQueue* m_queue = nullptr;
 
     std::unique_ptr<DocumentSession> m_session;
     std::optional<DocumentLibrary::Copy> m_copy;
 
     /// The shared ward being fetched to open, until it opens or another is shown.
     QString m_fetching;
+
+    QList<ServerContract::HistoryEntry> m_unseenHistory;
     Document m_empty;
     CommandHistory m_commandHistory;
 

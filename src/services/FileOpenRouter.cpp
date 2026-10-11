@@ -4,8 +4,6 @@
 #include "DocumentFile.h"
 #include "DocumentLibrary.h"
 
-#include <algorithm>
-
 namespace FileOpenRouter
 {
 
@@ -41,11 +39,7 @@ Route route(const QString& path, const DocumentLibrary& library, const DeviceIde
     {
         return Route{Action::AddWard, header.documentId};
     }
-
-    const bool thisPerson = std::any_of(header.recipients.cbegin(),
-                                        header.recipients.cend(),
-                                        [&](const RecipientEntry& entry) { return entry.member == identity.member; });
-    return Route{thisPerson ? Action::LinkDevice : Action::RequestAccess, header.documentId};
+    return Route{Action::RequestAccess, header.documentId};
 }
 
 } // namespace FileOpenRouter

@@ -110,9 +110,12 @@ simpler design wins.
 **Two kinds of trust, kept apart.** The server is trusted to run the access list: who may
 fetch and publish, who is an admin, who did what and when. It is never trusted with the
 content. Confidentiality rests on the data key alone, and a client seals that key only to
-a device it approved itself or that an earlier version already held. A server that lies
-about the access list can therefore deny service, but it cannot read the ward without
-someone approving a device it substituted at that moment.
+a device it approved itself or that an earlier version already held. A client takes a
+new version only when it descends from one it already holds - under the same key, or
+naming that key among its former keys - so the server cannot hand it a ward of the
+server's own making. A server that lies about the access list can therefore deny
+service, but it cannot read the ward without someone approving a device it substituted
+at that moment.
 
 **Defended against.** The server operator reading member data - the operator is the
 application's author, and the design keeps that from being a matter of trust. Anyone
@@ -163,6 +166,12 @@ hostile operator could substitute its own key at that moment and receive the dat
 sealed to it. Comparing a code between the two screens would close this, and was judged
 too much friction for the primary goal; it needs the operator to act at the moment of an
 approval, ward by ward, and the substituted device shows in the access list.
+
+**Accepted: a device's first download is taken as it stands.** A device holding no
+version of a ward - newly granted, or after its app data was cleared - has nothing for
+the first version to descend from, so a hostile operator could hand it a ward of its own
+making at that moment. What the device then writes into it would be readable by the
+operator. Every later version must descend from the one it took.
 
 **Accepted: a remote access request is not verified.** Whoever holds a forwarded invite
 link can put a request in front of an admin under any name; an admin who grants it gives
@@ -291,6 +300,14 @@ unattributable key must never sit in the header.
 The sealing set carries no names, member ids, or roles; those belong to the server. Its
 devices are the only thing a client seals to.
 
+**Former keys.** The sealing set also lists a hash of every data key the ward used before
+its current one (BLAKE2b, 32 bytes, personalised `wp-former-key`), appended at each
+rotation. A client takes a version only when its key is one the client already holds for
+that ward - its base copy's or its local file's - or when the version names one of those
+among its former keys. Only someone who held an earlier key can name it, and the hashes
+travel only inside the encrypted payload, so the server can neither forge a descendant nor
+learn them. The list grows by one entry per rotation, a handful a year.
+
 **How the sealing set changes.** Each write starts from the sealing set of the version it
 is built on, then:
 
@@ -300,7 +317,7 @@ is built on, then:
 2. **Adds** the devices this client approved and the server still lists: a person this
    admin granted, by the device that asked, and a device this device linked.
 3. **Rotates the data key** when the prune removed anyone. The new key is sealed only to
-   the devices that remain.
+   the devices that remain, and the old key joins the former keys.
 
 Nothing else adds a device. In particular a client never seals to a device because the
 server lists it - which is what keeps a hostile server from planting one.
@@ -602,7 +619,9 @@ silent.
 
 **A download replaces nothing until it validates.** Wherever the local file would be
 replaced by a server version: the header still includes this device, the key unseals,
-the payload decrypts, and the header matches the sealing set. Any failure keeps the
+the payload decrypts, the header matches the sealing set, and the version descends from
+one this device holds (see *Former keys*). A head that leaves this device off the
+allow-list is a server fault and is not applied. Any failure keeps the
 local file untouched and is reported as a server fault - the local file is the one copy
 that has to survive a server serving something wrong.
 
@@ -1083,6 +1102,8 @@ Against a fake server:
   app, and devices that never reconnect, are beyond reach.
 - **The server is trusted with the access list.** A hostile operator or a server bug can
   remove anyone, and their apps delete their local copies; it cannot read the ward.
+- **A device's first download is taken as it stands.** A newly granted device, or one
+  whose app data was cleared, has no earlier version to check the first against.
 - **An approved request or link can carry a substituted key.** The two screens compare
   nothing, so an operator acting at the moment of an approval could receive the key.
 - **One admin can remove anyone.** A compromised admin device can remove every other

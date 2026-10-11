@@ -15,6 +15,18 @@ Reconcile::DownloadCheck fault(const QString& reason)
     return check;
 }
 
+bool descendsFromAny(const Document& document, const QList<DataKey>& keys)
+{
+    for (const DataKey& key : keys)
+    {
+        if (document.sealingSet().descendsFrom(key))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 } // namespace
 
 namespace Reconcile
@@ -28,7 +40,8 @@ Fingerprint Self::fingerprint() const
 DownloadCheck validate(const QString& documentId,
                        const DocumentHeader& header,
                        const QByteArray& ciphertext,
-                       const Self& self)
+                       const Self& self,
+                       const QList<DataKey>& trusted)
 {
     // Another ward that also lists this device would pass every check below.
     if (header.documentId != documentId)
@@ -72,6 +85,11 @@ DownloadCheck validate(const QString& documentId,
         return fault(QObject::tr("The version disagrees with its own list of devices."));
     }
 
+    if (!trusted.isEmpty() && !trusted.contains(dataKey.value()) && !descendsFromAny(document.value(), trusted))
+    {
+        return fault(QObject::tr("The version does not descend from the copy this device holds."));
+    }
+
     DownloadCheck check;
     check.verdict = Verdict::Accept;
     check.header = header;
@@ -83,13 +101,14 @@ DownloadCheck validate(const QString& documentId,
 DownloadCheck validateDownload(const QString& documentId,
                                const QJsonObject& header,
                                const QByteArray& ciphertext,
-                               const Self& self)
+                               const Self& self,
+                               const QList<DataKey>& trusted)
 {
     DocumentHeader parsed;
     switch (DocumentHeader::parse(header, parsed))
     {
     case HeaderParse::Ok:
-        return validate(documentId, parsed, ciphertext, self);
+        return validate(documentId, parsed, ciphertext, self, trusted);
     case HeaderParse::NeedsNewerVersion:
     {
         DownloadCheck check;

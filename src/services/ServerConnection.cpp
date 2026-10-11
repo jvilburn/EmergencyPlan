@@ -200,6 +200,11 @@ void ServerConnection::withSession(SessionReady ready)
         ready(Result<Session>::success(m_session.value()));
         return;
     }
+    if (m_lost.has_value())
+    {
+        ready(Result<Session>::lostAccess(m_lost.value()));
+        return;
+    }
 
     m_waiting.append(ready);
     if (m_signingIn)
@@ -252,6 +257,10 @@ void ServerConnection::finishSignIn(const Result<Session>& session)
     if (session.ok())
     {
         m_session = session.value.value();
+    }
+    if (session.error == ServerError::AccessLost)
+    {
+        m_lost = session.lost;
     }
 
     // Taken first: a waiting call that fails its sign-in may start another.

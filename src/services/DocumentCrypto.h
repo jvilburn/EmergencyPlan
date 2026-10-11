@@ -11,17 +11,16 @@ struct DocumentHeader;
 /// What a BLAKE2b digest is for.
 ///
 /// Each value names a personalisation string mixed into BLAKE2b's parameter
-/// block, so a digest made for one purpose can never equal one made for another
-/// - whatever their inputs, and whatever their output lengths. Relying on the
-/// output lengths differing would be true today and silently false the day
-/// someone widens one of them.
+/// block, so a digest made for one purpose can never equal one made for another,
+/// whatever their inputs and output lengths.
 ///
 /// These strings are part of the document format. Changing one invalidates every
 /// fingerprint or hash of that kind.
 enum class HashDomain
 {
     Fingerprint,        ///< "wp-fingerprint" - a device's two public keys
-    Payload             ///< "wp-payload"     - the encrypted payload, for the base copy's record
+    Payload,            ///< "wp-payload"     - the encrypted payload, for the base copy's record
+    FormerKey           ///< "wp-former-key"  - a data key the ward used before its current one
 };
 
 /// One device's sealing keys.

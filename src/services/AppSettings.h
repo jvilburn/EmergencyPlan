@@ -33,6 +33,8 @@ public:
     void setRecord(const QString& documentId, const DocumentRecord& record) override;
     void removeRecord(const QString& documentId) override;
     QStringList documentIds() const override;
+    QList<DeviceKeys> linkedDevices() const override { return m_linkedDevices; }
+    void setLinkedDevices(const QList<DeviceKeys>& devices) override;
 
     // --- The document library's wards ---
 
@@ -105,6 +107,7 @@ private:
 
     QString m_path;
     QHash<QString, DocumentRecord> m_records;
+    QList<DeviceKeys> m_linkedDevices;
     QHash<QString, WardEntry> m_wards;
     QString m_lastWardId;
     bool m_developerExport = false;
