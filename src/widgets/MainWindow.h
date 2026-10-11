@@ -8,6 +8,7 @@
 #include <optional>
 
 #include "DocumentChange.h"
+#include "ConflictDialog.h"
 #include "DocumentManager.h"
 #include "DocumentSession.h"
 #include "Id.h"
@@ -43,8 +44,8 @@ public:
     /// Opens a ward by id and tells the person how it went.
     void openWard(const QString& documentId);
 
-    /// Wards the server listed for this device have arrived in the library.
-    void onWardsRestored(const QStringList& documentIds);
+    /// A ward the server listed for this device was fetched, or could not be.
+    void onWardRestored(const QString& documentId, DocumentSession::Download outcome);
 
 signals:
     /// The person asked to set this device up afresh and confirmed it; the app
@@ -80,7 +81,8 @@ private slots:
     void onAccessRemoved(const QString& wardName, const QString& byWhom, bool left);
     void onFetchFailed(const QString& documentId, DocumentSession::Download outcome);
     void onStartOver();
-    void onConflictRaised(const DocumentSession::Conflict& conflict);
+    /// Asks about the open ward's pending conflict until it is settled or set aside.
+    void askAboutConflict();
     void onEditRefused(const QString& message);
     void onFetchFinished(const QString& documentId, DocumentManager::Open result, const QString& reason);
     void updateFileActions();
@@ -108,6 +110,7 @@ private slots:
 
 private:
     void updateCopyBanner();
+    bool settleConflict(ConflictDialog::Choice choice, QString* errorMessage);
     void setupUi();
     void setupMenus();
     void setupConnections();
@@ -151,6 +154,7 @@ private:
     QAction* m_startEmergencyAction;
     QAction* m_endEmergencyAction;
     QAction* m_generateReportAction;
+    QAction* m_resolveConflictAction;
     QAction* m_startOverAction;
     QAction* m_exitAction;
     QAction* m_undoAction;

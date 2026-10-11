@@ -1,5 +1,7 @@
 #include "HttpWire.h"
 
+#include "DocumentHeader.h"
+#include "HexCodec.h"
 #include "StrictJson.h"
 
 #include <QJsonArray>
@@ -419,9 +421,10 @@ std::optional<QStringList> readDocumentIds(const QJsonObject& json)
     {
         return std::nullopt;
     }
+    // Each names a file on the device, so each must be a document id.
     for (const QString& documentId : documents)
     {
-        if (documentId.isEmpty())
+        if (!HexCodec::isCanonical(documentId, DocumentHeader::DocumentIdLength))
         {
             return std::nullopt;
         }

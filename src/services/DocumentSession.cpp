@@ -34,7 +34,7 @@ DocumentSession::Download downloadOutcome(Fetched::Outcome outcome)
 void finishDownload(DocumentRecords& records,
                     const QString& documentId,
                     const DocumentPaths& paths,
-                    const std::function<void(DocumentSession::Download)>& done,
+                    const DocumentSession::Downloaded& done,
                     const Fetched& theirs)
 {
     if (theirs.outcome == Fetched::Outcome::Removed)
@@ -44,18 +44,18 @@ void finishDownload(DocumentRecords& records,
 
     if (theirs.outcome != Fetched::Outcome::Accepted)
     {
-        done(downloadOutcome(theirs.outcome));
+        done(downloadOutcome(theirs.outcome), std::nullopt);
         return;
     }
 
     if (!DocumentFile::write(paths.file, theirs.bytes(), nullptr)
         || !ServerVersion::writeBase(records, documentId, paths, theirs.sealed, theirs.version, nullptr))
     {
-        done(DocumentSession::Download::ServerFault);
+        done(DocumentSession::Download::WriteFailed, std::nullopt);
         return;
     }
 
-    done(DocumentSession::Download::Done);
+    done(DocumentSession::Download::Done, theirs.document);
 }
 
 void ignoreRelease(const Result<Done>&)
@@ -207,7 +207,7 @@ void DocumentSession::download(const Context& context,
                                const QString& documentId,
                                const DocumentPaths& paths,
                                QObject* receiver,
-                               std::function<void(Download)> done)
+                               Downloaded done)
 {
     ServerVersion::fetch(context.identity,
                          context.records,
@@ -730,8 +730,10 @@ void DocumentSession::fastForward(const Fetched& theirs)
         emit saveFailed(tr("The ward could not be saved to %1.").arg(m_paths.file));
         return;
     }
-    if (!moveBase(theirs))
+    QString baseError;
+    if (!moveBase(theirs, &baseError))
     {
+        emit saveFailed(baseError);
         return;
     }
 
@@ -750,8 +752,10 @@ void DocumentSession::mergeWith(const Fetched& theirs, const Document& merged)
         emit saveFailed(tr("The ward could not be saved to %1.").arg(m_paths.file));
         return;
     }
-    if (!moveBase(theirs))
+    QString baseError;
+    if (!moveBase(theirs, &baseError))
     {
+        emit saveFailed(baseError);
         return;
     }
 
@@ -778,11 +782,21 @@ void DocumentSession::raiseConflict(const Fetched& theirs)
     emit conflictRaised(Conflict{nameOf(theirs.sealed.header.lastWriter), theirs.sealed.header.lastWriteTime});
 }
 
-void DocumentSession::resolve(Resolution resolution)
+std::optional<DocumentSession::Conflict> DocumentSession::pendingConflict() const
 {
     if (!m_conflict.has_value())
     {
-        return;
+        return std::nullopt;
+    }
+    const DocumentHeader& theirs = m_conflict.value().sealed.header;
+    return Conflict{nameOf(theirs.lastWriter), theirs.lastWriteTime};
+}
+
+bool DocumentSession::resolve(Resolution resolution, QString* errorMessage)
+{
+    if (!m_conflict.has_value())
+    {
+        return true;
     }
 
     const Fetched theirs = m_conflict.value();
@@ -815,29 +829,35 @@ void DocumentSession::resolve(Resolution resolution)
         written = writeLocal(resolved, previous, theirs.dataKey);
     }
 
-    // The local file first, as in a merge; the base then moves to theirs.
+    // The local file first, as in a merge; the base then moves to theirs. A base
+    // not written leaves the resolved file ahead of the old base, so the next head
+    // check takes theirs in again and nothing is lost.
     if (!written)
     {
         m_conflict = theirs;
-        emit saveFailed(tr("The ward could not be saved to %1.").arg(m_paths.file));
-        return;
+        if (errorMessage != nullptr)
+        {
+            *errorMessage = tr("The ward could not be saved to %1.").arg(m_paths.file);
+        }
+        return false;
     }
-    if (!moveBase(theirs))
+    if (!moveBase(theirs, errorMessage))
     {
-        return;
+        settleSyncState();
+        restartHeadCheck();
+        return false;
     }
 
     emit versionAdopted(previousBase, theirs.laterHeaders);
     settleSyncState();
     publish();
+    return true;
 }
 
-bool DocumentSession::moveBase(const Fetched& theirs)
+bool DocumentSession::moveBase(const Fetched& theirs, QString* errorMessage)
 {
-    QString error;
-    if (!ServerVersion::writeBase(m_context.records, m_documentId, m_paths, theirs.sealed, theirs.version, &error))
+    if (!ServerVersion::writeBase(m_context.records, m_documentId, m_paths, theirs.sealed, theirs.version, errorMessage))
     {
-        emit saveFailed(error);
         return false;
     }
 
@@ -1044,8 +1064,14 @@ void DocumentSession::setSyncState(SyncState state)
 
 void DocumentSession::setFault(const QString& reason)
 {
+    // A new reason in the same state is news to the indicator too.
+    const bool reasonChanged = m_syncState == SyncState::ServerFault && m_faultReason != reason;
     m_faultReason = reason;
     setSyncState(SyncState::ServerFault);
+    if (reasonChanged)
+    {
+        emit syncStateChanged(m_syncState);
+    }
 }
 
 void DocumentSession::settleSyncState()

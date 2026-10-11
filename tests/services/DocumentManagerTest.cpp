@@ -238,3 +238,48 @@ void DocumentManagerTest::aGeocodingResultAfterTheLeaseIsLostChangesNothing()
                                       Q_ARG(double, -112.0)));
     QVERIFY(manager.document() == content);
 }
+
+void DocumentManagerTest::aConflictWaitsUntilItIsSettled()
+{
+    TestWard ward;
+    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
+    Device& bob = ward.add(newIdentity("Bob", "Phone"));
+    std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
+    QVERIFY(aliceSession);
+    QVERIFY(ward.grant(alice, bob));
+    aliceSession->checkServer();
+    ward.settle();
+
+    // Bob moves Adams while out of reach; Alice moves Adams and publishes.
+    ward.server.setOffline(true);
+    std::unique_ptr<DocumentSession> offline = bob.open(ward.documentId);
+    ward.settle();
+    QVERIFY(offline);
+    QCOMPARE(offline->edit(DocumentSession::Edit::Directory, moveFamily(ward.adams, 50.0)), DocumentSession::Refusal::None);
+    offline.reset();
+    ward.server.setOffline(false);
+    aliceSession->edit(DocumentSession::Edit::Directory, moveFamily(ward.adams, 60.0));
+    aliceSession->publishNow();
+    ward.settle();
+
+    DocumentManager manager(bob.identity, bob.open(ward.documentId), nullptr);
+    QSignalSpy raised(&manager, &DocumentManager::conflictRaised);
+    QSignalSpy settled(&manager, &DocumentManager::conflictSettled);
+    ward.settle();
+
+    QCOMPARE(raised.count(), 1);
+    QVERIFY(manager.pendingConflict().has_value());
+    QCOMPARE(manager.pendingConflict()->writerName, QString("Alice"));
+
+    // Without a library there is nowhere to save a copy; the conflict still waits.
+    QString error;
+    QVERIFY(!manager.saveRecoveryCopy(nullptr, &error));
+    QVERIFY(!error.isEmpty());
+    QVERIFY(manager.pendingConflict().has_value());
+    QCOMPARE(settled.count(), 0);
+
+    QVERIFY(manager.resolveConflict(DocumentSession::Resolution::KeepTheirs, &error));
+    QVERIFY(!manager.pendingConflict().has_value());
+    QCOMPARE(settled.count(), 1);
+    QVERIFY(latitudeOf(manager.document(), ward.adams) == 60.0);
+}

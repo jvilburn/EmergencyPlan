@@ -1066,7 +1066,7 @@ void DocumentSessionTest::keepMineAfterTheyGrantedKeepsMyDirectoryAndTheirPerson
     QCOMPARE(recorder.conflicts.size(), qsizetype(1));
     const qint64 theirs = serverVersion(ward, alice);
 
-    bobSession->resolve(DocumentSession::Resolution::KeepMine);
+    QVERIFY(bobSession->resolve(DocumentSession::Resolution::KeepMine, nullptr));
     ward.settle();
 
     const ServerVersion::Fetched copy = ward.serverCopy(alice).value();
@@ -1101,7 +1101,7 @@ void DocumentSessionTest::keepMineNeverRestoresAMemberTheyRemoved()
     ward.settle();
     QCOMPARE(recorder.conflicts.size(), qsizetype(1));
 
-    bobSession->resolve(DocumentSession::Resolution::KeepMine);
+    QVERIFY(bobSession->resolve(DocumentSession::Resolution::KeepMine, nullptr));
     ward.settle();
 
     const ServerVersion::Fetched copy = ward.serverCopy(alice).value();
@@ -1140,7 +1140,7 @@ void DocumentSessionTest::keepTheirsHoldsTheirDirectoryAndTheMergedResponse()
     ward.settle();
     QCOMPARE(recorder.conflicts.size(), qsizetype(1));
 
-    bobSession->resolve(DocumentSession::Resolution::KeepTheirs);
+    QVERIFY(bobSession->resolve(DocumentSession::Resolution::KeepTheirs, nullptr));
     ward.settle();
 
     QVERIFY(latitudeOf(bobSession->document(), ward.adams) == 60.0);

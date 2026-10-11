@@ -105,11 +105,22 @@ public:
     /// Shows a copy read-only in place of the open ward, which is closed.
     bool showCopy(const DocumentLibrary::Copy& copy, QString* errorMessage);
 
-    /// Settles a conflict the session raised. Keeping theirs first writes this
-    /// session's document as a recovery copy in the person's Documents folder when
-    /// recoveryPath is given; false, with the reason, when that copy cannot be
-    /// written, and nothing is resolved.
-    bool resolveConflict(DocumentSession::Resolution resolution, QString* recoveryPath, QString* errorMessage);
+    /// The open ward's conflict waiting for a choice, if any.
+    std::optional<DocumentSession::Conflict> pendingConflict() const;
+
+    /// Writes the open ward's document, which keeping theirs would discard, as a
+    /// recovery copy in the person's Documents folder, and gives its path.
+    bool saveRecoveryCopy(QString* path, QString* errorMessage);
+
+    /// Settles the open ward's pending conflict. False, with the reason, when it
+    /// could not be written; the conflict then waits to be asked about again.
+    bool resolveConflict(DocumentSession::Resolution resolution, QString* errorMessage);
+
+    /// The ward's name as the library lists it; empty for one not there.
+    QString wardNameOf(const QString& documentId) const;
+
+    /// A shared ward is being fetched to open.
+    bool isFetching() const { return !m_fetching.isEmpty(); }
 
     /// Saves now and publishes. A local failure is the one reported.
     bool publishNow(QString* errorMessage);
@@ -144,6 +155,12 @@ signals:
     void readOnlyChanged();
     void syncStateChanged(SyncState state);
     void conflictRaised(const DocumentSession::Conflict& conflict);
+
+    /// The pending conflict was settled.
+    void conflictSettled();
+
+    /// The server holds a version this build cannot read, or no longer does.
+    void requiresUpdateChanged();
 
     /// This device is off a ward, which has left the library.
     void accessRemoved(const QString& wardName, const QString& byWhom, bool left);
@@ -195,7 +212,6 @@ private:
 
     /// The ward's files, copies, record, and entry go, and the person is told.
     void forgetRemovedWard(const QString& documentId, const QString& byWhom, bool left);
-    QString wardNameOf(const QString& documentId) const;
 
     void fetch(const QString& documentId);
     void onFetched(const QString& documentId, DocumentSession::Download outcome);

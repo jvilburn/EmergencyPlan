@@ -13,7 +13,6 @@
 #include <QStringList>
 
 #include <functional>
-#include <memory>
 #include <optional>
 
 class ServerConnection;
@@ -114,34 +113,37 @@ public:
     /// this device can open. A ward's own file is not a copy.
     std::optional<Copy> openCopy(const QString& sourcePath, QString* errorMessage) const;
 
-    using Restored = std::function<void(const QStringList& documentIds)>;
-    using Fetched = std::function<void(DocumentSession::Download outcome)>;
+    /// How fetching one ward went.
+    using WardFetched = std::function<void(const QString& documentId, DocumentSession::Download outcome)>;
 
-    /// Adds every ward the server lists for this device that the library lacks,
-    /// and fetches each: after a reinstall, cleared app data, or a grant. done gets
-    /// the wards that arrived; one that could not be fetched leaves the library
-    /// again, so the next restore tries it afresh. Replies come only while receiver
-    /// lives.
-    void restore(ServerConnection& server, QObject* receiver, const Restored& done);
+    /// Fetches every ward the server lists for this device that the library lacks:
+    /// after a reinstall, cleared app data, or a grant. Each reports through
+    /// fetched as it ends. Only a ward that arrives is added, so one that does not
+    /// is tried afresh by the next restore. A listed id that is not a document id
+    /// is passed over. Replies come only while receiver lives.
+    void restore(ServerConnection& server, QObject* receiver, const WardFetched& fetched);
 
-    /// Fetches one shared ward from the server, adding it to the library when it is
-    /// not there, and names its entry from what arrived.
-    void fetchWard(const QString& documentId, ServerConnection& server, QObject* receiver, const Fetched& done);
+    /// Fetches one shared ward from the server. On arrival it is added to the
+    /// library, if it was not there, and its entry named from what arrived. A ward
+    /// proven removed keeps its entry, so the caller can name it and delete its
+    /// copies through forgetRemoved.
+    void fetchWard(const QString& documentId, ServerConnection& server, QObject* receiver, const WardFetched& fetched);
 
 private:
-    struct Restore;
+    /// Where a ward's files are, whether or not it is in the library yet.
+    DocumentPaths pathsIn(const QString& documentId) const;
 
     void onListed(ServerConnection& server,
                   QObject* receiver,
-                  const std::shared_ptr<Restore>& restore,
+                  const WardFetched& fetched,
                   const ServerContract::Result<QStringList>& listed);
-    void onRestored(const std::shared_ptr<Restore>& restore,
-                    const QString& documentId,
-                    DocumentSession::Download outcome);
-    void onWardFetched(const QString& documentId, const Fetched& done, DocumentSession::Download outcome);
+    void onWardFetched(const QString& documentId,
+                       const WardFetched& fetched,
+                       DocumentSession::Download outcome,
+                       const std::optional<Document>& document);
 
-    /// Names the entry from the ward's own file, so the list shows what arrived.
-    void noteFromFile(const QString& documentId);
+    /// A name in directory that no file has yet: the base name, then "(2)", "(3)"...
+    static QString unusedPath(const QString& directory, const QString& baseName);
 
     AppSettings& m_settings;
     QString m_directory;

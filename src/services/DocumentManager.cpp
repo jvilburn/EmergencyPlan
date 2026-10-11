@@ -343,7 +343,7 @@ DocumentManager::Open DocumentManager::open(const QString& documentId, QString* 
 void DocumentManager::fetch(const QString& documentId)
 {
     m_fetching = documentId;
-    m_library->fetchWard(documentId, *m_server, this, std::bind(&DocumentManager::onFetched, this, documentId, _1));
+    m_library->fetchWard(documentId, *m_server, this, std::bind(&DocumentManager::onFetched, this, _1, _2));
 }
 
 void DocumentManager::onFetched(const QString& documentId, DocumentSession::Download outcome)
@@ -371,6 +371,7 @@ void DocumentManager::onFetched(const QString& documentId, DocumentSession::Down
     case DocumentSession::Download::Unreachable:
     case DocumentSession::Download::NeedsNewerVersion:
     case DocumentSession::Download::ServerFault:
+    case DocumentSession::Download::WriteFailed:
         emit fetchFailed(documentId, outcome);
         return;
     }
@@ -391,26 +392,43 @@ bool DocumentManager::showCopy(const DocumentLibrary::Copy& copy, QString* error
     return true;
 }
 
-bool DocumentManager::resolveConflict(DocumentSession::Resolution resolution,
-                                      QString* recoveryPath,
-                                      QString* errorMessage)
+std::optional<DocumentSession::Conflict> DocumentManager::pendingConflict() const
+{
+    return m_session ? m_session->pendingConflict() : std::nullopt;
+}
+
+bool DocumentManager::saveRecoveryCopy(QString* path, QString* errorMessage)
+{
+    if (!m_session || m_library == nullptr)
+    {
+        if (errorMessage != nullptr)
+        {
+            *errorMessage = tr("No ward is open.");
+        }
+        return false;
+    }
+    return m_library->writeRecoveryCopy(m_session->documentId(),
+                                        m_session->document(),
+                                        QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
+                                        path,
+                                        errorMessage);
+}
+
+bool DocumentManager::resolveConflict(DocumentSession::Resolution resolution, QString* errorMessage)
 {
     if (!m_session)
     {
+        if (errorMessage != nullptr)
+        {
+            *errorMessage = tr("No ward is open.");
+        }
         return false;
     }
-
-    if (recoveryPath != nullptr
-        && !m_library->writeRecoveryCopy(m_session->documentId(),
-                                         m_session->document(),
-                                         QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
-                                         recoveryPath,
-                                         errorMessage))
+    if (!m_session->resolve(resolution, errorMessage))
     {
         return false;
     }
-
-    m_session->resolve(resolution);
+    emit conflictSettled();
     return true;
 }
 
@@ -481,6 +499,7 @@ void DocumentManager::install(std::unique_ptr<DocumentSession> session)
     connect(opened, &DocumentSession::readOnlyChanged, this, &DocumentManager::onReadOnlyChanged);
     connect(opened, &DocumentSession::syncStateChanged, this, &DocumentManager::syncStateChanged);
     connect(opened, &DocumentSession::conflictRaised, this, &DocumentManager::conflictRaised);
+    connect(opened, &DocumentSession::requiresUpdateChanged, this, &DocumentManager::requiresUpdateChanged);
     connect(opened, &DocumentSession::saveFailed, this, &DocumentManager::saveFailed);
     connect(opened, &DocumentSession::removed, this, &DocumentManager::onSessionRemoved);
     if (m_queue != nullptr)

@@ -2937,19 +2937,28 @@ Commit as `feat: run the app on the sync-and-save core`.
 ### Task 15: Restore the ward list and missing files
 
 > **Done**, with these differences from the text below:
-> - `DocumentLibrary::restore` runs at every startup, not only on an empty list: it adds
->   whatever ward the server lists for this device that the library lacks, which also
->   brings in a ward granted while the app was closed. A ward that cannot be fetched
->   leaves the library again, so the next startup tries it afresh. When no ward is open,
->   the first that arrives opens.
-> - `DocumentLibrary::fetchWard` fetches one ward and names its entry from what arrived;
->   `DocumentManager` opens a shared ward with no usable file through it, so restore,
->   open, and Task 21's grant share one path.
+> - `DocumentLibrary::restore` runs at every startup, not only on an empty list: it
+>   fetches whatever ward the server lists for this device that the library lacks, which
+>   also brings in a ward granted while the app was closed, and reports each as it ends.
+>   Only a listed id that is a document id is taken, since ids name files. When nothing
+>   is open or being fetched, the first ward that arrives opens.
+> - `DocumentLibrary::fetchWard` fetches one ward and adds it to the library only when it
+>   arrives, named from the document the download returns, so a fetch that fails or is
+>   cut short leaves nothing behind and the next restore tries it afresh. A ward proven
+>   removed keeps its entry for `forgetRemoved`. `DocumentManager` opens a shared ward
+>   with no usable file through it, so restore, open, and Task 21's grant share one
+>   path.
+> - `DocumentSession::download` reports the document it wrote, and `WriteFailed` when it
+>   validated but could not be written on this device.
+> - Not covered by tests: opening a ward through `DocumentManager::openDocument` that is
+>   then fetched.
 > - `Entry::onDevice` lets the Open Ward dialog list a shared ward whose file is gone as
 >   not yet on this device, with **Fetch Tanglewood Ward from the Server** as its button.
 
-**Files:** `src/services/DocumentLibrary.cpp`, `src/widgets/OpenWardDialog.cpp`,
-`tests/services/DocumentLibraryTest.cpp`
+**Files:** `src/services/DocumentLibrary.h/.cpp`, `src/services/DocumentManager.h/.cpp`,
+`src/services/DocumentSession.h/.cpp`, `src/services/HttpWire.cpp`,
+`src/widgets/OpenWardDialog.h/.cpp`, `src/widgets/MainWindow.h/.cpp`, `src/main.cpp`,
+`tests/services/DocumentLibraryTest.h/.cpp`
 
 When the local ward list is empty, or application data was cleared, fetch
 `/me/documents` through `ServerConnection::myDocuments` and add each document this device
@@ -2968,9 +2977,11 @@ Commit as `feat: restore the ward list from the server`.
 
 ### Task 16: The sync indicator
 
-> **Done.** `SyncStatusWidget` follows `DocumentManager`'s `documentOpened`,
-> `syncStateChanged`, and `readOnlyChanged`; the explanation of each state is its tooltip,
-> with the fault's reason for *Could not check the server's copy*.
+> **Done.** `SyncStatusWidget` follows the open ward through `DocumentManager`; the
+> explanation of each state is its tooltip. Beyond the states below it shows *Two versions
+> are waiting for your choice* while a conflict is pending and *A newer version of Ward
+> Planning is needed to sync this ward* while `requiresUpdate()` holds, since neither
+> uploads. The lease message sits beside the sync state rather than replacing it.
 
 **Files:** `src/widgets/SyncStatusWidget.h/.cpp`, `src/widgets/MainWindow.cpp`
 
@@ -2992,10 +3003,15 @@ Commit as `feat: sync status indicator`.
 
 > **Done**, with these differences from the text below:
 > - `DocumentLibrary::writeRecoveryCopy` names and writes the copy through `exportCopy`, in
->   a folder it is given; `DocumentManager::resolveConflict` passes Documents and resolves
->   only once the copy is written, so a copy that cannot be written leaves the conflict
->   to be asked again.
-> - Closing the dialog is the default choice, which destroys nothing.
+>   a folder it is given, and never over an existing file: a second copy in the same
+>   minute is numbered.
+> - `DocumentSession::resolve` answers whether the ward was written, and
+>   `pendingConflict()` gives the conflict still waiting. The dialog opens once the
+>   session's call has returned, reads the conflict afresh, and asks again with the
+>   reason whenever a choice could not be carried out.
+> - Each option says what it costs. **Decide Later** sets the choice aside: nothing
+>   changes, nothing uploads, the indicator says so, and **File > Choose Between Two
+>   Versions...** asks again.
 
 **Files:** `src/widgets/ConflictDialog.h/.cpp`, `src/widgets/MainWindow.cpp`,
 `src/services/DocumentLibrary.cpp`, `tests/services/DocumentLibraryTest.cpp`

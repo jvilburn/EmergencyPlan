@@ -3,6 +3,7 @@
 #include "DocumentConstants.h"
 #include "DocumentCrypto.h"
 #include "DocumentFile.h"
+#include "HexCodec.h"
 #include "ServerConnection.h"
 #include "ServerVersion.h"
 
@@ -68,14 +69,7 @@ QList<DocumentLibrary::Entry> DocumentLibrary::entries() const
 
 DocumentPaths DocumentLibrary::pathsFor(const QString& documentId) const
 {
-    if (!contains(documentId))
-    {
-        return DocumentPaths();
-    }
-
-    const QDir directory(m_directory);
-    return DocumentPaths{directory.filePath(documentId + DocumentConstants::FileExtension),
-                         directory.filePath(documentId + ".base")};
+    return contains(documentId) ? pathsIn(documentId) : DocumentPaths();
 }
 
 QString DocumentLibrary::newDocumentId()
@@ -230,14 +224,24 @@ bool DocumentLibrary::writeRecoveryCopy(const QString& documentId,
                                         QString* path,
                                         QString* errorMessage)
 {
-    // A name the file system takes on any platform.
+    // A name the file system takes on any platform: no reserved or control
+    // characters, and no trailing dot or space, which Windows drops.
     QString wardName = m_settings.ward(documentId).value_or(AppSettings::WardEntry()).wardName.value_or(
         QObject::tr("Untitled"));
-    wardName.replace(QRegularExpression("[\\\\/:*?\"<>|]"), "-");
+    wardName.replace(QRegularExpression("[\\\\/:*?\"<>|\\x00-\\x1f]"), "-");
+    while (wardName.endsWith('.') || wardName.endsWith(' '))
+    {
+        wardName.chop(1);
+    }
+    if (wardName.isEmpty())
+    {
+        wardName = QObject::tr("Untitled");
+    }
 
+    // Never over an earlier copy or anyone's file: a copy that replaced one would
+    // destroy what it exists to keep.
     const QString stamp = QDateTime::currentDateTime().toString("yyyy-MM-dd HHmm");
-    const QString target = QDir(directory).filePath(
-        QObject::tr("%1 (unsaved changes %2)").arg(wardName, stamp) + DocumentConstants::FileExtension);
+    const QString target = unusedPath(directory, QObject::tr("%1 (unsaved changes %2)").arg(wardName, stamp));
     if (!QDir().mkpath(directory) || !exportCopy(documentId, document, target, errorMessage))
     {
         if (errorMessage != nullptr && errorMessage->isEmpty())
@@ -312,120 +316,72 @@ std::optional<DocumentLibrary::Copy> DocumentLibrary::openCopy(const QString& so
 
 // --- From the server -------------------------------------------------------------
 
-/// One restore in flight: the wards still being fetched, and those that arrived.
-struct DocumentLibrary::Restore
+void DocumentLibrary::restore(ServerConnection& server, QObject* receiver, const WardFetched& fetched)
 {
-    QStringList pending;
-    QStringList arrived;
-    Restored done;
-};
-
-void DocumentLibrary::restore(ServerConnection& server, QObject* receiver, const Restored& done)
-{
-    std::shared_ptr<Restore> restore = std::make_shared<Restore>();
-    restore->done = done;
-    server.myDocuments(receiver, std::bind(&DocumentLibrary::onListed, this, std::ref(server), receiver, restore, _1));
+    server.myDocuments(receiver, std::bind(&DocumentLibrary::onListed, this, std::ref(server), receiver, fetched, _1));
 }
 
 void DocumentLibrary::onListed(ServerConnection& server,
                                QObject* receiver,
-                               const std::shared_ptr<Restore>& restore,
+                               const WardFetched& fetched,
                                const ServerContract::Result<QStringList>& listed)
 {
-    if (listed.ok())
+    if (!listed.ok())
     {
-        for (const QString& documentId : listed.value.value())
-        {
-            if (!contains(documentId))
-            {
-                restore->pending.append(documentId);
-            }
-        }
-    }
-
-    if (restore->pending.isEmpty())
-    {
-        restore->done(QStringList());
         return;
     }
 
-    const QStringList toFetch = restore->pending;
-    for (const QString& documentId : toFetch)
+    // Ids name files here, so only a real document id is taken from the server.
+    QStringList documentIds = listed.value.value();
+    documentIds.removeDuplicates();
+    for (const QString& documentId : documentIds)
     {
-        fetchWard(documentId, server, receiver, std::bind(&DocumentLibrary::onRestored, this, restore, documentId, _1));
-    }
-}
-
-void DocumentLibrary::onRestored(const std::shared_ptr<Restore>& restore,
-                                 const QString& documentId,
-                                 DocumentSession::Download outcome)
-{
-    restore->pending.removeOne(documentId);
-    if (outcome == DocumentSession::Download::Done)
-    {
-        restore->arrived.append(documentId);
-    }
-    else
-    {
-        // Not listed until it arrives, so the next restore tries it afresh.
-        forget(documentId);
-    }
-
-    if (restore->pending.isEmpty())
-    {
-        restore->done(restore->arrived);
+        if (HexCodec::isCanonical(documentId, DocumentHeader::DocumentIdLength) && !contains(documentId))
+        {
+            fetchWard(documentId, server, receiver, fetched);
+        }
     }
 }
 
 void DocumentLibrary::fetchWard(const QString& documentId,
                                 ServerConnection& server,
                                 QObject* receiver,
-                                const Fetched& done)
+                                const WardFetched& fetched)
 {
-    add(documentId);
     DocumentSession::download(DocumentSession::Context{m_identity, m_settings, server},
                               documentId,
-                              pathsFor(documentId),
+                              pathsIn(documentId),
                               receiver,
-                              std::bind(&DocumentLibrary::onWardFetched, this, documentId, done, _1));
+                              std::bind(&DocumentLibrary::onWardFetched, this, documentId, fetched, _1, _2));
 }
 
-void DocumentLibrary::onWardFetched(const QString& documentId, const Fetched& done, DocumentSession::Download outcome)
+void DocumentLibrary::onWardFetched(const QString& documentId,
+                                    const WardFetched& fetched,
+                                    DocumentSession::Download outcome,
+                                    const std::optional<Document>& document)
 {
-    switch (outcome)
+    if (outcome == DocumentSession::Download::Done)
     {
-    case DocumentSession::Download::Done:
-        noteFromFile(documentId);
-        break;
-    case DocumentSession::Download::Removed:
-        // The download has already deleted its files and record.
-        m_settings.removeWard(documentId);
-        break;
-    case DocumentSession::Download::Unreachable:
-    case DocumentSession::Download::NeedsNewerVersion:
-    case DocumentSession::Download::ServerFault:
-        break;
+        add(documentId);
+        noteDocument(documentId, document.value());
     }
-    done(outcome);
+    fetched(documentId, outcome);
 }
 
-void DocumentLibrary::noteFromFile(const QString& documentId)
+DocumentPaths DocumentLibrary::pathsIn(const QString& documentId) const
 {
-    const std::optional<QByteArray> bytes = DocumentFile::readAll(pathsFor(documentId).file);
-    DocumentFile::Sealed sealed;
-    if (!bytes.has_value() || DocumentFile::decode(bytes.value(), sealed) != DocumentFile::Read::Ok)
-    {
-        return;
-    }
+    const QDir directory(m_directory);
+    return DocumentPaths{directory.filePath(documentId + DocumentConstants::FileExtension),
+                         directory.filePath(documentId + ".base")};
+}
 
-    const Reconcile::DownloadCheck check = Reconcile::validateDownload(documentId,
-                                                                       std::nullopt,
-                                                                       {sealed.header},
-                                                                       sealed.ciphertext,
-                                                                       m_identity.self(),
-                                                                       m_settings.record(documentId).highWaterMark);
-    if (check.verdict == Reconcile::Verdict::Accept)
+QString DocumentLibrary::unusedPath(const QString& directory, const QString& baseName)
+{
+    const QDir folder(directory);
+    QString candidate = folder.filePath(baseName + DocumentConstants::FileExtension);
+    for (int count = 2; QFileInfo::exists(candidate); ++count)
     {
-        noteDocument(documentId, check.document.value());
+        candidate = folder.filePath(QString("%1 (%2)").arg(baseName).arg(count) + DocumentConstants::FileExtension);
     }
+    return candidate;
 }

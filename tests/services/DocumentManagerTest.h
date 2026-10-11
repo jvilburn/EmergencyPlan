@@ -16,4 +16,5 @@ private slots:
     void aContactChangeAfterAMergeKeepsTheOtherSidesRecords();
     void batchGeocodingDoesNotStartWithoutTheLease();
     void aGeocodingResultAfterTheLeaseIsLostChangesNothing();
+    void aConflictWaitsUntilItIsSettled();
 };

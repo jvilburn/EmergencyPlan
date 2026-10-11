@@ -280,7 +280,10 @@ void HttpServerApiTest::answersAreReadFromTheWireFormat()
     QCOMPARE(HttpWire::readRequestStatus(jsonOf(R"({"status": "granted"})")).value(), RequestStatus::Granted);
     QCOMPARE(HttpWire::readRequestStatus(jsonOf(R"({"status": "withdrawn"})")).value(), RequestStatus::Withdrawn);
 
-    QCOMPARE(HttpWire::readDocumentIds(jsonOf(R"({"documents": ["a1", "b2"]})")).value(), (QStringList{"a1", "b2"}));
+    const QString first = ChainTestSupport::newDocumentId();
+    const QString second = ChainTestSupport::newDocumentId();
+    QCOMPARE(HttpWire::readDocumentIds(QJsonObject{{"documents", QJsonArray{first, second}}}).value(),
+             (QStringList{first, second}));
     QCOMPARE(HttpWire::readPairingCode(jsonOf(R"({"code": "K7Q2M9"})")).value(), QString("K7Q2M9"));
 
     // A pairing as first posted, and once every step is written.
@@ -344,6 +347,10 @@ void HttpServerApiTest::illFormedAnswersAreRefused_data()
                       R"( "verifyKey": "BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ="}]})");
     QTest::newRow("unknown status") << "status" << QByteArray(R"({"status": "maybe"})");
     QTest::newRow("empty document id") << "documents" << QByteArray(R"({"documents": [""]})");
+    QTest::newRow("document id that is a path") << "documents" << QByteArray(R"({"documents": ["../../x"]})");
+    QTest::newRow("document id too short") << "documents" << QByteArray(R"({"documents": ["a1"]})");
+    QTest::newRow("document id in capitals")
+        << "documents" << QByteArray(R"({"documents": ["0123456789ABCDEF0123456789ABCDEF"]})");
     QTest::newRow("pairing with no expiry")
         << "pairing" << QByteArray(R"({"code": "K7Q2M9", "initiatorDeviceName": "Phone", "commitment": "BQU="})");
     QTest::newRow("pairing expiry without milliseconds")

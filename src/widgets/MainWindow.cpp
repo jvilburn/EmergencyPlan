@@ -257,6 +257,9 @@ void MainWindow::setupMenus()
     fileMenu->addSeparator();
 
     // Only before this device holds any ward: a device set up as the wrong person.
+    // A conflict set aside by closing its dialog waits here.
+    m_resolveConflictAction = fileMenu->addAction(tr("Choose Between Two Versions..."), this, &MainWindow::askAboutConflict);
+
     m_startOverAction = fileMenu->addAction(tr("Set Up This Device Again..."), this, &MainWindow::onStartOver);
     connect(fileMenu, &QMenu::aboutToShow, this, &MainWindow::updateFileActions);
 
@@ -304,7 +307,7 @@ void MainWindow::setupConnections()
     connect(DocumentManager::instance(), &DocumentManager::fetchFailed,
             this, &MainWindow::onFetchFailed);
     connect(DocumentManager::instance(), &DocumentManager::conflictRaised,
-            this, &MainWindow::onConflictRaised);
+            this, &MainWindow::askAboutConflict, Qt::QueuedConnection);
     connect(DocumentManager::instance(), &DocumentManager::canUndoChanged,
             this, &MainWindow::updateUndoRedoActions);
     connect(DocumentManager::instance(), &DocumentManager::canRedoChanged,
@@ -375,17 +378,34 @@ void MainWindow::openWard(const QString& documentId)
     reportOpen(DocumentManager::instance()->openDocument(documentId, &reason), reason);
 }
 
-void MainWindow::onWardsRestored(const QStringList& documentIds)
+void MainWindow::onWardRestored(const QString& documentId, DocumentSession::Download outcome)
 {
-    if (documentIds.isEmpty())
+    switch (outcome)
     {
-        return;
-    }
+    case DocumentSession::Download::Done:
+    {
+        const QString name = DocumentManager::instance()->wardNameOf(documentId);
+        statusBar()->showMessage(tr("%1 restored from the server").arg(name), 5000);
 
-    statusBar()->showMessage(tr("%n ward(s) restored from the server", "", int(documentIds.size())), 5000);
-    if (DocumentManager::instance()->documentId().isEmpty() && !DocumentManager::instance()->copy().has_value())
-    {
-        openWard(documentIds.first());
+        // The first to arrive opens, unless something is open or on its way.
+        const DocumentManager* manager = DocumentManager::instance();
+        if (manager->documentId().isEmpty() && !manager->copy().has_value() && !manager->isFetching())
+        {
+            openWard(documentId);
+        }
+        break;
+    }
+    case DocumentSession::Download::NeedsNewerVersion:
+        statusBar()->showMessage(tr("A ward shared with you needs a newer version of Ward Planning."), 10000);
+        break;
+    case DocumentSession::Download::WriteFailed:
+        statusBar()->showMessage(tr("A ward shared with you could not be saved on this device."), 10000);
+        break;
+    case DocumentSession::Download::Unreachable:
+    case DocumentSession::Download::Removed:
+    case DocumentSession::Download::ServerFault:
+        // Tried afresh at the next start.
+        break;
     }
 }
 
@@ -773,6 +793,11 @@ void MainWindow::onFetchFailed(const QString& documentId, DocumentSession::Downl
     case DocumentSession::Download::NeedsNewerVersion:
         QMessageBox::warning(this, tr("Open Ward"), tr("This ward was saved by a newer version of Ward Planning."));
         break;
+    case DocumentSession::Download::WriteFailed:
+        QMessageBox::warning(this,
+                             tr("Open Ward"),
+                             tr("This ward arrived from the server but could not be saved on this device."));
+        break;
     case DocumentSession::Download::Done:
     case DocumentSession::Download::Removed:
     case DocumentSession::Download::ServerFault:
@@ -785,6 +810,7 @@ void MainWindow::onFetchFailed(const QString& documentId, DocumentSession::Downl
 
 void MainWindow::updateFileActions()
 {
+    m_resolveConflictAction->setEnabled(DocumentManager::instance()->pendingConflict().has_value());
     m_startOverAction->setEnabled(m_library.entries().isEmpty());
 }
 
@@ -793,37 +819,58 @@ void MainWindow::onEditRefused(const QString& message)
     statusBar()->showMessage(message, 8000);
 }
 
-void MainWindow::onConflictRaised(const DocumentSession::Conflict& conflict)
+void MainWindow::askAboutConflict()
 {
-    ConflictDialog dialog(conflict, this);
-    dialog.exec();
-
-    QString recoveryPath;
+    // Asked again with the reason until it is settled or set aside; a conflict whose
+    // ward has closed since it was raised is gone, and nothing is asked.
     QString error;
-    switch (dialog.choice())
+    for (;;)
+    {
+        const std::optional<DocumentSession::Conflict> conflict = DocumentManager::instance()->pendingConflict();
+        if (!conflict.has_value())
+        {
+            return;
+        }
+
+        ConflictDialog dialog(conflict.value(), error, this);
+        if (dialog.exec() != QDialog::Accepted)
+        {
+            return;
+        }
+
+        error.clear();
+        if (settleConflict(dialog.choice(), &error))
+        {
+            return;
+        }
+    }
+}
+
+bool MainWindow::settleConflict(ConflictDialog::Choice choice, QString* errorMessage)
+{
+    switch (choice)
     {
     case ConflictDialog::Choice::SaveMineAsCopy:
-        if (!DocumentManager::instance()->resolveConflict(DocumentSession::Resolution::KeepTheirs, &recoveryPath, &error))
+    {
+        QString recoveryPath;
+        if (!DocumentManager::instance()->saveRecoveryCopy(&recoveryPath, errorMessage)
+            || !DocumentManager::instance()->resolveConflict(DocumentSession::Resolution::KeepTheirs, errorMessage))
         {
-            QMessageBox::warning(this,
-                                 tr("Changes Not Saved"),
-                                 tr("Your version could not be saved as a copy, so nothing was changed: %1\n\n"
-                                    "You will be asked again.").arg(error));
-            return;
+            return false;
         }
         QMessageBox::information(this,
                                  tr("Your Version Was Saved"),
                                  tr("Your version is saved as a copy at:\n%1\n\nUse File > Open a Copy to "
                                     "look at it; anything you want from it has to be entered again by hand.")
                                      .arg(recoveryPath));
-        break;
-    case ConflictDialog::Choice::KeepTheirs:
-        DocumentManager::instance()->resolveConflict(DocumentSession::Resolution::KeepTheirs, nullptr, &error);
-        break;
-    case ConflictDialog::Choice::KeepMine:
-        DocumentManager::instance()->resolveConflict(DocumentSession::Resolution::KeepMine, nullptr, &error);
-        break;
+        return true;
     }
+    case ConflictDialog::Choice::KeepTheirs:
+        return DocumentManager::instance()->resolveConflict(DocumentSession::Resolution::KeepTheirs, errorMessage);
+    case ConflictDialog::Choice::KeepMine:
+        return DocumentManager::instance()->resolveConflict(DocumentSession::Resolution::KeepMine, errorMessage);
+    }
+    return false;
 }
 
 void MainWindow::onStartOver()

@@ -88,7 +88,8 @@ public:
         Unreachable,
         NeedsNewerVersion,
         Removed,
-        ServerFault
+        ServerFault,
+        WriteFailed         ///< it validated, but could not be written on this device
     };
 
     struct Context
@@ -130,6 +131,9 @@ public:
                                                  LoadFailure& failure,
                                                  QString* refusal);
 
+    /// What a download reports: how it went, and on Done the document it wrote.
+    using Downloaded = std::function<void(Download outcome, const std::optional<Document>& document)>;
+
     /// Fetches a shared ward whose local file is missing or refused, writes it and
     /// its base once it validates, and reports; the caller then opens it. done is
     /// called only while receiver is alive.
@@ -137,7 +141,7 @@ public:
                          const QString& documentId,
                          const DocumentPaths& paths,
                          QObject* receiver,
-                         std::function<void(Download)> done);
+                         Downloaded done);
 
     const Document& document() const { return m_document; }
     const DocumentHeader& header() const { return m_header; }
@@ -176,7 +180,13 @@ public:
     /// them from its pending Link changes.
     void share(const QList<RosterDevice>& linkedDevices);
 
-    void resolve(Resolution resolution);
+    /// The conflict waiting for a choice, if any. Head checks and publishing wait
+    /// with it, so it can be asked about again until it is settled.
+    std::optional<Conflict> pendingConflict() const;
+
+    /// Settles the pending conflict. False, with the reason, when the ward could not
+    /// be written; a conflict whose local file was not written is still pending.
+    bool resolve(Resolution resolution, QString* errorMessage);
 
     /// This device is proven off the ward: the files and record go, and the
     /// session does nothing further. The session reaches it itself, and the
@@ -257,7 +267,7 @@ private:
     void fastForward(const ServerVersion::Fetched& theirs);
     void mergeWith(const ServerVersion::Fetched& theirs, const Document& merged);
     void raiseConflict(const ServerVersion::Fetched& theirs);
-    bool moveBase(const ServerVersion::Fetched& theirs);
+    bool moveBase(const ServerVersion::Fetched& theirs, QString* errorMessage);
     QString nameOf(const Fingerprint& device) const;
 
     // --- The lease ---
