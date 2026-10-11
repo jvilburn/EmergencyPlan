@@ -1,6 +1,5 @@
 #include "DocumentFile.h"
 
-#include "AccessControl.h"
 #include "DocumentCrypto.h"
 
 #include <QFile>
@@ -52,32 +51,34 @@ Read decode(const QByteArray& bytes, Sealed& out)
     return Read::Ok;
 }
 
-std::optional<Sealed> seal(const Document& document,
-                           const DocumentHeader& previous,
-                           const DataKey& dataKey,
-                           const DeviceIdentity& writer)
+std::optional<Sealed> seal(const Document& document, const DocumentHeader& previous, const DataKey& dataKey)
 {
     if (previous.saveCounter >= DocumentHeader::MaxSaveCounter)
     {
         return std::nullopt;
     }
 
-    // Rebuilt from the roster on every seal rather than carried forward, so a
+    DocumentHeader header;
+    header.documentId = previous.documentId;
+    header.originDocumentId = previous.originDocumentId;
+    header.saveCounter = previous.saveCounter + 1;
+
+    // Rebuilt from the sealing set on every seal rather than carried forward, so a
     // mis-sealed entry cannot lock its owner out of every later version.
-    const std::optional<DocumentHeader> resealed = AccessControl::resealAll(previous, document.accessRoster(), dataKey);
-    if (!resealed.has_value())
+    for (const DeviceKeys& device : document.sealingSet().devices())
+    {
+        const QByteArray sealedKey = DocumentCrypto::sealDataKey(dataKey, device.publicKey);
+        if (sealedKey.isEmpty())
+        {
+            return std::nullopt;
+        }
+        header.recipients.append(
+            RecipientEntry{DocumentCrypto::fingerprintOf(device.publicKey, device.verifyKey), sealedKey});
+    }
+    if (header.recipients.isEmpty())
     {
         return std::nullopt;
     }
-
-    DocumentHeader header = resealed.value();
-    header.saveCounter = previous.saveCounter + 1;
-    header.lastWriter = writer.fingerprint();
-    header.writerPublicKey = writer.sealing.publicKey;
-    header.writerVerifyKey = writer.signing.verifyKey;
-    header.lastWriteTime = QDateTime::currentDateTimeUtc();
-    header.payloadHash.clear();
-    header.writerSignature.clear();
 
     // Fresh on every seal, never derived from the counter or carried over.
     header.nonce = DocumentCrypto::generateNonce();
@@ -89,8 +90,6 @@ std::optional<Sealed> seal(const Document& document,
         return std::nullopt;
     }
 
-    header.payloadHash = DocumentCrypto::payloadHash(ciphertext);
-    header.writerSignature = DocumentCrypto::signHeader(header, writer.signing.signingKey);
     return Sealed{header, ciphertext};
 }
 

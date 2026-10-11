@@ -10,12 +10,7 @@ Reconcile::Self DeviceIdentity::self() const
     return Reconcile::Self{sealing, signing.verifyKey};
 }
 
-RosterDevice DeviceIdentity::asRosterDevice() const
+ServerContract::Registration DeviceIdentity::registration() const
 {
-    return RosterDevice::create(deviceName, sealing.publicKey, signing.verifyKey);
-}
-
-RosterPerson DeviceIdentity::asNewPerson() const
-{
-    return RosterPerson::create(member, displayName, asRosterDevice(), RosterPerson::Role::Admin);
+    return ServerContract::Registration{member, displayName, deviceName, sealing.publicKey};
 }

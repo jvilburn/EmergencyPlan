@@ -18,19 +18,17 @@
 ///
 /// A client written against a permissive fake will not work against a strict
 /// server, so nothing here is relaxed for convenience. The payload is opaque to
-/// the fake exactly as it is to the real server: an upload's blob is stored and
-/// hashed, never read. If a test ever needs the fake to look inside it, the
-/// design has been violated somewhere.
+/// the fake exactly as it is to the real server: an upload's blob is stored, never
+/// read. If a test ever needs the fake to look inside it, the design has been
+/// violated somewhere.
 ///
 /// Every call is decided when it is made and answered later: its reply waits in a
 /// queue and is delivered on a later turn of the event loop, or when the test says
 /// so.
 ///
 /// Beyond ServerApi it offers controls the real server must never have - going
-/// offline, holding or losing replies, forcing a conflict, holding the lease as
-/// someone else, withholding or substituting a header in the chain, and scripting
-/// what successive pairing reads return - so the client's negative tests can make
-/// the server misbehave.
+/// offline, holding or losing replies, forcing a conflict, and holding the lease as
+/// someone else - so the client's negative tests can make the server misbehave.
 class FakeServer : public ServerContract::ServerApi
 {
 public:
@@ -40,13 +38,13 @@ public:
     {
         int registrationsPerKey = 20;
         int registrationsPerHour = 5;
-        int pairingsPerHour = 10;
+        int linksPerHour = 10;
         int requestsPerHour = 10;
         int uploadsPerHour = 600;
         qint64 maxBlobBytes = 16 * 1024 * 1024;
         qint64 sessionSeconds = 15 * 60;
         qint64 leaseSeconds = 2 * 60;
-        qint64 pairingSeconds = 10 * 60;
+        qint64 linkSeconds = 10 * 60;
     };
 
     FakeServer();
@@ -60,81 +58,77 @@ public:
                       const QByteArray& signature,
                       ServerContract::Reply<ServerContract::Session> reply) override;
 
+    void registerPerson(const ServerContract::Session& session,
+                        const ServerContract::Registration& registration,
+                        ServerContract::Reply<ServerContract::Done> reply) override;
+    void me(const ServerContract::Session& session, ServerContract::Reply<ServerContract::Me> reply) override;
+    void unlinkDevice(const ServerContract::Session& session,
+                      const Fingerprint& device,
+                      ServerContract::Reply<ServerContract::Done> reply) override;
+
+    void startLink(const ServerContract::Session& session,
+                   const PublicKey& publicKey,
+                   const QString& deviceName,
+                   ServerContract::Reply<QString> reply) override;
+    void link(const ServerContract::Session& session,
+              const QString& code,
+              ServerContract::Reply<ServerContract::LinkState> reply) override;
+    void approveLink(const ServerContract::Session& session,
+                     const QString& code,
+                     ServerContract::Reply<ServerContract::Done> reply) override;
+
     void registerDocument(const ServerContract::Session& session,
                           const ServerContract::Upload& upload,
-                          const QByteArray& requestSignature,
                           ServerContract::Reply<qint64> reply) override;
     void head(const ServerContract::Session& session,
               const QString& documentId,
               ServerContract::Reply<ServerContract::Head> reply) override;
-    void headers(const ServerContract::Session& session,
-                 const QString& documentId,
-                 qint64 after,
-                 ServerContract::Reply<ServerContract::HeaderChain> reply) override;
     void download(const ServerContract::Session& session,
                   const QString& documentId,
-                  qint64 after,
                   ServerContract::Reply<ServerContract::Snapshot> reply) override;
     void upload(const ServerContract::Session& session,
                 const QString& documentId,
                 qint64 baseVersion,
                 const ServerContract::Upload& upload,
-                const QByteArray& requestSignature,
                 ServerContract::Reply<qint64> reply) override;
 
     void takeLease(const ServerContract::Session& session,
                    const QString& documentId,
-                   const QByteArray& requestSignature,
                    ServerContract::Reply<ServerContract::Lease> reply) override;
     void releaseLease(const ServerContract::Session& session,
                       const QString& documentId,
-                      const QByteArray& requestSignature,
                       ServerContract::Reply<ServerContract::Done> reply) override;
 
+    void history(const ServerContract::Session& session,
+                 const QString& documentId,
+                 qint64 after,
+                 ServerContract::Reply<QList<ServerContract::HistoryEntry>> reply) override;
     void requestAccess(const ServerContract::Session& session,
                        const QString& documentId,
-                       const ServerContract::AccessRequest& request,
-                       const QByteArray& requestSignature,
                        ServerContract::Reply<ServerContract::Done> reply) override;
     void accessRequests(const ServerContract::Session& session,
                         const QString& documentId,
                         ServerContract::Reply<QList<ServerContract::AccessRequest>> reply) override;
-    void clearAccessRequest(const ServerContract::Session& session,
-                            const QString& documentId,
-                            const Fingerprint& device,
-                            const QByteArray& requestSignature,
-                            ServerContract::Reply<ServerContract::Done> reply) override;
+    void declineRequest(const ServerContract::Session& session,
+                        const QString& documentId,
+                        qint64 index,
+                        ServerContract::Reply<ServerContract::Done> reply) override;
     void myRequestStatus(const ServerContract::Session& session,
                          const QString& documentId,
                          ServerContract::Reply<ServerContract::RequestStatus> reply) override;
-
-    void myDocuments(const ServerContract::Session& session,
-                     ServerContract::Reply<QStringList> reply) override;
-
-    void startPairing(const ServerContract::Session& session,
-                      const QString& deviceName,
-                      const QByteArray& commitment,
-                      const QByteArray& requestSignature,
-                      ServerContract::Reply<QString> reply) override;
-    void pairing(const ServerContract::Session& session,
-                 const QString& code,
-                 ServerContract::Reply<ServerContract::PairingState> reply) override;
-    void respondToPairing(const ServerContract::Session& session,
-                          const QString& code,
-                          const DeviceKeys& responder,
-                          const QByteArray& requestSignature,
-                          ServerContract::Reply<ServerContract::Done> reply) override;
-    void revealPairing(const ServerContract::Session& session,
-                       const QString& code,
-                       const DeviceKeys& initiator,
-                       const QByteArray& nonce,
-                       const QByteArray& requestSignature,
-                       ServerContract::Reply<ServerContract::Done> reply) override;
-    void handOver(const ServerContract::Session& session,
-                  const QString& code,
-                  const QByteArray& handover,
-                  const QByteArray& requestSignature,
-                  ServerContract::Reply<ServerContract::Done> reply) override;
+    void grant(const ServerContract::Session& session,
+               const QString& documentId,
+               qint64 index,
+               ServerContract::Reply<ServerContract::Done> reply) override;
+    void removeMember(const ServerContract::Session& session,
+                      const QString& documentId,
+                      const MemberId& member,
+                      ServerContract::Reply<ServerContract::Done> reply) override;
+    void setRole(const ServerContract::Session& session,
+                 const QString& documentId,
+                 const MemberId& member,
+                 ServerContract::Role role,
+                 ServerContract::Reply<ServerContract::Done> reply) override;
 
     void advanceClock(qint64 seconds, ServerContract::Reply<ServerContract::Done> reply) override;
 
@@ -163,58 +157,35 @@ public:
     /// Another device holds the lease until the test says otherwise.
     void holdLeaseAs(const QString& documentId, const Fingerprint& holder);
 
-    /// The chain served for this document leaves out this version's header,
-    /// unless it is the last header a read serves.
-    void withholdHeader(const QString& documentId, qint64 version);
-
-    /// Every read of this document carries a different header for this version -
-    /// in a chain or as a download's last header. The blob is unchanged.
-    void substituteHeader(const QString& documentId,
-                          qint64 version,
-                          const DocumentHeader& replacement);
-
-    /// Successive reads of this pairing return these states, in order, before
-    /// returning to the true one.
-    void scriptPairingReads(const QString& code, const QList<ServerContract::PairingState>& reads);
-
     const QDateTime& now() const { return m_now; }
 
 private:
-    struct StoredVersion
-    {
-        qint64 version = 0;
-        DocumentHeader header;
-        bool kept = false;      ///< its membership differed from the version before
-    };
-
     struct StoredRequest
     {
         ServerContract::AccessRequest request;
         ServerContract::RequestStatus status = ServerContract::RequestStatus::Pending;
-        VerifyKey requester;
     };
 
     struct StoredDocument
     {
         qint64 version = 0;
+        QJsonObject header;
         QByteArray blob;
-        QList<StoredVersion> history;
+        ServerContract::Publication published;
+        QHash<QString, ServerContract::Role> members;           ///< by member id hex
+        QList<ServerContract::HistoryEntry> history;
+        QList<StoredRequest> requests;
+        QHash<QString, ServerContract::LostAccess> lost;        ///< by member id hex
         std::optional<ServerContract::Lease> lease;
-        QHash<QString, StoredRequest> requests;     ///< keyed by the requesting device's fingerprint hex
-
         bool forceConflict = false;
-        QSet<qint64> withheld;
-        QHash<qint64, DocumentHeader> substituted;
-
-        const DocumentHeader& current() const { return history.last().header; }
     };
 
-    struct StoredPairing
+    struct StoredLink
     {
-        ServerContract::PairingState state;
-        VerifyKey initiator;
-        std::optional<VerifyKey> responder;
-        QList<ServerContract::PairingState> scriptedReads;
+        QString deviceName;
+        DeviceKeys keys;
+        std::optional<QString> approvedAs;      ///< member id hex
+        QDateTime expires;
     };
 
     struct SessionRecord
@@ -223,12 +194,12 @@ private:
         QDateTime expires;
     };
 
-    /// A completed pairing: this device may be added under the responder's person
-    /// in any document that person belongs to.
-    struct LinkPermission
+    /// Who is calling: the device signed in, and its person once it has one.
+    struct Caller
     {
-        Fingerprint initiator;
-        VerifyKey responder;
+        VerifyKey device;
+        Fingerprint fingerprint;
+        ServerContract::Person* person = nullptr;
     };
 
     // --- The rules, decided at call time ---
@@ -237,67 +208,55 @@ private:
     ServerContract::Result<ServerContract::Session> decideAuthenticate(const VerifyKey& device,
                                                                        const QByteArray& challenge,
                                                                        const QByteArray& signature);
+    ServerContract::Result<ServerContract::Done> decideRegisterPerson(const ServerContract::Session& session,
+                                                                      const ServerContract::Registration& registration);
+    ServerContract::Result<ServerContract::Me> decideMe(const ServerContract::Session& session);
+    ServerContract::Result<ServerContract::Done> decideUnlinkDevice(const ServerContract::Session& session,
+                                                                    const Fingerprint& device);
+    ServerContract::Result<QString> decideStartLink(const ServerContract::Session& session,
+                                                    const PublicKey& publicKey,
+                                                    const QString& deviceName);
+    ServerContract::Result<ServerContract::LinkState> decideLink(const ServerContract::Session& session,
+                                                                 const QString& code);
+    ServerContract::Result<ServerContract::Done> decideApproveLink(const ServerContract::Session& session,
+                                                                   const QString& code);
     ServerContract::Result<qint64> decideRegisterDocument(const ServerContract::Session& session,
-                                                          const ServerContract::Upload& upload,
-                                                          const QByteArray& requestSignature);
+                                                          const ServerContract::Upload& upload);
     ServerContract::Result<ServerContract::Head> decideHead(const ServerContract::Session& session,
                                                             const QString& documentId);
-    ServerContract::Result<ServerContract::HeaderChain> decideHeaders(const ServerContract::Session& session,
-                                                                      const QString& documentId,
-                                                                      qint64 after);
     ServerContract::Result<ServerContract::Snapshot> decideDownload(const ServerContract::Session& session,
-                                                                    const QString& documentId,
-                                                                    qint64 after);
+                                                                    const QString& documentId);
     ServerContract::Result<qint64> decideUpload(const ServerContract::Session& session,
                                                 const QString& documentId,
                                                 qint64 baseVersion,
-                                                const ServerContract::Upload& upload,
-                                                const QByteArray& requestSignature);
+                                                const ServerContract::Upload& upload);
     ServerContract::Result<ServerContract::Lease> decideTakeLease(const ServerContract::Session& session,
-                                                                  const QString& documentId,
-                                                                  const QByteArray& requestSignature);
+                                                                  const QString& documentId);
     ServerContract::Result<ServerContract::Done> decideReleaseLease(const ServerContract::Session& session,
-                                                                    const QString& documentId,
-                                                                    const QByteArray& requestSignature);
-    ServerContract::Result<ServerContract::Done> decideRequestAccess(
-        const ServerContract::Session& session,
-        const QString& documentId,
-        const ServerContract::AccessRequest& request,
-        const QByteArray& requestSignature);
+                                                                    const QString& documentId);
+    ServerContract::Result<QList<ServerContract::HistoryEntry>> decideHistory(const ServerContract::Session& session,
+                                                                              const QString& documentId,
+                                                                              qint64 after);
+    ServerContract::Result<ServerContract::Done> decideRequestAccess(const ServerContract::Session& session,
+                                                                     const QString& documentId);
     ServerContract::Result<QList<ServerContract::AccessRequest>> decideAccessRequests(
         const ServerContract::Session& session,
         const QString& documentId);
-    ServerContract::Result<ServerContract::Done> decideClearAccessRequest(
-        const ServerContract::Session& session,
-        const QString& documentId,
-        const Fingerprint& device,
-        const QByteArray& requestSignature);
-    ServerContract::Result<ServerContract::RequestStatus> decideMyRequestStatus(
-        const ServerContract::Session& session,
-        const QString& documentId);
-    ServerContract::Result<QStringList> decideMyDocuments(const ServerContract::Session& session);
-    ServerContract::Result<QString> decideStartPairing(const ServerContract::Session& session,
-                                                       const QString& deviceName,
-                                                       const QByteArray& commitment,
-                                                       const QByteArray& requestSignature);
-    ServerContract::Result<ServerContract::PairingState> decidePairing(
-        const ServerContract::Session& session,
-        const QString& code);
-    ServerContract::Result<ServerContract::Done> decideRespondToPairing(
-        const ServerContract::Session& session,
-        const QString& code,
-        const DeviceKeys& responder,
-        const QByteArray& requestSignature);
-    ServerContract::Result<ServerContract::Done> decideRevealPairing(
-        const ServerContract::Session& session,
-        const QString& code,
-        const DeviceKeys& initiator,
-        const QByteArray& nonce,
-        const QByteArray& requestSignature);
-    ServerContract::Result<ServerContract::Done> decideHandOver(const ServerContract::Session& session,
-                                                                const QString& code,
-                                                                const QByteArray& handover,
-                                                                const QByteArray& requestSignature);
+    ServerContract::Result<ServerContract::Done> decideDeclineRequest(const ServerContract::Session& session,
+                                                                      const QString& documentId,
+                                                                      qint64 index);
+    ServerContract::Result<ServerContract::RequestStatus> decideMyRequestStatus(const ServerContract::Session& session,
+                                                                                const QString& documentId);
+    ServerContract::Result<ServerContract::Done> decideGrant(const ServerContract::Session& session,
+                                                             const QString& documentId,
+                                                             qint64 index);
+    ServerContract::Result<ServerContract::Done> decideRemoveMember(const ServerContract::Session& session,
+                                                                    const QString& documentId,
+                                                                    const MemberId& member);
+    ServerContract::Result<ServerContract::Done> decideSetRole(const ServerContract::Session& session,
+                                                               const QString& documentId,
+                                                               const MemberId& member,
+                                                               ServerContract::Role role);
     ServerContract::Result<ServerContract::Done> decideAdvanceClock(qint64 seconds);
 
     // --- Replies ---
@@ -319,47 +278,60 @@ private:
 
     // --- Helpers ---
 
-    QList<QJsonObject> chainOf(const StoredDocument& document, qint64 after, qint64 last) const;
+    /// The caller of a session: None, Unreachable, or Unauthenticated.
+    ServerContract::ServerError signedIn(const ServerContract::Session& session, Caller& caller);
 
-    ServerContract::ServerError authenticated(const ServerContract::Session& session,
-                                              VerifyKey& device) const;
-    ServerContract::ServerError member(const ServerContract::Session& session,
-                                       const QString& documentId,
-                                       VerifyKey& device,
-                                       StoredDocument*& document);
+    /// The caller, allow-listed on documentId. AccessLost, with lost set, for a device
+    /// that had access and no longer does; NotMember for one that never had it.
+    ServerContract::ServerError allowListed(const ServerContract::Session& session,
+                                            const QString& documentId,
+                                            Caller& caller,
+                                            StoredDocument*& document,
+                                            std::optional<ServerContract::LostAccess>& lost);
 
-    bool isMemberAnywhere(const VerifyKey& device) const;
+    /// The same, for callers that must also be admins.
+    ServerContract::ServerError admin(const ServerContract::Session& session,
+                                      const QString& documentId,
+                                      Caller& caller,
+                                      StoredDocument*& document,
+                                      std::optional<ServerContract::LostAccess>& lost);
+
+    QSet<QString> allowListOf(const StoredDocument& document) const;
+    QList<ServerContract::Member> membersOf(const StoredDocument& document) const;
+    bool keepsAnAdmin(const StoredDocument& document) const;
+    void record(StoredDocument& document,
+                ServerContract::HistoryEntry::Kind kind,
+                const QString& actor,
+                const QString& subject);
+
     bool withinLimits(const QHash<QByteArray, QList<QDateTime>>& log,
                       const VerifyKey& device,
                       int perHour,
                       int total) const;
-    bool linkPermitted(const Fingerprint& device,
-                       const MemberId& member,
-                       const DocumentHeader& current) const;
-
-    /// Unauthenticated unless the signature is this device's over this request.
-    ServerContract::ServerError signedBy(const ServerContract::Session& session,
-                                         const VerifyKey& device,
-                                         ServerContract::Endpoint endpoint,
-                                         const QString& documentId,
-                                         const QByteArray& body,
-                                         const QByteArray& signature) const;
-
-    /// Whether this device completed a pairing with exactly this responder.
-    bool pairedWith(const Fingerprint& initiator, const VerifyKey& responder) const;
     QString randomToken() const;
+
+    template<typename T>
+    static ServerContract::Result<T> refused(ServerContract::ServerError error,
+                                             const std::optional<ServerContract::LostAccess>& lost)
+    {
+        return error == ServerContract::ServerError::AccessLost && lost.has_value()
+                   ? ServerContract::Result<T>::lostAccess(lost.value())
+                   : ServerContract::Result<T>::failure(error);
+    }
 
     Limits m_limits;
     QDateTime m_now;
     bool m_offline = false;
 
+    QHash<QString, ServerContract::Person> m_people;        ///< by member id hex
+    QHash<QByteArray, QString> m_personOfDevice;            ///< verify key bytes to member id hex
+    QHash<QByteArray, ServerContract::LostAccess> m_unlinked;   ///< verify key bytes
     QHash<QString, StoredDocument> m_documents;
-    QHash<QString, StoredPairing> m_pairings;
+    QHash<QString, StoredLink> m_links;
     QHash<QString, SessionRecord> m_sessions;
     QSet<QByteArray> m_challenges;
-    QList<LinkPermission> m_linkPermissions;
     QHash<QByteArray, QList<QDateTime>> m_registrations;
-    QHash<QByteArray, QList<QDateTime>> m_pairingStarts;
+    QHash<QByteArray, QList<QDateTime>> m_linkStarts;
     QHash<QByteArray, QList<QDateTime>> m_accessRequests;
     QHash<QByteArray, QList<QDateTime>> m_uploads;
 

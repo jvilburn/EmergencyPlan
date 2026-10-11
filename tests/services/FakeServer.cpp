@@ -2,7 +2,6 @@
 
 #include "DocumentCrypto.h"
 #include "HexCodec.h"
-#include "Pairing.h"
 
 #include <QTimer>
 
@@ -13,54 +12,17 @@ namespace
 
 constexpr qint64 SecondsPerHour = 60 * 60;
 
-std::optional<RecipientEntry> entryByVerifyKey(const DocumentHeader& header, const VerifyKey& key)
+/// The device of a person with this verify key, if it is one of theirs.
+const Device* deviceOf(const Person& person, const VerifyKey& key)
 {
-    for (const RecipientEntry& entry : header.recipients)
+    for (const Device& device : person.devices)
     {
-        if (entry.verifyKey == key)
+        if (device.keys.verifyKey == key)
         {
-            return entry;
+            return &device;
         }
     }
-    return std::nullopt;
-}
-
-QHash<QString, RecipientEntry> byFingerprint(const DocumentHeader& header)
-{
-    QHash<QString, RecipientEntry> entries;
-    for (const RecipientEntry& entry : header.recipients)
-    {
-        entries.insert(entry.fingerprint.toHex(), entry);
-    }
-    return entries;
-}
-
-QSet<QString> peopleOf(const DocumentHeader& header)
-{
-    QSet<QString> people;
-    for (const RecipientEntry& entry : header.recipients)
-    {
-        people.insert(entry.member.toHex());
-    }
-    return people;
-}
-
-/// What the allow-list and the chain care about: who, which device, which key, and
-/// who is an admin. Two headers with equal membership differ only in content and
-/// sealed keys, and the chain rule gives the same answer across either.
-QSet<QString> membershipOf(const DocumentHeader& header)
-{
-    QSet<QString> membership;
-    for (const RecipientEntry& entry : header.recipients)
-    {
-        membership.insert(entry.member.toHex() + QLatin1Char('/') + entry.fingerprint.toHex()
-                          + QLatin1Char('/') + HexCodec::encode(entry.verifyKey.bytes));
-    }
-    for (const MemberId& admin : header.admins)
-    {
-        membership.insert(QLatin1String("admin/") + admin.toHex());
-    }
-    return membership;
+    return nullptr;
 }
 
 } // namespace
@@ -95,12 +57,42 @@ void FakeServer::authenticate(const VerifyKey& device,
     answer(decideAuthenticate(device, challenge, signature), reply);
 }
 
-void FakeServer::registerDocument(const Session& session,
-                                  const Upload& upload,
-                                  const QByteArray& requestSignature,
-                                  Reply<qint64> reply)
+void FakeServer::registerPerson(const Session& session, const Registration& registration, Reply<Done> reply)
 {
-    answer(decideRegisterDocument(session, upload, requestSignature), reply);
+    answer(decideRegisterPerson(session, registration), reply);
+}
+
+void FakeServer::me(const Session& session, Reply<Me> reply)
+{
+    answer(decideMe(session), reply);
+}
+
+void FakeServer::unlinkDevice(const Session& session, const Fingerprint& device, Reply<Done> reply)
+{
+    answer(decideUnlinkDevice(session, device), reply);
+}
+
+void FakeServer::startLink(const Session& session,
+                           const PublicKey& publicKey,
+                           const QString& deviceName,
+                           Reply<QString> reply)
+{
+    answer(decideStartLink(session, publicKey, deviceName), reply);
+}
+
+void FakeServer::link(const Session& session, const QString& code, Reply<LinkState> reply)
+{
+    answer(decideLink(session, code), reply);
+}
+
+void FakeServer::approveLink(const Session& session, const QString& code, Reply<Done> reply)
+{
+    answer(decideApproveLink(session, code), reply);
+}
+
+void FakeServer::registerDocument(const Session& session, const Upload& upload, Reply<qint64> reply)
+{
+    answer(decideRegisterDocument(session, upload), reply);
 }
 
 void FakeServer::head(const Session& session, const QString& documentId, Reply<Head> reply)
@@ -108,125 +100,78 @@ void FakeServer::head(const Session& session, const QString& documentId, Reply<H
     answer(decideHead(session, documentId), reply);
 }
 
-void FakeServer::headers(const Session& session,
-                         const QString& documentId,
-                         qint64 after,
-                         Reply<HeaderChain> reply)
+void FakeServer::download(const Session& session, const QString& documentId, Reply<Snapshot> reply)
 {
-    answer(decideHeaders(session, documentId, after), reply);
-}
-
-void FakeServer::download(const Session& session,
-                          const QString& documentId,
-                          qint64 after,
-                          Reply<Snapshot> reply)
-{
-    answer(decideDownload(session, documentId, after), reply);
+    answer(decideDownload(session, documentId), reply);
 }
 
 void FakeServer::upload(const Session& session,
                         const QString& documentId,
                         qint64 baseVersion,
                         const Upload& upload,
-                        const QByteArray& requestSignature,
                         Reply<qint64> reply)
 {
-    answer(decideUpload(session, documentId, baseVersion, upload, requestSignature), reply);
+    answer(decideUpload(session, documentId, baseVersion, upload), reply);
 }
 
-void FakeServer::takeLease(const Session& session,
-                           const QString& documentId,
-                           const QByteArray& requestSignature,
-                           Reply<Lease> reply)
+void FakeServer::takeLease(const Session& session, const QString& documentId, Reply<Lease> reply)
 {
-    answer(decideTakeLease(session, documentId, requestSignature), reply);
+    answer(decideTakeLease(session, documentId), reply);
 }
 
-void FakeServer::releaseLease(const Session& session,
-                              const QString& documentId,
-                              const QByteArray& requestSignature,
-                              Reply<Done> reply)
+void FakeServer::releaseLease(const Session& session, const QString& documentId, Reply<Done> reply)
 {
-    answer(decideReleaseLease(session, documentId, requestSignature), reply);
+    answer(decideReleaseLease(session, documentId), reply);
 }
 
-void FakeServer::requestAccess(const Session& session,
-                               const QString& documentId,
-                               const AccessRequest& request,
-                               const QByteArray& requestSignature,
-                               Reply<Done> reply)
+void FakeServer::history(const Session& session,
+                         const QString& documentId,
+                         qint64 after,
+                         Reply<QList<HistoryEntry>> reply)
 {
-    answer(decideRequestAccess(session, documentId, request, requestSignature), reply);
+    answer(decideHistory(session, documentId, after), reply);
 }
 
-void FakeServer::accessRequests(const Session& session,
-                                const QString& documentId,
-                                Reply<QList<AccessRequest>> reply)
+void FakeServer::requestAccess(const Session& session, const QString& documentId, Reply<Done> reply)
+{
+    answer(decideRequestAccess(session, documentId), reply);
+}
+
+void FakeServer::accessRequests(const Session& session, const QString& documentId, Reply<QList<AccessRequest>> reply)
 {
     answer(decideAccessRequests(session, documentId), reply);
 }
 
-void FakeServer::clearAccessRequest(const Session& session,
-                                    const QString& documentId,
-                                    const Fingerprint& device,
-                                    const QByteArray& requestSignature,
-                                    Reply<Done> reply)
+void FakeServer::declineRequest(const Session& session, const QString& documentId, qint64 index, Reply<Done> reply)
 {
-    answer(decideClearAccessRequest(session, documentId, device, requestSignature), reply);
+    answer(decideDeclineRequest(session, documentId, index), reply);
 }
 
-void FakeServer::myRequestStatus(const Session& session,
-                                 const QString& documentId,
-                                 Reply<RequestStatus> reply)
+void FakeServer::myRequestStatus(const Session& session, const QString& documentId, Reply<RequestStatus> reply)
 {
     answer(decideMyRequestStatus(session, documentId), reply);
 }
 
-void FakeServer::myDocuments(const Session& session, Reply<QStringList> reply)
+void FakeServer::grant(const Session& session, const QString& documentId, qint64 index, Reply<Done> reply)
 {
-    answer(decideMyDocuments(session), reply);
+    answer(decideGrant(session, documentId, index), reply);
 }
 
-void FakeServer::startPairing(const Session& session,
-                              const QString& deviceName,
-                              const QByteArray& commitment,
-                              const QByteArray& requestSignature,
-                              Reply<QString> reply)
+void FakeServer::removeMember(const Session& session,
+                              const QString& documentId,
+                              const MemberId& member,
+                              Reply<Done> reply)
 {
-    answer(decideStartPairing(session, deviceName, commitment, requestSignature), reply);
+    answer(decideRemoveMember(session, documentId, member), reply);
 }
 
-void FakeServer::pairing(const Session& session, const QString& code, Reply<PairingState> reply)
+void FakeServer::setRole(const Session& session,
+                         const QString& documentId,
+                         const MemberId& member,
+                         Role role,
+                         Reply<Done> reply)
 {
-    answer(decidePairing(session, code), reply);
-}
-
-void FakeServer::respondToPairing(const Session& session,
-                                  const QString& code,
-                                  const DeviceKeys& responder,
-                                  const QByteArray& requestSignature,
-                                  Reply<Done> reply)
-{
-    answer(decideRespondToPairing(session, code, responder, requestSignature), reply);
-}
-
-void FakeServer::revealPairing(const Session& session,
-                               const QString& code,
-                               const DeviceKeys& initiator,
-                               const QByteArray& nonce,
-                               const QByteArray& requestSignature,
-                               Reply<Done> reply)
-{
-    answer(decideRevealPairing(session, code, initiator, nonce, requestSignature), reply);
-}
-
-void FakeServer::handOver(const Session& session,
-                          const QString& code,
-                          const QByteArray& handover,
-                          const QByteArray& requestSignature,
-                          Reply<Done> reply)
-{
-    answer(decideHandOver(session, code, handover, requestSignature), reply);
+    answer(decideSetRole(session, documentId, member, role), reply);
 }
 
 void FakeServer::advanceClock(qint64 seconds, Reply<Done> reply)
@@ -234,7 +179,7 @@ void FakeServer::advanceClock(qint64 seconds, Reply<Done> reply)
     answer(decideAdvanceClock(seconds), reply);
 }
 
-// --- Authentication ------------------------------------------------------------
+// --- Signing in ----------------------------------------------------------------
 
 Result<QByteArray> FakeServer::decideChallenge()
 {
@@ -261,7 +206,7 @@ Result<Session> FakeServer::decideAuthenticate(const VerifyKey& device,
     // A challenge is good for one login. Taking it out before checking the
     // signature means a failed attempt spends it too.
     if (!m_challenges.remove(challenge) || !device.isValid()
-        || !DocumentCrypto::verify(SignatureTag::Auth, challenge, signature, device))
+        || !DocumentCrypto::challengeVerifies(challenge, signature, device))
     {
         return Result<Session>::failure(ServerError::Unauthenticated);
     }
@@ -272,41 +217,246 @@ Result<Session> FakeServer::decideAuthenticate(const VerifyKey& device,
     return Result<Session>::success(session);
 }
 
+// --- This device's person ------------------------------------------------------
+
+Result<Done> FakeServer::decideRegisterPerson(const Session& session, const Registration& registration)
+{
+    Caller caller;
+    const ServerError failure = signedIn(session, caller);
+    if (failure != ServerError::None)
+    {
+        return Result<Done>::failure(failure);
+    }
+
+    // An unlinked device claiming its old person hears why it cannot.
+    if (m_unlinked.contains(caller.device.bytes))
+    {
+        return Result<Done>::lostAccess(m_unlinked.value(caller.device.bytes));
+    }
+
+    if (caller.person != nullptr)
+    {
+        return caller.person->member == registration.member ? Result<Done>::success(Done())
+                                                            : Result<Done>::failure(ServerError::InvalidRequest);
+    }
+
+    // A new person, with this device as its first. A device joins an existing person
+    // only through a link that person approved.
+    if (!registration.member.isValid() || !registration.publicKey.isValid() || registration.displayName.isEmpty()
+        || registration.deviceName.isEmpty() || m_people.contains(registration.member.toHex()))
+    {
+        return Result<Done>::failure(ServerError::InvalidRequest);
+    }
+
+    Device device;
+    device.keys = DeviceKeys{registration.publicKey, caller.device};
+    device.fingerprint = DocumentCrypto::fingerprintOf(device.keys.publicKey, device.keys.verifyKey);
+    device.name = registration.deviceName;
+    device.linkedAt = m_now;
+
+    Person person;
+    person.member = registration.member;
+    person.displayName = registration.displayName;
+    person.devices.append(device);
+
+    m_people.insert(person.member.toHex(), person);
+    m_personOfDevice.insert(caller.device.bytes, person.member.toHex());
+    return Result<Done>::success(Done());
+}
+
+Result<Me> FakeServer::decideMe(const Session& session)
+{
+    Caller caller;
+    const ServerError failure = signedIn(session, caller);
+    if (failure != ServerError::None)
+    {
+        return Result<Me>::failure(failure);
+    }
+    if (caller.person == nullptr)
+    {
+        return m_unlinked.contains(caller.device.bytes) ? Result<Me>::lostAccess(m_unlinked.value(caller.device.bytes))
+                                                        : Result<Me>::failure(ServerError::InvalidRequest);
+    }
+
+    Me me;
+    me.person = *caller.person;
+    for (auto it = m_documents.constBegin(); it != m_documents.constEnd(); ++it)
+    {
+        if (it.value().members.contains(caller.person->member.toHex()))
+        {
+            me.documents.append(it.key());
+        }
+    }
+    me.documents.sort();
+    return Result<Me>::success(me);
+}
+
+Result<Done> FakeServer::decideUnlinkDevice(const Session& session, const Fingerprint& device)
+{
+    Caller caller;
+    const ServerError failure = signedIn(session, caller);
+    if (failure != ServerError::None)
+    {
+        return Result<Done>::failure(failure);
+    }
+    if (caller.person == nullptr)
+    {
+        return Result<Done>::failure(ServerError::InvalidRequest);
+    }
+
+    // Only the person's own devices, and never the last: that is leaving.
+    QList<Device>& devices = caller.person->devices;
+    for (qsizetype index = 0; index < devices.size(); ++index)
+    {
+        if (devices.at(index).fingerprint != device)
+        {
+            continue;
+        }
+        if (devices.size() == 1)
+        {
+            return Result<Done>::failure(ServerError::InvalidRequest);
+        }
+
+        const VerifyKey key = devices.at(index).keys.verifyKey;
+        const Device* unlinker = deviceOf(*caller.person, caller.device);
+        m_unlinked.insert(key.bytes, LostAccess{LostAccess::How::Unlinked, unlinker->name, m_now});
+        m_personOfDevice.remove(key.bytes);
+        devices.removeAt(index);
+        return Result<Done>::success(Done());
+    }
+
+    return Result<Done>::failure(ServerError::NotFound);
+}
+
+// --- Linking -------------------------------------------------------------------
+
+Result<QString> FakeServer::decideStartLink(const Session& session, const PublicKey& publicKey, const QString& deviceName)
+{
+    Caller caller;
+    const ServerError failure = signedIn(session, caller);
+    if (failure != ServerError::None)
+    {
+        return Result<QString>::failure(failure);
+    }
+    if (caller.person != nullptr || !publicKey.isValid() || deviceName.isEmpty())
+    {
+        return Result<QString>::failure(ServerError::InvalidRequest);
+    }
+    if (!withinLimits(m_linkStarts, caller.device, m_limits.linksPerHour, 0))
+    {
+        return Result<QString>::failure(ServerError::RateLimited);
+    }
+
+    const QString code = randomToken().left(8).toUpper();
+    m_links.insert(code, StoredLink{deviceName, DeviceKeys{publicKey, caller.device}, std::nullopt,
+                                    m_now.addSecs(m_limits.linkSeconds)});
+    m_linkStarts[caller.device.bytes].append(m_now);
+    return Result<QString>::success(code);
+}
+
+Result<LinkState> FakeServer::decideLink(const Session& session, const QString& code)
+{
+    Caller caller;
+    const ServerError failure = signedIn(session, caller);
+    if (failure != ServerError::None)
+    {
+        return Result<LinkState>::failure(failure);
+    }
+
+    const auto found = m_links.constFind(code);
+    if (found == m_links.constEnd())
+    {
+        return Result<LinkState>::failure(ServerError::NotFound);
+    }
+
+    // The new device itself, or a device of a person who might approve it.
+    const StoredLink& stored = found.value();
+    if (stored.keys.verifyKey != caller.device && caller.person == nullptr)
+    {
+        return Result<LinkState>::failure(ServerError::NotFound);
+    }
+    if (!stored.approvedAs.has_value() && stored.expires <= m_now)
+    {
+        return Result<LinkState>::failure(ServerError::Expired);
+    }
+
+    LinkState state;
+    state.deviceName = stored.deviceName;
+    state.keys = stored.keys;
+    state.expires = stored.expires;
+    if (stored.approvedAs.has_value())
+    {
+        state.approvedAs = m_people.value(stored.approvedAs.value());
+    }
+    return Result<LinkState>::success(state);
+}
+
+Result<Done> FakeServer::decideApproveLink(const Session& session, const QString& code)
+{
+    Caller caller;
+    const ServerError failure = signedIn(session, caller);
+    if (failure != ServerError::None)
+    {
+        return Result<Done>::failure(failure);
+    }
+    if (caller.person == nullptr)
+    {
+        return Result<Done>::failure(ServerError::InvalidRequest);
+    }
+
+    const auto found = m_links.find(code);
+    if (found == m_links.end())
+    {
+        return Result<Done>::failure(ServerError::NotFound);
+    }
+
+    StoredLink& stored = found.value();
+    if (stored.approvedAs.has_value() || m_personOfDevice.contains(stored.keys.verifyKey.bytes))
+    {
+        return Result<Done>::failure(ServerError::InvalidRequest);
+    }
+    if (stored.expires <= m_now)
+    {
+        return Result<Done>::failure(ServerError::Expired);
+    }
+
+    Device device;
+    device.keys = stored.keys;
+    device.fingerprint = DocumentCrypto::fingerprintOf(device.keys.publicKey, device.keys.verifyKey);
+    device.name = stored.deviceName;
+    device.linkedBy = caller.fingerprint;
+    device.linkedAt = m_now;
+
+    caller.person->devices.append(device);
+    m_personOfDevice.insert(device.keys.verifyKey.bytes, caller.person->member.toHex());
+    m_unlinked.remove(device.keys.verifyKey.bytes);
+    stored.approvedAs = caller.person->member.toHex();
+    return Result<Done>::success(Done());
+}
+
 // --- Documents -----------------------------------------------------------------
 
-Result<qint64> FakeServer::decideRegisterDocument(const Session& session,
-                                                  const Upload& upload,
-                                                  const QByteArray& requestSignature)
+Result<qint64> FakeServer::decideRegisterDocument(const Session& session, const Upload& upload)
 {
-    VerifyKey device;
-    const ServerError failure = authenticated(session, device);
+    Caller caller;
+    const ServerError failure = signedIn(session, caller);
     if (failure != ServerError::None)
     {
         return Result<qint64>::failure(failure);
     }
-
-    const ServerError requestCheck = signedBy(session,
-                                              device,
-                                              Endpoint::RegisterDocument,
-                                              upload.header.documentId,
-                                              registerBody(upload),
-                                              requestSignature);
-    if (requestCheck != ServerError::None)
+    if (caller.person == nullptr)
     {
-        return Result<qint64>::failure(requestCheck);
+        return Result<qint64>::failure(ServerError::InvalidRequest);
     }
 
-    if (!withinLimits(m_registrations,
-                      device,
-                      m_limits.registrationsPerHour,
-                      m_limits.registrationsPerKey))
+    if (!withinLimits(m_registrations, caller.device, m_limits.registrationsPerHour, m_limits.registrationsPerKey))
     {
         return Result<qint64>::failure(ServerError::RateLimited);
     }
 
     const DocumentHeader& header = upload.header;
     if (!HexCodec::isCanonical(header.documentId, DocumentHeader::DocumentIdLength)
-        || upload.blob.size() > m_limits.maxBlobBytes)
+        || upload.blob.size() > m_limits.maxBlobBytes || header.recipients.isEmpty())
     {
         return Result<qint64>::failure(ServerError::InvalidRequest);
     }
@@ -316,346 +466,156 @@ Result<qint64> FakeServer::decideRegisterDocument(const Session& session,
         return Result<qint64>::failure(ServerError::IdTaken);
     }
 
-    if (DocumentCrypto::payloadHash(upload.blob) != header.payloadHash)
+    // A new ward is sealed only to its creator's own devices.
+    QSet<QString> own;
+    for (const Device& device : caller.person->devices)
     {
-        return Result<qint64>::failure(ServerError::PayloadMismatch);
+        own.insert(device.fingerprint.toHex());
     }
-
-    // The first header has nothing to link from, so it stands on its own: one
-    // person, who is its admin, written by one of that person's devices, and signed.
-    if (!DocumentCrypto::isCoherent(header) || peopleOf(header).size() != 1)
-    {
-        return Result<qint64>::failure(ServerError::ChainRefused);
-    }
-
-    const std::optional<RecipientEntry> writer = header.entryFor(header.lastWriter);
-    if (!writer.has_value() || header.admins != QList<MemberId>{writer.value().member}
-        || !DocumentCrypto::verifyHeader(header))
-    {
-        return Result<qint64>::failure(ServerError::ChainRefused);
-    }
-
-    if (writer.value().verifyKey != device)
-    {
-        return Result<qint64>::failure(ServerError::InvalidRequest);
-    }
-
-    // The registering person may bring their own other devices, each one vouched
-    // for by a pairing with the registering device itself. Anyone who has seen a
-    // header knows a device's public keys; without this, a stranger could list
-    // someone else's device in a look-alike ward and have it appear on their list.
     for (const RecipientEntry& entry : header.recipients)
     {
-        if (entry.fingerprint != writer.value().fingerprint && !pairedWith(entry.fingerprint, device))
+        if (!own.contains(entry.fingerprint.toHex()))
         {
-            return Result<qint64>::failure(ServerError::DeviceNotInvited);
+            return Result<qint64>::failure(ServerError::NotOnAllowList);
         }
     }
 
     StoredDocument document;
     document.version = 1;
+    document.header = header.toJson();
     document.blob = upload.blob;
-    document.history.append(StoredVersion{1, header, true});
+    document.published = Publication{caller.person->displayName, caller.fingerprint, m_now};
+    document.members.insert(caller.person->member.toHex(), Role::Admin);
 
     m_documents.insert(header.documentId, document);
-    m_registrations[device.bytes].append(m_now);
+    m_registrations[caller.device.bytes].append(m_now);
     return Result<qint64>::success(1);
 }
 
 Result<Head> FakeServer::decideHead(const Session& session, const QString& documentId)
 {
-    VerifyKey device;
+    Caller caller;
     StoredDocument* document = nullptr;
-    const ServerError failure = member(session, documentId, device, document);
+    std::optional<LostAccess> lost;
+    const ServerError failure = allowListed(session, documentId, caller, document, lost);
     if (failure != ServerError::None)
     {
-        return Result<Head>::failure(failure);
+        return refused<Head>(failure, lost);
     }
 
     Head head;
     head.version = document->version;
-
+    head.published = document->published;
+    head.header = document->header;
+    head.members = membersOf(*document);
+    head.history = document->history.isEmpty() ? 0 : document->history.last().index;
     if (document->lease.has_value() && document->lease.value().expires > m_now)
     {
         head.leaseHolder = document->lease.value().holder;
     }
-
     return Result<Head>::success(head);
 }
 
-Result<HeaderChain> FakeServer::decideHeaders(const Session& session,
-                                              const QString& documentId,
-                                              qint64 after)
+Result<Snapshot> FakeServer::decideDownload(const Session& session, const QString& documentId)
 {
-    VerifyKey device;
-    const ServerError failure = authenticated(session, device);
-    if (failure != ServerError::None)
-    {
-        return Result<HeaderChain>::failure(failure);
-    }
-
-    const auto found = m_documents.constFind(documentId);
-    if (found == m_documents.constEnd())
-    {
-        return Result<HeaderChain>::failure(ServerError::UnknownDocument);
-    }
-    const StoredDocument& document = found.value();
-
-    // A current device reads the chain to the current version. A former device
-    // reads it only up to and including the header that removed it, which is
-    // exactly the evidence it needs and nothing written after.
-    qint64 cap = document.version;
-    if (!entryByVerifyKey(document.current(), device).has_value())
-    {
-        std::optional<qint64> removedAt;
-        bool listed = false;
-        for (const StoredVersion& stored : document.history)
-        {
-            if (entryByVerifyKey(stored.header, device).has_value())
-            {
-                listed = true;
-                removedAt.reset();
-            }
-            else if (listed && !removedAt.has_value())
-            {
-                removedAt = stored.version;
-            }
-        }
-
-        if (!removedAt.has_value())
-        {
-            return Result<HeaderChain>::failure(ServerError::NotAllowListed);
-        }
-
-        cap = removedAt.value();
-    }
-
-    if (after < 0 || after >= cap)
-    {
-        return Result<HeaderChain>::failure(ServerError::InvalidRequest);
-    }
-
-    HeaderChain chain;
-    chain.headers = chainOf(document, after, cap);
-    return Result<HeaderChain>::success(chain);
-}
-
-Result<Snapshot> FakeServer::decideDownload(const Session& session, const QString& documentId, qint64 after)
-{
-    VerifyKey device;
+    Caller caller;
     StoredDocument* document = nullptr;
-    const ServerError failure = member(session, documentId, device, document);
+    std::optional<LostAccess> lost;
+    const ServerError failure = allowListed(session, documentId, caller, document, lost);
     if (failure != ServerError::None)
     {
-        return Result<Snapshot>::failure(failure);
+        return refused<Snapshot>(failure, lost);
     }
 
-    // At the current version itself the chain is that one header, which is how a
-    // device whose base is current fetches the file again.
-    if (after < 0 || after > document->version)
-    {
-        return Result<Snapshot>::failure(ServerError::InvalidRequest);
-    }
-
-    // One state, so the last header always belongs to the blob beside it.
-    Snapshot snapshot;
-    snapshot.version = document->version;
-    snapshot.headers = chainOf(*document, after, document->version);
-    snapshot.blob = document->blob;
-    return Result<Snapshot>::success(snapshot);
+    return Result<Snapshot>::success(Snapshot{document->version, document->published, document->header, document->blob});
 }
 
 Result<qint64> FakeServer::decideUpload(const Session& session,
                                         const QString& documentId,
                                         qint64 baseVersion,
-                                        const Upload& upload,
-                                        const QByteArray& requestSignature)
+                                        const Upload& upload)
 {
-    VerifyKey device;
+    Caller caller;
     StoredDocument* document = nullptr;
-    const ServerError failure = member(session, documentId, device, document);
+    std::optional<LostAccess> lost;
+    const ServerError failure = allowListed(session, documentId, caller, document, lost);
     if (failure != ServerError::None)
     {
-        return Result<qint64>::failure(failure);
+        return refused<qint64>(failure, lost);
     }
 
-    const ServerError requestCheck = signedBy(session,
-                                              device,
-                                              Endpoint::Upload,
-                                              documentId,
-                                              uploadBody(baseVersion, upload),
-                                              requestSignature);
-    if (requestCheck != ServerError::None)
+    if (!withinLimits(m_uploads, caller.device, m_limits.uploadsPerHour, 0))
     {
-        return Result<qint64>::failure(requestCheck);
+        return Result<qint64>::failure(ServerError::RateLimited);
     }
 
-    if (document->forceConflict)
+    if (upload.header.documentId != documentId || upload.blob.size() > m_limits.maxBlobBytes
+        || upload.header.recipients.isEmpty())
+    {
+        return Result<qint64>::failure(ServerError::InvalidRequest);
+    }
+
+    if (document->forceConflict || baseVersion != document->version)
     {
         document->forceConflict = false;
         return Result<qint64>::failure(ServerError::VersionConflict);
     }
 
-    if (baseVersion != document->version)
+    // Fewer devices than the allow-list is fine - an addition is sealed by its
+    // approver's next version - but never one the allow-list has dropped.
+    const QSet<QString> allowList = allowListOf(*document);
+    for (const RecipientEntry& entry : upload.header.recipients)
     {
-        return Result<qint64>::failure(ServerError::VersionConflict);
-    }
-
-    // Accepted uploads are what advance the save counter, so they are what is
-    // counted: pushing it to its cap takes uploads this limit makes centuries long.
-    if (!withinLimits(m_uploads, device, m_limits.uploadsPerHour, 0))
-    {
-        return Result<qint64>::failure(ServerError::RateLimited);
-    }
-
-    const DocumentHeader& current = document->current();
-    const DocumentHeader& next = upload.header;
-
-    if (next.documentId != documentId || upload.blob.size() > m_limits.maxBlobBytes)
-    {
-        return Result<qint64>::failure(ServerError::InvalidRequest);
-    }
-
-    if (DocumentCrypto::payloadHash(upload.blob) != next.payloadHash)
-    {
-        return Result<qint64>::failure(ServerError::PayloadMismatch);
-    }
-
-    // The device uploading is the device that wrote it.
-    const std::optional<RecipientEntry> uploader = entryByVerifyKey(current, device);
-    if (!uploader.has_value() || uploader.value().fingerprint != next.lastWriter)
-    {
-        return Result<qint64>::failure(ServerError::InvalidRequest);
-    }
-
-    // The same rule every client applies, admin rules included. It also keeps the
-    // version and key generation from going backwards.
-    if (!DocumentCrypto::verifyLink(current, next))
-    {
-        return Result<qint64>::failure(ServerError::ChainRefused);
-    }
-
-    // The chain requires only a rise. The server sees every version, so it alone
-    // can bound each one, which keeps any member from pinning the counter at its cap.
-    if (next.saveCounter - current.saveCounter > DocumentHeader::MaxSaveCounterStep)
-    {
-        return Result<qint64>::failure(ServerError::CounterJump);
-    }
-
-    const QHash<QString, RecipientEntry> before = byFingerprint(current);
-    const QHash<QString, RecipientEntry> after = byFingerprint(next);
-
-    // Everything below decides; nothing changes until every check has passed, so
-    // a refused upload leaves requests and history exactly as they were.
-
-    // A device joins only a document it asked to join.
-    QStringList consumedRequests;
-    for (auto entry = after.constBegin(); entry != after.constEnd(); ++entry)
-    {
-        if (before.contains(entry.key()))
+        if (!allowList.contains(entry.fingerprint.toHex()))
         {
-            continue;
-        }
-
-        const auto request = document->requests.constFind(entry.key());
-        const bool requested = request != document->requests.constEnd()
-            && request.value().status == RequestStatus::Pending
-            && request.value().request.member == entry.value().member;
-
-        if (requested)
-        {
-            consumedRequests.append(entry.key());
-            continue;
-        }
-
-        if (!linkPermitted(entry.value().fingerprint, entry.value().member, current))
-        {
-            return Result<qint64>::failure(ServerError::DeviceNotInvited);
+            return Result<qint64>::failure(ServerError::NotOnAllowList);
         }
     }
 
-    // --- Commit: every change together. ---
-
-    const qint64 version = document->version + 1;
-    const bool kept = membershipOf(current) != membershipOf(next);
-
-    document->version = version;
+    ++document->version;
+    document->header = upload.header.toJson();
     document->blob = upload.blob;
-    document->history.append(StoredVersion{version, next, kept});
-    m_uploads[device.bytes].append(m_now);
-
-    for (const QString& fingerprint : consumedRequests)
-    {
-        document->requests[fingerprint].status = RequestStatus::Granted;
-    }
-
-    return Result<qint64>::success(version);
+    document->published = Publication{caller.person->displayName, caller.fingerprint, m_now};
+    m_uploads[caller.device.bytes].append(m_now);
+    return Result<qint64>::success(document->version);
 }
 
 // --- Lease ---------------------------------------------------------------------
 
-Result<Lease> FakeServer::decideTakeLease(const Session& session,
-                                          const QString& documentId,
-                                          const QByteArray& requestSignature)
+Result<Lease> FakeServer::decideTakeLease(const Session& session, const QString& documentId)
 {
-    VerifyKey device;
+    Caller caller;
     StoredDocument* document = nullptr;
-    const ServerError failure = member(session, documentId, device, document);
+    std::optional<LostAccess> lost;
+    const ServerError failure = allowListed(session, documentId, caller, document, lost);
     if (failure != ServerError::None)
     {
-        return Result<Lease>::failure(failure);
+        return refused<Lease>(failure, lost);
     }
 
-    const ServerError requestCheck = signedBy(session,
-                                              device,
-                                              Endpoint::TakeLease,
-                                              documentId,
-                                              emptyBody(),
-                                              requestSignature);
-    if (requestCheck != ServerError::None)
-    {
-        return Result<Lease>::failure(requestCheck);
-    }
-
-    const Fingerprint self = entryByVerifyKey(document->current(), device).value().fingerprint;
-
-    if (document->lease.has_value() && document->lease.value().holder != self
+    if (document->lease.has_value() && document->lease.value().holder != caller.fingerprint
         && document->lease.value().expires > m_now)
     {
         return Result<Lease>::failure(ServerError::LeaseHeld);
     }
 
-    document->lease = Lease{self, m_now.addSecs(m_limits.leaseSeconds)};
+    document->lease = Lease{caller.fingerprint, m_now.addSecs(m_limits.leaseSeconds)};
     return Result<Lease>::success(document->lease.value());
 }
 
-Result<Done> FakeServer::decideReleaseLease(const Session& session,
-                                            const QString& documentId,
-                                            const QByteArray& requestSignature)
+Result<Done> FakeServer::decideReleaseLease(const Session& session, const QString& documentId)
 {
-    VerifyKey device;
+    Caller caller;
     StoredDocument* document = nullptr;
-    const ServerError failure = member(session, documentId, device, document);
+    std::optional<LostAccess> lost;
+    const ServerError failure = allowListed(session, documentId, caller, document, lost);
     if (failure != ServerError::None)
     {
-        return Result<Done>::failure(failure);
+        return refused<Done>(failure, lost);
     }
-
-    const ServerError requestCheck = signedBy(session,
-                                              device,
-                                              Endpoint::ReleaseLease,
-                                              documentId,
-                                              emptyBody(),
-                                              requestSignature);
-    if (requestCheck != ServerError::None)
-    {
-        return Result<Done>::failure(requestCheck);
-    }
-
-    const Fingerprint self = entryByVerifyKey(document->current(), device).value().fingerprint;
 
     if (document->lease.has_value() && document->lease.value().expires > m_now
-        && document->lease.value().holder != self)
+        && document->lease.value().holder != caller.fingerprint)
     {
         return Result<Done>::failure(ServerError::LeaseHeld);
     }
@@ -664,99 +624,89 @@ Result<Done> FakeServer::decideReleaseLease(const Session& session,
     return Result<Done>::success(Done());
 }
 
-// --- Access requests -----------------------------------------------------------
+// --- Who has access ------------------------------------------------------------
 
-Result<Done> FakeServer::decideRequestAccess(const Session& session,
-                                             const QString& documentId,
-                                             const AccessRequest& request,
-                                             const QByteArray& requestSignature)
+Result<QList<HistoryEntry>> FakeServer::decideHistory(const Session& session, const QString& documentId, qint64 after)
 {
-    VerifyKey device;
-    const ServerError failure = authenticated(session, device);
+    Caller caller;
+    StoredDocument* document = nullptr;
+    std::optional<LostAccess> lost;
+    const ServerError failure = allowListed(session, documentId, caller, document, lost);
+    if (failure != ServerError::None)
+    {
+        return refused<QList<HistoryEntry>>(failure, lost);
+    }
+
+    QList<HistoryEntry> entries;
+    for (const HistoryEntry& entry : document->history)
+    {
+        if (entry.index > after)
+        {
+            entries.append(entry);
+        }
+    }
+    return Result<QList<HistoryEntry>>::success(entries);
+}
+
+Result<Done> FakeServer::decideRequestAccess(const Session& session, const QString& documentId)
+{
+    Caller caller;
+    const ServerError failure = signedIn(session, caller);
     if (failure != ServerError::None)
     {
         return Result<Done>::failure(failure);
     }
-
-    const ServerError requestCheck = signedBy(session,
-                                              device,
-                                              Endpoint::RequestAccess,
-                                              documentId,
-                                              requestAccessBody(request),
-                                              requestSignature);
-    if (requestCheck != ServerError::None)
-    {
-        return Result<Done>::failure(requestCheck);
-    }
-
-    // The one write open to a non-member, so the one a stranger can repeat.
-    if (!withinLimits(m_accessRequests, device, m_limits.requestsPerHour, 0))
-    {
-        return Result<Done>::failure(ServerError::RateLimited);
-    }
-
-    const auto found = m_documents.find(documentId);
-    if (found == m_documents.end())
-    {
-        return Result<Done>::failure(ServerError::UnknownDocument);
-    }
-
-    // A device asks for itself, not on another device's behalf.
-    if (!request.device.isValid() || request.device.verifyKey() != device
-        || !request.member.isValid() || request.displayName.isEmpty()
-        || entryByVerifyKey(found.value().current(), device).has_value())
+    if (caller.person == nullptr)
     {
         return Result<Done>::failure(ServerError::InvalidRequest);
     }
 
-    // A sealing key is one device's, so a request naming one already in this
-    // document or in another device's request is claiming a key it does not hold.
-    for (const RecipientEntry& entry : found.value().current().recipients)
+    const auto found = m_documents.find(documentId);
+    if (found == m_documents.end() || found.value().members.isEmpty())
     {
-        if (entry.publicKey == request.device.publicKey())
-        {
-            return Result<Done>::failure(ServerError::InvalidRequest);
-        }
+        return Result<Done>::failure(ServerError::UnknownDocument);
     }
-    for (const StoredRequest& other : found.value().requests)
+
+    StoredDocument& document = found.value();
+    if (document.members.contains(caller.person->member.toHex()))
     {
-        if (other.requester != device && other.request.device.publicKey() == request.device.publicKey())
+        return Result<Done>::failure(ServerError::InvalidRequest);
+    }
+
+    // One pending request per person: asking again changes nothing.
+    for (const StoredRequest& stored : document.requests)
+    {
+        if (stored.status == RequestStatus::Pending && stored.request.person.member == caller.person->member)
         {
-            return Result<Done>::failure(ServerError::InvalidRequest);
+            return Result<Done>::success(Done());
         }
     }
 
-    // One request per device: a new one replaces the device's earlier request, so
-    // its status is always the one it asked most recently.
-    for (auto earlier = found.value().requests.begin(); earlier != found.value().requests.end();)
+    if (!withinLimits(m_accessRequests, caller.device, m_limits.requestsPerHour, 0))
     {
-        if (earlier.value().requester == device)
-        {
-            earlier = found.value().requests.erase(earlier);
-        }
-        else
-        {
-            ++earlier;
-        }
+        return Result<Done>::failure(ServerError::RateLimited);
     }
 
-    StoredRequest stored;
-    stored.request = request;
-    stored.requester = device;
-    found.value().requests.insert(request.device.fingerprint().toHex(), stored);
-    m_accessRequests[device.bytes].append(m_now);
+    AccessRequest request;
+    request.index = document.requests.size() + 1;
+    request.person = *caller.person;
+    request.person.devices = {*deviceOf(*caller.person, caller.device)};
+    request.when = m_now;
+
+    document.requests.append(StoredRequest{request, RequestStatus::Pending});
+    m_accessRequests[caller.device.bytes].append(m_now);
     return Result<Done>::success(Done());
 }
 
-Result<QList<AccessRequest>> FakeServer::decideAccessRequests(const Session& session,
-                                                              const QString& documentId)
+Result<QList<AccessRequest>> FakeServer::decideAccessRequests(const Session& session, const QString& documentId)
 {
-    VerifyKey device;
+    Caller caller;
     StoredDocument* document = nullptr;
-    const ServerError failure = member(session, documentId, device, document);
+    std::optional<LostAccess> lost;
+    const ServerError failure = allowListed(session, documentId, caller, document, lost);
     if (failure != ServerError::None)
     {
-        return Result<QList<AccessRequest>>::failure(failure);
+        return refused<QList<AccessRequest>>(failure, lost);
     }
 
     QList<AccessRequest> pending;
@@ -770,378 +720,181 @@ Result<QList<AccessRequest>> FakeServer::decideAccessRequests(const Session& ses
     return Result<QList<AccessRequest>>::success(pending);
 }
 
-Result<Done> FakeServer::decideClearAccessRequest(const Session& session,
-                                                  const QString& documentId,
-                                                  const Fingerprint& requester,
-                                                  const QByteArray& requestSignature)
+Result<Done> FakeServer::decideDeclineRequest(const Session& session, const QString& documentId, qint64 index)
 {
-    VerifyKey device;
+    Caller caller;
     StoredDocument* document = nullptr;
-    const ServerError failure = member(session, documentId, device, document);
+    std::optional<LostAccess> lost;
+    const ServerError failure = admin(session, documentId, caller, document, lost);
     if (failure != ServerError::None)
     {
-        return Result<Done>::failure(failure);
+        return refused<Done>(failure, lost);
     }
 
-    const ServerError requestCheck = signedBy(session,
-                                              device,
-                                              Endpoint::ClearAccessRequest,
-                                              documentId,
-                                              clearAccessRequestBody(requester),
-                                              requestSignature);
-    if (requestCheck != ServerError::None)
+    for (StoredRequest& stored : document->requests)
     {
-        return Result<Done>::failure(requestCheck);
+        if (stored.request.index == index && stored.status == RequestStatus::Pending)
+        {
+            stored.status = RequestStatus::Declined;
+            return Result<Done>::success(Done());
+        }
     }
-
-    const auto stored = document->requests.find(requester.toHex());
-    if (stored == document->requests.end() || stored.value().status != RequestStatus::Pending)
-    {
-        return Result<Done>::failure(ServerError::NotFound);
-    }
-
-    stored.value().status = RequestStatus::Withdrawn;
-    return Result<Done>::success(Done());
+    return Result<Done>::failure(ServerError::NotFound);
 }
 
 Result<RequestStatus> FakeServer::decideMyRequestStatus(const Session& session, const QString& documentId)
 {
-    VerifyKey device;
-    const ServerError failure = authenticated(session, device);
+    Caller caller;
+    const ServerError failure = signedIn(session, caller);
     if (failure != ServerError::None)
     {
         return Result<RequestStatus>::failure(failure);
     }
 
     const auto found = m_documents.constFind(documentId);
-    if (found == m_documents.constEnd())
+    if (caller.person == nullptr || found == m_documents.constEnd())
     {
-        return Result<RequestStatus>::failure(ServerError::UnknownDocument);
+        return Result<RequestStatus>::failure(ServerError::NotFound);
     }
 
-    for (const StoredRequest& stored : found.value().requests)
+    // The latest request this person made.
+    for (qsizetype index = found.value().requests.size() - 1; index >= 0; --index)
     {
-        if (stored.requester == device)
+        const StoredRequest& stored = found.value().requests.at(index);
+        if (stored.request.person.member == caller.person->member)
         {
             return Result<RequestStatus>::success(stored.status);
         }
     }
-
     return Result<RequestStatus>::failure(ServerError::NotFound);
 }
 
-// --- This device ---------------------------------------------------------------
-
-Result<QStringList> FakeServer::decideMyDocuments(const Session& session)
+Result<Done> FakeServer::decideGrant(const Session& session, const QString& documentId, qint64 index)
 {
-    VerifyKey device;
-    const ServerError failure = authenticated(session, device);
+    Caller caller;
+    StoredDocument* document = nullptr;
+    std::optional<LostAccess> lost;
+    const ServerError failure = admin(session, documentId, caller, document, lost);
     if (failure != ServerError::None)
     {
-        return Result<QStringList>::failure(failure);
+        return refused<Done>(failure, lost);
     }
 
-    // Every device in a current header got there by registering the document, a
-    // granted request, or a completed pairing, so this lists only documents the
-    // device genuinely joined.
-    QStringList documents;
-    for (auto document = m_documents.constBegin(); document != m_documents.constEnd(); ++document)
+    for (StoredRequest& stored : document->requests)
     {
-        if (entryByVerifyKey(document.value().current(), device).has_value())
+        if (stored.request.index != index || stored.status != RequestStatus::Pending)
         {
-            documents.append(document.key());
+            continue;
         }
+
+        const QString member = stored.request.person.member.toHex();
+        stored.status = RequestStatus::Granted;
+        document->members.insert(member, Role::Member);
+        document->lost.remove(member);
+        record(*document, HistoryEntry::Kind::Added, caller.person->displayName, m_people.value(member).displayName);
+        return Result<Done>::success(Done());
     }
-    documents.sort();
-    return Result<QStringList>::success(documents);
+    return Result<Done>::failure(ServerError::NotFound);
 }
 
-// --- Pairings ------------------------------------------------------------------
-
-Result<QString> FakeServer::decideStartPairing(const Session& session,
-                                               const QString& deviceName,
-                                               const QByteArray& commitment,
-                                               const QByteArray& requestSignature)
+Result<Done> FakeServer::decideRemoveMember(const Session& session, const QString& documentId, const MemberId& member)
 {
-    VerifyKey device;
-    const ServerError failure = authenticated(session, device);
+    Caller caller;
+    StoredDocument* document = nullptr;
+    std::optional<LostAccess> lost;
+    const ServerError failure = allowListed(session, documentId, caller, document, lost);
     if (failure != ServerError::None)
     {
-        return Result<QString>::failure(failure);
+        return refused<Done>(failure, lost);
     }
 
-    const ServerError requestCheck = signedBy(session,
-                                              device,
-                                              Endpoint::StartPairing,
-                                              QString(),
-                                              startPairingBody(deviceName, commitment),
-                                              requestSignature);
-    if (requestCheck != ServerError::None)
+    const QString target = member.toHex();
+    const bool leaving = member == caller.person->member;
+    if (!leaving && document->members.value(caller.person->member.toHex()) != Role::Admin)
     {
-        return Result<QString>::failure(requestCheck);
+        return Result<Done>::failure(ServerError::NotAdmin);
     }
-
-    if (!withinLimits(m_pairingStarts, device, m_limits.pairingsPerHour, 0))
-    {
-        return Result<QString>::failure(ServerError::RateLimited);
-    }
-
-    if (deviceName.isEmpty() || commitment.isEmpty())
-    {
-        return Result<QString>::failure(ServerError::InvalidRequest);
-    }
-
-    QString code;
-    do
-    {
-        code = Pairing::newPairingCode();
-    }
-    while (m_pairings.contains(code));
-
-    StoredPairing pairing;
-    pairing.state.code = code;
-    pairing.state.initiatorDeviceName = deviceName;
-    pairing.state.commitment = commitment;
-    pairing.state.expires = m_now.addSecs(m_limits.pairingSeconds);
-    pairing.initiator = device;
-
-    m_pairings.insert(code, pairing);
-    m_pairingStarts[device.bytes].append(m_now);
-    return Result<QString>::success(code);
-}
-
-Result<PairingState> FakeServer::decidePairing(const Session& session, const QString& code)
-{
-    VerifyKey device;
-    const ServerError failure = authenticated(session, device);
-    if (failure != ServerError::None)
-    {
-        return Result<PairingState>::failure(failure);
-    }
-
-    const auto found = m_pairings.find(code);
-    if (found == m_pairings.end())
-    {
-        return Result<PairingState>::failure(ServerError::NotFound);
-    }
-
-    StoredPairing& stored = found.value();
-    if (stored.state.expires <= m_now)
-    {
-        return Result<PairingState>::failure(ServerError::Expired);
-    }
-
-    // The two parties only. Before anyone has responded, the responder-to-be has
-    // to read the commitment in order to keep it, so any member may read until
-    // then.
-    const bool isInitiator = stored.initiator == device;
-    const bool isResponder = stored.responder.has_value() && stored.responder.value() == device;
-    const bool mayRespond = !stored.responder.has_value() && isMemberAnywhere(device);
-
-    if (!isInitiator && !isResponder && !mayRespond)
-    {
-        return Result<PairingState>::failure(ServerError::NotAllowListed);
-    }
-
-    if (!stored.scriptedReads.isEmpty())
-    {
-        return Result<PairingState>::success(stored.scriptedReads.takeFirst());
-    }
-
-    return Result<PairingState>::success(stored.state);
-}
-
-Result<Done> FakeServer::decideRespondToPairing(const Session& session,
-                                                const QString& code,
-                                                const DeviceKeys& responder,
-                                                const QByteArray& requestSignature)
-{
-    VerifyKey device;
-    const ServerError failure = authenticated(session, device);
-    if (failure != ServerError::None)
-    {
-        return Result<Done>::failure(failure);
-    }
-
-    const ServerError requestCheck = signedBy(session,
-                                              device,
-                                              Endpoint::RespondToPairing,
-                                              QString(),
-                                              respondToPairingBody(code, responder),
-                                              requestSignature);
-    if (requestCheck != ServerError::None)
-    {
-        return Result<Done>::failure(requestCheck);
-    }
-
-    const auto found = m_pairings.find(code);
-    if (found == m_pairings.end())
+    if (!document->members.contains(target))
     {
         return Result<Done>::failure(ServerError::NotFound);
     }
 
-    StoredPairing& stored = found.value();
-    if (stored.state.expires <= m_now)
+    const Role role = document->members.take(target);
+    if (!keepsAnAdmin(*document))
     {
-        return Result<Done>::failure(ServerError::Expired);
+        document->members.insert(target, role);
+        return Result<Done>::failure(ServerError::LastAdmin);
     }
 
-    if (!isMemberAnywhere(device))
+    const QString subject = m_people.value(target).displayName;
+    if (leaving)
     {
-        return Result<Done>::failure(ServerError::NotAllowListed);
+        document->lost.insert(target, LostAccess{LostAccess::How::Left, QString(), m_now});
+        record(*document, HistoryEntry::Kind::Left, subject, subject);
+    }
+    else
+    {
+        document->lost.insert(target, LostAccess{LostAccess::How::Removed, caller.person->displayName, m_now});
+        record(*document, HistoryEntry::Kind::Removed, caller.person->displayName, subject);
     }
 
-    if (stored.responder.has_value())
+    // When the last person leaves, nobody can read or write the ward again. What
+    // remains is who lost access, so the leaver's other devices still learn why.
+    if (document->members.isEmpty())
     {
-        return Result<Done>::failure(ServerError::AlreadyWritten);
+        document->header = QJsonObject();
+        document->blob.clear();
+        document->requests.clear();
+        document->lease.reset();
     }
-
-    if (!responder.isValid() || responder.verifyKey != device || stored.initiator == device)
-    {
-        return Result<Done>::failure(ServerError::InvalidRequest);
-    }
-
-    stored.responder = device;
-    stored.state.responder = responder;
     return Result<Done>::success(Done());
 }
 
-Result<Done> FakeServer::decideRevealPairing(const Session& session,
-                                             const QString& code,
-                                             const DeviceKeys& initiator,
-                                             const QByteArray& nonce,
-                                             const QByteArray& requestSignature)
+Result<Done> FakeServer::decideSetRole(const Session& session,
+                                       const QString& documentId,
+                                       const MemberId& member,
+                                       Role role)
 {
-    VerifyKey device;
-    const ServerError failure = authenticated(session, device);
+    Caller caller;
+    StoredDocument* document = nullptr;
+    std::optional<LostAccess> lost;
+    const ServerError failure = admin(session, documentId, caller, document, lost);
     if (failure != ServerError::None)
     {
-        return Result<Done>::failure(failure);
+        return refused<Done>(failure, lost);
     }
 
-    const ServerError requestCheck = signedBy(session,
-                                              device,
-                                              Endpoint::RevealPairing,
-                                              QString(),
-                                              revealPairingBody(code, initiator, nonce),
-                                              requestSignature);
-    if (requestCheck != ServerError::None)
-    {
-        return Result<Done>::failure(requestCheck);
-    }
-
-    const auto found = m_pairings.find(code);
-    if (found == m_pairings.end())
+    const QString target = member.toHex();
+    if (!document->members.contains(target))
     {
         return Result<Done>::failure(ServerError::NotFound);
     }
 
-    StoredPairing& stored = found.value();
-    if (stored.state.expires <= m_now)
+    const Role previous = document->members.value(target);
+    if (previous == role)
     {
-        return Result<Done>::failure(ServerError::Expired);
+        return Result<Done>::success(Done());
     }
 
-    if (stored.initiator != device)
+    document->members.insert(target, role);
+    if (!keepsAnAdmin(*document))
     {
-        return Result<Done>::failure(ServerError::NotAllowListed);
+        document->members.insert(target, previous);
+        return Result<Done>::failure(ServerError::LastAdmin);
     }
 
-    // The initiator reveals only after it has read and kept the responder's keys.
-    if (!stored.responder.has_value())
-    {
-        return Result<Done>::failure(ServerError::OutOfOrder);
-    }
-
-    if (stored.state.initiator.has_value())
-    {
-        return Result<Done>::failure(ServerError::AlreadyWritten);
-    }
-
-    if (!initiator.isValid() || initiator.verifyKey != device || nonce.size() != Pairing::NonceSize)
-    {
-        return Result<Done>::failure(ServerError::InvalidRequest);
-    }
-
-    stored.state.initiator = initiator;
-    stored.state.nonce = nonce;
+    record(*document,
+           role == Role::Admin ? HistoryEntry::Kind::MadeAdmin : HistoryEntry::Kind::MadeMember,
+           caller.person->displayName,
+           m_people.value(target).displayName);
     return Result<Done>::success(Done());
 }
-
-Result<Done> FakeServer::decideHandOver(const Session& session,
-                                        const QString& code,
-                                        const QByteArray& handover,
-                                        const QByteArray& requestSignature)
-{
-    VerifyKey device;
-    const ServerError failure = authenticated(session, device);
-    if (failure != ServerError::None)
-    {
-        return Result<Done>::failure(failure);
-    }
-
-    const ServerError requestCheck = signedBy(session,
-                                              device,
-                                              Endpoint::HandOver,
-                                              QString(),
-                                              handOverBody(code, handover),
-                                              requestSignature);
-    if (requestCheck != ServerError::None)
-    {
-        return Result<Done>::failure(requestCheck);
-    }
-
-    const auto found = m_pairings.find(code);
-    if (found == m_pairings.end())
-    {
-        return Result<Done>::failure(ServerError::NotFound);
-    }
-
-    StoredPairing& stored = found.value();
-    if (stored.state.expires <= m_now)
-    {
-        return Result<Done>::failure(ServerError::Expired);
-    }
-
-    if (!stored.responder.has_value() || stored.responder.value() != device)
-    {
-        return Result<Done>::failure(ServerError::NotAllowListed);
-    }
-
-    if (!stored.state.initiator.has_value())
-    {
-        return Result<Done>::failure(ServerError::OutOfOrder);
-    }
-
-    if (!stored.state.handover.isEmpty())
-    {
-        return Result<Done>::failure(ServerError::AlreadyWritten);
-    }
-
-    if (handover.isEmpty())
-    {
-        return Result<Done>::failure(ServerError::InvalidRequest);
-    }
-
-    stored.state.handover = handover;
-
-    // A completed pairing is lasting permission to add the initiator's device
-    // under the responder's person, in any ward that person belongs to, however
-    // long the queue takes to reach them all.
-    const DeviceKeys& keys = stored.state.initiator.value();
-    m_linkPermissions.append(
-        LinkPermission{DocumentCrypto::fingerprintOf(keys.publicKey, keys.verifyKey), device});
-
-    return Result<Done>::success(Done());
-}
-
-// --- Development only ----------------------------------------------------------
 
 Result<Done> FakeServer::decideAdvanceClock(qint64 seconds)
 {
-    if (seconds < 0)
+    if (m_offline)
     {
-        return Result<Done>::failure(ServerError::InvalidRequest);
+        return Result<Done>::failure(ServerError::Unreachable);
     }
 
     m_now = m_now.addSecs(seconds);
@@ -1152,8 +905,6 @@ Result<Done> FakeServer::decideAdvanceClock(qint64 seconds)
 
 void FakeServer::forceConflict(const QString& documentId)
 {
-    // Controls act only on what exists, so a mistyped id in a test cannot create a
-    // document the server would then report as taken.
     const auto found = m_documents.find(documentId);
     if (found != m_documents.end())
     {
@@ -1166,36 +917,7 @@ void FakeServer::holdLeaseAs(const QString& documentId, const Fingerprint& holde
     const auto found = m_documents.find(documentId);
     if (found != m_documents.end())
     {
-        found.value().lease = Lease{holder, m_now.addYears(10)};
-    }
-}
-
-void FakeServer::withholdHeader(const QString& documentId, qint64 version)
-{
-    const auto found = m_documents.find(documentId);
-    if (found != m_documents.end())
-    {
-        found.value().withheld.insert(version);
-    }
-}
-
-void FakeServer::substituteHeader(const QString& documentId,
-                                  qint64 version,
-                                  const DocumentHeader& replacement)
-{
-    const auto found = m_documents.find(documentId);
-    if (found != m_documents.end())
-    {
-        found.value().substituted.insert(version, replacement);
-    }
-}
-
-void FakeServer::scriptPairingReads(const QString& code, const QList<PairingState>& reads)
-{
-    const auto found = m_pairings.find(code);
-    if (found != m_pairings.end())
-    {
-        found.value().scriptedReads = reads;
+        found.value().lease = Lease{holder, m_now.addYears(1)};
     }
 }
 
@@ -1247,34 +969,7 @@ void FakeServer::deliverWaiting()
     scheduleDelivery();
 }
 
-QList<QJsonObject> FakeServer::chainOf(const StoredDocument& document, qint64 after, qint64 last) const
-{
-    // The kept headers newer than after, then the header of last - always, even
-    // when last is after itself. A header whose membership did not change is not
-    // kept: verifyLink gives the same answer across it, which is what makes
-    // dropping it safe. Headers travel as the server stored them, so a substituted
-    // one in a later format reaches the client as that format.
-    QList<QJsonObject> chain;
-    for (const StoredVersion& stored : document.history)
-    {
-        if (stored.version > last)
-        {
-            continue;
-        }
-
-        const bool between = stored.version > after && stored.version < last;
-        const bool kept = stored.kept && !document.withheld.contains(stored.version);
-        if (stored.version != last && !(between && kept))
-        {
-            continue;
-        }
-
-        chain.append(document.substituted.value(stored.version, stored.header).toJson());
-    }
-    return chain;
-}
-
-ServerError FakeServer::authenticated(const Session& session, VerifyKey& device) const
+ServerError FakeServer::signedIn(const Session& session, Caller& caller)
 {
     if (m_offline)
     {
@@ -1287,47 +982,124 @@ ServerError FakeServer::authenticated(const Session& session, VerifyKey& device)
         return ServerError::Unauthenticated;
     }
 
-    device = record.value().device;
+    caller.device = record.value().device;
+    const auto person = m_personOfDevice.constFind(caller.device.bytes);
+    if (person != m_personOfDevice.constEnd())
+    {
+        caller.person = &m_people[person.value()];
+        caller.fingerprint = deviceOf(*caller.person, caller.device)->fingerprint;
+    }
     return ServerError::None;
 }
 
-ServerError FakeServer::member(const Session& session,
-                               const QString& documentId,
-                               VerifyKey& device,
-                               StoredDocument*& document)
+ServerError FakeServer::allowListed(const Session& session,
+                                    const QString& documentId,
+                                    Caller& caller,
+                                    StoredDocument*& document,
+                                    std::optional<LostAccess>& lost)
 {
-    const ServerError failure = authenticated(session, device);
+    const ServerError failure = signedIn(session, caller);
     if (failure != ServerError::None)
     {
         return failure;
     }
 
+    if (m_unlinked.contains(caller.device.bytes))
+    {
+        lost = m_unlinked.value(caller.device.bytes);
+        return ServerError::AccessLost;
+    }
+
     const auto found = m_documents.find(documentId);
-    if (found == m_documents.end() || found.value().history.isEmpty())
+    if (found == m_documents.end())
     {
         return ServerError::UnknownDocument;
     }
 
-    // The allow-list is the current header's recipients, and nothing else.
-    if (!entryByVerifyKey(found.value().current(), device).has_value())
+    if (caller.person == nullptr)
     {
-        return ServerError::NotAllowListed;
+        return ServerError::NotMember;
+    }
+
+    const QString member = caller.person->member.toHex();
+    if (!found.value().members.contains(member))
+    {
+        if (found.value().lost.contains(member))
+        {
+            lost = found.value().lost.value(member);
+            return ServerError::AccessLost;
+        }
+        return ServerError::NotMember;
     }
 
     document = &found.value();
     return ServerError::None;
 }
 
-bool FakeServer::isMemberAnywhere(const VerifyKey& device) const
+ServerError FakeServer::admin(const Session& session,
+                              const QString& documentId,
+                              Caller& caller,
+                              StoredDocument*& document,
+                              std::optional<LostAccess>& lost)
 {
-    for (const StoredDocument& document : m_documents)
+    const ServerError failure = allowListed(session, documentId, caller, document, lost);
+    if (failure != ServerError::None)
     {
-        if (!document.history.isEmpty() && entryByVerifyKey(document.current(), device).has_value())
+        return failure;
+    }
+    return document->members.value(caller.person->member.toHex()) == Role::Admin ? ServerError::None
+                                                                                  : ServerError::NotAdmin;
+}
+
+QSet<QString> FakeServer::allowListOf(const StoredDocument& document) const
+{
+    QSet<QString> allowList;
+    for (auto it = document.members.constBegin(); it != document.members.constEnd(); ++it)
+    {
+        for (const Device& device : m_people.value(it.key()).devices)
+        {
+            allowList.insert(device.fingerprint.toHex());
+        }
+    }
+    return allowList;
+}
+
+QList<Member> FakeServer::membersOf(const StoredDocument& document) const
+{
+    // In member id order, so two heads of the same state compare equal.
+    QStringList ids = document.members.keys();
+    ids.sort();
+
+    QList<Member> members;
+    for (const QString& id : ids)
+    {
+        members.append(Member{m_people.value(id), document.members.value(id)});
+    }
+    return members;
+}
+
+bool FakeServer::keepsAnAdmin(const StoredDocument& document) const
+{
+    if (document.members.isEmpty())
+    {
+        return true;
+    }
+    for (const Role role : document.members)
+    {
+        if (role == Role::Admin)
         {
             return true;
         }
     }
     return false;
+}
+
+void FakeServer::record(StoredDocument& document,
+                        HistoryEntry::Kind kind,
+                        const QString& actor,
+                        const QString& subject)
+{
+    document.history.append(HistoryEntry{document.history.size() + 1, kind, actor, subject, m_now});
 }
 
 bool FakeServer::withinLimits(const QHash<QByteArray, QList<QDateTime>>& log,
@@ -1350,50 +1122,6 @@ bool FakeServer::withinLimits(const QHash<QByteArray, QList<QDateTime>>& log,
         }
     }
     return recent < perHour;
-}
-
-bool FakeServer::linkPermitted(const Fingerprint& device,
-                               const MemberId& member,
-                               const DocumentHeader& current) const
-{
-    for (const LinkPermission& permission : m_linkPermissions)
-    {
-        if (permission.initiator != device)
-        {
-            continue;
-        }
-
-        const std::optional<RecipientEntry> responder = entryByVerifyKey(current, permission.responder);
-        if (responder.has_value() && responder.value().member == member)
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
-ServerError FakeServer::signedBy(const Session& session,
-                                  const VerifyKey& device,
-                                  Endpoint endpoint,
-                                  const QString& documentId,
-                                  const QByteArray& body,
-                                  const QByteArray& signature) const
-{
-    return requestVerifies(endpoint, session, documentId, body, signature, device)
-               ? ServerError::None
-               : ServerError::Unauthenticated;
-}
-
-bool FakeServer::pairedWith(const Fingerprint& initiator, const VerifyKey& responder) const
-{
-    for (const LinkPermission& permission : m_linkPermissions)
-    {
-        if (permission.initiator == initiator && permission.responder == responder)
-        {
-            return true;
-        }
-    }
-    return false;
 }
 
 QString FakeServer::randomToken() const

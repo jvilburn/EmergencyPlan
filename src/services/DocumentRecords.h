@@ -1,7 +1,6 @@
 #pragma once
 
-#include "Reconcile.h"
-#include "RosterChange.h"
+#include "CryptoTypes.h"
 
 #include <QByteArray>
 #include <QJsonObject>
@@ -22,11 +21,12 @@ struct DocumentRecord
     /// taken for the version the server and this device agreed on.
     QByteArray baseHash;
 
-    /// The newest server version this device has taken in or published.
-    Reconcile::HighWaterMark highWaterMark;
+    /// The base copy's save counter. A local file above it has unpublished changes.
+    qint64 baseSaveCounter = 0;
 
-    /// Roster changes waiting to publish, oldest first.
-    QList<RosterChange> pendingChanges;
+    /// The devices of people this admin granted, each the device that asked, until a
+    /// version seals to it or the server stops listing it.
+    QList<DeviceKeys> granted;
 
     QJsonObject toJson() const;
 
@@ -37,8 +37,8 @@ struct DocumentRecord
     bool operator!=(const DocumentRecord& other) const { return !(*this == other); }
 };
 
-/// Where records are kept. AppSettings keeps them in the app; tests keep them in
-/// memory.
+/// Where records are kept, with the one device-level list the sealing-set rule
+/// needs. AppSettings keeps them in the app; tests keep them in memory.
 class DocumentRecords
 {
 public:
@@ -49,9 +49,12 @@ public:
     virtual void setRecord(const QString& documentId, const DocumentRecord& record) = 0;
     virtual void removeRecord(const QString& documentId) = 0;
 
-    /// Every document with a record, so the roster change queue can resume the
-    /// changes kept in them.
+    /// Every document with a record, so the sealing queue can visit every ward.
     virtual QStringList documentIds() const = 0;
+
+    /// The devices this device linked, which it seals into every ward it holds.
+    virtual QList<DeviceKeys> linkedDevices() const = 0;
+    virtual void setLinkedDevices(const QList<DeviceKeys>& devices) = 0;
 };
 
 /// Where one document's files live. DocumentLibrary names them.

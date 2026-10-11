@@ -87,14 +87,12 @@ set(MODEL_SOURCES
     src/models/Stake.cpp
     src/models/DocumentMetadata.cpp
     src/models/Document.cpp
+    src/models/SealingSet.cpp
     src/models/MinisteringGroup.cpp
     src/models/MinisteringDistrict.cpp
     src/models/EmergencyAsset.cpp
     src/models/DocumentChange.cpp
     src/models/EmergencyResponse.cpp
-    src/models/AccessRoster.cpp
-    src/models/RosterDevice.cpp
-    src/models/RosterPerson.cpp
     src/models/StrictJson.cpp
 )
 
@@ -115,6 +113,7 @@ set(MODEL_HEADERS
     src/models/Stake.h
     src/models/DocumentMetadata.h
     src/models/Document.h
+    src/models/SealingSet.h
     src/models/MinisteringGroup.h
     src/models/MinisteringDistrict.h
     src/models/EmergencyAsset.h
@@ -122,9 +121,6 @@ set(MODEL_HEADERS
     src/models/DocumentChange.h
     src/models/Id.h
     src/models/EmergencyResponse.h
-    src/models/AccessRoster.h
-    src/models/RosterDevice.h
-    src/models/RosterPerson.h
     src/models/StrictJson.h
 )
 
@@ -169,13 +165,11 @@ set(SERVICE_SOURCES
     src/services/GeoLocation.cpp
     src/services/EmergencyManager.cpp
     src/services/ReportGenerator.cpp
-    src/services/AccessControl.cpp
     src/services/CanonicalBytes.cpp
     src/services/CryptoTypes.cpp
     src/services/DocumentCrypto.cpp
     src/services/DocumentHeader.cpp
     src/services/HexCodec.cpp
-    src/services/Pairing.cpp
     src/services/Reconcile.cpp
     src/services/ResponseMerge.cpp
     src/services/ServerContract.cpp
@@ -183,8 +177,7 @@ set(SERVICE_SOURCES
     src/services/DocumentFile.cpp
     src/services/DocumentRecords.cpp
     src/services/DocumentSession.cpp
-    src/services/RosterChange.cpp
-    src/services/RosterChangeQueue.cpp
+    src/services/SealingQueue.cpp
     src/services/ServerConnection.cpp
     src/services/ServerVersion.cpp
     src/services/SessionTimers.cpp
@@ -196,7 +189,6 @@ set(SERVICE_SOURCES
     src/services/FileOpenRouter.cpp
     src/services/HttpServerApi.cpp
     src/services/HttpWire.cpp
-    src/services/AccessEvents.cpp
     # src/services/StatisticsService.cpp
     # src/services/ResourceService.cpp
     # src/services/SearchService.cpp
@@ -222,14 +214,12 @@ set(SERVICE_HEADERS
     src/services/GeoLocation.h
     src/services/EmergencyManager.h
     src/services/ReportGenerator.h
-    src/services/AccessControl.h
     src/services/CanonicalBytes.h
     src/services/CryptoTypes.h
     src/services/DocumentConstants.h
     src/services/DocumentCrypto.h
     src/services/DocumentHeader.h
     src/services/HexCodec.h
-    src/services/Pairing.h
     src/services/Reconcile.h
     src/services/ResponseMerge.h
     src/services/ServerContract.h
@@ -237,8 +227,7 @@ set(SERVICE_HEADERS
     src/services/DocumentFile.h
     src/services/DocumentRecords.h
     src/services/DocumentSession.h
-    src/services/RosterChange.h
-    src/services/RosterChangeQueue.h
+    src/services/SealingQueue.h
     src/services/ServerConnection.h
     src/services/ServerVersion.h
     src/services/SessionTimers.h
@@ -250,7 +239,6 @@ set(SERVICE_HEADERS
     src/services/FileOpenRouter.h
     src/services/HttpServerApi.h
     src/services/HttpWire.h
-    src/services/AccessEvents.h
     # src/services/StatisticsService.h
     # src/services/ResourceService.h
     # src/services/SearchService.h

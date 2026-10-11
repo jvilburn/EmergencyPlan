@@ -1,6 +1,7 @@
 #include "CryptoTypes.h"
 
 #include "HexCodec.h"
+#include "StrictJson.h"
 
 #include <QStringList>
 
@@ -19,6 +20,10 @@ static_assert(Fingerprint::Size <= crypto_generichash_BYTES_MAX);
 
 namespace
 {
+
+// Part of the payload and settings formats.
+const QLatin1String KeyPublicKey("publicKey");
+const QLatin1String KeyVerifyKey("verifyKey");
 
 constexpr int GroupLength = 4;
 constexpr QChar GroupSeparator = QLatin1Char('-');
@@ -88,4 +93,33 @@ MemberId MemberId::fromHex(const QString& hex)
     MemberId member;
     member.bytes = HexCodec::decode(hex, Size);
     return member;
+}
+
+QJsonObject DeviceKeys::toJson() const
+{
+    QJsonObject json;
+    json[KeyPublicKey] = HexCodec::encode(publicKey.bytes);
+    json[KeyVerifyKey] = HexCodec::encode(verifyKey.bytes);
+    return json;
+}
+
+std::optional<DeviceKeys> DeviceKeys::fromJson(const QJsonObject& json)
+{
+    QString publicHex;
+    QString verifyHex;
+    if (!StrictJson::hasOnlyKeys(json, {KeyPublicKey, KeyVerifyKey})
+        || !StrictJson::readString(json, KeyPublicKey, publicHex)
+        || !StrictJson::readString(json, KeyVerifyKey, verifyHex))
+    {
+        return std::nullopt;
+    }
+
+    DeviceKeys keys;
+    keys.publicKey.bytes = HexCodec::decode(publicHex, PublicKey::Size);
+    keys.verifyKey.bytes = HexCodec::decode(verifyHex, VerifyKey::Size);
+    if (!keys.isValid())
+    {
+        return std::nullopt;
+    }
+    return keys;
 }

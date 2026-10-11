@@ -7,6 +7,7 @@
 
 #include <QJsonArray>
 #include <QJsonValue>
+#include <QSet>
 
 namespace
 {
@@ -19,30 +20,14 @@ namespace
 const QLatin1String KeyFormatVersion("formatVersion");
 const QLatin1String KeyDocumentId("documentId");
 const QLatin1String KeyOriginDocumentId("originDocumentId");
-const QLatin1String KeyKeyGeneration("keyGeneration");
 const QLatin1String KeySaveCounter("saveCounter");
-const QLatin1String KeyLastWriter("lastWriter");
-const QLatin1String KeyWriterPublicKey("writerPublicKey");
-const QLatin1String KeyWriterVerifyKey("writerVerifyKey");
-const QLatin1String KeyLastWriteTime("lastWriteTime");
 const QLatin1String KeyNonce("nonce");
 const QLatin1String KeyRecipients("recipients");
-const QLatin1String KeyAdmins("admins");
-const QLatin1String KeyPayloadHash("payloadHash");
-const QLatin1String KeyWriterSignature("writerSignature");
 
-const QLatin1String KeyMember("member");
 const QLatin1String KeyFingerprint("fingerprint");
-const QLatin1String KeyPublicKey("publicKey");
-const QLatin1String KeyVerifyKey("verifyKey");
 const QLatin1String KeySealedKey("sealedKey");
 
 // --- Serialisation ---
-
-QString toHex(const QByteArray& bytes)
-{
-    return HexCodec::encode(bytes);
-}
 
 QString toBase64(const QByteArray& bytes)
 {
@@ -63,12 +48,6 @@ bool readHexBytes(const QJsonObject& json, QLatin1String key, int expectedSize, 
     return out.size() == expectedSize;
 }
 
-template<typename Value>
-bool readHexValue(const QJsonObject& json, QLatin1String key, Value& out)
-{
-    return readHexBytes(json, key, Value::Size, out.bytes);
-}
-
 bool readDocumentId(const QJsonObject& json, QLatin1String key, QString& out)
 {
     const QJsonValue value = json.value(key);
@@ -78,8 +57,8 @@ bool readDocumentId(const QJsonObject& json, QLatin1String key, QString& out)
     }
 
     // documentId is the one hex field kept as a string rather than decoded to
-    // bytes: it is compared as a string in verifyLink and bound as a string into
-    // the associated data, so two spellings would be two different documents.
+    // bytes: it is compared as a string and bound as a string into the associated
+    // data, so two spellings would be two different documents.
     const QString text = value.toString();
     if (!HexCodec::isCanonical(text, DocumentHeader::DocumentIdLength))
     {
@@ -120,21 +99,14 @@ bool readBase64Bytes(const QJsonObject& json, QLatin1String key, int expectedSiz
 QJsonObject RecipientEntry::toJson() const
 {
     QJsonObject json;
-    json[KeyMember] = member.toHex();
     json[KeyFingerprint] = fingerprint.toHex();
-    json[KeyPublicKey] = toHex(publicKey.bytes);
-    json[KeyVerifyKey] = toHex(verifyKey.bytes);
     json[KeySealedKey] = toBase64(sealedKey);
     return json;
 }
 
 bool RecipientEntry::operator==(const RecipientEntry& other) const
 {
-    return member == other.member
-        && fingerprint == other.fingerprint
-        && publicKey == other.publicKey
-        && verifyKey == other.verifyKey
-        && sealedKey == other.sealedKey;
+    return fingerprint == other.fingerprint && sealedKey == other.sealedKey;
 }
 
 // --- DocumentHeader ---
@@ -150,13 +122,8 @@ QJsonObject DocumentHeader::toJson() const
         json[KeyOriginDocumentId] = originDocumentId;
     }
 
-    json[KeyKeyGeneration] = keyGeneration;
     json[KeySaveCounter] = saveCounter;
-    json[KeyLastWriter] = lastWriter.toHex();
-    json[KeyWriterPublicKey] = toHex(writerPublicKey.bytes);
-    json[KeyWriterVerifyKey] = toHex(writerVerifyKey.bytes);
-    json[KeyLastWriteTime] = StrictJson::writeTime(lastWriteTime);
-    json[KeyNonce] = toHex(nonce);
+    json[KeyNonce] = HexCodec::encode(nonce);
 
     QJsonArray recipientArray;
     for (const RecipientEntry& entry : recipients)
@@ -164,16 +131,6 @@ QJsonObject DocumentHeader::toJson() const
         recipientArray.append(entry.toJson());
     }
     json[KeyRecipients] = recipientArray;
-
-    QJsonArray adminArray;
-    for (const MemberId& admin : admins)
-    {
-        adminArray.append(admin.toHex());
-    }
-    json[KeyAdmins] = adminArray;
-
-    json[KeyPayloadHash] = toHex(payloadHash);
-    json[KeyWriterSignature] = toHex(writerSignature);
     return json;
 }
 
@@ -201,17 +158,9 @@ HeaderParse DocumentHeader::parse(const QJsonObject& json, DocumentHeader& out)
                                  {KeyFormatVersion,
                                   KeyDocumentId,
                                   KeyOriginDocumentId,
-                                  KeyKeyGeneration,
                                   KeySaveCounter,
-                                  KeyLastWriter,
-                                  KeyWriterPublicKey,
-                                  KeyWriterVerifyKey,
-                                  KeyLastWriteTime,
                                   KeyNonce,
-                                  KeyRecipients,
-                                  KeyAdmins,
-                                  KeyPayloadHash,
-                                  KeyWriterSignature}))
+                                  KeyRecipients}))
     {
         return HeaderParse::Malformed;
     }
@@ -227,33 +176,8 @@ HeaderParse DocumentHeader::parse(const QJsonObject& json, DocumentHeader& out)
         return HeaderParse::Malformed;
     }
 
-    if (!StrictJson::readInt(json, KeyKeyGeneration, header.keyGeneration) || header.keyGeneration < 1)
-    {
-        return HeaderParse::Malformed;
-    }
-
     if (!StrictJson::readInt64(json, KeySaveCounter, header.saveCounter) || header.saveCounter < 0
         || header.saveCounter > MaxSaveCounter)
-    {
-        return HeaderParse::Malformed;
-    }
-
-    if (!readHexValue(json, KeyLastWriter, header.lastWriter)
-        || !readHexValue(json, KeyWriterPublicKey, header.writerPublicKey)
-        || !readHexValue(json, KeyWriterVerifyKey, header.writerVerifyKey))
-    {
-        return HeaderParse::Malformed;
-    }
-
-    // The keys a header carries for its writer are the writer's, or the header
-    // could vouch for itself with anyone's.
-    if (DocumentCrypto::fingerprintOf(header.writerPublicKey, header.writerVerifyKey)
-        != header.lastWriter)
-    {
-        return HeaderParse::Malformed;
-    }
-
-    if (!StrictJson::readTime(json, KeyLastWriteTime, header.lastWriteTime))
     {
         return HeaderParse::Malformed;
     }
@@ -263,13 +187,13 @@ HeaderParse DocumentHeader::parse(const QJsonObject& json, DocumentHeader& out)
         return HeaderParse::Malformed;
     }
 
-    // An empty list is the last person's leave: valid, final, and unopenable.
     const QJsonValue recipientsValue = json.value(KeyRecipients);
-    if (!recipientsValue.isArray())
+    if (!recipientsValue.isArray() || recipientsValue.toArray().isEmpty())
     {
         return HeaderParse::Malformed;
     }
 
+    QSet<QString> fingerprints;
     for (const QJsonValue& element : recipientsValue.toArray())
     {
         if (!element.isObject())
@@ -278,70 +202,26 @@ HeaderParse DocumentHeader::parse(const QJsonObject& json, DocumentHeader& out)
         }
 
         const QJsonObject entryJson = element.toObject();
-
-        if (!StrictJson::hasOnlyKeys(entryJson,
-                                     {KeyMember,
-                                      KeyFingerprint,
-                                      KeyPublicKey,
-                                      KeyVerifyKey,
-                                      KeySealedKey}))
+        if (!StrictJson::hasOnlyKeys(entryJson, {KeyFingerprint, KeySealedKey}))
         {
             return HeaderParse::Malformed;
         }
 
         RecipientEntry entry;
-
-        if (!readHexValue(entryJson, KeyMember, entry.member)
-            || !readHexValue(entryJson, KeyFingerprint, entry.fingerprint)
-            || !readHexValue(entryJson, KeyPublicKey, entry.publicKey)
-            || !readHexValue(entryJson, KeyVerifyKey, entry.verifyKey)
-            || !readBase64Bytes(entryJson,
-                                KeySealedKey,
-                                DocumentCrypto::SealedDataKeySize,
-                                entry.sealedKey))
+        if (!readHexBytes(entryJson, KeyFingerprint, Fingerprint::Size, entry.fingerprint.bytes)
+            || !readBase64Bytes(entryJson, KeySealedKey, DocumentCrypto::SealedDataKeySize, entry.sealedKey))
         {
             return HeaderParse::Malformed;
         }
+
+        // One entry per device, or which sealed key is a device's would be a guess.
+        if (fingerprints.contains(entry.fingerprint.toHex()))
+        {
+            return HeaderParse::Malformed;
+        }
+        fingerprints.insert(entry.fingerprint.toHex());
 
         header.recipients.append(entry);
-    }
-
-    // Canonical: ascending, no repeats, so one admin set has one associated data.
-    const QJsonValue adminsValue = json.value(KeyAdmins);
-    if (!adminsValue.isArray())
-    {
-        return HeaderParse::Malformed;
-    }
-
-    QString previousAdmin;
-    for (const QJsonValue& element : adminsValue.toArray())
-    {
-        if (!element.isString())
-        {
-            return HeaderParse::Malformed;
-        }
-
-        const MemberId admin = MemberId::fromHex(element.toString());
-        if (!admin.isValid() || admin.toHex() <= previousAdmin)
-        {
-            return HeaderParse::Malformed;
-        }
-
-        previousAdmin = admin.toHex();
-        header.admins.append(admin);
-    }
-
-    if (!readHexBytes(json, KeyPayloadHash, DocumentCrypto::PayloadHashSize, header.payloadHash))
-    {
-        return HeaderParse::Malformed;
-    }
-
-    if (!readHexBytes(json,
-                      KeyWriterSignature,
-                      DocumentCrypto::SignatureSize,
-                      header.writerSignature))
-    {
-        return HeaderParse::Malformed;
     }
 
     out = header;
@@ -355,41 +235,16 @@ QByteArray DocumentHeader::associatedData() const
     writer.appendNumber(qint64(formatVersion));
     writer.appendText(documentId);
     writer.appendText(originDocumentId);
-    writer.appendNumber(qint64(keyGeneration));
     writer.appendNumber(saveCounter);
-    writer.appendText(lastWriter.toHex());
-    writer.appendText(toHex(writerPublicKey.bytes));
-    writer.appendText(toHex(writerVerifyKey.bytes));
-    writer.appendText(StrictJson::writeTime(lastWriteTime));
-    writer.appendText(toHex(nonce));
+    writer.appendText(HexCodec::encode(nonce));
 
-    // The counts are what stop one collection borrowing the other's elements:
-    // without them a header with two recipients and no admins could produce the
-    // same bytes as one with fewer recipients and an admin.
     writer.appendNumber(qint64(recipients.size()));
     for (const RecipientEntry& entry : recipients)
     {
-        writer.appendText(entry.member.toHex());
         writer.appendText(entry.fingerprint.toHex());
-        writer.appendText(toHex(entry.publicKey.bytes));
-        writer.appendText(toHex(entry.verifyKey.bytes));
         writer.appendText(toBase64(entry.sealedKey));
     }
 
-    writer.appendNumber(qint64(admins.size()));
-    for (const MemberId& admin : admins)
-    {
-        writer.appendText(admin.toHex());
-    }
-
-    return writer.bytes();
-}
-
-QByteArray DocumentHeader::signedBytes() const
-{
-    CanonicalBytes writer;
-    writer.appendBytes(associatedData());
-    writer.appendText(toHex(payloadHash));
     return writer.bytes();
 }
 
@@ -416,15 +271,7 @@ bool DocumentHeader::operator==(const DocumentHeader& other) const
     return formatVersion == other.formatVersion
         && documentId == other.documentId
         && originDocumentId == other.originDocumentId
-        && keyGeneration == other.keyGeneration
         && saveCounter == other.saveCounter
-        && lastWriter == other.lastWriter
-        && writerPublicKey == other.writerPublicKey
-        && writerVerifyKey == other.writerVerifyKey
-        && StrictJson::writeTime(lastWriteTime) == StrictJson::writeTime(other.lastWriteTime)
         && nonce == other.nonce
-        && recipients == other.recipients
-        && admins == other.admins
-        && payloadHash == other.payloadHash
-        && writerSignature == other.writerSignature;
+        && recipients == other.recipients;
 }

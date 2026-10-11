@@ -7,7 +7,6 @@
 #include <QJsonArray>
 #include <QDate>
 
-#include "AccessRoster.h"
 #include "DocumentMetadata.h"
 #include "Family.h"
 #include "Team.h"
@@ -18,6 +17,7 @@
 #include "EmergencyAsset.h"
 #include "EmergencyResponse.h"
 #include "ResponseArea.h"
+#include "SealingSet.h"
 #include <QSet>
 
 class Document
@@ -154,10 +154,10 @@ public:
     /// This is more efficient than rebuilding in each command's execute/undo.
     void onDocumentChanged(const struct DocumentChange& change);
 
-    // Who may open this document. Lives inside the payload, so it travels with
-    // the content and only a member can read it.
-    const AccessRoster& accessRoster() const { return m_accessRoster; }
-    void setAccessRoster(const AccessRoster& roster) { m_accessRoster = roster; }
+    // The devices this document's data key is sealed to. Lives inside the payload,
+    // so only a device holding the key can read or change it.
+    const SealingSet& sealingSet() const { return m_sealingSet; }
+    void setSealingSet(const SealingSet& set) { m_sealingSet = set; }
 
     // JSON serialization
     QJsonObject toJson() const;
@@ -165,7 +165,7 @@ public:
     /// Reads a payload, the only reader of a document. The header's format version
     /// covers the payload, so a later payload is refused before it is decrypted.
     ///
-    /// Nothing is skipped, defaulted, or carried through unread: an empty roster, a
+    /// Nothing is skipped, defaulted, or carried through unread: an empty sealing set, a
     /// top-level field it does not know, any element of any collection that fails
     /// its own strict reader, and a repeated id within a collection are all refused
     /// whole. Ids that name something elsewhere in the document are not checked;
@@ -186,8 +186,7 @@ private:
     // Ward/Stake hierarchy and document naming
     DocumentMetadata m_metadata;
 
-    // Access roster
-    AccessRoster m_accessRoster;
+    SealingSet m_sealingSet;
 
     // Core collections
     QHash<FamilyId, Family> m_families;

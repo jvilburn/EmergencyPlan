@@ -7,47 +7,54 @@
 #include <QObject>
 #include <QPointer>
 #include <QString>
-#include <QStringList>
 
 #include <functional>
 #include <optional>
 
-/// One device's way to the server. It holds the session token, signs in on first
-/// use - fetch a challenge, sign it under SignatureTag::Auth, exchange it for a
-/// token - and signs every mutating request under SignatureTag::Request. Everything
-/// above it calls the server without seeing sessions or signatures.
+/// One device's way to the server. It holds the session token and signs in on
+/// first use - fetch a challenge, sign it, exchange it for a token, then register
+/// this device's person when it has one. Everything above it calls the server
+/// without seeing sessions.
 ///
 /// An expired session is signed into again once: on Unauthenticated the connection
 /// signs in afresh and repeats the call, and a second Unauthenticated is the
 /// answer. Calls made while a sign-in is in flight wait for it, so a burst of calls
-/// costs one sign-in.
+/// costs one sign-in. A device whose registration the server refuses as AccessLost
+/// - one that was unlinked - hears that from every call.
 ///
 /// Every reply is delivered only while its context is alive, as with
 /// QTimer::singleShot: a session destroyed with a call outstanding never hears the
 /// answer.
 ///
-/// Tokens, challenge responses, and request bodies stay in memory only; the
-/// bodies are ciphertext, and keeping them out of logs keeps it that way.
+/// Tokens and request bodies stay in memory only; the bodies are ciphertext, and
+/// keeping them out of logs keeps it that way.
 class ServerConnection
 {
 public:
+    /// identity may have no person yet: such a device can only sign in and link.
     ServerConnection(ServerContract::ServerApi& server, const DeviceIdentity& identity);
 
     ServerConnection(const ServerConnection&) = delete;
     ServerConnection& operator=(const ServerConnection&) = delete;
 
+    // --- This device's person ---
+
+    void me(QObject* context, ServerContract::Reply<ServerContract::Me> reply);
+    void unlinkDevice(const Fingerprint& device, QObject* context, ServerContract::Reply<ServerContract::Done> reply);
+
+    // --- Linking ---
+
+    void startLink(QObject* context, ServerContract::Reply<QString> reply);
+    void link(const QString& code, QObject* context, ServerContract::Reply<ServerContract::LinkState> reply);
+    void approveLink(const QString& code, QObject* context, ServerContract::Reply<ServerContract::Done> reply);
+
+    // --- Documents ---
+
     void registerDocument(const ServerContract::Upload& upload,
                           QObject* context,
                           ServerContract::Reply<qint64> reply);
     void head(const QString& documentId, QObject* context, ServerContract::Reply<ServerContract::Head> reply);
-    void download(const QString& documentId,
-                  qint64 after,
-                  QObject* context,
-                  ServerContract::Reply<ServerContract::Snapshot> reply);
-    void headers(const QString& documentId,
-                 qint64 after,
-                 QObject* context,
-                 ServerContract::Reply<ServerContract::HeaderChain> reply);
+    void download(const QString& documentId, QObject* context, ServerContract::Reply<ServerContract::Snapshot> reply);
     void upload(const QString& documentId,
                 qint64 baseVersion,
                 const ServerContract::Upload& upload,
@@ -59,7 +66,37 @@ public:
     void releaseLease(const QString& documentId,
                       QObject* context,
                       ServerContract::Reply<ServerContract::Done> reply);
-    void myDocuments(QObject* context, ServerContract::Reply<QStringList> reply);
+
+    // --- Who has access ---
+
+    void history(const QString& documentId,
+                 qint64 after,
+                 QObject* context,
+                 ServerContract::Reply<QList<ServerContract::HistoryEntry>> reply);
+    void requestAccess(const QString& documentId, QObject* context, ServerContract::Reply<ServerContract::Done> reply);
+    void accessRequests(const QString& documentId,
+                        QObject* context,
+                        ServerContract::Reply<QList<ServerContract::AccessRequest>> reply);
+    void declineRequest(const QString& documentId,
+                        qint64 index,
+                        QObject* context,
+                        ServerContract::Reply<ServerContract::Done> reply);
+    void myRequestStatus(const QString& documentId,
+                         QObject* context,
+                         ServerContract::Reply<ServerContract::RequestStatus> reply);
+    void grant(const QString& documentId,
+               qint64 index,
+               QObject* context,
+               ServerContract::Reply<ServerContract::Done> reply);
+    void removeMember(const QString& documentId,
+                      const MemberId& member,
+                      QObject* context,
+                      ServerContract::Reply<ServerContract::Done> reply);
+    void setRole(const QString& documentId,
+                 const MemberId& member,
+                 ServerContract::Role role,
+                 QObject* context,
+                 ServerContract::Reply<ServerContract::Done> reply);
 
 private:
     /// Makes one call with a session, answering through the reply it is given.
@@ -88,29 +125,9 @@ private:
 
     void withSession(SessionReady ready);
     void onChallenge(const ServerContract::Result<QByteArray>& challenge);
+    void onAuthenticated(const ServerContract::Result<ServerContract::Session>& session);
+    void onRegistered(const ServerContract::Session& session, const ServerContract::Result<ServerContract::Done>& registered);
     void finishSignIn(const ServerContract::Result<ServerContract::Session>& session);
-
-    // --- Each endpoint, signed with the session it is given ---
-
-    void sendRegisterDocument(const ServerContract::Session& session,
-                              const ServerContract::Upload& upload,
-                              ServerContract::Reply<qint64> reply);
-    void sendUpload(const ServerContract::Session& session,
-                    const QString& documentId,
-                    qint64 baseVersion,
-                    const ServerContract::Upload& upload,
-                    ServerContract::Reply<qint64> reply);
-    void sendTakeLease(const ServerContract::Session& session,
-                       const QString& documentId,
-                       ServerContract::Reply<ServerContract::Lease> reply);
-    void sendReleaseLease(const ServerContract::Session& session,
-                          const QString& documentId,
-                          ServerContract::Reply<ServerContract::Done> reply);
-
-    QByteArray signature(ServerContract::Endpoint endpoint,
-                         const ServerContract::Session& session,
-                         const QString& documentId,
-                         const QByteArray& body) const;
 
     ServerContract::ServerApi& m_server;
     DeviceIdentity m_identity;

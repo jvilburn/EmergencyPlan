@@ -12,10 +12,8 @@ namespace
 // Part of the settings format.
 const QLatin1String KeyBaseVersion("baseVersion");
 const QLatin1String KeyBaseHash("baseHash");
-const QLatin1String KeyHighWaterMark("highWaterMark");
-const QLatin1String KeyKeyGeneration("keyGeneration");
-const QLatin1String KeySaveCounter("saveCounter");
-const QLatin1String KeyPendingChanges("pendingChanges");
+const QLatin1String KeyBaseSaveCounter("baseSaveCounter");
+const QLatin1String KeyGranted("granted");
 
 } // namespace
 
@@ -28,17 +26,14 @@ QJsonObject DocumentRecord::toJson() const
         json[KeyBaseHash] = HexCodec::encode(baseHash);
     }
 
-    QJsonObject mark;
-    mark[KeyKeyGeneration] = highWaterMark.keyGeneration;
-    mark[KeySaveCounter] = highWaterMark.saveCounter;
-    json[KeyHighWaterMark] = mark;
+    json[KeyBaseSaveCounter] = baseSaveCounter;
 
-    QJsonArray changes;
-    for (const RosterChange& change : pendingChanges)
+    QJsonArray grantedArray;
+    for (const DeviceKeys& device : granted)
     {
-        changes.append(change.toJson());
+        grantedArray.append(device.toJson());
     }
-    json[KeyPendingChanges] = changes;
+    json[KeyGranted] = grantedArray;
 
     return json;
 }
@@ -46,14 +41,10 @@ QJsonObject DocumentRecord::toJson() const
 std::optional<DocumentRecord> DocumentRecord::fromJson(const QJsonObject& json)
 {
     DocumentRecord record;
-    QJsonObject mark;
-    QList<QJsonObject> changes;
-    if (!StrictJson::hasOnlyKeys(json, {KeyBaseVersion, KeyBaseHash, KeyHighWaterMark, KeyPendingChanges})
-        || !StrictJson::readObject(json, KeyHighWaterMark, mark)
-        || !StrictJson::hasOnlyKeys(mark, {KeyKeyGeneration, KeySaveCounter})
-        || !StrictJson::readInt(mark, KeyKeyGeneration, record.highWaterMark.keyGeneration)
-        || !StrictJson::readInt64(mark, KeySaveCounter, record.highWaterMark.saveCounter)
-        || !StrictJson::readObjectArray(json, KeyPendingChanges, changes))
+    QList<QJsonObject> grantedJson;
+    if (!StrictJson::hasOnlyKeys(json, {KeyBaseVersion, KeyBaseHash, KeyBaseSaveCounter, KeyGranted})
+        || !StrictJson::readInt64(json, KeyBaseSaveCounter, record.baseSaveCounter)
+        || !StrictJson::readObjectArray(json, KeyGranted, grantedJson))
     {
         return std::nullopt;
     }
@@ -80,14 +71,14 @@ std::optional<DocumentRecord> DocumentRecord::fromJson(const QJsonObject& json)
         record.baseVersion = version;
     }
 
-    for (const QJsonObject& changeJson : changes)
+    for (const QJsonObject& deviceJson : grantedJson)
     {
-        const std::optional<RosterChange> change = RosterChange::fromJson(changeJson);
-        if (!change.has_value())
+        const std::optional<DeviceKeys> device = DeviceKeys::fromJson(deviceJson);
+        if (!device.has_value())
         {
             return std::nullopt;
         }
-        record.pendingChanges.append(change.value());
+        record.granted.append(device.value());
     }
 
     return record;
@@ -97,7 +88,6 @@ bool DocumentRecord::operator==(const DocumentRecord& other) const
 {
     return baseVersion == other.baseVersion
         && baseHash == other.baseHash
-        && highWaterMark.keyGeneration == other.highWaterMark.keyGeneration
-        && highWaterMark.saveCounter == other.highWaterMark.saveCounter
-        && pendingChanges == other.pendingChanges;
+        && baseSaveCounter == other.baseSaveCounter
+        && granted == other.granted;
 }

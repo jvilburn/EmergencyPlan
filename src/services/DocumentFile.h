@@ -1,6 +1,5 @@
 #pragma once
 
-#include "DeviceIdentity.h"
 #include "Document.h"
 #include "DocumentHeader.h"
 
@@ -39,18 +38,14 @@ enum class Read
 /// Splits at the first newline and parses the header with DocumentHeader::parse.
 Read decode(const QByteArray& bytes, Sealed& out);
 
-/// Builds the next version on previous: recipients and admins resealed from the
-/// document's roster by AccessControl::resealAll, a fresh nonce, previous's save
-/// counter plus one, the writer's keys, the time, the payload hash, and the
-/// signature. The key generation is previous's, so a membership change that
-/// rotates the key passes the header AccessControl produced. nullopt when
-/// resealing or encrypting fails, or the save counter is at its cap.
+/// Builds the next version on previous: its document id and origin, the data key
+/// sealed to every device in the document's sealing set, a fresh nonce, and
+/// previous's save counter plus one. The caller has already decided the set and the
+/// key; see ServerVersion::reseal. nullopt when sealing or encrypting fails, or the
+/// save counter is at its cap.
 ///
 /// The only place a save counter advances.
-std::optional<Sealed> seal(const Document& document,
-                           const DocumentHeader& previous,
-                           const DataKey& dataKey,
-                           const DeviceIdentity& writer);
+std::optional<Sealed> seal(const Document& document, const DocumentHeader& previous, const DataKey& dataKey);
 
 /// nullopt when the file is missing or unreadable.
 std::optional<QByteArray> readAll(const QString& path);

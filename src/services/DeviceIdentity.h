@@ -3,8 +3,7 @@
 #include "CryptoTypes.h"
 #include "DocumentCrypto.h"
 #include "Reconcile.h"
-#include "RosterDevice.h"
-#include "RosterPerson.h"
+#include "ServerContract.h"
 
 #include <QString>
 
@@ -20,8 +19,8 @@ struct DeviceIdentity
 
     Fingerprint fingerprint() const;
     Reconcile::Self self() const;
-    RosterDevice asRosterDevice() const;
+    DeviceKeys keys() const { return DeviceKeys{sealing.publicKey, signing.verifyKey}; }
 
-    /// This person, an admin, with only this device.
-    RosterPerson asNewPerson() const;
+    /// What ServerConnection registers after every sign-in.
+    ServerContract::Registration registration() const;
 };

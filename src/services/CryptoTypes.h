@@ -1,7 +1,10 @@
 #pragma once
 
 #include <QByteArray>
+#include <QJsonObject>
 #include <QString>
+
+#include <optional>
 
 // Fixed-size byte wrappers, so the compiler catches a public key passed where a
 // data key belongs.
@@ -35,7 +38,7 @@ struct SecretKey
     bool operator!=(const SecretKey& other) const { return !(*this == other); }
 };
 
-/// Ed25519 verify key: checks header, removal, pairing and auth signatures.
+/// Ed25519 verify key: checks a device's login signature.
 struct VerifyKey
 {
     static constexpr int Size = 32;
@@ -102,20 +105,27 @@ struct Fingerprint
     static Fingerprint fromHex(const QString& hex);
 };
 
-/// One device's two public keys, as they travel together through pairing and the
-/// server. The private halves never leave the device.
+/// One device's two public keys, as they travel together through the server and the
+/// sealing set. The private halves never leave the device.
 struct DeviceKeys
 {
     PublicKey publicKey;
     VerifyKey verifyKey;
 
     bool isValid() const { return publicKey.isValid() && verifyKey.isValid(); }
+
+    /// Both keys as lowercase hex.
+    QJsonObject toJson() const;
+
+    /// Exactly what toJson writes, both keys valid; nullopt otherwise.
+    static std::optional<DeviceKeys> fromJson(const QJsonObject& json);
+
     bool operator==(const DeviceKeys& other) const { return publicKey == other.publicKey && verifyKey == other.verifyKey; }
     bool operator!=(const DeviceKeys& other) const { return !(*this == other); }
 };
 
-/// Identifies a person on the access roster: 128 random bits, unique within one
-/// roster. A person who left or was removed may be granted again under the same id.
+/// Identifies a person: 128 random bits, one server record across all their wards. A
+/// person who left or was removed may be granted again under the same id.
 ///
 /// Not the directory's PersonId (src/models/Id.h): a MemberId identifies a
 /// person who may open the document, a PersonId a member of the ward directory.

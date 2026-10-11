@@ -3,9 +3,7 @@
 #include <QByteArray>
 #include <QString>
 
-/// The one canonical byte encoding used wherever this format has to hash or sign
-/// a structure: a document header's associated data, a pairing commitment and
-/// comparison number, and a pairing handover.
+/// The canonical byte encoding of a document header's associated data.
 ///
 /// Every field is written as a four-byte big-endian length followed by its bytes,
 /// so no field can be mistaken for part of another, no byte value has to be
@@ -19,12 +17,13 @@ class CanonicalBytes
 public:
     /// One name per kind of value, so a string literal or a bool always reaches
     /// the encoding the caller named.
-    CanonicalBytes& appendBytes(const QByteArray& value);
     CanonicalBytes& appendText(const QString& text);        ///< UTF-8
     CanonicalBytes& appendNumber(qint64 number);            ///< decimal ASCII
 
     QByteArray bytes() const { return m_bytes; }
 
 private:
+    CanonicalBytes& appendBytes(const QByteArray& value);
+
     QByteArray m_bytes;
 };

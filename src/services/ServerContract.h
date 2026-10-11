@@ -2,7 +2,6 @@
 
 #include "CryptoTypes.h"
 #include "DocumentHeader.h"
-#include "RosterDevice.h"
 
 #include <QByteArray>
 #include <QDateTime>
@@ -16,11 +15,15 @@
 
 /// What the Ward Planning server accepts and returns - types only, no transport.
 ///
-/// The server is a blob store with a version check and an allow-list. It holds
-/// no key material and never reads a payload; its only cryptography is verifying
-/// signatures over plaintext headers and login challenges, and hashing a blob. The
-/// allow-list is the current accepted header's recipients, so every membership
-/// change takes effect on the server in the same upload that makes it.
+/// The server holds the access list and the ciphertext. People, their devices,
+/// each ward's members and roles, and the access history are its ordinary state,
+/// changed by the calls below. It holds no key material and never reads a payload;
+/// its only cryptography is checking a login signature and computing device
+/// fingerprints.
+///
+/// Confidentiality does not rest on it. A client seals the data key only to devices
+/// it approved itself or that the version it builds on already held, so a server
+/// that lies about the access list can deny service but cannot read a ward.
 ///
 /// FakeServer (tests) implements this in memory and enforces every rule the real
 /// server must, so a client written against it will not meet a stricter server.
@@ -32,22 +35,79 @@ enum class ServerError
 {
     None,
     Unreachable,
-    Unauthenticated,    ///< no session, an expired one, a login that did not verify, or an unsigned request
-    NotAllowListed,     ///< the device is not in the document's current header
+    Unauthenticated,    ///< no session, an expired one, or a login that did not verify
+    AccessLost,         ///< this device had access and no longer does; Result::lost says how
+    NotMember,          ///< the caller's person is not a member of this ward
+    NotAdmin,           ///< an admin's call made by a member
+    LastAdmin,          ///< would leave a ward with people in it and no admin
+    NotOnAllowList,     ///< the uploaded header names a device the allow-list lacks
     UnknownDocument,
     VersionConflict,    ///< the upload was not built on the current version
     LeaseHeld,          ///< another device holds the edit lease
-    ChainRefused,       ///< the header does not extend the membership chain, or is not a valid first header
-    PayloadMismatch,    ///< the header's payload hash does not match the blob uploaded with it
-    CounterJump,        ///< the save counter rose by more than DocumentHeader::MaxSaveCounterStep
-    DeviceNotInvited,   ///< an added device has neither a pending access request nor a completed pairing
     IdTaken,            ///< a document id already registered
+    NotFound,           ///< an unknown link code, request, or member
+    Expired,            ///< a link code past its ten minutes
     RateLimited,
-    NotFound,
-    AlreadyWritten,     ///< a pairing step written twice
-    OutOfOrder,         ///< a pairing step written before the one it follows
-    Expired,            ///< a pairing past its ten minutes
-    InvalidRequest      ///< the request contradicts the caller's own identity or is ill-formed
+    InvalidRequest      ///< ill-formed, or contradicts the caller's own identity
+};
+
+enum class Role
+{
+    Admin,
+    Member
+};
+
+/// One of a person's devices, as the server holds it.
+struct Device
+{
+    Fingerprint fingerprint;
+    DeviceKeys keys;
+    QString name;
+    std::optional<Fingerprint> linkedBy;    ///< the device that linked it; none for a person's first
+    QDateTime linkedAt;
+
+    bool operator==(const Device& other) const;
+    bool operator!=(const Device& other) const { return !(*this == other); }
+};
+
+/// Someone who uses Ward Planning: one record shared by all their wards.
+struct Person
+{
+    MemberId member;
+    QString displayName;
+    QList<Device> devices;
+
+    bool operator==(const Person& other) const;
+    bool operator!=(const Person& other) const { return !(*this == other); }
+};
+
+/// A person in one ward.
+struct Member
+{
+    Person person;
+    Role role = Role::Member;
+
+    bool isAdmin() const { return role == Role::Admin; }
+    bool operator==(const Member& other) const { return person == other.person && role == other.role; }
+    bool operator!=(const Member& other) const { return !(*this == other); }
+};
+
+/// Why a device that had access no longer does - the reason the app acts on.
+struct LostAccess
+{
+    enum class How
+    {
+        Removed,
+        Left,
+        Unlinked
+    };
+
+    How how = How::Removed;
+    QString byWhom;     ///< display name at the time; empty for Left
+    QDateTime when;
+
+    bool operator==(const LostAccess& other) const;
+    bool operator!=(const LostAccess& other) const { return !(*this == other); }
 };
 
 /// A call's outcome: a value, or the reason there is none.
@@ -56,10 +116,12 @@ struct Result
 {
     std::optional<T> value;
     ServerError error = ServerError::None;
+    std::optional<LostAccess> lost;     ///< set exactly when error is AccessLost
 
     bool ok() const { return value.has_value(); }
-    static Result success(const T& result) { return Result{result, ServerError::None}; }
-    static Result failure(ServerError reason) { return Result{std::nullopt, reason}; }
+    static Result success(const T& result) { return Result{result, ServerError::None, std::nullopt}; }
+    static Result failure(ServerError reason) { return Result{std::nullopt, reason, std::nullopt}; }
+    static Result lostAccess(const LostAccess& how) { return Result{std::nullopt, ServerError::AccessLost, how}; }
 };
 
 /// How every call answers. Called exactly once, and never before the call that
@@ -73,52 +135,67 @@ struct Done
 {
 };
 
-/// A short-lived token from a signed login challenge. Holding one proves only that
-/// the caller has a device's signing key - device authentication. Member
-/// authentication is checked per document, against its current header.
+/// A bearer token from a signed login challenge, sent with every call.
 struct Session
 {
     QString token;
 };
 
-/// GET /documents/{id}/head - member authentication.
+/// PUT /me, sent by ServerConnection after every sign-in. Registers a new person
+/// with this device as its first; for a device already in the person it changes
+/// nothing. A device claiming a person it is not in is refused, and an unlinked
+/// device's claim is refused as AccessLost.
+struct Registration
+{
+    MemberId member;
+    QString displayName;
+    QString deviceName;
+    PublicKey publicKey;    ///< the verify key is the session's own
+};
+
+/// GET /me
+struct Me
+{
+    Person person;
+    QStringList documents;  ///< the wards this person is a member of
+};
+
+/// Who published a version, and when.
+struct Publication
+{
+    QString name;           ///< display name at the time
+    Fingerprint device;
+    QDateTime when;
+};
+
+// Reads carry the header as the server stored it. A reader parses it with
+// Reconcile::validateDownload, so a header in a later format reaches the client as
+// NeedsNewerVersion rather than being lost in transit.
+
+/// GET /documents/{id}/head
 struct Head
 {
     qint64 version = 0;
+    Publication published;
     std::optional<Fingerprint> leaseHolder;
+    QJsonObject header;
+    QList<Member> members;
+    qint64 history = 0;     ///< the index of the newest access-history entry; 0 for none
 };
 
-// Reads carry headers as the server stored them. A reader parses them with
-// Reconcile::readHeaders, so a header in a later format reaches the client as
-// NeedsNewerVersion rather than being lost in transit.
-
-/// GET /documents/{id}?after={base} - member authentication. One consistent
-/// state: the kept headers newer than base, then the current header, and the
-/// current blob, so a publish landing mid-download can never pair a header with
-/// another version's blob.
-///
-/// after runs from 0 to the current version. 0 is a device with no base: the
-/// whole kept chain. The current version itself is a device whose base is
-/// current: the current header alone.
+/// GET /documents/{id} - one consistent state, so a publish landing mid-download
+/// can never pair a header with another version's blob.
 struct Snapshot
 {
     qint64 version = 0;
-    QList<QJsonObject> headers;     ///< never empty; ends with the header of version
+    Publication published;
+    QJsonObject header;
     QByteArray blob;
 };
 
-/// GET /documents/{id}/headers?after={base} - device authentication. The kept
-/// headers newer than base, then the current header; for a former device, up to
-/// and including the header that removed it, so it can prove its removal without
-/// knowing the current version, which the server no longer tells it.
-struct HeaderChain
-{
-    QList<QJsonObject> headers;
-};
-
 /// POST /documents and PUT /documents/{id}: the plaintext header and the opaque
-/// blob. The server stores the header for the chain and never looks inside the
-/// blob.
+/// blob. The server checks the header's devices against the allow-list and never
+/// looks inside the blob.
 struct Upload
 {
     DocumentHeader header;
@@ -132,14 +209,31 @@ struct Lease
     QDateTime expires;
 };
 
-/// POST /documents/{id}/requests - the only write open to a non-member, since it
-/// is how someone asks to become one. The device must be the caller's own.
+/// GET /documents/{id}/history?after={n}
+struct HistoryEntry
+{
+    enum class Kind
+    {
+        Added,
+        Removed,
+        Left,
+        MadeAdmin,
+        MadeMember      ///< actor and subject the same: stepped down
+    };
+
+    qint64 index = 0;
+    Kind kind = Kind::Added;
+    QString actor;      ///< display names at the time
+    QString subject;
+    QDateTime when;
+};
+
+/// GET /documents/{id}/requests
 struct AccessRequest
 {
-    MemberId member;
-    QString displayName;
-    RosterDevice device;
-    QString pairingCode;    ///< set for an in-person invite; returned to members as posted
+    qint64 index = 0;
+    Person person;      ///< devices: exactly the one that asked
+    QDateTime when;
 };
 
 /// GET /documents/{id}/requests/mine
@@ -147,72 +241,18 @@ enum class RequestStatus
 {
     Pending,
     Granted,
-    Withdrawn
+    Declined
 };
 
-/// GET /pairings/{code} - a pairing belongs to no document.
-struct PairingState
+/// GET /links/{code}. The approving device reads the new device's name and keys;
+/// the new device reads whether it has been approved, and as whom.
+struct LinkState
 {
-    QString code;
-    QString initiatorDeviceName;
-    QByteArray commitment;
-    std::optional<DeviceKeys> responder;    ///< written once, by the existing device
-    std::optional<DeviceKeys> initiator;    ///< the reveal, written once, by the new device
-    QByteArray nonce;                       ///< the reveal's random value
-    QByteArray handover;                    ///< the responder's signed handover; opaque here
+    QString deviceName;
+    DeviceKeys keys;
+    std::optional<Person> approvedAs;
     QDateTime expires;
 };
-
-// --- Request signing ---
-//
-// A session token proves a device signed in; every mutating call is also signed,
-// under SignatureTag::Request, with the device's own key. A token taken from a
-// device is then not enough to change anything, and a captured signature cannot be
-// replayed against another document, another endpoint, or after its session ends.
-//
-// The signed message is the endpoint's route, the session token, the document id
-// (empty for a pairing, which belongs to no document), and a BLAKE2b of the call's
-// canonical body under HashDomain::Request. The bodies below are part of the protocol: the
-// companion server rebuilds them from the request it received.
-
-enum class Endpoint
-{
-    RegisterDocument,       ///< POST /documents
-    Upload,                 ///< PUT /documents/{id}
-    TakeLease,              ///< POST /documents/{id}/lease
-    ReleaseLease,           ///< DELETE /documents/{id}/lease
-    RequestAccess,          ///< POST /documents/{id}/requests
-    ClearAccessRequest,     ///< DELETE /documents/{id}/requests
-    StartPairing,           ///< POST /pairings
-    RespondToPairing,       ///< PUT /pairings/{code}/responder
-    RevealPairing,          ///< PUT /pairings/{code}/reveal
-    HandOver                ///< PUT /pairings/{code}/handover
-};
-
-/// A header travels as the bytes its writer signed and the signature itself; the
-/// blob is bound through the payload hash inside those bytes.
-QByteArray registerBody(const Upload& upload);
-QByteArray uploadBody(qint64 baseVersion, const Upload& upload);
-QByteArray emptyBody();
-QByteArray requestAccessBody(const AccessRequest& request);
-QByteArray clearAccessRequestBody(const Fingerprint& device);
-QByteArray startPairingBody(const QString& deviceName, const QByteArray& commitment);
-QByteArray respondToPairingBody(const QString& code, const DeviceKeys& responder);
-QByteArray revealPairingBody(const QString& code, const DeviceKeys& initiator, const QByteArray& nonce);
-QByteArray handOverBody(const QString& code, const QByteArray& handover);
-
-QByteArray signRequest(Endpoint endpoint,
-                       const Session& session,
-                       const QString& documentId,
-                       const QByteArray& body,
-                       const SigningKey& key);
-
-bool requestVerifies(Endpoint endpoint,
-                     const Session& session,
-                     const QString& documentId,
-                     const QByteArray& body,
-                     const QByteArray& signature,
-                     const VerifyKey& key);
 
 /// The server, one method per endpoint, each answering through its reply.
 ///
@@ -229,9 +269,9 @@ class ServerApi
 public:
     virtual ~ServerApi() = default;
 
-    // --- Authentication ---
+    // --- Signing in ---
 
-    /// Single-use bytes to sign under SignatureTag::Auth.
+    /// Single-use bytes to sign with DocumentCrypto::signChallenge.
     virtual void challenge(Reply<QByteArray> reply) = 0;
 
     virtual void authenticate(const VerifyKey& device,
@@ -239,115 +279,86 @@ public:
                               const QByteArray& signature,
                               Reply<Session> reply) = 0;
 
+    // --- This device's person ---
+
+    virtual void registerPerson(const Session& session, const Registration& registration, Reply<Done> reply) = 0;
+    virtual void me(const Session& session, Reply<Me> reply) = 0;
+
+    /// One of the caller's person's own devices, never its last.
+    virtual void unlinkDevice(const Session& session, const Fingerprint& device, Reply<Done> reply) = 0;
+
+    // --- Linking ---
+
+    /// A signed-in device with no person yet. Answers the link code.
+    virtual void startLink(const Session& session,
+                           const PublicKey& publicKey,
+                           const QString& deviceName,
+                           Reply<QString> reply) = 0;
+
+    virtual void link(const Session& session, const QString& code, Reply<LinkState> reply) = 0;
+
+    /// Adds the link's device to the caller's person.
+    virtual void approveLink(const Session& session, const QString& code, Reply<Done> reply) = 0;
+
     // --- Documents ---
 
-    /// POST /documents. Device authentication: the document does not exist yet.
-    virtual void registerDocument(const Session& session,
-                                  const Upload& upload,
-                                  const QByteArray& requestSignature,
-                                  Reply<qint64> reply) = 0;
+    /// The caller's person becomes the ward's first admin. Answers the version.
+    virtual void registerDocument(const Session& session, const Upload& upload, Reply<qint64> reply) = 0;
 
     virtual void head(const Session& session, const QString& documentId, Reply<Head> reply) = 0;
+    virtual void download(const Session& session, const QString& documentId, Reply<Snapshot> reply) = 0;
 
-    virtual void headers(const Session& session,
-                         const QString& documentId,
-                         qint64 after,
-                         Reply<HeaderChain> reply) = 0;
-
-    virtual void download(const Session& session,
-                          const QString& documentId,
-                          qint64 after,
-                          Reply<Snapshot> reply) = 0;
-
-    /// PUT /documents/{id}, conditional on baseVersion. Answers the new version.
+    /// Conditional on baseVersion. Answers the new version.
     virtual void upload(const Session& session,
                         const QString& documentId,
                         qint64 baseVersion,
                         const Upload& upload,
-                        const QByteArray& requestSignature,
                         Reply<qint64> reply) = 0;
 
     // --- Lease ---
 
     /// Takes the lease, or refreshes it when this device already holds it.
-    virtual void takeLease(const Session& session,
-                           const QString& documentId,
-                           const QByteArray& requestSignature,
-                           Reply<Lease> reply) = 0;
-    virtual void releaseLease(const Session& session,
-                              const QString& documentId,
-                              const QByteArray& requestSignature,
-                              Reply<Done> reply) = 0;
+    virtual void takeLease(const Session& session, const QString& documentId, Reply<Lease> reply) = 0;
+    virtual void releaseLease(const Session& session, const QString& documentId, Reply<Done> reply) = 0;
 
-    // --- Access requests ---
+    // --- Who has access ---
 
-    /// Device authentication: the one write open to a non-member.
-    virtual void requestAccess(const Session& session,
-                               const QString& documentId,
-                               const AccessRequest& request,
-                               const QByteArray& requestSignature,
-                               Reply<Done> reply) = 0;
+    /// The entries after index after, oldest first.
+    virtual void history(const Session& session,
+                         const QString& documentId,
+                         qint64 after,
+                         Reply<QList<HistoryEntry>> reply) = 0;
+
+    /// The caller's person asks, through the caller's device; the one document
+    /// write open to a non-member.
+    virtual void requestAccess(const Session& session, const QString& documentId, Reply<Done> reply) = 0;
 
     virtual void accessRequests(const Session& session,
                                 const QString& documentId,
                                 Reply<QList<AccessRequest>> reply) = 0;
+    virtual void declineRequest(const Session& session, const QString& documentId, qint64 index, Reply<Done> reply) = 0;
+    virtual void myRequestStatus(const Session& session, const QString& documentId, Reply<RequestStatus> reply) = 0;
 
-    virtual void clearAccessRequest(const Session& session,
-                                    const QString& documentId,
-                                    const Fingerprint& device,
-                                    const QByteArray& requestSignature,
-                                    Reply<Done> reply) = 0;
+    /// The request's person becomes a member.
+    virtual void grant(const Session& session, const QString& documentId, qint64 index, Reply<Done> reply) = 0;
 
-    /// Device authentication: the requester's own request only.
-    virtual void myRequestStatus(const Session& session,
-                                 const QString& documentId,
-                                 Reply<RequestStatus> reply) = 0;
+    /// An admin removing a person, or the person leaving.
+    virtual void removeMember(const Session& session,
+                              const QString& documentId,
+                              const MemberId& member,
+                              Reply<Done> reply) = 0;
 
-    // --- This device ---
-
-    /// Device authentication: the documents whose current header lists this
-    /// device, so a reinstall restores the ward list.
-    virtual void myDocuments(const Session& session, Reply<QStringList> reply) = 0;
-
-    // --- Pairings ---
-
-    /// Device authentication. Answers the pairing code.
-    virtual void startPairing(const Session& session,
-                              const QString& deviceName,
-                              const QByteArray& commitment,
-                              const QByteArray& requestSignature,
-                              Reply<QString> reply) = 0;
-
-    virtual void pairing(const Session& session, const QString& code, Reply<PairingState> reply) = 0;
-
-    /// Member authentication on some document; written once.
-    virtual void respondToPairing(const Session& session,
-                                  const QString& code,
-                                  const DeviceKeys& responder,
-                                  const QByteArray& requestSignature,
-                                  Reply<Done> reply) = 0;
-
-    /// The initiator only, after the responder; written once.
-    virtual void revealPairing(const Session& session,
-                               const QString& code,
-                               const DeviceKeys& initiator,
-                               const QByteArray& nonce,
-                               const QByteArray& requestSignature,
-                               Reply<Done> reply) = 0;
-
-    /// The responder only, after the reveal; written once. Completing it is what
-    /// lets the initiator's device be added under the responder's person.
-    virtual void handOver(const Session& session,
-                          const QString& code,
-                          const QByteArray& handover,
-                          const QByteArray& requestSignature,
-                          Reply<Done> reply) = 0;
+    virtual void setRole(const Session& session,
+                         const QString& documentId,
+                         const MemberId& member,
+                         Role role,
+                         Reply<Done> reply) = 0;
 
     // --- Development only ---
 
     /// Moves the server's clock forward. The fake always honours it; the real
     /// server only in local development, never in a deployed build. It exists so
-    /// the conformance suite can check session, lease, and pairing expiry.
+    /// the conformance suite can check session, lease, and link-code expiry.
     virtual void advanceClock(qint64 seconds, Reply<Done> reply) = 0;
 };
 

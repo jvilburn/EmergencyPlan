@@ -1,6 +1,5 @@
 #include "DocumentSession.h"
 
-#include "AccessControl.h"
 #include "ResponseMerge.h"
 
 using namespace ServerContract;
@@ -16,8 +15,8 @@ DocumentSession::Download downloadOutcome(Fetched::Outcome outcome)
     {
     case Fetched::Outcome::Accepted:
         return DocumentSession::Download::Done;
-    case Fetched::Outcome::Removed:
-        return DocumentSession::Download::Removed;
+    case Fetched::Outcome::AccessLost:
+        return DocumentSession::Download::AccessLost;
     case Fetched::Outcome::NeedsNewerVersion:
         return DocumentSession::Download::NeedsNewerVersion;
     case Fetched::Outcome::CallFailed:
@@ -37,7 +36,7 @@ void finishDownload(DocumentRecords& records,
                     const DocumentSession::Downloaded& done,
                     const Fetched& theirs)
 {
-    if (theirs.outcome == Fetched::Outcome::Removed)
+    if (theirs.outcome == Fetched::Outcome::AccessLost)
     {
         ServerVersion::forget(records, documentId, paths);
     }
@@ -94,7 +93,7 @@ DocumentSession::~DocumentSession()
     // Released whether the lease is held or its request is still on the way: the
     // release reaches the server after the request did. An unreleased lease
     // expires anyway.
-    if (!m_removed && (m_holdsLease || m_leaseRequested))
+    if (!m_lost && (m_holdsLease || m_leaseRequested))
     {
         m_context.server.releaseLease(m_documentId, nullptr, &ignoreRelease);
     }
@@ -106,19 +105,14 @@ std::unique_ptr<DocumentSession> DocumentSession::create(const Context& context,
                                                          const DocumentPaths& paths,
                                                          QString* errorMessage)
 {
-    AccessRoster roster;
-    roster.addPerson(context.identity.asNewPerson());
-
     Document document = Document::empty();
-    document.setAccessRoster(roster);
+    document.setSealingSet(SealingSet::of(context.identity.keys()));
 
     DocumentHeader first;
     first.documentId = documentId;
-    first.keyGeneration = 1;
-    first.saveCounter = 0;
 
     const DataKey dataKey = DocumentCrypto::generateDataKey();
-    const std::optional<DocumentFile::Sealed> sealed = DocumentFile::seal(document, first, dataKey, context.identity);
+    const std::optional<DocumentFile::Sealed> sealed = DocumentFile::seal(document, first, dataKey);
     if (!sealed.has_value())
     {
         if (errorMessage != nullptr)
@@ -168,15 +162,9 @@ std::unique_ptr<DocumentSession> DocumentSession::open(const Context& context,
         return nullptr;
     }
 
-    // Opening a local file is a download with no base copy: one statement of the
-    // rules serves the local file and every download alike.
+    // One statement of the rules serves the local file and every download alike.
     const Reconcile::DownloadCheck check =
-        Reconcile::validateDownload(documentId,
-                                    std::nullopt,
-                                    {sealed.header},
-                                    sealed.ciphertext,
-                                    context.identity.self(),
-                                    context.records.record(documentId).highWaterMark);
+        Reconcile::validate(documentId, sealed.header, sealed.ciphertext, context.identity.self());
     if (check.verdict != Reconcile::Verdict::Accept)
     {
         failure = LoadFailure::Refused;
@@ -210,10 +198,8 @@ void DocumentSession::download(const Context& context,
                                Downloaded done)
 {
     ServerVersion::fetch(context.identity,
-                         context.records,
                          context.server,
                          documentId,
-                         paths,
                          receiver,
                          std::bind(&finishDownload, std::ref(context.records), documentId, paths, done, _1));
 }
@@ -289,7 +275,7 @@ void DocumentSession::setEmergencyActive(bool active)
         return;
     }
     m_emergencyActive = active;
-    if (isShared() && !m_removed)
+    if (isShared() && !m_lost)
     {
         restartHeadCheck();
     }
@@ -327,14 +313,25 @@ bool DocumentSession::writeSave(QString* errorMessage)
 {
     m_timers->stop(SessionTimers::Timer::Save);
 
-    // A removed ward's files are gone, and its document goes with the session.
-    if (m_removed)
+    // A lost ward's files are gone, and its document goes with the session.
+    if (m_lost)
     {
         m_saveScheduled = false;
         return true;
     }
 
-    if (!writeLocal(m_document, m_header, m_dataKey))
+    // The sealing-set rule, applied to the document in memory: who it is sealed to
+    // is not content, so an edit's undo still applies.
+    DataKey dataKey = m_dataKey;
+    const std::optional<ServerVersion::Access> allowed = access();
+    if (allowed.has_value())
+    {
+        const ServerVersion::Resealed resealed = ServerVersion::reseal(m_document, m_dataKey, allowed.value());
+        m_document.setSealingSet(resealed.document.sealingSet());
+        dataKey = resealed.dataKey;
+    }
+
+    if (!writeLocal(m_document, m_header, dataKey))
     {
         if (errorMessage != nullptr)
         {
@@ -348,10 +345,20 @@ bool DocumentSession::writeSave(QString* errorMessage)
     return true;
 }
 
+std::optional<ServerVersion::Access> DocumentSession::access() const
+{
+    if (!isShared() || !m_head.has_value())
+    {
+        return std::nullopt;
+    }
+    return ServerVersion::accessFor(m_head.value(),
+                                    m_context.records.record(m_documentId),
+                                    m_context.records.linkedDevices());
+}
+
 bool DocumentSession::writeLocal(const Document& document, const DocumentHeader& previous, const DataKey& dataKey)
 {
-    const std::optional<DocumentFile::Sealed> sealed =
-        DocumentFile::seal(document, previous, dataKey, m_context.identity);
+    const std::optional<DocumentFile::Sealed> sealed = DocumentFile::seal(document, previous, dataKey);
     if (!sealed.has_value() || !DocumentFile::write(m_paths.file, DocumentFile::encode(sealed.value()), nullptr))
     {
         return false;
@@ -394,10 +401,8 @@ void DocumentSession::install(const Document& document)
 
 bool DocumentSession::hasUnpublishedChanges() const
 {
-    // The record's high-water mark is the base version's header, so this needs no
-    // base copy.
-    return m_saveScheduled
-        || m_header.saveCounter > m_context.records.record(m_documentId).highWaterMark.saveCounter;
+    // The record holds the base copy's save counter, so this needs no base copy.
+    return m_saveScheduled || m_header.saveCounter > m_context.records.record(m_documentId).baseSaveCounter;
 }
 
 // --- The server ------------------------------------------------------------------
@@ -412,7 +417,7 @@ void DocumentSession::startShared()
 void DocumentSession::checkHead()
 {
     // Paused while a conflict waits for resolve.
-    if (!isShared() || m_removed || m_conflict.has_value())
+    if (!isShared() || m_lost || m_conflict.has_value())
     {
         return;
     }
@@ -433,9 +438,9 @@ void DocumentSession::onHead(const Result<Head>& head)
 {
     m_busy = false;
 
-    if (head.error == ServerError::NotAllowListed)
+    if (head.error == ServerError::AccessLost)
     {
-        proveRemoval();
+        finishLost(head.lost.value());
         return;
     }
 
@@ -447,6 +452,15 @@ void DocumentSession::onHead(const Result<Head>& head)
         setSyncState(SyncState::Unreachable);
         finishOperation();
         return;
+    }
+
+    const bool changed = !m_head.has_value() || m_head.value().members != head.value->members
+                      || m_head.value().leaseHolder != head.value->leaseHolder
+                      || m_head.value().history != head.value->history;
+    m_head = head.value.value();
+    if (changed)
+    {
+        emit headChanged();
     }
 
     const std::optional<Fingerprint>& holder = head.value->leaseHolder;
@@ -481,10 +495,8 @@ void DocumentSession::fetchTheirs()
 
     m_busy = true;
     ServerVersion::fetch(m_context.identity,
-                         m_context.records,
                          m_context.server,
                          m_documentId,
-                         m_paths,
                          this,
                          std::bind(&DocumentSession::onFetched, this, _1));
 }
@@ -499,8 +511,8 @@ void DocumentSession::onFetched(const Fetched& theirs)
         setRequiresUpdate(false);
         adopt(theirs);
         break;
-    case Fetched::Outcome::Removed:
-        finishRemoved(theirs.remover, theirs.left);
+    case Fetched::Outcome::AccessLost:
+        finishLost(theirs.lost.value());
         return;
     case Fetched::Outcome::NeedsNewerVersion:
         // The local file and record stay untouched; re-evaluated on every head
@@ -523,7 +535,7 @@ void DocumentSession::publish()
 {
     // Nothing publishes while the server serves a version this build cannot read,
     // or while a conflict waits for resolve.
-    if (!isShared() || m_removed || m_requiresUpdate || m_conflict.has_value())
+    if (!isShared() || m_lost || m_requiresUpdate || m_conflict.has_value())
     {
         return;
     }
@@ -532,6 +544,13 @@ void DocumentSession::publish()
     {
         m_publishAgain = true;
         return;
+    }
+
+    // A local file the rule would seal differently is saved again first.
+    const std::optional<ServerVersion::Access> allowed = access();
+    if (allowed.has_value() && !ServerVersion::isCurrent(m_document, allowed.value()))
+    {
+        m_saveScheduled = true;
     }
 
     QString error;
@@ -581,6 +600,10 @@ void DocumentSession::onPublished(const Result<qint64>& result, const DocumentFi
             emit saveFailed(error);
         }
         m_base = ServerVersion::readBase(m_documentId, m_paths, m_context.records, m_context.identity.self());
+        if (access().has_value())
+        {
+            ServerVersion::settleGranted(m_context.records, m_documentId, published.header, access().value());
+        }
 
         m_retryDelay = SessionTimers::FirstRetryMilliseconds;
         m_timers->stop(SessionTimers::Timer::Retry);
@@ -597,13 +620,19 @@ void DocumentSession::onPublished(const Result<qint64>& result, const DocumentFi
 
     case ServerError::VersionConflict:
         // The server refuses only when its version moved past the base, so theirs
-        // is newer; a revocation is itself a new version, so a moved key
-        // generation always arrives this way too.
+        // is newer.
         fetchTheirs();
         return;
 
-    case ServerError::NotAllowListed:
-        proveRemoval();
+    case ServerError::NotOnAllowList:
+        // Someone was dropped since the last head; the next one prunes them, and
+        // the publish that follows it goes out sealed without them.
+        finishOperation();
+        checkHead();
+        return;
+
+    case ServerError::AccessLost:
+        finishLost(result.lost.value());
         return;
 
     case ServerError::Unreachable:
@@ -627,46 +656,6 @@ void DocumentSession::scheduleRetry()
     // tether during an emergency keeps its connection free between attempts.
     m_timers->start(SessionTimers::Timer::Retry, m_retryDelay);
     m_retryDelay = qMin(m_retryDelay * 2, SessionTimers::LastRetryMilliseconds);
-}
-
-void DocumentSession::proveRemoval()
-{
-    if (m_removed)
-    {
-        return;
-    }
-
-    m_busy = true;
-    ServerVersion::proveRemoval(m_context.identity,
-                                m_context.records,
-                                m_context.server,
-                                m_documentId,
-                                m_paths,
-                                this,
-                                std::bind(&DocumentSession::onRemovalChecked, this, _1));
-}
-
-void DocumentSession::onRemovalChecked(const Fetched& proof)
-{
-    m_busy = false;
-
-    switch (proof.outcome)
-    {
-    case Fetched::Outcome::Removed:
-        finishRemoved(proof.remover, proof.left);
-        return;
-    case Fetched::Outcome::CallFailed:
-        setSyncState(SyncState::Unreachable);
-        break;
-    case Fetched::Outcome::Accepted:
-    case Fetched::Outcome::NeedsNewerVersion:
-    case Fetched::Outcome::ServerFault:
-        // Only a chain-proven removal is acted on; anything else deletes nothing.
-        setFault(proof.reason);
-        break;
-    }
-
-    finishOperation();
 }
 
 void DocumentSession::finishOperation()
@@ -693,9 +682,9 @@ void DocumentSession::adopt(const Fetched& theirs)
         return;
     }
 
-    // The refused-publish route. Their data key, generation, and roster are taken
-    // exactly as validated; every roster change of this device went through the
-    // queue, so nothing of this session's roster needs carrying over.
+    // The refused-publish route. Their data key and sealing set are taken exactly as
+    // validated; the next save applies the rule to them afresh, so nothing of this
+    // session's sealing set needs carrying over.
     if (!m_base.has_value())
     {
         raiseConflict(theirs);
@@ -723,9 +712,6 @@ void DocumentSession::adopt(const Fetched& theirs)
 
 void DocumentSession::fastForward(const Fetched& theirs)
 {
-    const DocumentHeader previousBase = m_base.has_value() ? m_base.value().sealed.header : m_header;
-    const AccessRoster previousRoster = baseRoster();
-
     if (!writeLocal(theirs))
     {
         emit saveFailed(tr("The ward could not be saved to %1.").arg(m_paths.file));
@@ -739,14 +725,10 @@ void DocumentSession::fastForward(const Fetched& theirs)
     }
 
     settleSyncState();
-    emit versionAdopted(previousBase, theirs.laterHeaders, previousRoster);
 }
 
 void DocumentSession::mergeWith(const Fetched& theirs, const Document& merged)
 {
-    const DocumentHeader previousBase = m_base.value().sealed.header;
-    const AccessRoster previousRoster = baseRoster();
-
     // The local file first, then the base, so unpublished work is never covered by
     // a base that moved over a file that did not.
     if (!writeLocal(merged, theirs.sealed.header, theirs.dataKey))
@@ -761,17 +743,16 @@ void DocumentSession::mergeWith(const Fetched& theirs, const Document& merged)
         return;
     }
 
-    emit versionAdopted(previousBase, theirs.laterHeaders, previousRoster);
     publish();
 }
 
 void DocumentSession::raiseConflict(const Fetched& theirs)
 {
-    // The local file takes this session's work under their roster and key, so
+    // The local file takes this session's work under their sealing set and key, so
     // every later save builds on it. The base stays where it was, so a crash
     // before resolve meets the same conflict on reopen.
     Document mine = m_document;
-    mine.setAccessRoster(theirs.document.accessRoster());
+    mine.setSealingSet(theirs.document.sealingSet());
     if (!writeLocal(mine, theirs.sealed.header, theirs.dataKey))
     {
         emit saveFailed(tr("The ward could not be saved to %1.").arg(m_paths.file));
@@ -781,10 +762,7 @@ void DocumentSession::raiseConflict(const Fetched& theirs)
     m_conflict = theirs;
     m_timers->stop(SessionTimers::Timer::Retry);
     settleSyncState();
-    emit versionAdopted(m_base.has_value() ? m_base.value().sealed.header : m_header,
-                        theirs.laterHeaders,
-                        baseRoster());
-    emit conflictRaised(Conflict{nameOf(theirs.sealed.header.lastWriter), theirs.sealed.header.lastWriteTime});
+    emit conflictRaised(Conflict{theirs.published.name, theirs.published.when});
 }
 
 std::optional<DocumentSession::Conflict> DocumentSession::pendingConflict() const
@@ -793,8 +771,8 @@ std::optional<DocumentSession::Conflict> DocumentSession::pendingConflict() cons
     {
         return std::nullopt;
     }
-    const DocumentHeader& theirs = m_conflict.value().sealed.header;
-    return Conflict{nameOf(theirs.lastWriter), theirs.lastWriteTime};
+    const ServerContract::Publication& theirs = m_conflict.value().published;
+    return Conflict{theirs.name, theirs.when};
 }
 
 bool DocumentSession::resolve(Resolution resolution, QString* errorMessage)
@@ -817,8 +795,8 @@ bool DocumentSession::resolve(Resolution resolution, QString* errorMessage)
 
     // Keep theirs: their directory with the merged response. Keep mine: the local
     // file as it stands - this session's directory, the merged response, and the
-    // adopted roster and key - which was sealed on their header, so it passes every
-    // server rule and keeps everyone they removed off it.
+    // adopted sealing set and key - which was sealed on their header, so it never
+    // restores anyone they removed.
     Document resolved = resolution == Resolution::KeepTheirs ? theirs.document : m_document;
     resolved.setEmergencyResponse(response);
 
@@ -868,93 +846,37 @@ bool DocumentSession::moveBase(const Fetched& theirs, QString* errorMessage)
     return true;
 }
 
-void DocumentSession::finishRemoved(const Fingerprint& remover, bool left)
+void DocumentSession::finishLost(const ServerContract::LostAccess& lost)
 {
-    if (m_removed)
+    if (m_lost)
     {
         return;
     }
 
-    const QString byWhom = nameOf(remover);
-
     stopEveryTimer();
-    m_removed = true;
+    m_lost = true;
     m_saveScheduled = false;
     ServerVersion::forget(m_context.records, m_documentId, m_paths);
-    emit removed(byWhom, left);
-}
-
-AccessRoster DocumentSession::baseRoster() const
-{
-    return m_base.has_value() ? m_base.value().document.accessRoster() : m_document.accessRoster();
-}
-
-QString DocumentSession::nameOf(const Fingerprint& device) const
-{
-    std::optional<RosterPerson> person;
-    if (m_conflict.has_value())
-    {
-        person = m_conflict.value().document.accessRoster().personFor(device);
-    }
-    if (!person.has_value())
-    {
-        person = m_document.accessRoster().personFor(device);
-    }
-    if (!person.has_value() && m_base.has_value())
-    {
-        person = m_base.value().document.accessRoster().personFor(device);
-    }
-
-    return person.has_value() ? person.value().displayName() : tr("a former member");
+    emit accessLost(lost);
 }
 
 // --- Sharing ---------------------------------------------------------------------
 
-void DocumentSession::share(const QList<RosterDevice>& linkedDevices)
+void DocumentSession::share()
 {
-    if (isShared() || m_busy || m_removed)
+    if (isShared() || m_busy || m_lost)
     {
         return;
     }
 
-    // Devices linked while the ward was unshared join the first header: until now
-    // only this device read the file, so this is the one moment it matters.
-    AccessRoster roster = m_document.accessRoster();
-    for (const RosterDevice& device : linkedDevices)
+    QString error;
+    if (!flush(&error))
     {
-        const std::optional<AccessChange> linked =
-            AccessControl::linkDevice(m_header, roster, m_dataKey, m_context.identity.fingerprint(), device);
-        if (linked.has_value())
-        {
-            roster = linked.value().roster;
-        }
+        emit saveFailed(error);
+        return;
     }
 
-    // Through the ordinary write: the new roster, and any edit still scheduled.
-    if (roster != m_document.accessRoster())
-    {
-        Document document = m_document;
-        document.setAccessRoster(roster);
-        if (!writeLocal(document, m_header, m_dataKey))
-        {
-            emit saveFailed(tr("The ward could not be saved to %1.").arg(m_paths.file));
-            return;
-        }
-        m_saveScheduled = false;
-        m_timers->stop(SessionTimers::Timer::Save);
-    }
-    else
-    {
-        QString error;
-        if (!flush(&error))
-        {
-            emit saveFailed(error);
-            return;
-        }
-    }
-
-    // Registered under its existing id; its header, listing this person's
-    // devices, becomes the first allow-list.
+    // Registered under its existing id, sealed to this device alone.
     DocumentFile::Sealed sealed;
     if (DocumentFile::decode(DocumentFile::readAll(m_paths.file).value_or(QByteArray()), sealed) != DocumentFile::Read::Ok)
     {
@@ -997,7 +919,7 @@ void DocumentSession::onRegistered(const Result<qint64>& result, const DocumentF
 
 void DocumentSession::takeLease()
 {
-    if (m_leaseRequested || m_removed)
+    if (m_leaseRequested || m_lost)
     {
         return;
     }
@@ -1024,11 +946,8 @@ void DocumentSession::onLease(const Result<Lease>& lease)
         m_timers->stop(SessionTimers::Timer::Heartbeat);
         return;
 
-    case ServerError::NotAllowListed:
-        if (!m_busy)
-        {
-            proveRemoval();
-        }
+    case ServerError::AccessLost:
+        finishLost(lease.lost.value());
         return;
 
     default:

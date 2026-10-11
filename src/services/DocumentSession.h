@@ -48,12 +48,18 @@ enum class SyncState
 /// local file takes in a server version, and only then - a fast-forward, a silent
 /// merge, a resolve, an accepted publish, and the registration that shares the
 /// ward. "Unpublished changes" is exact: the local header's save counter is above
-/// the base version's, which the record holds as its high-water mark.
+/// the base copy's, which the record holds.
 ///
-/// One document operation runs at a time - a head check, a fetch, a publish, a
-/// removal check, or the registration that shares the ward - so a save made
-/// during a publish publishes after it, and a head check asked for meanwhile runs
-/// when it ends. The lease runs beside them.
+/// Every save of a shared ward applies the sealing-set rule against the latest
+/// head: devices the server no longer lists are pruned, with a fresh data key, and
+/// devices this client approved are added. A publish whose local file the rule
+/// would change is saved again first, so nothing is ever published sealed to a
+/// device the server has dropped.
+///
+/// One document operation runs at a time - a head check, a fetch, a publish, or
+/// the registration that shares the ward - so a save made during a publish
+/// publishes after it, and a head check asked for meanwhile runs when it ends. The
+/// lease runs beside them.
 ///
 /// Destroying a session closes it: a scheduled save is written, the lease is
 /// released, and every reply still on its way is dropped. Call flush() first to
@@ -87,7 +93,7 @@ public:
         Done,
         Unreachable,
         NeedsNewerVersion,
-        Removed,
+        AccessLost,
         ServerFault,
         WriteFailed         ///< it validated, but could not be written on this device
     };
@@ -101,7 +107,7 @@ public:
 
     struct Conflict
     {
-        QString writerName;         ///< their roster, then the base copy's, then "a former member"
+        QString writerName;         ///< as the server recorded who published their version
         QDateTime writeTime;
     };
 
@@ -114,8 +120,8 @@ public:
 
     ~DocumentSession() override;
 
-    /// A new, unshared ward, written at once: a first data key, generation 1, and a
-    /// roster holding only this person, as admin, with only this device.
+    /// A new, unshared ward, written at once: a first data key, sealed only to this
+    /// device.
     static std::unique_ptr<DocumentSession> create(const Context& context,
                                                    std::unique_ptr<SessionTimers> timers,
                                                    const QString& documentId,
@@ -175,10 +181,13 @@ public:
 
     void setEmergencyActive(bool active);
 
-    /// Registers the ward under its existing id with these devices of this person
-    /// linked first, so the first header lists them. RosterChangeQueue supplies
-    /// them from its pending Link changes.
-    void share(const QList<RosterDevice>& linkedDevices);
+    /// The latest head the server answered, if any: its members and their roles and
+    /// devices, the lease holder, and the newest access-history entry.
+    const std::optional<ServerContract::Head>& lastHead() const { return m_head; }
+
+    /// Registers the ward under its existing id, sealed to this device alone; the
+    /// next publish adds this device's linked devices once the head lists them.
+    void share();
 
     /// The conflict waiting for a choice, if any. Head checks and publishing wait
     /// with it, so it can be asked about again until it is settled.
@@ -188,22 +197,19 @@ public:
     /// be written; a conflict whose local file was not written is still pending.
     bool resolve(Resolution resolution, QString* errorMessage);
 
-    /// This device is proven off the ward: the files and record go, and the
-    /// session does nothing further. The session reaches it itself, and the
-    /// roster change queue reaches it for an open ward.
-    void finishRemoved(const Fingerprint& remover, bool left);
+    /// The server says this device lost access: the files and record go, and the
+    /// session does nothing further. The session reaches it itself, and the sealing
+    /// queue reaches it for an open ward.
+    void finishLost(const ServerContract::LostAccess& lost);
 
 signals:
     /// The in-memory document was replaced from outside an edit - a fast-forward,
-    /// a merge, a resolve, an adopted roster: undo no longer applies.
+    /// a merge, a resolve: undo no longer applies.
     void documentReplaced();
 
-    /// A server version was taken in - by a fast-forward, a merge, or the roster a
-    /// conflict adopts before it is settled - once per version: the old base's
-    /// header and roster, and the headers fetched after it.
-    void versionAdopted(const DocumentHeader& previousBase,
-                        const QList<DocumentHeader>& laterHeaders,
-                        const AccessRoster& previousRoster);
+    /// A head check answered with different members, roles, lease holder, or
+    /// newest access-history entry.
+    void headChanged();
 
     void syncStateChanged(SyncState state);
 
@@ -220,7 +226,7 @@ signals:
     void shareFailed(ServerContract::ServerError error);
 
     /// Files and record gone; the session is finished.
-    void removed(const QString& byWhom, bool left);
+    void accessLost(const ServerContract::LostAccess& lost);
 
 private:
     DocumentSession(const Context& context,
@@ -235,6 +241,9 @@ private:
 
     void onTimer(SessionTimers::Timer timer);
     bool writeSave(QString* errorMessage);
+
+    /// What the sealing-set rule allows from the latest head; nullopt before one.
+    std::optional<ServerVersion::Access> access() const;
 
     /// Seals document on previous with dataKey and writes it as the local file.
     /// The session's header, key, and document follow only on success.
@@ -259,8 +268,6 @@ private:
     void publish();
     void onPublished(const ServerContract::Result<qint64>& result, const DocumentFile::Sealed& published);
     void scheduleRetry();
-    void proveRemoval();
-    void onRemovalChecked(const ServerVersion::Fetched& proof);
     void onRegistered(const ServerContract::Result<qint64>& result, const DocumentFile::Sealed& registered);
     void finishOperation();
 
@@ -271,11 +278,6 @@ private:
     void mergeWith(const ServerVersion::Fetched& theirs, const Document& merged);
     void raiseConflict(const ServerVersion::Fetched& theirs);
     bool moveBase(const ServerVersion::Fetched& theirs, QString* errorMessage);
-    QString nameOf(const Fingerprint& device) const;
-
-    /// The roster of the version the base holds, which names people a later one
-    /// removed; this session's own when there is no base.
-    AccessRoster baseRoster() const;
 
     // --- The lease ---
 
@@ -303,6 +305,7 @@ private:
 
     std::optional<ServerVersion::BaseCopy> m_base;
     std::optional<ServerVersion::Fetched> m_conflict;
+    std::optional<ServerContract::Head> m_head;
 
     SyncState m_syncState = SyncState::Local;
     QString m_faultReason;
@@ -316,5 +319,5 @@ private:
     bool m_leaseRequested = false;
     bool m_requiresUpdate = false;
     bool m_emergencyActive = false;
-    bool m_removed = false;
+    bool m_lost = false;
 };

@@ -14,6 +14,13 @@ Reply<T> guarded(QObject* context, Reply<T> reply)
     return [alive, reply](const Result<T>& result) { if (alive) { reply(result); } };
 }
 
+/// A failure carried from one result type to another, with its lost access.
+template<typename T, typename U>
+Result<T> failureOf(const Result<U>& result)
+{
+    return Result<T>{std::nullopt, result.error, result.lost};
+}
+
 } // namespace
 
 ServerConnection::ServerConnection(ServerApi& server, const DeviceIdentity& identity)
@@ -24,9 +31,36 @@ ServerConnection::ServerConnection(ServerApi& server, const DeviceIdentity& iden
 
 // --- Endpoints -------------------------------------------------------------------
 
+void ServerConnection::me(QObject* context, Reply<Me> reply)
+{
+    call<Me>(context, std::bind(&ServerApi::me, &m_server, _1, _2), reply);
+}
+
+void ServerConnection::unlinkDevice(const Fingerprint& device, QObject* context, Reply<Done> reply)
+{
+    call<Done>(context, std::bind(&ServerApi::unlinkDevice, &m_server, _1, device, _2), reply);
+}
+
+void ServerConnection::startLink(QObject* context, Reply<QString> reply)
+{
+    call<QString>(context,
+                  std::bind(&ServerApi::startLink, &m_server, _1, m_identity.sealing.publicKey, m_identity.deviceName, _2),
+                  reply);
+}
+
+void ServerConnection::link(const QString& code, QObject* context, Reply<LinkState> reply)
+{
+    call<LinkState>(context, std::bind(&ServerApi::link, &m_server, _1, code, _2), reply);
+}
+
+void ServerConnection::approveLink(const QString& code, QObject* context, Reply<Done> reply)
+{
+    call<Done>(context, std::bind(&ServerApi::approveLink, &m_server, _1, code, _2), reply);
+}
+
 void ServerConnection::registerDocument(const Upload& upload, QObject* context, Reply<qint64> reply)
 {
-    call<qint64>(context, std::bind(&ServerConnection::sendRegisterDocument, this, _1, upload, _2), reply);
+    call<qint64>(context, std::bind(&ServerApi::registerDocument, &m_server, _1, upload, _2), reply);
 }
 
 void ServerConnection::head(const QString& documentId, QObject* context, Reply<Head> reply)
@@ -34,14 +68,9 @@ void ServerConnection::head(const QString& documentId, QObject* context, Reply<H
     call<Head>(context, std::bind(&ServerApi::head, &m_server, _1, documentId, _2), reply);
 }
 
-void ServerConnection::download(const QString& documentId, qint64 after, QObject* context, Reply<Snapshot> reply)
+void ServerConnection::download(const QString& documentId, QObject* context, Reply<Snapshot> reply)
 {
-    call<Snapshot>(context, std::bind(&ServerApi::download, &m_server, _1, documentId, after, _2), reply);
-}
-
-void ServerConnection::headers(const QString& documentId, qint64 after, QObject* context, Reply<HeaderChain> reply)
-{
-    call<HeaderChain>(context, std::bind(&ServerApi::headers, &m_server, _1, documentId, after, _2), reply);
+    call<Snapshot>(context, std::bind(&ServerApi::download, &m_server, _1, documentId, _2), reply);
 }
 
 void ServerConnection::upload(const QString& documentId,
@@ -50,24 +79,67 @@ void ServerConnection::upload(const QString& documentId,
                               QObject* context,
                               Reply<qint64> reply)
 {
-    call<qint64>(context,
-                 std::bind(&ServerConnection::sendUpload, this, _1, documentId, baseVersion, upload, _2),
-                 reply);
+    call<qint64>(context, std::bind(&ServerApi::upload, &m_server, _1, documentId, baseVersion, upload, _2), reply);
 }
 
 void ServerConnection::takeLease(const QString& documentId, QObject* context, Reply<Lease> reply)
 {
-    call<Lease>(context, std::bind(&ServerConnection::sendTakeLease, this, _1, documentId, _2), reply);
+    call<Lease>(context, std::bind(&ServerApi::takeLease, &m_server, _1, documentId, _2), reply);
 }
 
 void ServerConnection::releaseLease(const QString& documentId, QObject* context, Reply<Done> reply)
 {
-    call<Done>(context, std::bind(&ServerConnection::sendReleaseLease, this, _1, documentId, _2), reply);
+    call<Done>(context, std::bind(&ServerApi::releaseLease, &m_server, _1, documentId, _2), reply);
 }
 
-void ServerConnection::myDocuments(QObject* context, Reply<QStringList> reply)
+void ServerConnection::history(const QString& documentId,
+                               qint64 after,
+                               QObject* context,
+                               Reply<QList<HistoryEntry>> reply)
 {
-    call<QStringList>(context, std::bind(&ServerApi::myDocuments, &m_server, _1, _2), reply);
+    call<QList<HistoryEntry>>(context, std::bind(&ServerApi::history, &m_server, _1, documentId, after, _2), reply);
+}
+
+void ServerConnection::requestAccess(const QString& documentId, QObject* context, Reply<Done> reply)
+{
+    call<Done>(context, std::bind(&ServerApi::requestAccess, &m_server, _1, documentId, _2), reply);
+}
+
+void ServerConnection::accessRequests(const QString& documentId, QObject* context, Reply<QList<AccessRequest>> reply)
+{
+    call<QList<AccessRequest>>(context, std::bind(&ServerApi::accessRequests, &m_server, _1, documentId, _2), reply);
+}
+
+void ServerConnection::declineRequest(const QString& documentId, qint64 index, QObject* context, Reply<Done> reply)
+{
+    call<Done>(context, std::bind(&ServerApi::declineRequest, &m_server, _1, documentId, index, _2), reply);
+}
+
+void ServerConnection::myRequestStatus(const QString& documentId, QObject* context, Reply<RequestStatus> reply)
+{
+    call<RequestStatus>(context, std::bind(&ServerApi::myRequestStatus, &m_server, _1, documentId, _2), reply);
+}
+
+void ServerConnection::grant(const QString& documentId, qint64 index, QObject* context, Reply<Done> reply)
+{
+    call<Done>(context, std::bind(&ServerApi::grant, &m_server, _1, documentId, index, _2), reply);
+}
+
+void ServerConnection::removeMember(const QString& documentId,
+                                    const MemberId& member,
+                                    QObject* context,
+                                    Reply<Done> reply)
+{
+    call<Done>(context, std::bind(&ServerApi::removeMember, &m_server, _1, documentId, member, _2), reply);
+}
+
+void ServerConnection::setRole(const QString& documentId,
+                               const MemberId& member,
+                               Role role,
+                               QObject* context,
+                               Reply<Done> reply)
+{
+    call<Done>(context, std::bind(&ServerApi::setRole, &m_server, _1, documentId, member, role, _2), reply);
 }
 
 // --- One call, signed in once more if its session has expired ----------------------
@@ -86,7 +158,7 @@ void ServerConnection::attemptWith(const Result<Session>& session,
 {
     if (!session.ok())
     {
-        reply(Result<T>::failure(session.error));
+        reply(failureOf<T>(session));
         return;
     }
 
@@ -143,16 +215,35 @@ void ServerConnection::onChallenge(const Result<QByteArray>& challenge)
 {
     if (!challenge.ok())
     {
-        finishSignIn(Result<Session>::failure(challenge.error));
+        finishSignIn(failureOf<Session>(challenge));
         return;
     }
 
-    const QByteArray response =
-        DocumentCrypto::sign(SignatureTag::Auth, challenge.value.value(), m_identity.signing.signingKey);
+    const QByteArray response = DocumentCrypto::signChallenge(challenge.value.value(), m_identity.signing.signingKey);
     m_server.authenticate(m_identity.signing.verifyKey,
                           challenge.value.value(),
                           response,
-                          guarded<Session>(&m_lifetime, std::bind(&ServerConnection::finishSignIn, this, _1)));
+                          guarded<Session>(&m_lifetime, std::bind(&ServerConnection::onAuthenticated, this, _1)));
+}
+
+void ServerConnection::onAuthenticated(const Result<Session>& session)
+{
+    // A device with no person yet signs in to link, and has nothing to register.
+    if (!session.ok() || !m_identity.member.isValid())
+    {
+        finishSignIn(session);
+        return;
+    }
+
+    m_server.registerPerson(session.value.value(),
+                            m_identity.registration(),
+                            guarded<Done>(&m_lifetime,
+                                          std::bind(&ServerConnection::onRegistered, this, session.value.value(), _1)));
+}
+
+void ServerConnection::onRegistered(const Session& session, const Result<Done>& registered)
+{
+    finishSignIn(registered.ok() ? Result<Session>::success(session) : failureOf<Session>(registered));
 }
 
 void ServerConnection::finishSignIn(const Result<Session>& session)
@@ -170,49 +261,4 @@ void ServerConnection::finishSignIn(const Result<Session>& session)
     {
         ready(session);
     }
-}
-
-// --- Signed endpoints ------------------------------------------------------------
-
-void ServerConnection::sendRegisterDocument(const Session& session, const Upload& upload, Reply<qint64> reply)
-{
-    m_server.registerDocument(session,
-                              upload,
-                              signature(Endpoint::RegisterDocument, session, upload.header.documentId, registerBody(upload)),
-                              reply);
-}
-
-void ServerConnection::sendUpload(const Session& session,
-                                  const QString& documentId,
-                                  qint64 baseVersion,
-                                  const Upload& upload,
-                                  Reply<qint64> reply)
-{
-    m_server.upload(session,
-                    documentId,
-                    baseVersion,
-                    upload,
-                    signature(Endpoint::Upload, session, documentId, uploadBody(baseVersion, upload)),
-                    reply);
-}
-
-void ServerConnection::sendTakeLease(const Session& session, const QString& documentId, Reply<Lease> reply)
-{
-    m_server.takeLease(session, documentId, signature(Endpoint::TakeLease, session, documentId, emptyBody()), reply);
-}
-
-void ServerConnection::sendReleaseLease(const Session& session, const QString& documentId, Reply<Done> reply)
-{
-    m_server.releaseLease(session,
-                          documentId,
-                          signature(Endpoint::ReleaseLease, session, documentId, emptyBody()),
-                          reply);
-}
-
-QByteArray ServerConnection::signature(Endpoint endpoint,
-                                       const Session& session,
-                                       const QString& documentId,
-                                       const QByteArray& body) const
-{
-    return signRequest(endpoint, session, documentId, body, m_identity.signing.signingKey);
 }

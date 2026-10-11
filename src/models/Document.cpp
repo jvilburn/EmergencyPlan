@@ -579,8 +579,7 @@ QJsonObject Document::toJson() const
     // Metadata (wards/stakes)
     m_metadata.writeToJson(json);
 
-    // Access roster
-    json["accessRoster"] = m_accessRoster.toJson();
+    json["sealingSet"] = m_sealingSet.toJson();
 
     // Core collections
     serializeHashToJson(json, "families", m_families);
@@ -622,7 +621,7 @@ std::optional<Document> Document::parse(const QJsonObject& json)
     if (!StrictJson::hasOnlyKeys(json,
                                  {QLatin1String("stakes"),
                                   QLatin1String("wards"),
-                                  QLatin1String("accessRoster"),
+                                  QLatin1String("sealingSet"),
                                   QLatin1String("families"),
                                   QLatin1String("teams"),
                                   QLatin1String("tags"),
@@ -638,26 +637,23 @@ std::optional<Document> Document::parse(const QJsonObject& json)
         return std::nullopt;
     }
 
-    // The roster decides who may open the document, so it is read strictly: a
-    // roster understood in part would name fewer people than the document
-    // actually grants.
-    const QJsonValue rosterValue = json.value("accessRoster");
-    if (!rosterValue.isObject())
+    // The sealing set decides whom every later write seals to, so it is read
+    // strictly; fromJson refuses an empty one, since a readable document is sealed
+    // at least to the device reading it.
+    const QJsonValue setValue = json.value("sealingSet");
+    if (!setValue.isObject())
     {
         return std::nullopt;
     }
 
-    // Every readable document lists at least the person reading it. The last
-    // person's leave writes an empty roster, but nobody can decrypt that payload,
-    // so an empty roster that reaches this reader is damage.
-    const std::optional<AccessRoster> roster = AccessRoster::fromJson(rosterValue.toObject());
-    if (!roster.has_value() || roster.value().isEmpty())
+    const std::optional<SealingSet> sealingSet = SealingSet::fromJson(setValue.toObject());
+    if (!sealingSet.has_value())
     {
         return std::nullopt;
     }
 
     Document document;
-    document.m_accessRoster = roster.value();
+    document.m_sealingSet = sealingSet.value();
 
     const std::optional<DocumentMetadata> metadata = DocumentMetadata::fromJson(json);
     if (!metadata.has_value())
@@ -707,7 +703,7 @@ void Document::setEmergencyResponse(const std::optional<EmergencyResponse>& resp
 bool Document::operator==(const Document& other) const
 {
     return m_metadata == other.m_metadata
-        && m_accessRoster == other.m_accessRoster
+        && m_sealingSet == other.m_sealingSet
         && m_families == other.m_families
         && m_teams == other.m_teams
         && m_tags == other.m_tags
