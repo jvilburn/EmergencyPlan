@@ -348,6 +348,8 @@ void DocumentLibrary::fetchWard(const QString& documentId,
                                 QObject* receiver,
                                 const WardFetched& fetched)
 {
+    // The folder the download writes into, which the first ward on a device makes.
+    QDir().mkpath(m_directory);
     DocumentSession::download(DocumentSession::Context{m_identity, m_settings, server},
                               documentId,
                               pathsIn(documentId),
