@@ -3106,6 +3106,15 @@ Commit as `feat: access roster dialog`.
 
 ### Task 19: Single key holder notice
 
+> **Done**, with these differences from the text below:
+> - The stacking: the window's banner column holds the emergency banner, then the copy
+>   banner (Task 14), then `WardNotices`, a column of its own notices.
+> - `WardNotices` also shows Task 18's access changes, one notice per sync listing them.
+> - A dismissed notice stays dismissed for that ward while the app runs; a new sync's
+>   access changes come back. Each notice's button opens the access dialog until Task 23
+>   gives linking its own.
+> - Task 27's update check follows `requiresUpdateChanged` when it lands.
+
 **Files:** `src/widgets/MainWindow.h/.cpp`
 
 **In the main window, not the dialog.** The design calls for a persistent notice; a

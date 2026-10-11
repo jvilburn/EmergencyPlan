@@ -4,6 +4,7 @@
 #include "FileOpenRouter.h"
 #include "OpenWardDialog.h"
 #include "AccessDialog.h"
+#include "WardNotices.h"
 #include "ConflictDialog.h"
 #include "SyncStatusWidget.h"
 #include "EmergencyBanner.h"
@@ -162,6 +163,12 @@ void MainWindow::setupUi()
 
     centralLayout->addWidget(m_emergencyBanner);
     centralLayout->addWidget(m_copyBanner);
+
+    // The ward's standing notices, under the emergency and copy banners.
+    m_wardNotices = new WardNotices(centralContainer);
+    centralLayout->addWidget(m_wardNotices);
+    connect(m_wardNotices, &WardNotices::accessRequested, this, &MainWindow::onShowAccess);
+    connect(m_wardNotices, &WardNotices::linkRequested, this, &MainWindow::onShowAccess);
     centralLayout->addWidget(m_splitter, 1);
     setCentralWidget(centralContainer);
 

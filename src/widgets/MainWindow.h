@@ -16,6 +16,7 @@
 class AppSettings;
 class DocumentLibrary;
 class QLabel;
+class WardNotices;
 class QProgressBar;
 class EmergencyAssetView;
 class FamilyEditPanel;
@@ -133,6 +134,7 @@ private:
     QSplitter* m_splitter;
     EmergencyBanner* m_emergencyBanner;
     QLabel* m_copyBanner;
+    WardNotices* m_wardNotices;
     SidebarWidget* m_sidebarTabs;
     WardListView* m_wardListView;
     MinisteringView* m_ministeringView;
