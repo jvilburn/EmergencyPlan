@@ -1,5 +1,6 @@
 #include "DocumentManager.h"
 #include "BackgroundGeocodingService.h"
+#include "Reconcile.h"
 #include "RosterChangeQueue.h"
 #include "ServerConnection.h"
 #include "UnitLookupService.h"
@@ -500,6 +501,8 @@ void DocumentManager::install(std::unique_ptr<DocumentSession> session)
     connect(opened, &DocumentSession::syncStateChanged, this, &DocumentManager::syncStateChanged);
     connect(opened, &DocumentSession::conflictRaised, this, &DocumentManager::conflictRaised);
     connect(opened, &DocumentSession::requiresUpdateChanged, this, &DocumentManager::requiresUpdateChanged);
+    connect(opened, &DocumentSession::versionAdopted, this, &DocumentManager::onVersionAdopted);
+    m_knownRoster = opened->document().accessRoster();
     connect(opened, &DocumentSession::saveFailed, this, &DocumentManager::saveFailed);
     connect(opened, &DocumentSession::removed, this, &DocumentManager::onSessionRemoved);
     if (m_queue != nullptr)
@@ -527,6 +530,44 @@ void DocumentManager::onDocumentReplaced()
         m_session->setEmergencyActive(m_session->document().emergencyResponse().has_value());
     }
     afterChange(DocumentChange::full());
+}
+
+void DocumentManager::onVersionAdopted(const DocumentHeader& previousBase, const QList<DocumentHeader>& laterHeaders)
+{
+    // Every version taken in passes here once, so each change is told once.
+    const AccessRoster current = m_session->document().accessRoster();
+    const QList<AccessEvents::Event> events = AccessEvents::between(previousBase, laterHeaders, current, m_knownRoster);
+    m_knownRoster = current;
+    if (!events.isEmpty())
+    {
+        emit accessChanged(events);
+    }
+}
+
+void DocumentManager::fetchDeviceOrigins(QObject* receiver, const OriginsFetched& done)
+{
+    if (!m_session)
+    {
+        return;
+    }
+    if (!m_session->isShared() || m_server == nullptr)
+    {
+        done(AccessEvents::deviceOrigins({m_session->header()}));
+        return;
+    }
+    m_server->headers(m_session->documentId(),
+                      0,
+                      receiver,
+                      std::bind(&DocumentManager::onChainFetched, this, done, _1));
+}
+
+void DocumentManager::onChainFetched(const OriginsFetched& done, const ServerContract::Result<ServerContract::HeaderChain>& chain)
+{
+    QList<DocumentHeader> headers;
+    if (chain.ok() && Reconcile::readHeaders(chain.value.value().headers, headers) == Reconcile::Verdict::Accept)
+    {
+        done(AccessEvents::deviceOrigins(headers));
+    }
 }
 
 void DocumentManager::onReadOnlyChanged()

@@ -3053,6 +3053,16 @@ Prefer visible buttons over context menus; the audience is casual users.
 
 ### Task 18: Access roster dialog
 
+> **Done**, with these differences from the text below:
+> - `AccessDialog` opens from a new **Ward** menu, **Who Has Access...**. It decides
+>   nothing: each action is a signal, which Tasks 20, 23, and 24 connect. An unshared
+>   ward shows **Share...** in place of Invite.
+> - Which device added each device comes from `AccessEvents::deviceOrigins` over the
+>   chain `DocumentManager::fetchDeviceOrigins` reads from the server; a device unlinked
+>   and linked again was added by the later link.
+> - `DocumentManager` emits `accessChanged` with the events of each adopted version,
+>   naming people from the roster it held before; Task 19's container shows them.
+
 **Files:** `src/widgets/AccessDialog.h/.cpp`, `src/widgets/MainWindow.cpp`,
 `src/services/AccessEvents.h/.cpp`, `tests/services/AccessEventsTest.h/.cpp`
 

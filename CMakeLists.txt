@@ -196,6 +196,7 @@ set(SERVICE_SOURCES
     src/services/FileOpenRouter.cpp
     src/services/HttpServerApi.cpp
     src/services/HttpWire.cpp
+    src/services/AccessEvents.cpp
     # src/services/StatisticsService.cpp
     # src/services/ResourceService.cpp
     # src/services/SearchService.cpp
@@ -249,6 +250,7 @@ set(SERVICE_HEADERS
     src/services/FileOpenRouter.h
     src/services/HttpServerApi.h
     src/services/HttpWire.h
+    src/services/AccessEvents.h
     # src/services/StatisticsService.h
     # src/services/ResourceService.h
     # src/services/SearchService.h
@@ -270,6 +272,7 @@ set(WIDGET_SOURCES
     src/widgets/NotifyDialog.cpp
     src/widgets/FirstRunDialog.cpp
     src/widgets/ConflictDialog.cpp
+    src/widgets/AccessDialog.cpp
     src/widgets/SyncStatusWidget.cpp
     src/widgets/OpenWardDialog.cpp
     src/widgets/TaskDialog.cpp
@@ -325,6 +328,7 @@ set(WIDGET_HEADERS
     src/widgets/NotifyDialog.h
     src/widgets/FirstRunDialog.h
     src/widgets/ConflictDialog.h
+    src/widgets/AccessDialog.h
     src/widgets/SyncStatusWidget.h
     src/widgets/OpenWardDialog.h
     src/widgets/TaskDialog.h

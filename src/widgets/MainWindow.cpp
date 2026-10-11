@@ -3,6 +3,7 @@
 #include "DocumentLibrary.h"
 #include "FileOpenRouter.h"
 #include "OpenWardDialog.h"
+#include "AccessDialog.h"
 #include "ConflictDialog.h"
 #include "SyncStatusWidget.h"
 #include "EmergencyBanner.h"
@@ -276,6 +277,10 @@ void MainWindow::setupMenus()
 
     m_redoAction = editMenu->addAction(tr("&Redo"), this, &MainWindow::onRedo);
     m_redoAction->setShortcut(QKeySequence::Redo);
+
+    // Ward menu: who has access, and the actions on it
+    QMenu* wardMenu = menuBar()->addMenu(tr("&Ward"));
+    wardMenu->addAction(tr("&Who Has Access..."), this, &MainWindow::onShowAccess);
 
     // Emergency menu
     QMenu* emergencyMenu = menuBar()->addMenu(tr("E&mergency"));
@@ -871,6 +876,20 @@ bool MainWindow::settleConflict(ConflictDialog::Choice choice, QString* errorMes
         return DocumentManager::instance()->resolveConflict(DocumentSession::Resolution::KeepMine, errorMessage);
     }
     return false;
+}
+
+void MainWindow::onShowAccess()
+{
+    DocumentManager* manager = DocumentManager::instance();
+    if (manager->copy().has_value() || manager->session() == nullptr)
+    {
+        QMessageBox::information(this, tr("Who Has Access"), tr("Open a ward to see who has access to it."));
+        return;
+    }
+
+    AccessDialog dialog(manager->document().accessRoster(), manager->identity(), manager->session()->isShared(), this);
+    manager->fetchDeviceOrigins(&dialog, std::bind(&AccessDialog::setOrigins, &dialog, std::placeholders::_1));
+    dialog.exec();
 }
 
 void MainWindow::onStartOver()

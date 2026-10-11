@@ -1,4 +1,5 @@
 #include "AccessControlTest.h"
+#include "AccessEventsTest.h"
 #include "AccessRosterTest.h"
 #include "AppSettings.h"
 #include "AppSettingsTest.h"
@@ -99,6 +100,7 @@ int main(int argc, char** argv)
     status |= run<DocumentParseTest>(argc, argv);
     status |= run<WardDirectoryImportTest>(argc, argv);
     status |= run<AccessControlTest>(argc, argv);
+    status |= run<AccessEventsTest>(argc, argv);
     status |= run<FakeServerTest>(argc, argv);
     status |= run<ServerConformanceTest>(argc, argv, makeFakeServer);
 

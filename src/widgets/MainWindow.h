@@ -81,6 +81,7 @@ private slots:
     void onAccessRemoved(const QString& wardName, const QString& byWhom, bool left);
     void onFetchFailed(const QString& documentId, DocumentSession::Download outcome);
     void onStartOver();
+    void onShowAccess();
     /// Asks about the open ward's pending conflict until it is settled or set aside.
     void askAboutConflict();
     void onEditRefused(const QString& message);
