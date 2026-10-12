@@ -9,8 +9,8 @@
 class QVBoxLayout;
 class UpdateChecker;
 
-/// The standing notices, between the copy banner and the emergency banner: each
-/// persistent, never a per-save interruption.
+/// The standing notices, under the emergency and copy banners: each persistent, never a
+/// per-save interruption.
 ///
 /// - A newer version of Ward Planning is published, with or without a ward open.
 /// - The ward was saved by a newer version of Ward Planning, until it is updated.
@@ -69,6 +69,7 @@ private:
     QList<Notice> currentNotices() const;
 
     QWidget* makeNotice(const Notice& notice);
+    void openReleasePage();
     void dismiss(Kind kind);
 
     QVBoxLayout* m_layout = nullptr;

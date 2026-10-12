@@ -148,16 +148,19 @@ void startOver(const QString& identityPath, AppSettings& settings)
     QApplication::quit();
 }
 
+void onReleaseReply(QNetworkReply* reply, const UpdateChecker::Fetched& done)
+{
+    done(reply->error() == QNetworkReply::NoError, reply->readAll());
+    reply->deleteLater();
+}
+
 /// One GET for the release check. GitHub answers only a request that names its agent.
 void fetchRelease(QNetworkAccessManager& network, const QUrl& url, UpdateChecker::Fetched done)
 {
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("WardPlanning/") + WARD_PLANNING_VERSION);
     QNetworkReply* reply = network.get(request);
-    QObject::connect(reply, &QNetworkReply::finished, reply, [reply, done]() {
-        done(reply->error() == QNetworkReply::NoError, reply->readAll());
-        reply->deleteLater();
-    });
+    QObject::connect(reply, &QNetworkReply::finished, reply, std::bind(&onReleaseReply, reply, done));
 }
 
 /// Whether the arguments after the program's own name a Ward Planning file.

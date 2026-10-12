@@ -986,7 +986,7 @@ Each gets its own message:
 | This device unlinked | This device was unlinked by *name*; its wards have been deleted from it |
 | Header and sealing set disagree | Refused like any invalid version: the server's copy could not be verified; your local copy is unchanged |
 | Upload rejected on version | Someone else saved first, so the merge or the conflict dialog |
-| Lease held by another member | Directory read-only, naming who holds it; emergency response still editable |
+| Lease held by another member | Directory read-only, another member is editing; emergency response still editable |
 | Invite link unknown to the server | The document was deleted, or the link is wrong |
 | Server version written by a newer app | This ward was saved by a newer version of Ward Planning. Update to see the latest changes and share your work. Directory read-only; emergency response still editable locally. |
 | Document file missing from app data | Name the ward and offer to fetch it from the server |

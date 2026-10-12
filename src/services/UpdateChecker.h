@@ -1,7 +1,5 @@
 #pragma once
 
-#include "AppSettings.h"
-
 #include <QByteArray>
 #include <QObject>
 #include <QString>
@@ -10,14 +8,16 @@
 
 #include <functional>
 
+class AppSettings;
+
 /// Whether a newer Ward Planning has been published, read from GitHub Releases and so
 /// apart from the Ward Planning server. The newest release's tag, less a leading v, is
 /// compared with the running version. Silent on any failure: no release reachable, a
 /// body that is not a release, a tag that is not a version.
 ///
-/// Asked at launch and then at most once a day, the last answer kept in AppSettings so
-/// a known newer version shows between checks. Not now on a version keeps that version
-/// quiet; a later one shows again.
+/// Asked at launch, and skipped when the last answer is under a day old; that answer is
+/// kept in AppSettings, so a known newer version shows between checks. Not now on a
+/// version keeps that version quiet; a later one shows again.
 class UpdateChecker : public QObject
 {
     Q_OBJECT

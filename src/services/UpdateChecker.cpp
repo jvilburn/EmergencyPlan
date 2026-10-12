@@ -1,5 +1,6 @@
 #include "UpdateChecker.h"
 
+#include "AppSettings.h"
 #include "StrictJson.h"
 
 #include <QDateTime>
@@ -86,7 +87,8 @@ QString UpdateChecker::newerVersion() const
         return QString();
     }
     const QVersionNumber latest = QVersionNumber::fromString(last->latestVersion);
-    if (latest.isNull() || latest <= m_running || last->latestVersion == m_settings.dismissedUpdate())
+    if (m_running.isNull() || latest.isNull() || latest <= m_running
+        || last->latestVersion == m_settings.dismissedUpdate())
     {
         return QString();
     }

@@ -198,7 +198,7 @@ QWidget* WardNotices::makeNotice(const Notice& notice)
         QPushButton* later = new QPushButton(tr("Not Now"), frame);
         row->addWidget(download);
         row->addWidget(later);
-        connect(download, &QPushButton::clicked, this, []() { QDesktopServices::openUrl(UpdateChecker::releasePage()); });
+        connect(download, &QPushButton::clicked, this, &WardNotices::openReleasePage);
         connect(later, &QPushButton::clicked, m_updates, &UpdateChecker::dismiss);
         break;
     }
@@ -243,6 +243,11 @@ QWidget* WardNotices::makeNotice(const Notice& notice)
         column->addWidget(list);
     }
     return frame;
+}
+
+void WardNotices::openReleasePage()
+{
+    QDesktopServices::openUrl(UpdateChecker::releasePage());
 }
 
 void WardNotices::dismiss(Kind kind)

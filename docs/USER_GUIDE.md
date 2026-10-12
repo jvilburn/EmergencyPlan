@@ -36,7 +36,7 @@ After importing, the app automatically geocodes addresses in the background (sho
 
 ```
 +-----------------------------------------------+
-| File  Edit  Emergency                          |
+| File  Edit  Ward  Emergency                    |
 +------------------+----------------------------+
 | [Families]       |                            |
 | [Ministering]    |                            |
@@ -298,4 +298,4 @@ Emergency response actions (contact status, tasks) are **not** part of the undo 
 
 - Every change is saved to this device a moment after you make it; **Ctrl+S** saves now
 - A shared ward then uploads the saved version to the server, conditional on nothing having changed there meanwhile; the sync indicator shows where it stands
-- Closing the app saves and releases the editing turn; nothing is lost and nothing is asked
+- Closing the app saves and releases the editing turn; it asks only when a family edit is unfinished or the save fails

@@ -464,7 +464,7 @@ id refuses the whole payload. Its format version lives in the file's header, not
 
 ```json
 {
-    "accessRoster": { "people": [...] },
+    "sealingSet": { "devices": [...], "formerKeys": [...] },
     "stakes": [...],
     "wards": [...],
     "families": [

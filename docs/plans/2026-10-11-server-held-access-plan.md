@@ -1016,8 +1016,8 @@ The check reads GitHub Releases, independent of the Ward Planning server:
 `AppSettings`; silent on any failure. The notice sits in `WardNotices` below the
 emergency banner - *A new version of Ward Planning is available.* - with **Download**
 (`QDesktopServices::openUrl` on the release page) and **Not now**, hidden until a newer
-version. When the server has been unreachable a day or more and a newer version is known,
-the sync indicator's *Server unreachable* adds *a newer version is available*. It also
+version. While the server is unreachable and a newer version is known, the sync
+indicator's *Server unreachable* adds *a newer version is available*. It also
 runs when `DocumentManager::requiresUpdateChanged` fires. `UpdateChecker` takes an
 injectable fetch so its tests need no network.
 

@@ -28,9 +28,9 @@ To display the map, it uses https://tile.openstreetmap.org for street maps and h
 
 It caches map tiles to make map drawing responsive and also to allow drawing the maps during an emergency, when the internet may not be available.
 
-A shared ward talks to the Ward Planning server, which stores the ward encrypted and holds who has access. The address is built in and can be overridden in `settings.json`.
+A shared ward talks to the Ward Planning server, which stores the ward encrypted and holds who has access. Its address is the `serverAddress` entry in `settings.json`, in local app data; without one, every server call reports the server unreachable and the app works from its local copies.
 
-At startup, and at most once a day, it reads https://api.github.com/repos/jvilburn/EmergencyPlan/releases/latest to learn whether a newer version is published.
+At startup, unless it asked within the last day, it reads https://api.github.com/repos/jvilburn/EmergencyPlan/releases/latest to learn whether a newer version is published.
 
 ## Building
 
