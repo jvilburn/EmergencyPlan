@@ -10,6 +10,7 @@
 #include "DocumentLibrary.h"
 #include "DocumentManager.h"
 #include "EmergencyManager.h"
+#include "FileOpenRouter.h"
 #include "FirstRunDialog.h"
 #include "HttpServerApi.h"
 #include "IdentityService.h"
@@ -107,7 +108,8 @@ bool namesADocument(const QStringList& arguments)
 {
     for (qsizetype i = 1; i < arguments.size(); ++i)
     {
-        if (arguments.at(i).endsWith(DocumentConstants::FileExtension, Qt::CaseInsensitive))
+        if (arguments.at(i).endsWith(DocumentConstants::FileExtension, Qt::CaseInsensitive)
+            || !FileOpenRouter::invitedWard(arguments.at(i)).isEmpty())
         {
             return true;
         }

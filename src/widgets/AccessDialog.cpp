@@ -80,6 +80,15 @@ AccessDialog::AccessDialog(const QList<Member>& members, const DeviceIdentity& s
         layout->addLayout(top);
         connect(share, &QPushButton::clicked, this, &AccessDialog::shareRequested);
     }
+    else
+    {
+        QHBoxLayout* top = new QHBoxLayout();
+        top->addStretch(1);
+        m_inviteLink = new QPushButton(tr("Invite Link..."), this);
+        top->addWidget(m_inviteLink);
+        layout->addLayout(top);
+        connect(m_inviteLink, &QPushButton::clicked, this, &AccessDialog::inviteLinkRequested);
+    }
 
     m_offline = new QLabel(tr("Who has access shows once the server answers."), this);
     m_offline->setWordWrap(true);
@@ -176,6 +185,10 @@ void AccessDialog::fillTree()
     m_unlink->setVisible(m_shared && known);
     m_remove->setVisible(selfIsAdmin());
     m_role->setVisible(selfIsAdmin());
+    if (m_inviteLink != nullptr)
+    {
+        m_inviteLink->setVisible(selfIsAdmin());
+    }
 
     QList<Member> sorted = m_members;
     std::sort(sorted.begin(), sorted.end(), &sortsBefore);

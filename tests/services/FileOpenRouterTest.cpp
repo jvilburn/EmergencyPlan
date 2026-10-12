@@ -139,3 +139,38 @@ void FileOpenRouterTest::eachFileTakesItsRoute()
     QCOMPARE(route.action, action);
     QCOMPARE(route.documentId, namesTheWard ? documentId : QString());
 }
+
+void FileOpenRouterTest::anInviteLinkNamesItsWardAndNothingElseDoes()
+{
+    const QString documentId = DocumentLibrary::newDocumentId();
+    const QString link = FileOpenRouter::inviteLink(documentId);
+    QCOMPARE(link, "wardplanning:open/" + documentId);
+    QCOMPARE(FileOpenRouter::invitedWard(link), documentId);
+    QCOMPARE(FileOpenRouter::invitedWard(link + "/"), documentId);
+    QCOMPARE(FileOpenRouter::invitedWard(link.toUpper().replace(documentId.toUpper(), documentId)), documentId);
+
+    QVERIFY(FileOpenRouter::invitedWard("wardplanning:open/" + documentId.left(30)).isEmpty());
+    QVERIFY(FileOpenRouter::invitedWard("wardplanning:open/" + documentId.toUpper()).isEmpty());
+    QVERIFY(FileOpenRouter::invitedWard("wardplanning:open/../../" + documentId).isEmpty());
+    QVERIFY(FileOpenRouter::invitedWard("https://example.test/" + documentId).isEmpty());
+    QVERIFY(FileOpenRouter::invitedWard("C:/wards/" + documentId + ".wardplanning").isEmpty());
+}
+
+void FileOpenRouterTest::anInviteGoesToTheWardOrToARequest()
+{
+    QTemporaryDir folder;
+    QVERIFY(folder.isValid());
+    const std::unique_ptr<AppSettings> settings = AppSettings::open(folder.filePath("settings.json"), nullptr);
+    DocumentLibrary library(*settings, folder.filePath("wards"), newIdentity("Alice", "Laptop"));
+    const QString held = DocumentLibrary::newDocumentId();
+    library.add(held);
+    const QString other = DocumentLibrary::newDocumentId();
+
+    const FileOpenRouter::Route open = FileOpenRouter::routeInvite(held, library);
+    QCOMPARE(open.action, FileOpenRouter::Action::OpenWard);
+    QCOMPARE(open.documentId, held);
+
+    const FileOpenRouter::Route request = FileOpenRouter::routeInvite(other, library);
+    QCOMPARE(request.action, FileOpenRouter::Action::RequestAccess);
+    QCOMPARE(request.documentId, other);
+}

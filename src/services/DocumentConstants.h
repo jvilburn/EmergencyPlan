@@ -10,4 +10,7 @@ constexpr const char* FileExtension = ".wardplanning";
 /// The same extension as a directory-listing glob.
 constexpr const char* FileGlob = "*.wardplanning";
 
+/// What an invite link starts with: wardplanning:open/<document id>.
+constexpr const char* InvitePrefix = "wardplanning:open/";
+
 } // namespace DocumentConstants

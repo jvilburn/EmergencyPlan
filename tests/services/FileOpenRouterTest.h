@@ -12,4 +12,6 @@ private slots:
 
     void eachFileTakesItsRoute_data();
     void eachFileTakesItsRoute();
+    void anInviteLinkNamesItsWardAndNothingElseDoes();
+    void anInviteGoesToTheWardOrToARequest();
 };

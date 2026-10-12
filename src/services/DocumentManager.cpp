@@ -503,6 +503,8 @@ void DocumentManager::install(std::unique_ptr<DocumentSession> session)
     connect(opened, &DocumentSession::conflictRaised, this, &DocumentManager::conflictRaised);
     connect(opened, &DocumentSession::requiresUpdateChanged, this, &DocumentManager::requiresUpdateChanged);
     connect(opened, &DocumentSession::headChanged, this, &DocumentManager::onHeadChanged);
+    connect(opened, &DocumentSession::shared, this, &DocumentManager::onShared);
+    connect(opened, &DocumentSession::shareFailed, this, &DocumentManager::shareFailed);
     connect(opened, &DocumentSession::saveFailed, this, &DocumentManager::saveFailed);
     connect(opened, &DocumentSession::accessLost, this, &DocumentManager::onSessionLost);
     if (m_queue != nullptr)
@@ -579,6 +581,20 @@ void DocumentManager::onHistory(const QString& documentId,
     }
     m_unseenHistory = history.value.value();
     emit accessChanged();
+}
+
+void DocumentManager::share()
+{
+    if (m_session && !m_copy.has_value())
+    {
+        m_session->share();
+    }
+}
+
+void DocumentManager::onShared()
+{
+    emit readOnlyChanged();
+    emit shared(m_session->documentId());
 }
 
 void DocumentManager::dismissHistory()

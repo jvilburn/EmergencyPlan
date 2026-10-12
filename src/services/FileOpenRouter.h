@@ -5,9 +5,9 @@
 class DocumentLibrary;
 struct DeviceIdentity;
 
-/// Where a .wardplanning file opened by path goes - a double-click, a file given at
-/// startup, or one a later launch handed over. Among .wardplanning files, the
-/// header decides where one goes, not its name or folder.
+/// Where a .wardplanning file or an invite link goes - a double-click, a link
+/// clicked, an argument given at startup, or one a later launch handed over. Among
+/// .wardplanning files, the header decides where one goes, not its name or folder.
 namespace FileOpenRouter
 {
 
@@ -29,5 +29,16 @@ struct Route
 };
 
 Route route(const QString& path, const DocumentLibrary& library, const DeviceIdentity& identity);
+
+/// The invite link a shared ward is sent as. It grants nothing: whoever opens it
+/// asks for access.
+QString inviteLink(const QString& documentId);
+
+/// The ward an invite link names; empty for anything that is not one.
+QString invitedWard(const QString& argument);
+
+/// Where an invite link goes: the ward, when this device has it; otherwise a
+/// request for access.
+Route routeInvite(const QString& documentId, const DocumentLibrary& library);
 
 } // namespace FileOpenRouter

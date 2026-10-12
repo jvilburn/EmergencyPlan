@@ -36,6 +36,8 @@
 #include "GeoLocation.h"
 
 #include <QMenuBar>
+#include <QClipboard>
+#include <QGuiApplication>
 #include <QStatusBar>
 #include <QVBoxLayout>
 #include <QFileDialog>
@@ -75,7 +77,12 @@ void MainWindow::handleArguments(const QStringList& arguments)
     // Files of any other extension are other applications'.
     for (qsizetype i = 1; i < arguments.size(); ++i)
     {
-        if (arguments.at(i).endsWith(DocumentConstants::FileExtension, Qt::CaseInsensitive))
+        const QString invited = FileOpenRouter::invitedWard(arguments.at(i));
+        if (!invited.isEmpty())
+        {
+            followRoute(FileOpenRouter::routeInvite(invited, m_library), QString());
+        }
+        else if (arguments.at(i).endsWith(DocumentConstants::FileExtension, Qt::CaseInsensitive))
         {
             openPath(arguments.at(i));
         }
@@ -84,8 +91,11 @@ void MainWindow::handleArguments(const QStringList& arguments)
 
 void MainWindow::openPath(const QString& path)
 {
-    const FileOpenRouter::Route route =
-        FileOpenRouter::route(path, m_library, DocumentManager::instance()->identity());
+    followRoute(FileOpenRouter::route(path, m_library, DocumentManager::instance()->identity()), path);
+}
+
+void MainWindow::followRoute(const FileOpenRouter::Route& route, const QString& path)
+{
     switch (route.action)
     {
     case FileOpenRouter::Action::OpenWard:
@@ -305,6 +315,10 @@ void MainWindow::setupConnections()
             this, &MainWindow::onFetchFinished);
     connect(DocumentManager::instance(), &DocumentManager::accessLost,
             this, &MainWindow::onAccessLost);
+    connect(DocumentManager::instance(), &DocumentManager::shared,
+            this, &MainWindow::showInviteLink);
+    connect(DocumentManager::instance(), &DocumentManager::shareFailed,
+            this, &MainWindow::onShareFailed);
     connect(DocumentManager::instance(), &DocumentManager::fetchFailed,
             this, &MainWindow::onFetchFailed);
     connect(DocumentManager::instance(), &DocumentManager::conflictRaised,
@@ -883,10 +897,46 @@ void MainWindow::onShowAccess()
 
     AccessDialog dialog(currentMembers(), manager->identity(), manager->session()->isShared(), this);
 
+    connect(&dialog, &AccessDialog::shareRequested, manager, &DocumentManager::share);
+    connect(&dialog, &AccessDialog::inviteLinkRequested, this, std::bind(&MainWindow::showInviteLink, this, manager->documentId()));
+
     // Current while it is open: a head check's changes show, and another ward closes it.
     connect(manager, &DocumentManager::headChanged, &dialog, std::bind(&MainWindow::refreshAccessDialog, this, &dialog));
     connect(manager, &DocumentManager::documentOpened, &dialog, &QDialog::reject);
+    connect(manager, &DocumentManager::shared, &dialog, &QDialog::reject);
     dialog.exec();
+}
+
+void MainWindow::showInviteLink(const QString& documentId)
+{
+    const QString link = FileOpenRouter::inviteLink(documentId);
+
+    QMessageBox message(QMessageBox::Information, tr("Invite Link"), tr("Send this link to someone you want to add."),
+                        QMessageBox::Close, this);
+    message.setInformativeText(tr("%1\n\nWhoever opens it can ask for access. You or another admin then grant it "
+                                  "from Who Has Access.").arg(link));
+    message.setTextInteractionFlags(Qt::TextSelectableByMouse);
+    QPushButton* copy = message.addButton(tr("Copy Link"), QMessageBox::ActionRole);
+    message.exec();
+    if (message.clickedButton() == copy)
+    {
+        QGuiApplication::clipboard()->setText(link);
+        statusBar()->showMessage(tr("Invite link copied"), 5000);
+    }
+}
+
+void MainWindow::onShareFailed(ServerContract::ServerError error)
+{
+    switch (error)
+    {
+    case ServerContract::ServerError::Unreachable:
+    case ServerContract::ServerError::RateLimited:
+        QMessageBox::warning(this, tr("Share"), tr("The server could not be reached. Connect to the internet and share again."));
+        return;
+    default:
+        QMessageBox::warning(this, tr("Share"), tr("The server did not accept this ward, so it was not shared."));
+        return;
+    }
 }
 
 void MainWindow::refreshAccessDialog(AccessDialog* dialog)

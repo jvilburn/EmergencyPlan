@@ -11,6 +11,7 @@
 #include "ConflictDialog.h"
 #include "DocumentManager.h"
 #include "DocumentSession.h"
+#include "FileOpenRouter.h"
 #include "Id.h"
 
 class AppSettings;
@@ -124,6 +125,14 @@ private:
     void initializeDefaultLocation();
     void openEditPanel(const FamilyId& familyId);
     void openPath(const QString& path);
+
+    /// Carries out where a file or an invite link goes; path names the file, when
+    /// there is one, for the messages.
+    void followRoute(const FileOpenRouter::Route& route, const QString& path);
+
+    /// The invite link for a shared ward, to copy and send.
+    void showInviteLink(const QString& documentId);
+    void onShareFailed(ServerContract::ServerError error);
     void reportOpen(DocumentManager::Open result, const QString& reason);
     void openCopy(const QString& sourcePath);
     void closeEditPanelInternal();

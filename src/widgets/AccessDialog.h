@@ -18,6 +18,7 @@ class QTreeWidgetItem;
 /// device linked each one and when. Every action is a visible button, enabled only
 /// where it applies:
 ///
+/// - for an admin of a shared ward: Invite Link, the link to send someone
 /// - on another person, for an admin: Remove, and Make Admin or Make Member
 /// - on this person: Link a Device, Unlink on each of their devices but this one,
 ///   Make Member for an admin stepping down (not the last admin while anyone else
@@ -41,6 +42,7 @@ public:
 
 signals:
     void shareRequested();
+    void inviteLinkRequested();
     void linkRequested();
     void leaveRequested();
     void removeRequested(const MemberId& member);
@@ -74,6 +76,7 @@ private:
     QLabel* m_sharedNames = nullptr;
     QLabel* m_askAdmins = nullptr;
     QLabel* m_offline = nullptr;
+    QPushButton* m_inviteLink = nullptr;
     QPushButton* m_remove = nullptr;
     QPushButton* m_role = nullptr;
     QPushButton* m_unlink = nullptr;

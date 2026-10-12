@@ -128,6 +128,10 @@ public:
     /// Marks every unseen access change seen, on the ward's record.
     void dismissHistory();
 
+    /// Registers the open ward with the server, sealed to this device alone; shared
+    /// or shareFailed reports how it went.
+    void share();
+
     /// Saves now and publishes. A local failure is the one reported.
     bool publishNow(QString* errorMessage);
 
@@ -171,6 +175,10 @@ signals:
 
     /// unseenHistory() changed.
     void accessChanged();
+
+    /// The open ward is now shared.
+    void shared(const QString& documentId);
+    void shareFailed(ServerContract::ServerError error);
 
     /// The server holds a version this build cannot read, or no longer does.
     void requiresUpdateChanged();
@@ -221,6 +229,7 @@ private:
     void afterChange(const DocumentChange& change);
     void onReadOnlyChanged();
     void onHeadChanged();
+    void onShared();
     void onHistory(const QString& documentId, const ServerContract::Result<QList<ServerContract::HistoryEntry>>& history);
     void onSessionLost(const ServerContract::LostAccess& lost);
     void onQueueLost(const QString& documentId, const ServerContract::LostAccess& lost);

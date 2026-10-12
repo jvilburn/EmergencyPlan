@@ -85,6 +85,10 @@ Root: HKA; Subkey: "Software\Classes\.wardplanning"; ValueType: string; ValueNam
 Root: HKA; Subkey: "Software\Classes\WardPlanning.Document"; ValueType: string; ValueName: ""; ValueData: "Ward Planning Document"; Flags: uninsdeletekey; Tasks: fileassoc
 Root: HKA; Subkey: "Software\Classes\WardPlanning.Document\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc
 Root: HKA; Subkey: "Software\Classes\WardPlanning.Document\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc
+; Invite links: wardplanning:open/<document id>
+Root: HKA; Subkey: "Software\Classes\wardplanning"; ValueType: string; ValueName: ""; ValueData: "URL:Ward Planning invite"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\wardplanning"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
+Root: HKA; Subkey: "Software\Classes\wardplanning\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

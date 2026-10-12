@@ -64,6 +64,19 @@
         </dict>
     </array>
 
+    <!-- Invite links: wardplanning:open/<document id> -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>com.church.wardplanning.invite</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>wardplanning</string>
+            </array>
+        </dict>
+    </array>
+
     <!-- Privacy permissions if needed -->
     <key>NSLocationUsageDescription</key>
     <string>Ward Planning uses your location to center the map on your area.</string>
