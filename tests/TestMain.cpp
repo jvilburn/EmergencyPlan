@@ -13,6 +13,7 @@
 #include "FakeServer.h"
 #include "FakeServerTest.h"
 #include "FileOpenRouterTest.h"
+#include "InviteLinkTest.h"
 #include "FormatVectorsTest.h"
 #include "HttpServerApi.h"
 #include "HttpServerApiTest.h"
@@ -127,6 +128,7 @@ int main(int argc, char** argv)
     status |= run<DocumentLibraryTest>(argc, argv);
     status |= run<DocumentManagerTest>(argc, argv);
     status |= run<FileOpenRouterTest>(argc, argv);
+    status |= run<InviteLinkTest>(argc, argv);
     status |= run<HttpServerApiTest>(argc, argv);
     status |= run<UpdateCheckerTest>(argc, argv);
 

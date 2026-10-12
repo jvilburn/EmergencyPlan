@@ -5,7 +5,7 @@
 #include "DocumentFile.h"
 #include "DocumentHeader.h"
 #include "DocumentRecords.h"
-#include "FileOpenRouter.h"
+#include "InviteLink.h"
 #include "ServerConnection.h"
 #include "ServerVersion.h"
 #include "SessionTimers.h"
@@ -175,7 +175,7 @@ public:
     using Joined =
         std::function<void(Join outcome, const QString& reason, const std::optional<Document>& document)>;
     static void join(const Context& context,
-                     const FileOpenRouter::InviteLink& link,
+                     const InviteLink& link,
                      const DocumentPaths& paths,
                      QObject* receiver,
                      Joined done);

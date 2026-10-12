@@ -154,7 +154,7 @@ bool namesADocument(const QStringList& arguments)
     for (qsizetype i = 1; i < arguments.size(); ++i)
     {
         if (arguments.at(i).endsWith(DocumentConstants::FileExtension, Qt::CaseInsensitive)
-            || FileOpenRouter::InviteLink::parse(arguments.at(i)).has_value())
+            || InviteLink::parse(arguments.at(i)).has_value())
         {
             return true;
         }

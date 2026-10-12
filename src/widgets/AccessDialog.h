@@ -18,9 +18,9 @@ class QTreeWidget;
 ///
 /// - Add a Device, for anyone: an invite that joins this person
 /// - Add a User, for an admin: an invite that makes a new member or admin
+/// - Leave, for anyone
 /// - on another person, for an admin: Remove, and Make Admin or Make Member
-/// - on this person: Make Member for an admin stepping down (never the last admin),
-///   and Leave
+/// - on this person: Make Member for an admin stepping down (never the last admin)
 /// - on one of this person's own devices but this one: Unlink
 /// - on an open invite: Withdraw
 /// - Details for anyone, revealing device fingerprints

@@ -188,6 +188,7 @@ set(SERVICE_SOURCES
     src/services/IdentityService.cpp
     src/services/DocumentLibrary.cpp
     src/services/FileOpenRouter.cpp
+    src/services/InviteLink.cpp
     src/services/HttpServerApi.cpp
     src/services/HttpWire.cpp
     src/services/UpdateChecker.cpp
@@ -238,6 +239,7 @@ set(SERVICE_HEADERS
     src/services/IdentityService.h
     src/services/DocumentLibrary.h
     src/services/FileOpenRouter.h
+    src/services/InviteLink.h
     src/services/HttpServerApi.h
     src/services/HttpWire.h
     src/services/UpdateChecker.h

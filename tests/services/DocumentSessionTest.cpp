@@ -149,7 +149,7 @@ void keepJoinAndReason(std::optional<DocumentSession::Join>& out,
 }
 
 /// Joins link on device and opens the ward there.
-std::unique_ptr<DocumentSession> joinAndOpen(TestWard& ward, Device& device, const FileOpenRouter::InviteLink& link)
+std::unique_ptr<DocumentSession> joinAndOpen(TestWard& ward, Device& device, const InviteLink& link)
 {
     if (ward.join(device, link) != DocumentSession::Join::Done)
     {
@@ -1771,11 +1771,11 @@ void DocumentSessionTest::anInviteAddsARecipientAndARosterEntry()
     QVERIFY(aliceSession);
     const DataKey before = keyOf(ward, alice);
 
-    const std::optional<FileOpenRouter::InviteLink> link =
+    const std::optional<InviteLink> link =
         ward.invite(*aliceSession, Invite::For::User, Role::Admin, "for Bob");
     QVERIFY(link.has_value());
     QCOMPARE(link->documentId, ward.documentId);
-    QCOMPARE(link->seed.size(), qsizetype(FileOpenRouter::InviteLink::SeedSize));
+    QCOMPARE(link->seed.size(), qsizetype(InviteLink::SeedSize));
 
     const ServerVersion::Fetched copy = ward.serverCopy(alice).value();
     QCOMPARE(copy.version, qint64(2));
@@ -1799,7 +1799,7 @@ void DocumentSessionTest::aUserJoinsAndShowsInTheInvitersRosterAtTheNextHead()
     QVERIFY(aliceSession);
     Recorder recorder;
     recorder.watch(*aliceSession);
-    const std::optional<FileOpenRouter::InviteLink> link =
+    const std::optional<InviteLink> link =
         ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Bob");
     QVERIFY(link.has_value());
     const DataKey invited = keyOf(ward, alice);
@@ -1845,7 +1845,7 @@ void DocumentSessionTest::aDeviceJoinsAsAnotherDeviceOfItsPerson()
     std::unique_ptr<DocumentSession> session = ward.createShared(laptop);
     QVERIFY(session);
     // The invite's role is beside the point: the phone joins as Alice, an admin.
-    const std::optional<FileOpenRouter::InviteLink> link =
+    const std::optional<InviteLink> link =
         ward.invite(*session, Invite::For::Device, Role::Member, "for Phone");
     QVERIFY(link.has_value());
 
@@ -1874,7 +1874,7 @@ void DocumentSessionTest::aUsedLinkGivesInviteUsedAndWritesNothing()
     Device& mallory = ward.add(newIdentity("Mallory", "Laptop"));
     std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
     QVERIFY(aliceSession);
-    const std::optional<FileOpenRouter::InviteLink> link =
+    const std::optional<InviteLink> link =
         ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Bob");
     QVERIFY(link.has_value());
     QCOMPARE(ward.join(bob, link.value()), std::optional<DocumentSession::Join>(DocumentSession::Join::Done));
@@ -1890,7 +1890,7 @@ void DocumentSessionTest::aUsedLinkGivesInviteUsedAndWritesNothing()
     // A withdrawn invite is used up the same way.
     aliceSession->checkServer();
     ward.settle();
-    const std::optional<FileOpenRouter::InviteLink> withdrawn =
+    const std::optional<InviteLink> withdrawn =
         ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Carol");
     QVERIFY(withdrawn.has_value());
     const Fingerprint open = aliceSession->document().sealingSet().invites().first().fingerprint();
@@ -1907,7 +1907,7 @@ void DocumentSessionTest::aJoinWhoseAnswerWasLostStillFinishes()
     Device& bob = ward.add(newIdentity("Bob", "Phone"));
     std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
     QVERIFY(aliceSession);
-    const std::optional<FileOpenRouter::InviteLink> link =
+    const std::optional<InviteLink> link =
         ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Bob");
     QVERIFY(link.has_value());
 
@@ -1942,7 +1942,7 @@ void DocumentSessionTest::aJoinCutOffAfterItsVersionLandedFinishesWhenTheLinkIsO
     Device& bob = ward.add(newIdentity("Bob", "Phone"));
     std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
     QVERIFY(aliceSession);
-    const std::optional<FileOpenRouter::InviteLink> link =
+    const std::optional<InviteLink> link =
         ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Bob");
     QVERIFY(link.has_value());
 
@@ -1984,7 +1984,7 @@ void DocumentSessionTest::twoDevicesOpeningOneLinkTheSecondFindsItUsed()
     Device& mallory = ward.add(newIdentity("Mallory", "Laptop"));
     std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
     QVERIFY(aliceSession);
-    const std::optional<FileOpenRouter::InviteLink> link =
+    const std::optional<InviteLink> link =
         ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Bob");
     QVERIFY(link.has_value());
 
@@ -2024,7 +2024,7 @@ void DocumentSessionTest::aJoinStartsAgainWhenTheWardMovedUnderIt()
     Device& bob = ward.add(newIdentity("Bob", "Phone"));
     std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
     QVERIFY(aliceSession);
-    const std::optional<FileOpenRouter::InviteLink> link =
+    const std::optional<InviteLink> link =
         ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Bob");
     QVERIFY(link.has_value());
 
@@ -2064,7 +2064,7 @@ void DocumentSessionTest::aLinkOpenedByAPersonAlreadyInTheWardOpensItAndLeavesTh
 
     // A second user invite, opened on Bob's device: the roster already lists him, so
     // the current version is simply taken as his, and the invite stays open for Carol.
-    const std::optional<FileOpenRouter::InviteLink> forCarol =
+    const std::optional<InviteLink> forCarol =
         ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Carol");
     QVERIFY(forCarol.has_value());
     const qint64 before = headVersion(ward);
@@ -2089,7 +2089,7 @@ void DocumentSessionTest::aJoinOfAVersionThatDoesNotCheckOutWritesNothingAndSays
     Device& bob = ward.add(newIdentity("Bob", "Phone"));
     std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
     QVERIFY(aliceSession);
-    const std::optional<FileOpenRouter::InviteLink> link =
+    const std::optional<InviteLink> link =
         ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Bob");
     QVERIFY(link.has_value());
 
@@ -2109,7 +2109,7 @@ void DocumentSessionTest::aJoinOfAVersionThatDoesNotCheckOutWritesNothingAndSays
                           std::bind(&keepJoinAndReason, std::ref(joined), std::ref(reason), _1, _2, _3));
     ward.settle();
     QCOMPARE(joined, std::optional<DocumentSession::Join>(DocumentSession::Join::ServerFault));
-    QVERIFY(!reason.isEmpty());
+    QCOMPARE(reason, QString("The document could not be decrypted: the file was altered or truncated."));
     QCOMPARE(headVersion(ward), 2);
     QVERIFY(!bob.records.contains(ward.documentId));
     QVERIFY(!QFile::exists(bob.paths(ward.documentId).file));
@@ -2128,7 +2128,7 @@ void DocumentSessionTest::aJoinSaysWhyItCouldNotReachTheWard()
     Device& bob = ward.add(newIdentity("Bob", "Phone"));
     std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
     QVERIFY(aliceSession);
-    const std::optional<FileOpenRouter::InviteLink> link =
+    const std::optional<InviteLink> link =
         ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Bob");
     QVERIFY(link.has_value());
 
@@ -2136,7 +2136,7 @@ void DocumentSessionTest::aJoinSaysWhyItCouldNotReachTheWard()
     QCOMPARE(ward.join(bob, link.value()), std::optional<DocumentSession::Join>(DocumentSession::Join::Unreachable));
     ward.server.setOffline(false);
 
-    const FileOpenRouter::InviteLink nowhere{ServerTestSupport::newDocumentId(), link->seed};
+    const InviteLink nowhere{ServerTestSupport::newDocumentId(), link->seed};
     QCOMPARE(ward.join(bob, nowhere), std::optional<DocumentSession::Join>(DocumentSession::Join::UnknownWard));
     QVERIFY(!bob.records.contains(ward.documentId));
     QVERIFY(!bob.records.contains(nowhere.documentId));

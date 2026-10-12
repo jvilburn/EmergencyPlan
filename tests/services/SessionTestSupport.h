@@ -113,13 +113,13 @@ public:
     /// An invite made on inviter's open session, as DocumentManager makes one, its
     /// version published: the link, or nullopt when the roster refused it or the
     /// publish did not land.
-    std::optional<FileOpenRouter::InviteLink> invite(DocumentSession& inviter,
+    std::optional<InviteLink> invite(DocumentSession& inviter,
                                                      Invite::For purpose,
                                                      Role role,
                                                      const QString& label);
 
     /// Joins link on joiner, as opening the link does there.
-    std::optional<DocumentSession::Join> join(Device& joiner, const FileOpenRouter::InviteLink& link);
+    std::optional<DocumentSession::Join> join(Device& joiner, const InviteLink& link);
 
     /// A User invite from inviter, joined by newcomer as a new person.
     bool addUser(DocumentSession& inviter, Device& newcomer, Role role);

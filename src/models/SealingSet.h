@@ -43,7 +43,7 @@ struct Invite
 {
     enum class For
     {
-        Device,     ///< joins person as another device, with person's name and role
+        Device,     ///< joins its maker as another device, with the maker's name and role
         User        ///< makes a new person, named by the joiner, with role
     };
 
@@ -105,8 +105,8 @@ public:
     bool addInvite(const Invite& invite);
     bool removeInvite(const Fingerprint& invite);
 
-    /// The joiner's device takes the invite's place: under the invite's person for a
-    /// Device invite, with that person's role; for a User invite under a new person,
+    /// The joiner's device takes the invite's place: under the invite's maker for a
+    /// Device invite, with the maker's role; for a User invite under a new person,
     /// joiner, named name, with the invite's role.
     bool join(const Fingerprint& invite, const NamedDevice& device, const MemberId& joiner, const QString& name);
 

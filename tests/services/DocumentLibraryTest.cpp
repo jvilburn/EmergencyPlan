@@ -672,7 +672,7 @@ void DocumentLibraryTest::aJoinedWardIsAddedAndOpens()
     QCOMPARE(aliceSession->edit(DocumentSession::Edit::Directory, &nameTheWard), DocumentSession::Refusal::None);
     aliceSession->publishNow();
     ward.settle();
-    const std::optional<FileOpenRouter::InviteLink> link =
+    const std::optional<InviteLink> link =
         ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Bob");
     QVERIFY(link.has_value());
 
@@ -715,7 +715,7 @@ void DocumentLibraryTest::aJoinThatFailsAddsNothing()
     Device& carol = ward.add(newIdentity("Carol", "Tablet"));
     std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
     QVERIFY(aliceSession);
-    const std::optional<FileOpenRouter::InviteLink> link =
+    const std::optional<InviteLink> link =
         ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Bob");
     QVERIFY(link.has_value());
 

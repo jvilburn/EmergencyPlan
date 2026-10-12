@@ -141,7 +141,7 @@ public:
     /// invites them to which ward and where to get the app.
     struct Invitation
     {
-        FileOpenRouter::InviteLink link;
+        InviteLink link;
         QString message;
     };
 
@@ -172,7 +172,7 @@ public:
     /// Joins the ward an invite link names and opens it, whatever was opened
     /// meanwhile. fetchFinished reports the open; joinFailed reports a join that did
     /// not get that far.
-    void joinWard(const FileOpenRouter::InviteLink& link);
+    void joinWard(const InviteLink& link);
 
     /// Saves now and publishes. A local failure is the one reported.
     bool publishNow(QString* errorMessage);

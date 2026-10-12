@@ -87,7 +87,7 @@ void MainWindow::handleArguments(const QStringList& arguments)
     // Files of any other extension are other applications'.
     for (qsizetype i = 1; i < arguments.size(); ++i)
     {
-        const std::optional<FileOpenRouter::InviteLink> invite = FileOpenRouter::InviteLink::parse(arguments.at(i));
+        const std::optional<InviteLink> invite = InviteLink::parse(arguments.at(i));
         if (invite.has_value())
         {
             statusBar()->showMessage(tr("Joining the ward..."));
@@ -930,7 +930,7 @@ void MainWindow::onShowAccess()
     connect(&dialog, &AccessDialog::addUserRequested, this, &MainWindow::onAddUser);
     connect(&dialog, &AccessDialog::removeRequested, this, &MainWindow::onRemovePerson);
     connect(&dialog, &AccessDialog::unlinkRequested, this, &MainWindow::onUnlinkDevice);
-    connect(&dialog, &AccessDialog::withdrawRequested, this, &MainWindow::onWithdrawInvite);
+    connect(&dialog, &AccessDialog::withdrawRequested, manager, &DocumentManager::withdrawInvite);
     connect(&dialog, &AccessDialog::roleRequested, manager, &DocumentManager::setRole);
     connect(&dialog, &AccessDialog::leaveRequested, &dialog, &QDialog::accept);
     connect(&dialog, &AccessDialog::leaveRequested, this, &MainWindow::onLeave, Qt::QueuedConnection);
@@ -1119,11 +1119,6 @@ void MainWindow::onUnlinkDevice(const Fingerprint& device)
     {
         DocumentManager::instance()->removeDevice(device);
     }
-}
-
-void MainWindow::onWithdrawInvite(const Fingerprint& invite)
-{
-    DocumentManager::instance()->withdrawInvite(invite);
 }
 
 void MainWindow::onLeave()

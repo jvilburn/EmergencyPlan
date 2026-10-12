@@ -183,9 +183,10 @@ void AccessDialog::fillTree()
     std::sort(sorted.begin(), sorted.end(), &sortsBefore);
 
     m_tree->clear();
+    const std::optional<Holder> me = self();
     for (const Holder& person : sorted)
     {
-        const bool isSelf = self().has_value() && self()->id == person.id;
+        const bool isSelf = me.has_value() && me->id == person.id;
         const QString name = isSelf ? tr("%1 (you)").arg(person.name) : person.name;
         QTreeWidgetItem* row = new QTreeWidgetItem(m_tree, {name, roleText(person.role)});
         row->setData(0, PersonRole, person.id.toHex());
@@ -264,8 +265,9 @@ void AccessDialog::onSelectionChanged()
     const std::optional<Holder> person = selectedPerson();
     const std::optional<NamedDevice> device = selectedDevice();
     const std::optional<Invite> invite = selectedInvite();
-    const bool isSelf = person.has_value() && self().has_value() && person->id == self()->id;
-    const bool admin = selfIsAdmin();
+    const std::optional<Holder> me = self();
+    const bool isSelf = person.has_value() && me.has_value() && person->id == me->id;
+    const bool admin = me.has_value() && me->isAdmin();
 
     m_details->setEnabled(person.has_value());
 
@@ -296,7 +298,7 @@ void AccessDialog::onSelectionChanged()
     m_unlink->setEnabled(isSelf && device.has_value() && device->fingerprint() != m_self.fingerprint());
 
     // An invite is withdrawn by whoever made it, or by an admin.
-    m_withdraw->setEnabled(invite.has_value() && (admin || (self().has_value() && invite->maker == self()->id)));
+    m_withdraw->setEnabled(invite.has_value() && (admin || (me.has_value() && invite->maker == me->id)));
 }
 
 void AccessDialog::onRemove()

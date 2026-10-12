@@ -612,8 +612,8 @@ std::optional<DocumentManager::Invitation> DocumentManager::invite(Invite::For p
         return std::nullopt;
     }
 
-    const FileOpenRouter::InviteLink link{m_session->documentId(),
-                                          DocumentCrypto::randomBytes(FileOpenRouter::InviteLink::SeedSize)};
+    const InviteLink link{m_session->documentId(),
+                                          DocumentCrypto::randomBytes(InviteLink::SeedSize)};
     SealingSet changed = roster();
     if (!changed.addInvite(link.invite(purpose, me->id, role, label)))
     {
@@ -621,9 +621,10 @@ std::optional<DocumentManager::Invitation> DocumentManager::invite(Invite::For p
     }
     publishRoster(changed);
 
-    // The message names this person as the roster does, which the recipient will see.
-    const QString ward = wardNameOf(link.documentId);
-    return Invitation{link, FileOpenRouter::inviteMessage(me->name, ward.isEmpty() ? tr("a ward") : ward, link)};
+    // The message names this person as the roster does, which the recipient will see,
+    // and the ward as its own directory does.
+    const QString ward = m_session->document().suggestedFilename();
+    return Invitation{link, link.message(me->name, ward.isEmpty() ? tr("a ward") : ward)};
 }
 
 void DocumentManager::publishRoster(const SealingSet& roster)
@@ -684,7 +685,7 @@ void DocumentManager::leave()
     }
 }
 
-void DocumentManager::joinWard(const FileOpenRouter::InviteLink& link)
+void DocumentManager::joinWard(const InviteLink& link)
 {
     if (m_library == nullptr || m_server == nullptr)
     {

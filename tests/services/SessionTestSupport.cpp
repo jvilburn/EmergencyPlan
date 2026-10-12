@@ -291,7 +291,7 @@ std::unique_ptr<DocumentSession> TestWard::createShared(Device& owner)
     return session;
 }
 
-std::optional<FileOpenRouter::InviteLink> TestWard::invite(DocumentSession& inviter,
+std::optional<InviteLink> TestWard::invite(DocumentSession& inviter,
                                                            Invite::For purpose,
                                                            Role role,
                                                            const QString& label)
@@ -302,8 +302,8 @@ std::optional<FileOpenRouter::InviteLink> TestWard::invite(DocumentSession& invi
     {
         return std::nullopt;
     }
-    const FileOpenRouter::InviteLink link{inviter.documentId(),
-                                          DocumentCrypto::randomBytes(FileOpenRouter::InviteLink::SeedSize)};
+    const InviteLink link{inviter.documentId(),
+                                          DocumentCrypto::randomBytes(InviteLink::SeedSize)};
     const Invite open = link.invite(purpose, me->id, role, label);
     SealingSet changed = inviter.document().sealingSet();
     if (!changed.addInvite(open))
@@ -324,7 +324,7 @@ std::optional<FileOpenRouter::InviteLink> TestWard::invite(DocumentSession& invi
     return link;
 }
 
-std::optional<DocumentSession::Join> TestWard::join(Device& joiner, const FileOpenRouter::InviteLink& link)
+std::optional<DocumentSession::Join> TestWard::join(Device& joiner, const InviteLink& link)
 {
     QObject receiver;
     std::optional<DocumentSession::Join> joined;
@@ -339,14 +339,14 @@ std::optional<DocumentSession::Join> TestWard::join(Device& joiner, const FileOp
 
 bool TestWard::addUser(DocumentSession& inviter, Device& newcomer, Role role)
 {
-    const std::optional<FileOpenRouter::InviteLink> link =
+    const std::optional<InviteLink> link =
         invite(inviter, Invite::For::User, role, "for " + newcomer.identity.displayName);
     return link.has_value() && join(newcomer, link.value()) == DocumentSession::Join::Done;
 }
 
 bool TestWard::addDevice(DocumentSession& owner, Device& newDevice)
 {
-    const std::optional<FileOpenRouter::InviteLink> link =
+    const std::optional<InviteLink> link =
         invite(owner, Invite::For::Device, Role::Member, "for " + newDevice.identity.deviceName);
     return link.has_value() && join(newDevice, link.value()) == DocumentSession::Join::Done;
 }

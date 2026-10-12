@@ -85,7 +85,7 @@ bool shareFrom(TestWard& ward, App& app)
 
 /// Joins link in app, as opening the link there does, and says whether the ward
 /// opened.
-bool joinInApp(TestWard& ward, App& app, const FileOpenRouter::InviteLink& link)
+bool joinInApp(TestWard& ward, App& app, const InviteLink& link)
 {
     QSignalSpy finished(&app.manager, &DocumentManager::fetchFinished);
     app.manager.joinWard(link);
@@ -489,7 +489,7 @@ void DocumentManagerTest::anInviteJoinsAUserOrAnotherDevice()
     QCOMPARE(app.manager.roster().invites().size(), 1);
     QVERIFY(app.manager.roster().invites().first().role == Role::Admin);
     QCOMPARE(forBob->message,
-             "Alice has invited you to Untitled in Ward Planning. Install it from "
+             "Alice has invited you to a ward in Ward Planning. Install it from "
              "https://github.com/jvilburn/EmergencyPlan/releases/latest, then open this link:\n"
                  + forBob->link.toString());
     QCOMPARE(ward.join(bob, forBob->link), std::optional<DocumentSession::Join>(DocumentSession::Join::Done));
@@ -526,12 +526,12 @@ void DocumentManagerTest::aLinkForAWardAlreadyHereOpensItAndWritesNothing()
     Device& bob = ward.add(newIdentity("Bob", "Phone"));
     std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
     QVERIFY(aliceSession);
-    const std::optional<FileOpenRouter::InviteLink> forBob =
+    const std::optional<InviteLink> forBob =
         ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Bob");
     QVERIFY(forBob.has_value());
     App app(bob);
     QVERIFY(joinInApp(ward, app, forBob.value()));
-    const std::optional<FileOpenRouter::InviteLink> forCarol =
+    const std::optional<InviteLink> forCarol =
         ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Carol");
     QVERIFY(forCarol.has_value());
 
@@ -661,7 +661,7 @@ void DocumentManagerTest::aMemberLeavesAndTheWardGoes()
     Device& bob = ward.add(newIdentity("Bob", "Phone"));
     std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
     QVERIFY(aliceSession);
-    const std::optional<FileOpenRouter::InviteLink> link =
+    const std::optional<InviteLink> link =
         ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Bob");
     QVERIFY(link.has_value());
     aliceSession.reset();
@@ -699,7 +699,7 @@ struct BobsWard
         {
             return;
         }
-        const std::optional<FileOpenRouter::InviteLink> link =
+        const std::optional<InviteLink> link =
             ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Bob");
         opened = link.has_value() && joinInApp(ward, app, link.value());
         paths = app.library.pathsFor(ward.documentId);

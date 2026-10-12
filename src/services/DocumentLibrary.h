@@ -5,7 +5,7 @@
 #include "Document.h"
 #include "DocumentRecords.h"
 #include "DocumentSession.h"
-#include "FileOpenRouter.h"
+#include "InviteLink.h"
 
 #include <QDateTime>
 #include <QList>
@@ -126,7 +126,7 @@ public:
 
     /// Joins the ward an invite link names, as DocumentSession::join does, and on
     /// Done adds it to the library under its name.
-    void join(const FileOpenRouter::InviteLink& link,
+    void join(const InviteLink& link,
               ServerConnection& server,
               QObject* receiver,
               const DocumentSession::Joined& joined);

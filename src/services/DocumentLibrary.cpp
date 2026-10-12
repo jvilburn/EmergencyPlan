@@ -337,7 +337,7 @@ void DocumentLibrary::onWardFetched(const QString& documentId,
     fetched(documentId, outcome);
 }
 
-void DocumentLibrary::join(const FileOpenRouter::InviteLink& link,
+void DocumentLibrary::join(const InviteLink& link,
                            ServerConnection& server,
                            QObject* receiver,
                            const DocumentSession::Joined& joined)

@@ -141,7 +141,6 @@ private:
     /// each confirmed where it cannot be undone.
     void onRemovePerson(const MemberId& person);
     void onUnlinkDevice(const Fingerprint& device);
-    void onWithdrawInvite(const Fingerprint& invite);
     void onLeave();
 
     /// An invite link opened here that did not reach an open ward.

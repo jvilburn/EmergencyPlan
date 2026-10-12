@@ -65,8 +65,8 @@ void ignoreRelease(const Result<Done>&)
 struct Joining
 {
     DocumentSession::Context context;
-    FileOpenRouter::InviteLink link;
-    FileOpenRouter::InviteKeys keys;
+    InviteLink link;
+    InviteKeys keys;
     DocumentPaths paths;
     QObject* receiver;
     DocumentSession::Joined done;
@@ -346,7 +346,7 @@ void DocumentSession::download(const Context& context,
 }
 
 void DocumentSession::join(const Context& context,
-                           const FileOpenRouter::InviteLink& link,
+                           const InviteLink& link,
                            const DocumentPaths& paths,
                            QObject* receiver,
                            Joined done)

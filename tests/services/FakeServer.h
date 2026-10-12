@@ -33,8 +33,9 @@
 class FakeServer : public ServerContract::ServerApi
 {
 public:
-    /// The server's configuration values. Every limit the real server applies is
-    /// here, so a test can reach it without generating thousands of calls.
+    /// The server's configuration values: the per-device upload limit, the blob
+    /// size, and the lease length, so a test can reach each without generating
+    /// thousands of calls. The real server also limits by address.
     struct Limits
     {
         int uploadsPerHour = 600;
