@@ -20,7 +20,7 @@ const QLatin1String KeyName("name");
 const QLatin1String KeyRole("role");
 const QLatin1String KeyDevices("devices");
 const QLatin1String KeyFor("for");
-const QLatin1String KeyPerson("person");
+const QLatin1String KeyMaker("maker");
 const QLatin1String KeyLabel("label");
 const QLatin1String KeyPublicKey("publicKey");
 const QLatin1String KeyVerifyKey("verifyKey");
@@ -235,14 +235,10 @@ QList<DeviceKeys> SealingSet::recipients() const
 
 // --- Writing ---------------------------------------------------------------------
 
-bool SealingSet::keysAreFree(const DeviceKeys& keys, const QString& except) const
+bool SealingSet::keysAreFree(const DeviceKeys& keys) const
 {
     for (const DeviceKeys& held : recipients())
     {
-        if (fingerprintHex(held) == except)
-        {
-            continue;
-        }
         if (held.publicKey == keys.publicKey || held.verifyKey == keys.verifyKey)
         {
             return false;
@@ -254,7 +250,7 @@ bool SealingSet::keysAreFree(const DeviceKeys& keys, const QString& except) cons
 bool SealingSet::addInvite(const Invite& invite)
 {
     if (!invite.keys.isValid() || !invite.maker.isValid() || !m_people.contains(invite.maker.toHex())
-        || !keysAreFree(invite.keys, QString()))
+        || !keysAreFree(invite.keys))
     {
         return false;
     }
@@ -270,7 +266,7 @@ bool SealingSet::removeInvite(const Fingerprint& invite)
 bool SealingSet::join(const Fingerprint& invite, const NamedDevice& device, const MemberId& joiner, const QString& name)
 {
     const auto found = m_invites.constFind(invite.toHex());
-    if (found == m_invites.constEnd() || !device.keys.isValid() || !keysAreFree(device.keys, invite.toHex()))
+    if (found == m_invites.constEnd() || !device.keys.isValid() || !keysAreFree(device.keys))
     {
         return false;
     }
@@ -491,7 +487,7 @@ QJsonObject SealingSet::toJson() const
     {
         QJsonObject inviteJson;
         inviteJson[KeyFor] = invite.purpose == Invite::For::Device ? ForDevice : ForUser;
-        inviteJson[KeyPerson] = invite.maker.toHex();
+        inviteJson[KeyMaker] = invite.maker.toHex();
         inviteJson[KeyRole] = roleName(invite.role);
         inviteJson[KeyLabel] = invite.label;
         writeKeys(inviteJson, invite.keys);
@@ -544,36 +540,32 @@ std::optional<SealingSet> SealingSet::fromJson(const QJsonObject& json)
         {
             return std::nullopt;
         }
+
+        // In the set as each device is read, so the keys of one device count against the next.
+        Holder& added = set.m_people[id];
+        added = person;
         for (const QJsonObject& deviceJson : devices)
         {
             NamedDevice device;
             if (!StrictJson::hasOnlyKeys(deviceJson, {KeyName, KeyPublicKey, KeyVerifyKey})
                 || !StrictJson::readString(deviceJson, KeyName, device.name) || !readKeys(deviceJson, device.keys)
-                || !set.keysAreFree(device.keys, QString()))
+                || !set.keysAreFree(device.keys))
             {
                 return std::nullopt;
             }
-            for (const NamedDevice& held : person.devices)
-            {
-                if (held.keys.publicKey == device.keys.publicKey || held.keys.verifyKey == device.keys.verifyKey)
-                {
-                    return std::nullopt;
-                }
-            }
-            person.devices.append(device);
+            added.devices.append(device);
         }
-        std::sort(person.devices.begin(), person.devices.end(), &byFingerprint);
-        set.m_people.insert(id, person);
+        std::sort(added.devices.begin(), added.devices.end(), &byFingerprint);
     }
 
     for (const QJsonObject& inviteJson : invites)
     {
         Invite invite;
         QString purpose;
-        QString person;
+        QString maker;
         QString role;
-        if (!StrictJson::hasOnlyKeys(inviteJson, {KeyFor, KeyPerson, KeyRole, KeyLabel, KeyPublicKey, KeyVerifyKey})
-            || !StrictJson::readString(inviteJson, KeyFor, purpose) || !StrictJson::readString(inviteJson, KeyPerson, person)
+        if (!StrictJson::hasOnlyKeys(inviteJson, {KeyFor, KeyMaker, KeyRole, KeyLabel, KeyPublicKey, KeyVerifyKey})
+            || !StrictJson::readString(inviteJson, KeyFor, purpose) || !StrictJson::readString(inviteJson, KeyMaker, maker)
             || !StrictJson::readString(inviteJson, KeyRole, role) || !roleOf(role).has_value()
             || !StrictJson::readString(inviteJson, KeyLabel, invite.label) || !readKeys(inviteJson, invite.keys))
         {
@@ -591,9 +583,9 @@ std::optional<SealingSet> SealingSet::fromJson(const QJsonObject& json)
         {
             return std::nullopt;
         }
-        invite.maker = MemberId::fromHex(person);
+        invite.maker = MemberId::fromHex(maker);
         invite.role = roleOf(role).value();
-        if (person != invite.maker.toHex() || !set.addInvite(invite))
+        if (maker != invite.maker.toHex() || !set.addInvite(invite))
         {
             return std::nullopt;
         }

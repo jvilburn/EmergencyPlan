@@ -604,7 +604,7 @@ void DocumentManager::share()
     }
 }
 
-std::optional<FileOpenRouter::InviteLink> DocumentManager::invite(Invite::For purpose, Role role, const QString& label)
+std::optional<DocumentManager::Invitation> DocumentManager::invite(Invite::For purpose, Role role, const QString& label)
 {
     const std::optional<Holder> me = self();
     if (!me.has_value() || !m_session->isShared())
@@ -620,22 +620,14 @@ std::optional<FileOpenRouter::InviteLink> DocumentManager::invite(Invite::For pu
         return std::nullopt;
     }
     publishRoster(changed);
-    return link;
-}
 
-QString DocumentManager::inviteMessage(const FileOpenRouter::InviteLink& link) const
-{
-    // Named as the roster names this person, which the recipient will see.
+    // The message names this person as the roster does, which the recipient will see.
     const QString ward = wardNameOf(link.documentId);
-    return FileOpenRouter::inviteMessage(self().value().name, ward.isEmpty() ? tr("a ward") : ward, link);
+    return Invitation{link, FileOpenRouter::inviteMessage(me->name, ward.isEmpty() ? tr("a ward") : ward, link)};
 }
 
 void DocumentManager::publishRoster(const SealingSet& roster)
 {
-    if (!m_session)
-    {
-        return;
-    }
     m_session->edit(DocumentSession::Edit::Roster, std::bind(&Document::setSealingSet, _1, roster));
     m_session->publishNow();
 }

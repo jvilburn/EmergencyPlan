@@ -225,7 +225,8 @@ public:
     /// Publishes a version without this person, built from what is in memory, and
     /// once it lands finishes as Left: the local file is never written without this
     /// device. leaveFailed says why it did not land: the last person cannot leave,
-    /// and nothing lands while a conflict waits for resolve.
+    /// nothing lands while a conflict waits for resolve, and another server call may
+    /// be in flight.
     void leave();
 
     /// The conflict waiting for a choice, if any. Head checks and publishing wait

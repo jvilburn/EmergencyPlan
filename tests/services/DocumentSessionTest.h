@@ -90,6 +90,7 @@ private slots:
     void twoDevicesOpeningOneLinkTheSecondFindsItUsed();
     void aJoinStartsAgainWhenTheWardMovedUnderIt();
     void aLinkOpenedByAPersonAlreadyInTheWardOpensItAndLeavesTheInvite();
+    void aJoinOfAVersionThatDoesNotCheckOutWritesNothingAndSaysWhy();
     void aJoinSaysWhyItCouldNotReachTheWard();
 
     // The roster across a refused publish

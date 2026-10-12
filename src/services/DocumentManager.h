@@ -137,15 +137,20 @@ public:
     /// or shareFailed reports how it went.
     void share();
 
+    /// An invite made: the link, and the message to send it in, which says who
+    /// invites them to which ward and where to get the app.
+    struct Invitation
+    {
+        FileOpenRouter::InviteLink link;
+        QString message;
+    };
+
     /// An invite to the open ward, published: a Device invite joins this person, and
     /// role is ignored; a User invite makes a new person with role. The link works
     /// once the publish has landed, which the sync state shows. Whether this person
     /// may invite is the window's rule. nullopt when no invite could be made: the
     /// ward is not shared, or this person is not in it.
-    std::optional<FileOpenRouter::InviteLink> invite(Invite::For purpose, Role role, const QString& label);
-
-    /// What the person copies and sends for link.
-    QString inviteMessage(const FileOpenRouter::InviteLink& link) const;
+    std::optional<Invitation> invite(Invite::For purpose, Role role, const QString& label);
 
     /// Each a write of the open ward; the next version is sealed without whoever
     /// was taken out, under a fresh key. None of them takes out this person or this

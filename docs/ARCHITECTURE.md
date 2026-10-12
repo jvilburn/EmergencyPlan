@@ -451,7 +451,7 @@ convention among honest clients; the server cannot see them.
 | `ServerConnection` | Signs writes as this device, or as an invite while joining |
 | `IdentityService`, `IdentityFile` | This device's keys and person, kept like SSH keys in local app data |
 | `DocumentLibrary` | The wards on this device, named by document id in app data; copies; joining a ward |
-| `DocumentSession` | One open ward: the single write path, save and publish, the base copy, the lease, adopting newer versions, conflicts, invites, leaving, lost access |
+| `DocumentSession` | One open ward: the single write path, save and publish, the base copy, the lease, adopting newer versions, conflicts, joins, leaving, lost access |
 | `ServerVersion` | Taking in and writing server versions: the base copy, the sealing-set rule, why a version left this device out |
 | `DocumentManager` | Commands, undo, and geocoding over the open session; roster edits; the access notice |
 | `UpdateChecker` | Whether a newer release is published, from GitHub, apart from the Ward Planning server |

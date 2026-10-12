@@ -152,9 +152,8 @@ public:
     bool operator!=(const SealingSet& other) const { return !(*this == other); }
 
 private:
-    /// Whether keys could be added without sharing a key with any entry here, apart
-    /// from the entry at fingerprint except.
-    bool keysAreFree(const DeviceKeys& keys, const QString& except) const;
+    /// Whether keys could be added without sharing a key with any entry here.
+    bool keysAreFree(const DeviceKeys& keys) const;
 
     /// An invite is always some current person's: the one who made it.
     void dropInvitesWithoutAPerson();

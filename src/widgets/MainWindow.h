@@ -135,7 +135,7 @@ private:
     /// Add a Device and Add a User: an invite, shown as the message to send.
     void onAddDevice();
     void onAddUser();
-    void showInvite(const std::optional<FileOpenRouter::InviteLink>& link);
+    void showInvite(const std::optional<DocumentManager::Invitation>& invitation);
 
     /// Remove, unlink, withdraw, change a role, and leave, from the access dialog,
     /// each confirmed where it cannot be undone.

@@ -540,9 +540,21 @@ void SealingSetTest::fromJsonRefusesAnythingIllFormed()
     noDevice["people"] = QJsonArray{deviceless};
     bad.append(noDevice);
 
+    // The same id twice, on different devices.
     QJsonObject twice = good;
-    twice["people"] = QJsonArray{alice, alice};
+    const QJsonObject aliceAgain =
+        SealingSet::of(pair.alice, "Alice", newDevice("Tablet")).toJson()["people"].toArray().first().toObject();
+    twice["people"] = QJsonArray{alice, aliceAgain};
     bad.append(twice);
+
+    // One person, one device key twice.
+    QJsonObject sameKeyTwice = good;
+    QJsonObject doubled = alice;
+    QJsonArray twoDevices = alice["devices"].toArray();
+    twoDevices.append(twoDevices.first());
+    doubled["devices"] = twoDevices;
+    sameKeyTwice["people"] = QJsonArray{doubled};
+    bad.append(sameKeyTwice);
 
     // Two people, one device key between them.
     QJsonObject sharing = good;
@@ -565,7 +577,7 @@ void SealingSetTest::fromJsonRefusesAnythingIllFormed()
 
     QJsonObject orphan = good;
     QJsonObject unknownPerson = invites.first().toObject();
-    unknownPerson["person"] = newMember().toHex();
+    unknownPerson["maker"] = newMember().toHex();
     orphan["invites"] = QJsonArray{unknownPerson};
     bad.append(orphan);
 

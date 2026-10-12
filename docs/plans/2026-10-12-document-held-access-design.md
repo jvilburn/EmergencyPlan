@@ -59,7 +59,7 @@ sealingSet:
         - { name: "Laptop", publicKey, verifyKey }
         - { name: "Pixel 8", publicKey, verifyKey }
   invites:
-    - { for: device | user, person: <person id>, role, label: "for Bob", publicKey, verifyKey }
+    - { for: device | user, maker: <person id>, role, label: "for Bob", publicKey, verifyKey }
   formerKeys: [...]
 ```
 

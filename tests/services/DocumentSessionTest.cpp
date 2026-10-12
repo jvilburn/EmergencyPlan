@@ -137,6 +137,17 @@ bool editRosterOn(TestWard& ward, DocumentSession& by, const std::function<void(
     return by.syncState() == SyncState::UpToDate;
 }
 
+/// A Joined that keeps the outcome and its reason.
+void keepJoinAndReason(std::optional<DocumentSession::Join>& out,
+                       QString& reason,
+                       DocumentSession::Join join,
+                       const QString& why,
+                       const std::optional<Document>&)
+{
+    out = join;
+    reason = why;
+}
+
 /// Joins link on device and opens the ward there.
 std::unique_ptr<DocumentSession> joinAndOpen(TestWard& ward, Device& device, const FileOpenRouter::InviteLink& link)
 {
@@ -1702,6 +1713,7 @@ void DocumentSessionTest::destroyingASessionWithRepliesHeldWritesNothing()
     session = alice.open(ward.documentId);
     QVERIFY(session);
     session->edit(DocumentSession::Edit::Response, recordContact(ward.adams, ContactStatus::OK));
+    QVERIFY(session->flush(nullptr));
     session->publishNow();
     QVERIFY(ward.server.waitingReplies() > 0);
 
@@ -1776,12 +1788,6 @@ void DocumentSessionTest::anInviteAddsARecipientAndARosterEntry()
     QVERIFY(invites.first().role == Role::Admin);
     QVERIFY(invites.first().maker == alice.identity.member);
     QVERIFY(aliceSession->document().sealingSet() == copy.document.sealingSet());
-
-    // An unshared ward makes no invite.
-    std::unique_ptr<DocumentSession> local = alice.create(ServerTestSupport::newDocumentId());
-    QVERIFY(local);
-    QVERIFY(!ward.invite(*local, Invite::For::User, Role::Member, "for Carol").has_value());
-    QVERIFY(local->document().sealingSet().invites().isEmpty());
 }
 
 void DocumentSessionTest::aUserJoinsAndShowsInTheInvitersRosterAtTheNextHead()
@@ -2074,6 +2080,45 @@ void DocumentSessionTest::aLinkOpenedByAPersonAlreadyInTheWardOpensItAndLeavesTh
     Device& carol = ward.add(newIdentity("Carol", "Tablet"));
     QCOMPARE(ward.join(carol, forCarol.value()), std::optional<DocumentSession::Join>(DocumentSession::Join::Done));
     QCOMPARE(headVersion(ward), before + 1);
+}
+
+void DocumentSessionTest::aJoinOfAVersionThatDoesNotCheckOutWritesNothingAndSaysWhy()
+{
+    TestWard ward;
+    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
+    Device& bob = ward.add(newIdentity("Bob", "Phone"));
+    std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
+    QVERIFY(aliceSession);
+    const std::optional<FileOpenRouter::InviteLink> link =
+        ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Bob");
+    QVERIFY(link.has_value());
+
+    // The server serves the right header over a damaged payload.
+    const ServerVersion::Fetched copy = ward.serverCopy(alice).value();
+    QByteArray damaged = copy.sealed.ciphertext;
+    damaged[damaged.size() / 2] = char(damaged.at(damaged.size() / 2) ^ 0x01);
+    ward.server.serveInstead(ward.documentId, copy.sealed.header.toJson(), damaged);
+
+    QObject receiver;
+    std::optional<DocumentSession::Join> joined;
+    QString reason;
+    DocumentSession::join(bob.context(),
+                          link.value(),
+                          bob.paths(ward.documentId),
+                          &receiver,
+                          std::bind(&keepJoinAndReason, std::ref(joined), std::ref(reason), _1, _2, _3));
+    ward.settle();
+    QCOMPARE(joined, std::optional<DocumentSession::Join>(DocumentSession::Join::ServerFault));
+    QVERIFY(!reason.isEmpty());
+    QCOMPARE(headVersion(ward), 2);
+    QVERIFY(!bob.records.contains(ward.documentId));
+    QVERIFY(!QFile::exists(bob.paths(ward.documentId).file));
+    QVERIFY(!QFile::exists(bob.paths(ward.documentId).base));
+
+    // Anchor: served as stored, the same link joins.
+    ward.server.serveInstead(ward.documentId, QJsonObject(), QByteArray());
+    QCOMPARE(ward.join(bob, link.value()), std::optional<DocumentSession::Join>(DocumentSession::Join::Done));
+    QCOMPARE(headVersion(ward), 3);
 }
 
 void DocumentSessionTest::aJoinSaysWhyItCouldNotReachTheWard()

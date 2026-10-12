@@ -112,8 +112,9 @@ void finishJoin(const Joining& joining, DocumentSession::Join whenNotHeld)
                               std::bind(&onJoinDownloaded, joining, whenNotHeld, _1, _2));
 }
 
-/// The joined version was answered. Whatever the answer, the server's current version
-/// decides: one whose reply was lost after it landed still names this device.
+/// The joined version was answered. An answer that may hide a landed version - success,
+/// a refusal for a spent invite, a lost reply - is settled by the server's current
+/// version, which names this device if the version landed.
 void onJoinUploaded(const Joining& joining, const Result<qint64>& result)
 {
     switch (result.error)
@@ -401,12 +402,6 @@ bool DocumentSession::flush(QString* errorMessage)
 
 void DocumentSession::publishNow()
 {
-    QString error;
-    if (!flush(&error))
-    {
-        emit saveFailed(error);
-    }
-
     m_timers->stop(SessionTimers::Timer::Retry);
     publish();
 }
@@ -477,8 +472,7 @@ bool DocumentSession::writeSave(QString* errorMessage)
     // The sealing-set rule against the version this save builds on. The new set and
     // key reach memory only once written, so a failed save leaves the old pair, and
     // the next save rotates afresh.
-    const ServerVersion::Resealed resealed = ServerVersion::reseal(m_document, m_dataKey, m_header);
-    if (!writeLocal(resealed.document, m_header, resealed.dataKey))
+    if (!writeResealed(m_document, m_header, m_dataKey))
     {
         if (errorMessage != nullptr)
         {
@@ -845,9 +839,8 @@ void DocumentSession::adopt(const Fetched& theirs)
         return;
     }
 
-    // The refused-publish route. Their data key and sealing set are taken exactly as
-    // validated; the next save applies the rule to them afresh, so nothing of this
-    // session's sealing set needs carrying over.
+    // The refused-publish route: their data key, the roster merged entry by entry,
+    // resealed at once where the merge lacks someone theirs sealed to.
     if (!m_base.has_value())
     {
         raiseConflict(theirs);

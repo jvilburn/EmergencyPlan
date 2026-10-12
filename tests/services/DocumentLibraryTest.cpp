@@ -46,6 +46,12 @@ Document wardDocument(const DeviceIdentity& identity, const QString& wardName)
     return document;
 }
 
+/// A directory edit that names the ward Tanglewood.
+void nameTheWard(Document& document)
+{
+    document.metadata().addOrUpdateWard("123456", "Tanglewood", "654321", "Riverside Stake");
+}
+
 bool writeFile(const QString& path, const QByteArray& bytes)
 {
     QFile file(path);
@@ -663,6 +669,9 @@ void DocumentLibraryTest::aJoinedWardIsAddedAndOpens()
     const DeviceIdentity bob = newIdentity("Bob", "Phone");
     std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
     QVERIFY(aliceSession);
+    QCOMPARE(aliceSession->edit(DocumentSession::Edit::Directory, &nameTheWard), DocumentSession::Refusal::None);
+    aliceSession->publishNow();
+    ward.settle();
     const std::optional<FileOpenRouter::InviteLink> link =
         ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Bob");
     QVERIFY(link.has_value());
@@ -677,13 +686,14 @@ void DocumentLibraryTest::aJoinedWardIsAddedAndOpens()
     library.join(link.value(), connection, &receiver, std::bind(&keepJoined, std::ref(joined), _1, _2, _3));
     ward.settle();
 
+    // Added under the ward's name, read from the version joined.
     QVERIFY(joined == DocumentSession::Join::Done);
     QVERIFY(library.contains(ward.documentId));
     QCOMPARE(library.entries().size(), qsizetype(1));
-    QCOMPARE(library.entries().at(0).wardName, QString("Untitled"));
+    QCOMPARE(library.entries().at(0).wardName, QString("Tanglewood Ward"));
     QVERIFY(library.entries().at(0).shared);
     QVERIFY(library.entries().at(0).onDevice);
-    QCOMPARE(settings->record(ward.documentId).baseVersion, std::optional<qint64>(3));
+    QCOMPARE(settings->record(ward.documentId).baseVersion, std::optional<qint64>(4));
 
     LoadFailure failure = LoadFailure::None;
     const std::unique_ptr<DocumentSession> session =
@@ -727,7 +737,9 @@ void DocumentLibraryTest::aJoinThatFailsAddsNothing()
     QVERIFY(!library.contains(ward.documentId));
     QVERIFY(library.entries().isEmpty());
     QVERIFY(settings->documentIds().isEmpty());
-    QVERIFY(!QFile::exists(library.pathsFor(ward.documentId).file));
+    const QDir wards(folder.filePath("wards"));
+    QVERIFY(!QFile::exists(wards.filePath(ward.documentId + ".wardplanning")));
+    QVERIFY(!QFile::exists(wards.filePath(ward.documentId + ".base")));
 }
 
 void DocumentLibraryTest::aRecoveryCopyOpensForEverySealedDeviceAndIsRecorded()

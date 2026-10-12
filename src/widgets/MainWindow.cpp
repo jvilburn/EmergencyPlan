@@ -970,9 +970,9 @@ void MainWindow::onAddUser()
     showInvite(DocumentManager::instance()->invite(Invite::For::User, role, tr("for %1").arg(name->text().trimmed())));
 }
 
-void MainWindow::showInvite(const std::optional<FileOpenRouter::InviteLink>& link)
+void MainWindow::showInvite(const std::optional<DocumentManager::Invitation>& invitation)
 {
-    if (!link.has_value())
+    if (!invitation.has_value())
     {
         QMessageBox::warning(this,
                              tr("Invite"),
@@ -980,7 +980,7 @@ void MainWindow::showInvite(const std::optional<FileOpenRouter::InviteLink>& lin
         return;
     }
 
-    const QString text = DocumentManager::instance()->inviteMessage(link.value());
+    const QString text = invitation->message;
     QMessageBox message(QMessageBox::Information, tr("Invite"), tr("Copy this message and send it by email or text."), QMessageBox::Close, this);
     message.setInformativeText(text);
     message.setTextInteractionFlags(Qt::TextSelectableByMouse);

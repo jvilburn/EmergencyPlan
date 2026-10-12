@@ -96,15 +96,15 @@ bool joinInApp(TestWard& ward, App& app, const FileOpenRouter::InviteLink& link)
 }
 
 /// An invite made in app's open ward, its version published.
-std::optional<FileOpenRouter::InviteLink> inviteFrom(TestWard& ward,
-                                                     App& app,
-                                                     Invite::For purpose,
-                                                     Role role,
-                                                     const QString& label)
+std::optional<DocumentManager::Invitation> inviteFrom(TestWard& ward,
+                                                      App& app,
+                                                      Invite::For purpose,
+                                                      Role role,
+                                                      const QString& label)
 {
-    const std::optional<FileOpenRouter::InviteLink> link = app.manager.invite(purpose, role, label);
+    const std::optional<DocumentManager::Invitation> made = app.manager.invite(purpose, role, label);
     ward.settle();
-    return link;
+    return made;
 }
 
 /// The fingerprints the server's current version seals to, as sorted hex.
@@ -369,11 +369,11 @@ void DocumentManagerTest::accessChangesShowOnceAndStaySeenOnceDismissed()
 
     // Alice's own invite is news like any other change; Bob joining with it shows at
     // the next head, as what changed since the roster was last dismissed.
-    const std::optional<FileOpenRouter::InviteLink> link = inviteFrom(ward, app, Invite::For::User, Role::Member, "for Bob");
-    QVERIFY(link.has_value());
+    const std::optional<DocumentManager::Invitation> made = inviteFrom(ward, app, Invite::For::User, Role::Member, "for Bob");
+    QVERIFY(made.has_value());
     QCOMPARE(app.manager.unseenRosterChanges(), QStringList{"Alice made an invite, for Bob"});
     QCOMPARE(changed.count(), 1);
-    QCOMPARE(ward.join(bob, link.value()), std::optional<DocumentSession::Join>(DocumentSession::Join::Done));
+    QCOMPARE(ward.join(bob, made->link), std::optional<DocumentSession::Join>(DocumentSession::Join::Done));
     app.manager.session()->checkServer();
     ward.settle();
     QCOMPARE(app.manager.unseenRosterChanges(), QStringList{"Bob joined, as a member"});
@@ -474,28 +474,34 @@ void DocumentManagerTest::anInviteJoinsAUserOrAnotherDevice()
     Device& bob = ward.add(newIdentity("Bob", "Phone"));
     Device& tablet = ward.add(newIdentity("Alice", "Tablet"));
     App app(alice);
+
+    // An unshared ward makes no invite.
+    QVERIFY(app.manager.newDocument(nullptr));
+    QVERIFY(!app.manager.invite(Invite::For::User, Role::Member, "for Bob").has_value());
+    QVERIFY(app.manager.roster().invites().isEmpty());
     QVERIFY(shareFrom(ward, app));
 
     // A user invite: a new admin, named by the joiner.
-    const std::optional<FileOpenRouter::InviteLink> forBob = inviteFrom(ward, app, Invite::For::User, Role::Admin, "for Bob");
+    const std::optional<DocumentManager::Invitation> forBob = inviteFrom(ward, app, Invite::For::User, Role::Admin, "for Bob");
     QVERIFY(forBob.has_value());
-    QCOMPARE(forBob->documentId, ward.documentId);
+    QCOMPARE(forBob->link.documentId, ward.documentId);
     QCOMPARE(ward.head()->version, 2);
     QCOMPARE(app.manager.roster().invites().size(), 1);
     QVERIFY(app.manager.roster().invites().first().role == Role::Admin);
-    QCOMPARE(app.manager.inviteMessage(forBob.value()),
+    QCOMPARE(forBob->message,
              "Alice has invited you to Untitled in Ward Planning. Install it from "
              "https://github.com/jvilburn/EmergencyPlan/releases/latest, then open this link:\n"
-                 + forBob->toString());
-    QCOMPARE(ward.join(bob, forBob.value()), std::optional<DocumentSession::Join>(DocumentSession::Join::Done));
+                 + forBob->link.toString());
+    QCOMPARE(ward.join(bob, forBob->link), std::optional<DocumentSession::Join>(DocumentSession::Join::Done));
     QCOMPARE(ward.head()->version, 3);
 
     // A device invite: another of Alice's devices, an admin as she is. Made before
     // her session has seen Bob join: the two roster edits cross without trouble.
-    const std::optional<FileOpenRouter::InviteLink> forTablet = inviteFrom(ward, app, Invite::For::Device, Role::Member, "for Tablet");
+    const std::optional<DocumentManager::Invitation> forTablet =
+        inviteFrom(ward, app, Invite::For::Device, Role::Member, "for Tablet");
     QVERIFY(forTablet.has_value());
     QCOMPARE(ward.head()->version, 4);
-    QCOMPARE(ward.join(tablet, forTablet.value()), std::optional<DocumentSession::Join>(DocumentSession::Join::Done));
+    QCOMPARE(ward.join(tablet, forTablet->link), std::optional<DocumentSession::Join>(DocumentSession::Join::Done));
     QCOMPARE(ward.head()->version, 5);
 
     app.manager.session()->checkServer();
@@ -587,15 +593,15 @@ void DocumentManagerTest::anAdminRemovesWithdrawsAndChangesRoles()
     QVERIFY(!recipientsOnServer(ward).contains(carol.identity.fingerprint().toHex()));
     QCOMPARE(recipientsOnServer(ward).size(), 2);
 
-    const std::optional<FileOpenRouter::InviteLink> link = inviteFrom(ward, app, Invite::For::User, Role::Member, "for Dave");
-    QVERIFY(link.has_value());
+    const std::optional<DocumentManager::Invitation> forDave = inviteFrom(ward, app, Invite::For::User, Role::Member, "for Dave");
+    QVERIFY(forDave.has_value());
     QCOMPARE(recipientsOnServer(ward).size(), 3);
     app.manager.withdrawInvite(app.manager.roster().invites().first().fingerprint());
     ward.settle();
     QCOMPARE(ward.head()->version, 9);
     QCOMPARE(recipientsOnServer(ward).size(), 2);
     Device& dave = ward.add(newIdentity("Dave", "Laptop"));
-    QCOMPARE(ward.join(dave, link.value()), std::optional<DocumentSession::Join>(DocumentSession::Join::InviteUsed));
+    QCOMPARE(ward.join(dave, forDave->link), std::optional<DocumentSession::Join>(DocumentSession::Join::InviteUsed));
 
     // Neither takes out this person or this device: that is leave. Alice has a second
     // device by then, so only the manager's own-device rule refuses the unlink.
