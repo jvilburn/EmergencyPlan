@@ -2,17 +2,24 @@
 
 ## Overview
 
-Ward Planning is a desktop application for managing ward family data, ministering assignments, emergency response teams, and resources. It includes an interactive map and tools for coordinating welfare checks and task assignments during emergencies.
+Ward Planning is a desktop application for managing ward family data, ministering assignments, emergency response teams, and resources. It includes an interactive map and tools for coordinating welfare checks and task assignments during emergencies. A ward can be shared with other people, each on their own devices, through an encrypted copy on a server that holds who has access but can never read the ward itself.
 
 ---
 
 ## Getting Started
 
-### Creating or Opening a Document
+### The First Time
 
-- **File > New** (Ctrl+N) - Start with an empty document
-- **File > Open** (Ctrl+O) - Open an existing `.wardplanning` file
-- The app automatically reopens your last document on launch
+Ward Planning asks whether you already use it on another device. If you do, choose **Yes, link this device** and follow *Linking a Device* below, so your wards come to this device too. If not, give your name as your ward knows you and a name for this device.
+
+### Creating or Opening a Ward
+
+Wards live inside the app, in its own folder, so there is no file to find or lose.
+
+- **File > New Ward** (Ctrl+N) - Start a new, empty ward
+- **File > Open Ward** (Ctrl+O) - Choose from the wards on this device; a ward shared with you that has not arrived yet shows as *Requested* or *Waiting for access*
+- The app reopens your last ward on launch
+- **File > Save a Copy** writes a `.wardplanning` file wherever you choose, for a backup or to hand to someone. **File > Open a Copy** reads one back, read-only. A copy is sealed to the same devices as the ward, so only they can open it.
 
 ### Importing Data
 
@@ -183,14 +190,96 @@ Ending an emergency clears its response data from the document. The summary repo
 
 ---
 
+## Sharing a Ward
+
+A ward starts on one device, readable by nobody else. Sharing puts an encrypted copy on the Ward Planning server and lets you choose who may open it.
+
+### What the server knows
+
+The server holds who has access to each ward - names, roles, and device names - and who published each version and when. The ward itself reaches the server already encrypted, with a key the server never has, so nobody who runs or breaks into the server can read a family's details. Only the devices you have let in hold the key.
+
+### Share and invite
+
+1. Open the ward and choose **Ward > Who Has Access**, then **Share**.
+2. **Invite Link** shows a link to send to the people you want to add. Anyone who opens it can ask for access; only you, or another admin, can grant it.
+
+### Requests and grants
+
+Opening an invite link, or a `.wardplanning` copy of a ward you do not have, offers **Request access**. The ward then shows in your list as *Requested* until an admin answers.
+
+An admin sees requests at the bottom of **Who Has Access**, with the person's name and device, and chooses **Grant** or **Decline**. The moment a request is granted the ward is readable on the device that asked; it downloads within a minute. A request whose name matches someone who already has access is flagged: if it is that person's new phone, they should link it from their other device instead (see below), so the ward does not end up with two of them.
+
+### Admins and members
+
+Everyone with access reads and edits the ward. **Admins** also grant and decline requests, remove people, and make others admins or members. The person who shared the ward is its first admin. A ward always keeps at least one admin: the last admin cannot step down or leave until someone else is made an admin, and Ward Planning says so.
+
+### Removing someone
+
+An admin selects a person in **Who Has Access** and chooses **Remove**. They lose access at once, their app deletes its copy the next time it connects, and the next version anyone saves is sealed with a fresh key they do not hold. A copy they saved outside the app beforehand keeps what it had.
+
+**Leave** does the same for yourself. A member's copy goes at once; their other devices learn of it when they next connect.
+
+### Linking a device
+
+Your wards can live on more than one of your devices - a laptop and a phone, say - and the server sees them as one person.
+
+1. On the new device, start Ward Planning and choose **Yes, link this device**. Name the device and choose **Show Code**.
+2. On a device you already use, open **Who Has Access** and choose **Link a Device**, enter the code, and confirm *Link "Pixel 8" to your account?*
+3. Every ward on the approving device goes to the new one at that moment. A ward the approving device did not hold shows *Waiting for access* on the new one until the approving device next saves it.
+
+Each ward shows a notice while it is on only one of your devices: a second device is what keeps a ward if the first is lost or stolen.
+
+### Unlinking a lost device
+
+In **Who Has Access**, select one of your own devices and choose **Unlink**. It loses every ward at once and deletes its copies the next time it connects; if it had linked other devices, you are asked whether to unlink those too. You cannot unlink your last device.
+
+If a device is lost whose owner cannot be reached, an admin removes that person and grants them again from a device they still have.
+
+### Who has access changed
+
+Every grant, removal, leave, and role change is announced to everyone with access, once, as a notice above the ward - *3 changes to who has access* - that expands to the list. Dismiss it and it stays dismissed; new changes bring a new notice.
+
+### The sync indicator
+
+The status bar shows how the open ward stands with the server:
+
+- *Up to date*
+- *Changes not yet uploaded* - saved here; they upload when the server answers
+- *Server unreachable* - keep working; everything uploads when it returns. If a newer Ward Planning is known, the indicator says so, since an old build is one reason a server stops answering
+- *Could not check the server's copy* - your copy here is untouched
+- *Two versions are waiting for your choice* - see below
+- *A newer version of Ward Planning is needed to sync this ward* - someone saved it with a newer version; update to see their changes and share yours
+- *... another member is editing the directory* - one person at a time edits families and members while connected; emergency responses are never blocked
+
+### Two people editing at once
+
+Family and member details take turns: while one person is editing the directory and connected, others see it read-only. Emergency responses - welfare checks, tasks - never wait, from anyone, at any time.
+
+When two devices have both changed the same ward out of each other's sight, Ward Planning merges what it can. Where it cannot, **File > Choose Between Two Versions** names the other person and offers to keep yours, keep theirs, or save yours as a copy so nothing is lost.
+
+### Working offline
+
+Everything works without the server: open the ward, edit it, record contacts, print reports. Changes save on this device and upload when the server is reached again. During an outage, responders see each other's work only when the server is back.
+
+**Access must be granted before an emergency.** Granting, linking, and removing all need the server. A ward that has not been shared with everyone who will need it cannot be shared once the network is down - which is exactly when it matters. Share early.
+
+### Reports and copies
+
+Reports are plain PDFs, saved where you choose and readable by anyone who has the file. A ward copy saved with **Save a Copy** is encrypted and opens only on the devices the ward is sealed to.
+
+### Updates
+
+When a newer Ward Planning is published, a notice offers **Download**. **Not Now** keeps that version quiet; the next one shows again.
+
+---
+
 ## Keyboard Shortcuts
 
 | Action | Shortcut |
 |--------|----------|
-| New | Ctrl+N |
-| Open | Ctrl+O |
-| Save | Ctrl+S |
-| Save As | Ctrl+Shift+S |
+| New Ward | Ctrl+N |
+| Open Ward | Ctrl+O |
+| Save Now | Ctrl+S |
 | Undo | Ctrl+Z |
 | Redo | Ctrl+Y |
 | Quit | Ctrl+Q |
@@ -207,7 +296,6 @@ Emergency response actions (contact status, tasks) are **not** part of the undo 
 
 ## Saving
 
-- **Ctrl+S** saves the document
-- The app auto-saves after changes
-- The title bar shows an asterisk (*) when there are unsaved changes
-- On close, the app prompts to save if there are unsaved changes
+- Every change is saved to this device a moment after you make it; **Ctrl+S** saves now
+- A shared ward then uploads the saved version to the server, conditional on nothing having changed there meanwhile; the sync indicator shows where it stands
+- Closing the app saves and releases the editing turn; nothing is lost and nothing is asked

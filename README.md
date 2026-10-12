@@ -17,6 +17,7 @@ A C++/Qt desktop application for managing ward/stake family data, ministering as
 - **Emergency Response**: Organize teams and track skills/equipment for emergency preparedness
 - **Tag System**: Flexible categorization of families and individuals
 - **PDF Import**: Import ward directories and ministering assignments from PDF
+- **Shared Wards**: Share a ward with others through an encrypted copy on a server that holds who has access but can never read it; link your own devices; everything works offline
 
 ## Internet Access
 On startup, to center the map near you, it calls https://ipinfo.io/json — an IP-based geolocation service that returns the approximate location from your public IP address.
@@ -27,6 +28,10 @@ To display the map, it uses https://tile.openstreetmap.org for street maps and h
 
 It caches map tiles to make map drawing responsive and also to allow drawing the maps during an emergency, when the internet may not be available.
 
+A shared ward talks to the Ward Planning server, which stores the ward encrypted and holds who has access. The address is built in and can be overridden in `settings.json`.
+
+At startup, and at most once a day, it reads https://api.github.com/repos/jvilburn/EmergencyPlan/releases/latest to learn whether a newer version is published.
+
 ## Building
 
 ### Prerequisites
@@ -35,7 +40,7 @@ It caches map tiles to make map drawing responsive and also to allow drawing the
 - Qt 6.11+ with modules: Core, Gui, Widgets, Network, Svg, Pdf, Concurrent, PrintSupport, Test
 - C++17 compatible compiler
 - Ninja build system
-- vcpkg (for MuPDF dependency)
+- vcpkg (for the MuPDF and libsodium dependencies)
 
 ### Build Steps
 

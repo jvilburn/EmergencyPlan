@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the architecture of the Ward Planning application, a C++17/Qt 6 desktop application for managing ward/stake family data, emergency response teams, and resources.
+This document describes the architecture of the Ward Planning application, a C++17/Qt 6 desktop application for managing ward/stake family data, emergency response teams, and resources. A ward is an encrypted document that can be shared through a server which holds who has access but never a key; the *Shared Wards* section describes that part. The full design is in `docs/plans/2026-08-30-encrypted-shared-document-design.md`.
 
 ---
 
@@ -407,7 +407,53 @@ signals:
 
 ---
 
+## Shared Wards
+
+### Server-held access, client-held keys
+
+The server holds the access state - members, roles, devices, pending requests, the access history - and the current encrypted version of each ward. It never holds a data key. Every version it stores is ciphertext under a key sealed, in the version's own header, to each device allowed to read it. So the server decides *who may fetch*, and the devices decide *who can read*, and the second set can only ever be a subset of the first.
+
+The rule tying them together is the **sealing set**. The encrypted payload lists the devices its key is sealed to, and the plaintext header must list exactly those. Each write starts from the sealing set of the version it is built on, prunes every device the server's allow-list no longer lists, adds the devices this device approved (one it linked, or the one a grant or link approval admits in the same call), and rotates the data key whenever the prune removed anyone. A device is never sealed to because the server lists it; only its approver seals it.
+
+### The services
+
+| Service | Role |
+|---|---|
+| `DocumentCrypto` | libsodium: sealing the data key to a device's X25519 key, AEAD over the compressed payload with the whole header as associated data, Ed25519 for sign-in |
+| `DocumentFile` | The on-disk and on-wire format: header line and ciphertext |
+| `DocumentHeader` | The header's fields and strict parse; one format version covers the whole file |
+| `Reconcile` | Validates a version before anything local changes: sealed to this device, decrypts, header matches the sealing set, descends from a key this device trusts |
+| `ServerContract` | The server API as C++ types; `FakeServer` in the tests and `HttpServerApi` implement it |
+| `HttpServerApi`, `HttpWire` | HTTP transport and JSON shapes, one table in `HttpWire.h` |
+| `ServerConnection` | Challenge-response sign-in and the bearer token over any `ServerApi`; registers this device's person; tells the app once when the device was unlinked |
+| `IdentityService`, `IdentityFile` | This device's keys and person, kept like SSH keys in local app data |
+| `DocumentLibrary` | The wards on this device, named by document id in app data; copies; restoring the ward list from the server |
+| `DocumentSession` | One open ward: the single write path, save and publish, the base copy, the lease, adopting newer versions, conflicts, lost access |
+| `ServerVersion` | Taking in and writing server versions: the base copy, the sealing-set rule applied to a version about to be written, and building the resealed version a grant or a link approval carries |
+| `DocumentManager` | Commands, undo, and geocoding over the open session; grant, decline, remove, role, and leave as server calls |
+| `DeviceLinks` | Approving a new device's link code, with every held ward resealed to it, and unlinking |
+| `IncomingWards` | Requests this device made, wards on their way to it, and wards it has lost, checked against the server only while something is pending |
+| `UpdateChecker` | Whether a newer release is published, from GitHub, apart from the Ward Planning server |
+
+### The single write path
+
+Every change to the open ward goes through `DocumentSession::edit`, which applies the change to the in-memory `Document`, refuses a directory edit while another member holds the lease, and schedules a save. Commands, undo, and imports all enter here.
+
+### Save and publish
+
+Saving writes the local file a moment after a change, with the sealing-set rule applied; it never touches the network. Publishing uploads the saved file conditional on the server version this session started from. The **base copy** beside the local file is the file exactly as it stood at that version; its save counter tells whether the local file has unpublished changes, and a three-way merge against it tells what changed here from what changed there. A refused publish fetches the server's version, validates it, merges, and publishes again, raising the conflict dialog only where the merge cannot decide.
+
+### Grants and approvals carry the version
+
+A grant or a link approval sends the resealed current version with it, built on the server's head and conditional on it. The server adds the member or device and stores the version together, or refuses both. Nothing is owed afterwards, so nothing is queued or retried; the new device reads the ward the moment it is allowed to.
+
+---
+
 ## File Formats
+
+### The encrypted file
+
+A `.wardplanning` file, on disk or on the server, is a header line of JSON followed by ciphertext. The header holds the format version, document id, save counter, nonce, and one recipient entry per device: its fingerprint and the data key sealed to it. The whole header is the payload's associated data, so any change to it fails decryption. The payload is the document JSON below, compressed and encrypted.
 
 ### Document JSON Structure
 
