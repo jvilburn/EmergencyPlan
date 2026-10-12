@@ -72,6 +72,7 @@ private slots:
     void onOpenWard();
     void onSaveNow();
     void onSaveCopy();
+    void onExportJson();
     void onOpenCopy();
     void onShowFolder();
     void onImportPdf();
@@ -213,6 +214,7 @@ private:
     QAction* m_generateReportAction;
     QAction* m_resolveConflictAction;
     QAction* m_startOverAction;
+    QAction* m_exportJsonAction = nullptr;     ///< only when developer export is on
     QAction* m_exitAction;
     QAction* m_undoAction;
     QAction* m_redoAction;

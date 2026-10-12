@@ -43,6 +43,8 @@
 #include <QStatusBar>
 #include <QVBoxLayout>
 #include <QFileDialog>
+#include <QJsonDocument>
+#include <QSaveFile>
 #include <QInputDialog>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -254,6 +256,12 @@ void MainWindow::setupMenus()
     fileMenu->addAction(tr("Save a &Copy..."), this, &MainWindow::onSaveCopy);
     fileMenu->addAction(tr("Open a Cop&y..."), this, &MainWindow::onOpenCopy);
     fileMenu->addAction(tr("Show in &Folder"), this, &MainWindow::onShowFolder);
+
+    // For developers, switched on in settings.json: the document as plain JSON.
+    if (m_settings.developerExport())
+    {
+        m_exportJsonAction = fileMenu->addAction(tr("Export Decrypted JSON..."), this, &MainWindow::onExportJson);
+    }
 
     fileMenu->addSeparator();
 
@@ -505,6 +513,40 @@ void MainWindow::onSaveCopy()
         return;
     }
     statusBar()->showMessage(tr("Copy saved to %1").arg(targetPath), 5000);
+}
+
+void MainWindow::onExportJson()
+{
+    const QMessageBox::StandardButton answer = QMessageBox::warning(
+        this,
+        tr("Export Decrypted JSON"),
+        tr("This writes the ward's names, addresses, phone numbers, and birth dates as plain text that anyone "
+           "can read. Keep the file where nobody else can, and delete it when you are done."),
+        QMessageBox::Ok | QMessageBox::Cancel,
+        QMessageBox::Cancel);
+    if (answer != QMessageBox::Ok)
+    {
+        return;
+    }
+
+    const QString suggested = DocumentManager::instance()->document().suggestedFilename();
+    const QString targetPath = QFileDialog::getSaveFileName(this,
+                                                            tr("Export Decrypted JSON"),
+                                                            suggested.isEmpty() ? QString() : suggested + ".json",
+                                                            tr("JSON Files (*.json)"));
+    if (targetPath.isEmpty())
+    {
+        return;
+    }
+
+    QSaveFile file(targetPath);
+    const QByteArray json = QJsonDocument(DocumentManager::instance()->document().toJson()).toJson(QJsonDocument::Indented);
+    if (!file.open(QIODevice::WriteOnly) || file.write(json) != json.size() || !file.commit())
+    {
+        QMessageBox::warning(this, tr("Export Decrypted JSON"), tr("Could not write %1: %2").arg(targetPath, file.errorString()));
+        return;
+    }
+    statusBar()->showMessage(tr("Decrypted JSON written to %1").arg(targetPath), 5000);
 }
 
 void MainWindow::onOpenCopy()
@@ -840,6 +882,10 @@ void MainWindow::updateFileActions()
 {
     m_resolveConflictAction->setEnabled(DocumentManager::instance()->pendingConflict().has_value());
     m_startOverAction->setEnabled(m_library.entries().isEmpty());
+    if (m_exportJsonAction != nullptr)
+    {
+        m_exportJsonAction->setEnabled(!DocumentManager::instance()->documentId().isEmpty());
+    }
 }
 
 void MainWindow::onEditRefused(const QString& message)
