@@ -41,6 +41,8 @@ private slots:
     void registeringAgainChangesNothing();
     void aDeviceCannotClaimAnotherPerson();
     void anApprovedLinkAddsTheDeviceToThePerson();
+    void anApprovalStoresEveryResealingOrNone();
+    void anApprovalWithNoResealingsAddsTheDevice();
     void aLinkCodeExpires();
     void aDeviceWithAPersonCannotStartALink();
     void unlinkingCutsTheDeviceOffEveryWard();
@@ -58,6 +60,9 @@ private slots:
     // Who has access
     void onlyMembersReadOrWrite();
     void aPersonJoinsOnlyThroughAGrantedRequest();
+    void aGrantStoresTheResealedVersionWithTheMembership();
+    void aGrantOnAStaleVersionChangesNothing();
+    void aGrantSealingToAStrangerIsRefused();
     void everyDeviceOfAMemberIsAllowListed();
     void onlyAnAdminGrantsRemovesOrChangesRoles();
     void aDeclinedRequestSaysSo();

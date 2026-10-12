@@ -166,7 +166,7 @@ void ServerConnectionTest::anUnlinkedDeviceHearsItFromEveryCallWithoutSigningInA
     const DeviceIdentity phone = newDeviceOf(laptop, "Phone");
     const std::optional<Session> laptopSession = join(server, asTestDevice(laptop));
     QVERIFY(laptopSession.has_value());
-    QVERIFY(link(server, asTestDevice(phone), laptopSession.value()).has_value());
+    QVERIFY(link(server, asTestDevice(phone), laptopSession.value(), {}).has_value());
     QVERIFY(wait<Done>(std::bind(&ServerApi::unlinkDevice, &server, laptopSession.value(), phone.fingerprint(), _1)).ok());
 
     ServerConnection connection(server, phone);

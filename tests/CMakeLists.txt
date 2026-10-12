@@ -35,7 +35,6 @@ set(TEST_SOURCES
     services/IncomingWardsTest.cpp
     services/ReconcileTest.cpp
     services/ResponseMergeTest.cpp
-    services/SealingQueueTest.cpp
     services/ServerConformanceTest.cpp
     services/ServerConnectionTest.cpp
     services/ServerTestSupport.cpp

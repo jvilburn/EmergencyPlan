@@ -43,7 +43,7 @@ private slots:
     // The sealing-set rule
     void theNextPublishAfterARemovalPrunesAndRotates();
     void aPublishThatPrunesNobodyKeepsTheKey();
-    void aDeviceLinkedHereIsSealedOnceTheServerListsIt();
+    void aDeviceLinkedWithoutThisWardIsSealedByItsNextWrite();
     void aDeviceNobodyHereApprovedIsNeverSealed();
     void aHeadLeavingThisDeviceOutIsAFaultAndSealsNothing();
     void aRefusalOverTheAllowListPrunesAndPublishes();

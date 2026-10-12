@@ -6,9 +6,8 @@
 
 #include <functional>
 
-/// A session's timers, or the sealing queue's. The app runs them on
-/// QTimer; tests fire them by hand, so no test waits on the clock and no
-/// assertion depends on event-loop timing.
+/// A session's timers. The app runs them on QTimer; tests fire them by hand, so no
+/// test waits on the clock and no assertion depends on event-loop timing.
 class SessionTimers
 {
 public:
@@ -31,12 +30,12 @@ public:
     virtual void start(Timer timer, int milliseconds) = 0;
     virtual void stop(Timer timer) = 0;
 
-    /// Set by the session or queue that owns these timers.
+    /// Set by the session that owns these timers.
     std::function<void(Timer)> onTimeout;
 };
 
-/// SessionTimers on QTimer, for the app. Owned by its session or queue, so it
-/// has no Qt parent.
+/// SessionTimers on QTimer, for the app. Owned by its session, so it has no Qt
+/// parent.
 class QtSessionTimers : public QObject, public SessionTimers
 {
 public:

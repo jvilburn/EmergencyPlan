@@ -36,7 +36,9 @@ void onSnapshot(const Reconcile::Self& self,
     // reason: only a version that fails validation is the server misbehaving.
     if (!snapshot.ok())
     {
-        done(outcomeOnly(Fetched::Outcome::CallFailed));
+        Fetched failed = outcomeOnly(Fetched::Outcome::CallFailed);
+        failed.error = snapshot.error;
+        done(failed);
         return;
     }
 
@@ -242,7 +244,8 @@ void onResealingFetched(const QString& documentId,
 
 void onResealingHead(const Reconcile::Self& self,
                      const QList<DataKey>& trusted,
-                     const QList<DeviceKeys>& approved,
+                     const QList<DeviceKeys>& linked,
+                     const DeviceKeys& admitted,
                      ServerConnection& server,
                      const QString& documentId,
                      QObject* receiver,
@@ -258,7 +261,9 @@ void onResealingHead(const Reconcile::Self& self,
     }
     if (!head.ok())
     {
-        done(outcomeOnly(Fetched::Outcome::CallFailed), std::nullopt);
+        Fetched failed = outcomeOnly(Fetched::Outcome::CallFailed);
+        failed.error = head.error;
+        done(failed, std::nullopt);
         return;
     }
     if (!listsDevice(head.value.value(), self.fingerprint()))
@@ -269,7 +274,10 @@ void onResealingHead(const Reconcile::Self& self,
         return;
     }
 
-    const Access access = accessFor(head.value.value(), approved);
+    // The head does not list admitted yet; the grant or approval this goes up with
+    // adds it as it stores the version.
+    Access access = accessFor(head.value.value(), linked + QList<DeviceKeys>{admitted});
+    access.allowList.insert(DocumentCrypto::fingerprintOf(admitted.publicKey, admitted.verifyKey).toHex());
     fetch(self, trusted, server, documentId, receiver, std::bind(&onResealingFetched, documentId, access, done, _1));
 }
 
@@ -277,7 +285,8 @@ void onResealingHead(const Reconcile::Self& self,
 
 void buildResealing(const Reconcile::Self& self,
                     const QList<DataKey>& trusted,
-                    const QList<DeviceKeys>& approved,
+                    const QList<DeviceKeys>& linked,
+                    const DeviceKeys& admitted,
                     ServerConnection& server,
                     const QString& documentId,
                     QObject* receiver,
@@ -285,7 +294,7 @@ void buildResealing(const Reconcile::Self& self,
 {
     server.head(documentId,
                 receiver,
-                std::bind(&onResealingHead, self, trusted, approved, std::ref(server), documentId, receiver, done, _1));
+                std::bind(&onResealingHead, self, trusted, linked, admitted, std::ref(server), documentId, receiver, done, _1));
 }
 
 } // namespace ServerVersion

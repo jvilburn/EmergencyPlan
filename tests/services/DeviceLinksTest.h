@@ -11,6 +11,9 @@ private slots:
     void initTestCase();
 
     void approvingALinkRemembersTheDeviceAndSealsItEverywhere();
+    void aWardTheApproverCouldNotReadIsLeftOutAndArrivesWithItsNextWrite();
+    void anApprovalRetriesOnceOnAConflict();
+    void anApprovalWithAWardLeftUnansweredDoesNotGoUp();
     void anUnknownCodeFails();
     void unlinkingDropsTheDeviceAndCutsItOff();
 };

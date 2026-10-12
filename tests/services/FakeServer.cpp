@@ -441,7 +441,17 @@ Result<Done> FakeServer::decideApproveLink(const Session& session,
     device.linkedAt = m_now;
 
     // Every resealing is checked before any of it lands, so a refusal leaves the
-    // documents and the person as they were.
+    // documents and the person as they were. The check pass sees each document as it
+    // is, so a document may appear only once.
+    QSet<QString> seen;
+    for (const Resealing& resealing : resealings)
+    {
+        if (seen.contains(resealing.documentId))
+        {
+            return Result<Done>::failure(ServerError::InvalidRequest);
+        }
+        seen.insert(resealing.documentId);
+    }
     for (const bool store : {false, true})
     {
         for (const Resealing& resealing : resealings)
@@ -627,7 +637,7 @@ ServerError FakeServer::storeUpload(StoredDocument& document,
 
     if (document.forceConflict || baseVersion != document.version)
     {
-        document.forceConflict = !store && document.forceConflict;
+        document.forceConflict = false;
         return ServerError::VersionConflict;
     }
 

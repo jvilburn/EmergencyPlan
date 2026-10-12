@@ -46,7 +46,6 @@ void DeviceLinks::approve(const QString& code, const DeviceKeys& device)
 void DeviceLinks::startApproval(const QString& code, const DeviceKeys& device, bool mayRetry)
 {
     m_approval = Approval{code, device, mayRetry, 0, {}};
-    const QList<DeviceKeys> approved = m_records.linkedDevices() + QList<DeviceKeys>{device};
     for (const QString& documentId : m_records.documentIds())
     {
         if (!m_records.record(documentId).baseVersion.has_value())
@@ -57,7 +56,8 @@ void DeviceLinks::startApproval(const QString& code, const DeviceKeys& device, b
         ServerVersion::buildResealing(
             m_identity.self(),
             ServerVersion::trustedKeys(documentId, m_pathsFor(documentId), m_records, m_identity.self()),
-            approved,
+            m_records.linkedDevices(),
+            device,
             m_server,
             documentId,
             this,
@@ -71,17 +71,32 @@ void DeviceLinks::startApproval(const QString& code, const DeviceKeys& device, b
 
 void DeviceLinks::onBuilt(const ServerVersion::Fetched& theirs, const std::optional<Resealing>& built)
 {
-    // A ward whose version could not be built here is left out; this device seals it
+    // A ward whose version this device cannot read is left out; this device seals it
     // on its next write of that ward, and the new device waits for access until then.
-    Q_UNUSED(theirs);
+    // A ward whose call got no answer is another matter: the approval waits for a
+    // retry, so the new device is not left short by a dropped connection.
     if (built.has_value())
     {
         m_approval->built.append(built.value());
     }
-    if (--m_approval->building == 0)
+    else if (theirs.outcome == ServerVersion::Fetched::Outcome::CallFailed
+             && m_approval->unanswered == ServerError::None)
     {
-        sendApproval();
+        m_approval->unanswered = theirs.error;
     }
+
+    if (--m_approval->building > 0)
+    {
+        return;
+    }
+    if (m_approval->unanswered != ServerError::None)
+    {
+        const ServerError error = m_approval->unanswered;
+        m_approval.reset();
+        emit failed(error);
+        return;
+    }
+    sendApproval();
 }
 
 void DeviceLinks::sendApproval()

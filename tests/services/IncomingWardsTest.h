@@ -10,10 +10,11 @@ class IncomingWardsTest : public QObject
 private slots:
     void initTestCase();
 
-    void aGrantedRequestArrivesOnceTheWardIsSealedToThisDevice();
+    void aGrantedRequestArrivesAtOnce();
     void aDeclinedRequestIsDroppedAndSaysSo();
     void aRequestOutlivesTheApp();
     void aRequestForNoSuchWardFails();
     void aRequestTheServerNoLongerHasIsDropped();
-    void aLinkedDevicesWardsArriveOnceItsLinkerSealsThem();
+    void aLinkedDevicesWardsArriveAtOnce();
+    void aWardTheLinkerLackedWaitsForItsNextWrite();
 };

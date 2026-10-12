@@ -865,17 +865,17 @@ void DocumentSessionTest::aPublishThatPrunesNobodyKeepsTheKey()
     QCOMPARE(copy.document.sealingSet().size(), 2);
 }
 
-void DocumentSessionTest::aDeviceLinkedHereIsSealedOnceTheServerListsIt()
+void DocumentSessionTest::aDeviceLinkedWithoutThisWardIsSealedByItsNextWrite()
 {
     TestWard ward;
     Device& laptop = ward.add(newIdentity("Alice", "Laptop"));
     Device& phone = ward.add(newDeviceOf(laptop.identity, "Phone"));
     std::unique_ptr<DocumentSession> session = ward.createShared(laptop);
     QVERIFY(session);
-    QVERIFY(ward.link(phone, laptop));
+    QVERIFY(ward.linkCarryingNothing(phone, laptop));
 
-    // The phone is allow-listed but not yet sealed: it reads the ward's head, not
-    // its content.
+    // The approval carried no version of this ward, so the phone is allow-listed but
+    // not yet sealed: it reads the ward's head, not its content.
     QVERIFY(downloadTo(ward, phone) == DocumentSession::Download::ServerFault);
 
     session->checkServer();
@@ -899,7 +899,7 @@ void DocumentSessionTest::aDeviceNobodyHereApprovedIsNeverSealed()
     std::unique_ptr<DocumentSession> aliceSession;
     std::unique_ptr<DocumentSession> bobSession;
     QVERIFY(openAliceAndBob(ward, alice, bob, aliceSession, bobSession));
-    QVERIFY(ward.link(bobsTablet, bob));
+    QVERIFY(ward.linkCarryingNothing(bobsTablet, bob));
 
     // Alice publishes with the tablet on the allow-list; it is Bob's to seal.
     aliceSession->checkServer();
@@ -1676,7 +1676,6 @@ void DocumentSessionTest::aSecondDeviceGrantedAccessOpensIt()
     QVERIFY(latitudeOf(bobSession->document(), ward.adams) == 40.0);
     QVERIFY(bobSession->document().sealingSet().contains(bob.identity.fingerprint()));
     QVERIFY(bob.records.record(ward.documentId).baseVersion.has_value());
-    QVERIFY(alice.records.record(ward.documentId).granted.isEmpty());
 }
 
 void DocumentSessionTest::aDeviceLinkedBeforeSharingIsSealedAfterIt()

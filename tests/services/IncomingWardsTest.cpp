@@ -35,16 +35,30 @@ struct BobsApp
     IncomingWards requests;
 };
 
-/// The admin's grant of Bob's one pending request, on the server alone.
+/// The admin's grant of one pending request, as the admin's app makes it: the ward's
+/// current version, resealed on the admin's device to the device that asked, goes
+/// up with it.
 bool grantOnServer(TestWard& ward, Device& admin)
 {
     const Session session = ward.sessionFor(admin).value();
     const ServerContract::Result<QList<ServerContract::AccessRequest>> requests =
         ServerTestSupport::wait<QList<ServerContract::AccessRequest>>(
             std::bind(&ServerApi::accessRequests, &ward.server, session, ward.documentId, _1));
-    return requests.ok() && requests.value->size() == 1
-        && ServerTestSupport::wait<Done>(std::bind(
-                   &ServerApi::grant, &ward.server, session, ward.documentId, requests.value->first().index, _1))
+    if (!requests.ok() || requests.value->size() != 1)
+    {
+        return false;
+    }
+    const ServerContract::AccessRequest& request = requests.value->first();
+    const std::optional<ServerContract::Resealing> resealing =
+        ward.resealing(admin, ward.documentId, request.person.devices.first().keys);
+    return resealing.has_value()
+        && ServerTestSupport::wait<Done>(std::bind(&ServerApi::grant,
+                                                   &ward.server,
+                                                   session,
+                                                   ward.documentId,
+                                                   request.index,
+                                                   resealing.value(),
+                                                   _1))
                .ok();
 }
 
@@ -55,7 +69,7 @@ void IncomingWardsTest::initTestCase()
     QVERIFY(DocumentCrypto::initialise());
 }
 
-void IncomingWardsTest::aGrantedRequestArrivesOnceTheWardIsSealedToThisDevice()
+void IncomingWardsTest::aGrantedRequestArrivesAtOnce()
 {
     TestWard ward;
     Device& alice = ward.add(newIdentity("Alice", "Laptop"));
@@ -72,23 +86,14 @@ void IncomingWardsTest::aGrantedRequestArrivesOnceTheWardIsSealedToThisDevice()
     QCOMPARE(requested.count(), 1);
     QCOMPARE(app.requests.pending(), QStringList{ward.documentId});
 
-    // Granted, but not yet sealed to Bob: no longer a request, and waiting for access.
+    QVERIFY(!app.library.contains(ward.documentId));
+
+    // Granted with a version sealed to Bob: one check drops the request and fetches
+    // the ward, with no wait for access between.
     QVERIFY(grantOnServer(ward, alice));
     app.requests.checkNow();
     ward.settle();
-    QCOMPARE(arrived.count(), 0);
     QVERIFY(app.requests.pending().isEmpty());
-    QCOMPARE(app.requests.waiting(), QStringList{ward.documentId});
-    QVERIFY(!app.library.contains(ward.documentId));
-
-    // Alice's app seals it to the device that asked.
-    DocumentRecord record = alice.records.record(ward.documentId);
-    record.granted.append(bob.identity.keys());
-    alice.records.setRecord(ward.documentId, record);
-    ward.seal(alice);
-
-    app.requests.checkNow();
-    ward.settle();
     QCOMPARE(arrived.count(), 1);
     QCOMPARE(arrived.first().first().toString(), ward.documentId);
     QCOMPARE(arrived.first().at(1).value<DocumentSession::Download>(), DocumentSession::Download::Done);
@@ -187,7 +192,7 @@ void IncomingWardsTest::aRequestTheServerNoLongerHasIsDropped()
     QCOMPARE(declined.count(), 0);
 }
 
-void IncomingWardsTest::aLinkedDevicesWardsArriveOnceItsLinkerSealsThem()
+void IncomingWardsTest::aLinkedDevicesWardsArriveAtOnce()
 {
     TestWard ward;
     Device& laptop = ward.add(newIdentity("Alice", "Laptop"));
@@ -197,20 +202,62 @@ void IncomingWardsTest::aLinkedDevicesWardsArriveOnceItsLinkerSealsThem()
     session.reset();
     QVERIFY(ward.link(phone, laptop));
 
-    // Listed for the phone's person, but not yet sealed to the phone.
+    // The ward the laptop held went up with the approval sealed to the phone.
     BobsApp app(phone);
     QSignalSpy fetched(&app.requests, &IncomingWards::fetched);
     app.requests.checkNow();
     ward.settle();
-    QCOMPARE(fetched.count(), 0);
-    QCOMPARE(app.requests.waiting(), QStringList{ward.documentId});
-    QVERIFY(!app.library.contains(ward.documentId));
-
-    ward.seal(laptop);
-    app.requests.checkNow();
-    ward.settle();
     QCOMPARE(fetched.count(), 1);
+    QCOMPARE(fetched.first().first().toString(), ward.documentId);
+    QCOMPARE(fetched.first().at(1).value<DocumentSession::Download>(), DocumentSession::Download::Done);
     QVERIFY(app.library.contains(ward.documentId));
     QVERIFY(app.requests.waiting().isEmpty());
     QVERIFY(app.requests.pending().isEmpty());
+}
+
+void IncomingWardsTest::aWardTheLinkerLackedWaitsForItsNextWrite()
+{
+    TestWard ward;
+    Device& laptop = ward.add(newIdentity("Alice", "Laptop"));
+    Device& phone = ward.add(newDeviceOf(laptop.identity, "Phone"));
+    Device& carol = ward.add(newIdentity("Carol", "Tablet"));
+    std::unique_ptr<DocumentSession> laptopWard = ward.createShared(laptop);
+    QVERIFY(laptopWard);
+    laptopWard.reset();
+    const QString held = ward.documentId;
+    QVERIFY(ward.link(phone, laptop));
+
+    // After the link, Carol shares a ward and grants the laptop, which asked: the
+    // version that goes up with the grant seals to the laptop, not the phone.
+    std::unique_ptr<DocumentSession> carolsWard = ward.createShared(carol);
+    QVERIFY(carolsWard);
+    carolsWard.reset();
+    const QString lacked = ward.documentId;
+    QVERIFY(ward.grant(carol, laptop));
+
+    BobsApp app(phone);
+    QSignalSpy fetched(&app.requests, &IncomingWards::fetched);
+    app.requests.checkNow();
+    ward.settle();
+    QCOMPARE(fetched.count(), 1);
+    QCOMPARE(fetched.first().first().toString(), held);
+    QVERIFY(app.library.contains(held));
+    QCOMPARE(app.requests.waiting(), QStringList{lacked});
+    QVERIFY(!app.library.contains(lacked));
+
+    // The laptop opens and edits it; its publish seals to the phone it linked.
+    std::unique_ptr<DocumentSession> session = laptop.open(lacked);
+    QVERIFY(session);
+    ward.settle();
+    session->edit(DocumentSession::Edit::Directory, moveFamily(ward.adams, 45.0));
+    QVERIFY(laptop.timers->fire(SessionTimers::Timer::Save));
+    ward.settle();
+
+    app.requests.checkNow();
+    ward.settle();
+    QCOMPARE(fetched.count(), 2);
+    QCOMPARE(fetched.at(1).first().toString(), lacked);
+    QCOMPARE(fetched.at(1).at(1).value<DocumentSession::Download>(), DocumentSession::Download::Done);
+    QVERIFY(app.library.contains(lacked));
+    QVERIFY(app.requests.waiting().isEmpty());
 }

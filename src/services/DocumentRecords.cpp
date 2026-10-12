@@ -13,7 +13,7 @@ namespace
 const QLatin1String KeyBaseVersion("baseVersion");
 const QLatin1String KeyBaseHash("baseHash");
 const QLatin1String KeyBaseSaveCounter("baseSaveCounter");
-const QLatin1String KeyGranted("granted");     ///< written by builds before atomic grants; nothing reads it
+const QLatin1String KeyGranted("granted");     ///< accepted and ignored: older settings files carry it
 const QLatin1String KeyHistorySeen("historySeen");
 
 } // namespace
@@ -29,8 +29,6 @@ QJsonObject DocumentRecord::toJson() const
 
     json[KeyBaseSaveCounter] = baseSaveCounter;
     json[KeyHistorySeen] = historySeen;
-
-
     return json;
 }
 

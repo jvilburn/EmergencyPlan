@@ -159,27 +159,51 @@ void AppSettingsTest::recordsForTwoIdsStaySeparate()
     QVERIFY(reread->record(second) == other);
 }
 
-void AppSettingsTest::grantedAndLinkedDevicesRoundTrip()
+void AppSettingsTest::linkedDevicesRoundTrip()
 {
     QTemporaryDir folder;
     QVERIFY(folder.isValid());
     const QString path = folder.filePath("settings.json");
     const QString documentId = ServerTestSupport::newDocumentId();
-    const DeviceIdentity bob = newIdentity("Bob", "Phone");
-    const DeviceIdentity carol = newIdentity("Carol", "Tablet");
     const DeviceIdentity phone = newIdentity("Alice", "Phone");
+    const DeviceIdentity tablet = newIdentity("Alice", "Tablet");
 
-    DocumentRecord record = fullRecord();
-    record.granted = {bob.keys(), carol.keys()};
     std::unique_ptr<AppSettings> settings = openAt(path);
-    settings->setRecord(documentId, record);
+    settings->setRecord(documentId, fullRecord());
     QVERIFY(settings->linkedDevices().isEmpty());
-    settings->setLinkedDevices({phone.keys()});
+    settings->setLinkedDevices({phone.keys(), tablet.keys()});
 
     std::unique_ptr<AppSettings> reread = openAt(path);
-    QCOMPARE(reread->record(documentId).granted.size(), qsizetype(2));
-    QVERIFY(reread->record(documentId) == record);
-    QCOMPARE(reread->linkedDevices(), QList<DeviceKeys>{phone.keys()});
+    QVERIFY(reread->record(documentId) == fullRecord());
+    QCOMPARE(reread->linkedDevices(), (QList<DeviceKeys>{phone.keys(), tablet.keys()}));
+}
+
+void AppSettingsTest::aRecordFromAnEarlierBuildReadsWithoutItsGrantedList()
+{
+    QTemporaryDir folder;
+    QVERIFY(folder.isValid());
+    const QString path = folder.filePath("settings.json");
+    const QString documentId = ServerTestSupport::newDocumentId();
+    const QString hash = HexCodec::encode(DocumentCrypto::payloadHash("a base copy"));
+
+    // An earlier build's record, its granted list holding a device no build could
+    // read: the list is passed over, and the rest of the record is read.
+    QVERIFY(writeFile(path,
+                      QString(R"({"records": {"%1": {"baseVersion": 12, "baseHash": "%2", "baseSaveCounter": 41,)"
+                              R"( "historySeen": 3, "granted": [{"publicKey": "ab", "verifyKey": "cd"}]}}, "wards": {}})")
+                          .arg(documentId, hash)
+                          .toUtf8()));
+    QString error;
+    std::unique_ptr<AppSettings> settings = AppSettings::open(path, &error);
+    QVERIFY2(settings, qPrintable(error));
+    QVERIFY(settings->record(documentId) == fullRecord());
+
+    // Written again, the record carries no granted list.
+    settings->setLinkedDevices({newIdentity("Alice", "Phone").keys()});
+    QVERIFY(!settings->writeFailed());
+    const QByteArray written = readFile(path);
+    QVERIFY(written.contains(documentId.toUtf8()));
+    QVERIFY(!written.contains("granted"));
 }
 
 void AppSettingsTest::removingARecordLeavesTheOthers()
@@ -293,18 +317,14 @@ void AppSettingsTest::aMalformedFileIsReportedAndLeftAlone_data()
     QTest::newRow("latitude as text")
         << QByteArray(R"({"records": {}, "wards": {}, "map": {"defaultLat": "40", "defaultLng": 1}})");
     QTest::newRow("empty document id")
-        << QString(R"({"records": {"": {%1, "granted": []}}, "wards": {}})").arg(mark).toUtf8();
+        << QString(R"({"records": {"": {%1}}, "wards": {}})").arg(mark).toUtf8();
     QTest::newRow("record not an object") << QString(R"({"records": {"%1": 7}, "wards": {}})").arg(id).toUtf8();
     QTest::newRow("no base save counter")
-        << QString(R"({"records": {"%1": {"historySeen": 0, "granted": []}}, "wards": {}})").arg(id).toUtf8();
+        << QString(R"({"records": {"%1": {"historySeen": 0}}, "wards": {}})").arg(id).toUtf8();
     QTest::newRow("base version without hash")
-        << QString(R"({"records": {"%1": {"baseVersion": 3, %2, "granted": []}}, "wards": {}})").arg(id, mark).toUtf8();
+        << QString(R"({"records": {"%1": {"baseVersion": 3, %2}}, "wards": {}})").arg(id, mark).toUtf8();
     QTest::newRow("hash of the wrong size")
-        << QString(R"({"records": {"%1": {"baseVersion": 3, "baseHash": "abcd", %2, "granted": []}}, "wards": {}})")
-               .arg(id, mark)
-               .toUtf8();
-    QTest::newRow("a granted device with a short key")
-        << QString(R"({"records": {"%1": {%2, "granted": [{"publicKey": "ab", "verifyKey": "cd"}]}}, "wards": {}})")
+        << QString(R"({"records": {"%1": {"baseVersion": 3, "baseHash": "abcd", %2}}, "wards": {}})")
                .arg(id, mark)
                .toUtf8();
     QTest::newRow("no linked devices listed as empty")
@@ -332,7 +352,7 @@ void AppSettingsTest::aMalformedFileIsReportedAndLeftAlone_data()
 
     // Anchor: the same shapes, well formed, read.
     QTest::newRow("well formed")
-        << QString(R"({"records": {"%1": {"baseVersion": 3, "baseHash": "%2", %3, "granted": []}},)"
+        << QString(R"({"records": {"%1": {"baseVersion": 3, "baseHash": "%2", %3}},)"
                    R"( "wards": {"%1": {"wardName": "Tanglewood Ward", "lastOpened": "2026-10-06T09:30:15.250Z",)"
                    R"( "copies": [{"path": "E:/Tanglewood.wardplanning", "documentId": "%4"}]}, "%4": {}},)"
                    R"( "lastWard": "%1"})")

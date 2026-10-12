@@ -116,17 +116,34 @@ std::optional<SharedDocument> registerWard(ServerContract::ServerApi& server);
 /// Alice's ward, with Bob and Carol granted by request. Alice is the only admin.
 std::optional<SharedDocument> wardOfThree(ServerContract::ServerApi& server);
 
-/// Asks for access as device and has admin grant the request.
+/// Asks for access as device and has admin grant the request, carrying resealing
+/// as the version the new member reads.
 bool grantByRequest(ServerContract::ServerApi& server,
                     const QString& documentId,
                     const ServerContract::Session& admin,
                     const TestDevice& device,
-                    const ServerContract::Session& deviceSession);
+                    const ServerContract::Session& deviceSession,
+                    const ServerContract::Resealing& resealing);
 
-/// Links newDevice to the person existing belongs to; the new device's session.
+/// A version of ward on top of its current one, sealed to these devices, as a grant
+/// or an approval carries it. The ward's save counter advances; its version
+/// advances only once the call carrying it lands.
+ServerContract::Resealing resealingOf(SharedDocument& ward, const QList<TestDevice>& devices);
+
+/// Asks for access as device and has Alice grant it, with a version sealed to
+/// sealedTo; on success the ward's version advances.
+bool grantInto(ServerContract::ServerApi& server,
+               SharedDocument& ward,
+               const TestDevice& device,
+               const ServerContract::Session& deviceSession,
+               const QList<TestDevice>& sealedTo);
+
+/// Links newDevice to the person existing belongs to, the approval carrying
+/// resealings; the new device's session.
 std::optional<ServerContract::Session> link(ServerContract::ServerApi& server,
                                             const TestDevice& newDevice,
-                                            const ServerContract::Session& existing);
+                                            const ServerContract::Session& existing,
+                                            const QList<ServerContract::Resealing>& resealings);
 
 /// Uploads a version sealed to these devices on top of the ward's current version;
 /// on success the ward's version advances.

@@ -6,7 +6,6 @@
 #include "DocumentManager.h"
 #include "EmergencyManager.h"
 #include "FamilyCommands.h"
-#include "SealingQueue.h"
 #include "SessionTestSupport.h"
 
 #include <QFile>
@@ -16,6 +15,8 @@
 
 using namespace SessionTestSupport;
 using Timer = SessionTimers::Timer;
+
+const std::optional<DocumentSession::Download> Downloaded = DocumentSession::Download::Done;
 
 namespace
 {
@@ -53,26 +54,19 @@ void addUnmappedFamily(Document& document, const FamilyId& family)
 }
 
 /// One device's app, as main.cpp builds it: settings and a library in a folder of
-/// their own, the device's connection, a sealing queue, and the manager over them.
+/// their own, the device's connection, and the manager over them.
 struct App
 {
     explicit App(Device& device)
         : settings(AppSettings::open(folder.filePath("settings.json"), nullptr))
         , library(*settings, folder.filePath("wards"), device.identity)
-        , queue(device.identity,
-                *settings,
-                device.connection,
-                std::make_unique<ManualTimers>(),
-                std::bind(&DocumentLibrary::pathsFor, &library, std::placeholders::_1),
-                nullptr)
-        , manager(device.identity, *settings, device.connection, library, queue, nullptr)
+        , manager(device.identity, *settings, device.connection, library, nullptr)
     {
     }
 
     QTemporaryDir folder;
     std::unique_ptr<AppSettings> settings;
     DocumentLibrary library;
-    SealingQueue queue;
     DocumentManager manager;
     EmergencyManager emergency{nullptr};
 };
@@ -144,6 +138,31 @@ std::optional<ServerContract::Member> memberIn(const QList<ServerContract::Membe
         }
     }
     return std::nullopt;
+}
+
+ServerContract::RequestStatus statusOf(TestWard& ward, Device& asker)
+{
+    return ServerTestSupport::wait<ServerContract::RequestStatus>(
+               std::bind(&ServerContract::ServerApi::myRequestStatus,
+                         &ward.server,
+                         sessionOf(ward, asker),
+                         ward.documentId,
+                         std::placeholders::_1))
+        .value.value();
+}
+
+/// Every head and download of the ward serves its stored header with a blob no
+/// device can open, as a broken server would; uploads still build on the stored
+/// version.
+void serveUnreadable(TestWard& ward, Device& reader)
+{
+    const ServerContract::Result<ServerContract::Snapshot> stored =
+        ServerTestSupport::wait<ServerContract::Snapshot>(std::bind(&ServerContract::ServerApi::download,
+                                                                    &ward.server,
+                                                                    sessionOf(ward, reader),
+                                                                    ward.documentId,
+                                                                    std::placeholders::_1));
+    ward.server.serveInstead(ward.documentId, stored.value->header, "garbage");
 }
 
 } // namespace
@@ -399,12 +418,10 @@ void DocumentManagerTest::accessChangesShowOnceAndStaySeenOnceDismissed()
     QVERIFY(app.manager.unseenHistory().isEmpty());
 
     // Alice grants Bob: the next head shows it, once.
-    const ServerContract::Session bobSession = sessionOf(ward, bob);
-    QVERIFY(ServerTestSupport::grantByRequest(ward.server,
-                                              ward.documentId,
-                                              sessionOf(ward, alice),
-                                              asTestDevice(bob.identity),
-                                              bobSession));
+    const std::optional<ServerContract::AccessRequest> request = askAndRead(ward, app, bob);
+    QVERIFY(request.has_value());
+    app.manager.grant(request.value());
+    ward.settle();
     app.manager.session()->checkServer();
     ward.settle();
     QCOMPARE(app.manager.unseenHistory().size(), 1);
@@ -521,9 +538,20 @@ void DocumentManagerTest::aGrantSealsTheDeviceThatAskedAndADeclineSaysSo()
 
     QCOMPARE(done.count(), 1);
     QVERIFY(memberIn(membersAt(ward, alice), bob.identity.member).has_value());
-    // Sealed through the open session, then settled off the record.
+
+    // The version Bob reads went up with the grant: version 2, on top of the share's
+    // version 1. His device downloads and opens it with no sealing step between.
+    QCOMPARE(ward.serverCopy(alice)->version, qint64(2));
+    QCOMPARE(ward.download(bob, ward.documentId), Downloaded);
+    std::unique_ptr<DocumentSession> bobSession = bob.open(ward.documentId);
+    QVERIFY(bobSession);
+    QVERIFY(bobSession->header().entryFor(bob.identity.fingerprint()).has_value());
+    QCOMPARE(bob.records.record(ward.documentId).baseVersion, std::optional<qint64>(2));
+
+    // Alice's open session took the grant's version in at the head check that
+    // follows a grant: her own publish of the server's version, now sealed to Bob.
     QVERIFY(app.manager.session()->header().entryFor(bob.identity.fingerprint()).has_value());
-    QVERIFY(app.settings->record(ward.documentId).granted.isEmpty());
+    QCOMPARE(app.settings->record(ward.documentId).baseVersion, std::optional<qint64>(2));
 
     const std::optional<ServerContract::AccessRequest> carols = askAndRead(ward, app, carol);
     QVERIFY(carols.has_value());
@@ -537,6 +565,64 @@ void DocumentManagerTest::aGrantSealsTheDeviceThatAskedAndADeclineSaysSo()
                                                                               std::placeholders::_1))
                  .value,
              std::optional<ServerContract::RequestStatus>(ServerContract::RequestStatus::Declined));
+}
+
+void DocumentManagerTest::aGrantRetriesOnceOnAConflict()
+{
+    TestWard ward;
+    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
+    Device& bob = ward.add(newIdentity("Bob", "Phone"));
+    App app(alice);
+    QVERIFY(shareFrom(ward, app));
+    QSignalSpy done(&app.manager, &DocumentManager::accessCallDone);
+    QSignalSpy failed(&app.manager, &DocumentManager::accessCallFailed);
+    const std::optional<ServerContract::AccessRequest> request = askAndRead(ward, app, bob);
+    QVERIFY(request.has_value());
+
+    // The first grant is refused as a conflict; the second, built again, lands.
+    ward.server.forceConflict(ward.documentId);
+    app.manager.grant(request.value());
+    ward.settle();
+
+    QCOMPARE(done.count(), 1);
+    QCOMPARE(failed.count(), 0);
+    QCOMPARE(statusOf(ward, bob), ServerContract::RequestStatus::Granted);
+    QCOMPARE(ward.serverCopy(alice)->version, qint64(2));
+    QCOMPARE(ward.download(bob, ward.documentId), Downloaded);
+    QVERIFY(bob.open(ward.documentId));
+}
+
+void DocumentManagerTest::aGrantOnAnUnreadableVersionIsBlocked()
+{
+    TestWard ward;
+    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
+    Device& bob = ward.add(newIdentity("Bob", "Phone"));
+    App app(alice);
+    QVERIFY(shareFrom(ward, app));
+    QSignalSpy done(&app.manager, &DocumentManager::accessCallDone);
+    QSignalSpy failed(&app.manager, &DocumentManager::accessCallFailed);
+    QSignalSpy blocked(&app.manager, &DocumentManager::grantBlocked);
+    const std::optional<ServerContract::AccessRequest> request = askAndRead(ward, app, bob);
+    QVERIFY(request.has_value());
+
+    serveUnreadable(ward, alice);
+    app.manager.grant(request.value());
+    ward.settle();
+
+    QCOMPARE(blocked.count(), 1);
+    QCOMPARE(blocked.first().first().toString(), QString("The document could not be decrypted."));
+    QCOMPARE(done.count(), 0);
+    QCOMPARE(failed.count(), 0);
+    QCOMPARE(statusOf(ward, bob), ServerContract::RequestStatus::Pending);
+    QVERIFY(!memberIn(membersAt(ward, alice), bob.identity.member).has_value());
+
+    // Served as stored again, the same request is granted.
+    ward.server.serveInstead(ward.documentId, QJsonObject(), QByteArray());
+    app.manager.grant(request.value());
+    ward.settle();
+    QCOMPARE(done.count(), 1);
+    QCOMPARE(blocked.count(), 1);
+    QCOMPARE(statusOf(ward, bob), ServerContract::RequestStatus::Granted);
 }
 
 void DocumentManagerTest::anAdminRemovesAndChangesRoles()

@@ -253,7 +253,19 @@ void HttpServerApiTest::requestsAreWrittenInTheWireFormat()
                           {"publicKey", base64(publicKey.bytes)}}));
     QCOMPARE(HttpWire::startLinkRequest(publicKey, "Phone"),
              (QJsonObject{{"publicKey", base64(publicKey.bytes)}, {"deviceName", "Phone"}}));
-    QCOMPARE(HttpWire::grantRequest(4), (QJsonObject{{"request", 4}}));
+    const Resealing resealing{upload.header.documentId, 7, upload};
+    QCOMPARE(HttpWire::grantRequest(4, resealing),
+             (QJsonObject{{"request", 4},
+                          {"baseVersion", 7},
+                          {"header", upload.header.toJson()},
+                          {"blob", base64(upload.blob)}}));
+    const QJsonObject resealed{{"documentId", upload.header.documentId},
+                               {"baseVersion", 7},
+                               {"header", upload.header.toJson()},
+                               {"blob", base64(upload.blob)}};
+    QCOMPARE(HttpWire::approveLinkRequest({resealing, resealing}),
+             (QJsonObject{{"resealings", QJsonArray{resealed, resealed}}}));
+    QCOMPARE(HttpWire::approveLinkRequest({}), (QJsonObject{{"resealings", QJsonArray()}}));
     QCOMPARE(HttpWire::setRoleRequest(Role::Admin), (QJsonObject{{"role", "admin"}}));
     QCOMPARE(HttpWire::setRoleRequest(Role::Member), (QJsonObject{{"role", "member"}}));
     QCOMPARE(HttpWire::advanceClockRequest(86400), (QJsonObject{{"seconds", 86400}}));
@@ -683,7 +695,8 @@ void HttpServerApiTest::everyCallTakesItsRoute()
     }
     else if (call == "approveLink")
     {
-        api.approveLink(session, code, std::bind(note));
+        body = HttpWire::approveLinkRequest({Resealing{documentId, 5, upload}});
+        api.approveLink(session, code, {Resealing{documentId, 5, upload}}, std::bind(note));
     }
     else if (call == "registerDocument")
     {
@@ -733,8 +746,8 @@ void HttpServerApiTest::everyCallTakesItsRoute()
     }
     else if (call == "grant")
     {
-        body = HttpWire::grantRequest(5);
-        api.grant(session, documentId, 5, std::bind(note));
+        body = HttpWire::grantRequest(5, Resealing{documentId, 5, upload});
+        api.grant(session, documentId, 5, Resealing{documentId, 5, upload}, std::bind(note));
     }
     else if (call == "removeMember")
     {

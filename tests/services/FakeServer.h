@@ -154,7 +154,8 @@ public:
     /// request the server acted on whose answer never came back.
     void loseReplies(bool lose) { m_loseReplies = lose; }
 
-    /// The next upload to this document is refused as a version conflict.
+    /// The next upload to this document - a PUT, or the resealing a grant or an
+    /// approval carries - is refused as a version conflict.
     void forceConflict(const QString& documentId);
 
     /// Another device holds the lease until the test says otherwise.

@@ -23,7 +23,6 @@
 #include "IncomingWardsTest.h"
 #include "ReconcileTest.h"
 #include "ResponseMergeTest.h"
-#include "SealingQueueTest.h"
 #include "SealingSetTest.h"
 #include "ServerConformanceTest.h"
 #include "ServerConnectionTest.h"
@@ -121,7 +120,6 @@ int main(int argc, char** argv)
     status |= run<ServerConnectionTest>(argc, argv);
     status |= run<DocumentFileTest>(argc, argv);
     status |= run<DocumentSessionTest>(argc, argv);
-    status |= run<SealingQueueTest>(argc, argv);
     status |= run<IncomingWardsTest>(argc, argv);
     status |= run<DeviceLinksTest>(argc, argv);
     status |= run<AppSettingsTest>(argc, argv);

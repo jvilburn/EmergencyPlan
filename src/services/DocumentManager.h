@@ -262,7 +262,8 @@ private:
     void onShared();
     void onRequests(const RequestsFetched& done, const ServerContract::Result<QList<ServerContract::AccessRequest>>& requests);
     void startGrant(const ServerContract::AccessRequest& request, bool mayRetry);
-    void onGrantBuilt(const ServerContract::AccessRequest& request,
+    void onGrantBuilt(const QString& documentId,
+                      const ServerContract::AccessRequest& request,
                       bool mayRetry,
                       const ServerVersion::Fetched& theirs,
                       const std::optional<ServerContract::Resealing>& built);

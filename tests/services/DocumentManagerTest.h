@@ -23,6 +23,8 @@ private slots:
     void aFetchThatFindsAccessLostSaysWhy();
     void shareAnnouncesTheWardAndOfflineSaysWhy();
     void aGrantSealsTheDeviceThatAskedAndADeclineSaysSo();
+    void aGrantRetriesOnceOnAConflict();
+    void aGrantOnAnUnreadableVersionIsBlocked();
     void anAdminRemovesAndChangesRoles();
     void theLastAdminLeavesThroughASuccessorAndTheWardGoes();
     void aMemberLeavesAndTheWardGoes();

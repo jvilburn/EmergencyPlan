@@ -51,9 +51,42 @@ Result<QString> startLink(ServerApi& server, const Session& session, const TestD
         std::bind(&ServerApi::startLink, &server, session, device.sealing.publicKey, device.deviceName, _1));
 }
 
-Result<Done> approveLink(ServerApi& server, const Session& session, const QString& code)
+Result<Done> approveLink(ServerApi& server,
+                         const Session& session,
+                         const QString& code,
+                         const QList<Resealing>& resealings)
 {
-    return wait<Done>(std::bind(&ServerApi::approveLink, &server, session, code, _1));
+    return wait<Done>(std::bind(&ServerApi::approveLink, &server, session, code, resealings, _1));
+}
+
+Result<Done> grant(ServerApi& server,
+                   const Session& session,
+                   const QString& documentId,
+                   qint64 index,
+                   const Resealing& resealing)
+{
+    return wait<Done>(std::bind(&ServerApi::grant, &server, session, documentId, index, resealing, _1));
+}
+
+Result<LinkState> linkOf(ServerApi& server, const Session& session, const QString& code)
+{
+    return wait<LinkState>(std::bind(&ServerApi::link, &server, session, code, _1));
+}
+
+/// Another ward of Alice's, registered with only her device.
+std::optional<SharedDocument> anotherWardOf(ServerApi& server, const SharedDocument& first)
+{
+    SharedDocument ward = first;
+    ward.id = newDocumentId();
+    ward.saveCounter = 1;
+    const Result<qint64> version = wait<qint64>(
+        std::bind(&ServerApi::registerDocument, &server, ward.aliceSession, uploadFor(ward.id, {ward.alice}, 1), _1));
+    if (!version.ok())
+    {
+        return std::nullopt;
+    }
+    ward.version = version.value.value();
+    return ward;
 }
 
 Result<Done> unlinkDevice(ServerApi& server, const Session& session, const Fingerprint& device)
@@ -237,7 +270,7 @@ void ServerConformanceTest::anApprovedLinkAddsTheDeviceToThePerson()
     QCOMPARE(pending.value->keys, phone.keys());
     QVERIFY(!pending.value->approvedAs.has_value());
 
-    QVERIFY(approveLink(server(), laptopSession.value(), code.value.value()).ok());
+    QVERIFY(approveLink(server(), laptopSession.value(), code.value.value(), {}).ok());
 
     // The new device learns who it is from the link.
     const Result<LinkState> approved =
@@ -253,7 +286,78 @@ void ServerConformanceTest::anApprovedLinkAddsTheDeviceToThePerson()
     QCOMPARE(linked.linkedBy, std::optional<Fingerprint>(laptop.fingerprint()));
 
     // A second approval of the same code changes nothing more.
-    QCOMPARE(approveLink(server(), laptopSession.value(), code.value.value()).error, ServerError::InvalidRequest);
+    QCOMPARE(approveLink(server(), laptopSession.value(), code.value.value(), {}).error, ServerError::InvalidRequest);
+}
+
+void ServerConformanceTest::anApprovalStoresEveryResealingOrNone()
+{
+    std::optional<SharedDocument> first = registerWard(server());
+    QVERIFY(first.has_value());
+    std::optional<SharedDocument> second = anotherWardOf(server(), first.value());
+    QVERIFY(second.has_value());
+    QCOMPARE(publish(server(), first.value(), first->aliceSession, {first->alice}), ServerError::None);
+    QCOMPARE(first->version, 2);
+    QCOMPARE(second->version, 1);
+
+    const TestDevice phone = newDeviceOf(first->alice, "Alice's phone");
+    const std::optional<Session> phoneSession = signIn(server(), phone);
+    QVERIFY(phoneSession.has_value());
+    const Result<QString> code = startLink(server(), phoneSession.value(), phone);
+    QVERIFY(code.ok());
+
+    // The first ward's resealing is built on version 1, one behind: neither lands,
+    // and the phone is not added.
+    Resealing stale = resealingOf(first.value(), {first->alice, phone});
+    stale.baseVersion = 1;
+    const Resealing current = resealingOf(second.value(), {second->alice, phone});
+    QCOMPARE(approveLink(server(), first->aliceSession, code.value.value(), {current, stale}).error,
+             ServerError::VersionConflict);
+    QCOMPARE(headOf(server(), first->aliceSession, first->id).value->version, 2);
+    QCOMPARE(headOf(server(), first->aliceSession, second->id).value->version, 1);
+    QVERIFY(!linkOf(server(), first->aliceSession, code.value.value()).value->approvedAs.has_value());
+    QCOMPARE(meOf(server(), first->aliceSession).value->person.devices.size(), 1);
+    QCOMPARE(headOf(server(), phoneSession.value(), second->id).error, ServerError::NotMember);
+
+    // Both built on the current versions: both land with the device.
+    const Resealing firstResealed = resealingOf(first.value(), {first->alice, phone});
+    const Resealing secondResealed = resealingOf(second.value(), {second->alice, phone});
+    QVERIFY(approveLink(server(), first->aliceSession, code.value.value(), {firstResealed, secondResealed}).ok());
+    QCOMPARE(meOf(server(), first->aliceSession).value->person.devices.size(), 2);
+
+    const Result<Snapshot> firstCopy = downloadOf(server(), phoneSession.value(), first->id);
+    QVERIFY(firstCopy.ok());
+    QCOMPARE(firstCopy.value->version, 3);
+    QCOMPARE(firstCopy.value->header, firstResealed.upload.header.toJson());
+    QCOMPARE(firstCopy.value->blob, firstResealed.upload.blob);
+    QCOMPARE(firstCopy.value->published.device, first->alice.fingerprint());
+
+    const Result<Snapshot> secondCopy = downloadOf(server(), phoneSession.value(), second->id);
+    QVERIFY(secondCopy.ok());
+    QCOMPARE(secondCopy.value->version, 2);
+    QCOMPARE(secondCopy.value->header, secondResealed.upload.header.toJson());
+    QCOMPARE(secondCopy.value->blob, secondResealed.upload.blob);
+}
+
+void ServerConformanceTest::anApprovalWithNoResealingsAddsTheDevice()
+{
+    std::optional<SharedDocument> ward = registerWard(server());
+    QVERIFY(ward.has_value());
+    const TestDevice phone = newDeviceOf(ward->alice, "Alice's phone");
+    const std::optional<Session> phoneSession = signIn(server(), phone);
+    QVERIFY(phoneSession.has_value());
+    const Result<QString> code = startLink(server(), phoneSession.value(), phone);
+    QVERIFY(code.ok());
+
+    QVERIFY(approveLink(server(), ward->aliceSession, code.value.value(), {}).ok());
+
+    // The device is the person's, and so on the ward's allow-list; the ward's version
+    // is left as it was.
+    QCOMPARE(meOf(server(), ward->aliceSession).value->person.devices.size(), 2);
+    const Result<Head> head = headOf(server(), phoneSession.value(), ward->id);
+    QVERIFY(head.ok());
+    QCOMPARE(head.value->version, 1);
+    QCOMPARE(allowListOf(head.value.value()).size(), 2);
+    QVERIFY(allowListOf(head.value.value()).contains(phone.fingerprint().toHex()));
 }
 
 void ServerConformanceTest::aLinkCodeExpires()
@@ -267,8 +371,8 @@ void ServerConformanceTest::aLinkCodeExpires()
 
     QVERIFY(wait<Done>(std::bind(&ServerApi::advanceClock, &server(), ElevenMinutes, _1)).ok());
     const std::optional<Session> laptopSession = signIn(server(), laptop);
-    QCOMPARE(approveLink(server(), laptopSession.value(), code.value.value()).error, ServerError::Expired);
-    QCOMPARE(approveLink(server(), laptopSession.value(), "NOSUCHCODE").error, ServerError::NotFound);
+    QCOMPARE(approveLink(server(), laptopSession.value(), code.value.value(), {}).error, ServerError::Expired);
+    QCOMPARE(approveLink(server(), laptopSession.value(), "NOSUCHCODE", {}).error, ServerError::NotFound);
 }
 
 void ServerConformanceTest::aDeviceWithAPersonCannotStartALink()
@@ -283,7 +387,7 @@ void ServerConformanceTest::unlinkingCutsTheDeviceOffEveryWard()
     std::optional<SharedDocument> ward = registerWard(server());
     QVERIFY(ward.has_value());
     const TestDevice phone = newDeviceOf(ward->alice, "Alice's phone");
-    const std::optional<Session> phoneSession = link(server(), phone, ward->aliceSession);
+    const std::optional<Session> phoneSession = link(server(), phone, ward->aliceSession, {});
     QVERIFY(phoneSession.has_value());
     QVERIFY(headOf(server(), phoneSession.value(), ward->id).ok());
 
@@ -315,7 +419,7 @@ void ServerConformanceTest::anUnlinkedDeviceMayStartOverAsANewPerson()
     const TestDevice laptop = newPerson("Alice");
     const std::optional<Session> laptopSession = join(server(), laptop);
     TestDevice phone = newDeviceOf(laptop, "Alice's phone");
-    const std::optional<Session> phoneSession = link(server(), phone, laptopSession.value());
+    const std::optional<Session> phoneSession = link(server(), phone, laptopSession.value(), {});
     QVERIFY(phoneSession.has_value());
     QVERIFY(unlinkDevice(server(), laptopSession.value(), phone.fingerprint()).ok());
 
@@ -394,7 +498,8 @@ void ServerConformanceTest::anUploadListsOnlyAllowListedDevices()
 
     QCOMPARE(publish(server(), ward.value(), ward->aliceSession, {ward->alice, stranger}), ServerError::NotOnAllowList);
 
-    // Fewer than the allow-list is fine: a grant is sealed by its approver later.
+    // Fewer than the allow-list is fine: a device a version lacks is sealed by the
+    // next write of whoever approved it.
     QCOMPARE(publish(server(), ward.value(), ward->aliceSession, {ward->alice}), ServerError::None);
     QCOMPARE(publish(server(), ward.value(), ward->bobSession, {ward->alice, ward->bob, ward->carol}),
              ServerError::None);
@@ -454,8 +559,12 @@ void ServerConformanceTest::aPersonJoinsOnlyThroughAGrantedRequest()
     QCOMPARE(requests.value->first().person.devices.size(), 1);
     QCOMPARE(requests.value->first().person.devices.first().keys, ward->bob.keys());
 
-    QVERIFY(wait<Done>(std::bind(
-        &ServerApi::grant, &server(), ward->aliceSession, ward->id, requests.value->first().index, _1)).ok());
+    QVERIFY(grant(server(),
+                  ward->aliceSession,
+                  ward->id,
+                  requests.value->first().index,
+                  resealingOf(ward.value(), {ward->alice, ward->bob}))
+                .ok());
     QCOMPARE(statusOf(server(), bob.value(), ward->id).value, std::optional<RequestStatus>(RequestStatus::Granted));
 
     const Result<Head> head = headOf(server(), bob.value(), ward->id);
@@ -464,12 +573,91 @@ void ServerConformanceTest::aPersonJoinsOnlyThroughAGrantedRequest()
     QVERIFY(requestsOf(server(), ward->aliceSession, ward->id).value->isEmpty());
 }
 
+void ServerConformanceTest::aGrantStoresTheResealedVersionWithTheMembership()
+{
+    std::optional<SharedDocument> ward = registerWard(server());
+    QVERIFY(ward.has_value());
+    QCOMPARE(ward->version, 1);
+    const std::optional<Session> bob = join(server(), ward->bob);
+    QVERIFY(requestAccess(server(), bob.value(), ward->id).ok());
+    const qint64 index = requestsOf(server(), ward->aliceSession, ward->id).value->first().index;
+
+    const Resealing resealing = resealingOf(ward.value(), {ward->alice, ward->bob});
+    QVERIFY(grant(server(), ward->aliceSession, ward->id, index, resealing).ok());
+
+    const Result<Head> head = headOf(server(), bob.value(), ward->id);
+    QVERIFY(head.ok());
+    QCOMPARE(head.value->version, 2);
+    QCOMPARE(head.value->published.name, QString("Alice"));
+    QCOMPARE(head.value->published.device, ward->alice.fingerprint());
+    QCOMPARE(memberOf(head.value.value(), ward->bob.member)->role, Role::Member);
+    QCOMPARE(statusOf(server(), bob.value(), ward->id).value, std::optional<RequestStatus>(RequestStatus::Granted));
+
+    const Result<Snapshot> snapshot = downloadOf(server(), bob.value(), ward->id);
+    QVERIFY(snapshot.ok());
+    QCOMPARE(snapshot.value->version, 2);
+    QCOMPARE(snapshot.value->header, resealing.upload.header.toJson());
+    QCOMPARE(snapshot.value->blob, resealing.upload.blob);
+}
+
+void ServerConformanceTest::aGrantOnAStaleVersionChangesNothing()
+{
+    std::optional<SharedDocument> ward = registerWard(server());
+    QVERIFY(ward.has_value());
+    QCOMPARE(publish(server(), ward.value(), ward->aliceSession, {ward->alice}), ServerError::None);
+    QCOMPARE(ward->version, 2);
+    const std::optional<Session> bob = join(server(), ward->bob);
+    QVERIFY(requestAccess(server(), bob.value(), ward->id).ok());
+    const qint64 index = requestsOf(server(), ward->aliceSession, ward->id).value->first().index;
+
+    Resealing stale = resealingOf(ward.value(), {ward->alice, ward->bob});
+    stale.baseVersion = 1;
+    QCOMPARE(grant(server(), ward->aliceSession, ward->id, index, stale).error, ServerError::VersionConflict);
+
+    QCOMPARE(statusOf(server(), bob.value(), ward->id).value, std::optional<RequestStatus>(RequestStatus::Pending));
+    QCOMPARE(requestsOf(server(), ward->aliceSession, ward->id).value->size(), 1);
+    QCOMPARE(headOf(server(), bob.value(), ward->id).error, ServerError::NotMember);
+    const Result<Head> head = headOf(server(), ward->aliceSession, ward->id);
+    QCOMPARE(head.value->version, 2);
+    QCOMPARE(head.value->members.size(), 1);
+
+    // The same request, granted on the current version, lands.
+    QVERIFY(grant(server(), ward->aliceSession, ward->id, index, resealingOf(ward.value(), {ward->alice, ward->bob}))
+                .ok());
+    QCOMPARE(headOf(server(), bob.value(), ward->id).value->version, 3);
+}
+
+void ServerConformanceTest::aGrantSealingToAStrangerIsRefused()
+{
+    std::optional<SharedDocument> ward = registerWard(server());
+    QVERIFY(ward.has_value());
+    const TestDevice stranger = newPerson("Stranger");
+    QVERIFY(join(server(), stranger).has_value());
+    const std::optional<Session> bob = join(server(), ward->bob);
+    QVERIFY(requestAccess(server(), bob.value(), ward->id).ok());
+    const qint64 index = requestsOf(server(), ward->aliceSession, ward->id).value->first().index;
+
+    const Resealing planted = resealingOf(ward.value(), {ward->alice, ward->bob, stranger});
+    QCOMPARE(grant(server(), ward->aliceSession, ward->id, index, planted).error, ServerError::NotOnAllowList);
+
+    QCOMPARE(statusOf(server(), bob.value(), ward->id).value, std::optional<RequestStatus>(RequestStatus::Pending));
+    const Result<Head> head = headOf(server(), ward->aliceSession, ward->id);
+    QCOMPARE(head.value->version, 1);
+    QCOMPARE(head.value->members.size(), 1);
+    QCOMPARE(head.value->history, 0);
+
+    // Without the stranger, the same grant lands.
+    QVERIFY(grant(server(), ward->aliceSession, ward->id, index, resealingOf(ward.value(), {ward->alice, ward->bob}))
+                .ok());
+    QCOMPARE(headOf(server(), ward->aliceSession, ward->id).value->version, 2);
+}
+
 void ServerConformanceTest::everyDeviceOfAMemberIsAllowListed()
 {
     std::optional<SharedDocument> ward = wardOfThree(server());
     QVERIFY(ward.has_value());
     const TestDevice phone = newDeviceOf(ward->bob, "Bob's phone");
-    const std::optional<Session> phoneSession = link(server(), phone, ward->bobSession);
+    const std::optional<Session> phoneSession = link(server(), phone, ward->bobSession, {});
     QVERIFY(phoneSession.has_value());
 
     QVERIFY(headOf(server(), phoneSession.value(), ward->id).ok());
@@ -485,7 +673,7 @@ void ServerConformanceTest::onlyAnAdminGrantsRemovesOrChangesRoles()
     QVERIFY(requestAccess(server(), daveSession.value(), ward->id).ok());
     const qint64 index = requestsOf(server(), ward->aliceSession, ward->id).value->first().index;
 
-    QCOMPARE(wait<Done>(std::bind(&ServerApi::grant, &server(), ward->bobSession, ward->id, index, _1)).error,
+    QCOMPARE(grant(server(), ward->bobSession, ward->id, index, resealingOf(ward.value(), {ward->bob, dave})).error,
              ServerError::NotAdmin);
     QCOMPARE(wait<Done>(std::bind(&ServerApi::declineRequest, &server(), ward->bobSession, ward->id, index, _1)).error,
              ServerError::NotAdmin);
@@ -494,7 +682,7 @@ void ServerConformanceTest::onlyAnAdminGrantsRemovesOrChangesRoles()
 
     // Once Alice makes Bob an admin, he may.
     QVERIFY(setRole(server(), ward->aliceSession, ward->id, ward->bob.member, Role::Admin).ok());
-    QVERIFY(wait<Done>(std::bind(&ServerApi::grant, &server(), ward->bobSession, ward->id, index, _1)).ok());
+    QVERIFY(grant(server(), ward->bobSession, ward->id, index, resealingOf(ward.value(), {ward->bob, dave})).ok());
     QVERIFY(headOf(server(), daveSession.value(), ward->id).ok());
 }
 
@@ -566,7 +754,7 @@ void ServerConformanceTest::theLastPersonLeavingEndsTheWard()
     std::optional<SharedDocument> ward = registerWard(server());
     QVERIFY(ward.has_value());
     const TestDevice phone = newDeviceOf(ward->alice, "Alice's phone");
-    const std::optional<Session> phoneSession = link(server(), phone, ward->aliceSession);
+    const std::optional<Session> phoneSession = link(server(), phone, ward->aliceSession, {});
     QVERIFY(phoneSession.has_value());
 
     QVERIFY(removeMember(server(), ward->aliceSession, ward->id, ward->alice.member).ok());
@@ -587,7 +775,7 @@ void ServerConformanceTest::aRemovedPersonMayBeGrantedAgain()
     QVERIFY(removeMember(server(), ward->aliceSession, ward->id, ward->bob.member).ok());
     QCOMPARE(headOf(server(), ward->bobSession, ward->id).error, ServerError::AccessLost);
 
-    QVERIFY(grantByRequest(server(), ward->id, ward->aliceSession, ward->bob, ward->bobSession));
+    QVERIFY(grantInto(server(), ward.value(), ward->bob, ward->bobSession, {ward->alice, ward->bob, ward->carol}));
     QVERIFY(headOf(server(), ward->bobSession, ward->id).ok());
 }
 

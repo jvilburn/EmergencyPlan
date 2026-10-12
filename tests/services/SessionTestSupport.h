@@ -4,7 +4,6 @@
 #include "DocumentRecords.h"
 #include "DocumentSession.h"
 #include "FakeServer.h"
-#include "SealingQueue.h"
 #include "ServerConnection.h"
 #include "ServerTestSupport.h"
 #include "SessionTimers.h"
@@ -17,8 +16,7 @@
 #include <memory>
 #include <vector>
 
-/// Running devices of one ward against one FakeServer, for the session and queue
-/// suites.
+/// Running devices of one ward against one FakeServer, for the session suites.
 ///
 /// Everything is in memory or in a temporary folder, every timer fires only when
 /// a test fires it, and every reply arrives only when a test lets it.
@@ -81,10 +79,9 @@ public:
     ServerConnection connection;
     QTemporaryDir folder;
 
-    /// The timers of the session or queue made last, which own them. Valid while
-    /// that session or queue lives.
+    /// The timers of the session made last, which owns them. Valid while that
+    /// session lives.
     ManualTimers* timers = nullptr;
-    ManualTimers* queueTimers = nullptr;
 
     DocumentSession::Context context();
     DocumentPaths paths(const QString& documentId) const;
@@ -92,7 +89,6 @@ public:
     std::unique_ptr<DocumentSession> create(const QString& documentId);
     std::unique_ptr<DocumentSession> open(const QString& documentId);
     std::unique_ptr<DocumentSession> open(const QString& documentId, LoadFailure& failure);
-    std::unique_ptr<SealingQueue> queue();
 };
 
 /// A ward's devices over one FakeServer.
@@ -110,22 +106,38 @@ public:
     /// response recording both, then shares it. documentId is set.
     std::unique_ptr<DocumentSession> createShared(Device& owner);
 
-    /// Asks for access as newcomer, has admin grant it and seal it in through
-    /// admin's queue, and downloads the ward to newcomer.
+    /// Asks for access as newcomer and has admin grant it as the app does: the
+    /// ward's current version, resealed on admin to the device that asked, goes up
+    /// with the grant. Then downloads the ward to newcomer.
     bool grant(Device& admin, Device& newcomer);
 
-    /// Links newDevice to existing's person, as existing's approval does: the server
-    /// adds it, and existing remembers it to seal.
+    /// Links newDevice to existing's person as existing's approval does: every ward
+    /// existing holds goes up with the approval resealed to newDevice, and existing
+    /// remembers newDevice, so its later writes seal to it too.
     bool link(Device& newDevice, Device& existing);
 
-    /// Runs a fresh queue on device over every ward it holds, until it settles.
-    void seal(Device& device);
+    /// Links newDevice to existing's person as an approval does that could reseal
+    /// none of existing's wards: the server adds it, and existing remembers it, so
+    /// existing's next write of each ward seals to it.
+    bool linkCarryingNothing(Device& newDevice, Device& existing);
+
+    /// The server's current version of wardId resealed on holder to admit
+    /// admitted, as a grant or an approval carries it; nullopt when it cannot be
+    /// built there.
+    std::optional<ServerContract::Resealing> resealing(Device& holder,
+                                                       const QString& wardId,
+                                                       const DeviceKeys& admitted);
+
+    /// Fetches wardId to device as the app does for a ward it lacks.
+    std::optional<DocumentSession::Download> download(Device& device, const QString& wardId);
 
     /// A server session for device, signed in and registered.
     std::optional<ServerContract::Session> sessionFor(Device& device);
 
-    /// The server's current version of the ward, as a device of it downloads it.
+    /// The server's current version of the ward, or of wardId, as a device of
+    /// it downloads it.
     std::optional<ServerVersion::Fetched> serverCopy(Device& reader);
+    std::optional<ServerVersion::Fetched> serverCopy(Device& reader, const QString& wardId);
 
     QString documentId;
     FamilyId adams;

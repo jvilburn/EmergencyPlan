@@ -15,10 +15,10 @@
 #include <functional>
 #include <optional>
 
-/// Taking in and writing server versions, shared by DocumentSession and
-/// SealingQueue: the base copy on disk, the sealing-set rule applied to a version
-/// about to be written, and fetching the server's version and validating it before
-/// anything local changes.
+/// Taking in and writing server versions, shared by DocumentSession and by the
+/// grants and approvals that carry a resealed version: the base copy on disk, the
+/// sealing-set rule applied to a version about to be written, and fetching the
+/// server's version and validating it before anything local changes.
 namespace ServerVersion
 {
 
@@ -100,6 +100,7 @@ struct Fetched
 
     Outcome outcome = Outcome::ServerFault;
     QString reason;                         ///< ServerFault: why, for the sync indicator
+    ServerContract::ServerError error = ServerContract::ServerError::None;   ///< CallFailed: the server's answer
 
     // Accepted
     qint64 version = 0;
@@ -123,13 +124,15 @@ using ResealingBuilt =
     std::function<void(const Fetched& theirs, const std::optional<ServerContract::Resealing>& built)>;
 
 /// Fetches the server's head and current version of documentId, validates it against
-/// trusted as fetch does, applies the sealing-set rule with approved, encrypts, and
-/// hands back what grant or approveLink sends. A head that does not list this device
-/// is a ServerFault: applying it would seal this device out. Replies come only while
-/// receiver lives.
+/// trusted as fetch does, applies the sealing-set rule with this device's linked
+/// devices and admitted approved, encrypts, and hands back what grant or approveLink
+/// sends. admitted counts as allow-listed: the call the resealing goes up with puts it
+/// there in the same step. A head that does not list this device is a ServerFault:
+/// applying it would seal this device out. Replies come only while receiver lives.
 void buildResealing(const Reconcile::Self& self,
                     const QList<DataKey>& trusted,
-                    const QList<DeviceKeys>& approved,
+                    const QList<DeviceKeys>& linked,
+                    const DeviceKeys& admitted,
                     ServerConnection& server,
                     const QString& documentId,
                     QObject* receiver,

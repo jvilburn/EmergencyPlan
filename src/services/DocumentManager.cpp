@@ -609,23 +609,29 @@ void DocumentManager::grant(const ServerContract::AccessRequest& request)
 void DocumentManager::startGrant(const ServerContract::AccessRequest& request, bool mayRetry)
 {
     const QString documentId = m_session->documentId();
-    const QList<DeviceKeys> approved =
-        m_records->linkedDevices() + QList<DeviceKeys>{request.person.devices.first().keys};
     ServerVersion::buildResealing(
         m_identity.self(),
         ServerVersion::trustedKeys(documentId, m_library->pathsFor(documentId), *m_records, m_identity.self()),
-        approved,
+        m_records->linkedDevices(),
+        request.person.devices.first().keys,
         *m_server,
         documentId,
         this,
-        std::bind(&DocumentManager::onGrantBuilt, this, request, mayRetry, _1, _2));
+        std::bind(&DocumentManager::onGrantBuilt, this, documentId, request, mayRetry, _1, _2));
 }
 
-void DocumentManager::onGrantBuilt(const ServerContract::AccessRequest& request,
+void DocumentManager::onGrantBuilt(const QString& documentId,
+                                   const ServerContract::AccessRequest& request,
                                    bool mayRetry,
                                    const ServerVersion::Fetched& theirs,
                                    const std::optional<ServerContract::Resealing>& built)
 {
+    // The ward may have closed while the version was fetched.
+    if (!m_session || m_session->documentId() != documentId)
+    {
+        return;
+    }
+
     switch (theirs.outcome)
     {
     case ServerVersion::Fetched::Outcome::Accepted:
@@ -634,7 +640,7 @@ void DocumentManager::onGrantBuilt(const ServerContract::AccessRequest& request,
         emit accessCallFailed(ServerContract::ServerError::AccessLost);
         return;
     case ServerVersion::Fetched::Outcome::CallFailed:
-        emit accessCallFailed(ServerContract::ServerError::Unreachable);
+        emit accessCallFailed(theirs.error);
         return;
     case ServerVersion::Fetched::Outcome::NeedsNewerVersion:
         emit grantBlocked(tr("This ward's current version was written by a newer Ward Planning."));
@@ -644,11 +650,6 @@ void DocumentManager::onGrantBuilt(const ServerContract::AccessRequest& request,
         return;
     }
 
-    // The ward may have closed while the version was fetched.
-    if (!m_session || m_session->documentId() != built->documentId)
-    {
-        return;
-    }
     m_server->grant(built->documentId,
                     request.index,
                     built.value(),

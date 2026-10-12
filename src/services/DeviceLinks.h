@@ -59,6 +59,7 @@ private:
         bool mayRetry = true;
         int building = 0;
         QList<ServerContract::Resealing> built;
+        ServerContract::ServerError unanswered = ServerContract::ServerError::None;   ///< a ward's call that got no answer
     };
 
     void onRead(const QString& code, const ServerContract::Result<ServerContract::LinkState>& state);

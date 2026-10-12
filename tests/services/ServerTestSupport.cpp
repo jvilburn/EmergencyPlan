@@ -132,7 +132,8 @@ bool grantByRequest(ServerApi& server,
                     const QString& documentId,
                     const Session& admin,
                     const TestDevice& device,
-                    const Session& deviceSession)
+                    const Session& deviceSession,
+                    const Resealing& resealing)
 {
     if (!wait<Done>(std::bind(&ServerApi::requestAccess, &server, deviceSession, documentId, _1)).ok())
     {
@@ -149,10 +150,31 @@ bool grantByRequest(ServerApi& server,
     {
         if (request.person.member == device.member)
         {
-            return wait<Done>(std::bind(&ServerApi::grant, &server, admin, documentId, request.index, _1)).ok();
+            return wait<Done>(std::bind(&ServerApi::grant, &server, admin, documentId, request.index, resealing, _1))
+                .ok();
         }
     }
     return false;
+}
+
+Resealing resealingOf(SharedDocument& ward, const QList<TestDevice>& devices)
+{
+    ++ward.saveCounter;
+    return Resealing{ward.id, ward.version, uploadFor(ward.id, devices, ward.saveCounter)};
+}
+
+bool grantInto(ServerApi& server,
+               SharedDocument& ward,
+               const TestDevice& device,
+               const Session& deviceSession,
+               const QList<TestDevice>& sealedTo)
+{
+    if (!grantByRequest(server, ward.id, ward.aliceSession, device, deviceSession, resealingOf(ward, sealedTo)))
+    {
+        return false;
+    }
+    ++ward.version;
+    return true;
 }
 
 std::optional<SharedDocument> wardOfThree(ServerApi& server)
@@ -166,8 +188,8 @@ std::optional<SharedDocument> wardOfThree(ServerApi& server)
     const std::optional<Session> bob = join(server, ward->bob);
     const std::optional<Session> carol = join(server, ward->carol);
     if (!bob.has_value() || !carol.has_value()
-        || !grantByRequest(server, ward->id, ward->aliceSession, ward->bob, bob.value())
-        || !grantByRequest(server, ward->id, ward->aliceSession, ward->carol, carol.value()))
+        || !grantInto(server, ward.value(), ward->bob, bob.value(), {ward->alice, ward->bob})
+        || !grantInto(server, ward.value(), ward->carol, carol.value(), {ward->alice, ward->bob, ward->carol}))
     {
         return std::nullopt;
     }
@@ -176,7 +198,10 @@ std::optional<SharedDocument> wardOfThree(ServerApi& server)
     return ward;
 }
 
-std::optional<Session> link(ServerApi& server, const TestDevice& newDevice, const Session& existing)
+std::optional<Session> link(ServerApi& server,
+                            const TestDevice& newDevice,
+                            const Session& existing,
+                            const QList<Resealing>& resealings)
 {
     const std::optional<Session> session = signIn(server, newDevice);
     if (!session.has_value())
@@ -187,7 +212,7 @@ std::optional<Session> link(ServerApi& server, const TestDevice& newDevice, cons
     const Result<QString> code = wait<QString>(
         std::bind(&ServerApi::startLink, &server, session.value(), newDevice.sealing.publicKey, newDevice.deviceName, _1));
     if (!code.ok()
-        || !wait<Done>(std::bind(&ServerApi::approveLink, &server, existing, code.value.value(), _1)).ok())
+        || !wait<Done>(std::bind(&ServerApi::approveLink, &server, existing, code.value.value(), resealings, _1)).ok())
     {
         return std::nullopt;
     }

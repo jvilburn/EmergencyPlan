@@ -52,8 +52,15 @@ void keepDownload(std::optional<DocumentSession::Download>& out, DocumentSession
     out = download;
 }
 
-/// Timers for a session or queue to own, with a pointer kept for the test to
-/// fire them.
+void keepResealing(std::optional<Resealing>& out,
+                   const ServerVersion::Fetched& theirs,
+                   const std::optional<Resealing>& built)
+{
+    Q_UNUSED(theirs);
+    out = built;
+}
+
+/// Timers for a session to own, with a pointer kept for the test to fire them.
 std::unique_ptr<SessionTimers> keptTimers(SessionTestSupport::ManualTimers*& kept)
 {
     std::unique_ptr<SessionTestSupport::ManualTimers> timers = std::make_unique<SessionTestSupport::ManualTimers>();
@@ -182,16 +189,6 @@ std::unique_ptr<DocumentSession> Device::open(const QString& documentId, LoadFai
     return DocumentSession::open(context(), keptTimers(timers), documentId, paths(documentId), failure, nullptr);
 }
 
-std::unique_ptr<SealingQueue> Device::queue()
-{
-    return std::make_unique<SealingQueue>(identity,
-                                          records,
-                                          connection,
-                                          keptTimers(queueTimers),
-                                          std::bind(&Device::paths, this, _1),
-                                          nullptr);
-}
-
 // --- TestWard --------------------------------------------------------------------
 
 Device& TestWard::add(const DeviceIdentity& identity)
@@ -254,40 +251,43 @@ std::optional<Session> TestWard::sessionFor(Device& device)
 
 bool TestWard::grant(Device& admin, Device& newcomer)
 {
+    const std::optional<Resealing> built = resealing(admin, documentId, newcomer.identity.keys());
     const std::optional<Session> adminSession = sessionFor(admin);
     const std::optional<Session> newcomerSession = sessionFor(newcomer);
-    if (!adminSession.has_value() || !newcomerSession.has_value()
+    if (!built.has_value() || !adminSession.has_value() || !newcomerSession.has_value()
         || !ServerTestSupport::grantByRequest(server,
                                               documentId,
                                               adminSession.value(),
                                               asTestDevice(newcomer.identity),
-                                              newcomerSession.value()))
+                                              newcomerSession.value(),
+                                              built.value()))
     {
         return false;
     }
-
-    // As the app does on a grant: the device that asked is owed a seal.
-    DocumentRecord record = admin.records.record(documentId);
-    record.granted.append(newcomer.identity.keys());
-    admin.records.setRecord(documentId, record);
-    seal(admin);
-
-    QObject receiver;
-    std::optional<DocumentSession::Download> downloaded;
-    DocumentSession::download(newcomer.context(),
-                              documentId,
-                              newcomer.paths(documentId),
-                              &receiver,
-                              std::bind(&keepDownload, std::ref(downloaded), _1));
-    settle();
-    return downloaded == DocumentSession::Download::Done;
+    return download(newcomer, documentId) == DocumentSession::Download::Done;
 }
 
 bool TestWard::link(Device& newDevice, Device& existing)
 {
+    QList<Resealing> resealings;
+    for (const QString& held : existing.records.documentIds())
+    {
+        if (!existing.records.record(held).baseVersion.has_value())
+        {
+            continue;
+        }
+        const std::optional<Resealing> built = resealing(existing, held, newDevice.identity.keys());
+        if (!built.has_value())
+        {
+            return false;
+        }
+        resealings.append(built.value());
+    }
+
     const std::optional<Session> existingSession = sessionFor(existing);
     if (!existingSession.has_value()
-        || !ServerTestSupport::link(server, asTestDevice(newDevice.identity), existingSession.value()).has_value())
+        || !ServerTestSupport::link(server, asTestDevice(newDevice.identity), existingSession.value(), resealings)
+                .has_value())
     {
         return false;
     }
@@ -298,14 +298,57 @@ bool TestWard::link(Device& newDevice, Device& existing)
     return true;
 }
 
-void TestWard::seal(Device& device)
+bool TestWard::linkCarryingNothing(Device& newDevice, Device& existing)
 {
-    std::unique_ptr<SealingQueue> queue = device.queue();
-    queue->sealEverywhere();
+    const std::optional<Session> existingSession = sessionFor(existing);
+    if (!existingSession.has_value()
+        || !ServerTestSupport::link(server, asTestDevice(newDevice.identity), existingSession.value(), {}).has_value())
+    {
+        return false;
+    }
+
+    QList<DeviceKeys> linked = existing.records.linkedDevices();
+    linked.append(newDevice.identity.keys());
+    existing.records.setLinkedDevices(linked);
+    return true;
+}
+
+std::optional<Resealing> TestWard::resealing(Device& holder, const QString& wardId, const DeviceKeys& admitted)
+{
+    QObject receiver;
+    std::optional<Resealing> built;
+    ServerVersion::buildResealing(
+        holder.identity.self(),
+        ServerVersion::trustedKeys(wardId, holder.paths(wardId), holder.records, holder.identity.self()),
+        holder.records.linkedDevices(),
+        admitted,
+        holder.connection,
+        wardId,
+        &receiver,
+        std::bind(&keepResealing, std::ref(built), _1, _2));
     settle();
+    return built;
+}
+
+std::optional<DocumentSession::Download> TestWard::download(Device& device, const QString& wardId)
+{
+    QObject receiver;
+    std::optional<DocumentSession::Download> downloaded;
+    DocumentSession::download(device.context(),
+                              wardId,
+                              device.paths(wardId),
+                              &receiver,
+                              std::bind(&keepDownload, std::ref(downloaded), _1));
+    settle();
+    return downloaded;
 }
 
 std::optional<ServerVersion::Fetched> TestWard::serverCopy(Device& reader)
+{
+    return serverCopy(reader, documentId);
+}
+
+std::optional<ServerVersion::Fetched> TestWard::serverCopy(Device& reader, const QString& wardId)
 {
     // Fetched against no trusted key, so reading the server's copy changes nothing
     // the device keeps and takes the version as it stands.
@@ -314,7 +357,7 @@ std::optional<ServerVersion::Fetched> TestWard::serverCopy(Device& reader)
     ServerVersion::fetch(reader.identity.self(),
                          {},
                          reader.connection,
-                         documentId,
+                         wardId,
                          &receiver,
                          std::bind(&keepFetched, std::ref(fetched), _1));
     settle();

@@ -201,8 +201,8 @@ public:
     bool resolve(Resolution resolution, QString* errorMessage);
 
     /// The server says this device lost access: the files and record go, and the
-    /// session does nothing further. The session reaches it itself, and the sealing
-    /// queue reaches it for an open ward.
+    /// session does nothing further. The session reaches it itself, and
+    /// DocumentManager reaches it when this person leaves.
     void finishLost(const ServerContract::LostAccess& lost);
 
 signals:
