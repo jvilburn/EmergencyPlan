@@ -27,6 +27,7 @@
 #include "ServerConformanceTest.h"
 #include "ServerConnectionTest.h"
 #include "SmokeTest.h"
+#include "UpdateCheckerTest.h"
 #include "WardDirectoryImportTest.h"
 
 #include <QApplication>
@@ -129,6 +130,7 @@ int main(int argc, char** argv)
     status |= run<DocumentManagerTest>(argc, argv);
     status |= run<FileOpenRouterTest>(argc, argv);
     status |= run<HttpServerApiTest>(argc, argv);
+    status |= run<UpdateCheckerTest>(argc, argv);
 
     return status;
 }

@@ -9,6 +9,7 @@
 #include "WardNotices.h"
 #include "ConflictDialog.h"
 #include "SyncStatusWidget.h"
+#include "UpdateChecker.h"
 #include "EmergencyBanner.h"
 #include "WardListView.h"
 #include "MinisteringView.h"
@@ -61,12 +62,14 @@ MainWindow::MainWindow(AppSettings& settings,
                        DocumentLibrary& library,
                        IncomingWards& incoming,
                        DeviceLinks& links,
+                       UpdateChecker& updates,
                        QWidget* parent)
     : QMainWindow(parent)
     , m_settings(settings)
     , m_library(library)
     , m_requests(incoming)
     , m_links(links)
+    , m_updates(updates)
 {
     setupUi();
     setupMenus();
@@ -167,6 +170,7 @@ void MainWindow::setupUi()
 
     // The ward's standing notices, under the emergency and copy banners.
     m_wardNotices = new WardNotices(centralContainer);
+    m_wardNotices->setUpdateChecker(&m_updates);
     centralLayout->addWidget(m_wardNotices);
     connect(m_wardNotices, &WardNotices::accessRequested, this, &MainWindow::onShowAccess);
     connect(m_wardNotices, &WardNotices::linkRequested, this, &MainWindow::onLinkDevice);
@@ -232,7 +236,9 @@ void MainWindow::setupUi()
     m_geocodingProgress->setTextVisible(false);
     statusBar()->addPermanentWidget(m_geocodingLabel);
     statusBar()->addPermanentWidget(m_geocodingProgress);
-    statusBar()->addPermanentWidget(new SyncStatusWidget(this));
+    SyncStatusWidget* syncStatus = new SyncStatusWidget(this);
+    syncStatus->setUpdateChecker(&m_updates);
+    statusBar()->addPermanentWidget(syncStatus);
     m_geocodingLabel->hide();
     m_geocodingProgress->hide();
 }

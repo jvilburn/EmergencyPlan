@@ -4,6 +4,9 @@
 #include <QFileOpenEvent>
 #include <QIcon>
 #include <QMessageBox>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
 #include <QStandardPaths>
 #include "AppSettings.h"
 #include "DeviceLinks.h"
@@ -21,6 +24,7 @@
 #include "ServerConnection.h"
 #include "SingleInstance.h"
 #include "TileService.h"
+#include "UpdateChecker.h"
 
 #include <QPushButton>
 
@@ -144,6 +148,18 @@ void startOver(const QString& identityPath, AppSettings& settings)
     QApplication::quit();
 }
 
+/// One GET for the release check. GitHub answers only a request that names its agent.
+void fetchRelease(QNetworkAccessManager& network, const QUrl& url, UpdateChecker::Fetched done)
+{
+    QNetworkRequest request(url);
+    request.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("WardPlanning/") + WARD_PLANNING_VERSION);
+    QNetworkReply* reply = network.get(request);
+    QObject::connect(reply, &QNetworkReply::finished, reply, [reply, done]() {
+        done(reply->error() == QNetworkReply::NoError, reply->readAll());
+        reply->deleteLater();
+    });
+}
+
 /// Whether the arguments after the program's own name a Ward Planning file.
 bool namesADocument(const QStringList& arguments)
 {
@@ -254,7 +270,13 @@ int main(int argc, char *argv[])
                       server,
                       std::bind(&DocumentLibrary::pathsFor, &library, std::placeholders::_1),
                       nullptr);
-    MainWindow window(*settings, library, incoming, links, nullptr);
+    QNetworkAccessManager releaseNetwork;
+    UpdateChecker updates(*settings,
+                          WARD_PLANNING_VERSION,
+                          std::bind(&fetchRelease, std::ref(releaseNetwork), std::placeholders::_1, std::placeholders::_2),
+                          nullptr);
+    QObject::connect(&documentManager, &DocumentManager::requiresUpdateChanged, &updates, std::bind(&UpdateChecker::check, &updates, true));
+    MainWindow window(*settings, library, incoming, links, updates, nullptr);
     QObject::connect(&window,
                      &MainWindow::startOverRequested,
                      &app,
@@ -283,8 +305,10 @@ int main(int argc, char *argv[])
     QObject::connect(&instance, &SingleInstance::argumentsReceived, &window, &MainWindow::handleArguments);
 
     // Every ward the server lists for this person and the library lacks: after a
-    // reinstall, cleared app data, a grant, or a link.
+    // reinstall, cleared app data, a grant, or a link. And whether a newer Ward
+    // Planning is out.
     incoming.checkNow();
+    updates.check(false);
 
     return app.exec();
 }

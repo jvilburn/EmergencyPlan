@@ -1,6 +1,7 @@
 #include "SyncStatusWidget.h"
 
 #include "DocumentManager.h"
+#include "UpdateChecker.h"
 
 SyncStatusWidget::SyncStatusWidget(QWidget* parent)
     : QLabel(parent)
@@ -15,6 +16,13 @@ SyncStatusWidget::SyncStatusWidget(QWidget* parent)
     connect(manager, &DocumentManager::requiresUpdateChanged, this, &SyncStatusWidget::refresh);
     connect(manager, &DocumentManager::conflictRaised, this, &SyncStatusWidget::refresh);
     connect(manager, &DocumentManager::conflictSettled, this, &SyncStatusWidget::refresh);
+    refresh();
+}
+
+void SyncStatusWidget::setUpdateChecker(UpdateChecker* updates)
+{
+    m_updates = updates;
+    connect(updates, &UpdateChecker::changed, this, &SyncStatusWidget::refresh);
     refresh();
 }
 
@@ -58,6 +66,10 @@ void SyncStatusWidget::refresh()
         case SyncState::Unreachable:
             text = tr("Server unreachable");
             detail = tr("Your changes are saved on this device and upload when the server can be reached.");
+            if (m_updates != nullptr && !m_updates->newerVersion().isEmpty())
+            {
+                text = tr("Server unreachable - a newer version of Ward Planning is available");
+            }
             break;
         case SyncState::ServerFault:
             text = tr("Could not check the server's copy");

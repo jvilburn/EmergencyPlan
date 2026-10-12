@@ -7,10 +7,12 @@
 #include <QWidget>
 
 class QVBoxLayout;
+class UpdateChecker;
 
-/// The open ward's standing notices, between the copy banner and the emergency
-/// banner: each persistent, never a per-save interruption.
+/// The standing notices, between the copy banner and the emergency banner: each
+/// persistent, never a per-save interruption.
 ///
+/// - A newer version of Ward Planning is published, with or without a ward open.
 /// - The ward was saved by a newer version of Ward Planning, until it is updated.
 /// - Only you can open this ward: lose your devices and it cannot be recovered.
 /// - With one device, a gentler suggestion to link a second.
@@ -27,6 +29,9 @@ class WardNotices : public QWidget
 public:
     explicit WardNotices(QWidget* parent);
 
+    /// Where the update notice reads from; without one there is no update notice.
+    void setUpdateChecker(UpdateChecker* updates);
+
 signals:
     /// The notice's own button: add someone, make someone an admin.
     void accessRequested();
@@ -37,6 +42,7 @@ signals:
 private:
     enum class Kind
     {
+        UpdateAvailable,
         OnlyKeyHolder,
         OneDevice,
         OnlyAdmin,
@@ -66,6 +72,7 @@ private:
     void dismiss(Kind kind);
 
     QVBoxLayout* m_layout = nullptr;
+    UpdateChecker* m_updates = nullptr;
     QHash<QString, QSet<Kind>> m_dismissed;     ///< by document id
     QList<Notice> m_shown;
 };

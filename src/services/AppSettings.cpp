@@ -31,6 +31,10 @@ const QLatin1String KeyCopyDocumentId("documentId");
 const QLatin1String KeyLastWard("lastWard");
 const QLatin1String KeyRequestedWards("requestedWards");
 const QLatin1String KeyDeveloperExport("developerExport");
+const QLatin1String KeyUpdateCheck("updateCheck");
+const QLatin1String KeyCheckedAt("checkedAt");
+const QLatin1String KeyLatestVersion("latestVersion");
+const QLatin1String KeyDismissedUpdate("dismissedUpdate");
 const QLatin1String KeyServerAddress("serverAddress");
 const QLatin1String KeyMap("map");
 const QLatin1String KeyDefaultLat("defaultLat");
@@ -161,6 +165,18 @@ void AppSettings::setDeveloperExport(bool enabled)
     save();
 }
 
+void AppSettings::setUpdateCheck(const UpdateCheck& check)
+{
+    m_updateCheck = check;
+    save();
+}
+
+void AppSettings::setDismissedUpdate(const QString& version)
+{
+    m_dismissedUpdate = version;
+    save();
+}
+
 QString AppSettings::serverAddress() const
 {
     return m_serverAddressOverride.isEmpty() ? DefaultServerAddress : m_serverAddressOverride;
@@ -199,14 +215,32 @@ bool AppSettings::read(const QByteArray& bytes)
                                   KeyLastWard,
                                   KeyRequestedWards,
                                   KeyDeveloperExport,
+                                  KeyUpdateCheck,
+                                  KeyDismissedUpdate,
                                   KeyServerAddress,
                                   KeyMap})
         || !StrictJson::readObject(json, KeyRecords, records)
         || !StrictJson::readObject(json, KeyWards, wards)
         || !StrictJson::readOptionalNonEmptyString(json, KeyLastWard, m_lastWardId)
+        || !StrictJson::readOptionalNonEmptyString(json, KeyDismissedUpdate, m_dismissedUpdate)
         || !StrictJson::readOptionalNonEmptyString(json, KeyServerAddress, m_serverAddressOverride))
     {
         return false;
+    }
+
+    if (json.contains(KeyUpdateCheck))
+    {
+        QJsonObject checkJson;
+        UpdateCheck check;
+        if (!StrictJson::readObject(json, KeyUpdateCheck, checkJson)
+            || !StrictJson::hasOnlyKeys(checkJson, {KeyCheckedAt, KeyLatestVersion})
+            || !StrictJson::readTime(checkJson, KeyCheckedAt, check.when)
+            || !StrictJson::readString(checkJson, KeyLatestVersion, check.latestVersion)
+            || check.latestVersion.isEmpty())
+        {
+            return false;
+        }
+        m_updateCheck = check;
     }
 
     // Written only when set, so present means true.
@@ -401,6 +435,17 @@ QByteArray AppSettings::write() const
     if (m_developerExport)
     {
         json[KeyDeveloperExport] = true;
+    }
+    if (m_updateCheck.has_value())
+    {
+        QJsonObject check;
+        check[KeyCheckedAt] = StrictJson::writeTime(m_updateCheck.value().when);
+        check[KeyLatestVersion] = m_updateCheck.value().latestVersion;
+        json[KeyUpdateCheck] = check;
+    }
+    if (!m_dismissedUpdate.isEmpty())
+    {
+        json[KeyDismissedUpdate] = m_dismissedUpdate;
     }
     if (!m_serverAddressOverride.isEmpty())
     {

@@ -19,6 +19,7 @@ class DocumentLibrary;
 class QLabel;
 class AccessDialog;
 class DeviceLinks;
+class UpdateChecker;
 class IncomingWards;
 class WardNotices;
 class QProgressBar;
@@ -43,6 +44,7 @@ public:
                DocumentLibrary& library,
                IncomingWards& incoming,
                DeviceLinks& links,
+               UpdateChecker& updates,
                QWidget* parent);
     ~MainWindow();
 
@@ -183,6 +185,7 @@ private:
     DocumentLibrary& m_library;
     IncomingWards& m_requests;
     DeviceLinks& m_links;
+    UpdateChecker& m_updates;
     bool m_unlinkedHere = false;
 
     // Widgets

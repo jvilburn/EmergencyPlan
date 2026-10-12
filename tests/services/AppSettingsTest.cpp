@@ -87,6 +87,8 @@ void AppSettingsTest::everyValueReadsBackThroughASecondInstance()
         settings->setServerAddressOverride("https://example.test");
         settings->setDefaultLocation(AppSettings::Location{40.5, -111.25});
         settings->setRecord(documentId, fullRecord());
+        settings->setUpdateCheck(AppSettings::UpdateCheck{QDateTime(QDate(2026, 10, 12), QTime(14, 30), QTimeZone::UTC), "1.4.0"});
+        settings->setDismissedUpdate("1.3.0");
         QVERIFY(!settings->writeFailed());
     }
 
@@ -98,6 +100,9 @@ void AppSettingsTest::everyValueReadsBackThroughASecondInstance()
     QCOMPARE(reread->defaultLocation()->longitude, -111.25);
     QVERIFY(reread->record(documentId) == fullRecord());
     QCOMPARE(reread->documentIds(), QStringList{documentId});
+    QCOMPARE(reread->updateCheck()->when, QDateTime(QDate(2026, 10, 12), QTime(14, 30), QTimeZone::UTC));
+    QCOMPARE(reread->updateCheck()->latestVersion, QString("1.4.0"));
+    QCOMPARE(reread->dismissedUpdate(), QString("1.3.0"));
 
     // Cleared, each falls back: the override to the built-in address, the toggle off.
     reread->setServerAddressOverride(QString());

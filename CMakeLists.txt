@@ -190,6 +190,7 @@ set(SERVICE_SOURCES
     src/services/FileOpenRouter.cpp
     src/services/HttpServerApi.cpp
     src/services/HttpWire.cpp
+    src/services/UpdateChecker.cpp
     # src/services/StatisticsService.cpp
     # src/services/ResourceService.cpp
     # src/services/SearchService.cpp
@@ -241,6 +242,7 @@ set(SERVICE_HEADERS
     src/services/FileOpenRouter.h
     src/services/HttpServerApi.h
     src/services/HttpWire.h
+    src/services/UpdateChecker.h
     # src/services/StatisticsService.h
     # src/services/ResourceService.h
     # src/services/SearchService.h

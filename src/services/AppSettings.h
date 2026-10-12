@@ -83,6 +83,20 @@ public:
     bool developerExport() const { return m_developerExport; }
     void setDeveloperExport(bool enabled);
 
+    /// The last answer from the release check: when, and the newest version it named.
+    struct UpdateCheck
+    {
+        QDateTime when;
+        QString latestVersion;
+    };
+
+    std::optional<UpdateCheck> updateCheck() const { return m_updateCheck; }
+    void setUpdateCheck(const UpdateCheck& check);
+
+    /// The newer version the person chose not to hear about again; empty for none.
+    QString dismissedUpdate() const { return m_dismissedUpdate; }
+    void setDismissedUpdate(const QString& version);
+
     /// The override when one is set, the built-in address otherwise.
     QString serverAddress() const;
     void setServerAddressOverride(const QString& address);
@@ -116,6 +130,8 @@ private:
     QString m_lastWardId;
     QStringList m_requestedWards;
     bool m_developerExport = false;
+    std::optional<UpdateCheck> m_updateCheck;
+    QString m_dismissedUpdate;
     QString m_serverAddressOverride;
     std::optional<Location> m_defaultLocation;
     bool m_writeFailed = false;

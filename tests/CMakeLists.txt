@@ -40,6 +40,7 @@ set(TEST_SOURCES
     services/ServerTestSupport.cpp
     services/SessionTestSupport.cpp
     services/SmokeTest.cpp
+    services/UpdateCheckerTest.cpp
     services/WardDirectoryImportTest.cpp
 )
 

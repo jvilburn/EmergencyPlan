@@ -1,7 +1,9 @@
 #include "WardNotices.h"
 
 #include "DocumentManager.h"
+#include "UpdateChecker.h"
 
+#include <QDesktopServices>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -54,16 +56,30 @@ WardNotices::WardNotices(QWidget* parent)
     refresh();
 }
 
+void WardNotices::setUpdateChecker(UpdateChecker* updates)
+{
+    m_updates = updates;
+    connect(updates, &UpdateChecker::changed, this, &WardNotices::refresh);
+    refresh();
+}
+
 QList<WardNotices::Notice> WardNotices::currentNotices() const
 {
+    QList<Notice> notices;
+    if (m_updates != nullptr && !m_updates->newerVersion().isEmpty())
+    {
+        notices.append(Notice{Kind::UpdateAvailable,
+                              tr("Ward Planning %1 is available.").arg(m_updates->newerVersion()),
+                              QString()});
+    }
+
     const DocumentManager* manager = DocumentManager::instance();
     const DocumentSession* session = manager->session();
     if (session == nullptr || manager->copy().has_value())
     {
-        return {};
+        return notices;
     }
 
-    QList<Notice> notices;
     if (session->requiresUpdate())
     {
         notices.append(Notice{Kind::RequiresUpdate,
@@ -176,6 +192,16 @@ QWidget* WardNotices::makeNotice(const Notice& notice)
 
     switch (notice.kind)
     {
+    case Kind::UpdateAvailable:
+    {
+        QPushButton* download = new QPushButton(tr("Download..."), frame);
+        QPushButton* later = new QPushButton(tr("Not Now"), frame);
+        row->addWidget(download);
+        row->addWidget(later);
+        connect(download, &QPushButton::clicked, this, []() { QDesktopServices::openUrl(UpdateChecker::releasePage()); });
+        connect(later, &QPushButton::clicked, m_updates, &UpdateChecker::dismiss);
+        break;
+    }
     case Kind::OnlyKeyHolder:
     case Kind::OnlyAdmin:
     {
@@ -197,8 +223,8 @@ QWidget* WardNotices::makeNotice(const Notice& notice)
         break;
     }
 
-    // Until the app is updated, which the notice exists to prompt.
-    if (notice.kind != Kind::RequiresUpdate)
+    // The update notices have their own buttons: Not Now, or updating the app.
+    if (notice.kind != Kind::RequiresUpdate && notice.kind != Kind::UpdateAvailable)
     {
         QToolButton* close = new QToolButton(frame);
         close->setText(QStringLiteral("x"));
