@@ -18,7 +18,10 @@ class QTreeWidgetItem;
 /// device linked each one and when. Every action is a visible button, enabled only
 /// where it applies:
 ///
-/// - for an admin of a shared ward: Invite Link, the link to send someone
+/// - for an admin of a shared ward: Invite Link, the link to send someone, and Grant
+///   or Decline on each request waiting; anyone sees the requests
+/// - a request whose name matches a member is flagged: it is more likely that
+///   member's new device, which they should link instead
 /// - on another person, for an admin: Remove, and Make Admin or Make Member
 /// - on this person: Link a Device, Unlink on each of their devices but this one,
 ///   Make Member for an admin stepping down (not the last admin while anyone else
@@ -40,6 +43,9 @@ public:
     /// The members after a head check while the dialog is open; the selection is kept.
     void setMembers(const QList<ServerContract::Member>& members);
 
+    /// The ward's pending access requests, each with Grant and Decline for an admin.
+    void setRequests(const QList<ServerContract::AccessRequest>& requests);
+
 signals:
     void shareRequested();
     void inviteLinkRequested();
@@ -48,6 +54,8 @@ signals:
     void removeRequested(const MemberId& member);
     void roleRequested(const MemberId& member, ServerContract::Role role);
     void unlinkRequested(const Fingerprint& device);
+    void grantRequested(const ServerContract::AccessRequest& request);
+    void declineRequested(const ServerContract::AccessRequest& request);
 
 private slots:
     void onSelectionChanged();
@@ -55,6 +63,8 @@ private slots:
     void onRole();
     void onUnlink();
     void onDetails();
+    void onGrant();
+    void onDecline();
 
 private:
     void fillTree();
@@ -67,8 +77,11 @@ private:
     bool selfIsAdmin() const;
     bool isOnlyAdmin() const;
     QString linkedText(const ServerContract::Person& person, const ServerContract::Device& device) const;
+    std::optional<ServerContract::AccessRequest> selectedRequest() const;
+    void updateRequestButtons();
 
     QList<ServerContract::Member> m_members;
+    QList<ServerContract::AccessRequest> m_requests;
     DeviceIdentity m_self;
     bool m_shared;
 
@@ -77,6 +90,11 @@ private:
     QLabel* m_askAdmins = nullptr;
     QLabel* m_offline = nullptr;
     QPushButton* m_inviteLink = nullptr;
+    QLabel* m_requestsTitle = nullptr;
+    QTreeWidget* m_requestList = nullptr;
+    QLabel* m_requestWarning = nullptr;
+    QPushButton* m_grant = nullptr;
+    QPushButton* m_decline = nullptr;
     QPushButton* m_remove = nullptr;
     QPushButton* m_role = nullptr;
     QPushButton* m_unlink = nullptr;

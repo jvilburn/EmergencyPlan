@@ -74,6 +74,10 @@ public:
     QString lastWardId() const { return m_lastWardId; }
     void setLastWardId(const QString& documentId);
 
+    /// The wards this device asked for access to and has not yet received.
+    QStringList requestedWards() const { return m_requestedWards; }
+    void setRequestedWards(const QStringList& documentIds);
+
     // --- This device ---
 
     bool developerExport() const { return m_developerExport; }
@@ -110,6 +114,7 @@ private:
     QList<DeviceKeys> m_linkedDevices;
     QHash<QString, WardEntry> m_wards;
     QString m_lastWardId;
+    QStringList m_requestedWards;
     bool m_developerExport = false;
     QString m_serverAddressOverride;
     std::optional<Location> m_defaultLocation;

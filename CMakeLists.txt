@@ -177,6 +177,7 @@ set(SERVICE_SOURCES
     src/services/DocumentFile.cpp
     src/services/DocumentRecords.cpp
     src/services/DocumentSession.cpp
+    src/services/PendingRequests.cpp
     src/services/SealingQueue.cpp
     src/services/ServerConnection.cpp
     src/services/ServerVersion.cpp
@@ -227,6 +228,7 @@ set(SERVICE_HEADERS
     src/services/DocumentFile.h
     src/services/DocumentRecords.h
     src/services/DocumentSession.h
+    src/services/PendingRequests.h
     src/services/SealingQueue.h
     src/services/ServerConnection.h
     src/services/ServerVersion.h

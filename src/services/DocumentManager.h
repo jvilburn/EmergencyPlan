@@ -132,6 +132,16 @@ public:
     /// or shareFailed reports how it went.
     void share();
 
+    /// The open ward's pending access requests, answered only while receiver lives;
+    /// an empty list when the server cannot say.
+    using RequestsFetched = std::function<void(const QList<ServerContract::AccessRequest>& requests)>;
+    void fetchRequests(QObject* receiver, const RequestsFetched& done);
+
+    /// An admin's grant: the server makes the request's person a member, and this
+    /// device then seals the ward to the device that asked.
+    void grant(const ServerContract::AccessRequest& request);
+    void decline(const ServerContract::AccessRequest& request);
+
     /// Saves now and publishes. A local failure is the one reported.
     bool publishNow(QString* errorMessage);
 
@@ -179,6 +189,10 @@ signals:
     /// The open ward is now shared.
     void shared(const QString& documentId);
     void shareFailed(ServerContract::ServerError error);
+
+    /// A change to who has access went through, or was refused and why.
+    void accessCallDone();
+    void accessCallFailed(ServerContract::ServerError error);
 
     /// The server holds a version this build cannot read, or no longer does.
     void requiresUpdateChanged();
@@ -230,6 +244,11 @@ private:
     void onReadOnlyChanged();
     void onHeadChanged();
     void onShared();
+    void onRequests(const RequestsFetched& done, const ServerContract::Result<QList<ServerContract::AccessRequest>>& requests);
+    void onGranted(const QString& documentId,
+                   const DeviceKeys& device,
+                   const ServerContract::Result<ServerContract::Done>& result);
+    void onAccessCall(const ServerContract::Result<ServerContract::Done>& result);
     void onHistory(const QString& documentId, const ServerContract::Result<QList<ServerContract::HistoryEntry>>& history);
     void onSessionLost(const ServerContract::LostAccess& lost);
     void onQueueLost(const QString& documentId, const ServerContract::LostAccess& lost);

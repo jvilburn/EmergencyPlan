@@ -124,6 +124,28 @@ AccessDialog::AccessDialog(const QList<Member>& members, const DeviceIdentity& s
     body->addLayout(buttons);
     layout->addLayout(body, 1);
 
+    // Requests waiting, under the people who have access.
+    m_requestsTitle = new QLabel(tr("Asking for access"), this);
+    layout->addWidget(m_requestsTitle);
+    QHBoxLayout* requestRow = new QHBoxLayout();
+    m_requestList = new QTreeWidget(this);
+    m_requestList->setColumnCount(3);
+    m_requestList->setHeaderLabels({tr("Person"), tr("Device"), tr("Asked")});
+    m_requestList->setRootIsDecorated(false);
+    m_requestList->setMaximumHeight(120);
+    requestRow->addWidget(m_requestList, 1);
+    QVBoxLayout* requestButtons = new QVBoxLayout();
+    m_grant = new QPushButton(tr("Grant"), this);
+    m_decline = new QPushButton(tr("Decline"), this);
+    requestButtons->addWidget(m_grant);
+    requestButtons->addWidget(m_decline);
+    requestButtons->addStretch(1);
+    requestRow->addLayout(requestButtons);
+    layout->addLayout(requestRow);
+    m_requestWarning = new QLabel(this);
+    m_requestWarning->setWordWrap(true);
+    layout->addWidget(m_requestWarning);
+
     QDialogButtonBox* close = new QDialogButtonBox(QDialogButtonBox::Close, this);
     layout->addWidget(close);
 
@@ -134,9 +156,33 @@ AccessDialog::AccessDialog(const QList<Member>& members, const DeviceIdentity& s
     connect(m_role, &QPushButton::clicked, this, &AccessDialog::onRole);
     connect(m_remove, &QPushButton::clicked, this, &AccessDialog::onRemove);
     connect(m_details, &QPushButton::clicked, this, &AccessDialog::onDetails);
+    connect(m_requestList, &QTreeWidget::itemSelectionChanged, this, &AccessDialog::updateRequestButtons);
+    connect(m_grant, &QPushButton::clicked, this, &AccessDialog::onGrant);
+    connect(m_decline, &QPushButton::clicked, this, &AccessDialog::onDecline);
     connect(close, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
     fillTree();
+    setRequests({});
+}
+
+void AccessDialog::setRequests(const QList<ServerContract::AccessRequest>& requests)
+{
+    m_requests = requests;
+    m_requestList->clear();
+    for (const ServerContract::AccessRequest& request : requests)
+    {
+        const QString device = request.person.devices.isEmpty() ? QString() : request.person.devices.first().name;
+        const QString asked = QLocale().toString(request.when.toLocalTime(), QLocale::ShortFormat);
+        QTreeWidgetItem* row = new QTreeWidgetItem(m_requestList, {request.person.displayName, device, asked});
+        row->setData(0, Qt::UserRole, request.index);
+    }
+
+    const bool any = !requests.isEmpty();
+    m_requestsTitle->setVisible(any);
+    m_requestList->setVisible(any);
+    m_grant->setVisible(any && selfIsAdmin());
+    m_decline->setVisible(any && selfIsAdmin());
+    updateRequestButtons();
 }
 
 void AccessDialog::setMembers(const QList<Member>& members)
@@ -148,6 +194,7 @@ void AccessDialog::setMembers(const QList<Member>& members)
 
     m_members = members;
     fillTree();
+    setRequests(m_requests);
 
     for (QTreeWidgetItemIterator it(m_tree); *it != nullptr; ++it)
     {
@@ -347,6 +394,69 @@ void AccessDialog::onUnlink()
     if (device.has_value())
     {
         emit unlinkRequested(device.value().fingerprint);
+    }
+}
+
+std::optional<ServerContract::AccessRequest> AccessDialog::selectedRequest() const
+{
+    const QList<QTreeWidgetItem*> selected = m_requestList->selectedItems();
+    if (selected.isEmpty())
+    {
+        return std::nullopt;
+    }
+    const qint64 index = selected.first()->data(0, Qt::UserRole).toLongLong();
+    for (const ServerContract::AccessRequest& request : m_requests)
+    {
+        if (request.index == index)
+        {
+            return request;
+        }
+    }
+    return std::nullopt;
+}
+
+void AccessDialog::updateRequestButtons()
+{
+    const std::optional<ServerContract::AccessRequest> request = selectedRequest();
+    m_grant->setEnabled(request.has_value());
+    m_decline->setEnabled(request.has_value());
+
+    // Granting a second Bob gives him none of the first Bob's devices and a role of
+    // his own.
+    QString warning;
+    if (request.has_value())
+    {
+        const QString asked = request->person.displayName.simplified().toCaseFolded();
+        for (const Member& member : m_members)
+        {
+            if (member.person.displayName.simplified().toCaseFolded() == asked)
+            {
+                warning = tr("%1 already has access. If this is %1's new device, %1 should link it from their "
+                             "other device instead.")
+                              .arg(member.person.displayName);
+                break;
+            }
+        }
+    }
+    m_requestWarning->setText(warning);
+    m_requestWarning->setVisible(!warning.isEmpty());
+}
+
+void AccessDialog::onGrant()
+{
+    const std::optional<ServerContract::AccessRequest> request = selectedRequest();
+    if (request.has_value())
+    {
+        emit grantRequested(request.value());
+    }
+}
+
+void AccessDialog::onDecline()
+{
+    const std::optional<ServerContract::AccessRequest> request = selectedRequest();
+    if (request.has_value())
+    {
+        emit declineRequested(request.value());
     }
 }
 

@@ -18,6 +18,7 @@ class AppSettings;
 class DocumentLibrary;
 class QLabel;
 class AccessDialog;
+class PendingRequests;
 class WardNotices;
 class QProgressBar;
 class EmergencyAssetView;
@@ -37,7 +38,7 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    MainWindow(AppSettings& settings, DocumentLibrary& library, QWidget* parent);
+    MainWindow(AppSettings& settings, DocumentLibrary& library, PendingRequests& requests, QWidget* parent);
     ~MainWindow();
 
     /// This launch's arguments, or those a later launch handed to this one: each
@@ -133,6 +134,16 @@ private:
     /// The invite link for a shared ward, to copy and send.
     void showInviteLink(const QString& documentId);
     void onShareFailed(ServerContract::ServerError error);
+
+    /// Asks whether to request access to a ward this device lacks, and does.
+    void offerRequest(const QString& documentId);
+    void onRequested(const QString& documentId);
+    void onRequestFailed(const QString& documentId, ServerContract::ServerError error);
+    void onRequestArrived(const QString& documentId);
+    void onRequestDeclined(const QString& documentId);
+
+    /// A change to who has access the server refused, said plainly.
+    void onAccessCallFailed(ServerContract::ServerError error);
     void reportOpen(DocumentManager::Open result, const QString& reason);
     void openCopy(const QString& sourcePath);
     void closeEditPanelInternal();
@@ -143,6 +154,7 @@ private:
 
     AppSettings& m_settings;
     DocumentLibrary& m_library;
+    PendingRequests& m_requests;
 
     // Widgets
     QSplitter* m_splitter;

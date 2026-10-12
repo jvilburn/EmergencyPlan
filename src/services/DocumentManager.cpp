@@ -591,6 +591,89 @@ void DocumentManager::share()
     }
 }
 
+void DocumentManager::fetchRequests(QObject* receiver, const RequestsFetched& done)
+{
+    if (!m_session || m_server == nullptr || !m_session->isShared())
+    {
+        return;
+    }
+    m_server->accessRequests(m_session->documentId(), receiver, std::bind(&DocumentManager::onRequests, this, done, _1));
+}
+
+void DocumentManager::onRequests(const RequestsFetched& done,
+                                 const ServerContract::Result<QList<ServerContract::AccessRequest>>& requests)
+{
+    done(requests.value.value_or(QList<ServerContract::AccessRequest>()));
+}
+
+void DocumentManager::grant(const ServerContract::AccessRequest& request)
+{
+    if (!m_session || m_server == nullptr || request.person.devices.isEmpty())
+    {
+        return;
+    }
+    m_server->grant(m_session->documentId(),
+                    request.index,
+                    this,
+                    std::bind(&DocumentManager::onGranted,
+                              this,
+                              m_session->documentId(),
+                              request.person.devices.first().keys,
+                              _1));
+}
+
+void DocumentManager::onGranted(const QString& documentId,
+                                const DeviceKeys& device,
+                                const ServerContract::Result<ServerContract::Done>& result)
+{
+    if (!result.ok())
+    {
+        emit accessCallFailed(result.error);
+        return;
+    }
+
+    // The device that asked is owed a seal, which the queue carries to the ward -
+    // through the open session when it is this one.
+    DocumentRecord record = m_records->record(documentId);
+    if (!record.granted.contains(device))
+    {
+        record.granted.append(device);
+        m_records->setRecord(documentId, record);
+    }
+    if (m_queue != nullptr)
+    {
+        m_queue->sealEverywhere();
+    }
+    emit accessCallDone();
+}
+
+void DocumentManager::decline(const ServerContract::AccessRequest& request)
+{
+    if (m_session && m_server != nullptr)
+    {
+        m_server->declineRequest(m_session->documentId(),
+                                 request.index,
+                                 this,
+                                 std::bind(&DocumentManager::onAccessCall, this, _1));
+    }
+}
+
+void DocumentManager::onAccessCall(const ServerContract::Result<ServerContract::Done>& result)
+{
+    if (result.ok())
+    {
+        emit accessCallDone();
+        if (m_session)
+        {
+            m_session->checkServer();
+        }
+    }
+    else
+    {
+        emit accessCallFailed(result.error);
+    }
+}
+
 void DocumentManager::onShared()
 {
     emit readOnlyChanged();

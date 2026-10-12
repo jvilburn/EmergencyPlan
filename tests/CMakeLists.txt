@@ -31,6 +31,7 @@ set(TEST_SOURCES
     services/FormatVectorsTest.cpp
     services/IdentityFileTest.cpp
     services/IdentityServiceTest.cpp
+    services/PendingRequestsTest.cpp
     services/ReconcileTest.cpp
     services/ResponseMergeTest.cpp
     services/SealingQueueTest.cpp

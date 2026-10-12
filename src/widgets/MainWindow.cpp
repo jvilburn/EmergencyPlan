@@ -2,6 +2,7 @@
 #include "AppSettings.h"
 #include "DocumentLibrary.h"
 #include "FileOpenRouter.h"
+#include "PendingRequests.h"
 #include "OpenWardDialog.h"
 #include "AccessDialog.h"
 #include "WardNotices.h"
@@ -53,10 +54,11 @@
 #include <QCloseEvent>
 #include <QLocale>
 
-MainWindow::MainWindow(AppSettings& settings, DocumentLibrary& library, QWidget* parent)
+MainWindow::MainWindow(AppSettings& settings, DocumentLibrary& library, PendingRequests& requests, QWidget* parent)
     : QMainWindow(parent)
     , m_settings(settings)
     , m_library(library)
+    , m_requests(requests)
 {
     setupUi();
     setupMenus();
@@ -116,16 +118,8 @@ void MainWindow::followRoute(const FileOpenRouter::Route& route, const QString& 
         break;
     }
     case FileOpenRouter::Action::RequestAccess:
-    {
-        QMessageBox message(QMessageBox::Information,
-                            tr("Ward Planning"),
-                            tr("This ward is not on this device yet."),
-                            QMessageBox::Ok,
-                            this);
-        message.setInformativeText(tr("Someone who already has access to it can grant this device access."));
-        message.exec();
+        offerRequest(route.documentId);
         break;
-    }
     case FileOpenRouter::Action::NeedsNewerVersion:
         QMessageBox::warning(this, tr("Ward Planning"), tr("%1 was written by a newer version of Ward Planning.").arg(path));
         break;
@@ -319,6 +313,12 @@ void MainWindow::setupConnections()
             this, &MainWindow::showInviteLink);
     connect(DocumentManager::instance(), &DocumentManager::shareFailed,
             this, &MainWindow::onShareFailed);
+    connect(DocumentManager::instance(), &DocumentManager::accessCallFailed,
+            this, &MainWindow::onAccessCallFailed);
+    connect(&m_requests, &PendingRequests::requested, this, &MainWindow::onRequested);
+    connect(&m_requests, &PendingRequests::requestFailed, this, &MainWindow::onRequestFailed);
+    connect(&m_requests, &PendingRequests::arrived, this, &MainWindow::onRequestArrived);
+    connect(&m_requests, &PendingRequests::declined, this, &MainWindow::onRequestDeclined);
     connect(DocumentManager::instance(), &DocumentManager::fetchFailed,
             this, &MainWindow::onFetchFailed);
     connect(DocumentManager::instance(), &DocumentManager::conflictRaised,
@@ -898,6 +898,10 @@ void MainWindow::onShowAccess()
     AccessDialog dialog(currentMembers(), manager->identity(), manager->session()->isShared(), this);
 
     connect(&dialog, &AccessDialog::shareRequested, manager, &DocumentManager::share);
+    connect(&dialog, &AccessDialog::grantRequested, manager, &DocumentManager::grant);
+    connect(&dialog, &AccessDialog::declineRequested, manager, &DocumentManager::decline);
+    connect(manager, &DocumentManager::accessCallDone, &dialog, std::bind(&MainWindow::refreshAccessDialog, this, &dialog));
+    manager->fetchRequests(&dialog, std::bind(&AccessDialog::setRequests, &dialog, std::placeholders::_1));
     connect(&dialog, &AccessDialog::inviteLinkRequested, this, std::bind(&MainWindow::showInviteLink, this, manager->documentId()));
 
     // Current while it is open: a head check's changes show, and another ward closes it.
@@ -942,6 +946,95 @@ void MainWindow::onShareFailed(ServerContract::ServerError error)
 void MainWindow::refreshAccessDialog(AccessDialog* dialog)
 {
     dialog->setMembers(currentMembers());
+    DocumentManager::instance()->fetchRequests(dialog,
+                                               std::bind(&AccessDialog::setRequests, dialog, std::placeholders::_1));
+}
+
+void MainWindow::offerRequest(const QString& documentId)
+{
+    if (m_requests.pending().contains(documentId))
+    {
+        QMessageBox::information(this,
+                                 tr("Ward Planning"),
+                                 tr("You have already asked for this ward. It appears here once an admin grants it."));
+        return;
+    }
+
+    const QMessageBox::StandardButton answer = QMessageBox::question(
+        this,
+        tr("Request Access"),
+        tr("This ward is not on this device yet. Ask its admins for access?"),
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::Yes);
+    if (answer == QMessageBox::Yes)
+    {
+        m_requests.request(documentId);
+    }
+}
+
+void MainWindow::onRequested(const QString& documentId)
+{
+    Q_UNUSED(documentId);
+    QMessageBox::information(this,
+                             tr("Request Access"),
+                             tr("Your request was sent. The ward appears in your list once an admin grants it, "
+                                "which they do from Who Has Access."));
+}
+
+void MainWindow::onRequestFailed(const QString& documentId, ServerContract::ServerError error)
+{
+    Q_UNUSED(documentId);
+    if (error == ServerContract::ServerError::UnknownDocument)
+    {
+        QMessageBox::warning(this, tr("Request Access"), tr("The server has no such ward. It was deleted, or the link is wrong."));
+        return;
+    }
+    QMessageBox::warning(this,
+                         tr("Request Access"),
+                         tr("The request could not be sent. Connect to the internet and open the link again."));
+}
+
+void MainWindow::onRequestArrived(const QString& documentId)
+{
+    const QString name = DocumentManager::instance()->wardNameOf(documentId);
+    statusBar()->showMessage(tr("%1 is now on this device").arg(name), 10000);
+
+    const DocumentManager* manager = DocumentManager::instance();
+    if (manager->documentId().isEmpty() && !manager->copy().has_value() && !manager->isFetching())
+    {
+        openWard(documentId);
+    }
+}
+
+void MainWindow::onRequestDeclined(const QString& documentId)
+{
+    Q_UNUSED(documentId);
+    QMessageBox::information(this, tr("Request Access"), tr("An admin declined your request for access to a ward."));
+}
+
+void MainWindow::onAccessCallFailed(ServerContract::ServerError error)
+{
+    QString message;
+    switch (error)
+    {
+    case ServerContract::ServerError::NotAdmin:
+        message = tr("Only an admin can change who has access.");
+        break;
+    case ServerContract::ServerError::LastAdmin:
+        message = tr("Make someone else an admin first, so the ward can still add and remove people.");
+        break;
+    case ServerContract::ServerError::Unreachable:
+    case ServerContract::ServerError::RateLimited:
+        message = tr("Connect to the internet to change who has access.");
+        break;
+    case ServerContract::ServerError::NotFound:
+        message = tr("That has already changed. Look again at Who Has Access.");
+        break;
+    default:
+        message = tr("The server did not accept the change.");
+        break;
+    }
+    QMessageBox::warning(this, tr("Who Has Access"), message);
 }
 
 QList<ServerContract::Member> MainWindow::currentMembers() const

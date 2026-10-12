@@ -19,6 +19,7 @@
 #include "IdentityFileTest.h"
 #include "IdentityServiceTest.h"
 #include "ModelParsersTest.h"
+#include "PendingRequestsTest.h"
 #include "ReconcileTest.h"
 #include "ResponseMergeTest.h"
 #include "SealingQueueTest.h"
@@ -120,6 +121,7 @@ int main(int argc, char** argv)
     status |= run<DocumentFileTest>(argc, argv);
     status |= run<DocumentSessionTest>(argc, argv);
     status |= run<SealingQueueTest>(argc, argv);
+    status |= run<PendingRequestsTest>(argc, argv);
     status |= run<AppSettingsTest>(argc, argv);
     status |= run<IdentityFileTest>(argc, argv);
     status |= run<IdentityServiceTest>(argc, argv);

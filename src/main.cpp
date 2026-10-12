@@ -15,6 +15,7 @@
 #include "HttpServerApi.h"
 #include "IdentityService.h"
 #include "MainWindow.h"
+#include "PendingRequests.h"
 #include "ServerConnection.h"
 #include "SessionTimers.h"
 #include "SealingQueue.h"
@@ -211,7 +212,8 @@ int main(int argc, char *argv[])
     TileService::setInstance(&tileService);
     tileService.initialize();
 
-    MainWindow window(*settings, library, nullptr);
+    PendingRequests requests(*settings, library, server, nullptr);
+    MainWindow window(*settings, library, requests, nullptr);
     QObject::connect(&window, &MainWindow::startOverRequested, &app, std::bind(&startOver, identityPath));
     window.show();
 
@@ -236,6 +238,7 @@ int main(int argc, char *argv[])
     // Whatever this device owes a ward it holds - a device it linked, a person it
     // granted - since it last ran.
     queue.sealEverywhere();
+    requests.checkNow();
 
     return app.exec();
 }

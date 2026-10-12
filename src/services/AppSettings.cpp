@@ -1,5 +1,7 @@
 #include "AppSettings.h"
 
+#include "DocumentHeader.h"
+#include "HexCodec.h"
 #include "StrictJson.h"
 
 #include <QDebug>
@@ -27,6 +29,7 @@ const QLatin1String KeyCopies("copies");
 const QLatin1String KeyCopyPath("path");
 const QLatin1String KeyCopyDocumentId("documentId");
 const QLatin1String KeyLastWard("lastWard");
+const QLatin1String KeyRequestedWards("requestedWards");
 const QLatin1String KeyDeveloperExport("developerExport");
 const QLatin1String KeyServerAddress("serverAddress");
 const QLatin1String KeyMap("map");
@@ -144,6 +147,12 @@ void AppSettings::setLastWardId(const QString& documentId)
     save();
 }
 
+void AppSettings::setRequestedWards(const QStringList& documentIds)
+{
+    m_requestedWards = documentIds;
+    save();
+}
+
 // --- This device -----------------------------------------------------------------
 
 void AppSettings::setDeveloperExport(bool enabled)
@@ -188,6 +197,7 @@ bool AppSettings::read(const QByteArray& bytes)
                                   KeyLinkedDevices,
                                   KeyWards,
                                   KeyLastWard,
+                                  KeyRequestedWards,
                                   KeyDeveloperExport,
                                   KeyServerAddress,
                                   KeyMap})
@@ -220,6 +230,22 @@ bool AppSettings::read(const QByteArray& bytes)
             return false;
         }
         m_defaultLocation = location;
+    }
+
+    // Written only when there are any, and each names a file-to-be, so is an id.
+    if (json.contains(KeyRequestedWards))
+    {
+        if (!StrictJson::readStringArray(json, KeyRequestedWards, m_requestedWards) || m_requestedWards.isEmpty())
+        {
+            return false;
+        }
+        for (const QString& documentId : m_requestedWards)
+        {
+            if (!HexCodec::isCanonical(documentId, DocumentHeader::DocumentIdLength))
+            {
+                return false;
+            }
+        }
     }
 
     // Written only when there are any.
@@ -367,6 +393,10 @@ QByteArray AppSettings::write() const
     if (!m_lastWardId.isEmpty())
     {
         json[KeyLastWard] = m_lastWardId;
+    }
+    if (!m_requestedWards.isEmpty())
+    {
+        json[KeyRequestedWards] = QJsonArray::fromStringList(m_requestedWards);
     }
     if (m_developerExport)
     {
