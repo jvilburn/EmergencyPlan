@@ -110,8 +110,8 @@ Collections use `QHash<Id, Model>` for O(1) lookup by ID and automatic uniquenes
 
 Several models that were originally separate have been unified:
 
-- **MinisteringGroup** — Single class with `createEQ()`/`createRS()` factories. Tracks both `familyIds` (EQ) and `ministeredPersonIds` (RS) with an `m_isRSFormat` flag.
-- **EmergencyAsset** — Single class replacing separate Skill/Equipment. Uses a `ResponseArea` enum to categorize.
+- **MinisteringGroup** - Single class with `createEQ()`/`createRS()` factories. Tracks both `familyIds` (EQ) and `ministeredPersonIds` (RS) with an `m_isRSFormat` flag.
+- **EmergencyAsset** - Single class replacing separate Skill/Equipment. Uses a `ResponseArea` enum to categorize.
 
 ### Model Pattern
 
@@ -401,53 +401,77 @@ signals:
 
 ### Tile Services
 
-- **TileService** — Main orchestration: provider fallback, scaled tile generation, layer switching
-- **TileFetchService** — Network fetching with multi-provider fallback and deduplication
-- **TileDiskCacheService** — Directory-based disk cache with in-memory QSet index
+- **TileService** - Main orchestration: provider fallback, scaled tile generation, layer switching
+- **TileFetchService** - Network fetching with multi-provider fallback and deduplication
+- **TileDiskCacheService** - Directory-based disk cache with in-memory QSet index
 
 ---
 
 ## Shared Wards
 
-### Server-held access, client-held keys
+### The ward is its own access list
 
-The server holds the access state - members, roles, devices, pending requests, the access history - and the current encrypted version of each ward. It never holds a data key. Every version it stores is ciphertext under a key sealed, in the version's own header, to each device allowed to read it. So the server decides *who may fetch*, and the devices decide *who can read*, and the second set can only ever be a subset of the first.
+The server is a versioned store of encrypted documents with an edit lease. It holds no
+key material, never reads a payload, and knows nothing about people. Who may read a ward
+is whoever its current header seals the key to; who may write it is whoever can sign as
+one of them. Every version it stores is ciphertext under a key sealed, in the version's
+own header, to each device and open invite named in the payload's **roster**
+(`SealingSet`): people with names and roles, their devices with their keys, and invites.
+The header and the roster must agree exactly, and every reader checks that they do.
 
-The rule tying them together is the **sealing set**. The encrypted payload lists the devices its key is sealed to, and the plaintext header must list exactly those. Each write starts from the sealing set of the version it is built on, prunes every device the server's allow-list no longer lists, adds the devices this device approved (one it linked, or the one a grant or link approval admits in the same call), and rotates the data key whenever the prune removed anyone. A device is never sealed to because the server lists it; only its approver seals it.
+A write starts from the roster of the version it builds on. When the roster now lacks a
+device or an invite that version sealed to, the data key rotates, so whoever was taken
+out holds no key to anything written afterwards. Nothing else changes who can read.
+
+### Invites
+
+An invite is a one-time bearer key: a seed in a `wardplanning:join/<id>/<seed>` link, from
+which the invite's sealing and signing keypairs are derived. Making one writes a version
+sealed to the invite as well. Opening the link fetches the current version as the
+invite, puts this device in the invite's place in the roster (under the inviter's person
+for a Device invite, as a new person for a User invite), and writes the next version
+signed by the invite, which the current header names. From then on the device signs as
+itself. Roles are a convention among honest clients; the server cannot see them.
 
 ### The services
 
 | Service | Role |
 |---|---|
-| `DocumentCrypto` | libsodium: sealing the data key to a device's X25519 key, AEAD over the compressed payload with the whole header as associated data, Ed25519 for sign-in |
+| `DocumentCrypto` | libsodium: sealing the data key to a device's X25519 key, AEAD over the compressed payload with the whole header as associated data, Ed25519 signatures on writes, keypairs from an invite's seed |
 | `DocumentFile` | The on-disk and on-wire format: header line and ciphertext |
 | `DocumentHeader` | The header's fields and strict parse; one format version covers the whole file |
-| `Reconcile` | Validates a version before anything local changes: sealed to this device, decrypts, header matches the sealing set, descends from a key this device trusts |
-| `ServerContract` | The server API as C++ types; `FakeServer` in the tests and `HttpServerApi` implement it |
+| `SealingSet` | The roster inside the payload, and whether a write on top of a given header rotates the key |
+| `RosterDiff` | What changed between two rosters, for the access notice |
+| `Reconcile` | Validates a version before anything local changes: sealed to this device, decrypts, header matches the roster, descends from a key this device trusts |
+| `ServerContract` | The server API as C++ types, five calls and signed writes; `FakeServer` in the tests and `HttpServerApi` implement it |
 | `HttpServerApi`, `HttpWire` | HTTP transport and JSON shapes, one table in `HttpWire.h` |
-| `ServerConnection` | Challenge-response sign-in and the bearer token over any `ServerApi`; registers this device's person; tells the app once when the device was unlinked |
+| `ServerConnection` | Signs writes as this device, or as an invite while joining |
 | `IdentityService`, `IdentityFile` | This device's keys and person, kept like SSH keys in local app data |
-| `DocumentLibrary` | The wards on this device, named by document id in app data; copies; restoring the ward list from the server |
-| `DocumentSession` | One open ward: the single write path, save and publish, the base copy, the lease, adopting newer versions, conflicts, lost access |
-| `ServerVersion` | Taking in and writing server versions: the base copy, the sealing-set rule applied to a version about to be written, and building the resealed version a grant or a link approval carries |
-| `DocumentManager` | Commands, undo, and geocoding over the open session; grant, decline, remove, role, and leave as server calls |
-| `DeviceLinks` | Approving a new device's link code, with every held ward resealed to it, and unlinking |
-| `IncomingWards` | Requests this device made, wards on their way to it, and wards it has lost, checked against the server only while something is pending |
+| `DocumentLibrary` | The wards on this device, named by document id in app data; copies; joining a ward |
+| `DocumentSession` | One open ward: the single write path, save and publish, the base copy, the lease, adopting newer versions, conflicts, invites, leaving, lost access |
+| `ServerVersion` | Taking in and writing server versions: the base copy, the sealing-set rule, why a version left this device out |
+| `DocumentManager` | Commands, undo, and geocoding over the open session; roster edits; the access notice |
 | `UpdateChecker` | Whether a newer release is published, from GitHub, apart from the Ward Planning server |
 
 ### The single write path
 
-Every change to the open ward goes through `DocumentSession::edit`, which applies the change to the in-memory `Document`, refuses a directory edit while another member holds the lease, and schedules a save. Commands, undo, and imports all enter here.
+Every change to the open ward goes through `DocumentSession::edit`, which applies the
+change to the in-memory `Document`, refuses a directory edit while another member holds
+the lease, and schedules a save. Commands, undo, imports, and roster edits all enter
+here. Leaving is the one write that does not touch the local file: the version without
+this person is built in memory and uploaded, and the local copy goes once it has landed.
 
 ### Save and publish
 
-Saving writes the local file a moment after a change, with the sealing-set rule applied; it never touches the network. Publishing uploads the saved file conditional on the server version this session started from. The **base copy** beside the local file is the file exactly as it stood at that version; its save counter tells whether the local file has unpublished changes, and a three-way merge against it tells what changed here from what changed there. A refused publish fetches the server's version, validates it, merges, and publishes again, raising the conflict dialog only where the merge cannot decide.
-
-### Grants and approvals carry the version
-
-A grant or a link approval sends the resealed current version with it, built on the server's head and conditional on it. The server adds the member or device and stores the version together, or refuses both. Nothing is owed afterwards, so nothing is queued or retried; the new device reads the ward the moment it is allowed to.
-
----
+Saving writes the local file a moment after a change, with the sealing-set rule applied
+against the version it builds on; it never touches the network. Publishing uploads the
+saved file conditional on the server version this session started from. The **base
+copy** beside the local file is the file exactly as it stood at that version; its save
+counter tells whether the local file has unpublished changes, and a three-way merge
+against it tells what changed here from what changed there. The roster is directory
+content for that merge: changed on one side, that side's roster wins; changed on both,
+the conflict dialog. A refused publish fetches the server's version, validates it,
+merges, reseals, and publishes again.
 
 ## File Formats
 

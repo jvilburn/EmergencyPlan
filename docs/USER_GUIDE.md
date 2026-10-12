@@ -2,7 +2,7 @@
 
 ## Overview
 
-Ward Planning is a desktop application for managing ward family data, ministering assignments, emergency response teams, and resources. It includes an interactive map and tools for coordinating welfare checks and task assignments during emergencies. A ward can be shared with other people, each on their own devices, through an encrypted copy on a server that holds who has access but can never read the ward itself.
+Ward Planning is a desktop application for managing ward family data, ministering assignments, emergency response teams, and resources. It includes an interactive map and tools for coordinating welfare checks and task assignments during emergencies. A ward can be shared with other people, each on their own devices, through an encrypted copy on a server that can never read it and knows nothing about who may.
 
 ---
 
@@ -10,14 +10,14 @@ Ward Planning is a desktop application for managing ward family data, ministerin
 
 ### The First Time
 
-Ward Planning asks whether you already use it on another device. If you do, choose **Yes, link this device** and follow *Linking a Device* below, so your wards come to this device too. If not, give your name as your ward knows you and a name for this device.
+Ward Planning asks whether you already use it on another device. Give your name as your ward knows you and a name for this device. If you already use Ward Planning on another device, choose **Add a Device** there and open the link it gives you here, so your wards come to this device too.
 
 ### Creating or Opening a Ward
 
 Wards live inside the app, in its own folder, so there is no file to find or lose.
 
 - **File > New Ward** (Ctrl+N) - Start a new, empty ward
-- **File > Open Ward** (Ctrl+O) - Choose from the wards on this device; a ward shared with you that has not arrived yet shows as *Requested* or *Waiting for access*
+- **File > Open Ward** (Ctrl+O) - Choose from the wards on this device
 - The app reopens your last ward on launch
 - **File > Save a Copy** writes a `.wardplanning` file wherever you choose, for a backup or to hand to someone. **File > Open a Copy** reads one back, read-only. A copy is sealed to the same devices as the ward, so only they can open it.
 
@@ -121,7 +121,7 @@ The interactive map shows family locations as markers.
 
 - **Drag** to pan
 - **Scroll wheel** to zoom
-- **+/−** buttons (top-left) to zoom in/out
+- **+/-** buttons (top-left) to zoom in/out
 - **Recenter** button to fit all families in view
 - **Layer toggle** (top-right) to switch between Street and Satellite views
 
@@ -157,7 +157,7 @@ In the Families tab during an emergency, each family has action buttons:
 
 The progress bar at the top updates in real time:
 ```
-47 families: 23 OK · 3 need help · 2 unable to reach · 19 remaining
+47 families: 23 OK, 3 need help, 2 unable to reach, 19 remaining
 ```
 
 Use the filter tabs (**All**, **Remaining**, **OK**, **Needs Help**, **Unable to Reach**) to focus on specific groups.
@@ -192,52 +192,43 @@ Ending an emergency clears its response data from the document. The summary repo
 
 ## Sharing a Ward
 
-A ward starts on one device, readable by nobody else. Sharing puts an encrypted copy on the Ward Planning server and lets you choose who may open it.
+A ward starts on one device, readable by nobody else. Sharing puts an encrypted copy on the Ward Planning server and lets you invite people to it.
 
 ### What the server knows
 
-The server holds who has access to each ward - names, roles, and device names - and who published each version and when. The ward itself reaches the server already encrypted, with a key the server never has, so nobody who runs or breaks into the server can read a family's details. Only the devices you have let in hold the key.
+The server holds each ward's encrypted versions and nothing else: no names, no list of who has access, no key. The ward itself reaches the server already encrypted, with a key the server never has, so nobody who runs or breaks into the server can read a family's details. Who has access is written inside the ward, where only the people with access can read it.
 
-### Share and invite
+### Share
 
-1. Open the ward and choose **Ward > Who Has Access**, then **Share**.
-2. **Invite Link** shows a link to send to the people you want to add. Anyone who opens it can ask for access; only you, or another admin, can grant it.
+Open the ward and choose **Ward > Who Has Access**, then **Share**. The ward is on the server from then on, and the buttons to add people appear.
 
-### Requests and grants
+### Adding a user
 
-Opening an invite link, or a `.wardplanning` copy of a ward you do not have, offers **Request access**. The ward then shows in your list as *Requested* until an admin answers.
+In **Who Has Access**, an admin chooses **Add a User**, names who the invite is for, and gets a short message to copy and send by email or text. It names you and the ward, says where to install Ward Planning, and carries a link. The person opens the link on their device and the ward appears for them, under their own name, as a member.
 
-An admin sees requests at the bottom of **Who Has Access**, with the person's name and device, and chooses **Grant** or **Decline**. The moment a request is granted the ward is readable on the device that asked; it downloads within a minute. A request whose name matches someone who already has access is flagged: if it is that person's new phone, they should link it from their other device instead (see below), so the ward does not end up with two of them.
+The link works once. Whoever opens it first is in, and everyone with access sees who joined. If a link reaches the wrong person, remove them; the ward is sealed afresh without them.
+
+### Adding a device of your own
+
+Your wards can live on more than one of your devices. On a device you already use, choose **Add a Device** and send the message to yourself; open the link on the new device. It joins as another of your devices, with your name and your role. Keep this in mind: anyone who opens that link becomes one of your devices, so send it only to yourself, and remove any device you do not recognise.
 
 ### Admins and members
 
-Everyone with access reads and edits the ward. **Admins** also grant and decline requests, remove people, and make others admins or members. The person who shared the ward is its first admin. A ward always keeps at least one admin: the last admin cannot step down or leave until someone else is made an admin, and Ward Planning says so.
+Everyone with access reads and edits the ward. **Admins** also add users, remove people, and make others admins or members. The person who shared the ward is its first admin. A ward always keeps at least one admin: the last admin cannot step down or leave until someone else is made an admin.
+
+The admin rule is kept by the app, not by the server: it exists to keep well-meaning people from over-sharing, and it is not a lock. Anyone with access to a ward can read all of it, so share with the people you trust with it.
 
 ### Removing someone
 
-An admin selects a person in **Who Has Access** and chooses **Remove**. They lose access at once, their app deletes its copy the next time it connects, and the next version anyone saves is sealed with a fresh key they do not hold. A copy they saved outside the app beforehand keeps what it had.
+An admin selects a person in **Who Has Access** and chooses **Remove**. From that moment their devices cannot read anything saved afterwards, and their app deletes its copy the next time it checks the server. A copy they saved outside the app beforehand keeps what it had.
 
-**Leave** does the same for yourself. A member's copy goes at once; their other devices learn of it when they next connect.
+**Unlink** does the same for one of your own devices, say a lost phone. **Withdraw Invite** cancels an invite nobody has used yet.
 
-### Linking a device
-
-Your wards can live on more than one of your devices - a laptop and a phone, say - and the server sees them as one person.
-
-1. On the new device, start Ward Planning and choose **Yes, link this device**. Name the device and choose **Show Code**.
-2. On a device you already use, open **Who Has Access** and choose **Link a Device**, enter the code, and confirm *Link "Pixel 8" to your account?*
-3. Every ward on the approving device goes to the new one at that moment. A ward the approving device did not hold shows *Waiting for access* on the new one until the approving device next saves it.
-
-Each ward shows a notice while it is on only one of your devices: a second device is what keeps a ward if the first is lost or stolen.
-
-### Unlinking a lost device
-
-In **Who Has Access**, select one of your own devices and choose **Unlink**. It loses every ward at once and deletes its copies the next time it connects; if it had linked other devices, you are asked whether to unlink those too. You cannot unlink your last device.
-
-If a device is lost whose owner cannot be reached, an admin removes that person and grants them again from a device they still have.
+**Leave** takes you out of the ward yourself. It needs the server, since your leaving has to be held there before your copy goes. The last person in a ward cannot leave it.
 
 ### Who has access changed
 
-Every grant, removal, leave, and role change is announced to everyone with access, once, as a notice above the ward - *3 changes to who has access* - that expands to the list. Dismiss it and it stays dismissed; new changes bring a new notice.
+Every join, removal, role change, device, and invite is announced to everyone with access, once, as a notice above the ward - *3 changes to who has access* - that expands to the list. Dismiss it and it stays dismissed; new changes bring a new notice.
 
 ### The sync indicator
 
@@ -255,13 +246,13 @@ The status bar shows how the open ward stands with the server:
 
 Family and member details take turns: while one person is editing the directory and connected, others see it read-only. Emergency responses - welfare checks, tasks - never wait, from anyone, at any time.
 
-When two devices have both changed the same ward out of each other's sight, Ward Planning merges what it can. Where it cannot, **File > Choose Between Two Versions** names the other person and offers to keep yours, keep theirs, or save yours as a copy so nothing is lost.
+When two devices have both changed the same ward out of each other's sight, Ward Planning merges what it can. Where it cannot, including two people changing who has access at the same moment, **File > Choose Between Two Versions** names the other person and offers to keep yours, keep theirs, or save yours as a copy so nothing is lost.
 
 ### Working offline
 
 Everything works without the server: open the ward, edit it, record contacts, print reports. Changes save on this device and upload when the server is reached again. During an outage, responders see each other's work only when the server is back.
 
-**Access must be granted before an emergency.** Granting, linking, and removing all need the server. A ward that has not been shared with everyone who will need it cannot be shared once the network is down - which is exactly when it matters. Share early.
+**Share before an emergency.** Inviting, joining, and leaving all need the server. A ward that has not been shared with everyone who will need it cannot be shared once the network is down - which is exactly when it matters. Share early.
 
 ### Reports and copies
 
@@ -270,8 +261,6 @@ Reports are plain PDFs, saved where you choose and readable by anyone who has th
 ### Updates
 
 When a newer Ward Planning is published, a notice offers **Download**. **Not Now** keeps that version quiet; the next one shows again.
-
----
 
 ## Keyboard Shortcuts
 

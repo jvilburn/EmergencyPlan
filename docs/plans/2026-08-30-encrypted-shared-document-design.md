@@ -367,173 +367,16 @@ release used.
 
 ## Identity
 
-**An identity is a person with devices.** On first run a device generates **two
-keypairs**: an X25519 pair that documents are sealed to, and an Ed25519 pair that signs
-in to the server. They are created together, stored together as one record in the
-identity file, and loaded together. libsodium can derive one from the other, and this
-design does not: two independent keys cost nothing and keep the sealing key and the
-signing key each doing one job.
+Superseded by `2026-10-12-document-held-access-design.md`: the ward is its own access list, the server stores versions and keeps the lease, and people join through one-time invite links.
 
-**A person is a server record**, shared by all the wards they belong to: a random member
-id, a display name, and their devices, each with its public keys, device name, and the
-device that linked it. Granting a person a ward gives all their devices access; linking
-a device gives it access to all their wards.
-
-The first screen asks one question: **"Do you already use Ward Planning on another
-device?"**
-
-- **No** - the device creates a new person: a random member id and a display name,
-  editable later. It works offline at once, and registers the person with the server the
-  first time it shares a ward or requests access.
-- **Yes** - the device joins an existing person by linking.
-
-Asking this first is what keeps one person from becoming two by accident: a second
-"Bob" granted from a phone would be a separate person, with none of the first Bob's
-devices and a role of its own.
-
-**Linking a device.**
-
-1. The new device posts its public keys and device name, and shows a short link code -
-   a lookup handle, not a secret. The code expires after ten minutes.
-2. The person enters that code on a device they already use, which shows the new
-   device's name - *Link "Pixel 8" to your account?* - and the person confirms.
-3. The server adds the new device to that person. The new device learns its member id
-   and display name from the server, and the person's wards appear in its list.
-4. The approving device sends, with the approval, every ward it holds resealed to the
-   new device, each built on the server's current version and needing no lease. The
-   server adds the device and stores those versions in one step, so the new device can
-   read every one of them the moment it is linked. A ward the approver did not hold at
-   that moment shows *Waiting for access* on the new device until the approver next
-   writes it.
-
-The approving device remembers the device it linked, and every write it makes seals to
-it, so a ward granted to Bob after he linked his phone reaches the phone through Bob's
-laptop. A device sealed into a ward by another route - a grant that named it - needs
-nothing more.
-
-**Unlinking a device** - a lost phone, a retired laptop - is done by the same person from
-any other of their devices. One server call takes the device off the person, and so off
-the allow-list of every ward at once; the next version written in each ward prunes it
-and rotates the key. The unlinked device deletes its local copies when it next connects,
-and returns to the first-run question. A person's last device cannot be unlinked; that
-is leaving. **Unlinking a device also lists every device it linked**, from the server's
-record of who linked each - *This phone also linked "Dell Laptop" on 3 September. Unlink
-it too?* - with **Unlink both** as the default, so a device planted from a stolen phone
-does not outlive the phone.
-
-**Identity outlives a reinstall.** The keypairs live in a file in local app data, which
-the uninstaller leaves in place, so a reinstall finds the same device identity and the
-same access. Clearing local app data makes the machine a new device, which links again;
-the ward list is fetched from the server, so it comes back with it.
-
-There is no passphrase-protected identity export: linking covers new devices, and
-an admin's grant covers losing all of them.
-
-`IdentityFile` is a narrow pair - `load` and `store` - with `load` reporting a missing
-file distinctly from one it cannot read, so a damaged file never looks like a first run.
-
-**Identity resolves before any document exists.** `main.cpp` constructs
-`DocumentManager` before `MainWindow`, and `autoSave()` can fire from a network callback
-with no user present. So identity resolution is a startup precondition: until the
-keypairs are loaded or created, no document is created and no save is attempted.
-
-**A failed encrypted save is a modal error.** A transient status-bar message would be
-overwritten by the next one, and a user would not notice their work had stopped being
-saved. A failed *upload* is not an error and does not interrupt: it is a sync state,
-described below.
-
-An identity file that cannot be read stops startup with a message naming the file,
-rather than minting a second identity over it.
-
----
+What stands from this section: each device holds an X25519 sealing keypair and an
+Ed25519 signing keypair, made at first run and kept like SSH keys in local app data; a
+fingerprint is BLAKE2b over both public keys; a person is named by a 128-bit id their
+devices share.
 
 ## The server
 
-The server holds the access list and the ciphertext. It holds no key material and never
-reads the payload; its only cryptography is verifying the Ed25519 signature on a login
-challenge, and computing device fingerprints.
-
-**It stores:**
-
-- **People**: member id, display name, and devices, each with its fingerprint, X25519
-  public key, verify key, device name, and the device that linked it and when.
-- **Per document**: the current encrypted blob and its header; a monotonic version
-  number; who published the current version and when; the members, each with a role;
-  the access history; pending access requests; and the current lease.
-- **Former access**: for each person removed from or leaving a document, and each
-  unlinked device, who did it and when - so a device that comes back learns why it was
-  cut off.
-- **Link codes**: short-lived, belonging to no document.
-
-**The allow-list is the current members' devices.** A device may fetch and publish a
-document when it belongs to a person who is a member. A grant, removal, leave, or unlink
-takes effect on the server in the call that makes it.
-
-**The interface it must present** - shape rather than a wire specification, which the
-implementation plan carries:
-
-| Endpoint | Purpose |
-|---|---|
-| `POST /auth/challenge`, `POST /auth/token` | Challenge-response sign-in; the token is a bearer credential for every other call |
-| `PUT /me` | Register this device's person on first use, or change its display name |
-| `GET /me` | This device's person and devices, and the documents they are a member of, so a reinstall restores the ward list |
-| `DELETE /me/devices/{fingerprint}` | Unlink one of this person's devices; never the last |
-| `POST /links` | A new device posts its public keys and device name; returns a link code; rate-limited, expires in 10 minutes |
-| `GET /links/{code}` | For the approving device: the new device's name and keys. For the new device: whether it has been approved, and as whom |
-| `POST /links/{code}/approve` | Adds the new device to the caller's person. Carries every ward the approver holds, resealed to the new device, each conditional on the version it was built on; the device and the versions are stored together, or none of it is |
-| `POST /documents` | Register a newly shared document under its client-generated id, with its header and blob; the caller becomes its first admin |
-| `GET /documents/{id}/head` | Version, who published it and when, lease holder, the current header, and the members with their names, roles, and devices |
-| `GET /documents/{id}` | The current version number, its header, its blob, and who published it, in one response |
-| `PUT /documents/{id}` | Upload, conditional on the version the client started from |
-| `POST` and `DELETE /documents/{id}/lease` | Take, refresh, release the edit lease |
-| `GET /documents/{id}/history?after={n}` | The access changes after entry `n`, for the notices |
-| `POST /documents/{id}/requests` | Ask for access; open to any signed-in device, the only document write open to a non-member |
-| `GET /documents/{id}/requests` | List pending requests, for members |
-| `DELETE /documents/{id}/requests/{n}` | Decline a request, for admins |
-| `GET /documents/{id}/requests/mine` | The requesting device's own request status - pending, granted, or declined |
-| `POST /documents/{id}/members` | Grant a pending request, for admins: its person becomes a member. Carries the ward's current version resealed to the device that asked, conditional on the version it was built on; the membership and the version are stored together, or neither is |
-| `DELETE /documents/{id}/members/{member}` | Remove a person, for admins; or leave, for the person themselves |
-| `PUT /documents/{id}/members/{member}/role` | Promote or demote, for admins |
-
-**A download is one consistent snapshot.** The version, its header, and its blob come
-back in a single response, so a publish landing mid-download can never pair a header with
-a different version's blob.
-
-**A device that has lost access is told why.** Any document call from a device that is
-no longer on the allow-list is refused with the reason - removed by whom, left, or
-unlinked by whom - and when. That reason is what the app acts on.
-
-**Authentication.** The client fetches a challenge, signs it with its Ed25519 key, and
-receives a short-lived bearer token, sent with every call over TLS. A device on a
-document's allow-list is a *member* of it; a signed-in device that is not may still read
-its own person, start a link, post an access request, and check its status.
-
-**Rules the server enforces.**
-
-- Writes are conditional on the client's starting version, and the version never
-  decreases.
-- Only allow-listed devices read the blob or write.
-- **An uploaded header lists only allow-listed devices.** It may list fewer - a device
-  just linked or granted is sealed by the next version its approver writes - but a
-  header naming a removed or unlinked device is refused, which is what makes every client
-  prune before it publishes.
-- Only an admin grants, removes, or changes a role. A ward with anyone in it keeps at
-  least one admin: the last admin cannot leave, step down, or be removed while others
-  remain.
-- A person becomes a member only by an admin granting their request. A device joins a
-  person only by a link that person approved, or as the first device of a new person.
-- When the last person leaves, the document's content goes. Its id stays taken, and
-  the record of who lost access stays, so the leaver's other devices still learn they
-  left; anyone else is told they are not a member, and a request for it finds no
-  ward.
-
-Blob size is capped and requests are rate-limited.
-
-**What the server cannot check.** It cannot decrypt, so it cannot verify that the header
-matches the sealing set inside the payload. Clients check it on every open and download
-and refuse a version where they differ.
-
----
+Superseded by `2026-10-12-document-held-access-design.md`: the ward is its own access list, the server stores versions and keeps the lease, and people join through one-time invite links.
 
 ## Local-first sync
 
@@ -833,89 +676,15 @@ service returns.
 
 ## Sharing a document
 
-A new document is local and private, sealed only to the device that made it. **Share**
-registers it with the server: the app posts the blob under the document's existing id,
-and the server makes this person its first admin. The person's other devices reach it
-through the devices that linked them (see *Identity*). What the user gets back is an
-invite link carrying the id, which is not secret, since it grants no access on its own.
+Superseded by `2026-10-12-document-held-access-design.md`: the ward is its own access list, the server stores versions and keeps the lease, and people join through one-time invite links.
 
 ## Granting access
 
-**By request.** Someone opens an invite link, or opens a `.wardplanning` file that
-carries a document id. The app offers "Request access", and one click posts a request
-carrying this device's public keys, the person's member id and display name, and the
-device name. The next admin to open the document sees the request and grants it: the
-admin's app sends, with the grant, the ward's current version resealed to the device that
-asked, and the server makes that person a member and stores that version in one step, so
-the person can read the ward the moment they are a member. The person's other devices are
-sealed by the devices that linked them, with no further grant.
-
-**Every change to who has access is announced.** Each time a member's app checks the
-server, it shows **one** dismissible notice for the changes it has not yet shown - *3
-changes to who has access* - expanding to the list: *Bob Wilson added Tom Hale*, *Bob
-Wilson removed Tom Hale*, *Tom Hale left*, *Bob Wilson made Tom Hale an admin*. The list
-comes from the server's access history, read after the last entry this device showed.
-Only changes to people are announced; linking and unlinking a person's own devices shows
-in the access list instead. This is what makes a hostile admin's actions visible within
-minutes rather than silently effective.
-
-**A request whose display name matches a current member** is flagged in the grant
-dialog - *Bob Wilson already has access. If this is Bob's new phone, Bob should link it
-from his other device instead.* - because granting it would make a second Bob.
-
-The requester's app shows a **pending state** - the request is with the server,
-waiting on an admin to open the document - and notices when access is granted.
-Without it, a volunteer told "install this and you'll see the ward list" is left
-staring at a failure.
-
-**Remote requests are not verified, by choice.** Anyone holding an invite link can post a
-request bearing any display name and device name, and links get forwarded more broadly
-than intended. Verifying a remote request would mean comparing a code over a separate
-channel, and that friction is judged too high for the primary goal of sharing in a
-couple of minutes. What remains in its favour: only admins grant, the grant dialog flags
-a name that matches a current member, every grant is announced to all members, and a
-wrongly granted person is removed by any admin at once. The server rate-limits requests
-so the list cannot be flooded.
-
-**Access has to be granted before it is needed.** Granting runs through the server, so a
-bishopric that has not onboarded everyone cannot add anyone once the network is down -
-which is exactly when the document matters most. The user guide says this directly, and
-the single key holder notice is the standing nudge toward it.
+Superseded by `2026-10-12-document-held-access-design.md`: the ward is its own access list, the server stores versions and keeps the lease, and people join through one-time invite links.
 
 ## Removing access
 
-**Any admin removes a person, alone and at once.** Remove on a person in the access list
-is one server call: their devices are refused from that moment, and the next version
-anyone writes prunes them from the sealing set and rotates the key. No one else
-approves, and nothing waits. The removal is announced to every member.
-
-**A person unlinks their own lost device** from any other of their devices (see
-*Identity*). An admin removes people, not single devices: a lost phone whose owner
-cannot be reached is handled by removing that person and granting them again.
-
-**Admins manage roles.** Any admin promotes a member to admin or demotes an admin,
-including another admin and themselves. A ward with anyone in it keeps at least one
-admin, so the last admin cannot step down while anyone else remains.
-
-**Leaving needs nobody.** Confirming Leave is one server call; once it succeeds, this
-device deletes its copies the same way a removal does, and the leaver's other devices
-delete theirs when they next connect. The next version anyone writes prunes the leaver
-and rotates the key. Leaving needs the server, like every access change; offline, the
-app says to connect first.
-
-**When the last person leaves**, the server drops the document's content: nobody can
-read or write it again, and it does not come back after a reinstall. It keeps the id
-and who lost access, so the leaver's other devices still learn they left.
-
-**The last admin names a successor before leaving.** A ward with members and no admin
-could never grant or remove anyone again, so when the last admin presses Leave while
-others remain, the app asks *Before you leave, choose who will be admin*, and one
-confirmation promotes that person and then leaves.
-
-**The dialog says what removal does and does not do.** The person is cut off the moment
-the server accepts it, and their app deletes its local copy the next time it connects. A
-copy they took out of the app beforehand, or a device that never connects again, keeps
-what it had.
+Superseded by `2026-10-12-document-held-access-design.md`: the ward is its own access list, the server stores versions and keeps the lease, and people join through one-time invite links.
 
 ## Single key holder notice
 
@@ -970,29 +739,7 @@ stay where they are, named by id.
 
 ## Failure paths
 
-Each gets its own message:
-
-| Condition | Message |
-|---|---|
-| No identity on this device | Ask whether they already use Ward Planning elsewhere; link, or request access |
-| Link code unknown or expired | The code was not found; start again on the new device |
-| Listed for this person, but no version sealed to this device | Waiting for access: the ward arrives when the device that linked this one next writes it |
-| Header unreadable | File is damaged |
-| Payload authentication fails | File was altered or truncated |
-| Identity file unreadable | Name the file; Ward Planning will not start a new identity over it |
-| Server unreachable | Working from your local copy; changes upload when it returns |
-| Removed by an admin | Your access to the ward was removed by *name*; the local copy has been deleted |
-| Left, seen on another device | You left this ward; its copy on this device has been deleted |
-| This device unlinked | This device was unlinked by *name*; its wards have been deleted from it |
-| Header and sealing set disagree | Refused like any invalid version: the server's copy could not be verified; your local copy is unchanged |
-| Upload rejected on version | Someone else saved first, so the merge or the conflict dialog |
-| Lease held by another member | Directory read-only, another member is editing; emergency response still editable |
-| Invite link unknown to the server | The document was deleted, or the link is wrong |
-| Server version written by a newer app | This ward was saved by a newer version of Ward Planning. Update to see the latest changes and share your work. Directory read-only; emergency response still editable locally. |
-| Document file missing from app data | Name the ward and offer to fetch it from the server |
-| A member tries to grant, remove, or change a role | Only an admin can change who has access; name the ward's admins |
-| The last admin tries to leave, or be demoted, while others remain | Make someone else an admin first, so the ward can still add and remove people |
-| An access change while offline | Connect to the internet to change who has access |
+Superseded by `2026-10-12-document-held-access-design.md`: the ward is its own access list, the server stores versions and keeps the lease, and people join through one-time invite links.
 
 ## Debugging
 
@@ -1002,21 +749,7 @@ data.
 
 ## Component changes
 
-| Component | Responsibility |
-|---|---|
-| `IdentityFile` | This device's key record as a local file; load tells a first run from a damaged file |
-| `IdentityService` | This device's keypairs and name; the member id and display name it belongs to; the devices it has linked |
-| `DocumentCrypto` | Header parse and build, AD binding, seal and unseal the data key, encrypt and decrypt the payload |
-| `DocumentFile` | The encrypted file format: header line and ciphertext, sealing each new version under the sealing-set rule |
-| `HttpServerApi` | HTTP transport for the server contract; every call answers through a callback |
-| `ServerConnection` | Challenge-response sign-in and the bearer token, over any `ServerApi` |
-| `DocumentSession` | One open ward: the single write path, debounce, base version, publish queue, lease, adoption, conflict routing, lost access |
-| `ServerVersion` | Taking in and writing server versions: the base copy, the sealing-set rule applied to a version about to be written, and building the resealed version a grant or a link approval carries |
-| `DocumentManager` | Commands, undo, and geocoding over the open `DocumentSession` |
-
-There is deliberately **no storage abstraction with local and remote implementations**.
-The local file is always the local file, and the server is a separate concern layered
-above it; a polymorphic store would model a choice this design does not make.
+Superseded by `2026-10-12-document-held-access-design.md`: the ward is its own access list, the server stores versions and keeps the lease, and people join through one-time invite links.
 
 ## Testing
 
