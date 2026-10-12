@@ -312,34 +312,43 @@ std::optional<DocumentLibrary::Copy> DocumentLibrary::openCopy(const QString& so
 
 void DocumentLibrary::restore(ServerConnection& server,
                               QObject* receiver,
+                              const WardsListed& listed,
                               const WardFetched& fetched,
                               const WardLost& lost)
 {
-    server.me(receiver, std::bind(&DocumentLibrary::onListed, this, std::ref(server), receiver, fetched, lost, _1));
+    server.me(receiver,
+              std::bind(&DocumentLibrary::onListed, this, std::ref(server), receiver, listed, fetched, lost, _1));
 }
 
 void DocumentLibrary::onListed(ServerConnection& server,
                                QObject* receiver,
+                               const WardsListed& listed,
                                const WardFetched& fetched,
                                const WardLost& lost,
-                               const ServerContract::Result<ServerContract::Me>& listed)
+                               const ServerContract::Result<ServerContract::Me>& me)
 {
-    if (!listed.ok())
+    if (!me.ok())
     {
         return;
     }
 
     // Ids name files here, so only a real document id is taken from the server.
-    QStringList documentIds = listed.value.value().documents;
+    QStringList documentIds = me.value.value().documents;
     documentIds.removeDuplicates();
+    QStringList onTheirWay;
     for (const QString& documentId : documentIds)
     {
         if (HexCodec::isCanonical(documentId, DocumentHeader::DocumentIdLength) && !contains(documentId))
         {
-            server.head(documentId,
-                        receiver,
-                        std::bind(&DocumentLibrary::onHeadToFetch, this, documentId, std::ref(server), receiver, fetched, _1));
+            onTheirWay.append(documentId);
         }
+    }
+    listed(onTheirWay);
+    for (const QString& documentId : onTheirWay)
+    {
+        server.head(documentId,
+                    receiver,
+                    std::bind(&DocumentLibrary::onHeadToFetch, this, documentId, std::ref(server), receiver, fetched, _1));
     }
 
     // A shared ward here that the server no longer lists for this person was taken

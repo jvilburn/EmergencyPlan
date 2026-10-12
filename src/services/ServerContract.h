@@ -311,8 +311,8 @@ public:
     /// Adds the link's device to the caller's person and stores each resealing as an
     /// upload by the caller, with the new device on every allow-list. All or nothing:
     /// a resealing that fails any upload check refuses the whole call and the device
-    /// is not added. Wards of the person that are not among the resealings are left
-    /// as they are.
+    /// is not added. A document named twice is InvalidRequest. Wards of the person
+    /// that are not among the resealings are left as they are.
     virtual void approveLink(const Session& session,
                              const QString& code,
                              const QList<Resealing>& resealings,

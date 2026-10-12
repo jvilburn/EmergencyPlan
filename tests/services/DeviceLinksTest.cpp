@@ -192,7 +192,9 @@ void DeviceLinksTest::anApprovalRetriesOnceOnAConflict()
     QSignalSpy failed(&links, &DeviceLinks::failed);
 
     // The first approval is refused as a conflict on one ward, and neither ward
-    // moves; the second, built again, lands both.
+    // moves; the second, built again, lands both. The forced conflict leaves the
+    // version where it was, so what is pinned is that one refusal is absorbed, not
+    // that the resealings were rebuilt.
     ward.server.forceConflict(second);
     readAndApprove(ward, links, codeFor(ward, phone));
 

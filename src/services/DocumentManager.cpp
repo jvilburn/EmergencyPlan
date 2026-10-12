@@ -600,8 +600,13 @@ void DocumentManager::onRequests(const RequestsFetched& done,
 
 void DocumentManager::grant(const ServerContract::AccessRequest& request)
 {
-    if (!m_session || m_server == nullptr || !m_session->isShared() || request.person.devices.isEmpty())
+    if (!m_session || m_server == nullptr || !m_session->isShared())
     {
+        return;
+    }
+    if (request.person.devices.isEmpty())
+    {
+        emit grantBlocked(tr("The request names no device to seal the ward to."));
         return;
     }
     startGrant(request, true);
@@ -801,6 +806,12 @@ void DocumentManager::onSessionLost(const ServerContract::LostAccess& lost)
 
 void DocumentManager::onWardLostElsewhere(const QString& documentId, const ServerContract::LostAccess& lost)
 {
+    if (m_session && m_session->documentId() == documentId)
+    {
+        m_session->finishLost(lost);
+        return;
+    }
+
     // A ward no longer in the library has already gone.
     if (m_library->contains(documentId))
     {

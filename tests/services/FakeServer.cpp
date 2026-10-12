@@ -444,7 +444,12 @@ Result<Done> FakeServer::decideApproveLink(const Session& session,
 
     // Every resealing is checked before any of it lands, so a refusal leaves the
     // documents and the person as they were. The check pass sees each document as it
-    // is, so a document may appear only once.
+    // is, so a document may appear only once, and the upload limit is checked for the
+    // whole batch at once.
+    if (!withinLimits(m_uploads, caller.device, m_limits.uploadsPerHour - int(resealings.size()) + 1, 0))
+    {
+        return Result<Done>::failure(ServerError::RateLimited);
+    }
     QSet<QString> seen;
     for (const Resealing& resealing : resealings)
     {

@@ -360,6 +360,30 @@ void ServerConformanceTest::anApprovalWithNoResealingsAddsTheDevice()
     QVERIFY(allowListOf(head.value.value()).contains(phone.fingerprint().toHex()));
 }
 
+void ServerConformanceTest::anApprovalNamingAWardTwiceIsRefused()
+{
+    std::optional<SharedDocument> ward = registerWard(server());
+    QVERIFY(ward.has_value());
+    const TestDevice phone = newDeviceOf(ward->alice, "Alice's phone");
+    const std::optional<Session> phoneSession = signIn(server(), phone);
+    QVERIFY(phoneSession.has_value());
+    const Result<QString> code = startLink(server(), phoneSession.value(), phone);
+    QVERIFY(code.ok());
+
+    // Two resealings of one ward, both on its current version: neither can be
+    // checked against what the other would leave, so the call is refused whole.
+    const Resealing once = resealingOf(ward.value(), {ward->alice, phone});
+    const Resealing twice = resealingOf(ward.value(), {ward->alice, phone});
+    QCOMPARE(approveLink(server(), ward->aliceSession, code.value.value(), {once, twice}).error,
+             ServerError::InvalidRequest);
+    QCOMPARE(headOf(server(), ward->aliceSession, ward->id).value->version, 1);
+    QCOMPARE(meOf(server(), ward->aliceSession).value->person.devices.size(), 1);
+    QVERIFY(!linkOf(server(), ward->aliceSession, code.value.value()).value->approvedAs.has_value());
+
+    QVERIFY(approveLink(server(), ward->aliceSession, code.value.value(), {once}).ok());
+    QCOMPARE(headOf(server(), ward->aliceSession, ward->id).value->version, 2);
+}
+
 void ServerConformanceTest::aLinkCodeExpires()
 {
     const TestDevice laptop = newPerson("Alice");

@@ -122,15 +122,23 @@ public:
     /// A shared ward here that the server no longer lists for this person, and why.
     using WardLost = std::function<void(const QString& documentId, const ServerContract::LostAccess& lost)>;
 
-    /// Asks the server which wards it lists for this person. Each listed ward the
-    /// library lacks - after a reinstall, cleared app data, a grant, or a link - is
-    /// fetched once its head seals to this device, and reported through fetched as
-    /// NotYetSealed until then. Only a ward that arrives is added, so one that does not
-    /// is tried afresh by the next restore. A listed id that is not a document id is
-    /// passed over. Each shared ward here that the list lacks has been lost - removed,
-    /// left elsewhere - and is reported through lost with what its head says. Replies
-    /// come only while receiver lives.
-    void restore(ServerConnection& server, QObject* receiver, const WardFetched& fetched, const WardLost& lost);
+    /// The listed wards the library lacks, as of one answer from the server.
+    using WardsListed = std::function<void(const QStringList& onTheirWay)>;
+
+    /// Asks the server which wards it lists for this person. The listed wards the
+    /// library lacks - after a reinstall, cleared app data, a grant, or a link - are
+    /// reported through listed, then each is fetched once its head seals to this
+    /// device, and reported through fetched as NotYetSealed until then. Only a ward
+    /// that arrives is added, so one that does not is tried afresh by the next
+    /// restore. A listed id that is not a document id is passed over. Each shared ward
+    /// here that the list lacks has been lost - removed, left elsewhere - and is
+    /// reported through lost with what its head says. Replies come only while
+    /// receiver lives.
+    void restore(ServerConnection& server,
+                 QObject* receiver,
+                 const WardsListed& listed,
+                 const WardFetched& fetched,
+                 const WardLost& lost);
 
     /// Fetches one shared ward from the server. On arrival it is added to the
     /// library, if it was not there, and its entry named from what arrived. A ward
@@ -144,9 +152,10 @@ private:
 
     void onListed(ServerConnection& server,
                   QObject* receiver,
+                  const WardsListed& listed,
                   const WardFetched& fetched,
                   const WardLost& lost,
-                  const ServerContract::Result<ServerContract::Me>& listed);
+                  const ServerContract::Result<ServerContract::Me>& me);
     void onHeadToFetch(const QString& documentId,
                        ServerConnection& server,
                        QObject* receiver,

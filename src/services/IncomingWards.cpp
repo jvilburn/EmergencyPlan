@@ -45,8 +45,17 @@ void IncomingWards::checkNow()
     }
     m_library.restore(m_server,
                       this,
+                      std::bind(&IncomingWards::onListed, this, _1),
                       std::bind(&IncomingWards::onFetched, this, _1, _2),
                       std::bind(&IncomingWards::lostAccess, this, _1, _2));
+}
+
+void IncomingWards::onListed(const QStringList& onTheirWay)
+{
+    // The server's list is the whole of what is on its way: a ward it has stopped
+    // listing is no longer waited for.
+    m_waiting = onTheirWay;
+    settleWatch();
 }
 
 void IncomingWards::onStatus(const QString& documentId, const Result<RequestStatus>& status)
@@ -90,19 +99,13 @@ void IncomingWards::onFetched(const QString& documentId, DocumentSession::Downlo
         m_waiting.removeAll(documentId);
         emit fetched(documentId, outcome);
         break;
-    case DocumentSession::Download::NotYetSealed:
-        // Checked again next time, until its approver writes it.
-        if (!m_waiting.contains(documentId))
-        {
-            m_waiting.append(documentId);
-        }
-        break;
     case DocumentSession::Download::AccessLost:
         m_waiting.removeAll(documentId);
         break;
+    case DocumentSession::Download::NotYetSealed:
     case DocumentSession::Download::Unreachable:
     case DocumentSession::Download::ServerFault:
-        // Not reached, or a version that did not check out: tried again next time.
+        // Still on its way: checked again next time.
         break;
     }
     settleWatch();

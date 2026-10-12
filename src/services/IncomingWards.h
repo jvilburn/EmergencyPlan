@@ -39,7 +39,9 @@ public:
     /// The requests not yet answered.
     QStringList pending() const { return m_settings.requestedWards(); }
 
-    /// The listed wards not yet sealed to this device, as of the last check.
+    /// The wards the server lists for this person that are not here yet, as of the
+    /// last check: each waits for a version sealed to this device, or for the server
+    /// to be reached again.
     const QStringList& waiting() const { return m_waiting; }
 
     /// Whether the periodic check is running: it is while anything is pending or waiting.
@@ -65,6 +67,7 @@ signals:
 private:
     void onRequested(const QString& documentId, const ServerContract::Result<ServerContract::Done>& result);
     void onStatus(const QString& documentId, const ServerContract::Result<ServerContract::RequestStatus>& status);
+    void onListed(const QStringList& onTheirWay);
     void onFetched(const QString& documentId, DocumentSession::Download outcome);
 
     void add(const QString& documentId);

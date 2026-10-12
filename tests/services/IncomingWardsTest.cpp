@@ -285,6 +285,8 @@ void IncomingWardsTest::aDeviceWithNothingOnItsWayDoesNotWatch()
     QVERIFY(aliceSession);
     aliceSession.reset();
 
+    // isWatching is the timer's state; the timer is a real QTimer on a minute, so the
+    // tests drive checkNow by hand and pin only when the watch runs.
     BobsApp app(bob);
     QVERIFY(!app.requests.isWatching());
     app.requests.checkNow();

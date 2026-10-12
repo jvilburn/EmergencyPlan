@@ -28,4 +28,6 @@ private slots:
     void anAdminRemovesAndChangesRoles();
     void theLastAdminLeavesThroughASuccessorAndTheWardGoes();
     void aMemberLeavesAndTheWardGoes();
+    void aClosedWardTakenAwayGoesAtTheNextCheck();
+    void anOpenWardTakenAwayClosesAtTheNextCheck();
 };

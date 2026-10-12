@@ -43,6 +43,7 @@ private slots:
     void anApprovedLinkAddsTheDeviceToThePerson();
     void anApprovalStoresEveryResealingOrNone();
     void anApprovalWithNoResealingsAddsTheDevice();
+    void anApprovalNamingAWardTwiceIsRefused();
     void aLinkCodeExpires();
     void aDeviceWithAPersonCannotStartALink();
     void unlinkingCutsTheDeviceOffEveryWard();

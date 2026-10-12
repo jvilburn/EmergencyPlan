@@ -73,8 +73,9 @@ void DeviceLinks::onBuilt(const ServerVersion::Fetched& theirs, const std::optio
 {
     // A ward whose version this device cannot read is left out; this device seals it
     // on its next write of that ward, and the new device waits for access until then.
-    // A ward whose call got no answer is another matter: the approval waits for a
-    // retry, so the new device is not left short by a dropped connection.
+    // A ward whose call got no answer is another matter: the approval is refused
+    // here, so the person approves again once the connection is back, and the new
+    // device is not left short by a dropped connection.
     if (built.has_value())
     {
         m_approval->built.append(built.value());

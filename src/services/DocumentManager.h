@@ -157,8 +157,9 @@ public:
     /// Saves now and publishes. A local failure is the one reported.
     bool publishNow(QString* errorMessage);
 
-    /// A closed ward this device has lost - removed, or left on another device: its
-    /// files, copies, record, and entry go, and the person is told.
+    /// A ward this device has lost - removed, or left on another device - as the
+    /// server's list of this person's wards shows: its files, copies, record, and
+    /// entry go, and the person is told. The open ward goes through its session.
     void onWardLostElsewhere(const QString& documentId, const ServerContract::LostAccess& lost);
 
     /// Saves and closes the open ward, releasing its lease. False, with the reason,

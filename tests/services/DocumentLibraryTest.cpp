@@ -94,7 +94,12 @@ void keepRestored(QHash<QString, DocumentSession::Download>& out,
     out.insert(documentId, outcome);
 }
 
-/// These restores list every ward the library holds, so nothing is lost.
+/// These restores look only at what arrives: the listed set, and any loss, are not
+/// under test.
+void ignoreListed(const QStringList&)
+{
+}
+
 void ignoreLost(const QString&, const ServerContract::LostAccess&)
 {
 }
@@ -629,7 +634,7 @@ void DocumentLibraryTest::aClearedLibraryIsRestoredFromTheServerAndEachOpens()
 
     QObject receiver;
     QHash<QString, DocumentSession::Download> restored;
-    library.restore(wards.alice->connection, &receiver, std::bind(&keepRestored, std::ref(restored), _1, _2), &ignoreLost);
+    library.restore(wards.alice->connection, &receiver, &ignoreListed, std::bind(&keepRestored, std::ref(restored), _1, _2), &ignoreLost);
     wards.ward.settle();
 
     QCOMPARE(restored.size(), qsizetype(2));
@@ -648,7 +653,7 @@ void DocumentLibraryTest::aClearedLibraryIsRestoredFromTheServerAndEachOpens()
 
     // Once restored, nothing more is fetched.
     restored.clear();
-    library.restore(wards.alice->connection, &receiver, std::bind(&keepRestored, std::ref(restored), _1, _2), &ignoreLost);
+    library.restore(wards.alice->connection, &receiver, &ignoreListed, std::bind(&keepRestored, std::ref(restored), _1, _2), &ignoreLost);
     wards.ward.settle();
     QVERIFY(restored.isEmpty());
 }
@@ -664,7 +669,7 @@ void DocumentLibraryTest::aListedWardWhoseFileWasDeletedIsFetchedOnRequest()
     DocumentLibrary library(*settings, folder.filePath("wards"), wards.alice->identity);
     QObject receiver;
     QHash<QString, DocumentSession::Download> restored;
-    library.restore(wards.alice->connection, &receiver, std::bind(&keepRestored, std::ref(restored), _1, _2), &ignoreLost);
+    library.restore(wards.alice->connection, &receiver, &ignoreListed, std::bind(&keepRestored, std::ref(restored), _1, _2), &ignoreLost);
     wards.ward.settle();
     QCOMPARE(restored.size(), qsizetype(2));
 
@@ -795,7 +800,7 @@ void DocumentLibraryTest::onlyAWardThatArrivesIsAdded()
 
     wards.ward.server.setOffline(false);
     QHash<QString, DocumentSession::Download> restored;
-    library.restore(wards.alice->connection, &receiver, std::bind(&keepRestored, std::ref(restored), _1, _2), &ignoreLost);
+    library.restore(wards.alice->connection, &receiver, &ignoreListed, std::bind(&keepRestored, std::ref(restored), _1, _2), &ignoreLost);
     wards.ward.settle();
     QVERIFY(restored.value(wards.named) == DocumentSession::Download::Done);
     QVERIFY(library.contains(wards.named));
@@ -813,7 +818,7 @@ void DocumentLibraryTest::aWardWhoseFetchIsCutShortIsNotAdded()
     // The window closes while the fetch is on its way.
     std::unique_ptr<QObject> receiver = std::make_unique<QObject>();
     QHash<QString, DocumentSession::Download> restored;
-    library.restore(wards.alice->connection, receiver.get(), std::bind(&keepRestored, std::ref(restored), _1, _2), &ignoreLost);
+    library.restore(wards.alice->connection, receiver.get(), &ignoreListed, std::bind(&keepRestored, std::ref(restored), _1, _2), &ignoreLost);
     receiver.reset();
     wards.ward.settle();
 
@@ -822,7 +827,7 @@ void DocumentLibraryTest::aWardWhoseFetchIsCutShortIsNotAdded()
 
     // Anchor: the next start fetches both.
     QObject next;
-    library.restore(wards.alice->connection, &next, std::bind(&keepRestored, std::ref(restored), _1, _2), &ignoreLost);
+    library.restore(wards.alice->connection, &next, &ignoreListed, std::bind(&keepRestored, std::ref(restored), _1, _2), &ignoreLost);
     wards.ward.settle();
     QCOMPARE(library.entries().size(), qsizetype(2));
 }

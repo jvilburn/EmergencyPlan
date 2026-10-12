@@ -13,7 +13,7 @@ namespace
 const QLatin1String KeyBaseVersion("baseVersion");
 const QLatin1String KeyBaseHash("baseHash");
 const QLatin1String KeyBaseSaveCounter("baseSaveCounter");
-const QLatin1String KeyGranted("granted");     ///< accepted and ignored: older settings files carry it
+const QLatin1String KeyGranted("granted");     ///< accepted and ignored
 const QLatin1String KeyHistorySeen("historySeen");
 
 } // namespace
