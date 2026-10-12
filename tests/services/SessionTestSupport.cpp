@@ -47,12 +47,6 @@ void keepFetched(std::optional<ServerVersion::Fetched>& out, const ServerVersion
     out = fetched;
 }
 
-void keepJoin(std::optional<DocumentSession::Join>& out, DocumentSession::Join join, const QString& reason)
-{
-    Q_UNUSED(reason);
-    out = join;
-}
-
 void applyRemovePerson(Document& document, const MemberId& person)
 {
     SealingSet roster = document.sealingSet();
@@ -170,6 +164,16 @@ DeviceIdentity newDeviceOf(const DeviceIdentity& person, const QString& deviceNa
 ServerTestSupport::TestDevice asTestDevice(const DeviceIdentity& identity)
 {
     return ServerTestSupport::TestDevice{identity.deviceName, identity.sealing, identity.signing};
+}
+
+void keepJoin(std::optional<DocumentSession::Join>& out,
+              DocumentSession::Join join,
+              const QString& reason,
+              const std::optional<Document>& document)
+{
+    Q_UNUSED(reason);
+    Q_UNUSED(document);
+    out = join;
 }
 
 SealingSet rosterOf(const QList<DeviceIdentity>& devices)
@@ -305,7 +309,7 @@ std::optional<DocumentSession::Join> TestWard::join(Device& joiner, const FileOp
                           link,
                           joiner.paths(link.documentId),
                           &receiver,
-                          std::bind(&keepJoin, std::ref(joined), _1, _2));
+                          std::bind(&keepJoin, std::ref(joined), _1, _2, _3));
     settle();
     return joined;
 }

@@ -415,15 +415,17 @@ void SealingSetTest::roundTripsThroughJson()
 
     const QJsonObject json = pair.set.toJson();
     QCOMPARE(json["people"].toArray().size(), 2);
-    QCOMPARE(json["invites"].toArray().size(), 2);
     QCOMPARE(json["formerKeys"].toArray().size(), 1);
 
     const std::optional<SealingSet> read = SealingSet::fromJson(json);
     QVERIFY(read.has_value());
     QVERIFY(read.value() == pair.set);
     QCOMPARE(read->person(pair.alice)->devices.size(), 2);
+    QCOMPARE(read->person(pair.alice)->invites, QList<Invite>{user});
     QCOMPARE(read->person(pair.bob)->name, QString("Bob"));
     QVERIFY(read->person(pair.bob)->role == Role::Member);
+    QCOMPARE(read->person(pair.bob)->invites, QList<Invite>{device});
+    QCOMPARE(read->invites().size(), 2);
     QVERIFY(read->invite(device.fingerprint()) == device);
     QVERIFY(read->invite(user.fingerprint()) == user);
     QCOMPARE(read->toJson(), json);
@@ -437,16 +439,15 @@ void SealingSetTest::fromJsonRefusesAnythingIllFormed()
     QVERIFY(SealingSet::fromJson(good).has_value());
 
     const QJsonArray people = good["people"].toArray();
-    const QJsonArray invites = good["invites"].toArray();
     const QJsonObject alice = people.at(0).toObject()["id"].toString() == pair.alice.toHex() ? people.at(0).toObject()
                                                                                            : people.at(1).toObject();
     QCOMPARE(alice["name"].toString(), QString("Alice"));
+    QCOMPARE(alice["invites"].toArray().size(), 1);
 
     QList<QJsonObject> bad;
 
     QJsonObject nobody = good;
     nobody["people"] = QJsonArray();
-    nobody["invites"] = QJsonArray();
     bad.append(nobody);
 
     QJsonObject noDevice = good;
@@ -473,16 +474,12 @@ void SealingSetTest::fromJsonRefusesAnythingIllFormed()
     bad.append(badRole);
 
     QJsonObject badPurpose = good;
-    QJsonObject purpose = invites.first().toObject();
+    QJsonObject purpose = alice["invites"].toArray().first().toObject();
     purpose["for"] = "everyone";
-    badPurpose["invites"] = QJsonArray{purpose};
+    QJsonObject host = alice;
+    host["invites"] = QJsonArray{purpose};
+    badPurpose["people"] = QJsonArray{host};
     bad.append(badPurpose);
-
-    QJsonObject orphan = good;
-    QJsonObject unknownPerson = invites.first().toObject();
-    unknownPerson["person"] = newMember().toHex();
-    orphan["invites"] = QJsonArray{unknownPerson};
-    bad.append(orphan);
 
     QJsonObject shortKey = good;
     QJsonObject truncated = alice;
@@ -507,7 +504,9 @@ void SealingSetTest::fromJsonRefusesAnythingIllFormed()
     bad.append(missingHistory);
 
     QJsonObject missingInvites = good;
-    missingInvites.remove("invites");
+    QJsonObject noInvites = alice;
+    noInvites.remove("invites");
+    missingInvites["people"] = QJsonArray{noInvites};
     bad.append(missingInvites);
 
     for (qsizetype i = 0; i < bad.size(); ++i)
@@ -517,7 +516,8 @@ void SealingSetTest::fromJsonRefusesAnythingIllFormed()
 
     // Anchor: Alice alone, with no invites, is a set.
     QJsonObject aliceAlone = good;
-    aliceAlone["people"] = QJsonArray{alice};
-    aliceAlone["invites"] = QJsonArray();
+    QJsonObject quiet = alice;
+    quiet["invites"] = QJsonArray();
+    aliceAlone["people"] = QJsonArray{quiet};
     QVERIFY(SealingSet::fromJson(aliceAlone).has_value());
 }

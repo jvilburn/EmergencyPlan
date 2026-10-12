@@ -94,35 +94,33 @@ struct Joining
     DocumentSession::Joined done;
 };
 
-void fetchForJoin(const Joining& joining, bool mayRetry);
-
 /// The last step of every join: the current version, fetched as this device and
 /// written as any download is. One not sealed to this device ends the join as
 /// whenNotHeld says.
 void onJoinDownloaded(const Joining& joining,
                       DocumentSession::Join whenNotHeld,
                       DocumentSession::Download outcome,
-                      const std::optional<Document>&)
+                      const std::optional<Document>& document)
 {
     switch (outcome)
     {
     case DocumentSession::Download::Done:
-        joining.done(DocumentSession::Join::Done, QString());
+        joining.done(DocumentSession::Join::Done, QString(), document);
         return;
     case DocumentSession::Download::AccessLost:
-        joining.done(whenNotHeld, QString());
+        joining.done(whenNotHeld, QString(), std::nullopt);
         return;
     case DocumentSession::Download::Unreachable:
-        joining.done(DocumentSession::Join::Unreachable, QString());
+        joining.done(DocumentSession::Join::Unreachable, QString(), std::nullopt);
         return;
     case DocumentSession::Download::NeedsNewerVersion:
-        joining.done(DocumentSession::Join::NeedsNewerVersion, QString());
+        joining.done(DocumentSession::Join::NeedsNewerVersion, QString(), std::nullopt);
         return;
     case DocumentSession::Download::ServerFault:
-        joining.done(DocumentSession::Join::ServerFault, QObject::tr("The joined version did not check out."));
+        joining.done(DocumentSession::Join::ServerFault, QObject::tr("The joined version did not check out."), std::nullopt);
         return;
     case DocumentSession::Download::WriteFailed:
-        joining.done(DocumentSession::Join::WriteFailed, QString());
+        joining.done(DocumentSession::Join::WriteFailed, QString(), std::nullopt);
         return;
     }
 }
@@ -138,7 +136,7 @@ void finishJoin(const Joining& joining, DocumentSession::Join whenNotHeld)
 
 /// The joined version was answered. Whatever the answer, the server's current version
 /// decides: one whose reply was lost after it landed still names this device.
-void onJoinUploaded(const Joining& joining, bool mayRetry, const Result<qint64>& result)
+void onJoinUploaded(const Joining& joining, const Result<qint64>& result)
 {
     switch (result.error)
     {
@@ -151,26 +149,22 @@ void onJoinUploaded(const Joining& joining, bool mayRetry, const Result<qint64>&
         finishJoin(joining, DocumentSession::Join::Unreachable);
         return;
     case ServerError::VersionConflict:
-        // Someone published between the fetch and the upload: once more on theirs.
-        if (mayRetry)
-        {
-            fetchForJoin(joining, false);
-            return;
-        }
-        joining.done(DocumentSession::Join::Busy, QString());
+        joining.done(DocumentSession::Join::Busy, QString(), std::nullopt);
         return;
     case ServerError::UnknownDocument:
-        joining.done(DocumentSession::Join::UnknownWard, QString());
+        joining.done(DocumentSession::Join::UnknownWard, QString(), std::nullopt);
         return;
     default:
-        joining.done(DocumentSession::Join::ServerFault, QObject::tr("The server refused the version that joins this device."));
+        joining.done(DocumentSession::Join::ServerFault,
+                     QObject::tr("The server refused the version that joins this device."),
+                     std::nullopt);
         return;
     }
 }
 
 /// The current version, read as the invite: this device takes the invite's place and
 /// the result goes up signed by the invite.
-void onJoinFetched(const Joining& joining, bool mayRetry, const Fetched& theirs)
+void onJoinFetched(const Joining& joining, const Fetched& theirs)
 {
     switch (theirs.outcome)
     {
@@ -182,25 +176,27 @@ void onJoinFetched(const Joining& joining, bool mayRetry, const Fetched& theirs)
         finishJoin(joining, DocumentSession::Join::InviteUsed);
         return;
     case Fetched::Outcome::NeedsNewerVersion:
-        joining.done(DocumentSession::Join::NeedsNewerVersion, QString());
+        joining.done(DocumentSession::Join::NeedsNewerVersion, QString(), std::nullopt);
         return;
     case Fetched::Outcome::CallFailed:
         joining.done(theirs.error == ServerError::UnknownDocument ? DocumentSession::Join::UnknownWard
                                                                   : DocumentSession::Join::Unreachable,
-                     QString());
+                     QString(),
+                     std::nullopt);
         return;
     case Fetched::Outcome::ServerFault:
-        joining.done(DocumentSession::Join::ServerFault, theirs.reason);
+        joining.done(DocumentSession::Join::ServerFault, theirs.reason, std::nullopt);
         return;
     }
 
+    // A roster that refuses this device already lists it, or lists this person: the
+    // current version says which.
     const DeviceIdentity& identity = joining.context.identity;
     Document document = theirs.document;
     SealingSet roster = document.sealingSet();
     if (!roster.join(joining.keys.fingerprint(), identity.device(), identity.member, identity.displayName))
     {
-        joining.done(DocumentSession::Join::ServerFault,
-                     QObject::tr("This ward already lists you. Use Add a Device on one of your other devices to bring it here."));
+        finishJoin(joining, DocumentSession::Join::InviteUsed);
         return;
     }
     document.setSealingSet(roster);
@@ -210,7 +206,9 @@ void onJoinFetched(const Joining& joining, bool mayRetry, const Fetched& theirs)
         DocumentFile::seal(resealed.document, theirs.sealed.header, resealed.dataKey);
     if (!sealed.has_value())
     {
-        joining.done(DocumentSession::Join::ServerFault, QObject::tr("The version could not be sealed on this device."));
+        joining.done(DocumentSession::Join::ServerFault,
+                     QObject::tr("The version could not be sealed on this device."),
+                     std::nullopt);
         return;
     }
 
@@ -219,17 +217,7 @@ void onJoinFetched(const Joining& joining, bool mayRetry, const Fetched& theirs)
                                     theirs.version,
                                     Upload{sealed->header, sealed->ciphertext},
                                     joining.receiver,
-                                    std::bind(&onJoinUploaded, joining, mayRetry, _1));
-}
-
-void fetchForJoin(const Joining& joining, bool mayRetry)
-{
-    ServerVersion::fetch(joining.keys.self(),
-                         {},
-                         joining.context.server,
-                         joining.link.documentId,
-                         joining.receiver,
-                         std::bind(&onJoinFetched, joining, mayRetry, _1));
+                                    std::bind(&onJoinUploaded, joining, _1));
 }
 
 } // namespace
@@ -382,7 +370,8 @@ void DocumentSession::join(const Context& context,
                            QObject* receiver,
                            Joined done)
 {
-    fetchForJoin(Joining{context, link, inviteKeys(link.seed), paths, receiver, done}, true);
+    const Joining joining{context, link, inviteKeys(link.seed), paths, receiver, done};
+    ServerVersion::fetch(joining.keys.self(), {}, context.server, link.documentId, receiver, std::bind(&onJoinFetched, joining, _1));
 }
 
 bool DocumentSession::isShared() const
@@ -565,12 +554,6 @@ bool DocumentSession::writeLocal(const Fetched& theirs)
 
 void DocumentSession::install(const Document& document)
 {
-    // An edit's own save writes the document already in memory.
-    if (&document == &m_document)
-    {
-        return;
-    }
-
     // Who the document is sealed to is not undoable content, so a changed roster
     // keeps undo and is announced on its own.
     Document content = document;
@@ -1200,14 +1183,11 @@ void DocumentSession::onLeft(const Result<qint64>& result)
         return;
     }
 
-    emit leaveFailed(result.error);
-
-    // The server moved past the base: taken in now, so the next try builds on it.
-    if (result.error == ServerError::VersionConflict)
-    {
-        m_checkAgain = true;
-    }
+    // A head check next, whatever refused it: a version past the base is taken in,
+    // so the next try builds on it, and a version without this device ends the session.
+    m_checkAgain = true;
     finishOperation();
+    emit leaveFailed(result.error);
 }
 
 // --- The lease -------------------------------------------------------------------

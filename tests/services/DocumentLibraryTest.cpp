@@ -87,7 +87,10 @@ QString addWardWithFiles(Fixture& fixture)
     return documentId;
 }
 
-void keepJoined(std::optional<DocumentSession::Join>& out, DocumentSession::Join outcome, const QString&)
+void keepJoined(std::optional<DocumentSession::Join>& out,
+                DocumentSession::Join outcome,
+                const QString&,
+                const std::optional<Document>&)
 {
     out = outcome;
 }
@@ -671,7 +674,7 @@ void DocumentLibraryTest::aJoinedWardIsAddedAndOpens()
     ServerConnection connection(ward.server, bob);
     QObject receiver;
     std::optional<DocumentSession::Join> joined;
-    library.join(link.value(), connection, &receiver, std::bind(&keepJoined, std::ref(joined), _1, _2));
+    library.join(link.value(), connection, &receiver, std::bind(&keepJoined, std::ref(joined), _1, _2, _3));
     ward.settle();
 
     QVERIFY(joined == DocumentSession::Join::Done);
@@ -717,7 +720,7 @@ void DocumentLibraryTest::aJoinThatFailsAddsNothing()
     ServerConnection connection(ward.server, bob);
     QObject receiver;
     std::optional<DocumentSession::Join> joined;
-    library.join(link.value(), connection, &receiver, std::bind(&keepJoined, std::ref(joined), _1, _2));
+    library.join(link.value(), connection, &receiver, std::bind(&keepJoined, std::ref(joined), _1, _2, _3));
     ward.settle();
 
     QVERIFY(joined == DocumentSession::Join::InviteUsed);

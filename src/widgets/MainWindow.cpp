@@ -1055,20 +1055,11 @@ void MainWindow::onJoinFailed(DocumentSession::Join outcome, const QString& reas
 
 void MainWindow::onLeaveFailed(ServerContract::ServerError error)
 {
-    QString message;
-    switch (error)
-    {
-    case ServerContract::ServerError::Unreachable:
-        message = tr("Connect to the internet to leave a ward; the server has to hold your leaving.");
-        break;
-    case ServerContract::ServerError::InvalidRequest:
-        message = tr("The ward keeps its last person and its last admin. Make someone else an admin first.");
-        break;
-    default:
-        message = tr("You could not leave just now. Try again in a moment.");
-        break;
-    }
-    QMessageBox::warning(this, tr("Leave"), message);
+    QMessageBox::warning(this,
+                         tr("Leave"),
+                         error == ServerContract::ServerError::Unreachable
+                             ? tr("Connect to the internet to leave a ward; the server has to hold your leaving.")
+                             : tr("You could not leave just now. Try again in a moment."));
 }
 
 void MainWindow::onRemovePerson(const MemberId& person)

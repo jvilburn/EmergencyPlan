@@ -74,7 +74,7 @@ public:
     {
         Directory,
         Response,
-        Roster          ///< who has access: never refused, merged by person
+        Roster          ///< who has access: never refused, merged entry by entry
     };
 
     enum class Refusal
@@ -110,7 +110,7 @@ public:
         NeedsNewerVersion,
         ServerFault,        ///< the version did not check out; the reason says why
         WriteFailed,
-        Busy                ///< the ward changed under the join twice; open the link again
+        Busy                ///< the ward changed under the join; open the link again
     };
 
     struct Context
@@ -171,8 +171,9 @@ public:
     /// the local file and base, so a link opened again after a lost answer or a failed
     /// write finishes the same way. The caller then adds the ward to its library and
     /// opens it. done is called only while receiver is alive; reason is set for
-    /// ServerFault.
-    using Joined = std::function<void(Join outcome, const QString& reason)>;
+    /// ServerFault, and document on Done.
+    using Joined =
+        std::function<void(Join outcome, const QString& reason, const std::optional<Document>& document)>;
     static void join(const Context& context,
                      const FileOpenRouter::InviteLink& link,
                      const DocumentPaths& paths,
@@ -271,7 +272,8 @@ signals:
     /// The version that leaves was refused, or could not be built.
     void leaveFailed(ServerContract::ServerError error);
 
-    /// Who has access changed from outside an edit: a version taken in.
+    /// Who has access changed from outside an edit: a version taken in, or a save
+    /// that rotated the key.
     void rosterChanged();
 
 private:

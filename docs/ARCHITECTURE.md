@@ -430,8 +430,10 @@ which the invite's sealing and signing keypairs are derived. Making one writes a
 sealed to the invite as well. Opening the link fetches the current version as the
 invite, puts this device in the invite's place in the roster (under the inviter's person
 for a Device invite, as a new person for a User invite), and writes the next version
-signed by the invite, which the current header names. From then on the device signs as
-itself. Roles are a convention among honest clients; the server cannot see them.
+signed by the invite, which the current header names. The device then downloads the
+current version as itself and writes it, so a link opened again after a lost answer or a
+failed write finishes the same way. From then on the device signs as itself. Roles are a
+convention among honest clients; the server cannot see them.
 
 ### The services
 
@@ -469,9 +471,11 @@ saved file conditional on the server version this session started from. The **ba
 copy** beside the local file is the file exactly as it stood at that version; its save
 counter tells whether the local file has unpublished changes, and a three-way merge
 against it tells what changed here from what changed there. The roster merges entry by
-entry, and never conflicts: a person or an invite changed on one side is taken from that
-side; one changed differently on both is the server's. A refused publish fetches the
-server's version, validates it, merges, reseals, and publishes again.
+entry, and never conflicts: a person's entry, with their devices and invites, changed on
+one side is taken from that side; one changed differently on both is the server's, and
+where the entries taken together are not a sound set, the server's set stands whole. A
+refused publish fetches the server's version, validates it, merges, reseals, and publishes
+again.
 
 ## File Formats
 
@@ -488,7 +492,7 @@ id refuses the whole payload. Its format version lives in the file's header, not
 
 ```json
 {
-    "sealingSet": { "people": [...], "invites": [...], "formerKeys": [...] },
+    "sealingSet": { "people": [...], "formerKeys": [...] },
     "stakes": [...],
     "wards": [...],
     "families": [

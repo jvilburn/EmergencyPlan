@@ -64,6 +64,12 @@ DeviceIdentity newDeviceOf(const DeviceIdentity& person, const QString& deviceNa
 
 ServerTestSupport::TestDevice asTestDevice(const DeviceIdentity& identity);
 
+/// A Joined that keeps the outcome in out.
+void keepJoin(std::optional<DocumentSession::Join>& out,
+              DocumentSession::Join join,
+              const QString& reason,
+              const std::optional<Document>& document);
+
 /// A roster of these devices as invites would build it: the first its maker, an
 /// admin; each later one joined through an invite of its own, as another device of a
 /// person already listed under its member id, else as a new member.

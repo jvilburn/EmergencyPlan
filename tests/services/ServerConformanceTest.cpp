@@ -188,6 +188,11 @@ void ServerConformanceTest::anUploadWhoseHeaderNamesAnotherDocumentIsRefused()
     QCOMPARE(uploadAs(server(), ward->bob, ward->id, ward->version, elsewhere).error, ServerError::InvalidRequest);
     QCOMPARE(headOf(server(), ward->id).value->version, 2);
     QCOMPARE(headOf(server(), elsewhere.header.documentId).error, ServerError::UnknownDocument);
+
+    // Anchor: the same upload under the ward's own id lands.
+    const Upload here = uploadFor(ward->id, {ward->alice, ward->bob, ward->carol}, 5);
+    QVERIFY(uploadAs(server(), ward->bob, ward->id, ward->version, here).ok());
+    QCOMPARE(headOf(server(), ward->id).value->version, 3);
 }
 
 void ServerConformanceTest::aKeyTheCurrentHeaderDropsCanNoLongerWrite()

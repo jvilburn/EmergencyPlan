@@ -347,20 +347,21 @@ void DocumentLibrary::join(const FileOpenRouter::InviteLink& link,
                           link,
                           pathsIn(link.documentId),
                           receiver,
-                          std::bind(&DocumentLibrary::onJoined, this, link.documentId, joined, _1, _2));
+                          std::bind(&DocumentLibrary::onJoined, this, link.documentId, joined, _1, _2, _3));
 }
 
 void DocumentLibrary::onJoined(const QString& documentId,
                                const DocumentSession::Joined& joined,
                                DocumentSession::Join outcome,
-                               const QString& reason)
+                               const QString& reason,
+                               const std::optional<Document>& document)
 {
-    // Named once it opens; the join wrote the file without reading it back here.
     if (outcome == DocumentSession::Join::Done)
     {
         add(documentId);
+        noteDocument(documentId, document.value());
     }
-    joined(outcome, reason);
+    joined(outcome, reason, document);
 }
 
 DocumentPaths DocumentLibrary::pathsIn(const QString& documentId) const

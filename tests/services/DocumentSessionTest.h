@@ -51,7 +51,7 @@ private slots:
     void twoRefusalsInARowBothMergeSilently();
     void aFamilyEditOnBothSidesRaisesAConflict();
     void reopeningBeforeResolveMeetsTheConflictAgain();
-    void keepMineAfterTheyGrantedKeepsMyDirectoryAndTheirPerson();
+    void keepMineAfterTheyAddedSomeoneKeepsMyDirectoryAndTheirPerson();
     void keepMineNeverRestoresAMemberTheyRemoved();
     void keepTheirsHoldsTheirDirectoryAndTheMergedResponse();
 
@@ -61,6 +61,7 @@ private slots:
     void aRemovalOnAPublishDeletesEverything();
     void aLeaveReportsLeftOnceTheServerHasIt();
     void aLeaveFromThisPersonsOtherDeviceReportsLeft();
+    void aLeaveRefusedAsAConflictTakesTheirsInAndThenLands();
     void aDeviceTakenOutByItsOwnPersonReportsUnlinked();
 
     // Read-only and updates

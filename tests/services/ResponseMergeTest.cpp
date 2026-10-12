@@ -630,7 +630,9 @@ void ResponseMergeTest::rosterEditsOnBothSidesMergeEntryByEntry()
     const SealingSet keys = SealingSet::merge(base.sealingSet(), mineKeys, theirsKeys);
     QVERIFY(keys.descendsFrom(mineRotated));
     QVERIFY(keys.descendsFrom(theirsRotated));
-    QCOMPARE(keys.toJson().value("formerKeys").toArray().size(), 2);
+    const QJsonArray theirsThenMine{theirsKeys.toJson().value("formerKeys").toArray().first(),
+                                    mineKeys.toJson().value("formerKeys").toArray().first()};
+    QCOMPARE(keys.toJson().value("formerKeys").toArray(), theirsThenMine);
 }
 
 void ResponseMergeTest::theSameEntryChangedOnBothSidesIsTheirs()
@@ -665,7 +667,8 @@ void ResponseMergeTest::anUnsoundMergeIsTheirsWhole()
     QVERIFY(SealingSet::merge(base, daveGone, aliceGone) == aliceGone);
     QVERIFY(SealingSet::merge(base, aliceGone, daveGone) == daveGone);
 
-    // Dave invites someone here while he is removed there: the invite has no maker.
+    // Dave's invites are part of his entry: made here while he is removed there, or
+    // the other way round, his entry is theirs, and his invite goes with it.
     SealingSet davesInvite = base;
     Invite byDave;
     byDave.purpose = Invite::For::User;
@@ -674,4 +677,5 @@ void ResponseMergeTest::anUnsoundMergeIsTheirsWhole()
     byDave.keys = newKeys();
     QVERIFY(davesInvite.addInvite(byDave));
     QVERIFY(SealingSet::merge(base, davesInvite, daveGone) == daveGone);
+    QVERIFY(SealingSet::merge(base, daveGone, davesInvite) == davesInvite);
 }

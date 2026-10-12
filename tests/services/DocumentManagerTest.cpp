@@ -558,7 +558,7 @@ void DocumentManagerTest::anAdminRemovesWithdrawsAndChangesRoles()
     QVERIFY(app.manager.roster().person(alice.identity.member).has_value());
 }
 
-void DocumentManagerTest::theLastAdminCannotStepDownOrLeave()
+void DocumentManagerTest::theLastAdminCannotStepDown()
 {
     TestWard ward;
     Device& alice = ward.add(newIdentity("Alice", "Laptop"));
@@ -572,19 +572,12 @@ void DocumentManagerTest::theLastAdminCannotStepDownOrLeave()
     const QString file = app.library.pathsFor(documentId).file;
     QCOMPARE(ward.head()->version, 3);
     QSignalSpy lost(&app.manager, &DocumentManager::accessLost);
-    QSignalSpy leaveFailed(&app.manager, &DocumentManager::leaveFailed);
 
-    // The only admin, with Bob still here: stepping down and leaving are both refused.
+    // The only admin, with Bob still here: stepping down is refused.
     app.manager.setRole(alice.identity.member, Role::Member);
     ward.settle();
     QVERIFY(app.manager.self()->role == Role::Admin);
     QCOMPARE(ward.head()->version, 3);
-    app.manager.leave();
-    ward.settle();
-    QCOMPARE(leaveFailed.count(), 1);
-    QCOMPARE(lost.count(), 0);
-    QCOMPARE(ward.head()->version, 3);
-    QVERIFY(QFile::exists(file));
 
     // Anchor: with Bob made an admin first, she steps down, then leaves.
     app.manager.setRole(bob.identity.member, Role::Admin);

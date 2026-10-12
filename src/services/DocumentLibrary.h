@@ -125,7 +125,7 @@ public:
     void fetchWard(const QString& documentId, ServerConnection& server, QObject* receiver, const WardFetched& fetched);
 
     /// Joins the ward an invite link names, as DocumentSession::join does, and on
-    /// Done adds it to the library, Untitled until it is opened.
+    /// Done adds it to the library under its name.
     void join(const FileOpenRouter::InviteLink& link,
               ServerConnection& server,
               QObject* receiver,
@@ -139,7 +139,11 @@ private:
                        const WardFetched& fetched,
                        DocumentSession::Download outcome,
                        const std::optional<Document>& document);
-    void onJoined(const QString& documentId, const DocumentSession::Joined& joined, DocumentSession::Join outcome, const QString& reason);
+    void onJoined(const QString& documentId,
+                  const DocumentSession::Joined& joined,
+                  DocumentSession::Join outcome,
+                  const QString& reason,
+                  const std::optional<Document>& document);
 
     /// A name in directory that no file has yet: the base name, then "(2)", "(3)"...
     static QString unusedPath(const QString& directory, const QString& baseName);

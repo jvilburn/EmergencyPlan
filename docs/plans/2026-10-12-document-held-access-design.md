@@ -105,8 +105,8 @@ An invite is a one-time bearer key.
    by an admin. Removing a person withdraws the invites they made.
 
 Two people changing who has access at the same moment merges entry by entry, like the
-emergency response, and never asks: a person or an invite changed on one side is taken
-from that side; one changed differently on both is the server's. Where the entries taken
+emergency response, and never asks: a person's entry, with their devices and invites,
+changed on one side is taken from that side; one changed differently on both is the server's. Where the entries taken
 together are not a sound set, the server's set stands whole. An invite made here and a
 join landing there cross without troubling anyone. The
 last person cannot leave: a ward with nobody to read it is not a state.

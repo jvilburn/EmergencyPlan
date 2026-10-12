@@ -24,7 +24,7 @@ private slots:
     void shareAnnouncesTheWardAndOfflineSaysWhy();
     void anInviteJoinsAUserOrAnotherDevice();
     void anAdminRemovesWithdrawsAndChangesRoles();
-    void theLastAdminCannotStepDownOrLeave();
+    void theLastAdminCannotStepDown();
     void aMemberLeavesAndTheWardGoes();
     void aClosedWardTakenAwayGoesWhenItIsNextOpened();
     void anOpenWardTakenAwayClosesAtTheNextCheck();

@@ -691,14 +691,6 @@ void DocumentManager::leave()
         return;
     }
 
-    // A ward always keeps an admin while anyone is left in it.
-    const SealingSet current = roster();
-    const std::optional<Holder> me = self();
-    if (me.has_value() && me->isAdmin() && current.adminCount() == 1 && current.people().size() > 1)
-    {
-        emit leaveFailed(ServerContract::ServerError::InvalidRequest);
-        return;
-    }
     m_session->leave();
 }
 

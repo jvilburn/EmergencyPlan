@@ -24,6 +24,8 @@
 ///
 /// A task's assignment (assignee, notes, and the notification sent) is one value,
 /// and so is its resolution (notes and time).
+///
+/// Who has access merges by SealingSet::merge, where a both-sides change is theirs.
 namespace ResponseMerge
 {
 

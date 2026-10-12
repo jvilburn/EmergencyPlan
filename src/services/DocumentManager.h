@@ -132,7 +132,7 @@ public:
     std::optional<Holder> self() const;
 
     /// What changed in who has access since the notice was last dismissed, one line
-    /// each; this device's own changes count as seen.
+    /// each, this device's own changes included.
     const QStringList& unseenRosterChanges() const { return m_rosterChanges; }
     void dismissRosterChanges();
 
@@ -161,8 +161,8 @@ public:
 
     /// This person leaves the open ward: a version without them goes up, and once
     /// it has, the ward and its copies go from this device, reported as accessLost.
-    /// The last admin, with others still in the ward, is refused through leaveFailed
-    /// and nothing is written.
+    /// The last person cannot leave, through leaveFailed; whether the last admin may
+    /// is the caller's rule.
     void leave();
 
     /// Joins the ward an invite link names and opens it. fetchFinished reports the

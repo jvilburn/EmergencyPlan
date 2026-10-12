@@ -1110,7 +1110,7 @@ void DocumentSessionTest::reopeningBeforeResolveMeetsTheConflictAgain()
     QVERIFY(latitudeOf(ward.serverCopy(alice)->document, ward.adams) == 60.0);
 }
 
-void DocumentSessionTest::keepMineAfterTheyGrantedKeepsMyDirectoryAndTheirPerson()
+void DocumentSessionTest::keepMineAfterTheyAddedSomeoneKeepsMyDirectoryAndTheirPerson()
 {
     TestWard ward;
     Device& alice = ward.add(newIdentity("Alice", "Laptop"));
@@ -1353,6 +1353,40 @@ void DocumentSessionTest::aLeaveReportsLeftOnceTheServerHasIt()
     QCOMPARE(aliceRecorder.leaveFailures.size(), 1);
     QVERIFY(!aliceRecorder.lost.has_value());
     QCOMPARE(headVersion(ward), 4);
+}
+
+void DocumentSessionTest::aLeaveRefusedAsAConflictTakesTheirsInAndThenLands()
+{
+    TestWard ward;
+    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
+    Device& bob = ward.add(newIdentity("Bob", "Phone"));
+    std::unique_ptr<DocumentSession> aliceSession;
+    std::unique_ptr<DocumentSession> bobSession;
+    QVERIFY(openAliceAndBob(ward, alice, bob, aliceSession, bobSession));
+    Recorder recorder;
+    recorder.watch(*bobSession);
+
+    // Alice publishes; Bob, still on the older base, is refused as a conflict and
+    // takes her version in.
+    aliceSession->edit(DocumentSession::Edit::Directory, moveFamily(ward.adams, 57.0));
+    QVERIFY(alice.timers->fire(Timer::Save));
+    ward.settle();
+    const qint64 alices = headVersion(ward);
+    bobSession->leave();
+    ward.settle();
+    QCOMPARE(recorder.leaveFailures, QList<ServerContract::ServerError>{ServerContract::ServerError::VersionConflict});
+    QCOMPARE(headVersion(ward), alices);
+    QCOMPARE(bob.records.record(ward.documentId).baseVersion, std::optional<qint64>(alices));
+    QVERIFY(latitudeOf(bobSession->document(), ward.adams) == 57.0);
+    QCOMPARE(bobSession->syncState(), SyncState::UpToDate);
+
+    // The next try lands.
+    bobSession->leave();
+    ward.settle();
+    QCOMPARE(recorder.leaveFailures.size(), 1);
+    QCOMPARE(headVersion(ward), alices + 1);
+    QVERIFY(!bob.records.contains(ward.documentId));
+    QCOMPARE(recipientsOnServer(ward), hexOf({&alice.identity}));
 }
 
 void DocumentSessionTest::aLeaveFromThisPersonsOtherDeviceReportsLeft()
@@ -1877,7 +1911,7 @@ void DocumentSessionTest::aJoinWhoseAnswerWasLostFinishesWhenTheLinkIsOpenedAgai
                           link.value(),
                           bob.paths(ward.documentId),
                           &receiver,
-                          [&joined](DocumentSession::Join outcome, const QString&) { joined = outcome; });
+                          std::bind(&keepJoin, std::ref(joined), _1, _2, _3));
     ward.server.loseReplies(true);
     QVERIFY(ward.server.deliverNext());
     ward.server.holdReplies(false);
