@@ -23,10 +23,22 @@ struct NamedDevice
     bool operator!=(const NamedDevice& other) const { return !(*this == other); }
 };
 
+/// One person with access, a holder of the key: their devices hold it.
+struct Holder
+{
+    MemberId id;
+    QString name;
+    Role role = Role::Member;
+    QList<NamedDevice> devices;         ///< sorted by fingerprint hex
+
+    bool isAdmin() const { return role == Role::Admin; }
+    bool operator==(const Holder& other) const;
+    bool operator!=(const Holder& other) const { return !(*this == other); }
+};
+
 /// A one-time invite: a keypair the data key is sealed to until someone joins with
 /// it. Whoever holds the seed the keypair was made from can read the ward and write
-/// the version that puts their own device in the invite's place. An invite is listed
-/// under a person: whom a Device invite joins, who made a User invite.
+/// the version that puts their own device in the invite's place.
 struct Invite
 {
     enum class For
@@ -36,8 +48,8 @@ struct Invite
     };
 
     For purpose = For::User;
-    MemberId person;                    ///< the person this invite is listed under
-    Role role = Role::Member;
+    MemberId person;                    ///< whom a Device invite joins; who made a User invite
+    Role role = Role::Member;           ///< what a User invite's joiner becomes; a Device joins as its person
     QString label;                      ///< shown while the invite is open: "for Bob"
     DeviceKeys keys;
 
@@ -47,30 +59,13 @@ struct Invite
     bool operator!=(const Invite& other) const { return !(*this == other); }
 };
 
-/// One person with access, a holder of the key: their devices hold it, and their open
-/// invites will.
-struct Holder
-{
-    MemberId id;
-    QString name;
-    Role role = Role::Member;
-    QList<NamedDevice> devices;         ///< sorted by fingerprint hex
-    QList<Invite> invites;              ///< sorted by fingerprint hex
-
-    bool isAdmin() const { return role == Role::Admin; }
-    bool operator==(const Holder& other) const;
-    bool operator!=(const Holder& other) const { return !(*this == other); }
-};
-
 /// Who has access to this document, carried inside the payload: each person with a
-/// name and a role, each of their devices with its keys, and each invite of theirs
-/// still open.
+/// name and a role, each of their devices with its keys, and each invite still open.
 ///
 /// This is the whole access list. The header seals the data key to every device and
 /// invite here and to nothing else, and the server sees only those fingerprints. A
 /// person is added by an invite they join with, removed by a write without them, and
-/// nothing else changes who can read. A person's invites are part of their entry, so
-/// they go wherever the person goes.
+/// nothing else changes who can read.
 ///
 /// It also carries a hash of every data key the ward used before its current one, so
 /// a version can show it descends from one this device already holds: only someone
@@ -93,13 +88,13 @@ public:
     std::optional<Holder> personOf(const Fingerprint& device) const;
     std::optional<NamedDevice> device(const Fingerprint& fingerprint) const;
 
-    /// Everyone's, sorted by fingerprint hex.
+    /// Sorted by fingerprint hex.
     QList<Invite> invites() const;
     std::optional<Invite> invite(const Fingerprint& fingerprint) const;
 
     /// A device or an invite.
     bool contains(const Fingerprint& fingerprint) const;
-    bool isEmpty() const { return m_people.isEmpty(); }
+    bool isEmpty() const { return m_people.isEmpty() && m_invites.isEmpty(); }
     int adminCount() const;
 
     /// Every device and every invite, sorted by fingerprint hex: what the header seals
@@ -110,7 +105,6 @@ public:
     // inconsistent: a key shared between two entries, a person with no device, an
     // unknown person or invite.
 
-    /// Under invite.person.
     bool addInvite(const Invite& invite);
     bool removeInvite(const Fingerprint& invite);
 
@@ -119,19 +113,21 @@ public:
     /// joiner, named name, with the invite's role.
     bool join(const Fingerprint& invite, const NamedDevice& device, const MemberId& joiner, const QString& name);
 
-    /// Never the last person: a ward with nobody to read it is not a state.
+    /// Never the last person: a ward with nobody to read it is not a state. The
+    /// person's invites go with them.
     bool removePerson(const MemberId& id);
 
     /// Never a person's last device; removePerson for that.
     bool removeDevice(const Fingerprint& device);
     bool setRole(const MemberId& id, Role role);
 
-    /// Three ways: mine and theirs each built on base. A person's entry - their
-    /// devices, role, and invites - changed on one side is taken from that side; one
-    /// changed differently on both is theirs', which the server holds. The former
-    /// keys are theirs' with mine's appended, so the merged set descends from both.
-    /// This is what lets an invite made here and a join landing there cross without
-    /// troubling anyone.
+    /// Three ways: mine and theirs each built on base. An entry - a person with their
+    /// devices and role, or an invite - changed on one side is taken from that side;
+    /// one changed differently on both is theirs', which the server holds. A removed
+    /// person's invites go with them, as in removePerson. The former keys are theirs'
+    /// with mine's appended, so the merged set descends from both. Where the entries
+    /// taken together are not a sound set, theirs stands whole. This is what lets an
+    /// invite made here and a join landing there cross without troubling anyone.
     static SealingSet merge(const SealingSet& base, const SealingSet& mine, const SealingSet& theirs);
 
     // --- The rule ---
@@ -163,6 +159,12 @@ private:
     /// from the entry at fingerprint except.
     bool keysAreFree(const DeviceKeys& keys, const QString& except) const;
 
+    /// An invite is always some current person's: whom a Device invite joins, who
+    /// made a User invite.
+    void dropInvitesWithoutAPerson();
+
     QHash<QString, Holder> m_people;        ///< by person id hex
+    QHash<QString, Invite> m_invites;       ///< by fingerprint hex
     QStringList m_formerKeys;               ///< FormerKey hashes as hex, oldest first
 };
+

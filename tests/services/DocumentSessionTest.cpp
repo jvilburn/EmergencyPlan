@@ -1892,7 +1892,42 @@ void DocumentSessionTest::aUsedLinkGivesInviteUsedAndWritesNothing()
     QVERIFY(!mallory.records.contains(ward.documentId));
 }
 
-void DocumentSessionTest::aJoinWhoseAnswerWasLostFinishesWhenTheLinkIsOpenedAgain()
+void DocumentSessionTest::aJoinWhoseAnswerWasLostStillFinishes()
+{
+    TestWard ward;
+    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
+    Device& bob = ward.add(newIdentity("Bob", "Phone"));
+    std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
+    QVERIFY(aliceSession);
+    const std::optional<FileOpenRouter::InviteLink> link =
+        ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Bob");
+    QVERIFY(link.has_value());
+
+    // The joined version lands and only its answer is lost: the join reads the
+    // current version as Bob and finishes.
+    QObject receiver;
+    std::optional<DocumentSession::Join> joined;
+    ward.server.holdReplies(true);
+    DocumentSession::join(bob.context(),
+                          link.value(),
+                          bob.paths(ward.documentId),
+                          &receiver,
+                          std::bind(&keepJoin, std::ref(joined), _1, _2, _3));
+    ward.server.loseReplies(true);
+    QVERIFY(ward.server.deliverNext());
+    ward.server.loseReplies(false);
+    ward.server.holdReplies(false);
+    ward.settle();
+    QCOMPARE(joined, std::optional<DocumentSession::Join>(DocumentSession::Join::Done));
+    QCOMPARE(headVersion(ward), 3);
+    QCOMPARE(bob.records.record(ward.documentId).baseVersion, std::optional<qint64>(3));
+    std::unique_ptr<DocumentSession> bobSession = bob.open(ward.documentId);
+    QVERIFY(bobSession);
+    ward.settle();
+    QCOMPARE(bobSession->syncState(), SyncState::UpToDate);
+}
+
+void DocumentSessionTest::aJoinCutOffAfterItsVersionLandedFinishesWhenTheLinkIsOpenedAgain()
 {
     TestWard ward;
     Device& alice = ward.add(newIdentity("Alice", "Laptop"));
@@ -1931,6 +1966,47 @@ void DocumentSessionTest::aJoinWhoseAnswerWasLostFinishesWhenTheLinkIsOpenedAgai
     ward.settle();
     QCOMPARE(bobSession->syncState(), SyncState::UpToDate);
     QCOMPARE(bobSession->document().sealingSet().person(bob.identity.member)->name, QString("Bob"));
+}
+
+void DocumentSessionTest::twoDevicesOpeningOneLinkTheSecondFindsItUsed()
+{
+    TestWard ward;
+    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
+    Device& bob = ward.add(newIdentity("Bob", "Phone"));
+    Device& mallory = ward.add(newIdentity("Mallory", "Laptop"));
+    std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
+    QVERIFY(aliceSession);
+    const std::optional<FileOpenRouter::InviteLink> link =
+        ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Bob");
+    QVERIFY(link.has_value());
+
+    // Both read the same version as the invite; Bob's joined version lands first, so
+    // the header no longer names the invite when Mallory's arrives.
+    QObject receiver;
+    std::optional<DocumentSession::Join> bobJoined;
+    std::optional<DocumentSession::Join> malloryJoined;
+    ward.server.holdReplies(true);
+    DocumentSession::join(bob.context(),
+                          link.value(),
+                          bob.paths(ward.documentId),
+                          &receiver,
+                          std::bind(&keepJoin, std::ref(bobJoined), _1, _2, _3));
+    DocumentSession::join(mallory.context(),
+                          link.value(),
+                          mallory.paths(ward.documentId),
+                          &receiver,
+                          std::bind(&keepJoin, std::ref(malloryJoined), _1, _2, _3));
+    QVERIFY(ward.server.deliverNext());
+    QVERIFY(ward.server.deliverNext());
+    ward.server.holdReplies(false);
+    ward.settle();
+
+    QCOMPARE(bobJoined, std::optional<DocumentSession::Join>(DocumentSession::Join::Done));
+    QCOMPARE(malloryJoined, std::optional<DocumentSession::Join>(DocumentSession::Join::InviteUsed));
+    QCOMPARE(headVersion(ward), 3);
+    QCOMPARE(recipientsOnServer(ward), hexOf({&alice.identity, &bob.identity}));
+    QVERIFY(!mallory.records.contains(ward.documentId));
+    QVERIFY(!QFile::exists(mallory.paths(ward.documentId).file));
 }
 
 void DocumentSessionTest::aJoinSaysWhyItCouldNotReachTheWard()

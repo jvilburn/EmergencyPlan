@@ -141,15 +141,15 @@ public:
     void share();
 
     /// An invite to the open ward: a Device invite joins this person, a User invite
-    /// makes a new member. Whether this person may invite is the window's rule.
-    /// nullopt for a ward that is not shared.
-    std::optional<FileOpenRouter::InviteLink> invite(Invite::For purpose, const QString& label);
+    /// makes a new person with role. Whether this person may invite is the window's
+    /// rule. nullopt for a ward that is not shared.
+    std::optional<FileOpenRouter::InviteLink> invite(Invite::For purpose, Role role, const QString& label);
 
     /// What the person copies and sends for link.
     QString inviteMessage(const FileOpenRouter::InviteLink& link) const;
 
     /// Each a write of the open ward; the next version is sealed without whoever
-    /// was taken out, under a fresh key. Neither takes out this person or this
+    /// was taken out, under a fresh key. None of them takes out this person or this
     /// device: that is leave.
     void removePerson(const MemberId& id);
     void removeDevice(const Fingerprint& device);

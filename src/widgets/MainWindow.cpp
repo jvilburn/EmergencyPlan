@@ -47,6 +47,10 @@
 #include <QJsonDocument>
 #include <QSaveFile>
 #include <QInputDialog>
+#include <QCheckBox>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QFormLayout>
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
@@ -942,23 +946,29 @@ void MainWindow::onShowAccess()
 
 void MainWindow::onAddDevice()
 {
-    showInvite(DocumentManager::instance()->invite(Invite::For::Device, tr("for another device of mine")));
+    showInvite(DocumentManager::instance()->invite(Invite::For::Device, Role::Member, tr("for another device of mine")));
 }
 
 void MainWindow::onAddUser()
 {
-    bool entered = false;
-    const QString name = QInputDialog::getText(this,
-                                               tr("Add a User"),
-                                               tr("Who is this invite for? (Shown until they join.)"),
-                                               QLineEdit::Normal,
-                                               QString(),
-                                               &entered);
-    if (!entered || name.trimmed().isEmpty())
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("Add a User"));
+    QLineEdit* name = new QLineEdit(&dialog);
+    QCheckBox* admin = new QCheckBox(tr("As an admin, who can add and remove people"), &dialog);
+    QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    QFormLayout* layout = new QFormLayout(&dialog);
+    layout->addRow(tr("Who is this invite for? (Shown until they join.)"), name);
+    layout->addRow(admin);
+    layout->addRow(buttons);
+    if (dialog.exec() != QDialog::Accepted || name->text().trimmed().isEmpty())
     {
         return;
     }
-    showInvite(DocumentManager::instance()->invite(Invite::For::User, tr("for %1").arg(name.trimmed())));
+
+    const Role role = admin->isChecked() ? Role::Admin : Role::Member;
+    showInvite(DocumentManager::instance()->invite(Invite::For::User, role, tr("for %1").arg(name->text().trimmed())));
 }
 
 void MainWindow::showInvite(const std::optional<FileOpenRouter::InviteLink>& link)
@@ -1045,9 +1055,6 @@ void MainWindow::onJoinFailed(DocumentSession::Join outcome, const QString& reas
         break;
     case DocumentSession::Join::WriteFailed:
         message = tr("The ward arrived but could not be saved on this device.");
-        break;
-    case DocumentSession::Join::Busy:
-        message = tr("The ward is being changed right now. Open the link again in a moment.");
         break;
     }
     QMessageBox::warning(this, tr("Join a Ward"), message);

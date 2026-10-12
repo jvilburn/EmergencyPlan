@@ -149,7 +149,9 @@ void onJoinUploaded(const Joining& joining, const Result<qint64>& result)
         finishJoin(joining, DocumentSession::Join::Unreachable);
         return;
     case ServerError::VersionConflict:
-        joining.done(DocumentSession::Join::Busy, QString(), std::nullopt);
+        // Someone published between the fetch and the upload; the invite is still
+        // open, since that is checked first. Once more from the current version.
+        DocumentSession::join(joining.context, joining.link, joining.paths, joining.receiver, joining.done);
         return;
     case ServerError::UnknownDocument:
         joining.done(DocumentSession::Join::UnknownWard, QString(), std::nullopt);

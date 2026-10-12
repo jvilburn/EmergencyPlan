@@ -292,13 +292,31 @@ std::optional<FileOpenRouter::InviteLink> TestWard::invite(DocumentSession& invi
                                                            Role role,
                                                            const QString& label)
 {
+    QSet<QString> before;
+    for (const Invite& invite : inviter.document().sealingSet().invites())
+    {
+        before.insert(invite.fingerprint().toHex());
+    }
+
     const std::optional<FileOpenRouter::InviteLink> link = inviter.invite(purpose, role, label);
     settle();
     if (!link.has_value() || inviter.syncState() != SyncState::UpToDate)
     {
         return std::nullopt;
     }
-    return link;
+
+    // Published: the server's current header seals to the new invite.
+    const std::optional<Head> current = head();
+    for (const Invite& invite : inviter.document().sealingSet().invites())
+    {
+        const QString fingerprint = invite.fingerprint().toHex();
+        if (!before.contains(fingerprint) && current.has_value()
+            && ServerTestSupport::recipientsOf(current.value()).contains(fingerprint))
+        {
+            return link;
+        }
+    }
+    return std::nullopt;
 }
 
 std::optional<DocumentSession::Join> TestWard::join(Device& joiner, const FileOpenRouter::InviteLink& link)

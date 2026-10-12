@@ -198,16 +198,18 @@ void AccessDialog::fillTree()
             deviceRow->setData(0, PersonRole, person.id.toHex());
             deviceRow->setData(0, DeviceRole, device.fingerprint().toHex());
         }
-    }
 
-    for (const Invite& invite : m_roster.invites())
-    {
-        const std::optional<Holder> maker = m_roster.person(invite.person);
-        const QString what = invite.purpose == Invite::For::Device
-                                 ? tr("Invite for a device of %1").arg(maker.has_value() ? maker->name : tr("someone"))
-                                 : tr("Invite for a new user");
-        QTreeWidgetItem* row = new QTreeWidgetItem(m_tree, {tr("%1: %2").arg(what, invite.label), tr("Open")});
-        row->setData(0, InviteRole, invite.fingerprint().toHex());
+        // Under the person: whom a Device invite joins, who made a User invite.
+        for (const Invite& invite : m_roster.invites())
+        {
+            if (invite.person != person.id)
+            {
+                continue;
+            }
+            const QString what = invite.purpose == Invite::For::Device ? tr("Invite for a device") : tr("Invite for a new user");
+            QTreeWidgetItem* inviteRow = new QTreeWidgetItem(row, {tr("%1: %2").arg(what, invite.label), tr("Open")});
+            inviteRow->setData(0, InviteRole, invite.fingerprint().toHex());
+        }
     }
 
     m_tree->expandAll();

@@ -59,7 +59,7 @@ sealingSet:
         - { name: "Laptop", publicKey, verifyKey }
         - { name: "Pixel 8", publicKey, verifyKey }
   invites:
-    - { for: device | user, person: <person id or absent>, role, label: "for Bob", publicKey, verifyKey }
+    - { for: device | user, person: <person id>, role, label: "for Bob", publicKey, verifyKey }
   formerKeys: [...]
 ```
 
@@ -105,8 +105,9 @@ An invite is a one-time bearer key.
    by an admin. Removing a person withdraws the invites they made.
 
 Two people changing who has access at the same moment merges entry by entry, like the
-emergency response, and never asks: a person's entry, with their devices and invites,
-changed on one side is taken from that side; one changed differently on both is the server's. Where the entries taken
+emergency response, and never asks: a person or an invite changed on one side is taken
+from that side; one changed differently on both is the server's, and a removed person's
+invites go with them. Where the entries taken
 together are not a sound set, the server's set stands whole. An invite made here and a
 join landing there cross without troubling anyone. The
 last person cannot leave: a ward with nobody to read it is not a state.
@@ -150,10 +151,10 @@ the fragment, which browsers do not send to the server.
 
 | Condition | Message |
 |---|---|
-| Invite link already used or revoked | This invite has been used. Ask for another. |
-| Invite link for a ward the server does not have | The ward was deleted, or the link is wrong. |
-| Opening a link while offline | Connect to the internet to join a ward. |
-| Not an admin, trying to add a user | Only an admin can add people. Ask *names*. |
+| Invite link already used or revoked | This invite has been used or withdrawn. Ask for another. |
+| Invite link for a ward the server does not have | The server has no such ward. It was deleted, or the link is wrong. |
+| Opening a link while offline | Connect to the internet to join a ward, then open the link again. |
+| Not an admin | Add a User is not offered; the dialog says: To add or remove people, ask an admin: *names*. |
 | Head lacks this device | Removed by *name* / You left / This device was unlinked by *name*, as now |
 
 ## What is deleted

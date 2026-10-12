@@ -96,9 +96,13 @@ bool joinInApp(TestWard& ward, App& app, const FileOpenRouter::InviteLink& link)
 }
 
 /// An invite made in app's open ward, its version published.
-std::optional<FileOpenRouter::InviteLink> inviteFrom(TestWard& ward, App& app, Invite::For purpose, const QString& label)
+std::optional<FileOpenRouter::InviteLink> inviteFrom(TestWard& ward,
+                                                     App& app,
+                                                     Invite::For purpose,
+                                                     Role role,
+                                                     const QString& label)
 {
-    const std::optional<FileOpenRouter::InviteLink> link = app.manager.invite(purpose, label);
+    const std::optional<FileOpenRouter::InviteLink> link = app.manager.invite(purpose, role, label);
     ward.settle();
     return link;
 }
@@ -365,7 +369,7 @@ void DocumentManagerTest::accessChangesShowOnceAndStaySeenOnceDismissed()
 
     // Alice's own invite is news like any other change; Bob joining with it shows at
     // the next head, as what changed since the roster was last dismissed.
-    const std::optional<FileOpenRouter::InviteLink> link = inviteFrom(ward, app, Invite::For::User, "for Bob");
+    const std::optional<FileOpenRouter::InviteLink> link = inviteFrom(ward, app, Invite::For::User, Role::Member, "for Bob");
     QVERIFY(link.has_value());
     QCOMPARE(app.manager.unseenRosterChanges(), QStringList{"Alice made an invite, for Bob"});
     QCOMPARE(changed.count(), 1);
@@ -472,13 +476,13 @@ void DocumentManagerTest::anInviteJoinsAUserOrAnotherDevice()
     App app(alice);
     QVERIFY(shareFrom(ward, app));
 
-    // A user invite: a new member, named by the joiner.
-    const std::optional<FileOpenRouter::InviteLink> forBob = inviteFrom(ward, app, Invite::For::User, "for Bob");
+    // A user invite: a new admin, named by the joiner.
+    const std::optional<FileOpenRouter::InviteLink> forBob = inviteFrom(ward, app, Invite::For::User, Role::Admin, "for Bob");
     QVERIFY(forBob.has_value());
     QCOMPARE(forBob->documentId, ward.documentId);
     QCOMPARE(ward.head()->version, 2);
     QCOMPARE(app.manager.roster().invites().size(), 1);
-    QVERIFY(app.manager.roster().invites().first().role == Role::Member);
+    QVERIFY(app.manager.roster().invites().first().role == Role::Admin);
     QCOMPARE(app.manager.inviteMessage(forBob.value()),
              "Alice has invited you to Untitled in Ward Planning. Install it from "
              "https://github.com/jvilburn/EmergencyPlan/releases/latest, then open this link:\n"
@@ -486,11 +490,9 @@ void DocumentManagerTest::anInviteJoinsAUserOrAnotherDevice()
     QCOMPARE(ward.join(bob, forBob.value()), std::optional<DocumentSession::Join>(DocumentSession::Join::Done));
     QCOMPARE(ward.head()->version, 3);
 
-    // A device invite: another of Alice's devices, an admin as she is. Made once her
-    // session has seen Bob join, since an invite is a roster edit like any other.
-    app.manager.session()->checkServer();
-    ward.settle();
-    const std::optional<FileOpenRouter::InviteLink> forTablet = inviteFrom(ward, app, Invite::For::Device, "for Tablet");
+    // A device invite: another of Alice's devices, an admin as she is. Made before
+    // her session has seen Bob join: the two roster edits cross without trouble.
+    const std::optional<FileOpenRouter::InviteLink> forTablet = inviteFrom(ward, app, Invite::For::Device, Role::Member, "for Tablet");
     QVERIFY(forTablet.has_value());
     QCOMPARE(ward.head()->version, 4);
     QCOMPARE(ward.join(tablet, forTablet.value()), std::optional<DocumentSession::Join>(DocumentSession::Join::Done));
@@ -501,7 +503,7 @@ void DocumentManagerTest::anInviteJoinsAUserOrAnotherDevice()
     const SealingSet roster = app.manager.roster();
     QCOMPARE(roster.people().size(), 2);
     QCOMPARE(roster.person(bob.identity.member)->name, QString("Bob"));
-    QVERIFY(roster.person(bob.identity.member)->role == Role::Member);
+    QVERIFY(roster.person(bob.identity.member)->role == Role::Admin);
     QCOMPARE(roster.person(alice.identity.member)->devices.size(), 2);
     QVERIFY(roster.personOf(tablet.identity.fingerprint())->id == alice.identity.member);
     QVERIFY(roster.invites().isEmpty());
@@ -520,8 +522,6 @@ void DocumentManagerTest::anAdminRemovesWithdrawsAndChangesRoles()
     App app(alice);
     QVERIFY(shareFrom(ward, app));
     QVERIFY(ward.addUser(*app.manager.session(), bob, Role::Member));
-    app.manager.session()->checkServer();
-    ward.settle();
     QVERIFY(ward.addUser(*app.manager.session(), carol, Role::Member));
     app.manager.session()->checkServer();
     ward.settle();
@@ -540,7 +540,7 @@ void DocumentManagerTest::anAdminRemovesWithdrawsAndChangesRoles()
     QVERIFY(!recipientsOnServer(ward).contains(carol.identity.fingerprint().toHex()));
     QCOMPARE(recipientsOnServer(ward).size(), 2);
 
-    const std::optional<FileOpenRouter::InviteLink> link = inviteFrom(ward, app, Invite::For::User, "for Dave");
+    const std::optional<FileOpenRouter::InviteLink> link = inviteFrom(ward, app, Invite::For::User, Role::Member, "for Dave");
     QVERIFY(link.has_value());
     QCOMPARE(recipientsOnServer(ward).size(), 3);
     app.manager.revokeInvite(app.manager.roster().invites().first().fingerprint());

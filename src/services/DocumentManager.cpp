@@ -608,16 +608,13 @@ void DocumentManager::share()
     }
 }
 
-std::optional<FileOpenRouter::InviteLink> DocumentManager::invite(Invite::For purpose, const QString& label)
+std::optional<FileOpenRouter::InviteLink> DocumentManager::invite(Invite::For purpose, Role role, const QString& label)
 {
-    const std::optional<Holder> me = self();
-    if (!m_session || !me.has_value())
+    if (!m_session || !self().has_value())
     {
         return std::nullopt;
     }
 
-    // A device invite joins this person as they are; a new person starts as a member.
-    const Role role = purpose == Invite::For::Device ? me->role : Role::Member;
     const std::optional<FileOpenRouter::InviteLink> link = m_session->invite(purpose, role, label);
     refreshRosterChanges();
     return link;
@@ -712,17 +709,18 @@ void DocumentManager::joinWard(const FileOpenRouter::InviteLink& link)
 
 void DocumentManager::onJoined(const QString& documentId, DocumentSession::Join outcome, const QString& reason)
 {
-    if (m_fetching != documentId)
-    {
-        return;
-    }
-    m_fetching.clear();
-
     if (outcome != DocumentSession::Join::Done)
     {
         emit joinFailed(outcome, reason);
         return;
     }
+
+    // Opened unless another ward was opened meanwhile; it is in the library either way.
+    if (m_fetching != documentId)
+    {
+        return;
+    }
+    m_fetching.clear();
     QString refusal;
     const Open result = open(documentId, &refusal, false);
     emit fetchFinished(documentId, result, refusal);

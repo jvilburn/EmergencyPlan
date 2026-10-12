@@ -471,9 +471,9 @@ saved file conditional on the server version this session started from. The **ba
 copy** beside the local file is the file exactly as it stood at that version; its save
 counter tells whether the local file has unpublished changes, and a three-way merge
 against it tells what changed here from what changed there. The roster merges entry by
-entry, and never conflicts: a person's entry, with their devices and invites, changed on
-one side is taken from that side; one changed differently on both is the server's, and
-where the entries taken together are not a sound set, the server's set stands whole. A
+entry, and never conflicts: a person or an invite changed on one side is taken from that
+side; one changed differently on both is the server's; a removed person's invites go with
+them; and where the entries taken together are not a sound set, the server's set stands whole. A
 refused publish fetches the server's version, validates it, merges, reseals, and publishes
 again.
 
@@ -492,7 +492,7 @@ id refuses the whole payload. Its format version lives in the file's header, not
 
 ```json
 {
-    "sealingSet": { "people": [...], "formerKeys": [...] },
+    "sealingSet": { "people": [...], "invites": [...], "formerKeys": [...] },
     "stakes": [...],
     "wards": [...],
     "families": [

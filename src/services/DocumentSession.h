@@ -109,8 +109,7 @@ public:
         InviteUsed,         ///< the current version seals to neither the invite nor this device
         NeedsNewerVersion,
         ServerFault,        ///< the version did not check out; the reason says why
-        WriteFailed,
-        Busy                ///< the ward changed under the join; open the link again
+        WriteFailed
     };
 
     struct Context
