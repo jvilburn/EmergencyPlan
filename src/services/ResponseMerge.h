@@ -5,8 +5,8 @@
 
 #include <optional>
 
-/// Emergency response records on reconnect: merged three ways against the base
-/// copy, silently.
+/// A document on reconnect, merged three ways against the base copy: the directory
+/// decides conflicts, and the emergency response and who has access merge silently.
 ///
 /// An emergency is when several people record work at once and the network is
 /// least likely to be there, so responders edit offline in parallel by design.

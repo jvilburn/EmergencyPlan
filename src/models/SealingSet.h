@@ -48,7 +48,7 @@ struct Invite
     };
 
     For purpose = For::User;
-    MemberId person;                    ///< who made it; a Device invite joins its maker
+    MemberId maker;                     ///< a Device invite joins its maker
     Role role = Role::Member;           ///< what a User invite's joiner becomes; a Device joins as its maker
     QString label;                      ///< shown while the invite is open: "for Bob"
     DeviceKeys keys;
@@ -120,11 +120,11 @@ public:
 
     /// Three ways: mine and theirs each built on base. An entry - a person with their
     /// devices and role, or an invite - changed on one side is taken from that side;
-    /// one changed differently on both is theirs', which the server holds. A removed
-    /// person's invites go with them, as in removePerson. The former keys are theirs'
-    /// with mine's appended, so the merged set descends from both. Where the entries
-    /// taken together are not a sound set, theirs stands whole. This is what lets an
-    /// invite made here and a join landing there cross without troubling anyone.
+    /// one changed differently on both is theirs, which the server holds. A removed
+    /// person's invites go with them, as in removePerson. The former keys are theirs
+    /// with mine's appended, so the merged set descends from both. Where removals on
+    /// both sides leave nobody, theirs stands whole. This is what lets an invite made
+    /// here and a join landing there cross without troubling anyone.
     static SealingSet merge(const SealingSet& base, const SealingSet& mine, const SealingSet& theirs);
 
     // --- The rule ---

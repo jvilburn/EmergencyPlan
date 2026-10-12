@@ -2,6 +2,7 @@
 
 #include "DeviceIdentity.h"
 #include "DocumentConstants.h"
+#include "DocumentCrypto.h"
 #include "DocumentFile.h"
 #include "DocumentLibrary.h"
 #include "HexCodec.h"
@@ -45,6 +46,21 @@ Route route(const QString& path, const DocumentLibrary& library, const DeviceIde
         return Route{Action::AddWard, header.documentId};
     }
     return Route{Action::NotForThisDevice, header.documentId};
+}
+
+Fingerprint InviteKeys::fingerprint() const
+{
+    return DocumentCrypto::fingerprintOf(sealing.publicKey, signing.verifyKey);
+}
+
+InviteKeys InviteLink::keys() const
+{
+    InviteKeys keys;
+    keys.sealing = DocumentCrypto::keypairFromSeed(
+        DocumentCrypto::hash(HashDomain::InviteSealing, seed, DocumentCrypto::SealingSeedSize));
+    keys.signing = DocumentCrypto::signingKeypairFromSeed(
+        DocumentCrypto::hash(HashDomain::InviteSigning, seed, DocumentCrypto::SigningSeedSize));
+    return keys;
 }
 
 QString InviteLink::toString() const

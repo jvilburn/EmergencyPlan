@@ -29,7 +29,7 @@ SealingSet setOf(const QList<TestDevice>& devices)
     {
         Invite invite;
         invite.purpose = Invite::For::User;
-        invite.person = maker;
+        invite.maker = maker;
         invite.label = "for " + devices.at(i).name;
         invite.keys = ServerTestSupport::newDevice("Invite").keys();
         set.addInvite(invite);

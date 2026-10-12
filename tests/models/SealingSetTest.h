@@ -28,6 +28,11 @@ private slots:
     void aRemovalRotates();
     void formerKeysCarryOver();
 
+    // Merging
+    void mergeTakesEachEntryFromTheSideThatChangedIt();
+    void theSameEntryChangedOnBothSidesIsTheirs();
+    void aMergeThatLeavesNobodyIsTheirsWhole();
+
     // JSON
     void roundTripsThroughJson();
     void fromJsonRefusesAnythingIllFormed();

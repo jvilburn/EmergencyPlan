@@ -204,7 +204,7 @@ Open the ward and choose **Ward > Who Has Access**, then **Share**. The ward is 
 
 ### Adding a user
 
-In **Who Has Access**, an admin chooses **Add a User**, names who the invite is for, chooses whether they join as an admin, and gets a short message to copy and send by email or text. It names you and the ward, says where to install Ward Planning, and carries a link. The person opens the link on their device and the ward appears for them, under their own name.
+In **Who Has Access**, an admin chooses **Add a User**, names who the invite is for, chooses whether they join as an admin, and gets a short message to copy and send by email or text. It names you and the ward, says where to install Ward Planning, and carries a link. The person opens the link on their device and the ward appears for them, under their own name. The link works once the invite has reached the server, which the sync indicator shows; an invite made offline waits with your other changes.
 
 The link works once. Whoever opens it first is in, and everyone with access sees who joined. If a link reaches the wrong person, remove them; the ward is sealed afresh without them.
 

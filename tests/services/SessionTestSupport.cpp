@@ -47,31 +47,45 @@ void keepFetched(std::optional<ServerVersion::Fetched>& out, const ServerVersion
     out = fetched;
 }
 
+// A refused roster change is a test's mistake, and loud.
+
 void applyRemovePerson(Document& document, const MemberId& person)
 {
     SealingSet roster = document.sealingSet();
-    roster.removePerson(person);
+    if (!roster.removePerson(person))
+    {
+        qFatal("removePerson refused");
+    }
     document.setSealingSet(roster);
 }
 
 void applyRemoveDevice(Document& document, const Fingerprint& device)
 {
     SealingSet roster = document.sealingSet();
-    roster.removeDevice(device);
+    if (!roster.removeDevice(device))
+    {
+        qFatal("removeDevice refused");
+    }
     document.setSealingSet(roster);
 }
 
 void applyRemoveInvite(Document& document, const Fingerprint& invite)
 {
     SealingSet roster = document.sealingSet();
-    roster.removeInvite(invite);
+    if (!roster.removeInvite(invite))
+    {
+        qFatal("removeInvite refused");
+    }
     document.setSealingSet(roster);
 }
 
 void applySetRole(Document& document, const MemberId& person, Role role)
 {
     SealingSet roster = document.sealingSet();
-    roster.setRole(person, role);
+    if (!roster.setRole(person, role))
+    {
+        qFatal("setRole refused");
+    }
     document.setSealingSet(roster);
 }
 
@@ -174,7 +188,7 @@ SealingSet rosterOf(const QList<DeviceIdentity>& devices)
     {
         const DeviceIdentity& joiner = devices.at(i);
         Invite open;
-        open.person = devices.first().member;
+        open.maker = devices.first().member;
         open.label = "for " + joiner.displayName;
         open.keys = DeviceKeys{DocumentCrypto::generateKeypair().publicKey,
                                DocumentCrypto::generateSigningKeypair().verifyKey};
@@ -280,31 +294,37 @@ std::optional<FileOpenRouter::InviteLink> TestWard::invite(DocumentSession& invi
                                                            Role role,
                                                            const QString& label)
 {
-    QSet<QString> before;
-    for (const Invite& invite : inviter.document().sealingSet().invites())
-    {
-        before.insert(invite.fingerprint().toHex());
-    }
-
-    const std::optional<FileOpenRouter::InviteLink> link = inviter.invite(purpose, role, label);
-    settle();
-    if (!link.has_value() || inviter.syncState() != SyncState::UpToDate)
+    // As DocumentManager::invite makes one.
+    const std::optional<Holder> me = inviter.self();
+    if (!inviter.isShared() || !me.has_value())
     {
         return std::nullopt;
     }
+    const FileOpenRouter::InviteLink link{inviter.documentId(),
+                                          DocumentCrypto::randomBytes(FileOpenRouter::InviteLink::SeedSize)};
+    Invite open;
+    open.purpose = purpose;
+    open.maker = me->id;
+    open.role = role;
+    open.label = label;
+    open.keys = link.keys().publicKeys();
+    SealingSet changed = inviter.document().sealingSet();
+    if (!changed.addInvite(open))
+    {
+        return std::nullopt;
+    }
+    inviter.edit(DocumentSession::Edit::Roster, std::bind(&Document::setSealingSet, _1, changed));
+    inviter.publishNow();
+    settle();
 
     // Published: the server's current header seals to the new invite.
     const std::optional<Head> current = head();
-    for (const Invite& invite : inviter.document().sealingSet().invites())
+    if (inviter.syncState() != SyncState::UpToDate || !current.has_value()
+        || !ServerTestSupport::recipientsOf(current.value()).contains(open.fingerprint().toHex()))
     {
-        const QString fingerprint = invite.fingerprint().toHex();
-        if (!before.contains(fingerprint) && current.has_value()
-            && ServerTestSupport::recipientsOf(current.value()).contains(fingerprint))
-        {
-            return link;
-        }
+        return std::nullopt;
     }
-    return std::nullopt;
+    return link;
 }
 
 std::optional<DocumentSession::Join> TestWard::join(Device& joiner, const FileOpenRouter::InviteLink& link)

@@ -137,9 +137,10 @@ public:
     /// or shareFailed reports how it went.
     void share();
 
-    /// An invite to the open ward: a Device invite joins this person, a User invite
-    /// makes a new person with role. Whether this person may invite is the window's
-    /// rule. nullopt for a ward that is not shared.
+    /// An invite to the open ward, published: a Device invite joins this person, a
+    /// User invite makes a new person with role. The link works once the publish has
+    /// landed, which the sync state shows. Whether this person may invite is the
+    /// window's rule. nullopt for a ward that is not shared.
     std::optional<FileOpenRouter::InviteLink> invite(Invite::For purpose, Role role, const QString& label);
 
     /// What the person copies and sends for link.
@@ -150,7 +151,7 @@ public:
     /// device: that is leave.
     void removePerson(const MemberId& id);
     void removeDevice(const Fingerprint& device);
-    void revokeInvite(const Fingerprint& invite);
+    void withdrawInvite(const Fingerprint& invite);
 
     /// Nothing when it would leave the ward without an admin: the last admin makes
     /// someone else an admin first.
@@ -206,6 +207,9 @@ signals:
 
     /// The open ward's head answered: the lease holder, as the server now says.
     void headChanged();
+
+    /// Who has access to the open ward changed: an edit here, or a version taken in.
+    void rosterChanged();
 
     /// unseenRosterChanges() changed.
     void accessChanged();

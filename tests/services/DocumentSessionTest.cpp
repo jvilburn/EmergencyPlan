@@ -126,7 +126,7 @@ std::optional<Fingerprint> leaseHolder(TestWard& ward)
 }
 
 /// A roster edit made on by, which catches up first, and published. True once the
-/// version without what change took out has landed.
+/// version with the change has landed.
 bool editRosterOn(TestWard& ward, DocumentSession& by, const std::function<void(Document&)>& change)
 {
     by.checkServer();
@@ -1774,13 +1774,13 @@ void DocumentSessionTest::anInviteAddsARecipientAndARosterEntry()
     QCOMPARE(invites.first().label, QString("for Bob"));
     QVERIFY(invites.first().purpose == Invite::For::User);
     QVERIFY(invites.first().role == Role::Admin);
-    QVERIFY(invites.first().person == alice.identity.member);
+    QVERIFY(invites.first().maker == alice.identity.member);
     QVERIFY(aliceSession->document().sealingSet() == copy.document.sealingSet());
 
     // An unshared ward makes no invite.
     std::unique_ptr<DocumentSession> local = alice.create(ServerTestSupport::newDocumentId());
     QVERIFY(local);
-    QVERIFY(!local->invite(Invite::For::User, Role::Member, "for Carol").has_value());
+    QVERIFY(!ward.invite(*local, Invite::For::User, Role::Member, "for Carol").has_value());
     QVERIFY(local->document().sealingSet().invites().isEmpty());
 }
 
@@ -1821,11 +1821,12 @@ void DocumentSessionTest::aUserJoinsAndShowsInTheInvitersRosterAtTheNextHead()
     QVERIFY(copy.dataKey != invited);
     QVERIFY(roster.descendsFrom(invited));
 
-    // Alice sees him at her next head: her own invite was an edit, the join is news.
-    QCOMPARE(recorder.rosterChanges, 0);
+    // Alice sees him at her next head: her own invite was announced as she made it,
+    // and the join is announced as it is taken in.
+    QCOMPARE(recorder.rosterChanges, 1);
     aliceSession->checkServer();
     ward.settle();
-    QCOMPARE(recorder.rosterChanges, 1);
+    QCOMPARE(recorder.rosterChanges, 2);
     QCOMPARE(recorder.replaced, 0);
     QVERIFY(aliceSession->document().sealingSet() == roster);
 }
@@ -2044,6 +2045,35 @@ void DocumentSessionTest::aJoinStartsAgainWhenTheWardMovedUnderIt()
     ward.settle();
     QVERIFY(latitudeOf(bobSession->document(), ward.adams) == 57.0);
     QCOMPARE(bobSession->syncState(), SyncState::UpToDate);
+}
+
+void DocumentSessionTest::aLinkOpenedByAPersonAlreadyInTheWardOpensItAndLeavesTheInvite()
+{
+    TestWard ward;
+    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
+    Device& bob = ward.add(newIdentity("Bob", "Phone"));
+    std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
+    QVERIFY(aliceSession);
+    QVERIFY(ward.addUser(*aliceSession, bob, Role::Member));
+
+    // A second user invite, opened on Bob's device: the roster already lists him, so
+    // the current version is simply taken as his, and the invite stays open for Carol.
+    const std::optional<FileOpenRouter::InviteLink> forCarol =
+        ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Carol");
+    QVERIFY(forCarol.has_value());
+    const qint64 before = headVersion(ward);
+    QCOMPARE(ward.join(bob, forCarol.value()), std::optional<DocumentSession::Join>(DocumentSession::Join::Done));
+    QCOMPARE(headVersion(ward), before);
+    std::unique_ptr<DocumentSession> bobSession = bob.open(ward.documentId);
+    QVERIFY(bobSession);
+    ward.settle();
+    QCOMPARE(bobSession->syncState(), SyncState::UpToDate);
+    QCOMPARE(bobSession->document().sealingSet().invites().size(), qsizetype(1));
+
+    // Anchor: Carol's own device joins with it.
+    Device& carol = ward.add(newIdentity("Carol", "Tablet"));
+    QCOMPARE(ward.join(carol, forCarol.value()), std::optional<DocumentSession::Join>(DocumentSession::Join::Done));
+    QCOMPARE(headVersion(ward), before + 1);
 }
 
 void DocumentSessionTest::aJoinSaysWhyItCouldNotReachTheWard()

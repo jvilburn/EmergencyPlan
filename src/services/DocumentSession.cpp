@@ -62,33 +62,12 @@ void ignoreRelease(const Result<Done>&)
 {
 }
 
-/// An invite's keypairs, both from its seed through their own hash domains.
-struct InviteKeys
-{
-    Keypair sealing;
-    SigningKeypair signing;
-
-    DeviceKeys keys() const { return DeviceKeys{sealing.publicKey, signing.verifyKey}; }
-    Fingerprint fingerprint() const { return DocumentCrypto::fingerprintOf(sealing.publicKey, signing.verifyKey); }
-    Reconcile::Self self() const { return Reconcile::Self{sealing, signing.verifyKey}; }
-};
-
-InviteKeys inviteKeys(const QByteArray& seed)
-{
-    InviteKeys keys;
-    keys.sealing = DocumentCrypto::keypairFromSeed(
-        DocumentCrypto::hash(HashDomain::InviteSealing, seed, DocumentCrypto::SealingSeedSize));
-    keys.signing = DocumentCrypto::signingKeypairFromSeed(
-        DocumentCrypto::hash(HashDomain::InviteSigning, seed, DocumentCrypto::SigningSeedSize));
-    return keys;
-}
-
 /// One join in progress: everything its steps need.
 struct Joining
 {
     DocumentSession::Context context;
     FileOpenRouter::InviteLink link;
-    InviteKeys keys;
+    FileOpenRouter::InviteKeys keys;
     DocumentPaths paths;
     QObject* receiver;
     DocumentSession::Joined done;
@@ -214,7 +193,7 @@ void onJoinFetched(const Joining& joining, const Fetched& theirs)
         return;
     }
 
-    joining.context.server.uploadAs(ServerConnection::Writer{joining.keys.keys(), joining.keys.signing.signingKey},
+    joining.context.server.uploadAs(ServerConnection::Writer{joining.keys.publicKeys(), joining.keys.signing.signingKey},
                                     joining.link.documentId,
                                     theirs.version,
                                     Upload{sealed->header, sealed->ciphertext},
@@ -372,8 +351,13 @@ void DocumentSession::join(const Context& context,
                            QObject* receiver,
                            Joined done)
 {
-    const Joining joining{context, link, inviteKeys(link.seed), paths, receiver, done};
-    ServerVersion::fetch(joining.keys.self(), {}, context.server, link.documentId, receiver, std::bind(&onJoinFetched, joining, _1));
+    const Joining joining{context, link, link.keys(), paths, receiver, done};
+    ServerVersion::fetch(Reconcile::Self{joining.keys.sealing, joining.keys.signing.verifyKey},
+                         {},
+                         context.server,
+                         link.documentId,
+                         receiver,
+                         std::bind(&onJoinFetched, joining, _1));
 }
 
 bool DocumentSession::isShared() const
@@ -400,6 +384,10 @@ DocumentSession::Refusal DocumentSession::edit(Edit kind, const std::function<vo
     change(m_document);
     m_saveScheduled = true;
     m_timers->start(SessionTimers::Timer::Save, SaveDelayMilliseconds);
+    if (kind == Edit::Roster)
+    {
+        emit rosterChanged();
+    }
     return Refusal::None;
 }
 
@@ -976,7 +964,7 @@ bool DocumentSession::resolve(Resolution resolution, QString* errorMessage)
 
     // Who has access merges on its own, whichever directory is kept, so keeping mine
     // never puts back someone they removed and keeping theirs never drops someone
-    // this device added. With no base to judge by, every difference is theirs'.
+    // this device added. With no base to judge by, every difference is theirs.
     const SealingSet& baseRoster = m_base.has_value() ? m_base->document.sealingSet() : m_document.sealingSet();
     resolved.setSealingSet(SealingSet::merge(baseRoster, m_document.sealingSet(), theirs.document.sealingSet()));
 
@@ -1088,35 +1076,15 @@ void DocumentSession::onRegistered(const Result<qint64>& result, const DocumentF
     startShared();
 }
 
-std::optional<FileOpenRouter::InviteLink> DocumentSession::invite(Invite::For purpose, Role role, const QString& label)
-{
-    const std::optional<Holder> me = self();
-    if (!isShared() || m_lost || m_requiresUpdate || !me.has_value())
-    {
-        return std::nullopt;
-    }
-
-    const QByteArray seed = DocumentCrypto::randomBytes(FileOpenRouter::InviteLink::SeedSize);
-    const InviteKeys keys = inviteKeys(seed);
-    Invite open;
-    open.purpose = purpose;
-    open.person = me->id;
-    open.role = role;
-    open.label = label;
-    open.keys = keys.keys();
-
-    SealingSet roster = m_document.sealingSet();
-    if (!roster.addInvite(open))
-    {
-        return std::nullopt;
-    }
-    edit(Edit::Roster, std::bind(&Document::setSealingSet, _1, roster));
-    publishNow();
-    return FileOpenRouter::InviteLink{m_documentId, seed};
-}
-
 void DocumentSession::leave()
 {
+    // A version built on the old base cannot land while a conflict waits for resolve.
+    if (m_conflict.has_value())
+    {
+        emit leaveFailed(ServerError::VersionConflict);
+        return;
+    }
+
     const std::optional<Holder> me = self();
     if (!isShared() || m_lost || m_busy || !me.has_value())
     {

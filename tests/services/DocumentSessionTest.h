@@ -89,6 +89,7 @@ private slots:
     void aJoinCutOffAfterItsVersionLandedFinishesWhenTheLinkIsOpenedAgain();
     void twoDevicesOpeningOneLinkTheSecondFindsItUsed();
     void aJoinStartsAgainWhenTheWardMovedUnderIt();
+    void aLinkOpenedByAPersonAlreadyInTheWardOpensItAndLeavesTheInvite();
     void aJoinSaysWhyItCouldNotReachTheWard();
 
     // The roster across a refused publish

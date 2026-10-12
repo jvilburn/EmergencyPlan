@@ -543,19 +543,25 @@ void DocumentManagerTest::anAdminRemovesWithdrawsAndChangesRoles()
     const std::optional<FileOpenRouter::InviteLink> link = inviteFrom(ward, app, Invite::For::User, Role::Member, "for Dave");
     QVERIFY(link.has_value());
     QCOMPARE(recipientsOnServer(ward).size(), 3);
-    app.manager.revokeInvite(app.manager.roster().invites().first().fingerprint());
+    app.manager.withdrawInvite(app.manager.roster().invites().first().fingerprint());
     ward.settle();
     QCOMPARE(ward.head()->version, 9);
     QCOMPARE(recipientsOnServer(ward).size(), 2);
     Device& dave = ward.add(newIdentity("Dave", "Laptop"));
     QCOMPARE(ward.join(dave, link.value()), std::optional<DocumentSession::Join>(DocumentSession::Join::InviteUsed));
 
-    // Neither takes out this person or this device: that is leave.
+    // Neither takes out this person or this device: that is leave. Alice has a second
+    // device by then, so only the manager's own-device rule refuses the unlink.
+    Device& tablet = ward.add(newIdentity("Alice", "Tablet"));
+    QVERIFY(ward.addDevice(*app.manager.session(), tablet));
+    app.manager.session()->checkServer();
+    ward.settle();
+    QCOMPARE(ward.head()->version, 11);
     app.manager.removePerson(alice.identity.member);
     app.manager.removeDevice(alice.identity.fingerprint());
     ward.settle();
-    QCOMPARE(ward.head()->version, 9);
-    QVERIFY(app.manager.roster().person(alice.identity.member).has_value());
+    QCOMPARE(ward.head()->version, 11);
+    QCOMPARE(app.manager.roster().person(alice.identity.member)->devices.size(), 2);
 }
 
 void DocumentManagerTest::theLastAdminCannotStepDown()

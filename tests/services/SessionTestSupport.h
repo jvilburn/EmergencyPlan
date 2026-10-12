@@ -110,8 +110,9 @@ public:
     /// response recording both, then shares it. documentId is set.
     std::unique_ptr<DocumentSession> createShared(Device& owner);
 
-    /// An invite made on inviter's open session, its version published: the link,
-    /// or nullopt when the session refused it or the publish did not land.
+    /// An invite made on inviter's open session, as DocumentManager makes one, its
+    /// version published: the link, or nullopt when the roster refused it or the
+    /// publish did not land.
     std::optional<FileOpenRouter::InviteLink> invite(DocumentSession& inviter,
                                                      Invite::For purpose,
                                                      Role role,
@@ -153,7 +154,8 @@ std::function<void(Document&)> addFamily(const FamilyId& family, double latitude
 /// A response edit: records a contact.
 std::function<void(Document&)> recordContact(const FamilyId& family, ContactStatus status);
 
-/// Roster edits, as the access dialog makes them through Edit::Roster.
+/// Roster edits, as DocumentManager makes them through Edit::Roster; one the roster
+/// refuses ends the run.
 std::function<void(Document&)> removePerson(const MemberId& person);
 std::function<void(Document&)> removeDevice(const Fingerprint& device);
 std::function<void(Document&)> removeInvite(const Fingerprint& invite);

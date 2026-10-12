@@ -97,8 +97,8 @@ An invite is a one-time bearer key.
    current version, unseal the data key with the invite's private key, validate as any
    download is validated, then write the next version: the invite entry becomes a device
    entry - under the inviter's person for a device invite, under a new person for a user
-   invite, named by the joiner - signed by the invite's verify key, which the current
-   header names. The device then downloads the current version as itself and writes it,
+   invite, named by the joiner - signed by the invite's signing key, whose verify key
+   the current header names. The device then downloads the current version as itself and writes it,
    so a link opened again after a lost answer or a failed write finishes the same way.
    From then on the device signs as itself. The ward opens.
 3. **Withdrawing** an unused invite is a write without its entry, by whoever made it or
@@ -131,7 +131,7 @@ the fragment, which browsers do not send to the server.
 - **Access notices**: the client diffs the roster between the version it last dismissed
   and the current one, one line per entry that differs: joined as member or admin, no
   longer has access, now an admin or a member, a device added or unlinked, an invite
-  made or used. The lines say what the roster now says, with nobody named as the cause;
+  made or used. The lines name whose entry changed, never who changed it;
   this device's own edits are news like any other.
 - **Lost access**: a head whose header lacks this device. The reason is read off the
   previous roster and the publisher: removed by *name*, or left, or this device unlinked.
@@ -150,7 +150,7 @@ the fragment, which browsers do not send to the server.
 
 | Condition | Message |
 |---|---|
-| Invite link already used or revoked | This invite has been used or withdrawn. Ask for another. |
+| Invite link already used or withdrawn, or not yet published | This invite has been used or withdrawn, or has not reached the server yet. Ask the sender. |
 | Invite link for a ward the server does not have | The server has no such ward. It was deleted, or the link is wrong. |
 | Opening a link while offline | Connect to the internet to join a ward, then open the link again. |
 | Not an admin | Add a User is not offered; the dialog says: To add or remove people, ask an admin: *names*. |

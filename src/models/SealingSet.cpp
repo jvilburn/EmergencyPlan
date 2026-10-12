@@ -105,7 +105,7 @@ Fingerprint Invite::fingerprint() const
 
 bool Invite::operator==(const Invite& other) const
 {
-    return purpose == other.purpose && person == other.person && role == other.role && label == other.label
+    return purpose == other.purpose && maker == other.maker && role == other.role && label == other.label
         && keys == other.keys;
 }
 
@@ -253,7 +253,7 @@ bool SealingSet::keysAreFree(const DeviceKeys& keys, const QString& except) cons
 
 bool SealingSet::addInvite(const Invite& invite)
 {
-    if (!invite.keys.isValid() || !invite.person.isValid() || !m_people.contains(invite.person.toHex())
+    if (!invite.keys.isValid() || !invite.maker.isValid() || !m_people.contains(invite.maker.toHex())
         || !keysAreFree(invite.keys, QString()))
     {
         return false;
@@ -280,7 +280,7 @@ bool SealingSet::join(const Fingerprint& invite, const NamedDevice& device, cons
     switch (open.purpose)
     {
     case Invite::For::Device:
-        personId = open.person.toHex();
+        personId = open.maker.toHex();
         if (!m_people.contains(personId))
         {
             return false;
@@ -317,7 +317,7 @@ void SealingSet::dropInvitesWithoutAPerson()
 {
     for (auto invite = m_invites.begin(); invite != m_invites.end();)
     {
-        if (m_people.contains(invite.value().person.toHex()))
+        if (m_people.contains(invite.value().maker.toHex()))
         {
             ++invite;
         }
@@ -425,9 +425,9 @@ SealingSet SealingSet::merge(const SealingSet& base, const SealingSet& mine, con
 
     merged.dropInvitesWithoutAPerson();
 
-    // Sound entries can still make an unsound set: two removals that between them
-    // leave nobody. Theirs, which the server holds, stands then.
-    return fromJson(merged.toJson()).value_or(theirs);
+    // Two removals that between them leave nobody: theirs, which the server holds,
+    // stands.
+    return merged.m_people.isEmpty() ? theirs : merged;
 }
 
 // --- The rule --------------------------------------------------------------------
@@ -491,7 +491,7 @@ QJsonObject SealingSet::toJson() const
     {
         QJsonObject inviteJson;
         inviteJson[KeyFor] = invite.purpose == Invite::For::Device ? ForDevice : ForUser;
-        inviteJson[KeyPerson] = invite.person.toHex();
+        inviteJson[KeyPerson] = invite.maker.toHex();
         inviteJson[KeyRole] = roleName(invite.role);
         inviteJson[KeyLabel] = invite.label;
         writeKeys(inviteJson, invite.keys);
@@ -591,9 +591,9 @@ std::optional<SealingSet> SealingSet::fromJson(const QJsonObject& json)
         {
             return std::nullopt;
         }
-        invite.person = MemberId::fromHex(person);
+        invite.maker = MemberId::fromHex(person);
         invite.role = roleOf(role).value();
-        if (person != invite.person.toHex() || !set.addInvite(invite))
+        if (person != invite.maker.toHex() || !set.addInvite(invite))
         {
             return std::nullopt;
         }

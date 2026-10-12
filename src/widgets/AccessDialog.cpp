@@ -199,10 +199,10 @@ void AccessDialog::fillTree()
             deviceRow->setData(0, DeviceRole, device.fingerprint().toHex());
         }
 
-        // Under the person who made it, with the role a new user joins as.
+        // Under its maker, with the role a new user joins as.
         for (const Invite& invite : m_roster.invites())
         {
-            if (invite.person != person.id)
+            if (invite.maker != person.id)
             {
                 continue;
             }
@@ -269,13 +269,13 @@ void AccessDialog::onSelectionChanged()
 
     m_details->setEnabled(person.has_value());
 
-    // Removing and changing roles are an admin's, on someone else.
-    m_remove->setEnabled(admin && person.has_value() && !isSelf);
+    // Removing and changing roles are an admin's, on someone else's own row.
+    const bool personRow = person.has_value() && !device.has_value();
+    m_remove->setEnabled(admin && personRow && !isSelf);
 
     // Make Member on yourself steps down - never as the only admin, since a ward
     // always has one.
     m_role->setToolTip(QString());
-    const bool personRow = person.has_value() && !device.has_value();
     m_role->setText(person.has_value() && person->isAdmin() ? tr("Make Member") : tr("Make Admin"));
     if (personRow && (isSelf ? person->isAdmin() : admin))
     {
@@ -296,7 +296,7 @@ void AccessDialog::onSelectionChanged()
     m_unlink->setEnabled(isSelf && device.has_value() && device->fingerprint() != m_self.fingerprint());
 
     // An invite is withdrawn by whoever made it, or by an admin.
-    m_withdraw->setEnabled(invite.has_value() && (admin || (self().has_value() && invite->person == self()->id)));
+    m_withdraw->setEnabled(invite.has_value() && (admin || (self().has_value() && invite->maker == self()->id)));
 }
 
 void AccessDialog::onRemove()

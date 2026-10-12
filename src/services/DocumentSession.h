@@ -218,16 +218,13 @@ public:
     /// Registers the ward under its existing id, sealed to this device alone.
     void share();
 
-    /// Writes a version sealed to a fresh invite keypair as well, publishes it, and
-    /// answers the link to send; the invite works once that publish has landed, which
-    /// the sync state shows. A Device invite joins this person; a User invite makes a
-    /// new person with role. Whether this person may invite is the caller's rule.
-    /// nullopt for an unshared or lost ward, or one a newer build has written.
-    std::optional<FileOpenRouter::InviteLink> invite(Invite::For purpose, Role role, const QString& label);
+    /// This person as the roster lists it; nullopt when the roster does not.
+    std::optional<Holder> self() const;
 
     /// Publishes a version without this person, built from what is in memory, and
     /// once it lands finishes as Left: the local file is never written without this
-    /// device. leaveFailed says why it did not land; the last person cannot leave.
+    /// device. leaveFailed says why it did not land: the last person cannot leave,
+    /// and nothing lands while a conflict waits for resolve.
     void leave();
 
     /// The conflict waiting for a choice, if any. Head checks and publishing wait
@@ -271,8 +268,8 @@ signals:
     /// The version that leaves was refused, or could not be built.
     void leaveFailed(ServerContract::ServerError error);
 
-    /// Who has access changed from outside an edit: a version taken in, or a save
-    /// that rotated the key.
+    /// Who has access changed: a roster edit, a version taken in, or a save that
+    /// rotated the key.
     void rosterChanged();
 
 private:
@@ -299,9 +296,6 @@ private:
     /// writeLocal with the sealing-set rule applied against previous first, for a
     /// document taken in from the server: a roster carried through a merge rotates.
     bool writeResealed(const Document& document, const DocumentHeader& previous, const DataKey& dataKey);
-
-    /// This person as the roster lists it; nullopt when the roster does not.
-    std::optional<Holder> self() const;
 
     /// The exact bytes of a server version as the local file.
     bool writeLocal(const ServerVersion::Fetched& theirs);

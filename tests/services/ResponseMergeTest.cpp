@@ -6,7 +6,6 @@
 #include "ResponseMerge.h"
 #include "SealingSet.h"
 
-#include <QJsonArray>
 #include <QtTest>
 
 namespace
@@ -120,31 +119,11 @@ SealingSet withInvite(const SealingSet& set)
     SealingSet invited = set;
     Invite invite;
     invite.purpose = Invite::For::User;
-    invite.person = set.people().first().id;
+    invite.maker = set.people().first().id;
     invite.label = "for Bob";
     invite.keys = newKeys();
     invited.addInvite(invite);
     return invited;
-}
-
-/// The set with Dave joined as a member through an invite of its one person.
-SealingSet withDave(const SealingSet& set)
-{
-    SealingSet joined = withInvite(set);
-    joined.join(joined.invites().first().fingerprint(), NamedDevice{"Tablet", newKeys()}, newMember(), "Dave");
-    return joined;
-}
-
-MemberId idOf(const SealingSet& set, const QString& name)
-{
-    for (const Holder& person : set.people())
-    {
-        if (person.name == name)
-        {
-            return person.id;
-        }
-    }
-    return MemberId();
 }
 
 /// A document with one family and the storm under way.
@@ -619,23 +598,6 @@ void ResponseMergeTest::rosterEditsOnBothSidesMergeEntryByEntry()
     QCOMPARE(merged->sealingSet().people().size(), 2);
     QCOMPARE(merged->sealingSet().person(alice)->devices.size(), 1);
 
-    // The same with a device invite joined there: Alice's own entry changed there, and
-    // her new invite here still carries.
-    Invite forPhone;
-    forPhone.purpose = Invite::For::Device;
-    forPhone.person = alice;
-    forPhone.label = "for Phone";
-    forPhone.keys = newKeys();
-    SealingSet phoneInvited = base.sealingSet();
-    QVERIFY(phoneInvited.addInvite(forPhone));
-    SealingSet phoneJoined = phoneInvited;
-    QVERIFY(phoneJoined.join(forPhone.fingerprint(), NamedDevice{"Phone", newKeys()}, alice, "Alice"));
-    SealingSet phoneAndInvite = withInvite(phoneInvited);
-    const SealingSet crossed = SealingSet::merge(phoneInvited, phoneAndInvite, phoneJoined);
-    QCOMPARE(crossed.person(alice)->devices.size(), 2);
-    QCOMPARE(crossed.invites().size(), 2);
-    QVERIFY(!crossed.invite(forPhone.fingerprint()).has_value());
-
     // A roster edit on one side and a family edit on the other both carry.
     Document moved = base;
     moved.updateFamily(familyAt(s.adams, 41.5));
@@ -643,63 +605,4 @@ void ResponseMergeTest::rosterEditsOnBothSidesMergeEntryByEntry()
     QVERIFY(both.has_value());
     QCOMPARE(both->sealingSet().invites().size(), 2);
     QVERIFY(both->findFamilyById(s.adams).value().latitude() == std::optional<double>(41.5));
-
-    // The former keys of both sides, theirs' first.
-    const DataKey mineRotated = DocumentCrypto::generateDataKey();
-    const DataKey theirsRotated = DocumentCrypto::generateDataKey();
-    SealingSet mineKeys = base.sealingSet();
-    mineKeys.addFormerKey(mineRotated);
-    SealingSet theirsKeys = base.sealingSet();
-    theirsKeys.addFormerKey(theirsRotated);
-    const SealingSet keys = SealingSet::merge(base.sealingSet(), mineKeys, theirsKeys);
-    QVERIFY(keys.descendsFrom(mineRotated));
-    QVERIFY(keys.descendsFrom(theirsRotated));
-    const QJsonArray theirsThenMine{theirsKeys.toJson().value("formerKeys").toArray().first(),
-                                    mineKeys.toJson().value("formerKeys").toArray().first()};
-    QCOMPARE(keys.toJson().value("formerKeys").toArray(), theirsThenMine);
-}
-
-void ResponseMergeTest::theSameEntryChangedOnBothSidesIsTheirs()
-{
-    const SealingSet base = withDave(setOfOne());
-    const MemberId dave = idOf(base, "Dave");
-
-    SealingSet daveAdmin = base;
-    QVERIFY(daveAdmin.setRole(dave, Role::Admin));
-    SealingSet daveGone = base;
-    QVERIFY(daveGone.removePerson(dave));
-
-    // Promoted here, removed there, and the other way round: theirs each time.
-    QVERIFY(!SealingSet::merge(base, daveAdmin, daveGone).person(dave).has_value());
-    QVERIFY(SealingSet::merge(base, daveGone, daveAdmin).person(dave)->role == Role::Admin);
-
-    // A removed person's invites go with them, whichever side made the invite and
-    // whichever removed him.
-    SealingSet davesInvite = base;
-    Invite byDave;
-    byDave.purpose = Invite::For::User;
-    byDave.person = dave;
-    byDave.label = "for Erin";
-    byDave.keys = newKeys();
-    QVERIFY(davesInvite.addInvite(byDave));
-    QVERIFY(SealingSet::merge(base, davesInvite, daveGone) == daveGone);
-    QVERIFY(SealingSet::merge(base, daveGone, davesInvite) == daveGone);
-
-    // Anchor: the same change on both sides is that change.
-    QVERIFY(SealingSet::merge(base, daveAdmin, daveAdmin).person(dave)->role == Role::Admin);
-}
-
-void ResponseMergeTest::anUnsoundMergeIsTheirsWhole()
-{
-    const SealingSet base = withDave(setOfOne());
-    const MemberId alice = idOf(base, "Alice");
-    const MemberId dave = idOf(base, "Dave");
-
-    // Each side removes the other: entry by entry, nobody is left, so theirs stands.
-    SealingSet daveGone = base;
-    QVERIFY(daveGone.removePerson(dave));
-    SealingSet aliceGone = base;
-    QVERIFY(aliceGone.removePerson(alice));
-    QVERIFY(SealingSet::merge(base, daveGone, aliceGone) == aliceGone);
-    QVERIFY(SealingSet::merge(base, aliceGone, daveGone) == daveGone);
 }

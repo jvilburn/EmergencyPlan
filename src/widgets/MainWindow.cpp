@@ -937,8 +937,7 @@ void MainWindow::onShowAccess()
 
     // Current while it is open: every change to the roster shows, and another ward
     // closes it.
-    connect(manager, &DocumentManager::documentChanged, &dialog, std::bind(&MainWindow::refreshAccessDialog, this, &dialog));
-    connect(manager, &DocumentManager::accessChanged, &dialog, std::bind(&MainWindow::refreshAccessDialog, this, &dialog));
+    connect(manager, &DocumentManager::rosterChanged, &dialog, std::bind(&MainWindow::refreshAccessDialog, this, &dialog));
     connect(manager, &DocumentManager::documentOpened, &dialog, &QDialog::reject);
     connect(manager, &DocumentManager::shared, &dialog, &QDialog::reject);
     dialog.exec();
@@ -977,8 +976,7 @@ void MainWindow::showInvite(const std::optional<FileOpenRouter::InviteLink>& lin
     {
         QMessageBox::warning(this,
                              tr("Invite"),
-                             tr("Share the ward first. An invite is a version of the ward on the server, so the ward "
-                                "must be shared, and readable by this version of Ward Planning."));
+                             tr("Share the ward first. An invite is a version of the ward on the server."));
         return;
     }
 
@@ -1062,11 +1060,20 @@ void MainWindow::onJoinFailed(DocumentSession::Join outcome, const QString& reas
 
 void MainWindow::onLeaveFailed(ServerContract::ServerError error)
 {
-    QMessageBox::warning(this,
-                         tr("Leave"),
-                         error == ServerContract::ServerError::Unreachable
-                             ? tr("Connect to the internet to leave a ward; the server has to hold your leaving.")
-                             : tr("You could not leave just now. Try again in a moment."));
+    QString message;
+    switch (error)
+    {
+    case ServerContract::ServerError::Unreachable:
+        message = tr("Connect to the internet to leave a ward; the server has to hold your leaving.");
+        break;
+    case ServerContract::ServerError::VersionConflict:
+        message = tr("Choose between the two versions first (File > Choose Between Two Versions), then leave.");
+        break;
+    default:
+        message = tr("You could not leave just now. Try again in a moment.");
+        break;
+    }
+    QMessageBox::warning(this, tr("Leave"), message);
 }
 
 void MainWindow::onRemovePerson(const MemberId& person)
@@ -1116,7 +1123,7 @@ void MainWindow::onUnlinkDevice(const Fingerprint& device)
 
 void MainWindow::onWithdrawInvite(const Fingerprint& invite)
 {
-    DocumentManager::instance()->revokeInvite(invite);
+    DocumentManager::instance()->withdrawInvite(invite);
 }
 
 void MainWindow::onLeave()

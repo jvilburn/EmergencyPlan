@@ -25,7 +25,7 @@ Invite newInvite(Invite::For purpose, const MemberId& person, const QString& lab
 {
     Invite invite;
     invite.purpose = purpose;
-    invite.person = person;
+    invite.maker = person;
     invite.label = label;
     invite.keys = newKeys();
     return invite;

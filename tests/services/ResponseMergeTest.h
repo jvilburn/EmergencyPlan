@@ -37,6 +37,4 @@ private slots:
     void noDirectoryChangeMergesTheResponse();
     void aRosterEditOnOneSideCarriesThrough();
     void rosterEditsOnBothSidesMergeEntryByEntry();
-    void theSameEntryChangedOnBothSidesIsTheirs();
-    void anUnsoundMergeIsTheirsWhole();
 };

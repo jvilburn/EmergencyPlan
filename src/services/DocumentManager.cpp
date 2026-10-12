@@ -1,5 +1,6 @@
 #include "DocumentManager.h"
 #include "BackgroundGeocodingService.h"
+#include "DocumentCrypto.h"
 #include "RosterDiff.h"
 #include "ServerVersion.h"
 #include "ServerConnection.h"
@@ -492,6 +493,7 @@ void DocumentManager::install(std::unique_ptr<DocumentSession> session)
     DocumentSession* opened = m_session.get();
     connect(opened, &DocumentSession::documentReplaced, this, &DocumentManager::onDocumentReplaced);
     connect(opened, &DocumentSession::rosterChanged, this, &DocumentManager::refreshRosterChanges);
+    connect(opened, &DocumentSession::rosterChanged, this, &DocumentManager::rosterChanged);
     connect(opened, &DocumentSession::leaveFailed, this, &DocumentManager::leaveFailed);
     connect(opened, &DocumentSession::readOnlyChanged, this, &DocumentManager::onReadOnlyChanged);
     connect(opened, &DocumentSession::syncStateChanged, this, &DocumentManager::syncStateChanged);
@@ -550,7 +552,7 @@ SealingSet DocumentManager::roster() const
 
 std::optional<Holder> DocumentManager::self() const
 {
-    return roster().personOf(m_identity.fingerprint());
+    return m_session ? m_session->self() : std::nullopt;
 }
 
 void DocumentManager::refreshRosterChanges()
@@ -605,24 +607,36 @@ void DocumentManager::share()
 
 std::optional<FileOpenRouter::InviteLink> DocumentManager::invite(Invite::For purpose, Role role, const QString& label)
 {
-    if (!m_session || !self().has_value())
+    const std::optional<Holder> me = self();
+    if (!me.has_value() || !m_session->isShared())
     {
         return std::nullopt;
     }
 
-    const std::optional<FileOpenRouter::InviteLink> link = m_session->invite(purpose, role, label);
-    refreshRosterChanges();
+    // The link carries the seed; the roster carries the keys made from it.
+    const FileOpenRouter::InviteLink link{m_session->documentId(),
+                                          DocumentCrypto::randomBytes(FileOpenRouter::InviteLink::SeedSize)};
+    Invite open;
+    open.purpose = purpose;
+    open.maker = me->id;
+    open.role = role;
+    open.label = label;
+    open.keys = link.keys().publicKeys();
+
+    SealingSet changed = roster();
+    if (!changed.addInvite(open))
+    {
+        return std::nullopt;
+    }
+    publishRoster(changed);
     return link;
 }
 
 QString DocumentManager::inviteMessage(const FileOpenRouter::InviteLink& link) const
 {
     // Named as the roster names this person, which the recipient will see.
-    const std::optional<Holder> me = self();
     const QString ward = wardNameOf(link.documentId);
-    return FileOpenRouter::inviteMessage(me.has_value() ? me->name : m_identity.displayName,
-                                         ward.isEmpty() ? tr("a ward") : ward,
-                                         link);
+    return FileOpenRouter::inviteMessage(self().value().name, ward.isEmpty() ? tr("a ward") : ward, link);
 }
 
 void DocumentManager::publishRoster(const SealingSet& roster)
@@ -633,7 +647,6 @@ void DocumentManager::publishRoster(const SealingSet& roster)
     }
     m_session->edit(DocumentSession::Edit::Roster, std::bind(&Document::setSealingSet, _1, roster));
     m_session->publishNow();
-    refreshRosterChanges();
 }
 
 void DocumentManager::removePerson(const MemberId& id)
@@ -656,7 +669,7 @@ void DocumentManager::removeDevice(const Fingerprint& device)
     }
 }
 
-void DocumentManager::revokeInvite(const Fingerprint& invite)
+void DocumentManager::withdrawInvite(const Fingerprint& invite)
 {
     SealingSet changed = roster();
     if (changed.removeInvite(invite))

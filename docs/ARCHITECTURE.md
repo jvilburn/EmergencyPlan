@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the architecture of the Ward Planning application, a C++17/Qt 6 desktop application for managing ward/stake family data, emergency response teams, and resources. A ward is an encrypted document that can be shared through a server which holds who has access but never a key; the *Shared Wards* section describes that part. The full design is in `docs/plans/2026-08-30-encrypted-shared-document-design.md`.
+This document describes the architecture of the Ward Planning application, a C++17/Qt 6 desktop application for managing ward/stake family data, emergency response teams, and resources. A ward is an encrypted document that can be shared through a server which stores its versions and never a key; the ward carries its own access list. The *Shared Wards* section describes that part. The designs are `docs/plans/2026-08-30-encrypted-shared-document-design.md` and `docs/plans/2026-10-12-document-held-access-design.md`.
 
 ---
 
@@ -444,6 +444,7 @@ convention among honest clients; the server cannot see them.
 | `DocumentHeader` | The header's fields and strict parse; one format version covers the whole file |
 | `SealingSet` | The roster inside the payload, and whether a write on top of a given header rotates the key |
 | `RosterDiff` | What changed between two rosters, for the access notice |
+| `ResponseMerge` | A document merged three ways against its base copy: the directory decides conflicts, the emergency response and the roster merge on their own |
 | `Reconcile` | Validates a version before anything local changes: sealed to this device, decrypts, header matches the roster, descends from a key this device trusts |
 | `ServerContract` | The server API as C++ types, five calls and signed writes; `FakeServer` in the tests and `HttpServerApi` implement it |
 | `HttpServerApi`, `HttpWire` | HTTP transport and JSON shapes, one table in `HttpWire.h` |
