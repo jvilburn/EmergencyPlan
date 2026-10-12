@@ -10,36 +10,42 @@
 #include <QStringList>
 #include <QTimer>
 
-/// The wards this device asked for and has not yet received. Each is asked for once,
-/// then checked on an interval: an admin grants it, and the ward arrives once a
-/// version sealed to this device does - the granting admin's app seals it, so it may
-/// lag the grant a little - or the request is declined.
+/// The wards on their way to this device: each the server lists for this person that
+/// the library lacks - after a grant, a link, a reinstall, or cleared app data - and
+/// each this device asked for and an admin has not yet answered.
 ///
-/// Kept in AppSettings, so a request outlives closing the app.
-class PendingRequests : public QObject
+/// A listed ward arrives once a version sealed to this device does. The device that
+/// approved it seals it - the granting admin's, or the one that linked this device -
+/// so it may lag the grant or the link a little; until then it waits for access.
+///
+/// Checked on an interval, and kept in AppSettings, so a request outlives closing
+/// the app.
+class IncomingWards : public QObject
 {
     Q_OBJECT
 
 public:
     static constexpr int CheckMilliseconds = 60 * 1000;
 
-    PendingRequests(AppSettings& settings, DocumentLibrary& library, ServerConnection& server, QObject* parent);
+    IncomingWards(AppSettings& settings, DocumentLibrary& library, ServerConnection& server, QObject* parent);
 
     /// Asks the server for access to a ward this device lacks.
     void request(const QString& documentId);
 
+    /// The requests not yet answered.
     QStringList pending() const { return m_settings.requestedWards(); }
 
-    /// Checks every pending request now, as the interval does.
+    /// Checks every request, and fetches every listed ward this device lacks, now.
     void checkNow();
 
 signals:
     void requested(const QString& documentId);
     void requestFailed(const QString& documentId, ServerContract::ServerError error);
-
-    /// Granted, and on this device.
-    void arrived(const QString& documentId);
     void declined(const QString& documentId);
+
+    /// A ward reached this device, or could not be kept: Done, NeedsNewerVersion, or
+    /// WriteFailed. One still waiting for access is not reported.
+    void fetched(const QString& documentId, DocumentSession::Download outcome);
 
 private:
     void onRequested(const QString& documentId, const ServerContract::Result<ServerContract::Done>& result);
@@ -48,7 +54,6 @@ private:
 
     void add(const QString& documentId);
     void drop(const QString& documentId);
-    void fetch(const QString& documentId);
 
     AppSettings& m_settings;
     DocumentLibrary& m_library;

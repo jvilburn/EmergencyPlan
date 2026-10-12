@@ -5,6 +5,7 @@
 #include <QMessageBox>
 #include <QStandardPaths>
 #include "AppSettings.h"
+#include "DeviceLinks.h"
 #include "DocumentConstants.h"
 #include "DocumentCrypto.h"
 #include "DocumentLibrary.h"
@@ -15,7 +16,7 @@
 #include "HttpServerApi.h"
 #include "IdentityService.h"
 #include "MainWindow.h"
-#include "PendingRequests.h"
+#include "IncomingWards.h"
 #include "ServerConnection.h"
 #include "SessionTimers.h"
 #include "SealingQueue.h"
@@ -180,10 +181,12 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    // The first screen, while no person exists on this device.
+    // The first screen, while no person exists on this device. Linking reaches the
+    // server before the rest of the app exists.
+    HttpServerApi serverApi(*settings, nullptr);
     if (!identityService->identity().has_value())
     {
-        FirstRunDialog firstRun(*identityService, nullptr);
+        FirstRunDialog firstRun(*identityService, serverApi, nullptr);
         if (firstRun.exec() != QDialog::Accepted)
         {
             return 0;
@@ -193,7 +196,6 @@ int main(int argc, char *argv[])
 
     // Every service that takes the identity is built after it exists, and takes it
     // by value.
-    HttpServerApi serverApi(*settings, nullptr);
     ServerConnection server(serverApi, identity);
     DocumentLibrary library(*settings, deviceData.filePath("wards"), identity);
     SealingQueue queue(identity,
@@ -212,8 +214,9 @@ int main(int argc, char *argv[])
     TileService::setInstance(&tileService);
     tileService.initialize();
 
-    PendingRequests requests(*settings, library, server, nullptr);
-    MainWindow window(*settings, library, requests, nullptr);
+    IncomingWards incoming(*settings, library, server, nullptr);
+    DeviceLinks links(*settings, server, queue, nullptr);
+    MainWindow window(*settings, library, incoming, links, nullptr);
     QObject::connect(&window, &MainWindow::startOverRequested, &app, std::bind(&startOver, identityPath));
     window.show();
 
@@ -228,17 +231,13 @@ int main(int argc, char *argv[])
         window.openWard(library.lastOpenedId());
     }
 
-    // Every ward the server lists for this device and the library lacks: after a
-    // reinstall, cleared app data, or a grant.
-    library.restore(server,
-                    &window,
-                    std::bind(&MainWindow::onWardRestored, &window, std::placeholders::_1, std::placeholders::_2));
     QObject::connect(&instance, &SingleInstance::argumentsReceived, &window, &MainWindow::handleArguments);
 
-    // Whatever this device owes a ward it holds - a device it linked, a person it
-    // granted - since it last ran.
+    // Every ward the server lists for this person and the library lacks - after a
+    // reinstall, cleared app data, a grant, or a link - and whatever this device owes
+    // a ward it holds since it last ran.
+    incoming.checkNow();
     queue.sealEverywhere();
-    requests.checkNow();
 
     return app.exec();
 }

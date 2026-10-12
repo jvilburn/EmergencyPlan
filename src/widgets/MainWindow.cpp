@@ -1,8 +1,9 @@
 #include "MainWindow.h"
 #include "AppSettings.h"
 #include "DocumentLibrary.h"
+#include "DeviceLinks.h"
 #include "FileOpenRouter.h"
-#include "PendingRequests.h"
+#include "IncomingWards.h"
 #include "OpenWardDialog.h"
 #include "AccessDialog.h"
 #include "WardNotices.h"
@@ -38,6 +39,8 @@
 
 #include <QMenuBar>
 #include <QClipboard>
+#include <QInputDialog>
+#include <QLineEdit>
 #include <QGuiApplication>
 #include <QStatusBar>
 #include <QVBoxLayout>
@@ -54,11 +57,16 @@
 #include <QCloseEvent>
 #include <QLocale>
 
-MainWindow::MainWindow(AppSettings& settings, DocumentLibrary& library, PendingRequests& requests, QWidget* parent)
+MainWindow::MainWindow(AppSettings& settings,
+                       DocumentLibrary& library,
+                       IncomingWards& incoming,
+                       DeviceLinks& links,
+                       QWidget* parent)
     : QMainWindow(parent)
     , m_settings(settings)
     , m_library(library)
-    , m_requests(requests)
+    , m_requests(incoming)
+    , m_links(links)
 {
     setupUi();
     setupMenus();
@@ -161,7 +169,7 @@ void MainWindow::setupUi()
     m_wardNotices = new WardNotices(centralContainer);
     centralLayout->addWidget(m_wardNotices);
     connect(m_wardNotices, &WardNotices::accessRequested, this, &MainWindow::onShowAccess);
-    connect(m_wardNotices, &WardNotices::linkRequested, this, &MainWindow::onShowAccess);
+    connect(m_wardNotices, &WardNotices::linkRequested, this, &MainWindow::onLinkDevice);
     centralLayout->addWidget(m_splitter, 1);
     setCentralWidget(centralContainer);
 
@@ -315,10 +323,14 @@ void MainWindow::setupConnections()
             this, &MainWindow::onShareFailed);
     connect(DocumentManager::instance(), &DocumentManager::accessCallFailed,
             this, &MainWindow::onAccessCallFailed);
-    connect(&m_requests, &PendingRequests::requested, this, &MainWindow::onRequested);
-    connect(&m_requests, &PendingRequests::requestFailed, this, &MainWindow::onRequestFailed);
-    connect(&m_requests, &PendingRequests::arrived, this, &MainWindow::onRequestArrived);
-    connect(&m_requests, &PendingRequests::declined, this, &MainWindow::onRequestDeclined);
+    connect(&m_requests, &IncomingWards::requested, this, &MainWindow::onRequested);
+    connect(&m_requests, &IncomingWards::requestFailed, this, &MainWindow::onRequestFailed);
+    connect(&m_requests, &IncomingWards::fetched, this, &MainWindow::onWardRestored);
+    connect(&m_links, &DeviceLinks::linkRead, this, &MainWindow::onLinkRead);
+    connect(&m_links, &DeviceLinks::approved, this, &MainWindow::onLinkApproved);
+    connect(&m_links, &DeviceLinks::unlinked, this, &MainWindow::onUnlinked);
+    connect(&m_links, &DeviceLinks::failed, this, &MainWindow::onAccessCallFailed);
+    connect(&m_requests, &IncomingWards::declined, this, &MainWindow::onRequestDeclined);
     connect(DocumentManager::instance(), &DocumentManager::fetchFailed,
             this, &MainWindow::onFetchFailed);
     connect(DocumentManager::instance(), &DocumentManager::conflictRaised,
@@ -779,10 +791,8 @@ void MainWindow::onAccessLost(const QString& wardName, const ServerContract::Los
         message = tr("You left %1, so it is no longer on this device.").arg(ward);
         break;
     case ServerContract::LostAccess::How::Unlinked:
-        message = lost.byWhom.isEmpty()
-                      ? tr("This device was unlinked, so %1 is no longer on it.").arg(ward)
-                      : tr("This device was unlinked by %1, so %2 is no longer on it.").arg(lost.byWhom, ward);
-        break;
+        unlinkedHere();
+        return;
     case ServerContract::LostAccess::How::Removed:
         message = lost.byWhom.isEmpty()
                       ? tr("Your access to %1 was removed, so it is no longer on this device.").arg(ward)
@@ -899,6 +909,8 @@ void MainWindow::onShowAccess()
 
     connect(&dialog, &AccessDialog::shareRequested, manager, &DocumentManager::share);
     connect(&dialog, &AccessDialog::grantRequested, manager, &DocumentManager::grant);
+    connect(&dialog, &AccessDialog::linkRequested, this, &MainWindow::onLinkDevice);
+    connect(&dialog, &AccessDialog::unlinkRequested, this, &MainWindow::onUnlinkDevice);
     connect(&dialog, &AccessDialog::declineRequested, manager, &DocumentManager::decline);
     connect(manager, &DocumentManager::accessCallDone, &dialog, std::bind(&MainWindow::refreshAccessDialog, this, &dialog));
     manager->fetchRequests(&dialog, std::bind(&AccessDialog::setRequests, &dialog, std::placeholders::_1));
@@ -994,22 +1006,143 @@ void MainWindow::onRequestFailed(const QString& documentId, ServerContract::Serv
                          tr("The request could not be sent. Connect to the internet and open the link again."));
 }
 
-void MainWindow::onRequestArrived(const QString& documentId)
-{
-    const QString name = DocumentManager::instance()->wardNameOf(documentId);
-    statusBar()->showMessage(tr("%1 is now on this device").arg(name), 10000);
-
-    const DocumentManager* manager = DocumentManager::instance();
-    if (manager->documentId().isEmpty() && !manager->copy().has_value() && !manager->isFetching())
-    {
-        openWard(documentId);
-    }
-}
-
 void MainWindow::onRequestDeclined(const QString& documentId)
 {
     Q_UNUSED(documentId);
     QMessageBox::information(this, tr("Request Access"), tr("An admin declined your request for access to a ward."));
+}
+
+void MainWindow::onLinkDevice()
+{
+    bool entered = false;
+    const QString code = QInputDialog::getText(this,
+                                               tr("Link a Device"),
+                                               tr("Enter the code your new device shows:"),
+                                               QLineEdit::Normal,
+                                               QString(),
+                                               &entered);
+    if (entered && !code.trimmed().isEmpty())
+    {
+        m_links.read(code);
+    }
+}
+
+void MainWindow::onLinkRead(const QString& code, const ServerContract::LinkState& state)
+{
+    if (state.approvedAs.has_value())
+    {
+        QMessageBox::information(this, tr("Link a Device"), tr("That code has already been used."));
+        return;
+    }
+
+    const QMessageBox::StandardButton answer = QMessageBox::question(
+        this,
+        tr("Link a Device"),
+        tr("Link \"%1\" to your account? It will open every ward you have, and you can unlink it later.")
+            .arg(state.deviceName),
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::Yes);
+    if (answer == QMessageBox::Yes)
+    {
+        m_links.approve(code, state.keys);
+    }
+}
+
+void MainWindow::onLinkApproved(const QString& deviceName)
+{
+    statusBar()->showMessage(tr("%1 is linked. Your wards are on their way to it.").arg(deviceName), 10000);
+    if (DocumentManager::instance()->session() != nullptr)
+    {
+        DocumentManager::instance()->session()->checkServer();
+    }
+}
+
+void MainWindow::onUnlinkDevice(const Fingerprint& device)
+{
+    // This person's devices as the server last said, and which of them the lost one
+    // linked: a device planted from a stolen phone should not outlive the phone.
+    QList<ServerContract::Device> mine;
+    for (const ServerContract::Member& member : currentMembers())
+    {
+        if (member.person.member == DocumentManager::instance()->identity().member)
+        {
+            mine = member.person.devices;
+        }
+    }
+
+    QString name;
+    QList<Fingerprint> alsoLinked;
+    QStringList alsoNames;
+    for (const ServerContract::Device& listed : mine)
+    {
+        if (listed.fingerprint == device)
+        {
+            name = listed.name;
+        }
+        else if (listed.linkedBy == device && listed.fingerprint != DocumentManager::instance()->identity().fingerprint())
+        {
+            alsoLinked.append(listed.fingerprint);
+            alsoNames.append(tr("\"%1\" on %2").arg(listed.name,
+                                                    QLocale().toString(listed.linkedAt.toLocalTime().date(),
+                                                                       QLocale::ShortFormat)));
+        }
+    }
+
+    QMessageBox confirm(QMessageBox::Question,
+                        tr("Unlink"),
+                        tr("Unlink \"%1\"? It loses every ward at once, and deletes them when it next connects.")
+                            .arg(name),
+                        QMessageBox::Cancel,
+                        this);
+    QPushButton* both = nullptr;
+    if (!alsoLinked.isEmpty())
+    {
+        confirm.setInformativeText(tr("It also linked %1. Unlink those too?").arg(QLocale().createSeparatedList(alsoNames)));
+        both = confirm.addButton(tr("Unlink Both"), QMessageBox::AcceptRole);
+        confirm.setDefaultButton(both);
+    }
+    QPushButton* justThis = confirm.addButton(alsoLinked.isEmpty() ? tr("Unlink") : tr("Just This One"),
+                                              QMessageBox::DestructiveRole);
+    confirm.exec();
+
+    if (confirm.clickedButton() == both)
+    {
+        m_links.unlink(QList<Fingerprint>{device} + alsoLinked);
+    }
+    else if (confirm.clickedButton() == justThis)
+    {
+        m_links.unlink({device});
+    }
+}
+
+void MainWindow::unlinkedHere()
+{
+    // Reported once, however many wards and calls hear it.
+    if (m_unlinkedHere)
+    {
+        return;
+    }
+    m_unlinkedHere = true;
+
+    DocumentManager::instance()->close(nullptr);
+    for (const DocumentLibrary::Entry& entry : m_library.entries())
+    {
+        m_library.forgetLost(entry.documentId);
+    }
+    QMessageBox::information(this,
+                             tr("Ward Planning"),
+                             tr("This device was unlinked, so its wards have been deleted from it. Ward Planning "
+                                "will close; start it again to set this device up."));
+    emit startOverRequested();
+}
+
+void MainWindow::onUnlinked(int count)
+{
+    statusBar()->showMessage(tr("%n device(s) unlinked", "", count), 10000);
+    if (DocumentManager::instance()->session() != nullptr)
+    {
+        DocumentManager::instance()->session()->checkServer();
+    }
 }
 
 void MainWindow::onAccessCallFailed(ServerContract::ServerError error)

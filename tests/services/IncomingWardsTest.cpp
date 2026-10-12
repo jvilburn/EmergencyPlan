@@ -1,9 +1,9 @@
-#include "PendingRequestsTest.h"
+#include "IncomingWardsTest.h"
 
 #include "AppSettings.h"
 #include "DocumentCrypto.h"
 #include "DocumentLibrary.h"
-#include "PendingRequests.h"
+#include "IncomingWards.h"
 #include "SessionTestSupport.h"
 
 #include <QSignalSpy>
@@ -32,7 +32,7 @@ struct BobsApp
     QTemporaryDir folder;
     std::unique_ptr<AppSettings> settings;
     DocumentLibrary library;
-    PendingRequests requests;
+    IncomingWards requests;
 };
 
 /// The admin's grant of Bob's one pending request, on the server alone.
@@ -50,12 +50,12 @@ bool grantOnServer(TestWard& ward, Device& admin)
 
 } // namespace
 
-void PendingRequestsTest::initTestCase()
+void IncomingWardsTest::initTestCase()
 {
     QVERIFY(DocumentCrypto::initialise());
 }
 
-void PendingRequestsTest::aGrantedRequestArrivesOnceTheWardIsSealedToThisDevice()
+void IncomingWardsTest::aGrantedRequestArrivesOnceTheWardIsSealedToThisDevice()
 {
     TestWard ward;
     Device& alice = ward.add(newIdentity("Alice", "Laptop"));
@@ -65,8 +65,8 @@ void PendingRequestsTest::aGrantedRequestArrivesOnceTheWardIsSealedToThisDevice(
     aliceSession.reset();
 
     BobsApp app(bob);
-    QSignalSpy requested(&app.requests, &PendingRequests::requested);
-    QSignalSpy arrived(&app.requests, &PendingRequests::arrived);
+    QSignalSpy requested(&app.requests, &IncomingWards::requested);
+    QSignalSpy arrived(&app.requests, &IncomingWards::fetched);
     app.requests.request(ward.documentId);
     ward.settle();
     QCOMPARE(requested.count(), 1);
@@ -90,11 +90,12 @@ void PendingRequestsTest::aGrantedRequestArrivesOnceTheWardIsSealedToThisDevice(
     ward.settle();
     QCOMPARE(arrived.count(), 1);
     QCOMPARE(arrived.first().first().toString(), ward.documentId);
+    QCOMPARE(arrived.first().at(1).value<DocumentSession::Download>(), DocumentSession::Download::Done);
     QVERIFY(app.requests.pending().isEmpty());
     QVERIFY(app.library.contains(ward.documentId));
 }
 
-void PendingRequestsTest::aDeclinedRequestIsDroppedAndSaysSo()
+void IncomingWardsTest::aDeclinedRequestIsDroppedAndSaysSo()
 {
     TestWard ward;
     Device& alice = ward.add(newIdentity("Alice", "Laptop"));
@@ -103,7 +104,7 @@ void PendingRequestsTest::aDeclinedRequestIsDroppedAndSaysSo()
     QVERIFY(aliceSession);
 
     BobsApp app(bob);
-    QSignalSpy declined(&app.requests, &PendingRequests::declined);
+    QSignalSpy declined(&app.requests, &IncomingWards::declined);
     app.requests.request(ward.documentId);
     ward.settle();
 
@@ -119,7 +120,7 @@ void PendingRequestsTest::aDeclinedRequestIsDroppedAndSaysSo()
     QVERIFY(!app.library.contains(ward.documentId));
 }
 
-void PendingRequestsTest::aRequestOutlivesTheApp()
+void IncomingWardsTest::aRequestOutlivesTheApp()
 {
     TestWard ward;
     Device& alice = ward.add(newIdentity("Alice", "Laptop"));
@@ -132,28 +133,54 @@ void PendingRequestsTest::aRequestOutlivesTheApp()
     {
         std::unique_ptr<AppSettings> settings = AppSettings::open(folder.filePath("settings.json"), nullptr);
         DocumentLibrary library(*settings, folder.filePath("wards"), bob.identity);
-        PendingRequests requests(*settings, library, bob.connection, nullptr);
+        IncomingWards requests(*settings, library, bob.connection, nullptr);
         requests.request(ward.documentId);
         ward.settle();
     }
 
     std::unique_ptr<AppSettings> settings = AppSettings::open(folder.filePath("settings.json"), nullptr);
     DocumentLibrary library(*settings, folder.filePath("wards"), bob.identity);
-    PendingRequests requests(*settings, library, bob.connection, nullptr);
+    IncomingWards requests(*settings, library, bob.connection, nullptr);
     QCOMPARE(requests.pending(), QStringList{ward.documentId});
 }
 
-void PendingRequestsTest::aRequestForNoSuchWardFails()
+void IncomingWardsTest::aRequestForNoSuchWardFails()
 {
     TestWard ward;
     Device& bob = ward.add(newIdentity("Bob", "Phone"));
     BobsApp app(bob);
-    QSignalSpy failed(&app.requests, &PendingRequests::requestFailed);
+    QSignalSpy failed(&app.requests, &IncomingWards::requestFailed);
 
     app.requests.request(ServerTestSupport::newDocumentId());
     ward.settle();
 
     QCOMPARE(failed.count(), 1);
     QCOMPARE(failed.first().at(1).value<ServerContract::ServerError>(), ServerContract::ServerError::UnknownDocument);
+    QVERIFY(app.requests.pending().isEmpty());
+}
+
+void IncomingWardsTest::aLinkedDevicesWardsArriveOnceItsLinkerSealsThem()
+{
+    TestWard ward;
+    Device& laptop = ward.add(newIdentity("Alice", "Laptop"));
+    Device& phone = ward.add(newDeviceOf(laptop.identity, "Phone"));
+    std::unique_ptr<DocumentSession> session = ward.createShared(laptop);
+    QVERIFY(session);
+    session.reset();
+    QVERIFY(ward.link(phone, laptop));
+
+    // Listed for the phone's person, but not yet sealed to the phone.
+    BobsApp app(phone);
+    QSignalSpy fetched(&app.requests, &IncomingWards::fetched);
+    app.requests.checkNow();
+    ward.settle();
+    QCOMPARE(fetched.count(), 0);
+    QVERIFY(!app.library.contains(ward.documentId));
+
+    ward.seal(laptop);
+    app.requests.checkNow();
+    ward.settle();
+    QCOMPARE(fetched.count(), 1);
+    QVERIFY(app.library.contains(ward.documentId));
     QVERIFY(app.requests.pending().isEmpty());
 }

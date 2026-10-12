@@ -86,6 +86,15 @@ QString IdentityService::defaultDeviceName()
     return QSysInfo::machineHostName();
 }
 
+DeviceIdentity IdentityService::deviceOnly(const QString& deviceName) const
+{
+    DeviceIdentity identity;
+    identity.sealing = m_record.sealing;
+    identity.signing = m_record.signing;
+    identity.deviceName = deviceName.trimmed();
+    return identity;
+}
+
 bool IdentityService::createPerson(const QString& displayName, const QString& deviceName, QString* errorMessage)
 {
     MemberId member;

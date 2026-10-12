@@ -38,6 +38,9 @@ public:
     /// This device's public keys, which linking presents before a person exists.
     DeviceKeys deviceKeys() const;
 
+    /// This device with no person: its keys and a name, enough to sign in and link.
+    DeviceIdentity deviceOnly(const QString& deviceName) const;
+
     /// The machine's host name, offered for editing on the first screen.
     static QString defaultDeviceName();
 

@@ -18,6 +18,7 @@ set(TEST_SOURCES
     services/AppSettingsTest.cpp
     services/CryptoLinkTest.cpp
     services/CryptoTypesTest.cpp
+    services/DeviceLinksTest.cpp
     services/DocumentCryptoTest.cpp
     services/DocumentFileTest.cpp
     services/DocumentHeaderTest.cpp
@@ -31,7 +32,7 @@ set(TEST_SOURCES
     services/FormatVectorsTest.cpp
     services/IdentityFileTest.cpp
     services/IdentityServiceTest.cpp
-    services/PendingRequestsTest.cpp
+    services/IncomingWardsTest.cpp
     services/ReconcileTest.cpp
     services/ResponseMergeTest.cpp
     services/SealingQueueTest.cpp

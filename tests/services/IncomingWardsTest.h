@@ -2,9 +2,8 @@
 
 #include <QObject>
 
-/// The wards this device asked for, from the request to the ward arriving or the
-/// request being declined.
-class PendingRequestsTest : public QObject
+/// The wards on their way to this device: asked for, granted, or listed after a link.
+class IncomingWardsTest : public QObject
 {
     Q_OBJECT
 
@@ -15,4 +14,5 @@ private slots:
     void aDeclinedRequestIsDroppedAndSaysSo();
     void aRequestOutlivesTheApp();
     void aRequestForNoSuchWardFails();
+    void aLinkedDevicesWardsArriveOnceItsLinkerSealsThem();
 };
