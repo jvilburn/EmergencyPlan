@@ -19,8 +19,6 @@
 #include "MainWindow.h"
 #include "IncomingWards.h"
 #include "ServerConnection.h"
-#include "SessionTimers.h"
-#include "SealingQueue.h"
 #include "SingleInstance.h"
 #include "TileService.h"
 
@@ -239,15 +237,9 @@ int main(int argc, char *argv[])
     // by value.
     ServerConnection server(serverApi, identity);
     DocumentLibrary library(*settings, deviceData.filePath("wards"), identity);
-    SealingQueue queue(identity,
-                       *settings,
-                       server,
-                       std::make_unique<QtSessionTimers>(),
-                       std::bind(&DocumentLibrary::pathsFor, &library, std::placeholders::_1),
-                       nullptr);
 
     // Stack locals, so the window goes first and the manager outlives it.
-    DocumentManager documentManager(identity, *settings, server, library, queue, nullptr);
+    DocumentManager documentManager(identity, *settings, server, library, nullptr);
     EmergencyManager emergencyManager(nullptr);
 
     // Initialize tile service for map rendering
@@ -256,7 +248,11 @@ int main(int argc, char *argv[])
     tileService.initialize();
 
     IncomingWards incoming(*settings, library, server, nullptr);
-    DeviceLinks links(*settings, server, queue, nullptr);
+    DeviceLinks links(identity,
+                      *settings,
+                      server,
+                      std::bind(&DocumentLibrary::pathsFor, &library, std::placeholders::_1),
+                      nullptr);
     MainWindow window(*settings, library, incoming, links, nullptr);
     QObject::connect(&window,
                      &MainWindow::startOverRequested,
@@ -285,11 +281,9 @@ int main(int argc, char *argv[])
 
     QObject::connect(&instance, &SingleInstance::argumentsReceived, &window, &MainWindow::handleArguments);
 
-    // Every ward the server lists for this person and the library lacks - after a
-    // reinstall, cleared app data, a grant, or a link - and whatever this device owes
-    // a ward it holds since it last ran.
+    // Every ward the server lists for this person and the library lacks: after a
+    // reinstall, cleared app data, a grant, or a link.
     incoming.checkNow();
-    queue.sealEverywhere();
 
     return app.exec();
 }

@@ -1,6 +1,6 @@
 #include "DocumentManager.h"
 #include "BackgroundGeocodingService.h"
-#include "SealingQueue.h"
+#include "ServerVersion.h"
 #include "ServerConnection.h"
 #include "UnitLookupService.h"
 
@@ -15,20 +15,16 @@ DocumentManager::DocumentManager(const DeviceIdentity& identity,
                                  DocumentRecords& records,
                                  ServerConnection& server,
                                  DocumentLibrary& library,
-                                 SealingQueue& queue,
                                  QObject* parent)
     : QObject(parent)
     , m_identity(identity)
     , m_records(&records)
     , m_server(&server)
     , m_library(&library)
-    , m_queue(&queue)
     , m_empty(Document::empty())
     , m_commandHistory(this)
 {
     connectServices();
-
-    connect(m_queue, &SealingQueue::accessLost, this, &DocumentManager::onQueueLost);
 }
 
 DocumentManager::DocumentManager(const DeviceIdentity& identity,
@@ -47,10 +43,6 @@ DocumentManager::~DocumentManager()
 {
     // The session closes as it goes: a scheduled save is written and the lease
     // released.
-    if (m_queue != nullptr)
-    {
-        m_queue->setOpenSession(nullptr);
-    }
     m_session.reset();
     s_instance = nullptr;
 }
@@ -471,10 +463,6 @@ bool DocumentManager::closeCurrent(QString* errorMessage)
     }
 
     stopGeocoding();
-    if (m_queue != nullptr)
-    {
-        m_queue->setOpenSession(nullptr);
-    }
     m_session.reset();
     return true;
 }
@@ -509,10 +497,6 @@ void DocumentManager::install(std::unique_ptr<DocumentSession> session)
     connect(opened, &DocumentSession::shareFailed, this, &DocumentManager::shareFailed);
     connect(opened, &DocumentSession::saveFailed, this, &DocumentManager::saveFailed);
     connect(opened, &DocumentSession::accessLost, this, &DocumentManager::onSessionLost);
-    if (m_queue != nullptr)
-    {
-        m_queue->setOpenSession(opened);
-    }
 
     opened->setEmergencyActive(opened->document().emergencyResponse().has_value());
     onDocumentReplaced();
@@ -615,43 +599,74 @@ void DocumentManager::onRequests(const RequestsFetched& done,
 
 void DocumentManager::grant(const ServerContract::AccessRequest& request)
 {
-    if (!m_session || m_server == nullptr || request.person.devices.isEmpty())
+    if (!m_session || m_server == nullptr || !m_session->isShared() || request.person.devices.isEmpty())
     {
         return;
     }
-    m_server->grant(m_session->documentId(),
-                    request.index,
-                    this,
-                    std::bind(&DocumentManager::onGranted,
-                              this,
-                              m_session->documentId(),
-                              request.person.devices.first().keys,
-                              _1));
+    startGrant(request, true);
 }
 
-void DocumentManager::onGranted(const QString& documentId,
-                                const DeviceKeys& device,
-                                const ServerContract::Result<ServerContract::Done>& result)
+void DocumentManager::startGrant(const ServerContract::AccessRequest& request, bool mayRetry)
 {
-    if (!result.ok())
+    const QString documentId = m_session->documentId();
+    const QList<DeviceKeys> approved =
+        m_records->linkedDevices() + QList<DeviceKeys>{request.person.devices.first().keys};
+    ServerVersion::buildResealing(
+        m_identity.self(),
+        ServerVersion::trustedKeys(documentId, m_library->pathsFor(documentId), *m_records, m_identity.self()),
+        approved,
+        *m_server,
+        documentId,
+        this,
+        std::bind(&DocumentManager::onGrantBuilt, this, request, mayRetry, _1, _2));
+}
+
+void DocumentManager::onGrantBuilt(const ServerContract::AccessRequest& request,
+                                   bool mayRetry,
+                                   const ServerVersion::Fetched& theirs,
+                                   const std::optional<ServerContract::Resealing>& built)
+{
+    switch (theirs.outcome)
     {
-        emit accessCallFailed(result.error);
+    case ServerVersion::Fetched::Outcome::Accepted:
+        break;
+    case ServerVersion::Fetched::Outcome::AccessLost:
+        emit accessCallFailed(ServerContract::ServerError::AccessLost);
+        return;
+    case ServerVersion::Fetched::Outcome::CallFailed:
+        emit accessCallFailed(ServerContract::ServerError::Unreachable);
+        return;
+    case ServerVersion::Fetched::Outcome::NeedsNewerVersion:
+        emit grantBlocked(tr("This ward's current version was written by a newer Ward Planning."));
+        return;
+    case ServerVersion::Fetched::Outcome::ServerFault:
+        emit grantBlocked(theirs.reason);
         return;
     }
 
-    // The device that asked is owed a seal, which the queue carries to the ward -
-    // through the open session when it is this one.
-    DocumentRecord record = m_records->record(documentId);
-    if (!record.granted.contains(device))
+    // The ward may have closed while the version was fetched.
+    if (!m_session || m_session->documentId() != built->documentId)
     {
-        record.granted.append(device);
-        m_records->setRecord(documentId, record);
+        return;
     }
-    if (m_queue != nullptr)
+    m_server->grant(built->documentId,
+                    request.index,
+                    built.value(),
+                    this,
+                    std::bind(&DocumentManager::onGranted, this, request, mayRetry, _1));
+}
+
+void DocumentManager::onGranted(const ServerContract::AccessRequest& request,
+                                bool mayRetry,
+                                const ServerContract::Result<ServerContract::Done>& result)
+{
+    // Someone published between the fetch and the grant: once more on their version.
+    if (result.error == ServerContract::ServerError::VersionConflict && mayRetry && m_session)
     {
-        m_queue->sealEverywhere();
+        startGrant(request, false);
+        return;
     }
-    emit accessCallDone();
+    onAccessCall(result);
 }
 
 void DocumentManager::decline(const ServerContract::AccessRequest& request)
@@ -777,10 +792,6 @@ void DocumentManager::onSessionLost(const ServerContract::LostAccess& lost)
 
     // Finished from inside its own signal, so it goes once that returns.
     stopGeocoding();
-    if (m_queue != nullptr)
-    {
-        m_queue->setOpenSession(nullptr);
-    }
     m_session.release()->deleteLater();
     resetWard();
     forgetLostWard(documentId, lost);

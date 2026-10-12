@@ -358,9 +358,7 @@ std::optional<ServerVersion::Access> DocumentSession::access() const
     {
         return std::nullopt;
     }
-    return ServerVersion::accessFor(m_head.value(),
-                                    m_context.records.record(m_documentId),
-                                    m_context.records.linkedDevices());
+    return ServerVersion::accessFor(m_head.value(), m_context.records.linkedDevices());
 }
 
 bool DocumentSession::writeLocal(const Document& document, const DocumentHeader& previous, const DataKey& dataKey)
@@ -626,10 +624,6 @@ void DocumentSession::onPublished(const Result<qint64>& result, const DocumentFi
             emit saveFailed(error);
         }
         m_base = ServerVersion::readBase(m_documentId, m_paths, m_context.records, m_context.identity.self());
-        if (access().has_value())
-        {
-            ServerVersion::settleGranted(m_context.records, m_documentId, published.header, access().value());
-        }
 
         m_retryDelay = SessionTimers::FirstRetryMilliseconds;
         m_allowListRefusals = 0;

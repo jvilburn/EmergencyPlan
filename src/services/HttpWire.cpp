@@ -53,6 +53,8 @@ const QLatin1String KeyActor("actor");
 const QLatin1String KeySubject("subject");
 const QLatin1String KeyRequests("requests");
 const QLatin1String KeyRequest("request");
+const QLatin1String KeyResealings("resealings");
+const QLatin1String KeyDocumentId("documentId");
 const QLatin1String KeyStatus("status");
 const QLatin1String KeySeconds("seconds");
 const QLatin1String KeyError("error");
@@ -344,10 +346,26 @@ QJsonObject uploadRequest(qint64 baseVersion, const Upload& upload)
     return json;
 }
 
-QJsonObject grantRequest(qint64 index)
+QJsonObject approveLinkRequest(const QList<Resealing>& resealings)
 {
+    QJsonArray array;
+    for (const Resealing& resealing : resealings)
+    {
+        QJsonObject json = uploadJson(resealing.upload);
+        json[KeyDocumentId] = resealing.documentId;
+        json[KeyBaseVersion] = resealing.baseVersion;
+        array.append(json);
+    }
     QJsonObject json;
+    json[KeyResealings] = array;
+    return json;
+}
+
+QJsonObject grantRequest(qint64 index, const Resealing& resealing)
+{
+    QJsonObject json = uploadJson(resealing.upload);
     json[KeyRequest] = index;
+    json[KeyBaseVersion] = resealing.baseVersion;
     return json;
 }
 

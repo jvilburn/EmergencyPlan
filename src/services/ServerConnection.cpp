@@ -53,9 +53,12 @@ void ServerConnection::link(const QString& code, QObject* context, Reply<LinkSta
     call<LinkState>(context, std::bind(&ServerApi::link, &m_server, _1, code, _2), reply);
 }
 
-void ServerConnection::approveLink(const QString& code, QObject* context, Reply<Done> reply)
+void ServerConnection::approveLink(const QString& code,
+                                   const QList<Resealing>& resealings,
+                                   QObject* context,
+                                   Reply<Done> reply)
 {
-    call<Done>(context, std::bind(&ServerApi::approveLink, &m_server, _1, code, _2), reply);
+    call<Done>(context, std::bind(&ServerApi::approveLink, &m_server, _1, code, resealings, _2), reply);
 }
 
 void ServerConnection::registerDocument(const Upload& upload, QObject* context, Reply<qint64> reply)
@@ -120,9 +123,13 @@ void ServerConnection::myRequestStatus(const QString& documentId, QObject* conte
     call<RequestStatus>(context, std::bind(&ServerApi::myRequestStatus, &m_server, _1, documentId, _2), reply);
 }
 
-void ServerConnection::grant(const QString& documentId, qint64 index, QObject* context, Reply<Done> reply)
+void ServerConnection::grant(const QString& documentId,
+                             qint64 index,
+                             const Resealing& resealing,
+                             QObject* context,
+                             Reply<Done> reply)
 {
-    call<Done>(context, std::bind(&ServerApi::grant, &m_server, _1, documentId, index, _2), reply);
+    call<Done>(context, std::bind(&ServerApi::grant, &m_server, _1, documentId, index, resealing, _2), reply);
 }
 
 void ServerConnection::removeMember(const QString& documentId,

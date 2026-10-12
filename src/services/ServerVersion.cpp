@@ -167,7 +167,7 @@ bool listsDevice(const Head& head, const Fingerprint& device)
     return false;
 }
 
-Access accessFor(const Head& head, const DocumentRecord& record, const QList<DeviceKeys>& linked)
+Access accessFor(const Head& head, const QList<DeviceKeys>& approved)
 {
     Access access;
     for (const Member& member : head.members)
@@ -177,7 +177,7 @@ Access accessFor(const Head& head, const DocumentRecord& record, const QList<Dev
             access.allowList.insert(device.fingerprint.toHex());
         }
     }
-    access.approved = record.granted + linked;
+    access.approved = approved;
     return access;
 }
 
@@ -202,29 +202,6 @@ bool isCurrent(const Document& document, const Access& access)
     return !next.rotate && next.devices == document.sealingSet();
 }
 
-void settleGranted(DocumentRecords& records,
-                   const QString& documentId,
-                   const DocumentHeader& published,
-                   const Access& access)
-{
-    DocumentRecord record = records.record(documentId);
-    QList<DeviceKeys> waiting;
-    for (const DeviceKeys& device : record.granted)
-    {
-        const Fingerprint fingerprint = DocumentCrypto::fingerprintOf(device.publicKey, device.verifyKey);
-        if (!published.entryFor(fingerprint).has_value() && access.allowList.contains(fingerprint.toHex()))
-        {
-            waiting.append(device);
-        }
-    }
-
-    if (waiting != record.granted)
-    {
-        record.granted = waiting;
-        records.setRecord(documentId, record);
-    }
-}
-
 void fetch(const Reconcile::Self& self,
            const QList<DataKey>& trusted,
            ServerConnection& server,
@@ -233,6 +210,82 @@ void fetch(const Reconcile::Self& self,
            FetchDone done)
 {
     server.download(documentId, receiver, std::bind(&onSnapshot, self, trusted, documentId, done, _1));
+}
+
+namespace
+{
+
+void onResealingFetched(const QString& documentId,
+                        const Access& access,
+                        const ResealingBuilt& done,
+                        const Fetched& theirs)
+{
+    if (theirs.outcome != Fetched::Outcome::Accepted)
+    {
+        done(theirs, std::nullopt);
+        return;
+    }
+
+    const Resealed resealed = reseal(theirs.document, theirs.dataKey, access);
+    const std::optional<DocumentFile::Sealed> sealed =
+        DocumentFile::seal(resealed.document, theirs.sealed.header, resealed.dataKey);
+    if (!sealed.has_value())
+    {
+        Fetched failed = outcomeOnly(Fetched::Outcome::ServerFault);
+        failed.reason = QObject::tr("The version could not be sealed on this device.");
+        done(failed, std::nullopt);
+        return;
+    }
+
+    done(theirs, Resealing{documentId, theirs.version, Upload{sealed->header, sealed->ciphertext}});
+}
+
+void onResealingHead(const Reconcile::Self& self,
+                     const QList<DataKey>& trusted,
+                     const QList<DeviceKeys>& approved,
+                     ServerConnection& server,
+                     const QString& documentId,
+                     QObject* receiver,
+                     const ResealingBuilt& done,
+                     const Result<Head>& head)
+{
+    if (head.error == ServerError::AccessLost)
+    {
+        Fetched lost = outcomeOnly(Fetched::Outcome::AccessLost);
+        lost.lost = head.lost;
+        done(lost, std::nullopt);
+        return;
+    }
+    if (!head.ok())
+    {
+        done(outcomeOnly(Fetched::Outcome::CallFailed), std::nullopt);
+        return;
+    }
+    if (!listsDevice(head.value.value(), self.fingerprint()))
+    {
+        Fetched fault = outcomeOnly(Fetched::Outcome::ServerFault);
+        fault.reason = QObject::tr("The server's list of who has access leaves out this device.");
+        done(fault, std::nullopt);
+        return;
+    }
+
+    const Access access = accessFor(head.value.value(), approved);
+    fetch(self, trusted, server, documentId, receiver, std::bind(&onResealingFetched, documentId, access, done, _1));
+}
+
+} // namespace
+
+void buildResealing(const Reconcile::Self& self,
+                    const QList<DataKey>& trusted,
+                    const QList<DeviceKeys>& approved,
+                    ServerConnection& server,
+                    const QString& documentId,
+                    QObject* receiver,
+                    ResealingBuilt done)
+{
+    server.head(documentId,
+                receiver,
+                std::bind(&onResealingHead, self, trusted, approved, std::ref(server), documentId, receiver, done, _1));
 }
 
 } // namespace ServerVersion

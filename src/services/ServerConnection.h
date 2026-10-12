@@ -52,7 +52,10 @@ public:
 
     void startLink(QObject* context, ServerContract::Reply<QString> reply);
     void link(const QString& code, QObject* context, ServerContract::Reply<ServerContract::LinkState> reply);
-    void approveLink(const QString& code, QObject* context, ServerContract::Reply<ServerContract::Done> reply);
+    void approveLink(const QString& code,
+                     const QList<ServerContract::Resealing>& resealings,
+                     QObject* context,
+                     ServerContract::Reply<ServerContract::Done> reply);
 
     // --- Documents ---
 
@@ -92,6 +95,7 @@ public:
                          ServerContract::Reply<ServerContract::RequestStatus> reply);
     void grant(const QString& documentId,
                qint64 index,
+               const ServerContract::Resealing& resealing,
                QObject* context,
                ServerContract::Reply<ServerContract::Done> reply);
     void removeMember(const QString& documentId,

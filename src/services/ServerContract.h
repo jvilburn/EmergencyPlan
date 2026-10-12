@@ -202,6 +202,17 @@ struct Upload
     QByteArray blob;
 };
 
+/// A version of a ward resealed to admit someone, carried by the call that admits them:
+/// grant, for the ward being granted, and approveLink, one per ward the approver holds.
+/// Stored as `PUT /documents/{id}` would store it, conditional on baseVersion, in the
+/// same step as the membership change, or refused with it.
+struct Resealing
+{
+    QString documentId;
+    qint64 baseVersion = 0;
+    Upload upload;
+};
+
 /// POST /documents/{id}/lease
 struct Lease
 {
@@ -297,8 +308,15 @@ public:
 
     virtual void link(const Session& session, const QString& code, Reply<LinkState> reply) = 0;
 
-    /// Adds the link's device to the caller's person.
-    virtual void approveLink(const Session& session, const QString& code, Reply<Done> reply) = 0;
+    /// Adds the link's device to the caller's person and stores each resealing as an
+    /// upload by the caller, with the new device on every allow-list. All or nothing:
+    /// a resealing that fails any upload check refuses the whole call and the device
+    /// is not added. Wards of the person that are not among the resealings are left
+    /// as they are.
+    virtual void approveLink(const Session& session,
+                             const QString& code,
+                             const QList<Resealing>& resealings,
+                             Reply<Done> reply) = 0;
 
     // --- Documents ---
 
@@ -339,8 +357,15 @@ public:
     virtual void declineRequest(const Session& session, const QString& documentId, qint64 index, Reply<Done> reply) = 0;
     virtual void myRequestStatus(const Session& session, const QString& documentId, Reply<RequestStatus> reply) = 0;
 
-    /// The request's person becomes a member.
-    virtual void grant(const Session& session, const QString& documentId, qint64 index, Reply<Done> reply) = 0;
+    /// The request's person becomes a member, and the resealing is stored as an
+    /// upload by the caller with that person's devices on the allow-list. All or
+    /// nothing: VersionConflict, NotOnAllowList, or an invalid upload refuses the
+    /// grant too. The resealing's documentId must be documentId.
+    virtual void grant(const Session& session,
+                       const QString& documentId,
+                       qint64 index,
+                       const Resealing& resealing,
+                       Reply<Done> reply) = 0;
 
     /// An admin removing a person, or the person leaving. When the last person
     /// leaves, the ward keeps only who lost access: its id stays taken, its other

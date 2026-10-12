@@ -5,11 +5,16 @@
 using namespace ServerContract;
 using namespace std::placeholders;
 
-DeviceLinks::DeviceLinks(DocumentRecords& records, ServerConnection& server, SealingQueue& queue, QObject* parent)
+DeviceLinks::DeviceLinks(const DeviceIdentity& identity,
+                         DocumentRecords& records,
+                         ServerConnection& server,
+                         std::function<DocumentPaths(const QString&)> pathsFor,
+                         QObject* parent)
     : QObject(parent)
+    , m_identity(identity)
     , m_records(records)
     , m_server(server)
-    , m_queue(queue)
+    , m_pathsFor(std::move(pathsFor))
 {
 }
 
@@ -31,13 +36,70 @@ void DeviceLinks::onRead(const QString& code, const Result<LinkState>& state)
 
 void DeviceLinks::approve(const QString& code, const DeviceKeys& device)
 {
-    m_server.approveLink(code,
-                         this,
-                         std::bind(&DeviceLinks::onApproved, this, device, m_names.value(code), _1));
+    if (m_approval.has_value())
+    {
+        return;
+    }
+    startApproval(code, device, true);
 }
 
-void DeviceLinks::onApproved(const DeviceKeys& device, const QString& deviceName, const Result<Done>& result)
+void DeviceLinks::startApproval(const QString& code, const DeviceKeys& device, bool mayRetry)
 {
+    m_approval = Approval{code, device, mayRetry, 0, {}};
+    const QList<DeviceKeys> approved = m_records.linkedDevices() + QList<DeviceKeys>{device};
+    for (const QString& documentId : m_records.documentIds())
+    {
+        if (!m_records.record(documentId).baseVersion.has_value())
+        {
+            continue;
+        }
+        ++m_approval->building;
+        ServerVersion::buildResealing(
+            m_identity.self(),
+            ServerVersion::trustedKeys(documentId, m_pathsFor(documentId), m_records, m_identity.self()),
+            approved,
+            m_server,
+            documentId,
+            this,
+            std::bind(&DeviceLinks::onBuilt, this, _1, _2));
+    }
+    if (m_approval->building == 0)
+    {
+        sendApproval();
+    }
+}
+
+void DeviceLinks::onBuilt(const ServerVersion::Fetched& theirs, const std::optional<Resealing>& built)
+{
+    // A ward whose version could not be built here is left out; this device seals it
+    // on its next write of that ward, and the new device waits for access until then.
+    Q_UNUSED(theirs);
+    if (built.has_value())
+    {
+        m_approval->built.append(built.value());
+    }
+    if (--m_approval->building == 0)
+    {
+        sendApproval();
+    }
+}
+
+void DeviceLinks::sendApproval()
+{
+    m_server.approveLink(m_approval->code, m_approval->built, this, std::bind(&DeviceLinks::onApproved, this, _1));
+}
+
+void DeviceLinks::onApproved(const Result<Done>& result)
+{
+    const Approval approval = m_approval.value();
+    m_approval.reset();
+
+    // Someone published to one of the wards meanwhile: once more on their versions.
+    if (result.error == ServerError::VersionConflict && approval.mayRetry)
+    {
+        startApproval(approval.code, approval.device, false);
+        return;
+    }
     if (!result.ok())
     {
         emit failed(result.error);
@@ -45,13 +107,12 @@ void DeviceLinks::onApproved(const DeviceKeys& device, const QString& deviceName
     }
 
     QList<DeviceKeys> linked = m_records.linkedDevices();
-    if (!linked.contains(device))
+    if (!linked.contains(approval.device))
     {
-        linked.append(device);
+        linked.append(approval.device);
         m_records.setLinkedDevices(linked);
     }
-    m_queue.sealEverywhere();
-    emit approved(deviceName);
+    emit approved(m_names.value(approval.code));
 }
 
 void DeviceLinks::unlink(const QList<Fingerprint>& devices)

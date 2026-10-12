@@ -202,9 +202,13 @@ void HttpServerApi::link(const Session& session, const QString& code, Reply<Link
     send<LinkState>(Call{"GET", linkPath(code), std::nullopt, session.token}, HttpWire::readLinkState, reply);
 }
 
-void HttpServerApi::approveLink(const Session& session, const QString& code, Reply<Done> reply)
+void HttpServerApi::approveLink(const Session& session,
+                                const QString& code,
+                                const QList<Resealing>& resealings,
+                                Reply<Done> reply)
 {
-    sendForDone(Call{"POST", linkPath(code) + "/approve", std::nullopt, session.token}, reply);
+    sendForDone(Call{"POST", linkPath(code) + "/approve", HttpWire::approveLinkRequest(resealings), session.token},
+                reply);
 }
 
 // --- Documents -------------------------------------------------------------------
@@ -295,9 +299,16 @@ void HttpServerApi::myRequestStatus(const Session& session, const QString& docum
                         reply);
 }
 
-void HttpServerApi::grant(const Session& session, const QString& documentId, qint64 index, Reply<Done> reply)
+void HttpServerApi::grant(const Session& session,
+                          const QString& documentId,
+                          qint64 index,
+                          const Resealing& resealing,
+                          Reply<Done> reply)
 {
-    sendForDone(Call{"POST", documentPath(documentId) + "/members", HttpWire::grantRequest(index), session.token},
+    sendForDone(Call{"POST",
+                     documentPath(documentId) + "/members",
+                     HttpWire::grantRequest(index, resealing),
+                     session.token},
                 reply);
 }
 

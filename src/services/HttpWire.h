@@ -29,7 +29,7 @@
 /// | unlinkDevice | `DELETE /me/devices/{fingerprint}` | - | - |
 /// | startLink | `POST /links` | `{publicKey, deviceName}` | `{code}` |
 /// | link | `GET /links/{code}` | - | `{deviceName, publicKey, verifyKey, approvedAs?, expires}` |
-/// | approveLink | `POST /links/{code}/approve` | - | - |
+/// | approveLink | `POST /links/{code}/approve` | `{resealings: [{documentId, baseVersion, header, blob}]}` | - |
 /// | registerDocument | `POST /documents` | `{header, blob}` | `{version}` |
 /// | head | `GET /documents/{id}/head` | - | `{version, published, leaseHolder?, header, members, history}` |
 /// | download | `GET /documents/{id}` | - | `{version, published, header, blob}` |
@@ -41,7 +41,7 @@
 /// | accessRequests | `GET /documents/{id}/requests` | - | `{requests}` |
 /// | declineRequest | `DELETE /documents/{id}/requests/{n}` | - | - |
 /// | myRequestStatus | `GET /documents/{id}/requests/mine` | - | `{status}`: `pending`, `granted`, or `declined` |
-/// | grant | `POST /documents/{id}/members` | `{request}` | - |
+/// | grant | `POST /documents/{id}/members` | `{request, baseVersion, header, blob}` | - |
 /// | removeMember | `DELETE /documents/{id}/members/{member}` | - | - |
 /// | setRole | `PUT /documents/{id}/members/{member}/role` | `{role}`: `admin` or `member` | - |
 /// | advanceClock | `POST /dev/clock` | `{seconds}` | - |
@@ -94,7 +94,8 @@ QJsonObject registerPersonRequest(const ServerContract::Registration& registrati
 QJsonObject startLinkRequest(const PublicKey& publicKey, const QString& deviceName);
 QJsonObject registerRequest(const ServerContract::Upload& upload);
 QJsonObject uploadRequest(qint64 baseVersion, const ServerContract::Upload& upload);
-QJsonObject grantRequest(qint64 index);
+QJsonObject approveLinkRequest(const QList<ServerContract::Resealing>& resealings);
+QJsonObject grantRequest(qint64 index, const ServerContract::Resealing& resealing);
 QJsonObject setRoleRequest(ServerContract::Role role);
 QJsonObject advanceClockRequest(qint64 seconds);
 

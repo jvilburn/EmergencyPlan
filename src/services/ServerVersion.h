@@ -69,9 +69,9 @@ struct Access
 /// seal this device out of its own local file.
 bool listsDevice(const ServerContract::Head& head, const Fingerprint& device);
 
-/// The allow-list a head names, and this ward's approved devices: its record's
-/// granted devices and this device's linked ones.
-Access accessFor(const ServerContract::Head& head, const DocumentRecord& record, const QList<DeviceKeys>& linked);
+/// The allow-list a head names, and the devices this device approved for the write:
+/// the ones it linked, and for a grant or an approval the one being added.
+Access accessFor(const ServerContract::Head& head, const QList<DeviceKeys>& approved);
 
 /// The sealing-set rule applied to a document about to be written: its sealing set
 /// becomes SealingSet::next, and the data key is fresh when that rotates.
@@ -85,13 +85,6 @@ Resealed reseal(const Document& document, const DataKey& dataKey, const Access& 
 /// Whether a version already seals to exactly what the rule would give, so writing
 /// it again would change nothing about who can read it.
 bool isCurrent(const Document& document, const Access& access);
-
-/// After a version with this header was accepted: drops from the record's granted
-/// list each device it seals, and each the allow-list no longer lists.
-void settleGranted(DocumentRecords& records,
-                   const QString& documentId,
-                   const DocumentHeader& published,
-                   const Access& access);
 
 /// What fetching the server's version found.
 struct Fetched
@@ -122,6 +115,25 @@ struct Fetched
 };
 
 using FetchDone = std::function<void(const Fetched&)>;
+
+/// How building a resealing ended: Accepted with the resealing, or why not. A fetched
+/// version that could not be sealed - which only a crypto failure causes - counts as a
+/// ServerFault with its reason.
+using ResealingBuilt =
+    std::function<void(const Fetched& theirs, const std::optional<ServerContract::Resealing>& built)>;
+
+/// Fetches the server's head and current version of documentId, validates it against
+/// trusted as fetch does, applies the sealing-set rule with approved, encrypts, and
+/// hands back what grant or approveLink sends. A head that does not list this device
+/// is a ServerFault: applying it would seal this device out. Replies come only while
+/// receiver lives.
+void buildResealing(const Reconcile::Self& self,
+                    const QList<DataKey>& trusted,
+                    const QList<DeviceKeys>& approved,
+                    ServerConnection& server,
+                    const QString& documentId,
+                    QObject* receiver,
+                    ResealingBuilt done);
 
 /// Downloads the server's current version and validates it against the keys this
 /// device trusts. Nothing is written. done is called only while receiver is alive.

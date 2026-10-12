@@ -13,7 +13,7 @@ namespace
 const QLatin1String KeyBaseVersion("baseVersion");
 const QLatin1String KeyBaseHash("baseHash");
 const QLatin1String KeyBaseSaveCounter("baseSaveCounter");
-const QLatin1String KeyGranted("granted");
+const QLatin1String KeyGranted("granted");     ///< written by builds before atomic grants; nothing reads it
 const QLatin1String KeyHistorySeen("historySeen");
 
 } // namespace
@@ -30,12 +30,6 @@ QJsonObject DocumentRecord::toJson() const
     json[KeyBaseSaveCounter] = baseSaveCounter;
     json[KeyHistorySeen] = historySeen;
 
-    QJsonArray grantedArray;
-    for (const DeviceKeys& device : granted)
-    {
-        grantedArray.append(device.toJson());
-    }
-    json[KeyGranted] = grantedArray;
 
     return json;
 }
@@ -43,11 +37,9 @@ QJsonObject DocumentRecord::toJson() const
 std::optional<DocumentRecord> DocumentRecord::fromJson(const QJsonObject& json)
 {
     DocumentRecord record;
-    QList<QJsonObject> grantedJson;
     if (!StrictJson::hasOnlyKeys(json, {KeyBaseVersion, KeyBaseHash, KeyBaseSaveCounter, KeyGranted, KeyHistorySeen})
         || !StrictJson::readInt64(json, KeyBaseSaveCounter, record.baseSaveCounter)
-        || !StrictJson::readInt64(json, KeyHistorySeen, record.historySeen)
-        || !StrictJson::readObjectArray(json, KeyGranted, grantedJson))
+        || !StrictJson::readInt64(json, KeyHistorySeen, record.historySeen))
     {
         return std::nullopt;
     }
@@ -74,16 +66,6 @@ std::optional<DocumentRecord> DocumentRecord::fromJson(const QJsonObject& json)
         record.baseVersion = version;
     }
 
-    for (const QJsonObject& deviceJson : grantedJson)
-    {
-        const std::optional<DeviceKeys> device = DeviceKeys::fromJson(deviceJson);
-        if (!device.has_value())
-        {
-            return std::nullopt;
-        }
-        record.granted.append(device.value());
-    }
-
     return record;
 }
 
@@ -92,6 +74,5 @@ bool DocumentRecord::operator==(const DocumentRecord& other) const
     return baseVersion == other.baseVersion
         && baseHash == other.baseHash
         && baseSaveCounter == other.baseSaveCounter
-        && granted == other.granted
         && historySeen == other.historySeen;
 }

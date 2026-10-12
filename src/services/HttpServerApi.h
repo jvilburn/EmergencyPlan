@@ -55,6 +55,7 @@ public:
               ServerContract::Reply<ServerContract::LinkState> reply) override;
     void approveLink(const ServerContract::Session& session,
                      const QString& code,
+                     const QList<ServerContract::Resealing>& resealings,
                      ServerContract::Reply<ServerContract::Done> reply) override;
 
     void registerDocument(const ServerContract::Session& session,
@@ -99,6 +100,7 @@ public:
     void grant(const ServerContract::Session& session,
                const QString& documentId,
                qint64 index,
+               const ServerContract::Resealing& resealing,
                ServerContract::Reply<ServerContract::Done> reply) override;
     void removeMember(const ServerContract::Session& session,
                       const QString& documentId,

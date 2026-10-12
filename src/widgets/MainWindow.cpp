@@ -321,6 +321,7 @@ void MainWindow::setupConnections()
             this, &MainWindow::onShareFailed);
     connect(DocumentManager::instance(), &DocumentManager::accessCallFailed,
             this, &MainWindow::onAccessCallFailed);
+    connect(DocumentManager::instance(), &DocumentManager::grantBlocked, this, &MainWindow::onGrantBlocked);
     connect(&m_requests, &IncomingWards::requested, this, &MainWindow::onRequested);
     connect(&m_requests, &IncomingWards::requestFailed, this, &MainWindow::onRequestFailed);
     connect(&m_requests, &IncomingWards::fetched, this, &MainWindow::onWardRestored);
@@ -1242,6 +1243,11 @@ void MainWindow::onUnlinked(int count)
     {
         DocumentManager::instance()->session()->checkServer();
     }
+}
+
+void MainWindow::onGrantBlocked(const QString& reason)
+{
+    QMessageBox::warning(this, tr("Who Has Access"), tr("Nobody can be added yet. %1").arg(reason));
 }
 
 void MainWindow::onAccessCallFailed(ServerContract::ServerError error)

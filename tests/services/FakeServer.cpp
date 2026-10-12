@@ -85,9 +85,12 @@ void FakeServer::link(const Session& session, const QString& code, Reply<LinkSta
     answer(decideLink(session, code), reply);
 }
 
-void FakeServer::approveLink(const Session& session, const QString& code, Reply<Done> reply)
+void FakeServer::approveLink(const Session& session,
+                             const QString& code,
+                             const QList<Resealing>& resealings,
+                             Reply<Done> reply)
 {
-    answer(decideApproveLink(session, code), reply);
+    answer(decideApproveLink(session, code, resealings), reply);
 }
 
 void FakeServer::registerDocument(const Session& session, const Upload& upload, Reply<qint64> reply)
@@ -152,9 +155,13 @@ void FakeServer::myRequestStatus(const Session& session, const QString& document
     answer(decideMyRequestStatus(session, documentId), reply);
 }
 
-void FakeServer::grant(const Session& session, const QString& documentId, qint64 index, Reply<Done> reply)
+void FakeServer::grant(const Session& session,
+                       const QString& documentId,
+                       qint64 index,
+                       const Resealing& resealing,
+                       Reply<Done> reply)
 {
-    answer(decideGrant(session, documentId, index), reply);
+    answer(decideGrant(session, documentId, index, resealing), reply);
 }
 
 void FakeServer::removeMember(const Session& session,
@@ -395,7 +402,9 @@ Result<LinkState> FakeServer::decideLink(const Session& session, const QString& 
     return Result<LinkState>::success(state);
 }
 
-Result<Done> FakeServer::decideApproveLink(const Session& session, const QString& code)
+Result<Done> FakeServer::decideApproveLink(const Session& session,
+                                           const QString& code,
+                                           const QList<Resealing>& resealings)
 {
     Caller caller;
     const ServerError failure = signedIn(session, caller);
@@ -430,6 +439,37 @@ Result<Done> FakeServer::decideApproveLink(const Session& session, const QString
     device.name = stored.deviceName;
     device.linkedBy = caller.fingerprint;
     device.linkedAt = m_now;
+
+    // Every resealing is checked before any of it lands, so a refusal leaves the
+    // documents and the person as they were.
+    for (const bool store : {false, true})
+    {
+        for (const Resealing& resealing : resealings)
+        {
+            const auto document = m_documents.find(resealing.documentId);
+            if (document == m_documents.end())
+            {
+                return Result<Done>::failure(ServerError::UnknownDocument);
+            }
+            QSet<QString> allowList = allowListOf(document.value());
+            if (!allowList.contains(caller.fingerprint.toHex()))
+            {
+                return Result<Done>::failure(ServerError::NotMember);
+            }
+            allowList.insert(device.fingerprint.toHex());
+            const ServerError refusal = storeUpload(document.value(),
+                                                    resealing.documentId,
+                                                    caller,
+                                                    resealing.baseVersion,
+                                                    resealing.upload,
+                                                    allowList,
+                                                    store);
+            if (refusal != ServerError::None)
+            {
+                return Result<Done>::failure(refusal);
+            }
+        }
+    }
 
     caller.person->devices.append(device);
     m_personOfDevice.insert(device.keys.verifyKey.bytes, caller.person->member.toHex());
@@ -558,40 +598,60 @@ Result<qint64> FakeServer::decideUpload(const Session& session,
         return refused<qint64>(failure, lost);
     }
 
+    const ServerError stored = storeUpload(*document, documentId, caller, baseVersion, upload, allowListOf(*document), true);
+    if (stored != ServerError::None)
+    {
+        return Result<qint64>::failure(stored);
+    }
+    return Result<qint64>::success(document->version);
+}
+
+ServerError FakeServer::storeUpload(StoredDocument& document,
+                                    const QString& documentId,
+                                    const Caller& caller,
+                                    qint64 baseVersion,
+                                    const Upload& upload,
+                                    const QSet<QString>& allowList,
+                                    bool store)
+{
     if (!withinLimits(m_uploads, caller.device, m_limits.uploadsPerHour, 0))
     {
-        return Result<qint64>::failure(ServerError::RateLimited);
+        return ServerError::RateLimited;
     }
 
     if (upload.header.documentId != documentId || upload.blob.size() > m_limits.maxBlobBytes
         || upload.header.recipients.isEmpty())
     {
-        return Result<qint64>::failure(ServerError::InvalidRequest);
+        return ServerError::InvalidRequest;
     }
 
-    if (document->forceConflict || baseVersion != document->version)
+    if (document.forceConflict || baseVersion != document.version)
     {
-        document->forceConflict = false;
-        return Result<qint64>::failure(ServerError::VersionConflict);
+        document.forceConflict = !store && document.forceConflict;
+        return ServerError::VersionConflict;
     }
 
-    // Fewer devices than the allow-list is fine - an addition is sealed by its
-    // approver's next version - but never one the allow-list has dropped.
-    const QSet<QString> allowList = allowListOf(*document);
+    // Fewer devices than the allow-list is fine - a device this version lacks is
+    // sealed by the next write of whoever approved it - but never one the allow-list
+    // has dropped.
     for (const RecipientEntry& entry : upload.header.recipients)
     {
         if (!allowList.contains(entry.fingerprint.toHex()))
         {
-            return Result<qint64>::failure(ServerError::NotOnAllowList);
+            return ServerError::NotOnAllowList;
         }
     }
 
-    ++document->version;
-    document->header = upload.header.toJson();
-    document->blob = upload.blob;
-    document->published = Publication{caller.person->displayName, caller.fingerprint, m_now};
+    if (!store)
+    {
+        return ServerError::None;
+    }
+    ++document.version;
+    document.header = upload.header.toJson();
+    document.blob = upload.blob;
+    document.published = Publication{caller.person->displayName, caller.fingerprint, m_now};
     m_uploads[caller.device.bytes].append(m_now);
-    return Result<qint64>::success(document->version);
+    return ServerError::None;
 }
 
 // --- Lease ---------------------------------------------------------------------
@@ -783,7 +843,10 @@ Result<RequestStatus> FakeServer::decideMyRequestStatus(const Session& session, 
     return Result<RequestStatus>::failure(ServerError::NotFound);
 }
 
-Result<Done> FakeServer::decideGrant(const Session& session, const QString& documentId, qint64 index)
+Result<Done> FakeServer::decideGrant(const Session& session,
+                                     const QString& documentId,
+                                     qint64 index,
+                                     const Resealing& resealing)
 {
     Caller caller;
     StoredDocument* document = nullptr;
@@ -793,6 +856,10 @@ Result<Done> FakeServer::decideGrant(const Session& session, const QString& docu
     {
         return refused<Done>(failure, lost);
     }
+    if (resealing.documentId != documentId)
+    {
+        return Result<Done>::failure(ServerError::InvalidRequest);
+    }
 
     for (StoredRequest& stored : document->requests)
     {
@@ -801,7 +868,20 @@ Result<Done> FakeServer::decideGrant(const Session& session, const QString& docu
             continue;
         }
 
+        // The version the new member reads lands with the membership, or neither does.
         const QString member = stored.request.person.member.toHex();
+        QSet<QString> allowList = allowListOf(*document);
+        for (const Device& device : m_people.value(member).devices)
+        {
+            allowList.insert(device.fingerprint.toHex());
+        }
+        const ServerError refusal =
+            storeUpload(*document, documentId, caller, resealing.baseVersion, resealing.upload, allowList, true);
+        if (refusal != ServerError::None)
+        {
+            return Result<Done>::failure(refusal);
+        }
+
         stored.status = RequestStatus::Granted;
         document->members.insert(member, Role::Member);
         document->lost.remove(member);

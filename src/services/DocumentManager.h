@@ -16,7 +16,6 @@
 #include "DocumentSession.h"
 
 class BackgroundGeocodingService;
-class SealingQueue;
 class ServerConnection;
 class UnitLookupService;
 
@@ -51,10 +50,9 @@ public:
                     DocumentRecords& records,
                     ServerConnection& server,
                     DocumentLibrary& library,
-                    SealingQueue& queue,
                     QObject* parent);
 
-    /// For tests: one session, already open, with no library, server, or queue.
+    /// For tests: one session, already open, with no library or server.
     DocumentManager(const DeviceIdentity& identity, std::unique_ptr<DocumentSession> session, QObject* parent);
 
     ~DocumentManager() override;
@@ -137,8 +135,10 @@ public:
     using RequestsFetched = std::function<void(const QList<ServerContract::AccessRequest>& requests)>;
     void fetchRequests(QObject* receiver, const RequestsFetched& done);
 
-    /// An admin's grant: the server makes the request's person a member, and this
-    /// device then seals the ward to the device that asked.
+    /// An admin's grant: the open ward's current version, resealed to the device that
+    /// asked, goes up with the grant, so the person can read the ward the moment they
+    /// are a member. A conflict with a publish that landed meanwhile is built again
+    /// once.
     void grant(const ServerContract::AccessRequest& request);
     void decline(const ServerContract::AccessRequest& request);
 
@@ -206,6 +206,10 @@ signals:
     void accessCallDone();
     void accessCallFailed(ServerContract::ServerError error);
 
+    /// A grant could not be prepared here: the ward's current version could not be
+    /// read on this device. reason says why, in the person's words.
+    void grantBlocked(const QString& reason);
+
     /// The server holds a version this build cannot read, or no longer does.
     void requiresUpdateChanged();
 
@@ -257,8 +261,13 @@ private:
     void onHeadChanged();
     void onShared();
     void onRequests(const RequestsFetched& done, const ServerContract::Result<QList<ServerContract::AccessRequest>>& requests);
-    void onGranted(const QString& documentId,
-                   const DeviceKeys& device,
+    void startGrant(const ServerContract::AccessRequest& request, bool mayRetry);
+    void onGrantBuilt(const ServerContract::AccessRequest& request,
+                      bool mayRetry,
+                      const ServerVersion::Fetched& theirs,
+                      const std::optional<ServerContract::Resealing>& built);
+    void onGranted(const ServerContract::AccessRequest& request,
+                   bool mayRetry,
                    const ServerContract::Result<ServerContract::Done>& result);
     void onAccessCall(const ServerContract::Result<ServerContract::Done>& result);
     void onSuccessorMade(const QString& documentId, const ServerContract::Result<ServerContract::Done>& result);
@@ -284,7 +293,6 @@ private:
     DocumentRecords* m_records = nullptr;
     ServerConnection* m_server = nullptr;
     DocumentLibrary* m_library = nullptr;
-    SealingQueue* m_queue = nullptr;
 
     std::unique_ptr<DocumentSession> m_session;
     std::optional<DocumentLibrary::Copy> m_copy;

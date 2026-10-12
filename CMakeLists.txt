@@ -179,7 +179,6 @@ set(SERVICE_SOURCES
     src/services/DocumentSession.cpp
     src/services/DeviceLinks.cpp
     src/services/IncomingWards.cpp
-    src/services/SealingQueue.cpp
     src/services/ServerConnection.cpp
     src/services/ServerVersion.cpp
     src/services/SessionTimers.cpp
@@ -231,7 +230,6 @@ set(SERVICE_HEADERS
     src/services/DocumentSession.h
     src/services/DeviceLinks.h
     src/services/IncomingWards.h
-    src/services/SealingQueue.h
     src/services/ServerConnection.h
     src/services/ServerVersion.h
     src/services/SessionTimers.h

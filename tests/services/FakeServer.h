@@ -76,6 +76,7 @@ public:
               ServerContract::Reply<ServerContract::LinkState> reply) override;
     void approveLink(const ServerContract::Session& session,
                      const QString& code,
+                     const QList<ServerContract::Resealing>& resealings,
                      ServerContract::Reply<ServerContract::Done> reply) override;
 
     void registerDocument(const ServerContract::Session& session,
@@ -120,6 +121,7 @@ public:
     void grant(const ServerContract::Session& session,
                const QString& documentId,
                qint64 index,
+               const ServerContract::Resealing& resealing,
                ServerContract::Reply<ServerContract::Done> reply) override;
     void removeMember(const ServerContract::Session& session,
                       const QString& documentId,
@@ -230,7 +232,8 @@ private:
     ServerContract::Result<ServerContract::LinkState> decideLink(const ServerContract::Session& session,
                                                                  const QString& code);
     ServerContract::Result<ServerContract::Done> decideApproveLink(const ServerContract::Session& session,
-                                                                   const QString& code);
+                                                                   const QString& code,
+                                                                   const QList<ServerContract::Resealing>& resealings);
     ServerContract::Result<qint64> decideRegisterDocument(const ServerContract::Session& session,
                                                           const ServerContract::Upload& upload);
     ServerContract::Result<ServerContract::Head> decideHead(const ServerContract::Session& session,
@@ -260,7 +263,8 @@ private:
                                                                                 const QString& documentId);
     ServerContract::Result<ServerContract::Done> decideGrant(const ServerContract::Session& session,
                                                              const QString& documentId,
-                                                             qint64 index);
+                                                             qint64 index,
+                                                             const ServerContract::Resealing& resealing);
     ServerContract::Result<ServerContract::Done> decideRemoveMember(const ServerContract::Session& session,
                                                                     const QString& documentId,
                                                                     const MemberId& member);
@@ -308,6 +312,18 @@ private:
                                       std::optional<ServerContract::LostAccess>& lost);
 
     QSet<QString> allowListOf(const StoredDocument& document) const;
+
+    /// The upload checks PUT, grant, and approve share, against the allow-list the
+    /// caller supplies - for grant and approve, one that already includes who is being
+    /// added. Stores the version only when store is set, so a batch can be checked
+    /// whole before any of it lands. The caller has already been resolved.
+    ServerContract::ServerError storeUpload(StoredDocument& document,
+                                            const QString& documentId,
+                                            const Caller& caller,
+                                            qint64 baseVersion,
+                                            const ServerContract::Upload& upload,
+                                            const QSet<QString>& allowList,
+                                            bool store);
     bool isHidden(const ServerContract::Device& device) const;
     QList<ServerContract::Member> membersOf(const StoredDocument& document) const;
     bool keepsAnAdmin(const StoredDocument& document) const;

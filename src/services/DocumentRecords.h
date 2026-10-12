@@ -24,10 +24,6 @@ struct DocumentRecord
     /// The base copy's save counter. A local file above it has unpublished changes.
     qint64 baseSaveCounter = 0;
 
-    /// The devices of people this admin granted, each the device that asked, until a
-    /// version seals to it or the server stops listing it.
-    QList<DeviceKeys> granted;
-
     /// The newest access-history entry this device has shown and had dismissed, so
     /// the notice shows only what is newer - across syncs, ward switches, and runs.
     qint64 historySeen = 0;
@@ -53,7 +49,7 @@ public:
     virtual void setRecord(const QString& documentId, const DocumentRecord& record) = 0;
     virtual void removeRecord(const QString& documentId) = 0;
 
-    /// Every document with a record, so the sealing queue can visit every ward.
+    /// Every document with a record, so an approval can reseal every ward.
     virtual QStringList documentIds() const = 0;
 
     /// The devices this device linked, which it seals into every ward it holds.
