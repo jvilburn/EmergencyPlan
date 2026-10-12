@@ -103,6 +103,7 @@ void DeviceLinksTest::unlinkingDropsTheDeviceAndCutsItOff()
     std::unique_ptr<SealingQueue> queue = laptop.queue();
     DeviceLinks links(laptop.records, laptop.connection, *queue, nullptr);
     QSignalSpy unlinked(&links, &DeviceLinks::unlinked);
+    QCOMPARE(laptop.records.linkedDevices().size(), 2);
 
     links.unlink({phone.identity.fingerprint(), tablet.identity.fingerprint()});
     ward.settle();

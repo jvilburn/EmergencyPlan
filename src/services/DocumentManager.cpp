@@ -754,7 +754,6 @@ void DocumentManager::onAccessCall(const ServerContract::Result<ServerContract::
 
 void DocumentManager::onShared()
 {
-    emit readOnlyChanged();
     emit shared(m_session->documentId());
 }
 

@@ -67,7 +67,9 @@ void DeviceLinks::unlink(const QList<Fingerprint>& devices)
 void DeviceLinks::onUnlinked(const Fingerprint& device, const Result<Done>& result)
 {
     --m_unlinking;
-    if (result.ok())
+
+    // NotFound: already gone from this person, which is what was asked.
+    if (result.ok() || result.error == ServerError::NotFound)
     {
         ++m_unlinked;
 

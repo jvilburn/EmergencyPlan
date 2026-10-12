@@ -57,7 +57,6 @@
             <key>CFBundleTypeExtensions</key>
             <array>
                 <string>wardplanning</string>
-                <string>json</string>
             </array>
             <key>CFBundleTypeIconFile</key>
             <string>WardPlanningDoc.icns</string>

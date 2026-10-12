@@ -963,7 +963,7 @@ Commit as `feat: share a ward`.
 **Request.** Opening an invite link or a `.wardplanning` file for a ward this device
 lacks offers *Request access*, replacing the `RequestAccess` placeholder in
 `MainWindow::openPath`. One click calls `requestAccess`; the ward list shows the ward as
-*Requested* and polls `myRequestStatus` on the ordinary head interval; on Granted it
+*Requested* and polls `myRequestStatus` every minute; on Granted it
 fetches through `DocumentLibrary::fetchWard` and the ward shows *Waiting for access*
 until a version seals this device; on Declined it says so and drops the entry.
 
@@ -986,7 +986,7 @@ Commit as `feat: request and grant access`.
 instruction *On a device you already use, choose Link a device and enter this code.* It
 polls `link(code)`; once `approvedAs` arrives it calls
 `IdentityService::joinPerson(member, displayName, deviceName)`, then restores the ward
-list. Wards not yet sealed to it show *Waiting for access from your other device*. An
+list. Wards not yet sealed to it show *Waiting for access*. An
 expired code offers to start again. This replaces the **Yes** placeholder in
 `FirstRunDialog::onLinkDevice`.
 

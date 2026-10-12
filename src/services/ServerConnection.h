@@ -20,7 +20,8 @@
 /// signs in afresh and repeats the call, and a second Unauthenticated is the
 /// answer. Calls made while a sign-in is in flight wait for it, so a burst of calls
 /// costs one sign-in. A device whose registration the server refuses as AccessLost
-/// - one that was unlinked - hears that from every call.
+/// - one that was unlinked - hears that from every call, and the unlinked handler
+/// hears it once.
 ///
 /// Every reply is delivered only while its context is alive, as with
 /// QTimer::singleShot: a session destroyed with a call outstanding never hears the
@@ -36,6 +37,11 @@ public:
 
     ServerConnection(const ServerConnection&) = delete;
     ServerConnection& operator=(const ServerConnection&) = delete;
+
+    /// Called once, from within the call that found out, when the server refuses
+    /// this device's registration because it was unlinked.
+    using Unlinked = std::function<void(const ServerContract::LostAccess& lost)>;
+    void setUnlinkedHandler(Unlinked handler) { m_unlinked = std::move(handler); }
 
     // --- This device's person ---
 
@@ -136,6 +142,7 @@ private:
 
     /// Set once registration says this device was unlinked; every call answers it.
     std::optional<ServerContract::LostAccess> m_lost;
+    Unlinked m_unlinked;
     bool m_signingIn = false;
     QList<SessionReady> m_waiting;
 

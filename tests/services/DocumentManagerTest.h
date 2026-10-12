@@ -25,4 +25,5 @@ private slots:
     void aGrantSealsTheDeviceThatAskedAndADeclineSaysSo();
     void anAdminRemovesAndChangesRoles();
     void theLastAdminLeavesThroughASuccessorAndTheWardGoes();
+    void aMemberLeavesAndTheWardGoes();
 };

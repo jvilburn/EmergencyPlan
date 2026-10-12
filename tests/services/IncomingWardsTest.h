@@ -14,5 +14,6 @@ private slots:
     void aDeclinedRequestIsDroppedAndSaysSo();
     void aRequestOutlivesTheApp();
     void aRequestForNoSuchWardFails();
+    void aRequestTheServerNoLongerHasIsDropped();
     void aLinkedDevicesWardsArriveOnceItsLinkerSealsThem();
 };

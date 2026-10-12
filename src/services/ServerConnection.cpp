@@ -258,6 +258,7 @@ void ServerConnection::finishSignIn(const Result<Session>& session)
     {
         m_session = session.value.value();
     }
+    const bool unlinkedNow = session.error == ServerError::AccessLost && !m_lost.has_value();
     if (session.error == ServerError::AccessLost)
     {
         m_lost = session.lost;
@@ -269,5 +270,10 @@ void ServerConnection::finishSignIn(const Result<Session>& session)
     for (const SessionReady& ready : waiting)
     {
         ready(session);
+    }
+
+    if (unlinkedNow && m_unlinked)
+    {
+        m_unlinked(m_lost.value_or(ServerContract::LostAccess{}));
     }
 }

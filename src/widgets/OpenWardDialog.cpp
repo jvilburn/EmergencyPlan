@@ -7,7 +7,10 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
-OpenWardDialog::OpenWardDialog(const QList<DocumentLibrary::Entry>& entries, QWidget* parent)
+OpenWardDialog::OpenWardDialog(const QList<DocumentLibrary::Entry>& entries,
+                               const QStringList& requested,
+                               const QStringList& waiting,
+                               QWidget* parent)
     : QDialog(parent)
 {
     setWindowTitle(tr("Open Ward"));
@@ -34,7 +37,20 @@ OpenWardDialog::OpenWardDialog(const QList<DocumentLibrary::Entry>& entries, QWi
         }
     }
 
-    if (entries.isEmpty())
+    for (qsizetype i = 0; i < requested.size(); ++i)
+    {
+        QListWidgetItem* item = new QListWidgetItem(tr("A ward you asked for  -  Requested"), m_list);
+        item->setFlags(Qt::ItemIsEnabled);
+        item->setToolTip(tr("It appears here once an admin grants your request."));
+    }
+    for (qsizetype i = 0; i < waiting.size(); ++i)
+    {
+        QListWidgetItem* item = new QListWidgetItem(tr("A ward shared with you  -  Waiting for access"), m_list);
+        item->setFlags(Qt::ItemIsEnabled);
+        item->setToolTip(tr("It arrives once the device that gave you access next runs Ward Planning."));
+    }
+
+    if (m_list->count() == 0)
     {
         layout->addWidget(new QLabel(tr("There are no wards on this device yet."), this));
         m_list->hide();

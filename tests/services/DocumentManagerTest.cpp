@@ -499,6 +499,8 @@ void DocumentManagerTest::shareAnnouncesTheWardAndOfflineSaysWhy()
     ward.settle();
     QCOMPARE(shared.count(), 1);
     QCOMPARE(shared.first().first().toString(), app.manager.documentId());
+    QVERIFY(app.manager.session()->isShared());
+    QCOMPARE(app.settings->record(app.manager.documentId()).baseVersion, 1);
 }
 
 void DocumentManagerTest::aGrantSealsTheDeviceThatAskedAndADeclineSaysSo()
@@ -607,4 +609,37 @@ void DocumentManagerTest::theLastAdminLeavesThroughASuccessorAndTheWardGoes()
     const QList<ServerContract::Member> members = membersAt(ward, bob);
     QCOMPARE(members.size(), 1);
     QCOMPARE(members.first().role, ServerContract::Role::Admin);
+}
+
+void DocumentManagerTest::aMemberLeavesAndTheWardGoes()
+{
+    TestWard ward;
+    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
+    Device& bob = ward.add(newIdentity("Bob", "Phone"));
+    std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
+    QVERIFY(aliceSession);
+    QVERIFY(ward.grant(alice, bob));
+    aliceSession.reset();
+
+    App app(bob);
+    app.library.add(ward.documentId);
+    DocumentRecord record;
+    record.baseVersion = 1;
+    app.settings->setRecord(ward.documentId, record);
+    QCOMPARE(app.manager.openDocument(ward.documentId, nullptr), DocumentManager::Open::Fetching);
+    ward.settle();
+    QCOMPARE(app.manager.documentId(), ward.documentId);
+    const DocumentPaths paths = app.library.pathsFor(ward.documentId);
+    QVERIFY(QFile::exists(paths.file));
+    QVERIFY(QFile::exists(paths.base));
+    QSignalSpy lost(&app.manager, &DocumentManager::accessLost);
+
+    app.manager.leave(std::nullopt);
+    ward.settle();
+    QCOMPARE(lost.count(), 1);
+    QCOMPARE(lost.first().at(1).value<ServerContract::LostAccess>().how, ServerContract::LostAccess::How::Left);
+    QVERIFY(!QFile::exists(paths.file));
+    QVERIFY(!QFile::exists(paths.base));
+    QVERIFY(!app.library.contains(ward.documentId));
+    QVERIFY(!memberIn(membersAt(ward, alice), bob.identity.member).has_value());
 }

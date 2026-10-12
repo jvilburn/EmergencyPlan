@@ -47,14 +47,16 @@ public:
     ~MainWindow();
 
     /// This launch's arguments, or those a later launch handed to this one: each
-    /// .wardplanning file among them is opened by FileOpenRouter's route.
+    /// .wardplanning file and invite link among them is followed by FileOpenRouter's
+    /// route.
     void handleArguments(const QStringList& arguments);
 
     /// Opens a ward by id and tells the person how it went.
     void openWard(const QString& documentId);
 
-    /// A ward the server listed for this device was fetched, or could not be.
-    void onWardRestored(const QString& documentId, DocumentSession::Download outcome);
+    /// This device was unlinked: every ward and copy goes, and the app closes to set
+    /// the device up afresh. Reported once, however many calls hear it.
+    void unlinkedHere(const ServerContract::LostAccess& lost);
 
 signals:
     /// The person asked to set this device up afresh and confirmed it; the app
@@ -163,9 +165,10 @@ private:
     void onRemoveMember(const MemberId& member);
     void onLeave();
 
-    /// This device was unlinked: every ward and copy goes, and the app closes to set
-    /// the device up afresh.
-    void unlinkedHere();
+    /// A ward the server listed for this device was fetched, or could not be.
+    void onWardRestored(const QString& documentId, DocumentSession::Download outcome);
+
+    void onLinkFailed(ServerContract::ServerError error);
     void reportOpen(DocumentManager::Open result, const QString& reason);
     void openCopy(const QString& sourcePath);
     void closeEditPanelInternal();

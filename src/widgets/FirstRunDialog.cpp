@@ -128,6 +128,7 @@ void FirstRunDialog::onBack()
     m_codeLabel->clear();
     m_linkStatus->clear();
     m_showCode->setEnabled(true);
+    m_linkDeviceName->setEnabled(true);
     m_pages->setCurrentIndex(0);
 }
 
@@ -140,6 +141,7 @@ void FirstRunDialog::onShowCode()
     }
 
     m_showCode->setEnabled(false);
+    m_linkDeviceName->setEnabled(false);
     m_linkStatus->setText(tr("Asking the server for a code..."));
     m_connection = std::make_unique<ServerConnection>(m_server, m_identity.deviceOnly(m_linkDeviceName->text()));
     m_connection->startLink(this, std::bind(&FirstRunDialog::onCode, this, _1));
@@ -200,6 +202,7 @@ void FirstRunDialog::linkFailed(const QString& message)
     m_codeLabel->clear();
     m_linkStatus->setText(message);
     m_showCode->setEnabled(true);
+    m_linkDeviceName->setEnabled(true);
 }
 
 void FirstRunDialog::onNamesChanged()

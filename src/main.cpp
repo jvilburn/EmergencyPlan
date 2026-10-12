@@ -1,6 +1,7 @@
 #include <QApplication>
 #include <QDir>
 #include <QFile>
+#include <QFileOpenEvent>
 #include <QIcon>
 #include <QMessageBox>
 #include <QStandardPaths>
@@ -30,10 +31,50 @@
 namespace
 {
 
+/// Replaces this device's identity, and drops what the old one kept in settings: the
+/// devices it linked, which it seals into its wards, and the wards it asked for.
+std::unique_ptr<IdentityService> replaceIdentity(const QString& path, AppSettings& settings, QString* error)
+{
+    std::unique_ptr<IdentityService> identity = IdentityService::startOver(path, error);
+    if (identity)
+    {
+        settings.setLinkedDevices({});
+        settings.setRequestedWards({});
+    }
+    return identity;
+}
+
+/// On macOS a file or a wardplanning: link opened from elsewhere arrives as an
+/// event, not as arguments; it goes where the arguments would.
+class FileOpenForwarder : public QObject
+{
+public:
+    explicit FileOpenForwarder(MainWindow& window)
+        : m_window(window)
+    {
+    }
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (event->type() != QEvent::FileOpen)
+        {
+            return QObject::eventFilter(watched, event);
+        }
+
+        const QFileOpenEvent* open = static_cast<QFileOpenEvent*>(event);
+        m_window.handleArguments({QString(), open->file().isEmpty() ? open->url().toString() : open->file()});
+        return true;
+    }
+
+private:
+    MainWindow& m_window;
+};
+
 /// This device's identity, or nullptr once the person has been told why there is
 /// none and chosen to quit. A damaged file is offered a fresh start; one a newer
 /// version wrote is left alone, since starting afresh would orphan it for nothing.
-std::unique_ptr<IdentityService> resolveIdentity(const QString& path)
+std::unique_ptr<IdentityService> resolveIdentity(const QString& path, AppSettings& settings)
 {
     IdentityFile::Load outcome = IdentityFile::Load::NotFound;
     QString error;
@@ -85,7 +126,7 @@ std::unique_ptr<IdentityService> resolveIdentity(const QString& path)
         return nullptr;
     }
 
-    identity = IdentityService::startOver(path, &error);
+    identity = replaceIdentity(path, settings, &error);
     if (!identity)
     {
         QMessageBox::critical(nullptr, QObject::tr("Ward Planning"), error);
@@ -95,10 +136,10 @@ std::unique_ptr<IdentityService> resolveIdentity(const QString& path)
 
 /// A fresh identity in place of this device's, then the app closes so the next
 /// launch asks the first question afresh.
-void startOver(const QString& identityPath)
+void startOver(const QString& identityPath, AppSettings& settings)
 {
     QString error;
-    if (!IdentityService::startOver(identityPath, &error))
+    if (!replaceIdentity(identityPath, settings, &error))
     {
         QMessageBox::critical(nullptr, QObject::tr("Ward Planning"), error);
     }
@@ -175,7 +216,7 @@ int main(int argc, char *argv[])
 
     // Resolved before any document exists: there is no document without an identity.
     const QString identityPath = deviceData.filePath("identity.json");
-    std::unique_ptr<IdentityService> identityService = resolveIdentity(identityPath);
+    std::unique_ptr<IdentityService> identityService = resolveIdentity(identityPath, *settings);
     if (!identityService)
     {
         return 1;
@@ -217,7 +258,18 @@ int main(int argc, char *argv[])
     IncomingWards incoming(*settings, library, server, nullptr);
     DeviceLinks links(*settings, server, queue, nullptr);
     MainWindow window(*settings, library, incoming, links, nullptr);
-    QObject::connect(&window, &MainWindow::startOverRequested, &app, std::bind(&startOver, identityPath));
+    QObject::connect(&window,
+                     &MainWindow::startOverRequested,
+                     &app,
+                     std::bind(&startOver, identityPath, std::ref(*settings)));
+
+    // Told outside the call that found out, which is still delivering its replies.
+    server.setUnlinkedHandler([&window](const ServerContract::LostAccess& lost) {
+        QMetaObject::invokeMethod(&window, std::bind(&MainWindow::unlinkedHere, &window, lost), Qt::QueuedConnection);
+    });
+
+    FileOpenForwarder fileOpen(window);
+    app.installEventFilter(&fileOpen);
     window.show();
 
     // A file passed on the command line (a file association) opens in place of the

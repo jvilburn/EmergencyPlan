@@ -170,6 +170,8 @@ void ServerConnectionTest::anUnlinkedDeviceHearsItFromEveryCallWithoutSigningInA
     QVERIFY(wait<Done>(std::bind(&ServerApi::unlinkDevice, &server, laptopSession.value(), phone.fingerprint(), _1)).ok());
 
     ServerConnection connection(server, phone);
+    QList<LostAccess> told;
+    connection.setUnlinkedHandler([&told](const LostAccess& lost) { told.append(lost); });
     QObject context;
     const int before = server.challengesIssued();
 
@@ -183,6 +185,11 @@ void ServerConnectionTest::anUnlinkedDeviceHearsItFromEveryCallWithoutSigningInA
         wait<Head>(std::bind(&ServerConnection::head, &connection, ServerTestSupport::newDocumentId(), &context, _1));
     QCOMPARE(second.error, ServerError::AccessLost);
     QCOMPARE(server.challengesIssued(), before + 1);
+
+    // The app hears it once, however many calls do.
+    QCOMPARE(told.size(), 1);
+    QCOMPARE(told.first().how, LostAccess::How::Unlinked);
+    QCOMPARE(told.first().byWhom, QString("Laptop"));
 }
 
 void ServerConnectionTest::aReplyWhoseContextWasDestroyedIsDropped()

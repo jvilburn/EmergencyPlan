@@ -167,6 +167,10 @@ AccessDialog::AccessDialog(const QList<Member>& members, const DeviceIdentity& s
 
 void AccessDialog::setRequests(const QList<ServerContract::AccessRequest>& requests)
 {
+    // Kept across the refill by the request's index.
+    const QList<QTreeWidgetItem*> selected = m_requestList->selectedItems();
+    const QVariant selectedIndex = selected.isEmpty() ? QVariant() : selected.first()->data(0, Qt::UserRole);
+
     m_requests = requests;
     m_requestList->clear();
     for (const ServerContract::AccessRequest& request : requests)
@@ -175,6 +179,7 @@ void AccessDialog::setRequests(const QList<ServerContract::AccessRequest>& reque
         const QString asked = QLocale().toString(request.when.toLocalTime(), QLocale::ShortFormat);
         QTreeWidgetItem* row = new QTreeWidgetItem(m_requestList, {request.person.displayName, device, asked});
         row->setData(0, Qt::UserRole, request.index);
+        row->setSelected(selectedIndex.isValid() && selectedIndex.toLongLong() == request.index);
     }
 
     const bool any = !requests.isEmpty();

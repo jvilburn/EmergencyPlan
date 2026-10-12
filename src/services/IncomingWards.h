@@ -10,16 +10,18 @@
 #include <QStringList>
 #include <QTimer>
 
-/// The wards on their way to this device: each the server lists for this person that
-/// the library lacks - after a grant, a link, a reinstall, or cleared app data - and
-/// each this device asked for and an admin has not yet answered.
+/// The wards on their way to this device: each this device asked for and an admin has
+/// not yet answered, and each the server lists for this person that the library
+/// lacks - after a grant, a link, a reinstall, or cleared app data.
 ///
-/// A listed ward arrives once a version sealed to this device does. The device that
-/// approved it seals it - the granting admin's, or the one that linked this device -
-/// so it may lag the grant or the link a little; until then it waits for access.
+/// A request lasts until it is answered or the server no longer has it; a granted one
+/// becomes a listed ward. A listed ward arrives once a version sealed to this device
+/// does. The device that approved it seals it - the granting admin's, or the one that
+/// linked this device - so it may lag the grant or the link a little; until then it
+/// waits for access.
 ///
-/// Checked on an interval, and kept in AppSettings, so a request outlives closing
-/// the app.
+/// Checked every minute, so a ward arrives soon after it is sealed. Requests are kept
+/// in AppSettings, so they outlive closing the app.
 class IncomingWards : public QObject
 {
     Q_OBJECT
@@ -34,6 +36,9 @@ public:
 
     /// The requests not yet answered.
     QStringList pending() const { return m_settings.requestedWards(); }
+
+    /// The listed wards not yet sealed to this device, as of the last check.
+    const QStringList& waiting() const { return m_waiting; }
 
     /// Checks every request, and fetches every listed ward this device lacks, now.
     void checkNow();
@@ -59,4 +64,5 @@ private:
     DocumentLibrary& m_library;
     ServerConnection& m_server;
     QTimer m_timer;
+    QStringList m_waiting;
 };

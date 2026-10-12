@@ -133,7 +133,7 @@ public:
     void share();
 
     /// The open ward's pending access requests, answered only while receiver lives;
-    /// an empty list when the server cannot say.
+    /// an empty list when the server cannot say, and no answer for an unshared ward.
     using RequestsFetched = std::function<void(const QList<ServerContract::AccessRequest>& requests)>;
     void fetchRequests(QObject* receiver, const RequestsFetched& done);
 

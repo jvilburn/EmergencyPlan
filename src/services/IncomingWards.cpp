@@ -29,7 +29,6 @@ void IncomingWards::onRequested(const QString& documentId, const Result<Done>& r
         return;
     case ServerError::InvalidRequest:
         // Already a member: nothing to ask, only a ward to fetch.
-        add(documentId);
         checkNow();
         return;
     default:
@@ -49,12 +48,32 @@ void IncomingWards::checkNow()
 
 void IncomingWards::onStatus(const QString& documentId, const Result<RequestStatus>& status)
 {
-    // Unreachable, or a ward that has gone: asked again next time. A granted request
-    // is fetched as a listed ward; it is dropped when it arrives.
-    if (status.ok() && status.value.value() == RequestStatus::Declined)
+    switch (status.error)
     {
+    case ServerError::None:
+        break;
+    case ServerError::NotFound:
+    case ServerError::UnknownDocument:
+        // The request, or the ward, is gone: nothing left to wait for.
+        drop(documentId);
+        return;
+    default:
+        // Not reached: asked again next time.
+        return;
+    }
+
+    switch (status.value.value())
+    {
+    case RequestStatus::Pending:
+        return;
+    case RequestStatus::Granted:
+        // Now a listed ward, which the restore fetches.
+        drop(documentId);
+        return;
+    case RequestStatus::Declined:
         drop(documentId);
         emit declined(documentId);
+        return;
     }
 }
 
@@ -63,17 +82,23 @@ void IncomingWards::onFetched(const QString& documentId, DocumentSession::Downlo
     switch (outcome)
     {
     case DocumentSession::Download::Done:
-        drop(documentId);
-        emit fetched(documentId, outcome);
-        return;
     case DocumentSession::Download::NeedsNewerVersion:
     case DocumentSession::Download::WriteFailed:
+        m_waiting.removeAll(documentId);
         emit fetched(documentId, outcome);
         return;
-    case DocumentSession::Download::Unreachable:
-    case DocumentSession::Download::AccessLost:
     case DocumentSession::Download::ServerFault:
-        // Not yet sealed to this device, or not reached: tried again next time.
+        // Listed, but no version is sealed to this device yet: tried again next time.
+        if (!m_waiting.contains(documentId))
+        {
+            m_waiting.append(documentId);
+        }
+        return;
+    case DocumentSession::Download::AccessLost:
+        m_waiting.removeAll(documentId);
+        return;
+    case DocumentSession::Download::Unreachable:
+        // Not reached: tried again next time.
         return;
     }
 }

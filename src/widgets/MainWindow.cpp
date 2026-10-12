@@ -39,8 +39,6 @@
 
 #include <QMenuBar>
 #include <QClipboard>
-#include <QInputDialog>
-#include <QLineEdit>
 #include <QGuiApplication>
 #include <QStatusBar>
 #include <QVBoxLayout>
@@ -265,10 +263,10 @@ void MainWindow::setupMenus()
 
     fileMenu->addSeparator();
 
-    // Only before this device holds any ward: a device set up as the wrong person.
     // A conflict set aside by closing its dialog waits here.
     m_resolveConflictAction = fileMenu->addAction(tr("Choose Between Two Versions..."), this, &MainWindow::askAboutConflict);
 
+    // Only before this device holds any ward: a device set up as the wrong person.
     m_startOverAction = fileMenu->addAction(tr("Set Up This Device Again..."), this, &MainWindow::onStartOver);
     connect(fileMenu, &QMenu::aboutToShow, this, &MainWindow::updateFileActions);
 
@@ -318,7 +316,7 @@ void MainWindow::setupConnections()
     connect(DocumentManager::instance(), &DocumentManager::accessLost,
             this, &MainWindow::onAccessLost);
     connect(DocumentManager::instance(), &DocumentManager::shared,
-            this, &MainWindow::showInviteLink);
+            this, &MainWindow::showInviteLink, Qt::QueuedConnection);
     connect(DocumentManager::instance(), &DocumentManager::shareFailed,
             this, &MainWindow::onShareFailed);
     connect(DocumentManager::instance(), &DocumentManager::accessCallFailed,
@@ -329,7 +327,7 @@ void MainWindow::setupConnections()
     connect(&m_links, &DeviceLinks::linkRead, this, &MainWindow::onLinkRead);
     connect(&m_links, &DeviceLinks::approved, this, &MainWindow::onLinkApproved);
     connect(&m_links, &DeviceLinks::unlinked, this, &MainWindow::onUnlinked);
-    connect(&m_links, &DeviceLinks::failed, this, &MainWindow::onAccessCallFailed);
+    connect(&m_links, &DeviceLinks::failed, this, &MainWindow::onLinkFailed);
     connect(&m_requests, &IncomingWards::declined, this, &MainWindow::onRequestDeclined);
     connect(DocumentManager::instance(), &DocumentManager::fetchFailed,
             this, &MainWindow::onFetchFailed);
@@ -392,7 +390,7 @@ void MainWindow::onNewWard()
 
 void MainWindow::onOpenWard()
 {
-    OpenWardDialog dialog(m_library.entries(), this);
+    OpenWardDialog dialog(m_library.entries(), m_requests.pending(), m_requests.waiting(), this);
     if (dialog.exec() == QDialog::Accepted && !dialog.selectedDocumentId().isEmpty())
     {
         openWard(dialog.selectedDocumentId());
@@ -431,7 +429,7 @@ void MainWindow::onWardRestored(const QString& documentId, DocumentSession::Down
     case DocumentSession::Download::Unreachable:
     case DocumentSession::Download::AccessLost:
     case DocumentSession::Download::ServerFault:
-        // Tried afresh at the next start.
+        // IncomingWards keeps these to itself and tries again.
         break;
     }
 }
@@ -791,7 +789,7 @@ void MainWindow::onAccessLost(const QString& wardName, const ServerContract::Los
         message = tr("You left %1, so it is no longer on this device.").arg(ward);
         break;
     case ServerContract::LostAccess::How::Unlinked:
-        unlinkedHere();
+        unlinkedHere(lost);
         return;
     case ServerContract::LostAccess::How::Removed:
         message = lost.byWhom.isEmpty()
@@ -1102,7 +1100,7 @@ void MainWindow::onUnlinkDevice(const Fingerprint& device)
     if (!alsoLinked.isEmpty())
     {
         confirm.setInformativeText(tr("It also linked %1. Unlink those too?").arg(QLocale().createSeparatedList(alsoNames)));
-        both = confirm.addButton(tr("Unlink Both"), QMessageBox::AcceptRole);
+        both = confirm.addButton(alsoLinked.size() == 1 ? tr("Unlink Both") : tr("Unlink All"), QMessageBox::AcceptRole);
         confirm.setDefaultButton(both);
     }
     QPushButton* justThis = confirm.addButton(alsoLinked.isEmpty() ? tr("Unlink") : tr("Just This One"),
@@ -1119,7 +1117,7 @@ void MainWindow::onUnlinkDevice(const Fingerprint& device)
     }
 }
 
-void MainWindow::unlinkedHere()
+void MainWindow::unlinkedHere(const ServerContract::LostAccess& lost)
 {
     // Reported once, however many wards and calls hear it.
     if (m_unlinkedHere)
@@ -1135,8 +1133,12 @@ void MainWindow::unlinkedHere()
     }
     QMessageBox::information(this,
                              tr("Ward Planning"),
-                             tr("This device was unlinked, so its wards have been deleted from it. Ward Planning "
-                                "will close; start it again to set this device up."));
+                             lost.byWhom.isEmpty()
+                                 ? tr("This device was unlinked, so its wards have been deleted from it. Ward Planning "
+                                      "will close; start it again to set this device up.")
+                                 : tr("%1 unlinked this device, so its wards have been deleted from it. Ward Planning "
+                                      "will close; start it again to set this device up.")
+                                       .arg(lost.byWhom));
     emit startOverRequested();
 }
 
@@ -1173,8 +1175,7 @@ void MainWindow::onLeave()
 
     bool selfAdmin = false;
     int admins = 0;
-    QStringList others;
-    QList<MemberId> otherIds;
+    QList<ServerContract::Member> others;
     for (const ServerContract::Member& member : members)
     {
         admins += member.isAdmin() ? 1 : 0;
@@ -1184,8 +1185,7 @@ void MainWindow::onLeave()
         }
         else
         {
-            others.append(member.person.displayName);
-            otherIds.append(member.person.member);
+            others.append(member);
         }
     }
 
@@ -1193,19 +1193,31 @@ void MainWindow::onLeave()
     std::optional<MemberId> successor;
     if (selfAdmin && admins == 1 && !others.isEmpty())
     {
+        // Each named with their devices, so two people sharing a name are told apart.
+        QStringList labels;
+        for (const ServerContract::Member& member : others)
+        {
+            QStringList devices;
+            for (const ServerContract::Device& device : member.person.devices)
+            {
+                devices.append(device.name);
+            }
+            labels.append(tr("%1 (%2)").arg(member.person.displayName, QLocale().createSeparatedList(devices)));
+        }
+
         bool chosen = false;
-        const QString name = QInputDialog::getItem(this,
-                                                   tr("Leave"),
-                                                   tr("Before you leave, choose who will be admin:"),
-                                                   others,
-                                                   0,
-                                                   false,
-                                                   &chosen);
+        const QString label = QInputDialog::getItem(this,
+                                                    tr("Leave"),
+                                                    tr("Before you leave, choose who will be admin:"),
+                                                    labels,
+                                                    0,
+                                                    false,
+                                                    &chosen);
         if (!chosen)
         {
             return;
         }
-        successor = otherIds.at(others.indexOf(name));
+        successor = others.at(labels.indexOf(label)).person.member;
     }
 
     const QMessageBox::StandardButton answer = QMessageBox::question(
@@ -1247,7 +1259,9 @@ void MainWindow::onAccessCallFailed(ServerContract::ServerError error)
                 admins.append(member.person.displayName);
             }
         }
-        message = tr("Only an admin can change who has access. Ask %1.").arg(admins.join(tr(", ")));
+        message = admins.isEmpty()
+                      ? tr("Only an admin can change who has access.")
+                      : tr("Only an admin can change who has access. Ask %1.").arg(QLocale().createSeparatedList(admins));
         break;
     }
     case ServerContract::ServerError::LastAdmin:
@@ -1265,6 +1279,28 @@ void MainWindow::onAccessCallFailed(ServerContract::ServerError error)
         break;
     }
     QMessageBox::warning(this, tr("Who Has Access"), message);
+}
+
+void MainWindow::onLinkFailed(ServerContract::ServerError error)
+{
+    QString message;
+    switch (error)
+    {
+    case ServerContract::ServerError::NotFound:
+        message = tr("No device is showing that code. Check it, or start again on the new device.");
+        break;
+    case ServerContract::ServerError::Expired:
+        message = tr("That code has expired. Start again on the new device.");
+        break;
+    case ServerContract::ServerError::Unreachable:
+    case ServerContract::ServerError::RateLimited:
+        message = tr("Connect to the internet to link or unlink a device.");
+        break;
+    default:
+        message = tr("The server did not accept the change.");
+        break;
+    }
+    QMessageBox::warning(this, tr("Link a Device"), message);
 }
 
 QList<ServerContract::Member> MainWindow::currentMembers() const

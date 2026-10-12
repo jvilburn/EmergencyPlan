@@ -72,12 +72,13 @@ void IncomingWardsTest::aGrantedRequestArrivesOnceTheWardIsSealedToThisDevice()
     QCOMPARE(requested.count(), 1);
     QCOMPARE(app.requests.pending(), QStringList{ward.documentId});
 
-    // Granted, but not yet sealed to Bob: still waiting.
+    // Granted, but not yet sealed to Bob: no longer a request, and waiting for access.
     QVERIFY(grantOnServer(ward, alice));
     app.requests.checkNow();
     ward.settle();
     QCOMPARE(arrived.count(), 0);
-    QCOMPARE(app.requests.pending(), QStringList{ward.documentId});
+    QVERIFY(app.requests.pending().isEmpty());
+    QCOMPARE(app.requests.waiting(), QStringList{ward.documentId});
     QVERIFY(!app.library.contains(ward.documentId));
 
     // Alice's app seals it to the device that asked.
@@ -91,7 +92,7 @@ void IncomingWardsTest::aGrantedRequestArrivesOnceTheWardIsSealedToThisDevice()
     QCOMPARE(arrived.count(), 1);
     QCOMPARE(arrived.first().first().toString(), ward.documentId);
     QCOMPARE(arrived.first().at(1).value<DocumentSession::Download>(), DocumentSession::Download::Done);
-    QVERIFY(app.requests.pending().isEmpty());
+    QVERIFY(app.requests.waiting().isEmpty());
     QVERIFY(app.library.contains(ward.documentId));
 }
 
@@ -159,6 +160,33 @@ void IncomingWardsTest::aRequestForNoSuchWardFails()
     QVERIFY(app.requests.pending().isEmpty());
 }
 
+void IncomingWardsTest::aRequestTheServerNoLongerHasIsDropped()
+{
+    TestWard ward;
+    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
+    Device& bob = ward.add(newIdentity("Bob", "Phone"));
+    std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
+    QVERIFY(aliceSession);
+    aliceSession.reset();
+
+    BobsApp app(bob);
+    QSignalSpy declined(&app.requests, &IncomingWards::declined);
+    app.requests.request(ward.documentId);
+    ward.settle();
+    QCOMPARE(app.requests.pending(), QStringList{ward.documentId});
+
+    // The last person leaves, and the ward's requests go with her.
+    const Session session = ward.sessionFor(alice).value();
+    QVERIFY(ServerTestSupport::wait<Done>(std::bind(
+                &ServerApi::removeMember, &ward.server, session, ward.documentId, alice.identity.member, _1))
+                .ok());
+
+    app.requests.checkNow();
+    ward.settle();
+    QVERIFY(app.requests.pending().isEmpty());
+    QCOMPARE(declined.count(), 0);
+}
+
 void IncomingWardsTest::aLinkedDevicesWardsArriveOnceItsLinkerSealsThem()
 {
     TestWard ward;
@@ -175,6 +203,7 @@ void IncomingWardsTest::aLinkedDevicesWardsArriveOnceItsLinkerSealsThem()
     app.requests.checkNow();
     ward.settle();
     QCOMPARE(fetched.count(), 0);
+    QCOMPARE(app.requests.waiting(), QStringList{ward.documentId});
     QVERIFY(!app.library.contains(ward.documentId));
 
     ward.seal(laptop);
@@ -182,5 +211,6 @@ void IncomingWardsTest::aLinkedDevicesWardsArriveOnceItsLinkerSealsThem()
     ward.settle();
     QCOMPARE(fetched.count(), 1);
     QVERIFY(app.library.contains(ward.documentId));
+    QVERIFY(app.requests.waiting().isEmpty());
     QVERIFY(app.requests.pending().isEmpty());
 }
