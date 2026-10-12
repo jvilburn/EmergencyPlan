@@ -34,8 +34,7 @@ Written written()
     w.bob = newIdentity("Bob", "Phone");
     w.dataKey = DocumentCrypto::generateDataKey();
 
-    SealingSet set = SealingSet::of(w.alice.keys());
-    set.add(w.bob.keys());
+    const SealingSet set = rosterOf({w.alice, w.bob});
 
     w.document = Document::empty();
     w.document.setSealingSet(set);

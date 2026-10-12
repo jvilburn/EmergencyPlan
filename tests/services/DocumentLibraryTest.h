@@ -26,8 +26,9 @@ private slots:
     void openCopySaysWhyItCannotOpenAFile();
     void forgetRemovesTheFilesRecordAndEntryAndKeepsCopies();
     void forgetLostDeletesCopiesStillAtTheirPaths();
-    void aClearedLibraryIsRestoredFromTheServerAndEachOpens();
     void aListedWardWhoseFileWasDeletedIsFetchedOnRequest();
+    void aJoinedWardIsAddedAndOpens();
+    void aJoinThatFailsAddsNothing();
     void onlyAWardThatArrivesIsAdded();
     void aWardWhoseFetchIsCutShortIsNotAdded();
     void aWardLostWhileFetchedKeepsItsEntryForForgetLost();

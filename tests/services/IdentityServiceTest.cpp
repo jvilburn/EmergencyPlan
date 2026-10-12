@@ -1,6 +1,5 @@
 #include "IdentityServiceTest.h"
 
-#include "ServerTestSupport.h"
 #include "DocumentCrypto.h"
 #include "IdentityService.h"
 
@@ -24,6 +23,13 @@ QByteArray readFile(const QString& path)
 {
     QFile file(path);
     return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray();
+}
+
+/// The device keys the identity file at path holds; invalid when it holds none.
+DeviceKeys keysAt(const QString& path)
+{
+    const std::optional<IdentityRecord> record = IdentityRecord::fromBytes(readFile(path));
+    return record.has_value() ? DeviceKeys{record->sealing.publicKey, record->signing.verifyKey} : DeviceKeys();
 }
 
 bool writeFile(const QString& path, const QByteArray& bytes)
@@ -51,7 +57,7 @@ void IdentityServiceTest::aFirstRunCreatesKeysAndNoPerson()
     QCOMPARE(outcome, IdentityFile::Load::NotFound);
     QVERIFY(QFile::exists(path));
     QVERIFY(!service->identity().has_value());
-    QVERIFY(service->deviceKeys().isValid());
+    QVERIFY(keysAt(path).isValid());
 }
 
 void IdentityServiceTest::aFirstRunThatCannotStoreFails()
@@ -78,11 +84,19 @@ void IdentityServiceTest::theKeysSurviveReopening()
     QVERIFY(folder.isValid());
     const QString path = folder.filePath("identity.json");
 
-    const DeviceKeys first = openAt(path)->deviceKeys();
-    QVERIFY(openAt(path)->deviceKeys() == first);
+    QVERIFY(openAt(path));
+    const DeviceKeys first = keysAt(path);
+    QVERIFY(first.isValid());
+
+    // Reopened without a person, then given one: the keys are the first run's.
+    std::unique_ptr<IdentityService> reopened = openAt(path);
+    QVERIFY(keysAt(path) == first);
+    QVERIFY(reopened->createPerson("Alice Adams", "Laptop", nullptr));
+    QVERIFY(reopened->identity()->keys() == first);
 
     // A different place is a different device.
-    QVERIFY(openAt(folder.filePath("other.json"))->deviceKeys() != first);
+    QVERIFY(openAt(folder.filePath("other.json")));
+    QVERIFY(keysAt(folder.filePath("other.json")) != first);
 }
 
 void IdentityServiceTest::createPersonGivesAFreshMemberId()
@@ -104,30 +118,7 @@ void IdentityServiceTest::createPersonGivesAFreshMemberId()
     QCOMPARE(identity.deviceName, QString("Laptop"));
 
     // The identity is this device's keys.
-    QVERIFY(identity.sealing.publicKey == alice->deviceKeys().publicKey);
-    QVERIFY(identity.signing.verifyKey == alice->deviceKeys().verifyKey);
-}
-
-void IdentityServiceTest::joinPersonKeepsTheGivenIdAndNameAndSurvivesAReload()
-{
-    QTemporaryDir folder;
-    QVERIFY(folder.isValid());
-    const QString path = folder.filePath("identity.json");
-    const MemberId member = ServerTestSupport::newMember();
-
-    // The display name exactly as the server gave it.
-    const QString handedOver(" Alice Adams ");
-    std::unique_ptr<IdentityService> phone = openAt(path);
-    QVERIFY(phone->joinPerson(member, handedOver, " Phone ", nullptr));
-    QVERIFY(phone->identity()->member == member);
-    QCOMPARE(phone->identity()->displayName, handedOver);
-    QCOMPARE(phone->identity()->deviceName, QString("Phone"));
-    phone.reset();
-
-    const DeviceIdentity reloaded = openAt(path)->identity().value();
-    QVERIFY(reloaded.member == member);
-    QCOMPARE(reloaded.displayName, handedOver);
-    QCOMPARE(reloaded.deviceName, QString("Phone"));
+    QVERIFY(identity.keys() == keysAt(folder.filePath("alice.json")));
 }
 
 void IdentityServiceTest::thePersonAndNamesSurviveAReload()
@@ -162,13 +153,12 @@ void IdentityServiceTest::aPersonIsSetOnce()
     QString error;
     QVERIFY(!service->createPerson("Someone Else", "Desktop", &error));
     QVERIFY(!error.isEmpty());
-    QVERIFY(!service->joinPerson(ServerTestSupport::newMember(), "Someone Else", "Desktop", nullptr));
 
     QVERIFY(service->identity()->member == first.member);
     QCOMPARE(openAt(path)->identity()->displayName, QString("Alice Adams"));
 }
 
-void IdentityServiceTest::namesAndAMemberIdAreRequiredAndARefusalWritesNothing()
+void IdentityServiceTest::namesAreRequiredAndARefusalWritesNothing()
 {
     QTemporaryDir folder;
     QVERIFY(folder.isValid());
@@ -180,13 +170,6 @@ void IdentityServiceTest::namesAndAMemberIdAreRequiredAndARefusalWritesNothing()
     QVERIFY(!service->createPerson("   ", "Laptop", &error));
     QVERIFY(!error.isEmpty());
     QVERIFY(!service->createPerson("Alice Adams", "", nullptr));
-    QVERIFY(!service->joinPerson(ServerTestSupport::newMember(), "  ", "Phone", nullptr));
-
-    // An invalid id says so, rather than asking for names.
-    QString idError;
-    QVERIFY(!service->joinPerson(MemberId(), "Alice Adams", "Laptop", &idError));
-    QVERIFY(!idError.isEmpty());
-    QVERIFY(idError != error);
 
     QVERIFY(!service->identity().has_value());
     QCOMPARE(readFile(path), before);
@@ -260,18 +243,21 @@ void IdentityServiceTest::startingOverKeepsTheOldFileAndMakesANewDevice()
 
     std::unique_ptr<IdentityService> before = openAt(path);
     QVERIFY(before->createPerson("Alice Adams", "Laptop", nullptr));
-    const DeviceKeys oldKeys = before->deviceKeys();
+    const DeviceKeys oldKeys = keysAt(path);
     const QByteArray oldBytes = readFile(path);
     before.reset();
 
     std::unique_ptr<IdentityService> after = IdentityService::startOver(path, nullptr);
     QVERIFY(after);
-    QVERIFY(after->deviceKeys() != oldKeys);
+    QVERIFY(keysAt(path).isValid());
+    QVERIFY(keysAt(path) != oldKeys);
     QVERIFY(!after->identity().has_value());
 
     // The old file sits beside the new one, byte for byte, ready to be restored.
     const QStringList setAside = QDir(folder.path()).entryList({"identity-set-aside-*.json"}, QDir::Files);
     QCOMPARE(setAside.size(), qsizetype(1));
     QCOMPARE(readFile(folder.filePath(setAside.first())), oldBytes);
-    QVERIFY(openAt(path)->deviceKeys() == after->deviceKeys());
+    const DeviceKeys newKeys = keysAt(path);
+    QVERIFY(openAt(path));
+    QVERIFY(keysAt(path) == newKeys);
 }

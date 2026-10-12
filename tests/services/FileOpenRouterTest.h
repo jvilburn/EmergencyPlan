@@ -2,7 +2,8 @@
 
 #include <QObject>
 
-/// Where a .wardplanning file opened by path goes, by its header.
+/// Where a .wardplanning file opened by path goes, by its header, and the invite
+/// links that join a ward.
 class FileOpenRouterTest : public QObject
 {
     Q_OBJECT
@@ -12,6 +13,8 @@ private slots:
 
     void eachFileTakesItsRoute_data();
     void eachFileTakesItsRoute();
-    void anInviteLinkNamesItsWardAndNothingElseDoes();
-    void anInviteGoesToTheWardOrToARequest();
+    void anInviteLinkRoundTripsThroughItsText();
+    void aMalformedInviteLinkIsNotOne_data();
+    void aMalformedInviteLinkIsNotOne();
+    void theInviteMessageSaysWhoWhereAndHow();
 };

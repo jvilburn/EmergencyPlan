@@ -35,5 +35,6 @@ private slots:
     void aResponseChangeAndADirectoryEditBothSurviveWhicheverSideIsMine();
     void aDirectoryEditOnBothSidesIsAConflict();
     void noDirectoryChangeMergesTheResponse();
-    void theSealingSetIsAlwaysTheirs();
+    void aRosterEditOnOneSideCarriesThrough();
+    void aRosterEditOnBothSidesIsAConflict();
 };

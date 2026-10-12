@@ -6,7 +6,7 @@
 #include "DocumentManager.h"
 #include "EmergencyManager.h"
 #include "FamilyCommands.h"
-#include "IncomingWards.h"
+#include "ServerTestSupport.h"
 #include "SessionTestSupport.h"
 
 #include <QFile>
@@ -16,8 +16,6 @@
 
 using namespace SessionTestSupport;
 using Timer = SessionTimers::Timer;
-
-const std::optional<DocumentSession::Download> Downloaded = DocumentSession::Download::Done;
 
 namespace
 {
@@ -72,16 +70,6 @@ struct App
     EmergencyManager emergency{nullptr};
 };
 
-ServerContract::Session sessionOf(TestWard& ward, Device& device)
-{
-    return ward.sessionFor(device).value();
-}
-
-void keepRequests(QList<ServerContract::AccessRequest>& out, const QList<ServerContract::AccessRequest>& requests)
-{
-    out = requests;
-}
-
 /// Alice's app with a shared ward of her making, and the ward's id on the test ward.
 bool shareFrom(TestWard& ward, App& app)
 {
@@ -95,75 +83,37 @@ bool shareFrom(TestWard& ward, App& app)
     return app.manager.session()->isShared();
 }
 
-/// Bob asks for Alice's ward; Alice's app reads the request.
-std::optional<ServerContract::AccessRequest> askAndRead(TestWard& ward, App& app, Device& bob)
+/// Joins link in app, as opening the link there does, and says whether the ward
+/// opened.
+bool joinInApp(TestWard& ward, App& app, const FileOpenRouter::InviteLink& link)
 {
-    if (!ServerTestSupport::wait<ServerContract::Done>(std::bind(&ServerContract::ServerApi::requestAccess,
-                                                                 &ward.server,
-                                                                 sessionOf(ward, bob),
-                                                                 ward.documentId,
-                                                                 std::placeholders::_1))
-             .ok())
-    {
-        return std::nullopt;
-    }
-    QObject receiver;
-    QList<ServerContract::AccessRequest> requests;
-    app.manager.fetchRequests(&receiver, std::bind(&keepRequests, std::ref(requests), std::placeholders::_1));
+    QSignalSpy finished(&app.manager, &DocumentManager::fetchFinished);
+    app.manager.joinWard(link);
     ward.settle();
-    if (requests.size() != 1)
-    {
-        return std::nullopt;
-    }
-    return requests.first();
+    return finished.count() == 1
+        && finished.first().at(1).value<DocumentManager::Open>() == DocumentManager::Open::Opened
+        && app.manager.documentId() == link.documentId;
 }
 
-QList<ServerContract::Member> membersAt(TestWard& ward, Device& reader)
+/// An invite made in app's open ward, its version published.
+std::optional<FileOpenRouter::InviteLink> inviteFrom(TestWard& ward, App& app, Invite::For purpose, const QString& label)
 {
-    return ServerTestSupport::wait<ServerContract::Head>(std::bind(&ServerContract::ServerApi::head,
-                                                                   &ward.server,
-                                                                   sessionOf(ward, reader),
-                                                                   ward.documentId,
-                                                                   std::placeholders::_1))
-        .value.value_or(ServerContract::Head())
-        .members;
+    const std::optional<FileOpenRouter::InviteLink> link = app.manager.invite(purpose, label);
+    ward.settle();
+    return link;
 }
 
-std::optional<ServerContract::Member> memberIn(const QList<ServerContract::Member>& members, const MemberId& id)
+/// The fingerprints the server's current version seals to, as sorted hex.
+QStringList recipientsOnServer(TestWard& ward)
 {
-    for (const ServerContract::Member& member : members)
-    {
-        if (member.person.member == id)
-        {
-            return member;
-        }
-    }
-    return std::nullopt;
+    const std::optional<ServerContract::Head> head = ward.head();
+    return head.has_value() ? ServerTestSupport::recipientsOf(head.value()) : QStringList();
 }
 
-ServerContract::RequestStatus statusOf(TestWard& ward, Device& asker)
+QStringList sorted(QStringList list)
 {
-    return ServerTestSupport::wait<ServerContract::RequestStatus>(
-               std::bind(&ServerContract::ServerApi::myRequestStatus,
-                         &ward.server,
-                         sessionOf(ward, asker),
-                         ward.documentId,
-                         std::placeholders::_1))
-        .value.value();
-}
-
-/// Every head and download of the ward serves its stored header with a blob no
-/// device can open, as a broken server would; uploads still build on the stored
-/// version.
-void serveUnreadable(TestWard& ward, Device& reader)
-{
-    const ServerContract::Result<ServerContract::Snapshot> stored =
-        ServerTestSupport::wait<ServerContract::Snapshot>(std::bind(&ServerContract::ServerApi::download,
-                                                                    &ward.server,
-                                                                    sessionOf(ward, reader),
-                                                                    ward.documentId,
-                                                                    std::placeholders::_1));
-    ward.server.serveInstead(ward.documentId, stored.value->header, "garbage");
+    list.sort();
+    return list;
 }
 
 } // namespace
@@ -180,7 +130,7 @@ void DocumentManagerTest::aForeignLeaseRefusesCommandsUndoAndRedoButNotResponses
     std::unique_ptr<DocumentSession> session = ward.createShared(alice);
     QVERIFY(session);
     DocumentSession* open = session.get();
-    DocumentManager manager(alice.identity, std::move(session), nullptr);
+    DocumentManager manager(alice.identity, alice.records, std::move(session), nullptr);
     EmergencyManager emergency(nullptr);
 
     // Two moves and one undo, while Alice holds the lease: one to undo, one to redo.
@@ -232,13 +182,13 @@ void DocumentManagerTest::aFastForwardClearsTheUndoStack()
     Device& bob = ward.add(newIdentity("Bob", "Phone"));
     std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
     QVERIFY(aliceSession);
-    QVERIFY(ward.grant(alice, bob));
+    QVERIFY(ward.addUser(*aliceSession, bob, Role::Member));
     aliceSession->checkServer();
     std::unique_ptr<DocumentSession> bobSession = bob.open(ward.documentId);
     QVERIFY(bobSession);
     ward.settle();
 
-    DocumentManager manager(alice.identity, std::move(aliceSession), nullptr);
+    DocumentManager manager(alice.identity, alice.records, std::move(aliceSession), nullptr);
     manager.executeCommand(moveCommand(manager.document(), ward.adams, 50.0));
     QVERIFY(manager.canUndo());
     QVERIFY(alice.timers->fire(Timer::Save));
@@ -267,13 +217,13 @@ void DocumentManagerTest::aContactChangeAfterAMergeKeepsTheOtherSidesRecords()
     Device& bob = ward.add(newIdentity("Bob", "Phone"));
     std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
     QVERIFY(aliceSession);
-    QVERIFY(ward.grant(alice, bob));
+    QVERIFY(ward.addUser(*aliceSession, bob, Role::Member));
     aliceSession->checkServer();
     std::unique_ptr<DocumentSession> bobSession = bob.open(ward.documentId);
     QVERIFY(bobSession);
     ward.settle();
 
-    DocumentManager manager(alice.identity, std::move(aliceSession), nullptr);
+    DocumentManager manager(alice.identity, alice.records, std::move(aliceSession), nullptr);
     EmergencyManager emergency(nullptr);
     QVERIFY(emergency.isActive());
 
@@ -315,7 +265,7 @@ void DocumentManagerTest::batchGeocodingDoesNotStartWithoutTheLease()
     DocumentSession* open = session.get();
     loseTheLease(ward, *open);
 
-    DocumentManager manager(alice.identity, std::move(session), nullptr);
+    DocumentManager manager(alice.identity, alice.records, std::move(session), nullptr);
     QVERIFY(!manager.mayWriteDirectory());
 
     // Anchor: a family geocoding would look up.
@@ -336,7 +286,7 @@ void DocumentManagerTest::aGeocodingResultAfterTheLeaseIsLostChangesNothing()
     std::unique_ptr<DocumentSession> session = ward.createShared(alice);
     QVERIFY(session);
     DocumentSession* open = session.get();
-    DocumentManager manager(alice.identity, std::move(session), nullptr);
+    DocumentManager manager(alice.identity, alice.records, std::move(session), nullptr);
 
     // Anchor: with the lease, a result moves the family.
     QVERIFY(QMetaObject::invokeMethod(&manager,
@@ -365,7 +315,7 @@ void DocumentManagerTest::aConflictWaitsUntilItIsSettled()
     Device& bob = ward.add(newIdentity("Bob", "Phone"));
     std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
     QVERIFY(aliceSession);
-    QVERIFY(ward.grant(alice, bob));
+    QVERIFY(ward.addUser(*aliceSession, bob, Role::Member));
     aliceSession->checkServer();
     ward.settle();
 
@@ -381,7 +331,7 @@ void DocumentManagerTest::aConflictWaitsUntilItIsSettled()
     aliceSession->publishNow();
     ward.settle();
 
-    DocumentManager manager(bob.identity, bob.open(ward.documentId), nullptr);
+    DocumentManager manager(bob.identity, bob.records, bob.open(ward.documentId), nullptr);
     QSignalSpy raised(&manager, &DocumentManager::conflictRaised);
     QSignalSpy settled(&manager, &DocumentManager::conflictSettled);
     ward.settle();
@@ -410,55 +360,45 @@ void DocumentManagerTest::accessChangesShowOnceAndStaySeenOnceDismissed()
     Device& bob = ward.add(newIdentity("Bob", "Phone"));
     App app(alice);
     QSignalSpy changed(&app.manager, &DocumentManager::accessChanged);
+    QVERIFY(shareFrom(ward, app));
+    QVERIFY(app.manager.unseenRosterChanges().isEmpty());
 
-    QVERIFY(app.manager.newDocument(nullptr));
-    app.manager.share();
-    ward.settle();
-    ward.documentId = app.manager.documentId();
-    QVERIFY(app.manager.session()->isShared());
-    QVERIFY(app.manager.unseenHistory().isEmpty());
-
-    // Alice grants Bob: the next head shows it, once.
-    const std::optional<ServerContract::AccessRequest> request = askAndRead(ward, app, bob);
-    QVERIFY(request.has_value());
-    app.manager.grant(request.value());
-    ward.settle();
+    // Alice's own invite counts as seen; Bob joining with it shows at the next head, once.
+    const std::optional<FileOpenRouter::InviteLink> link = inviteFrom(ward, app, Invite::For::User, "for Bob");
+    QVERIFY(link.has_value());
+    QVERIFY(app.manager.unseenRosterChanges().isEmpty());
+    QCOMPARE(ward.join(bob, link.value()), std::optional<DocumentSession::Join>(DocumentSession::Join::Done));
     app.manager.session()->checkServer();
     ward.settle();
-    QCOMPARE(app.manager.unseenHistory().size(), 1);
-    QCOMPARE(app.manager.unseenHistory().first().kind, ServerContract::HistoryEntry::Kind::Added);
-    QCOMPARE(app.manager.unseenHistory().first().actor, QString("Alice"));
-    QCOMPARE(app.manager.unseenHistory().first().subject, QString("Bob"));
+    QCOMPARE(app.manager.unseenRosterChanges(),
+             (QStringList{"Bob joined, as a member", "The invite for Bob was used or withdrawn"}));
     QCOMPARE(changed.count(), 1);
 
-    // A second head with nothing new fetches nothing and shows the same.
+    // A second head with nothing new shows the same, unannounced.
     app.manager.session()->checkServer();
     ward.settle();
-    QCOMPARE(app.manager.unseenHistory().size(), 1);
+    QCOMPARE(app.manager.unseenRosterChanges().size(), 2);
     QCOMPARE(changed.count(), 1);
 
     // Dismissed: seen on the record, so later heads show nothing.
-    app.manager.dismissHistory();
-    QVERIFY(app.manager.unseenHistory().isEmpty());
-    QCOMPARE(app.settings->record(ward.documentId).historySeen, 1);
+    app.manager.dismissRosterChanges();
+    QVERIFY(app.manager.unseenRosterChanges().isEmpty());
+    QCOMPARE(changed.count(), 2);
+    QCOMPARE(SealingSet::fromJson(app.settings->record(ward.documentId).rosterShown).value(), app.manager.roster());
     app.manager.session()->checkServer();
     ward.settle();
-    QVERIFY(app.manager.unseenHistory().isEmpty());
+    QVERIFY(app.manager.unseenRosterChanges().isEmpty());
 
-    // A later change shows alone.
-    QVERIFY(ServerTestSupport::wait<ServerContract::Done>(std::bind(&ServerContract::ServerApi::setRole,
-                                                                    &ward.server,
-                                                                    sessionOf(ward, alice),
-                                                                    ward.documentId,
-                                                                    bob.identity.member,
-                                                                    ServerContract::Role::Admin,
-                                                                    std::placeholders::_1))
-                .ok());
+    // A later change, by Bob, shows alone.
+    std::unique_ptr<DocumentSession> bobSession = bob.open(ward.documentId);
+    QVERIFY(bobSession);
+    ward.settle();
+    bobSession->edit(DocumentSession::Edit::Roster, setRole(bob.identity.member, Role::Admin));
+    bobSession->publishNow();
+    ward.settle();
     app.manager.session()->checkServer();
     ward.settle();
-    QCOMPARE(app.manager.unseenHistory().size(), 1);
-    QCOMPARE(app.manager.unseenHistory().first().kind, ServerContract::HistoryEntry::Kind::MadeAdmin);
-    QCOMPARE(app.manager.unseenHistory().first().index, 2);
+    QCOMPARE(app.manager.unseenRosterChanges(), QStringList{"Bob is now an admin"});
 }
 
 void DocumentManagerTest::aFetchThatFindsAccessLostSaysWhy()
@@ -468,7 +408,7 @@ void DocumentManagerTest::aFetchThatFindsAccessLostSaysWhy()
     Device& bob = ward.add(newIdentity("Bob", "Laptop"));
     std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
     QVERIFY(aliceSession);
-    QVERIFY(ward.grant(alice, bob));
+    QVERIFY(ward.addUser(*aliceSession, bob, Role::Member));
 
     // Bob's app knows the ward but has no file of it, so opening it fetches.
     App app(bob);
@@ -478,21 +418,22 @@ void DocumentManagerTest::aFetchThatFindsAccessLostSaysWhy()
     app.settings->setRecord(ward.documentId, record);
     QSignalSpy lost(&app.manager, &DocumentManager::accessLost);
 
-    // Bob leaves from another of his devices' sessions, here his own on the server.
-    QVERIFY(ServerTestSupport::wait<ServerContract::Done>(std::bind(&ServerContract::ServerApi::removeMember,
-                                                                    &ward.server,
-                                                                    sessionOf(ward, bob),
-                                                                    ward.documentId,
-                                                                    bob.identity.member,
-                                                                    std::placeholders::_1))
-                .ok());
+    // Alice removes Bob.
+    aliceSession->checkServer();
+    ward.settle();
+    aliceSession->edit(DocumentSession::Edit::Roster, removePerson(bob.identity.member));
+    aliceSession->publishNow();
+    ward.settle();
+    QCOMPARE(recipientsOnServer(ward), QStringList{alice.identity.fingerprint().toHex()});
 
     QCOMPARE(app.manager.openDocument(ward.documentId, nullptr), DocumentManager::Open::Fetching);
     ward.settle();
 
+    // A fetch holds no roster to say who: removed, by nobody named.
     QCOMPARE(lost.count(), 1);
-    const ServerContract::LostAccess how = lost.first().at(1).value<ServerContract::LostAccess>();
-    QCOMPARE(how.how, ServerContract::LostAccess::How::Left);
+    const ServerVersion::LostAccess how = lost.first().at(1).value<ServerVersion::LostAccess>();
+    QCOMPARE(how.how, ServerVersion::LostAccess::How::Removed);
+    QCOMPARE(how.byWhom, QString());
     QVERIFY(!app.library.contains(ward.documentId));
 }
 
@@ -521,7 +462,55 @@ void DocumentManagerTest::shareAnnouncesTheWardAndOfflineSaysWhy()
     QCOMPARE(app.settings->record(app.manager.documentId()).baseVersion, 1);
 }
 
-void DocumentManagerTest::aGrantSealsTheDeviceThatAskedAndADeclineSaysSo()
+void DocumentManagerTest::anInviteJoinsAUserOrAnotherDevice()
+{
+    TestWard ward;
+    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
+    Device& bob = ward.add(newIdentity("Bob", "Phone"));
+    Device& tablet = ward.add(newDeviceOf(alice.identity, "Tablet"));
+    App app(alice);
+    QVERIFY(shareFrom(ward, app));
+
+    // A user invite: a new member, named by the joiner.
+    const std::optional<FileOpenRouter::InviteLink> forBob = inviteFrom(ward, app, Invite::For::User, "for Bob");
+    QVERIFY(forBob.has_value());
+    QCOMPARE(forBob->documentId, ward.documentId);
+    QCOMPARE(ward.head()->version, 2);
+    QCOMPARE(app.manager.roster().invites().size(), 1);
+    QVERIFY(app.manager.roster().invites().first().role == Role::Member);
+    QCOMPARE(app.manager.inviteMessage(forBob.value()),
+             "Alice has invited you to Untitled in Ward Planning. Install it from "
+             "https://github.com/jvilburn/EmergencyPlan/releases/latest, then open this link:\n"
+                 + forBob->toString());
+    QCOMPARE(ward.join(bob, forBob.value()), std::optional<DocumentSession::Join>(DocumentSession::Join::Done));
+    QCOMPARE(ward.head()->version, 3);
+
+    // A device invite: another of Alice's devices, an admin as she is. Made once her
+    // session has seen Bob join, since an invite is a roster edit like any other.
+    app.manager.session()->checkServer();
+    ward.settle();
+    const std::optional<FileOpenRouter::InviteLink> forTablet = inviteFrom(ward, app, Invite::For::Device, "for Tablet");
+    QVERIFY(forTablet.has_value());
+    QCOMPARE(ward.head()->version, 4);
+    QCOMPARE(ward.join(tablet, forTablet.value()), std::optional<DocumentSession::Join>(DocumentSession::Join::Done));
+    QCOMPARE(ward.head()->version, 5);
+
+    app.manager.session()->checkServer();
+    ward.settle();
+    const SealingSet roster = app.manager.roster();
+    QCOMPARE(roster.people().size(), 2);
+    QCOMPARE(roster.person(bob.identity.member)->name, QString("Bob"));
+    QVERIFY(roster.person(bob.identity.member)->role == Role::Member);
+    QCOMPARE(roster.person(alice.identity.member)->devices.size(), 2);
+    QVERIFY(roster.personOf(tablet.identity.fingerprint())->id == alice.identity.member);
+    QVERIFY(roster.invites().isEmpty());
+    QCOMPARE(recipientsOnServer(ward),
+             sorted({alice.identity.fingerprint().toHex(),
+                     bob.identity.fingerprint().toHex(),
+                     tablet.identity.fingerprint().toHex()}));
+}
+
+void DocumentManagerTest::anAdminRemovesWithdrawsAndChangesRoles()
 {
     TestWard ward;
     Device& alice = ward.add(newIdentity("Alice", "Laptop"));
@@ -529,176 +518,87 @@ void DocumentManagerTest::aGrantSealsTheDeviceThatAskedAndADeclineSaysSo()
     Device& carol = ward.add(newIdentity("Carol", "Tablet"));
     App app(alice);
     QVERIFY(shareFrom(ward, app));
-    QSignalSpy done(&app.manager, &DocumentManager::accessCallDone);
-
-    const std::optional<ServerContract::AccessRequest> request = askAndRead(ward, app, bob);
-    QVERIFY(request.has_value());
-    QCOMPARE(request->person.displayName, QString("Bob"));
-    app.manager.grant(request.value());
+    QVERIFY(ward.addUser(*app.manager.session(), bob, Role::Member));
+    app.manager.session()->checkServer();
     ward.settle();
-
-    QCOMPARE(done.count(), 1);
-    QVERIFY(memberIn(membersAt(ward, alice), bob.identity.member).has_value());
-
-    // The version Bob reads went up with the grant: version 2, on top of the share's
-    // version 1. His device downloads and opens it with no sealing step between.
-    QCOMPARE(ward.serverCopy(alice)->version, qint64(2));
-    QCOMPARE(ward.download(bob, ward.documentId), Downloaded);
-    std::unique_ptr<DocumentSession> bobSession = bob.open(ward.documentId);
-    QVERIFY(bobSession);
-    QVERIFY(bobSession->header().entryFor(bob.identity.fingerprint()).has_value());
-    QCOMPARE(bob.records.record(ward.documentId).baseVersion, std::optional<qint64>(2));
-
-    // Alice's open session took the grant's version in at the head check that
-    // follows a grant: her own publish of the server's version, now sealed to Bob.
-    QVERIFY(app.manager.session()->header().entryFor(bob.identity.fingerprint()).has_value());
-    QCOMPARE(app.settings->record(ward.documentId).baseVersion, std::optional<qint64>(2));
-
-    const std::optional<ServerContract::AccessRequest> carols = askAndRead(ward, app, carol);
-    QVERIFY(carols.has_value());
-    app.manager.decline(carols.value());
+    QVERIFY(ward.addUser(*app.manager.session(), carol, Role::Member));
+    app.manager.session()->checkServer();
     ward.settle();
-    QCOMPARE(done.count(), 2);
-    QCOMPARE(ServerTestSupport::wait<ServerContract::RequestStatus>(std::bind(&ServerContract::ServerApi::myRequestStatus,
-                                                                              &ward.server,
-                                                                              sessionOf(ward, carol),
-                                                                              ward.documentId,
-                                                                              std::placeholders::_1))
-                 .value,
-             std::optional<ServerContract::RequestStatus>(ServerContract::RequestStatus::Declined));
+    QCOMPARE(app.manager.roster().people().size(), 3);
+    const qint64 before = ward.head()->version;
+    QCOMPARE(before, 5);
+
+    app.manager.setRole(bob.identity.member, Role::Admin);
+    ward.settle();
+    QCOMPARE(ward.head()->version, 6);
+    QVERIFY(ward.serverCopy(bob)->document.sealingSet().person(bob.identity.member)->role == Role::Admin);
+
+    app.manager.removePerson(carol.identity.member);
+    ward.settle();
+    QCOMPARE(ward.head()->version, 7);
+    QVERIFY(!recipientsOnServer(ward).contains(carol.identity.fingerprint().toHex()));
+    QCOMPARE(recipientsOnServer(ward).size(), 2);
+
+    const std::optional<FileOpenRouter::InviteLink> link = inviteFrom(ward, app, Invite::For::User, "for Dave");
+    QVERIFY(link.has_value());
+    QCOMPARE(recipientsOnServer(ward).size(), 3);
+    app.manager.revokeInvite(app.manager.roster().invites().first().fingerprint());
+    ward.settle();
+    QCOMPARE(ward.head()->version, 9);
+    QCOMPARE(recipientsOnServer(ward).size(), 2);
+    Device& dave = ward.add(newIdentity("Dave", "Laptop"));
+    QCOMPARE(ward.join(dave, link.value()), std::optional<DocumentSession::Join>(DocumentSession::Join::InviteUsed));
+
+    // Neither takes out this person or this device: that is leave.
+    app.manager.removePerson(alice.identity.member);
+    app.manager.removeDevice(alice.identity.fingerprint());
+    ward.settle();
+    QCOMPARE(ward.head()->version, 9);
+    QVERIFY(app.manager.roster().person(alice.identity.member).has_value());
 }
 
-void DocumentManagerTest::aGrantRetriesOnceOnAConflict()
+void DocumentManagerTest::theLastAdminCannotStepDownOrLeave()
 {
     TestWard ward;
     Device& alice = ward.add(newIdentity("Alice", "Laptop"));
     Device& bob = ward.add(newIdentity("Bob", "Phone"));
     App app(alice);
     QVERIFY(shareFrom(ward, app));
-    QSignalSpy done(&app.manager, &DocumentManager::accessCallDone);
-    QSignalSpy failed(&app.manager, &DocumentManager::accessCallFailed);
-    const std::optional<ServerContract::AccessRequest> request = askAndRead(ward, app, bob);
-    QVERIFY(request.has_value());
-
-    // The first grant is refused as a conflict; the second, built again, lands. The
-    // forced conflict leaves the version where it was, so a retry that resent the
-    // first resealing unchanged would pass here too; what is pinned is that one
-    // refusal is absorbed.
-    ward.server.forceConflict(ward.documentId);
-    app.manager.grant(request.value());
-    ward.settle();
-
-    QCOMPARE(done.count(), 1);
-    QCOMPARE(failed.count(), 0);
-    QCOMPARE(statusOf(ward, bob), ServerContract::RequestStatus::Granted);
-    QCOMPARE(ward.serverCopy(alice)->version, qint64(2));
-    QCOMPARE(ward.download(bob, ward.documentId), Downloaded);
-    QVERIFY(bob.open(ward.documentId));
-}
-
-void DocumentManagerTest::aGrantOnAnUnreadableVersionIsBlocked()
-{
-    TestWard ward;
-    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
-    Device& bob = ward.add(newIdentity("Bob", "Phone"));
-    App app(alice);
-    QVERIFY(shareFrom(ward, app));
-    QSignalSpy done(&app.manager, &DocumentManager::accessCallDone);
-    QSignalSpy failed(&app.manager, &DocumentManager::accessCallFailed);
-    QSignalSpy blocked(&app.manager, &DocumentManager::grantBlocked);
-    const std::optional<ServerContract::AccessRequest> request = askAndRead(ward, app, bob);
-    QVERIFY(request.has_value());
-
-    serveUnreadable(ward, alice);
-    app.manager.grant(request.value());
-    ward.settle();
-
-    QCOMPARE(blocked.count(), 1);
-    QCOMPARE(blocked.first().first().toString(), QString("The document could not be decrypted: the file was altered or truncated."));
-    QCOMPARE(done.count(), 0);
-    QCOMPARE(failed.count(), 0);
-    QCOMPARE(statusOf(ward, bob), ServerContract::RequestStatus::Pending);
-    QVERIFY(!memberIn(membersAt(ward, alice), bob.identity.member).has_value());
-
-    // Served as stored again, the same request is granted.
-    ward.server.serveInstead(ward.documentId, QJsonObject(), QByteArray());
-    app.manager.grant(request.value());
-    ward.settle();
-    QCOMPARE(done.count(), 1);
-    QCOMPARE(blocked.count(), 1);
-    QCOMPARE(statusOf(ward, bob), ServerContract::RequestStatus::Granted);
-}
-
-void DocumentManagerTest::anAdminRemovesAndChangesRoles()
-{
-    TestWard ward;
-    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
-    Device& bob = ward.add(newIdentity("Bob", "Phone"));
-    Device& carol = ward.add(newIdentity("Carol", "Tablet"));
-    App app(alice);
-    QVERIFY(shareFrom(ward, app));
-    QSignalSpy failed(&app.manager, &DocumentManager::accessCallFailed);
-    for (Device* person : {&bob, &carol})
-    {
-        const std::optional<ServerContract::AccessRequest> request = askAndRead(ward, app, *person);
-        QVERIFY(request.has_value());
-        app.manager.grant(request.value());
-        ward.settle();
-    }
-
-    app.manager.setRole(bob.identity.member, ServerContract::Role::Admin);
-    ward.settle();
-    QCOMPARE(memberIn(membersAt(ward, alice), bob.identity.member)->role, ServerContract::Role::Admin);
-
-    app.manager.remove(carol.identity.member);
-    ward.settle();
-    QVERIFY(!memberIn(membersAt(ward, alice), carol.identity.member).has_value());
-    QCOMPARE(failed.count(), 0);
-
-    // Alice steps down; then, a member, her removal is refused.
-    app.manager.setRole(alice.identity.member, ServerContract::Role::Member);
-    ward.settle();
-    app.manager.remove(bob.identity.member);
-    ward.settle();
-    QCOMPARE(failed.count(), 1);
-    QCOMPARE(failed.first().first().value<ServerContract::ServerError>(), ServerContract::ServerError::NotAdmin);
-}
-
-void DocumentManagerTest::theLastAdminLeavesThroughASuccessorAndTheWardGoes()
-{
-    TestWard ward;
-    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
-    Device& bob = ward.add(newIdentity("Bob", "Phone"));
-    App app(alice);
-    QVERIFY(shareFrom(ward, app));
-    const std::optional<ServerContract::AccessRequest> request = askAndRead(ward, app, bob);
-    QVERIFY(request.has_value());
-    app.manager.grant(request.value());
+    QVERIFY(ward.addUser(*app.manager.session(), bob, Role::Member));
+    app.manager.session()->checkServer();
     ward.settle();
     const QString documentId = ward.documentId;
     const QString file = app.library.pathsFor(documentId).file;
-    QVERIFY(QFile::exists(file));
+    QCOMPARE(ward.head()->version, 3);
     QSignalSpy lost(&app.manager, &DocumentManager::accessLost);
-    QSignalSpy failed(&app.manager, &DocumentManager::accessCallFailed);
+    QSignalSpy leaveFailed(&app.manager, &DocumentManager::leaveFailed);
 
-    // Without a successor the server refuses; with one, she leaves.
-    app.manager.leave(std::nullopt);
+    // The only admin, with Bob still here: stepping down and leaving are both refused.
+    app.manager.setRole(alice.identity.member, Role::Member);
     ward.settle();
-    QCOMPARE(failed.count(), 1);
-    QCOMPARE(failed.first().first().value<ServerContract::ServerError>(), ServerContract::ServerError::LastAdmin);
+    QVERIFY(app.manager.self()->role == Role::Admin);
+    QCOMPARE(ward.head()->version, 3);
+    app.manager.leave();
+    ward.settle();
+    QCOMPARE(leaveFailed.count(), 1);
+    QCOMPARE(lost.count(), 0);
+    QCOMPARE(ward.head()->version, 3);
     QVERIFY(QFile::exists(file));
 
-    app.manager.leave(bob.identity.member);
+    // Anchor: with Bob made an admin first, she steps down, then leaves.
+    app.manager.setRole(bob.identity.member, Role::Admin);
+    ward.settle();
+    app.manager.setRole(alice.identity.member, Role::Member);
+    ward.settle();
+    QVERIFY(app.manager.self()->role == Role::Member);
+    QCOMPARE(ward.head()->version, 5);
+    app.manager.leave();
     ward.settle();
     QCOMPARE(lost.count(), 1);
-    QCOMPARE(lost.first().at(1).value<ServerContract::LostAccess>().how, ServerContract::LostAccess::How::Left);
+    QCOMPARE(lost.first().at(1).value<ServerVersion::LostAccess>().how, ServerVersion::LostAccess::How::Left);
     QVERIFY(!QFile::exists(file));
     QVERIFY(!app.library.contains(documentId));
-    QVERIFY(app.manager.documentId().isEmpty());
-
-    const QList<ServerContract::Member> members = membersAt(ward, bob);
-    QCOMPARE(members.size(), 1);
-    QCOMPARE(members.first().role, ServerContract::Role::Admin);
+    QCOMPARE(recipientsOnServer(ward), QStringList{bob.identity.fingerprint().toHex()});
 }
 
 void DocumentManagerTest::aMemberLeavesAndTheWardGoes()
@@ -708,82 +608,75 @@ void DocumentManagerTest::aMemberLeavesAndTheWardGoes()
     Device& bob = ward.add(newIdentity("Bob", "Phone"));
     std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
     QVERIFY(aliceSession);
-    QVERIFY(ward.grant(alice, bob));
+    const std::optional<FileOpenRouter::InviteLink> link =
+        ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Bob");
+    QVERIFY(link.has_value());
     aliceSession.reset();
 
     App app(bob);
-    app.library.add(ward.documentId);
-    DocumentRecord record;
-    record.baseVersion = 1;
-    app.settings->setRecord(ward.documentId, record);
-    QCOMPARE(app.manager.openDocument(ward.documentId, nullptr), DocumentManager::Open::Fetching);
-    ward.settle();
-    QCOMPARE(app.manager.documentId(), ward.documentId);
+    QVERIFY(joinInApp(ward, app, link.value()));
     const DocumentPaths paths = app.library.pathsFor(ward.documentId);
     QVERIFY(QFile::exists(paths.file));
     QVERIFY(QFile::exists(paths.base));
+    QCOMPARE(recipientsOnServer(ward).size(), 2);
     QSignalSpy lost(&app.manager, &DocumentManager::accessLost);
 
-    app.manager.leave(std::nullopt);
+    app.manager.leave();
     ward.settle();
     QCOMPARE(lost.count(), 1);
-    QCOMPARE(lost.first().at(1).value<ServerContract::LostAccess>().how, ServerContract::LostAccess::How::Left);
+    QCOMPARE(lost.first().at(1).value<ServerVersion::LostAccess>().how, ServerVersion::LostAccess::How::Left);
     QVERIFY(!QFile::exists(paths.file));
     QVERIFY(!QFile::exists(paths.base));
     QVERIFY(!app.library.contains(ward.documentId));
-    QVERIFY(!memberIn(membersAt(ward, alice), bob.identity.member).has_value());
+    QVERIFY(app.manager.documentId().isEmpty());
+    QCOMPARE(recipientsOnServer(ward), QStringList{alice.identity.fingerprint().toHex()});
 }
 
 namespace
 {
 
-/// Bob's ward, fetched into his app and opened, with his incoming wards wired to his
-/// manager as main.cpp wires them.
+/// Alice's ward with Bob joined in his app through her invite, and Alice's session
+/// current with it.
 struct BobsWard
 {
-    BobsWard(TestWard& ward, Device& bob, App& app)
-        : incoming(*app.settings, app.library, bob.connection, nullptr)
+    BobsWard(TestWard& ward, Device& alice, App& app)
     {
-        QObject::connect(&incoming, &IncomingWards::lostAccess, &app.manager, &DocumentManager::onWardLostElsewhere);
-        app.library.add(ward.documentId);
-        DocumentRecord record;
-        record.baseVersion = 1;
-        app.settings->setRecord(ward.documentId, record);
-        opened = app.manager.openDocument(ward.documentId, nullptr) == DocumentManager::Open::Fetching;
-        ward.settle();
+        aliceSession = ward.createShared(alice);
+        if (!aliceSession)
+        {
+            return;
+        }
+        const std::optional<FileOpenRouter::InviteLink> link =
+            ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Bob");
+        opened = link.has_value() && joinInApp(ward, app, link.value());
         paths = app.library.pathsFor(ward.documentId);
+        aliceSession->checkServer();
+        ward.settle();
     }
 
-    IncomingWards incoming;
+    /// Alice writes Bob out.
+    bool removeBob(TestWard& ward, const MemberId& bob)
+    {
+        aliceSession->edit(DocumentSession::Edit::Roster, removePerson(bob));
+        aliceSession->publishNow();
+        ward.settle();
+        return aliceSession->syncState() == SyncState::UpToDate && recipientsOnServer(ward).size() == 1;
+    }
+
+    std::unique_ptr<DocumentSession> aliceSession;
     bool opened = false;
     DocumentPaths paths;
 };
 
-bool removeOnServer(TestWard& ward, Device& admin, Device& person)
-{
-    return ServerTestSupport::wait<ServerContract::Done>(std::bind(&ServerContract::ServerApi::removeMember,
-                                                                   &ward.server,
-                                                                   sessionOf(ward, admin),
-                                                                   ward.documentId,
-                                                                   person.identity.member,
-                                                                   std::placeholders::_1))
-        .ok();
-}
-
 } // namespace
 
-void DocumentManagerTest::aClosedWardTakenAwayGoesAtTheNextCheck()
+void DocumentManagerTest::aClosedWardTakenAwayGoesWhenItIsNextOpened()
 {
     TestWard ward;
     Device& alice = ward.add(newIdentity("Alice", "Laptop"));
     Device& bob = ward.add(newIdentity("Bob", "Phone"));
-    std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
-    QVERIFY(aliceSession);
-    QVERIFY(ward.grant(alice, bob));
-    aliceSession.reset();
-
     App app(bob);
-    BobsWard bobs(ward, bob, app);
+    BobsWard bobs(ward, alice, app);
     QVERIFY(bobs.opened);
     QVERIFY(app.manager.close(nullptr));
     QVERIFY(app.manager.documentId().isEmpty());
@@ -791,18 +684,24 @@ void DocumentManagerTest::aClosedWardTakenAwayGoesAtTheNextCheck()
     QVERIFY(QFile::exists(bobs.paths.base));
     QSignalSpy lost(&app.manager, &DocumentManager::accessLost);
 
-    QVERIFY(removeOnServer(ward, alice, bob));
-    bobs.incoming.checkNow();
+    QVERIFY(bobs.removeBob(ward, bob.identity.member));
+    ward.settle();
+    QCOMPARE(lost.count(), 0);
+    QVERIFY(QFile::exists(bobs.paths.file));
+
+    // Opened, its local file opens, and the head it checks leaves this device out.
+    QCOMPARE(app.manager.openDocument(ward.documentId, nullptr), DocumentManager::Open::Opened);
     ward.settle();
 
     QCOMPARE(lost.count(), 1);
-    const ServerContract::LostAccess how = lost.first().at(1).value<ServerContract::LostAccess>();
-    QCOMPARE(how.how, ServerContract::LostAccess::How::Removed);
+    const ServerVersion::LostAccess how = lost.first().at(1).value<ServerVersion::LostAccess>();
+    QCOMPARE(how.how, ServerVersion::LostAccess::How::Removed);
     QCOMPARE(how.byWhom, QString("Alice"));
     QVERIFY(!QFile::exists(bobs.paths.file));
     QVERIFY(!QFile::exists(bobs.paths.base));
     QVERIFY(!app.library.contains(ward.documentId));
     QVERIFY(!app.settings->record(ward.documentId).baseVersion.has_value());
+    QVERIFY(app.manager.documentId().isEmpty());
 }
 
 void DocumentManagerTest::anOpenWardTakenAwayClosesAtTheNextCheck()
@@ -810,25 +709,20 @@ void DocumentManagerTest::anOpenWardTakenAwayClosesAtTheNextCheck()
     TestWard ward;
     Device& alice = ward.add(newIdentity("Alice", "Laptop"));
     Device& bob = ward.add(newIdentity("Bob", "Phone"));
-    std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
-    QVERIFY(aliceSession);
-    QVERIFY(ward.grant(alice, bob));
-    aliceSession.reset();
-
     App app(bob);
-    BobsWard bobs(ward, bob, app);
+    BobsWard bobs(ward, alice, app);
     QVERIFY(bobs.opened);
     QCOMPARE(app.manager.documentId(), ward.documentId);
     QSignalSpy lost(&app.manager, &DocumentManager::accessLost);
 
-    // The removal reaches the incoming check before the session's own head check;
-    // the open ward still closes through its session, once.
-    QVERIFY(removeOnServer(ward, alice, bob));
-    bobs.incoming.checkNow();
+    QVERIFY(bobs.removeBob(ward, bob.identity.member));
+    QCOMPARE(lost.count(), 0);
+    app.manager.session()->checkServer();
     ward.settle();
 
     QCOMPARE(lost.count(), 1);
-    QCOMPARE(lost.first().at(1).value<ServerContract::LostAccess>().how, ServerContract::LostAccess::How::Removed);
+    QCOMPARE(lost.first().at(1).value<ServerVersion::LostAccess>().how, ServerVersion::LostAccess::How::Removed);
+    QCOMPARE(lost.first().at(1).value<ServerVersion::LostAccess>().byWhom, QString("Alice"));
     QVERIFY(app.manager.documentId().isEmpty());
     QVERIFY(!QFile::exists(bobs.paths.file));
     QVERIFY(!QFile::exists(bobs.paths.base));

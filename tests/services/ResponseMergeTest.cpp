@@ -96,10 +96,34 @@ Family familyAt(const FamilyId& id, double latitude)
     return Family::createWithId(id, latitude, -111.0, Address(), {});
 }
 
+DeviceKeys newKeys()
+{
+    return DeviceKeys{DocumentCrypto::generateKeypair().publicKey, DocumentCrypto::generateSigningKeypair().verifyKey};
+}
+
+MemberId newMember()
+{
+    MemberId member;
+    member.bytes = DocumentCrypto::randomBytes(MemberId::Size);
+    return member;
+}
+
 SealingSet setOfOne()
 {
-    return SealingSet::of(
-        DeviceKeys{DocumentCrypto::generateKeypair().publicKey, DocumentCrypto::generateSigningKeypair().verifyKey});
+    return SealingSet::of(newMember(), "Alice", NamedDevice{"Laptop", newKeys()});
+}
+
+/// The set with an open invite for Bob added by its one person.
+SealingSet withInvite(const SealingSet& set)
+{
+    SealingSet invited = set;
+    Invite invite;
+    invite.purpose = Invite::For::User;
+    invite.person = set.people().first().id;
+    invite.label = "for Bob";
+    invite.keys = newKeys();
+    invited.addInvite(invite);
+    return invited;
 }
 
 /// A document with one family and the storm under way.
@@ -522,23 +546,54 @@ void ResponseMergeTest::noDirectoryChangeMergesTheResponse()
     QVERIFY(hasAttempt(recordOf(response, s.baker), theirsCalled.id()));
 }
 
-void ResponseMergeTest::theSealingSetIsAlwaysTheirs()
+void ResponseMergeTest::aRosterEditOnOneSideCarriesThrough()
 {
     const Storm s = storm();
     const Document base = documentWith(s.adams, s);
 
+    // Mine made an invite; theirs recorded a contact.
     Document mine = base;
-    mine.updateFamily(familyAt(s.adams, 41.5));
-    mine.setSealingSet(setOfOne());
+    mine.setSealingSet(withInvite(base.sealingSet()));
+    QCOMPARE(mine.sealingSet().invites().size(), 1);
+    QVERIFY(ResponseMerge::directoryChanged(mine, base));
 
     Document theirs = base;
-    theirs.setSealingSet(setOfOne());
+    EmergencyResponse response = theirs.emergencyResponse().value();
+    response.mutableRecord(s.baker)->setContactStatus(ContactStatus::OK);
+    theirs.setEmergencyResponse(response);
+    QVERIFY(!ResponseMerge::directoryChanged(theirs, base));
 
     const std::optional<Document> result = ResponseMerge::mergeDocuments(base, mine, theirs);
     QVERIFY(result.has_value());
-    QVERIFY(result.value().sealingSet() == theirs.sealingSet());
-    QVERIFY(!(result.value().sealingSet() == mine.sealingSet()));
+    QVERIFY(result->sealingSet() == mine.sealingSet());
+    QCOMPARE(recordOf(result->emergencyResponse().value(), s.baker).contactStatus(), ContactStatus::OK);
 
-    // A change to who it is sealed to alone is not a directory change.
-    QVERIFY(!ResponseMerge::directoryChanged(theirs, base));
+    // Either way round.
+    const std::optional<Document> swapped = ResponseMerge::mergeDocuments(base, theirs, mine);
+    QVERIFY(swapped.has_value());
+    QVERIFY(swapped->sealingSet() == mine.sealingSet());
+}
+
+void ResponseMergeTest::aRosterEditOnBothSidesIsAConflict()
+{
+    const Storm s = storm();
+    const Document base = documentWith(s.adams, s);
+    const MemberId person = base.sealingSet().people().first().id;
+
+    // Mine made an invite; theirs gave up the admin role.
+    Document mine = base;
+    mine.setSealingSet(withInvite(base.sealingSet()));
+    Document theirs = base;
+    SealingSet stepped = base.sealingSet();
+    QVERIFY(stepped.setRole(person, Role::Member));
+    theirs.setSealingSet(stepped);
+    QVERIFY(!ResponseMerge::mergeDocuments(base, mine, theirs).has_value());
+
+    // A roster edit on one side and a family edit on the other is a conflict too.
+    Document moved = base;
+    moved.updateFamily(familyAt(s.adams, 41.5));
+    QVERIFY(!ResponseMerge::mergeDocuments(base, mine, moved).has_value());
+
+    // Anchor: the same roster edit on both sides is no conflict.
+    QVERIFY(ResponseMerge::mergeDocuments(base, theirs, theirs).has_value());
 }

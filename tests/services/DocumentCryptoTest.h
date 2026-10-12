@@ -17,6 +17,7 @@ private slots:
     void fingerprintIsStableAndDistinct();
     void fingerprintRefusesInvalidKeys();
     void publicHalvesDeriveFromTheSecretHalves();
+    void aSealingKeypairComesFromItsSeed();
     void derivingRefusesInvalidInput();
     // Sealing the data key
     void theHolderUnsealsTheDataKey();
@@ -24,8 +25,8 @@ private slots:
     void twoSealsOfTheSameKeyDiffer();
     void unsealRefusesAMalformedSealedKey();
 
-    // Signing the login challenge
+    // Signing what a write covers
     void signatureVerifiesAndRejectsTampering();
     void signatureFailsWithAnotherDevicesKey();
-    void signingRefusesAnInvalidKeyOrAnEmptyChallenge();
+    void signingRefusesAnInvalidKeyOrNoBytes();
 };

@@ -12,13 +12,13 @@ enable_testing()
 set(TEST_SOURCES
     TestMain.cpp
     models/DocumentParseTest.cpp
+    models/RosterDiffTest.cpp
     models/SealingSetTest.cpp
     models/ModelParsersTest.cpp
     models/ModelSamples.cpp
     services/AppSettingsTest.cpp
     services/CryptoLinkTest.cpp
     services/CryptoTypesTest.cpp
-    services/DeviceLinksTest.cpp
     services/DocumentCryptoTest.cpp
     services/DocumentFileTest.cpp
     services/DocumentHeaderTest.cpp
@@ -32,7 +32,6 @@ set(TEST_SOURCES
     services/FormatVectorsTest.cpp
     services/IdentityFileTest.cpp
     services/IdentityServiceTest.cpp
-    services/IncomingWardsTest.cpp
     services/ReconcileTest.cpp
     services/ResponseMergeTest.cpp
     services/ServerConformanceTest.cpp

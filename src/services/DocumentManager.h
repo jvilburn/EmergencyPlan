@@ -53,8 +53,12 @@ public:
                     DocumentLibrary& library,
                     QObject* parent);
 
-    /// For tests: one session, already open, with no library or server.
-    DocumentManager(const DeviceIdentity& identity, std::unique_ptr<DocumentSession> session, QObject* parent);
+    /// For tests: one session, already open, with no library or server. records are
+    /// the session's own, where the access notices keep the roster last shown.
+    DocumentManager(const DeviceIdentity& identity,
+                    DocumentRecords& records,
+                    std::unique_ptr<DocumentSession> session,
+                    QObject* parent);
 
     ~DocumentManager() override;
 
@@ -150,10 +154,15 @@ public:
     void removePerson(const MemberId& id);
     void removeDevice(const Fingerprint& device);
     void revokeInvite(const Fingerprint& invite);
+
+    /// Nothing when it would leave the ward without an admin: the last admin makes
+    /// someone else an admin first.
     void setRole(const MemberId& id, Role role);
 
     /// This person leaves the open ward: a version without them goes up, and once
     /// it has, the ward and its copies go from this device, reported as accessLost.
+    /// The last admin, with others still in the ward, is refused through leaveFailed
+    /// and nothing is written.
     void leave();
 
     /// Joins the ward an invite link names and opens it. fetchFinished reports the

@@ -2,8 +2,8 @@
 
 #include <QObject>
 
-/// The devices a document's data key is sealed to, and the rule every write applies
-/// to them.
+/// Who a document is sealed to - people, their devices, and open invites - and the
+/// rule every write applies to them.
 class SealingSetTest : public QObject
 {
     Q_OBJECT
@@ -11,19 +11,22 @@ class SealingSetTest : public QObject
 private slots:
     void initTestCase();
 
-    // The rule
-    void keepingEveryListedDeviceKeepsTheKey();
-    void droppingADeviceRotates();
-    void anApprovedListedDeviceIsAdded();
-    void anApprovedDeviceTheServerDoesNotListIsNotAdded();
-    void aDeviceOnlyTheServerListsIsNeverAdded();
-    void formerKeysCarryOver();
+    // The roster
+    void ofMakesItsMakerAnAdminOnOneDevice();
+    void anInviteIsARecipientUntilItIsJoined();
+    void aUserInviteJoinsAsANewPerson();
+    void aDeviceInviteJoinsAsAnotherDeviceOfItsPerson();
+    void joinRefusesWhatWouldLeaveTheSetInconsistent();
+    void addInviteRefusesAnUnknownPersonOrASharedKey();
+    void removeDeviceRefusesAPersonsLastDevice();
+    void removePersonRefusesTheLastPersonAndTakesTheirInvites();
+    void setRoleChangesOnlyThatPerson();
+    void everythingComesInASteadyOrder();
 
-    // The set
-    void aDeviceSharingAKeyIsRefused();
-    void addingADeviceTwiceKeepsOne();
-    void devicesComeInFingerprintOrder();
-    void ofInvalidKeysIsEmpty();
+    // The rule
+    void anAdditionKeepsTheKey();
+    void aRemovalRotates();
+    void formerKeysCarryOver();
 
     // JSON
     void roundTripsThroughJson();

@@ -74,7 +74,7 @@ void DocumentHeaderTest::roundTripsThroughJson()
     DocumentHeader read;
     QCOMPARE(DocumentHeader::parse(header.toJson(), read), HeaderParse::Ok);
     QVERIFY(read == header);
-    QCOMPARE(read.formatVersion, 3);
+    QCOMPARE(read.formatVersion, 4);
 }
 
 void DocumentHeaderTest::roundTripKeepsRecipientOrder()

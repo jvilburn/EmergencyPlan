@@ -19,12 +19,24 @@ Reconcile::Self selfOf(const TestDevice& device)
     return Reconcile::Self{device.sealing, device.signing.verifyKey};
 }
 
+/// A roster of these devices, each its own person, the first an admin who invited
+/// the rest.
 SealingSet setOf(const QList<TestDevice>& devices)
 {
-    SealingSet set;
-    for (const TestDevice& device : devices)
+    const MemberId maker = ServerTestSupport::newMember();
+    SealingSet set = SealingSet::of(maker, devices.first().name, NamedDevice{devices.first().name, devices.first().keys()});
+    for (qsizetype i = 1; i < devices.size(); ++i)
     {
-        set.add(device.keys());
+        Invite invite;
+        invite.purpose = Invite::For::User;
+        invite.person = maker;
+        invite.label = "for " + devices.at(i).name;
+        invite.keys = ServerTestSupport::newDevice("Invite").keys();
+        set.addInvite(invite);
+        set.join(invite.fingerprint(),
+                 NamedDevice{devices.at(i).name, devices.at(i).keys()},
+                 ServerTestSupport::newMember(),
+                 devices.at(i).name);
     }
     return set;
 }
@@ -45,9 +57,9 @@ World world()
 {
     World w;
     w.documentId = ServerTestSupport::newDocumentId();
-    w.alice = ServerTestSupport::newPerson("Alice");
-    w.bob = ServerTestSupport::newPerson("Bob");
-    w.carol = ServerTestSupport::newPerson("Carol");
+    w.alice = ServerTestSupport::newDevice("Alice");
+    w.bob = ServerTestSupport::newDevice("Bob");
+    w.carol = ServerTestSupport::newDevice("Carol");
     w.dataKey = DocumentCrypto::generateDataKey();
     w.document = Document::empty();
     w.document.setSealingSet(setOf({w.alice, w.bob}));

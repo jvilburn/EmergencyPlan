@@ -2,7 +2,6 @@
 #include "AppSettingsTest.h"
 #include "CryptoLinkTest.h"
 #include "CryptoTypesTest.h"
-#include "DeviceLinksTest.h"
 #include "DocumentCrypto.h"
 #include "DocumentCryptoTest.h"
 #include "DocumentFileTest.h"
@@ -20,9 +19,9 @@
 #include "IdentityFileTest.h"
 #include "IdentityServiceTest.h"
 #include "ModelParsersTest.h"
-#include "IncomingWardsTest.h"
 #include "ReconcileTest.h"
 #include "ResponseMergeTest.h"
+#include "RosterDiffTest.h"
 #include "SealingSetTest.h"
 #include "ServerConformanceTest.h"
 #include "ServerConnectionTest.h"
@@ -93,6 +92,7 @@ int main(int argc, char** argv)
     status |= run<DocumentHeaderTest>(argc, argv);
     status |= run<FormatVectorsTest>(argc, argv);
     status |= run<SealingSetTest>(argc, argv);
+    status |= run<RosterDiffTest>(argc, argv);
     status |= run<ModelParsersTest>(argc, argv);
     status |= run<DocumentParseTest>(argc, argv);
     status |= run<WardDirectoryImportTest>(argc, argv);
@@ -121,8 +121,6 @@ int main(int argc, char** argv)
     status |= run<ServerConnectionTest>(argc, argv);
     status |= run<DocumentFileTest>(argc, argv);
     status |= run<DocumentSessionTest>(argc, argv);
-    status |= run<IncomingWardsTest>(argc, argv);
-    status |= run<DeviceLinksTest>(argc, argv);
     status |= run<AppSettingsTest>(argc, argv);
     status |= run<IdentityFileTest>(argc, argv);
     status |= run<IdentityServiceTest>(argc, argv);

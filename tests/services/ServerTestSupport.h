@@ -18,33 +18,28 @@
 ///
 /// Everything here goes through ServerApi alone, so it serves the conformance
 /// suite against any server. Ids and keys are fresh every time, so runs can share
-/// a real server.
+/// a real server. The server knows devices only, by their keys; who a device
+/// belongs to lives in the payload, which the server never reads.
 namespace ServerTestSupport
 {
 
-/// One device belonging to one person. Several devices may carry the same member
-/// id, which is how a person's phone and laptop are expressed.
+/// One device: its two keypairs and a name for the test to tell it by.
 struct TestDevice
 {
-    MemberId member;
-    QString displayName;
-    QString deviceName;
+    QString name;
     Keypair sealing;
     SigningKeypair signing;
 
     Fingerprint fingerprint() const;
     DeviceKeys keys() const { return DeviceKeys{sealing.publicKey, signing.verifyKey}; }
-    ServerContract::Registration registration() const;
+
+    /// This device signing bytes, as a write carries it.
+    ServerContract::Signer signer(const QByteArray& bytes) const;
 };
 
 MemberId newMember();
 QString newDocumentId();
-
-/// A device belonging to a brand new person.
-TestDevice newPerson(const QString& displayName);
-
-/// Another device of the same person, not yet linked.
-TestDevice newDeviceOf(const TestDevice& person, const QString& deviceName);
+TestDevice newDevice(const QString& name);
 
 /// Runs call with a reply that stores the result, then spins a QEventLoop until
 /// it arrives. Seventy seconds without one is ServerError::Unreachable: past
@@ -83,18 +78,33 @@ ServerContract::Result<T> wait(const std::function<void(ServerContract::Reply<T>
     return result->value();
 }
 
-/// Signs in with a fresh challenge; nullopt when the server refuses.
-std::optional<ServerContract::Session> signIn(ServerContract::ServerApi& server, const TestDevice& device);
-
-/// Signs in and registers the device's person, as ServerConnection does.
-std::optional<ServerContract::Session> join(ServerContract::ServerApi& server, const TestDevice& device);
-
 /// A header sealing a fresh data key to these devices, and an opaque blob. The
 /// server never reads the blob, so it need not be a real payload.
 ServerContract::Upload uploadFor(const QString& documentId, const QList<TestDevice>& devices, qint64 saveCounter);
 
-/// The fingerprints the server lists for a ward, from its head.
-QStringList allowListOf(const ServerContract::Head& head);
+// --- Each call, signed by device where it writes ---
+
+ServerContract::Result<qint64> registerAs(ServerContract::ServerApi& server,
+                                          const TestDevice& device,
+                                          const ServerContract::Upload& upload);
+ServerContract::Result<qint64> uploadAs(ServerContract::ServerApi& server,
+                                        const TestDevice& device,
+                                        const QString& documentId,
+                                        qint64 baseVersion,
+                                        const ServerContract::Upload& upload);
+ServerContract::Result<ServerContract::Lease> takeLeaseAs(ServerContract::ServerApi& server,
+                                                          const TestDevice& device,
+                                                          const QString& documentId);
+ServerContract::Result<ServerContract::Done> releaseLeaseAs(ServerContract::ServerApi& server,
+                                                            const TestDevice& device,
+                                                            const QString& documentId);
+ServerContract::Result<ServerContract::Head> headOf(ServerContract::ServerApi& server, const QString& documentId);
+ServerContract::Result<ServerContract::Snapshot> downloadOf(ServerContract::ServerApi& server,
+                                                            const QString& documentId);
+bool advanceClock(ServerContract::ServerApi& server, qint64 seconds);
+
+/// The fingerprints a head's header seals to, as sorted hex.
+QStringList recipientsOf(const ServerContract::Head& head);
 
 /// One ward on the server, and what the test knows about it.
 struct SharedDocument
@@ -103,57 +113,21 @@ struct SharedDocument
     TestDevice alice;
     TestDevice bob;
     TestDevice carol;
-    ServerContract::Session aliceSession;
-    ServerContract::Session bobSession;
-    ServerContract::Session carolSession;
     qint64 version = 0;
     qint64 saveCounter = 1;
 };
 
-/// Alice's ward, registered with only her device.
+/// Alice's ward, registered sealed to her device alone.
 std::optional<SharedDocument> registerWard(ServerContract::ServerApi& server);
 
-/// Alice's ward, with Bob and Carol granted by request. Alice is the only admin.
+/// Alice's ward, its second version sealed by her to Alice, Bob, and Carol.
 std::optional<SharedDocument> wardOfThree(ServerContract::ServerApi& server);
 
-/// Asks for access as device and has admin grant the request, carrying resealing
-/// as the version the new member reads.
-bool grantByRequest(ServerContract::ServerApi& server,
-                    const QString& documentId,
-                    const ServerContract::Session& admin,
-                    const TestDevice& device,
-                    const ServerContract::Session& deviceSession,
-                    const ServerContract::Resealing& resealing);
-
-/// A version of ward on top of its current one, sealed to these devices, as a grant
-/// or an approval carries it. The ward's save counter advances; its version
-/// advances only once the call carrying it lands.
-ServerContract::Resealing resealingOf(SharedDocument& ward, const QList<TestDevice>& devices);
-
-/// Asks for access as device and has Alice grant it, with a version sealed to
-/// sealedTo; on success the ward's version advances.
-bool grantInto(ServerContract::ServerApi& server,
-               SharedDocument& ward,
-               const TestDevice& device,
-               const ServerContract::Session& deviceSession,
-               const QList<TestDevice>& sealedTo);
-
-/// Links newDevice to the person existing belongs to, the approval carrying
-/// resealings; the new device's session.
-std::optional<ServerContract::Session> link(ServerContract::ServerApi& server,
-                                            const TestDevice& newDevice,
-                                            const ServerContract::Session& existing,
-                                            const QList<ServerContract::Resealing>& resealings);
-
-/// Uploads a version sealed to these devices on top of the ward's current version;
-/// on success the ward's version advances.
+/// Uploads a version sealed to these devices on top of the ward's current version,
+/// signed by writer; on success the ward's version advances.
 ServerContract::ServerError publish(ServerContract::ServerApi& server,
                                     SharedDocument& ward,
-                                    const ServerContract::Session& session,
+                                    const TestDevice& writer,
                                     const QList<TestDevice>& devices);
-
-/// Moves the server's clock and signs everyone in again, since how long a
-/// session lasts is the server's business.
-bool advance(ServerContract::ServerApi& server, SharedDocument& ward, qint64 seconds);
 
 } // namespace ServerTestSupport

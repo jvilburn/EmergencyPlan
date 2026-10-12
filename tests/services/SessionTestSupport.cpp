@@ -47,17 +47,38 @@ void keepFetched(std::optional<ServerVersion::Fetched>& out, const ServerVersion
     out = fetched;
 }
 
-void keepDownload(std::optional<DocumentSession::Download>& out, DocumentSession::Download download)
+void keepJoin(std::optional<DocumentSession::Join>& out, DocumentSession::Join join, const QString& reason)
 {
-    out = download;
+    Q_UNUSED(reason);
+    out = join;
 }
 
-void keepResealing(std::optional<Resealing>& out,
-                   const ServerVersion::Fetched& theirs,
-                   const std::optional<Resealing>& built)
+void applyRemovePerson(Document& document, const MemberId& person)
 {
-    Q_UNUSED(theirs);
-    out = built;
+    SealingSet roster = document.sealingSet();
+    roster.removePerson(person);
+    document.setSealingSet(roster);
+}
+
+void applyRemoveDevice(Document& document, const Fingerprint& device)
+{
+    SealingSet roster = document.sealingSet();
+    roster.removeDevice(device);
+    document.setSealingSet(roster);
+}
+
+void applyRemoveInvite(Document& document, const Fingerprint& invite)
+{
+    SealingSet roster = document.sealingSet();
+    roster.removeInvite(invite);
+    document.setSealingSet(roster);
+}
+
+void applySetRole(Document& document, const MemberId& person, Role role)
+{
+    SealingSet roster = document.sealingSet();
+    roster.setRole(person, role);
+    document.setSealingSet(roster);
 }
 
 /// Timers for a session to own, with a pointer kept for the test to fire them.
@@ -146,11 +167,27 @@ DeviceIdentity newDeviceOf(const DeviceIdentity& person, const QString& deviceNa
 
 ServerTestSupport::TestDevice asTestDevice(const DeviceIdentity& identity)
 {
-    return ServerTestSupport::TestDevice{identity.member,
-                                         identity.displayName,
-                                         identity.deviceName,
-                                         identity.sealing,
-                                         identity.signing};
+    return ServerTestSupport::TestDevice{identity.deviceName, identity.sealing, identity.signing};
+}
+
+SealingSet rosterOf(const QList<DeviceIdentity>& devices)
+{
+    SealingSet roster = SealingSet::of(devices.first().member, devices.first().displayName, devices.first().device());
+    for (qsizetype i = 1; i < devices.size(); ++i)
+    {
+        const DeviceIdentity& joiner = devices.at(i);
+        const bool known = roster.person(joiner.member).has_value();
+
+        Invite open;
+        open.purpose = known ? Invite::For::Device : Invite::For::User;
+        open.person = known ? joiner.member : devices.first().member;
+        open.label = "for " + joiner.displayName;
+        open.keys = DeviceKeys{DocumentCrypto::generateKeypair().publicKey,
+                               DocumentCrypto::generateSigningKeypair().verifyKey};
+        roster.addInvite(open);
+        roster.join(open.fingerprint(), joiner.device(), joiner.member, joiner.displayName);
+    }
+    return roster;
 }
 
 // --- Device ----------------------------------------------------------------------
@@ -244,103 +281,55 @@ std::unique_ptr<DocumentSession> TestWard::createShared(Device& owner)
     return session;
 }
 
-std::optional<Session> TestWard::sessionFor(Device& device)
+std::optional<FileOpenRouter::InviteLink> TestWard::invite(DocumentSession& inviter,
+                                                           Invite::For purpose,
+                                                           Role role,
+                                                           const QString& label)
 {
-    return ServerTestSupport::join(server, asTestDevice(device.identity));
+    const std::optional<FileOpenRouter::InviteLink> link = inviter.invite(purpose, role, label);
+    settle();
+    if (!link.has_value() || inviter.syncState() != SyncState::UpToDate)
+    {
+        return std::nullopt;
+    }
+    return link;
 }
 
-bool TestWard::grant(Device& admin, Device& newcomer)
-{
-    const std::optional<Resealing> built = resealing(admin, documentId, newcomer.identity.keys());
-    const std::optional<Session> adminSession = sessionFor(admin);
-    const std::optional<Session> newcomerSession = sessionFor(newcomer);
-    if (!built.has_value() || !adminSession.has_value() || !newcomerSession.has_value()
-        || !ServerTestSupport::grantByRequest(server,
-                                              documentId,
-                                              adminSession.value(),
-                                              asTestDevice(newcomer.identity),
-                                              newcomerSession.value(),
-                                              built.value()))
-    {
-        return false;
-    }
-    return download(newcomer, documentId) == DocumentSession::Download::Done;
-}
-
-bool TestWard::link(Device& newDevice, Device& existing)
-{
-    QList<Resealing> resealings;
-    for (const QString& held : existing.records.documentIds())
-    {
-        if (!existing.records.record(held).baseVersion.has_value())
-        {
-            continue;
-        }
-        const std::optional<Resealing> built = resealing(existing, held, newDevice.identity.keys());
-        if (!built.has_value())
-        {
-            return false;
-        }
-        resealings.append(built.value());
-    }
-
-    const std::optional<Session> existingSession = sessionFor(existing);
-    if (!existingSession.has_value()
-        || !ServerTestSupport::link(server, asTestDevice(newDevice.identity), existingSession.value(), resealings)
-                .has_value())
-    {
-        return false;
-    }
-
-    QList<DeviceKeys> linked = existing.records.linkedDevices();
-    linked.append(newDevice.identity.keys());
-    existing.records.setLinkedDevices(linked);
-    return true;
-}
-
-bool TestWard::linkCarryingNothing(Device& newDevice, Device& existing)
-{
-    const std::optional<Session> existingSession = sessionFor(existing);
-    if (!existingSession.has_value()
-        || !ServerTestSupport::link(server, asTestDevice(newDevice.identity), existingSession.value(), {}).has_value())
-    {
-        return false;
-    }
-
-    QList<DeviceKeys> linked = existing.records.linkedDevices();
-    linked.append(newDevice.identity.keys());
-    existing.records.setLinkedDevices(linked);
-    return true;
-}
-
-std::optional<Resealing> TestWard::resealing(Device& holder, const QString& wardId, const DeviceKeys& admitted)
+std::optional<DocumentSession::Join> TestWard::join(Device& joiner, const FileOpenRouter::InviteLink& link)
 {
     QObject receiver;
-    std::optional<Resealing> built;
-    ServerVersion::buildResealing(
-        holder.identity.self(),
-        ServerVersion::trustedKeys(wardId, holder.paths(wardId), holder.records, holder.identity.self()),
-        holder.records.linkedDevices(),
-        admitted,
-        holder.connection,
-        wardId,
-        &receiver,
-        std::bind(&keepResealing, std::ref(built), _1, _2));
+    std::optional<DocumentSession::Join> joined;
+    DocumentSession::join(joiner.context(),
+                          link,
+                          joiner.paths(link.documentId),
+                          &receiver,
+                          std::bind(&keepJoin, std::ref(joined), _1, _2));
     settle();
-    return built;
+    return joined;
 }
 
-std::optional<DocumentSession::Download> TestWard::download(Device& device, const QString& wardId)
+bool TestWard::addUser(DocumentSession& inviter, Device& newcomer, Role role)
 {
-    QObject receiver;
-    std::optional<DocumentSession::Download> downloaded;
-    DocumentSession::download(device.context(),
-                              wardId,
-                              device.paths(wardId),
-                              &receiver,
-                              std::bind(&keepDownload, std::ref(downloaded), _1));
-    settle();
-    return downloaded;
+    const std::optional<FileOpenRouter::InviteLink> link =
+        invite(inviter, Invite::For::User, role, "for " + newcomer.identity.displayName);
+    return link.has_value() && join(newcomer, link.value()) == DocumentSession::Join::Done;
+}
+
+bool TestWard::addDevice(DocumentSession& owner, Device& newDevice)
+{
+    const std::optional<FileOpenRouter::InviteLink> link =
+        invite(owner, Invite::For::Device, Role::Member, "for " + newDevice.identity.deviceName);
+    return link.has_value() && join(newDevice, link.value()) == DocumentSession::Join::Done;
+}
+
+std::optional<Head> TestWard::head()
+{
+    const Result<Head> answered = ServerTestSupport::headOf(server, documentId);
+    if (!answered.ok())
+    {
+        return std::nullopt;
+    }
+    return answered.value;
 }
 
 std::optional<ServerVersion::Fetched> TestWard::serverCopy(Device& reader)
@@ -383,6 +372,26 @@ std::function<void(Document&)> addFamily(const FamilyId& family, double latitude
 std::function<void(Document&)> recordContact(const FamilyId& family, ContactStatus status)
 {
     return std::bind(&applyContact, _1, family, status);
+}
+
+std::function<void(Document&)> removePerson(const MemberId& person)
+{
+    return std::bind(&applyRemovePerson, _1, person);
+}
+
+std::function<void(Document&)> removeDevice(const Fingerprint& device)
+{
+    return std::bind(&applyRemoveDevice, _1, device);
+}
+
+std::function<void(Document&)> removeInvite(const Fingerprint& invite)
+{
+    return std::bind(&applyRemoveInvite, _1, invite);
+}
+
+std::function<void(Document&)> setRole(const MemberId& person, Role role)
+{
+    return std::bind(&applySetRole, _1, person, role);
 }
 
 std::optional<double> latitudeOf(const Document& document, const FamilyId& family)

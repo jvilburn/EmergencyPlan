@@ -30,14 +30,11 @@ public:
     void setRecord(const QString& documentId, const DocumentRecord& record) override;
     void removeRecord(const QString& documentId) override;
     QStringList documentIds() const override;
-    QList<DeviceKeys> linkedDevices() const override { return m_linked; }
-    void setLinkedDevices(const QList<DeviceKeys>& devices) override { m_linked = devices; }
 
     bool contains(const QString& documentId) const { return m_records.contains(documentId); }
 
 private:
     QHash<QString, DocumentRecord> m_records;
-    QList<DeviceKeys> m_linked;
 };
 
 /// Records each running timer and its interval, and fires one on fire().
@@ -66,6 +63,11 @@ DeviceIdentity newIdentity(const QString& displayName, const QString& deviceName
 DeviceIdentity newDeviceOf(const DeviceIdentity& person, const QString& deviceName);
 
 ServerTestSupport::TestDevice asTestDevice(const DeviceIdentity& identity);
+
+/// A roster of these devices as invites would build it: the first its maker, an
+/// admin; each later one joined through an invite of its own, as another device of a
+/// person already listed under its member id, else as a new member.
+SealingSet rosterOf(const QList<DeviceIdentity>& devices);
 
 /// One installation: its identity, its records, its timers, its connection, and its
 /// own folder.
@@ -106,33 +108,24 @@ public:
     /// response recording both, then shares it. documentId is set.
     std::unique_ptr<DocumentSession> createShared(Device& owner);
 
-    /// Asks for access as newcomer and has admin grant it as the app does: the
-    /// ward's current version, resealed on admin to the device that asked, goes up
-    /// with the grant. Then downloads the ward to newcomer.
-    bool grant(Device& admin, Device& newcomer);
+    /// An invite made on inviter's open session, its version published: the link,
+    /// or nullopt when the session refused it or the publish did not land.
+    std::optional<FileOpenRouter::InviteLink> invite(DocumentSession& inviter,
+                                                     Invite::For purpose,
+                                                     Role role,
+                                                     const QString& label);
 
-    /// Links newDevice to existing's person as existing's approval does: every ward
-    /// existing holds goes up with the approval resealed to newDevice, and existing
-    /// remembers newDevice, so its later writes seal to it too.
-    bool link(Device& newDevice, Device& existing);
+    /// Joins link on joiner, as opening the link does there.
+    std::optional<DocumentSession::Join> join(Device& joiner, const FileOpenRouter::InviteLink& link);
 
-    /// Links newDevice to existing's person as an approval does that could reseal
-    /// none of existing's wards: the server adds it, and existing remembers it, so
-    /// existing's next write of each ward seals to it.
-    bool linkCarryingNothing(Device& newDevice, Device& existing);
+    /// A User invite from inviter, joined by newcomer as a new person.
+    bool addUser(DocumentSession& inviter, Device& newcomer, Role role);
 
-    /// The server's current version of wardId resealed on holder to admit
-    /// admitted, as a grant or an approval carries it; nullopt when it cannot be
-    /// built there.
-    std::optional<ServerContract::Resealing> resealing(Device& holder,
-                                                       const QString& wardId,
-                                                       const DeviceKeys& admitted);
+    /// A Device invite from owner, joined by newDevice as another of owner's devices.
+    bool addDevice(DocumentSession& owner, Device& newDevice);
 
-    /// Fetches wardId to device as the app does for a ward it lacks.
-    std::optional<DocumentSession::Download> download(Device& device, const QString& wardId);
-
-    /// A server session for device, signed in and registered.
-    std::optional<ServerContract::Session> sessionFor(Device& device);
+    /// The server's head of the ward, read as anyone may.
+    std::optional<ServerContract::Head> head();
 
     /// The server's current version of the ward, or of wardId, as a device of
     /// it downloads it.
@@ -157,6 +150,12 @@ std::function<void(Document&)> addFamily(const FamilyId& family, double latitude
 
 /// A response edit: records a contact.
 std::function<void(Document&)> recordContact(const FamilyId& family, ContactStatus status);
+
+/// Roster edits, as the access dialog makes them through Edit::Roster.
+std::function<void(Document&)> removePerson(const MemberId& person);
+std::function<void(Document&)> removeDevice(const Fingerprint& device);
+std::function<void(Document&)> removeInvite(const Fingerprint& invite);
+std::function<void(Document&)> setRole(const MemberId& person, Role role);
 
 std::optional<double> latitudeOf(const Document& document, const FamilyId& family);
 ContactStatus statusOf(const Document& document, const FamilyId& family);

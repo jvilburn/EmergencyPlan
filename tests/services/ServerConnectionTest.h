@@ -2,7 +2,8 @@
 
 #include <QObject>
 
-/// Section 6.3: signing in and signing requests.
+/// One device's way to the server: writes signed as this device, or as the invite
+/// it holds while joining, and replies dropped with their context.
 class ServerConnectionTest : public QObject
 {
     Q_OBJECT
@@ -10,12 +11,8 @@ class ServerConnectionTest : public QObject
 private slots:
     void initTestCase();
 
-    void theFirstCallSignsInAndSucceeds();
-    void anExpiredSessionIsSignedIntoAgain();
-    void aRefusedSignInGivesOneUnauthenticatedReplyAndNoRetry();
-    void callsMadeBeforeTheFirstSignInShareOneChallenge();
-    void signingInRegistersThePerson();
-    void aDeviceWithNoPersonSignsInToLink();
-    void anUnlinkedDeviceHearsItFromEveryCallWithoutSigningInAgain();
+    void writesAreSignedByThisDevice();
+    void aDeviceSigningWithAnotherKeyIsRefused();
+    void uploadAsSignsAsTheWriterGiven();
     void aReplyWhoseContextWasDestroyedIsDropped();
 };

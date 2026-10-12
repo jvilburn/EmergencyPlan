@@ -38,7 +38,7 @@ struct Fixture
 Document wardDocument(const DeviceIdentity& identity, const QString& wardName)
 {
     Document document = Document::empty();
-    document.setSealingSet(SealingSet::of(identity.keys()));
+    document.setSealingSet(SealingSet::of(identity.member, identity.displayName, identity.device()));
     if (!wardName.isEmpty())
     {
         document.metadata().addOrUpdateWard("123456", wardName, "654321", "Riverside Stake");
@@ -87,21 +87,9 @@ QString addWardWithFiles(Fixture& fixture)
     return documentId;
 }
 
-void keepRestored(QHash<QString, DocumentSession::Download>& out,
-                  const QString& documentId,
-                  DocumentSession::Download outcome)
+void keepJoined(std::optional<DocumentSession::Join>& out, DocumentSession::Join outcome, const QString&)
 {
-    out.insert(documentId, outcome);
-}
-
-/// These restores look only at what arrives: the listed set, and any loss, are not
-/// under test.
-void ignoreListed(const QStringList&)
-{
-}
-
-void ignoreLost(const QString&, const ServerContract::LostAccess&)
-{
+    out = outcome;
 }
 
 void keepFetched(std::optional<DocumentSession::Download>& out, const QString&, DocumentSession::Download outcome)
@@ -620,27 +608,25 @@ void DocumentLibraryTest::forgetLostDeletesCopiesStillAtTheirPaths()
     QCOMPARE(fixture.settings->ward(other)->copies.at(0).path, otherWard);
 }
 
-void DocumentLibraryTest::aClearedLibraryIsRestoredFromTheServerAndEachOpens()
+void DocumentLibraryTest::aListedWardWhoseFileWasDeletedIsFetchedOnRequest()
 {
     ServerWards wards;
     QVERIFY(shareTwoWards(wards));
 
-    // The same device, its settings and library cleared.
+    // The same device, its settings and library cleared, its two wards fetched back.
     QTemporaryDir folder;
     QVERIFY(folder.isValid());
     const std::unique_ptr<AppSettings> settings = AppSettings::open(folder.filePath("settings.json"), nullptr);
     DocumentLibrary library(*settings, folder.filePath("wards"), wards.alice->identity);
-    QVERIFY(library.entries().isEmpty());
-
     QObject receiver;
-    QHash<QString, DocumentSession::Download> restored;
-    library.restore(wards.alice->connection, &receiver, &ignoreListed, std::bind(&keepRestored, std::ref(restored), _1, _2), &ignoreLost);
-    wards.ward.settle();
-
-    QCOMPARE(restored.size(), qsizetype(2));
-    QVERIFY(restored.value(wards.named) == DocumentSession::Download::Done);
-    QVERIFY(restored.value(wards.unnamed) == DocumentSession::Download::Done);
-
+    std::optional<DocumentSession::Download> fetched;
+    for (const QString& ward : {wards.named, wards.unnamed})
+    {
+        fetched.reset();
+        library.fetchWard(ward, wards.alice->connection, &receiver, std::bind(&keepFetched, std::ref(fetched), _1, _2));
+        wards.ward.settle();
+        QVERIFY(fetched == DocumentSession::Download::Done);
+    }
     const QList<DocumentLibrary::Entry> entries = library.entries();
     QCOMPARE(entries.size(), qsizetype(2));
     for (const DocumentLibrary::Entry& entry : entries)
@@ -648,30 +634,7 @@ void DocumentLibraryTest::aClearedLibraryIsRestoredFromTheServerAndEachOpens()
         QVERIFY(entry.shared);
         QVERIFY(entry.onDevice);
         QCOMPARE(entry.wardName, entry.documentId == wards.named ? QString("Tanglewood Ward") : QString("Untitled"));
-        QVERIFY(opens(library, *settings, *wards.alice, entry.documentId));
     }
-
-    // Once restored, nothing more is fetched.
-    restored.clear();
-    library.restore(wards.alice->connection, &receiver, &ignoreListed, std::bind(&keepRestored, std::ref(restored), _1, _2), &ignoreLost);
-    wards.ward.settle();
-    QVERIFY(restored.isEmpty());
-}
-
-void DocumentLibraryTest::aListedWardWhoseFileWasDeletedIsFetchedOnRequest()
-{
-    ServerWards wards;
-    QVERIFY(shareTwoWards(wards));
-
-    QTemporaryDir folder;
-    QVERIFY(folder.isValid());
-    const std::unique_ptr<AppSettings> settings = AppSettings::open(folder.filePath("settings.json"), nullptr);
-    DocumentLibrary library(*settings, folder.filePath("wards"), wards.alice->identity);
-    QObject receiver;
-    QHash<QString, DocumentSession::Download> restored;
-    library.restore(wards.alice->connection, &receiver, &ignoreListed, std::bind(&keepRestored, std::ref(restored), _1, _2), &ignoreLost);
-    wards.ward.settle();
-    QCOMPARE(restored.size(), qsizetype(2));
 
     const QString file = library.pathsFor(wards.named).file;
     QVERIFY(QFile::remove(file));
@@ -680,13 +643,88 @@ void DocumentLibraryTest::aListedWardWhoseFileWasDeletedIsFetchedOnRequest()
         QCOMPARE(entry.onDevice, entry.documentId != wards.named);
     }
 
-    std::optional<DocumentSession::Download> fetched;
+    fetched.reset();
     library.fetchWard(wards.named, wards.alice->connection, &receiver, std::bind(&keepFetched, std::ref(fetched), _1, _2));
     wards.ward.settle();
 
     QVERIFY(fetched == DocumentSession::Download::Done);
     QVERIFY(QFile::exists(file));
     QVERIFY(opens(library, *settings, *wards.alice, wards.named));
+    QVERIFY(opens(library, *settings, *wards.alice, wards.unnamed));
+}
+
+void DocumentLibraryTest::aJoinedWardIsAddedAndOpens()
+{
+    TestWard ward;
+    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
+    const DeviceIdentity bob = newIdentity("Bob", "Phone");
+    std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
+    QVERIFY(aliceSession);
+    const std::optional<FileOpenRouter::InviteLink> link =
+        ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Bob");
+    QVERIFY(link.has_value());
+
+    QTemporaryDir folder;
+    QVERIFY(folder.isValid());
+    const std::unique_ptr<AppSettings> settings = AppSettings::open(folder.filePath("settings.json"), nullptr);
+    DocumentLibrary library(*settings, folder.filePath("wards"), bob);
+    ServerConnection connection(ward.server, bob);
+    QObject receiver;
+    std::optional<DocumentSession::Join> joined;
+    library.join(link.value(), connection, &receiver, std::bind(&keepJoined, std::ref(joined), _1, _2));
+    ward.settle();
+
+    QVERIFY(joined == DocumentSession::Join::Done);
+    QVERIFY(library.contains(ward.documentId));
+    QCOMPARE(library.entries().size(), qsizetype(1));
+    QCOMPARE(library.entries().at(0).wardName, QString("Untitled"));
+    QVERIFY(library.entries().at(0).shared);
+    QVERIFY(library.entries().at(0).onDevice);
+    QCOMPARE(settings->record(ward.documentId).baseVersion, std::optional<qint64>(3));
+
+    LoadFailure failure = LoadFailure::None;
+    const std::unique_ptr<DocumentSession> session =
+        DocumentSession::open(DocumentSession::Context{bob, *settings, connection},
+                              std::make_unique<ManualTimers>(),
+                              ward.documentId,
+                              library.pathsFor(ward.documentId),
+                              failure,
+                              nullptr);
+    QVERIFY(session);
+    QCOMPARE(session->document().sealingSet().person(bob.member)->name, QString("Bob"));
+    QCOMPARE(session->document().families().size(), qsizetype(2));
+}
+
+void DocumentLibraryTest::aJoinThatFailsAddsNothing()
+{
+    TestWard ward;
+    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
+    Device& carol = ward.add(newIdentity("Carol", "Tablet"));
+    std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
+    QVERIFY(aliceSession);
+    const std::optional<FileOpenRouter::InviteLink> link =
+        ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Bob");
+    QVERIFY(link.has_value());
+
+    // Carol opens the link first, so it is used by the time Bob opens it.
+    QVERIFY(ward.join(carol, link.value()) == DocumentSession::Join::Done);
+
+    QTemporaryDir folder;
+    QVERIFY(folder.isValid());
+    const DeviceIdentity bob = newIdentity("Bob", "Phone");
+    const std::unique_ptr<AppSettings> settings = AppSettings::open(folder.filePath("settings.json"), nullptr);
+    DocumentLibrary library(*settings, folder.filePath("wards"), bob);
+    ServerConnection connection(ward.server, bob);
+    QObject receiver;
+    std::optional<DocumentSession::Join> joined;
+    library.join(link.value(), connection, &receiver, std::bind(&keepJoined, std::ref(joined), _1, _2));
+    ward.settle();
+
+    QVERIFY(joined == DocumentSession::Join::InviteUsed);
+    QVERIFY(!library.contains(ward.documentId));
+    QVERIFY(library.entries().isEmpty());
+    QVERIFY(settings->documentIds().isEmpty());
+    QVERIFY(!QFile::exists(library.pathsFor(ward.documentId).file));
 }
 
 void DocumentLibraryTest::aRecoveryCopyOpensForEverySealedDeviceAndIsRecorded()
@@ -698,12 +736,10 @@ void DocumentLibraryTest::aRecoveryCopyOpensForEverySealedDeviceAndIsRecorded()
     fixture.library.add(documentId);
     fixture.library.noteDocument(documentId, wardDocument(fixture.alice, "Tanglewood"));
 
-    // The sealing set after a refused publish: Alice and the Bob they granted.
+    // The roster after a refused publish: Alice and the Bob she invited.
     const DeviceIdentity bob = newIdentity("Bob", "Phone");
     Document document = wardDocument(fixture.alice, "Tanglewood");
-    SealingSet set = document.sealingSet();
-    QVERIFY(set.add(bob.keys()));
-    document.setSealingSet(set);
+    document.setSealingSet(rosterOf({fixture.alice, bob}));
 
     QString path;
     QString error;
@@ -799,11 +835,11 @@ void DocumentLibraryTest::onlyAWardThatArrivesIsAdded()
     QVERIFY(library.entries().isEmpty());
 
     wards.ward.server.setOffline(false);
-    QHash<QString, DocumentSession::Download> restored;
-    library.restore(wards.alice->connection, &receiver, &ignoreListed, std::bind(&keepRestored, std::ref(restored), _1, _2), &ignoreLost);
+    library.fetchWard(wards.named, wards.alice->connection, &receiver, std::bind(&keepFetched, std::ref(fetched), _1, _2));
     wards.ward.settle();
-    QVERIFY(restored.value(wards.named) == DocumentSession::Download::Done);
+    QVERIFY(fetched == DocumentSession::Download::Done);
     QVERIFY(library.contains(wards.named));
+    QCOMPARE(library.entries().size(), qsizetype(1));
 }
 
 void DocumentLibraryTest::aWardWhoseFetchIsCutShortIsNotAdded()
@@ -817,19 +853,20 @@ void DocumentLibraryTest::aWardWhoseFetchIsCutShortIsNotAdded()
 
     // The window closes while the fetch is on its way.
     std::unique_ptr<QObject> receiver = std::make_unique<QObject>();
-    QHash<QString, DocumentSession::Download> restored;
-    library.restore(wards.alice->connection, receiver.get(), &ignoreListed, std::bind(&keepRestored, std::ref(restored), _1, _2), &ignoreLost);
+    std::optional<DocumentSession::Download> fetched;
+    library.fetchWard(wards.named, wards.alice->connection, receiver.get(), std::bind(&keepFetched, std::ref(fetched), _1, _2));
     receiver.reset();
     wards.ward.settle();
 
-    QVERIFY(restored.isEmpty());
+    QVERIFY(!fetched.has_value());
     QVERIFY(library.entries().isEmpty());
 
-    // Anchor: the next start fetches both.
+    // Anchor: asked again, it arrives.
     QObject next;
-    library.restore(wards.alice->connection, &next, &ignoreListed, std::bind(&keepRestored, std::ref(restored), _1, _2), &ignoreLost);
+    library.fetchWard(wards.named, wards.alice->connection, &next, std::bind(&keepFetched, std::ref(fetched), _1, _2));
     wards.ward.settle();
-    QCOMPARE(library.entries().size(), qsizetype(2));
+    QVERIFY(fetched == DocumentSession::Download::Done);
+    QCOMPARE(library.entries().size(), qsizetype(1));
 }
 
 void DocumentLibraryTest::aWardLostWhileFetchedKeepsItsEntryForForgetLost()
@@ -839,7 +876,7 @@ void DocumentLibraryTest::aWardLostWhileFetchedKeepsItsEntryForForgetLost()
     Device& bob = ward.add(newIdentity("Bob", "Phone"));
     std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
     QVERIFY(aliceSession);
-    QVERIFY(ward.grant(alice, bob));
+    QVERIFY(ward.addUser(*aliceSession, bob, Role::Member));
 
     // Bob's library holds the ward, named, with a copy written from it.
     QTemporaryDir folder;
@@ -858,14 +895,13 @@ void DocumentLibraryTest::aWardLostWhileFetchedKeepsItsEntryForForgetLost()
     QVERIFY(library.exportCopy(ward.documentId, wardDocument(bob.identity, "Tanglewood"), copyPath, nullptr));
 
     // Alice removes Bob; Bob's file is gone, so opening it fetches.
-    const ServerContract::Session admin = ward.sessionFor(alice).value();
-    QVERIFY(ServerTestSupport::wait<ServerContract::Done>(std::bind(&ServerContract::ServerApi::removeMember,
-                                                                    &ward.server,
-                                                                    admin,
-                                                                    ward.documentId,
-                                                                    bob.identity.member,
-                                                                    std::placeholders::_1))
-                .ok());
+    aliceSession->checkServer();
+    ward.settle();
+    QVERIFY(aliceSession->document().sealingSet().person(bob.identity.member).has_value());
+    aliceSession->edit(DocumentSession::Edit::Roster, removePerson(bob.identity.member));
+    aliceSession->publishNow();
+    ward.settle();
+    QVERIFY(aliceSession->syncState() == SyncState::UpToDate);
     QVERIFY(QFile::remove(library.pathsFor(ward.documentId).file));
 
     fetched.reset();

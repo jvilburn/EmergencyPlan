@@ -11,19 +11,13 @@
 using namespace ServerContract;
 using namespace ServerTestSupport;
 using SessionTestSupport::asTestDevice;
-using SessionTestSupport::newDeviceOf;
 using SessionTestSupport::newIdentity;
 using namespace std::placeholders;
 
 namespace
 {
 
-Result<Me> meOf(ServerConnection& connection, QObject* context)
-{
-    return wait<Me>(std::bind(&ServerConnection::me, &connection, context, _1));
-}
-
-void countReply(int& replies, ServerError& last, const Result<Me>& result)
+void countReply(int& replies, ServerError& last, const Result<Head>& result)
 {
     ++replies;
     last = result.error;
@@ -45,6 +39,20 @@ void settle(FakeServer& server)
     }
 }
 
+Result<qint64> registerThrough(ServerConnection& connection, const Upload& upload, QObject* context)
+{
+    return wait<qint64>(std::bind(&ServerConnection::registerDocument, &connection, upload, context, _1));
+}
+
+Result<qint64> uploadThrough(ServerConnection& connection,
+                             const QString& documentId,
+                             qint64 baseVersion,
+                             const Upload& upload,
+                             QObject* context)
+{
+    return wait<qint64>(std::bind(&ServerConnection::upload, &connection, documentId, baseVersion, upload, context, _1));
+}
+
 } // namespace
 
 void ServerConnectionTest::initTestCase()
@@ -52,164 +60,122 @@ void ServerConnectionTest::initTestCase()
     QVERIFY(DocumentCrypto::initialise());
 }
 
-void ServerConnectionTest::theFirstCallSignsInAndSucceeds()
-{
-    FakeServer server;
-    ServerConnection connection(server, newIdentity("Alice", "Laptop"));
-    QObject context;
-
-    QCOMPARE(server.challengesIssued(), 0);
-    const Result<Me> documents = meOf(connection, &context);
-    QVERIFY(documents.ok());
-    QCOMPARE(server.challengesIssued(), 1);
-
-    // Signed in: the next call needs no challenge.
-    QVERIFY(meOf(connection, &context).ok());
-    QCOMPARE(server.challengesIssued(), 1);
-}
-
-void ServerConnectionTest::anExpiredSessionIsSignedIntoAgain()
-{
-    FakeServer server;
-    ServerConnection connection(server, newIdentity("Alice", "Laptop"));
-    QObject context;
-
-    QVERIFY(meOf(connection, &context).ok());
-    QCOMPARE(server.challengesIssued(), 1);
-
-    QVERIFY(wait<Done>(std::bind(&ServerApi::advanceClock, &server, FakeServer::Limits().sessionSeconds + 1, _1)).ok());
-
-    QVERIFY(meOf(connection, &context).ok());
-    QCOMPARE(server.challengesIssued(), 2);
-}
-
-void ServerConnectionTest::aRefusedSignInGivesOneUnauthenticatedReplyAndNoRetry()
-{
-    FakeServer server;
-
-    // A device whose signing key is not the one its verify key names: every login
-    // it signs fails to verify.
-    DeviceIdentity broken = newIdentity("Mallory", "Laptop");
-    broken.signing.signingKey = DocumentCrypto::generateSigningKeypair().signingKey;
-    ServerConnection connection(server, broken);
-    QObject context;
-
-    int replies = 0;
-    ServerError last = ServerError::None;
-    connection.me(&context, std::bind(&countReply, std::ref(replies), std::ref(last), _1));
-    settle(server);
-
-    QCOMPARE(replies, 1);
-    QCOMPARE(last, ServerError::Unauthenticated);
-    QCOMPARE(server.challengesIssued(), 1);
-}
-
-void ServerConnectionTest::callsMadeBeforeTheFirstSignInShareOneChallenge()
-{
-    FakeServer server;
-    ServerConnection connection(server, newIdentity("Alice", "Laptop"));
-    QObject context;
-
-    int replies = 0;
-    ServerError last = ServerError::Unreachable;
-    for (int call = 0; call < 3; ++call)
-    {
-        connection.me(&context, std::bind(&countReply, std::ref(replies), std::ref(last), _1));
-    }
-    settle(server);
-
-    QCOMPARE(replies, 3);
-    QCOMPARE(last, ServerError::None);
-    QCOMPARE(server.challengesIssued(), 1);
-}
-
-void ServerConnectionTest::signingInRegistersThePerson()
+void ServerConnectionTest::writesAreSignedByThisDevice()
 {
     FakeServer server;
     const DeviceIdentity alice = newIdentity("Alice", "Laptop");
     ServerConnection connection(server, alice);
     QObject context;
+    const QString id = newDocumentId();
 
-    const Result<Me> me = meOf(connection, &context);
-    QVERIFY(me.ok());
-    QCOMPARE(me.value->person.member, alice.member);
-    QCOMPARE(me.value->person.displayName, QString("Alice"));
-    QCOMPARE(me.value->person.devices.size(), 1);
-    QCOMPARE(me.value->person.devices.first().fingerprint, alice.fingerprint());
-    QCOMPARE(me.value->person.devices.first().name, QString("Laptop"));
+    const Result<qint64> registered = registerThrough(connection, uploadFor(id, {asTestDevice(alice)}, 1), &context);
+    QVERIFY(registered.ok());
+    QCOMPARE(registered.value.value(), 1);
 
-    // A second connection for the same device registers again and changes nothing.
-    ServerConnection again(server, alice);
-    QCOMPARE(meOf(again, &context).value->person.devices.size(), 1);
+    const Result<qint64> uploaded = uploadThrough(connection, id, 1, uploadFor(id, {asTestDevice(alice)}, 2), &context);
+    QVERIFY(uploaded.ok());
+    QCOMPARE(uploaded.value.value(), 2);
+
+    const Result<Lease> lease = wait<Lease>(std::bind(&ServerConnection::takeLease, &connection, id, &context, _1));
+    QVERIFY(lease.ok());
+    QCOMPARE(lease.value->holder, alice.fingerprint());
+
+    const Result<Head> head = wait<Head>(std::bind(&ServerConnection::head, &connection, id, &context, _1));
+    QCOMPARE(head.value->version, 2);
+    QCOMPARE(head.value->published.device, alice.fingerprint());
+    QVERIFY(head.value->leaseHolder == alice.fingerprint());
+
+    QVERIFY(wait<Done>(std::bind(&ServerConnection::releaseLease, &connection, id, &context, _1)).ok());
+    QVERIFY(!headOf(server, id).value->leaseHolder.has_value());
 }
 
-void ServerConnectionTest::aDeviceWithNoPersonSignsInToLink()
+void ServerConnectionTest::aDeviceSigningWithAnotherKeyIsRefused()
 {
     FakeServer server;
-    DeviceIdentity unlinked = newIdentity("", "Phone");
-    unlinked.member = MemberId();
-    ServerConnection connection(server, unlinked);
+
+    // A device whose signing key is not the one its verify key names: every write
+    // it signs fails to verify.
+    DeviceIdentity broken = newIdentity("Mallory", "Laptop");
+    broken.signing.signingKey = DocumentCrypto::generateSigningKeypair().signingKey;
+    ServerConnection connection(server, broken);
     QObject context;
+    const QString id = newDocumentId();
 
-    const Result<QString> code = wait<QString>(std::bind(&ServerConnection::startLink, &connection, &context, _1));
-    QVERIFY(code.ok());
-    QVERIFY(!code.value->isEmpty());
+    QCOMPARE(registerThrough(connection, uploadFor(id, {asTestDevice(broken)}, 1), &context).error,
+             ServerError::InvalidRequest);
+    QCOMPARE(headOf(server, id).error, ServerError::UnknownDocument);
 
-    // Without a person it has nothing to read about itself.
-    QCOMPARE(meOf(connection, &context).error, ServerError::InvalidRequest);
+    // Anchor: the same identity with its own signing key is accepted.
+    const DeviceIdentity sound = newIdentity("Alice", "Laptop");
+    ServerConnection soundConnection(server, sound);
+    QVERIFY(registerThrough(soundConnection, uploadFor(id, {asTestDevice(sound)}, 1), &context).ok());
 }
 
-void ServerConnectionTest::anUnlinkedDeviceHearsItFromEveryCallWithoutSigningInAgain()
+void ServerConnectionTest::uploadAsSignsAsTheWriterGiven()
 {
     FakeServer server;
-    const DeviceIdentity laptop = newIdentity("Alice", "Laptop");
-    const DeviceIdentity phone = newDeviceOf(laptop, "Phone");
-    const std::optional<Session> laptopSession = join(server, asTestDevice(laptop));
-    QVERIFY(laptopSession.has_value());
-    QVERIFY(link(server, asTestDevice(phone), laptopSession.value(), {}).has_value());
-    QVERIFY(wait<Done>(std::bind(&ServerApi::unlinkDevice, &server, laptopSession.value(), phone.fingerprint(), _1)).ok());
-
-    ServerConnection connection(server, phone);
-    QList<LostAccess> told;
-    connection.setUnlinkedHandler([&told](const LostAccess& lost) { told.append(lost); });
+    const DeviceIdentity alice = newIdentity("Alice", "Laptop");
+    const TestDevice invite = newDevice("Invite");
+    const TestDevice stranger = newDevice("Stranger");
+    ServerConnection connection(server, alice);
     QObject context;
-    const int before = server.challengesIssued();
+    const QString id = newDocumentId();
+    QVERIFY(registerThrough(connection, uploadFor(id, {asTestDevice(alice), invite}, 1), &context).ok());
 
-    const Result<Me> first = meOf(connection, &context);
-    QCOMPARE(first.error, ServerError::AccessLost);
-    QVERIFY(first.lost.has_value());
-    QCOMPARE(first.lost->how, LostAccess::How::Unlinked);
-    QCOMPARE(first.lost->byWhom, QString("Laptop"));
+    // Signed as the invite, which the header names, though this connection is Alice's.
+    const ServerConnection::Writer asInvite{invite.keys(), invite.signing.signingKey};
+    const Result<qint64> joined = wait<qint64>(std::bind(&ServerConnection::uploadAs,
+                                                         &connection,
+                                                         asInvite,
+                                                         id,
+                                                         1,
+                                                         uploadFor(id, {asTestDevice(alice)}, 2),
+                                                         &context,
+                                                         _1));
+    QVERIFY(joined.ok());
+    QCOMPARE(joined.value.value(), 2);
+    QCOMPARE(headOf(server, id).value->published.device, invite.fingerprint());
 
-    const Result<Head> second =
-        wait<Head>(std::bind(&ServerConnection::head, &connection, ServerTestSupport::newDocumentId(), &context, _1));
-    QCOMPARE(second.error, ServerError::AccessLost);
-    QCOMPARE(server.challengesIssued(), before + 1);
-
-    // The app hears it once, however many calls do.
-    QCOMPARE(told.size(), 1);
-    QCOMPARE(told.first().how, LostAccess::How::Unlinked);
-    QCOMPARE(told.first().byWhom, QString("Laptop"));
+    // The invite is gone from the header it wrote, so it cannot write again; nor can a
+    // writer the header never named.
+    const ServerConnection::Writer asStranger{stranger.keys(), stranger.signing.signingKey};
+    for (const ServerConnection::Writer& writer : {asInvite, asStranger})
+    {
+        const Result<qint64> refused = wait<qint64>(std::bind(&ServerConnection::uploadAs,
+                                                              &connection,
+                                                              writer,
+                                                              id,
+                                                              2,
+                                                              uploadFor(id, {asTestDevice(alice)}, 3),
+                                                              &context,
+                                                              _1));
+        QCOMPARE(refused.error, ServerError::NotAKeyHolder);
+    }
+    QCOMPARE(headOf(server, id).value->version, 2);
+    QVERIFY(connection.self().keys == alice.keys());
 }
 
 void ServerConnectionTest::aReplyWhoseContextWasDestroyedIsDropped()
 {
     FakeServer server;
-    ServerConnection connection(server, newIdentity("Alice", "Laptop"));
+    const DeviceIdentity alice = newIdentity("Alice", "Laptop");
+    ServerConnection connection(server, alice);
     QObject survivor;
+    const QString id = newDocumentId();
+    QVERIFY(registerThrough(connection, uploadFor(id, {asTestDevice(alice)}, 1), &survivor).ok());
 
     server.holdReplies(true);
 
     int droppedReplies = 0;
     ServerError droppedError = ServerError::None;
     QObject* doomed = new QObject;
-    connection.me(doomed, std::bind(&countReply, std::ref(droppedReplies), std::ref(droppedError), _1));
+    connection.head(id, doomed, std::bind(&countReply, std::ref(droppedReplies), std::ref(droppedError), _1));
 
     int keptReplies = 0;
     ServerError keptError = ServerError::Unreachable;
-    connection.me(&survivor, std::bind(&countReply, std::ref(keptReplies), std::ref(keptError), _1));
+    connection.head(id, &survivor, std::bind(&countReply, std::ref(keptReplies), std::ref(keptError), _1));
 
-    QVERIFY(server.waitingReplies() > 0);
+    QCOMPARE(server.waitingReplies(), qsizetype(2));
     delete doomed;
 
     server.holdReplies(false);

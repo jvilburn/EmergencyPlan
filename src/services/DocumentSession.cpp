@@ -199,6 +199,13 @@ void fetchForJoin(const Joining& joining, bool mayRetry)
                          std::bind(&onJoinFetched, joining, mayRetry, _1));
 }
 
+/// Whether two rosters name the same people, devices, roles, and invites. The former
+/// keys each carries are the history of its data key, not who has access.
+bool sameAccess(const SealingSet& a, const SealingSet& b)
+{
+    return a.people() == b.people() && a.invites() == b.invites();
+}
+
 /// The one edit invite makes.
 bool addInviteTo(Document& document, const Invite& invite)
 {
@@ -964,23 +971,39 @@ bool DocumentSession::resolve(Resolution resolution, QString* errorMessage)
     const std::optional<EmergencyResponse> response =
         ResponseMerge::merge(baseResponse, m_document.emergencyResponse(), theirs.document.emergencyResponse());
 
-    // Keep theirs: their directory and roster with the merged response. Keep mine:
-    // the local file as it stands - this session's directory and roster, the merged
-    // response - sealed on their header when the conflict was raised.
+    // Keep theirs: their directory with the merged response. Keep mine: the local
+    // file as it stands - this session's directory, the merged response - sealed on
+    // their header when the conflict was raised.
     Document resolved = resolution == Resolution::KeepTheirs ? theirs.document : m_document;
     resolved.setEmergencyResponse(response);
+
+    // Who has access is settled on its own: a roster only one side changed is that
+    // side's, whichever directory is kept, so keeping mine never puts back someone
+    // they removed and keeping theirs never drops someone this device added.
+    const SealingSet& baseRoster = m_base.has_value() ? m_base->document.sealingSet() : theirs.document.sealingSet();
+    const bool mineChanged = !sameAccess(m_document.sealingSet(), baseRoster);
+    const bool theirsChanged = !sameAccess(theirs.document.sealingSet(), baseRoster);
+    if (mineChanged != theirsChanged)
+    {
+        resolved.setSealingSet(mineChanged ? m_document.sealingSet() : theirs.document.sealingSet());
+    }
 
     bool written = false;
     if (resolved == theirs.document)
     {
         written = writeLocal(theirs);
     }
+    else if (resolution == Resolution::KeepMine && resolved.sealingSet() == m_document.sealingSet())
+    {
+        // Mine, roster and all, as the local file holds it: sealed by the key that file
+        // is, since an edit made while the conflict waited may have rotated it.
+        written = writeLocal(resolved, m_header, m_dataKey);
+    }
     else
     {
-        // Each document with the key it is sealed by: an edit made while the conflict
-        // waited may have rotated this session's key.
-        written = resolution == Resolution::KeepMine ? writeLocal(resolved, m_header, m_dataKey)
-                                                     : writeResealed(resolved, theirs.sealed.header, theirs.dataKey);
+        // Their roster, or their directory: on their header and key, rotated where the
+        // roster lacks someone they sealed to.
+        written = writeResealed(resolved, theirs.sealed.header, theirs.dataKey);
     }
 
     // The local file first, as in a merge; the base then moves to theirs. A base

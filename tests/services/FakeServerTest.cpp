@@ -13,16 +13,6 @@ using namespace std::placeholders;
 namespace
 {
 
-Result<Head> headOf(FakeServer& server, const Session& session, const QString& documentId)
-{
-    return wait<Head>(std::bind(&ServerApi::head, &server, session, documentId, _1));
-}
-
-Result<Snapshot> downloadOf(FakeServer& server, const Session& session, const QString& documentId)
-{
-    return wait<Snapshot>(std::bind(&ServerApi::download, &server, session, documentId, _1));
-}
-
 void keepUpload(std::optional<Result<qint64>>& out, const Result<qint64>& result)
 {
     out = result;
@@ -52,13 +42,15 @@ void FakeServerTest::offlineRefusesEverything()
     QVERIFY(ward.has_value());
 
     server.setOffline(true);
-    QCOMPARE(wait<QByteArray>(std::bind(&ServerApi::challenge, &server, _1)).error, ServerError::Unreachable);
-    QCOMPARE(headOf(server, ward->aliceSession, ward->id).error, ServerError::Unreachable);
-    QCOMPARE(downloadOf(server, ward->aliceSession, ward->id).error, ServerError::Unreachable);
-    QCOMPARE(wait<Me>(std::bind(&ServerApi::me, &server, ward->aliceSession, _1)).error, ServerError::Unreachable);
+    QCOMPARE(headOf(server, ward->id).error, ServerError::Unreachable);
+    QCOMPARE(downloadOf(server, ward->id).error, ServerError::Unreachable);
+    QCOMPARE(publish(server, ward.value(), ward->alice, {ward->alice}), ServerError::Unreachable);
+    QCOMPARE(takeLeaseAs(server, ward->alice, ward->id).error, ServerError::Unreachable);
+    const TestDevice dave = newDevice("Dave");
+    QCOMPARE(registerAs(server, dave, uploadFor(newDocumentId(), {dave}, 1)).error, ServerError::Unreachable);
 
     server.setOffline(false);
-    QVERIFY(headOf(server, ward->aliceSession, ward->id).ok());
+    QCOMPARE(headOf(server, ward->id).value->version, 2);
 }
 
 void FakeServerTest::aForcedConflictRefusesTheNextUploadOnly()
@@ -70,11 +62,13 @@ void FakeServerTest::aForcedConflictRefusesTheNextUploadOnly()
 
     server.forceConflict(w.id);
     const QList<TestDevice> everyone = {w.alice, w.bob, w.carol};
-    QCOMPARE(publish(server, w, w.aliceSession, everyone), ServerError::VersionConflict);
-    QCOMPARE(publish(server, w, w.aliceSession, everyone), ServerError::None);
+    QCOMPARE(publish(server, w, w.alice, everyone), ServerError::VersionConflict);
+    QCOMPARE(w.version, 2);
+    QCOMPARE(publish(server, w, w.alice, everyone), ServerError::None);
+    QCOMPARE(w.version, 3);
 }
 
-void FakeServerTest::aLeaseCanBeHeldByAnotherMember()
+void FakeServerTest::aLeaseCanBeHeldByAnotherDevice()
 {
     FakeServer server;
     std::optional<SharedDocument> ward = wardOfThree(server);
@@ -83,35 +77,36 @@ void FakeServerTest::aLeaseCanBeHeldByAnotherMember()
 
     server.holdLeaseAs(w.id, w.carol.fingerprint());
 
-    QCOMPARE(wait<Lease>(std::bind(&ServerApi::takeLease, &server, w.aliceSession, w.id, _1)).error,
-             ServerError::LeaseHeld);
-    QVERIFY(headOf(server, w.aliceSession, w.id).value->leaseHolder == w.carol.fingerprint());
+    QCOMPARE(takeLeaseAs(server, w.alice, w.id).error, ServerError::LeaseHeld);
+    QVERIFY(headOf(server, w.id).value->leaseHolder == w.carol.fingerprint());
 
-    // A held lease never blocks a sealing addition or a response record: the lease
-    // is advisory at the server, which cannot tell a directory edit from either.
-    QCOMPARE(publish(server, w, w.aliceSession, {w.alice, w.bob, w.carol}), ServerError::None);
+    // A held lease never blocks a roster edit or a response record: the lease is
+    // advisory at the server, which cannot tell a directory edit from either.
+    QCOMPARE(publish(server, w, w.alice, {w.alice, w.bob, w.carol}), ServerError::None);
+    QCOMPARE(w.version, 3);
 }
 
 void FakeServerTest::limitsAreConfigurable()
 {
     FakeServer::Limits limits;
-    limits.registrationsPerKey = 2;
-    limits.registrationsPerHour = 100;
+    limits.uploadsPerHour = 2;
     FakeServer server(limits);
+    std::optional<SharedDocument> ward = wardOfThree(server);
+    QVERIFY(ward.has_value());
+    SharedDocument& w = ward.value();
+    const QList<TestDevice> everyone = {w.alice, w.bob, w.carol};
 
-    const TestDevice device = newPerson("Alice");
-    const std::optional<Session> session = join(server, device);
-    QVERIFY(session.has_value());
+    // wardOfThree's own upload was Alice's first of the hour.
+    QCOMPARE(publish(server, w, w.alice, everyone), ServerError::None);
+    QCOMPARE(publish(server, w, w.alice, everyone), ServerError::RateLimited);
+    QCOMPARE(w.version, 3);
 
-    for (int attempt = 0; attempt < 2; ++attempt)
-    {
-        QVERIFY(wait<qint64>(std::bind(
-            &ServerApi::registerDocument, &server, session.value(), uploadFor(newDocumentId(), {device}, 1), _1)).ok());
-    }
-    QCOMPARE(wait<qint64>(std::bind(
-                 &ServerApi::registerDocument, &server, session.value(), uploadFor(newDocumentId(), {device}, 1), _1))
-                 .error,
-             ServerError::RateLimited);
+    // Counted per signer, and per hour.
+    QCOMPARE(publish(server, w, w.bob, everyone), ServerError::None);
+    QCOMPARE(w.version, 4);
+    QVERIFY(advanceClock(server, 61 * 60));
+    QCOMPARE(publish(server, w, w.alice, everyone), ServerError::None);
+    QCOMPARE(w.version, 5);
 }
 
 // --- Replies ---------------------------------------------------------------------
@@ -123,12 +118,12 @@ void FakeServerTest::aReplyNeverArrivesBeforeTheCallReturns()
     QVERIFY(ward.has_value());
 
     bool answered = false;
-    server.head(ward->aliceSession, ward->id, [&answered](const Result<Head>&) { answered = true; });
+    server.head(ward->id, [&answered](const Result<Head>&) { answered = true; });
     QVERIFY(!answered);
 
     // A failure is answered later too.
     bool refused = false;
-    server.head(Session{"not a session"}, ward->id, [&refused](const Result<Head>&) { refused = true; });
+    server.head(newDocumentId(), [&refused](const Result<Head>&) { refused = true; });
     QVERIFY(!refused);
 
     QTRY_VERIFY(answered);
@@ -145,9 +140,11 @@ void FakeServerTest::heldRepliesArriveInCallOrderOneAtATime()
     server.holdReplies(true);
 
     QList<QString> arrived;
-    server.head(w.aliceSession, w.id, std::bind(&noteArrival, std::ref(arrived), QString("head")));
-    server.download(w.aliceSession, w.id, std::bind(&noteArrival, std::ref(arrived), QString("download")));
-    server.me(w.aliceSession, std::bind(&noteArrival, std::ref(arrived), QString("me")));
+    server.head(w.id, std::bind(&noteArrival, std::ref(arrived), QString("head")));
+    server.download(w.id, std::bind(&noteArrival, std::ref(arrived), QString("download")));
+    server.releaseLease(w.alice.signer(signedBytes(CallReleaseLease, w.id)),
+                        w.id,
+                        std::bind(&noteArrival, std::ref(arrived), QString("release")));
 
     // Held means held, however long the event loop runs.
     QTest::qWait(50);
@@ -158,7 +155,7 @@ void FakeServerTest::heldRepliesArriveInCallOrderOneAtATime()
     QVERIFY(server.deliverNext());
     QCOMPARE(arrived, (QList<QString>{"head", "download"}));
     QVERIFY(server.deliverNext());
-    QCOMPARE(arrived, (QList<QString>{"head", "download", "me"}));
+    QCOMPARE(arrived, (QList<QString>{"head", "download", "release"}));
     QVERIFY(!server.deliverNext());
 }
 
@@ -173,10 +170,14 @@ void FakeServerTest::anUploadTakesEffectWhileItsReplyIsHeld()
 
     server.holdReplies(true);
     std::optional<Result<qint64>> uploaded;
-    server.upload(w.aliceSession, w.id, w.version, upload, std::bind(&keepUpload, std::ref(uploaded), _1));
+    server.upload(w.alice.signer(signedBytes(CallUpload, w.id, w.version, upload)),
+                  w.id,
+                  w.version,
+                  upload,
+                  std::bind(&keepUpload, std::ref(uploaded), _1));
 
     std::optional<Result<Head>> head;
-    server.head(w.bobSession, w.id, std::bind(&keepHead, std::ref(head), _1));
+    server.head(w.id, std::bind(&keepHead, std::ref(head), _1));
 
     // Both were decided when made: going offline before they are delivered
     // changes neither. The head asked after the upload sees it, though the
@@ -186,8 +187,8 @@ void FakeServerTest::anUploadTakesEffectWhileItsReplyIsHeld()
     QVERIFY(server.deliverNext());
     QVERIFY(uploaded.has_value() && uploaded->ok());
     QVERIFY(head.has_value() && head->ok());
-    QCOMPARE(head->value->version, w.version + 1);
-    QCOMPARE(uploaded->value.value(), w.version + 1);
+    QCOMPARE(head->value->version, 3);
+    QCOMPARE(uploaded->value.value(), 3);
 }
 
 void FakeServerTest::aLostReplysUploadIsStillTheCurrentVersion()
@@ -200,14 +201,13 @@ void FakeServerTest::aLostReplysUploadIsStillTheCurrentVersion()
     const Upload upload = uploadFor(w.id, {w.alice, w.bob, w.carol}, 5);
 
     server.loseReplies(true);
-    const Result<qint64> lost =
-        wait<qint64>(std::bind(&ServerApi::upload, &server, w.aliceSession, w.id, w.version, upload, _1));
+    const Result<qint64> lost = uploadAs(server, w.alice, w.id, w.version, upload);
     QCOMPARE(lost.error, ServerError::Unreachable);
     server.loseReplies(false);
 
-    const Result<Snapshot> snapshot = downloadOf(server, w.aliceSession, w.id);
+    const Result<Snapshot> snapshot = downloadOf(server, w.id);
     QVERIFY(snapshot.ok());
-    QCOMPARE(snapshot.value->version, w.version + 1);
+    QCOMPARE(snapshot.value->version, 3);
     QCOMPARE(snapshot.value->header, upload.header.toJson());
     QCOMPARE(snapshot.value->blob, upload.blob);
 }

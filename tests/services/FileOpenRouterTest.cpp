@@ -28,7 +28,7 @@ bool writeFile(const QString& path, const QByteArray& bytes)
 Document documentFor(const DeviceIdentity& identity)
 {
     Document document = Document::empty();
-    document.setSealingSet(SealingSet::of(identity.keys()));
+    document.setSealingSet(SealingSet::of(identity.member, identity.displayName, identity.device()));
     return document;
 }
 
@@ -68,8 +68,8 @@ void FileOpenRouterTest::eachFileTakesItsRoute_data()
     QTest::newRow("a copy") << "copy" << FileOpenRouter::Action::OpenCopy << false;
     QTest::newRow("written for this device") << "this device" << FileOpenRouter::Action::AddWard << true;
     QTest::newRow("written for another of this person's devices")
-        << "other device" << FileOpenRouter::Action::RequestAccess << true;
-    QTest::newRow("another person's ward") << "stranger" << FileOpenRouter::Action::RequestAccess << true;
+        << "other device" << FileOpenRouter::Action::NotForThisDevice << true;
+    QTest::newRow("another person's ward") << "stranger" << FileOpenRouter::Action::NotForThisDevice << true;
     QTest::newRow("a later format") << "later" << FileOpenRouter::Action::NeedsNewerVersion << false;
     QTest::newRow("not a Ward Planning file") << "not ours" << FileOpenRouter::Action::NotAWardPlanningFile << false;
     QTest::newRow("a first line longer than any header")
@@ -140,37 +140,86 @@ void FileOpenRouterTest::eachFileTakesItsRoute()
     QCOMPARE(route.documentId, namesTheWard ? documentId : QString());
 }
 
-void FileOpenRouterTest::anInviteLinkNamesItsWardAndNothingElseDoes()
+namespace
 {
-    const QString documentId = DocumentLibrary::newDocumentId();
-    const QString link = FileOpenRouter::inviteLink(documentId);
-    QCOMPARE(link, "wardplanning:open/" + documentId);
-    QCOMPARE(FileOpenRouter::invitedWard(link), documentId);
-    QCOMPARE(FileOpenRouter::invitedWard(link + "/"), documentId);
-    QCOMPARE(FileOpenRouter::invitedWard(link.toUpper().replace(documentId.toUpper(), documentId)), documentId);
 
-    QVERIFY(FileOpenRouter::invitedWard("wardplanning:open/" + documentId.left(30)).isEmpty());
-    QVERIFY(FileOpenRouter::invitedWard("wardplanning:open/" + documentId.toUpper()).isEmpty());
-    QVERIFY(FileOpenRouter::invitedWard("wardplanning:open/../../" + documentId).isEmpty());
-    QVERIFY(FileOpenRouter::invitedWard("https://example.test/" + documentId).isEmpty());
-    QVERIFY(FileOpenRouter::invitedWard("C:/wards/" + documentId + ".wardplanning").isEmpty());
+/// Bytes 0, 1, ... 31: a seed anyone can reproduce.
+QByteArray countingSeed()
+{
+    QByteArray seed;
+    for (int i = 0; i < FileOpenRouter::InviteLink::SeedSize; ++i)
+    {
+        seed.append(char(i));
+    }
+    return seed;
 }
 
-void FileOpenRouterTest::anInviteGoesToTheWardOrToARequest()
+const QString VectorId = "00112233445566778899aabbccddeeff";
+const QString VectorLink = "wardplanning:join/00112233445566778899aabbccddeeff/AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8";
+
+} // namespace
+
+void FileOpenRouterTest::anInviteLinkRoundTripsThroughItsText()
 {
-    QTemporaryDir folder;
-    QVERIFY(folder.isValid());
-    const std::unique_ptr<AppSettings> settings = AppSettings::open(folder.filePath("settings.json"), nullptr);
-    DocumentLibrary library(*settings, folder.filePath("wards"), newIdentity("Alice", "Laptop"));
-    const QString held = DocumentLibrary::newDocumentId();
-    library.add(held);
-    const QString other = DocumentLibrary::newDocumentId();
+    const FileOpenRouter::InviteLink link{VectorId, countingSeed()};
+    QCOMPARE(link.toString(), VectorLink);
+    QCOMPARE(link.toString().size(), 94);
 
-    const FileOpenRouter::Route open = FileOpenRouter::routeInvite(held, library);
-    QCOMPARE(open.action, FileOpenRouter::Action::OpenWard);
-    QCOMPARE(open.documentId, held);
+    const std::optional<FileOpenRouter::InviteLink> parsed = FileOpenRouter::InviteLink::parse(VectorLink);
+    QVERIFY(parsed.has_value());
+    QCOMPARE(parsed->documentId, VectorId);
+    QCOMPARE(parsed->seed, countingSeed());
 
-    const FileOpenRouter::Route request = FileOpenRouter::routeInvite(other, library);
-    QCOMPARE(request.action, FileOpenRouter::Action::RequestAccess);
-    QCOMPARE(request.documentId, other);
+    // A browser's trailing slash, and a scheme in capitals, are the same link.
+    QCOMPARE(FileOpenRouter::InviteLink::parse(VectorLink + "/")->seed, countingSeed());
+    QCOMPARE(FileOpenRouter::InviteLink::parse("WardPlanning:Join/" + VectorLink.mid(18))->documentId, VectorId);
+
+    // Any seed survives the trip, including those whose base64 uses '-' and '_'.
+    for (int i = 0; i < 20; ++i)
+    {
+        const FileOpenRouter::InviteLink random{DocumentLibrary::newDocumentId(),
+                                                DocumentCrypto::randomBytes(FileOpenRouter::InviteLink::SeedSize)};
+        const std::optional<FileOpenRouter::InviteLink> back = FileOpenRouter::InviteLink::parse(random.toString());
+        QVERIFY(back.has_value());
+        QCOMPARE(back->documentId, random.documentId);
+        QCOMPARE(back->seed, random.seed);
+    }
+}
+
+void FileOpenRouterTest::aMalformedInviteLinkIsNotOne_data()
+{
+    const QString seed = VectorLink.mid(VectorLink.lastIndexOf('/') + 1);
+    const QString prefix = "wardplanning:join/";
+
+    QTest::addColumn<QString>("argument");
+    QTest::newRow("a short seed") << prefix + VectorId + "/" + seed.left(40);
+    QTest::newRow("a long seed") << prefix + VectorId + "/" + seed + "AAAA";
+    QTest::newRow("a seed with a character outside base64url") << prefix + VectorId + "/" + seed.left(42) + "+";
+    QTest::newRow("no seed") << prefix + VectorId;
+    QTest::newRow("an empty seed") << prefix + VectorId + "/";
+    QTest::newRow("a short id") << prefix + VectorId.left(30) + "/" + seed;
+    QTest::newRow("an id in capitals") << prefix + VectorId.toUpper() + "/" + seed;
+    QTest::newRow("a path in the id") << prefix + "../" + VectorId + "/" + seed;
+    QTest::newRow("a part too many") << prefix + VectorId + "/" + seed + "/more";
+    QTest::newRow("the open link no build makes") << "wardplanning:open/" + VectorId;
+    QTest::newRow("a web address") << "https://example.test/join/" + VectorId + "/" + seed;
+    QTest::newRow("a file") << "C:/wards/" + VectorId + ".wardplanning";
+}
+
+void FileOpenRouterTest::aMalformedInviteLinkIsNotOne()
+{
+    QFETCH(QString, argument);
+    QVERIFY(!FileOpenRouter::InviteLink::parse(argument).has_value());
+
+    // Anchor: the vector itself parses, so the refusal is the change's doing.
+    QVERIFY(FileOpenRouter::InviteLink::parse(VectorLink).has_value());
+}
+
+void FileOpenRouterTest::theInviteMessageSaysWhoWhereAndHow()
+{
+    const FileOpenRouter::InviteLink link{VectorId, countingSeed()};
+    QCOMPARE(FileOpenRouter::inviteMessage("Alice Smith", "Tanglewood Ward", link),
+             QString("Alice Smith has invited you to Tanglewood Ward in Ward Planning. Install it from "
+                     "https://github.com/jvilburn/EmergencyPlan/releases/latest, then open this link:\n")
+                 + VectorLink);
 }

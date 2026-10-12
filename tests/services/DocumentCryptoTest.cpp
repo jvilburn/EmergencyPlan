@@ -43,7 +43,10 @@ void DocumentCryptoTest::hashIsStableAndSeparatesDomains()
     const QList<HashDomain> domains = {
         HashDomain::Fingerprint,
         HashDomain::Payload,
-        HashDomain::FormerKey
+        HashDomain::FormerKey,
+        HashDomain::SignedWrite,
+        HashDomain::InviteSealing,
+        HashDomain::InviteSigning
     };
 
     // Same length as well as same material, so the digests are told apart by the
@@ -128,8 +131,34 @@ void DocumentCryptoTest::publicHalvesDeriveFromTheSecretHalves()
             != sealing.publicKey);
 }
 
+void DocumentCryptoTest::aSealingKeypairComesFromItsSeed()
+{
+    const QByteArray seed = DocumentCrypto::randomBytes(DocumentCrypto::SealingSeedSize);
+    const Keypair fromSeed = DocumentCrypto::keypairFromSeed(seed);
+    QVERIFY(fromSeed.publicKey.isValid());
+    QVERIFY(fromSeed.secretKey.isValid());
+
+    // The same seed makes the same keypair, its halves belonging together.
+    const Keypair again = DocumentCrypto::keypairFromSeed(seed);
+    QVERIFY(again.publicKey == fromSeed.publicKey);
+    QVERIFY(again.secretKey == fromSeed.secretKey);
+    QVERIFY(DocumentCrypto::keypairFromSecret(fromSeed.secretKey).publicKey == fromSeed.publicKey);
+
+    // A data key sealed to it opens with it, and not with another seed's keypair.
+    const DataKey dataKey = DocumentCrypto::generateDataKey();
+    const QByteArray sealed = DocumentCrypto::sealDataKey(dataKey, fromSeed.publicKey);
+    QVERIFY(DocumentCrypto::unsealDataKey(sealed, again) == dataKey);
+    QByteArray otherSeed = seed;
+    otherSeed[0] = char(otherSeed.at(0) ^ 0x01);
+    const Keypair other = DocumentCrypto::keypairFromSeed(otherSeed);
+    QVERIFY(other.publicKey != fromSeed.publicKey);
+    QVERIFY(!DocumentCrypto::unsealDataKey(sealed, other).has_value());
+}
+
 void DocumentCryptoTest::derivingRefusesInvalidInput()
 {
+    QVERIFY(!DocumentCrypto::keypairFromSeed(QByteArray(5, 'x')).publicKey.isValid());
+    QVERIFY(!DocumentCrypto::keypairFromSeed(QByteArray()).secretKey.isValid());
     QVERIFY(!DocumentCrypto::keypairFromSecret(SecretKey()).publicKey.isValid());
     QVERIFY(DocumentCrypto::seedOf(SigningKey()).isEmpty());
     QVERIFY(!DocumentCrypto::signingKeypairFromSeed(QByteArray(5, 'x')).signingKey.isValid());
@@ -199,45 +228,45 @@ void DocumentCryptoTest::unsealRefusesAMalformedSealedKey()
 void DocumentCryptoTest::signatureVerifiesAndRejectsTampering()
 {
     const SigningKeypair keys = DocumentCrypto::generateSigningKeypair();
-    const QByteArray challenge = "challenge";
-    const QByteArray signature = DocumentCrypto::signChallenge(challenge, keys.signingKey);
+    const QByteArray bytes = "what a write covers";
+    const QByteArray signature = DocumentCrypto::sign(bytes, keys.signingKey);
 
     QCOMPARE(signature.size(), qsizetype(DocumentCrypto::SignatureSize));
-    QVERIFY(DocumentCrypto::challengeVerifies(challenge, signature, keys.verifyKey));
-    QVERIFY(!DocumentCrypto::challengeVerifies("challenqe", signature, keys.verifyKey));
+    QVERIFY(DocumentCrypto::verifies(bytes, signature, keys.verifyKey));
+    QVERIFY(!DocumentCrypto::verifies("what a write coverz", signature, keys.verifyKey));
 
     QByteArray flipped = signature;
     flipped[0] = char(flipped.at(0) ^ 0x01);
-    QVERIFY(!DocumentCrypto::challengeVerifies(challenge, flipped, keys.verifyKey));
+    QVERIFY(!DocumentCrypto::verifies(bytes, flipped, keys.verifyKey));
 
     // A truncated or lengthened signature is refused before it reaches libsodium.
-    QVERIFY(!DocumentCrypto::challengeVerifies(challenge, signature.left(signature.size() - 1), keys.verifyKey));
-    QVERIFY(!DocumentCrypto::challengeVerifies(challenge, signature + QByteArray(1, 'x'), keys.verifyKey));
+    QVERIFY(!DocumentCrypto::verifies(bytes, signature.left(signature.size() - 1), keys.verifyKey));
+    QVERIFY(!DocumentCrypto::verifies(bytes, signature + QByteArray(1, 'x'), keys.verifyKey));
 }
 
 void DocumentCryptoTest::signatureFailsWithAnotherDevicesKey()
 {
     const SigningKeypair keys = DocumentCrypto::generateSigningKeypair();
     const SigningKeypair other = DocumentCrypto::generateSigningKeypair();
-    const QByteArray challenge = "a challenge";
+    const QByteArray bytes = "what a write covers";
 
-    const QByteArray signature = DocumentCrypto::signChallenge(challenge, keys.signingKey);
+    const QByteArray signature = DocumentCrypto::sign(bytes, keys.signingKey);
 
-    QVERIFY(DocumentCrypto::challengeVerifies(challenge, signature, keys.verifyKey));
-    QVERIFY(!DocumentCrypto::challengeVerifies(challenge, signature, other.verifyKey));
-    QVERIFY(!DocumentCrypto::challengeVerifies(challenge, signature, VerifyKey()));
+    QVERIFY(DocumentCrypto::verifies(bytes, signature, keys.verifyKey));
+    QVERIFY(!DocumentCrypto::verifies(bytes, signature, other.verifyKey));
+    QVERIFY(!DocumentCrypto::verifies(bytes, signature, VerifyKey()));
 }
 
-void DocumentCryptoTest::signingRefusesAnInvalidKeyOrAnEmptyChallenge()
+void DocumentCryptoTest::signingRefusesAnInvalidKeyOrNoBytes()
 {
     // A 32-byte value is a plausible mistake here, since every other key is 32.
     SigningKey tooShort;
     tooShort.bytes = QByteArray(32, 'k');
 
-    QVERIFY(DocumentCrypto::signChallenge("challenge", tooShort).isEmpty());
-    QVERIFY(DocumentCrypto::signChallenge("challenge", SigningKey()).isEmpty());
+    QVERIFY(DocumentCrypto::sign("what a write covers", tooShort).isEmpty());
+    QVERIFY(DocumentCrypto::sign("what a write covers", SigningKey()).isEmpty());
 
     const SigningKeypair keys = DocumentCrypto::generateSigningKeypair();
-    QVERIFY(DocumentCrypto::signChallenge(QByteArray(), keys.signingKey).isEmpty());
-    QVERIFY(!DocumentCrypto::signChallenge("challenge", keys.signingKey).isEmpty());
+    QVERIFY(DocumentCrypto::sign(QByteArray(), keys.signingKey).isEmpty());
+    QVERIFY(!DocumentCrypto::sign("what a write covers", keys.signingKey).isEmpty());
 }

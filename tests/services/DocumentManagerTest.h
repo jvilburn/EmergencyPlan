@@ -18,16 +18,14 @@ private slots:
     void aGeocodingResultAfterTheLeaseIsLostChangesNothing();
     void aConflictWaitsUntilItIsSettled();
 
-    // Access history and lost access, through the app's own services
+    // Who has access, and lost access, through the app's own services
     void accessChangesShowOnceAndStaySeenOnceDismissed();
     void aFetchThatFindsAccessLostSaysWhy();
     void shareAnnouncesTheWardAndOfflineSaysWhy();
-    void aGrantSealsTheDeviceThatAskedAndADeclineSaysSo();
-    void aGrantRetriesOnceOnAConflict();
-    void aGrantOnAnUnreadableVersionIsBlocked();
-    void anAdminRemovesAndChangesRoles();
-    void theLastAdminLeavesThroughASuccessorAndTheWardGoes();
+    void anInviteJoinsAUserOrAnotherDevice();
+    void anAdminRemovesWithdrawsAndChangesRoles();
+    void theLastAdminCannotStepDownOrLeave();
     void aMemberLeavesAndTheWardGoes();
-    void aClosedWardTakenAwayGoesAtTheNextCheck();
+    void aClosedWardTakenAwayGoesWhenItIsNextOpened();
     void anOpenWardTakenAwayClosesAtTheNextCheck();
 };

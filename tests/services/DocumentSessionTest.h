@@ -41,12 +41,9 @@ private slots:
     void aServerVersionFailingValidationTouchesNothing();
 
     // The sealing-set rule
-    void theNextPublishAfterARemovalPrunesAndRotates();
+    void aRemovalRotatesTheKeyPastWhoeverWasRemoved();
     void aPublishThatPrunesNobodyKeepsTheKey();
-    void aDeviceLinkedWithoutThisWardIsSealedByItsNextWrite();
-    void aDeviceNobodyHereApprovedIsNeverSealed();
-    void aHeadLeavingThisDeviceOutIsAFaultAndSealsNothing();
-    void aRefusalOverTheAllowListPrunesAndPublishes();
+    void aRefusalAfterSomeoneLeftTakesTheirRosterAndPublishes();
 
     // The refused-publish route
     void aRefusedPublishAdoptsTheirKeyAndSealingSet();
@@ -62,7 +59,9 @@ private slots:
     void aRemovalMidSessionDeletesEverything();
     void aRemovalOnOpenDeletesEverything();
     void aRemovalOnAPublishDeletesEverything();
+    void aLeaveReportsLeftOnceTheServerHasIt();
     void aLeaveFromThisPersonsOtherDeviceReportsLeft();
+    void aDeviceTakenOutByItsOwnPersonReportsUnlinked();
 
     // Read-only and updates
     void aForeignLeaseRefusesDirectoryEditsButNotResponses();
@@ -79,6 +78,15 @@ private slots:
 
     // Sharing
     void sharingKeepsTheIdAndPathsAndRecordsABase();
-    void aSecondDeviceGrantedAccessOpensIt();
-    void aDeviceLinkedBeforeSharingIsSealedAfterIt();
+
+    // Invites and joins
+    void anInviteAddsARecipientAndARosterEntry();
+    void aUserJoinsAndShowsInTheInvitersRosterAtTheNextHead();
+    void aDeviceJoinsAsAnotherDeviceOfItsPerson();
+    void aUsedLinkGivesInviteUsedAndWritesNothing();
+    void aJoinSaysWhyItCouldNotReachTheWard();
+
+    // The roster across a refused publish
+    void aRosterEditCarriesThroughARefusedPublish();
+    void rosterEditsOnBothSidesRaiseAConflict();
 };

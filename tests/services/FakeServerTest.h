@@ -16,7 +16,7 @@ private slots:
 
     void offlineRefusesEverything();
     void aForcedConflictRefusesTheNextUploadOnly();
-    void aLeaseCanBeHeldByAnotherMember();
+    void aLeaseCanBeHeldByAnotherDevice();
     void limitsAreConfigurable();
 
     // Replies

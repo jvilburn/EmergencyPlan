@@ -29,10 +29,12 @@ DocumentManager::DocumentManager(const DeviceIdentity& identity,
 }
 
 DocumentManager::DocumentManager(const DeviceIdentity& identity,
+                                 DocumentRecords& records,
                                  std::unique_ptr<DocumentSession> session,
                                  QObject* parent)
     : QObject(parent)
     , m_identity(identity)
+    , m_records(&records)
     , m_empty(Document::empty())
     , m_commandHistory(this)
 {
@@ -686,15 +688,30 @@ void DocumentManager::revokeInvite(const Fingerprint& invite)
 
 void DocumentManager::setRole(const MemberId& id, Role role)
 {
+    const std::optional<Holder> person = roster().person(id);
+    if (role == Role::Member && person.has_value() && person->isAdmin() && roster().adminCount() == 1)
+    {
+        return;
+    }
     editRoster([&id, role](SealingSet& roster) { return roster.setRole(id, role); });
 }
 
 void DocumentManager::leave()
 {
-    if (m_session && !m_copy.has_value())
+    if (!m_session || m_copy.has_value())
     {
-        m_session->leave();
+        return;
     }
+
+    // A ward always keeps an admin while anyone is left in it.
+    const SealingSet current = roster();
+    const std::optional<Holder> me = self();
+    if (me.has_value() && me->isAdmin() && current.adminCount() == 1 && current.people().size() > 1)
+    {
+        emit leaveFailed(ServerContract::ServerError::InvalidRequest);
+        return;
+    }
+    m_session->leave();
 }
 
 void DocumentManager::joinWard(const FileOpenRouter::InviteLink& link)

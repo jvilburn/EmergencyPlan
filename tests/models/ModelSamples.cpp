@@ -191,8 +191,10 @@ QJsonObject emergencyResponse()
 
 QJsonObject document()
 {
-    const SealingSet sealingSet = SealingSet::of(
-        DeviceKeys{DocumentCrypto::generateKeypair().publicKey, DocumentCrypto::generateSigningKeypair().verifyKey});
+    MemberId person;
+    person.bytes = DocumentCrypto::randomBytes(MemberId::Size);
+    const DeviceKeys keys{DocumentCrypto::generateKeypair().publicKey, DocumentCrypto::generateSigningKeypair().verifyKey};
+    const SealingSet sealingSet = SealingSet::of(person, "Alice", NamedDevice{"Laptop", keys});
 
     QJsonObject json;
     json["sealingSet"] = sealingSet.toJson();
