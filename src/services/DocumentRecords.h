@@ -24,9 +24,10 @@ struct DocumentRecord
     /// The base copy's save counter. A local file above it has unpublished changes.
     qint64 baseSaveCounter = 0;
 
-    /// The newest access-history entry this device has shown and had dismissed, so
-    /// the notice shows only what is newer - across syncs, ward switches, and runs.
-    qint64 historySeen = 0;
+    /// The server version whose roster the access notices last showed and had
+    /// dismissed, so a notice shows only what changed since - across syncs, ward
+    /// switches, and runs.
+    qint64 rosterShown = 0;
 
     QJsonObject toJson() const;
 
@@ -37,8 +38,8 @@ struct DocumentRecord
     bool operator!=(const DocumentRecord& other) const { return !(*this == other); }
 };
 
-/// Where records are kept, with the one device-level list the sealing-set rule
-/// needs. AppSettings keeps them in the app; tests keep them in memory.
+/// Where records are kept. AppSettings keeps them in the app; tests keep them in
+/// memory.
 class DocumentRecords
 {
 public:
@@ -49,12 +50,8 @@ public:
     virtual void setRecord(const QString& documentId, const DocumentRecord& record) = 0;
     virtual void removeRecord(const QString& documentId) = 0;
 
-    /// Every document with a record, so an approval can reseal every ward.
+    /// Every document with a record.
     virtual QStringList documentIds() const = 0;
-
-    /// The devices this device linked, which it seals into every ward it holds.
-    virtual QList<DeviceKeys> linkedDevices() const = 0;
-    virtual void setLinkedDevices(const QList<DeviceKeys>& devices) = 0;
 };
 
 /// Where one document's files live. DocumentLibrary names them.

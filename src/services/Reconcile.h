@@ -65,9 +65,9 @@ DownloadCheck validateDownload(const QString& documentId,
                                const Self& self,
                                const QList<DataKey>& trusted);
 
-/// Every recipient entry's fingerprint is one device in the set, and every device
-/// in the set has exactly one entry. The agreement the server cannot check, since it
-/// never sees the payload.
+/// Every recipient entry's fingerprint is one device or invite in the set, and every
+/// one of those has exactly one entry. The agreement the server cannot check, since
+/// it never sees the payload.
 bool headerMatchesSealingSet(const DocumentHeader& header, const SealingSet& set);
 
 } // namespace Reconcile

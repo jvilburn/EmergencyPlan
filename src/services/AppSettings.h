@@ -33,8 +33,6 @@ public:
     void setRecord(const QString& documentId, const DocumentRecord& record) override;
     void removeRecord(const QString& documentId) override;
     QStringList documentIds() const override;
-    QList<DeviceKeys> linkedDevices() const override { return m_linkedDevices; }
-    void setLinkedDevices(const QList<DeviceKeys>& devices) override;
 
     // --- The document library's wards ---
 
@@ -73,10 +71,6 @@ public:
     /// The ward opened last, which the app reopens at startup; empty for none.
     QString lastWardId() const { return m_lastWardId; }
     void setLastWardId(const QString& documentId);
-
-    /// The wards this device asked for access to and has not yet received.
-    QStringList requestedWards() const { return m_requestedWards; }
-    void setRequestedWards(const QStringList& documentIds);
 
     // --- This device ---
 
@@ -125,10 +119,8 @@ private:
 
     QString m_path;
     QHash<QString, DocumentRecord> m_records;
-    QList<DeviceKeys> m_linkedDevices;
     QHash<QString, WardEntry> m_wards;
     QString m_lastWardId;
-    QStringList m_requestedWards;
     bool m_developerExport = false;
     std::optional<UpdateCheck> m_updateCheck;
     QString m_dismissedUpdate;

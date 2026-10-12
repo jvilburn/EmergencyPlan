@@ -15,10 +15,9 @@
 #include <functional>
 #include <optional>
 
-/// Taking in and writing server versions, shared by DocumentSession and by the
-/// grants and approvals that carry a resealed version: the base copy on disk, the
-/// sealing-set rule applied to a version about to be written, and fetching the
-/// server's version and validating it before anything local changes.
+/// Taking in and writing server versions: the base copy on disk, the sealing-set rule
+/// applied to a version about to be written, and fetching the server's version and
+/// validating it before anything local changes.
 namespace ServerVersion
 {
 
@@ -57,34 +56,37 @@ QList<DataKey> trustedKeys(const QString& documentId,
                            const DocumentRecords& records,
                            const Reconcile::Self& self);
 
-/// What one write may seal to: the allow-list from the latest head, and the devices
-/// this client approved for this ward.
-struct Access
+/// Why this device no longer holds a ward, read off the roster it last held and who
+/// published the version that left it out.
+struct LostAccess
 {
-    QSet<QString> allowList;        ///< fingerprint hex
-    QList<DeviceKeys> approved;
+    enum class How
+    {
+        Removed,        ///< another person wrote a version without this person
+        Left,           ///< this person's own device wrote one without this person
+        Unlinked        ///< this person's own device wrote one without this device
+    };
+
+    How how = How::Removed;
+    QString byWhom;     ///< the publisher's name for Removed; the device's name for Unlinked; empty for Left
+
+    bool operator==(const LostAccess& other) const { return how == other.how && byWhom == other.byWhom; }
+    bool operator!=(const LostAccess& other) const { return !(*this == other); }
 };
 
-/// Whether a head lists this device. One that does not is never applied: it would
-/// seal this device out of its own local file.
-bool listsDevice(const ServerContract::Head& head, const Fingerprint& device);
+/// The reason a header that leaves out self gives, from the roster this device last
+/// read and the device that published the version.
+LostAccess whyLost(const SealingSet& previousRoster, const Fingerprint& self, const Fingerprint& publisher);
 
-/// The allow-list a head names, and the devices this device approved for the write:
-/// the ones it linked, and for a grant or an approval the one being added.
-Access accessFor(const ServerContract::Head& head, const QList<DeviceKeys>& approved);
-
-/// The sealing-set rule applied to a document about to be written: its sealing set
-/// becomes SealingSet::next, and the data key is fresh when that rotates.
+/// The sealing-set rule applied to a document about to be written on top of the
+/// version whose header is previous: the data key is fresh when that version sealed
+/// to anyone the document's roster now lacks.
 struct Resealed
 {
     Document document;
     DataKey dataKey;
 };
-Resealed reseal(const Document& document, const DataKey& dataKey, const Access& access);
-
-/// Whether a version already seals to exactly what the rule would give, so writing
-/// it again would change nothing about who can read it.
-bool isCurrent(const Document& document, const Access& access);
+Resealed reseal(const Document& document, const DataKey& dataKey, const DocumentHeader& previous);
 
 /// What fetching the server's version found.
 struct Fetched
@@ -92,7 +94,7 @@ struct Fetched
     enum class Outcome
     {
         Accepted,
-        AccessLost,
+        AccessLost,         ///< the version's header does not seal to self
         NeedsNewerVersion,
         CallFailed,         ///< no answer to judge: unreachable, refused, or rate limited
         ServerFault
@@ -109,37 +111,14 @@ struct Fetched
     DataKey dataKey;
     Document document;
 
-    // AccessLost
-    std::optional<ServerContract::LostAccess> lost;
-
     QByteArray bytes() const { return DocumentFile::encode(sealed); }
 };
 
 using FetchDone = std::function<void(const Fetched&)>;
 
-/// How building a resealing ended: Accepted with the resealing, or why not. A fetched
-/// version that could not be sealed - which only a crypto failure causes - counts as a
-/// ServerFault with its reason.
-using ResealingBuilt =
-    std::function<void(const Fetched& theirs, const std::optional<ServerContract::Resealing>& built)>;
-
-/// Fetches the server's head and current version of documentId, validates it against
-/// trusted as fetch does, applies the sealing-set rule with this device's linked
-/// devices and admitted approved, encrypts, and hands back what grant or approveLink
-/// sends. admitted counts as allow-listed: the call the resealing goes up with puts it
-/// there in the same step. A head that does not list this device is a ServerFault:
-/// applying it would seal this device out. Replies come only while receiver lives.
-void buildResealing(const Reconcile::Self& self,
-                    const QList<DataKey>& trusted,
-                    const QList<DeviceKeys>& linked,
-                    const DeviceKeys& admitted,
-                    ServerConnection& server,
-                    const QString& documentId,
-                    QObject* receiver,
-                    ResealingBuilt done);
-
-/// Downloads the server's current version and validates it against the keys this
-/// device trusts. Nothing is written. done is called only while receiver is alive.
+/// Fetches the server's current version of documentId and validates it for self
+/// against trusted, as Reconcile does for a local file. Replies come only while
+/// receiver lives.
 void fetch(const Reconcile::Self& self,
            const QList<DataKey>& trusted,
            ServerConnection& server,

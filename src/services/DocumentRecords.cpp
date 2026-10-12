@@ -13,8 +13,7 @@ namespace
 const QLatin1String KeyBaseVersion("baseVersion");
 const QLatin1String KeyBaseHash("baseHash");
 const QLatin1String KeyBaseSaveCounter("baseSaveCounter");
-const QLatin1String KeyGranted("granted");     ///< accepted and ignored
-const QLatin1String KeyHistorySeen("historySeen");
+const QLatin1String KeyRosterShown("rosterShown");
 
 } // namespace
 
@@ -28,16 +27,16 @@ QJsonObject DocumentRecord::toJson() const
     }
 
     json[KeyBaseSaveCounter] = baseSaveCounter;
-    json[KeyHistorySeen] = historySeen;
+    json[KeyRosterShown] = rosterShown;
     return json;
 }
 
 std::optional<DocumentRecord> DocumentRecord::fromJson(const QJsonObject& json)
 {
     DocumentRecord record;
-    if (!StrictJson::hasOnlyKeys(json, {KeyBaseVersion, KeyBaseHash, KeyBaseSaveCounter, KeyGranted, KeyHistorySeen})
+    if (!StrictJson::hasOnlyKeys(json, {KeyBaseVersion, KeyBaseHash, KeyBaseSaveCounter, KeyRosterShown})
         || !StrictJson::readInt64(json, KeyBaseSaveCounter, record.baseSaveCounter)
-        || !StrictJson::readInt64(json, KeyHistorySeen, record.historySeen))
+        || !StrictJson::readInt64(json, KeyRosterShown, record.rosterShown))
     {
         return std::nullopt;
     }
@@ -72,5 +71,5 @@ bool DocumentRecord::operator==(const DocumentRecord& other) const
     return baseVersion == other.baseVersion
         && baseHash == other.baseHash
         && baseSaveCounter == other.baseSaveCounter
-        && historySeen == other.historySeen;
+        && rosterShown == other.rosterShown;
 }

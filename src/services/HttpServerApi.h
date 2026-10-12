@@ -2,127 +2,59 @@
 
 #include "ServerContract.h"
 
-#include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QObject>
+#include <QString>
 
 #include <functional>
 #include <optional>
 
 class AppSettings;
 
-/// ServerApi over HTTP(S), in HttpWire's format. Plain http is for a development
-/// server on this machine; anywhere else the address is https. Transport only:
-/// routes, bodies, the session token in a header, and HTTP status mapped onto
-/// ServerError. Signing in is ServerConnection's.
+/// The server contract over HTTPS, as HttpWire.h describes it.
 ///
-/// The base URL is AppSettings::serverAddress(), read on every request, so an
-/// override takes effect without restarting; with none set, every call is
-/// Unreachable. Every reply comes from the network's own signal, or the event loop
-/// for a call that never leaves, so none arrives before its call returns.
+/// The base address is AppSettings::serverAddress(), read on every call, so a change
+/// takes effect at once. With none set every call answers Unreachable, and the app
+/// works from its local copies.
 ///
-/// Nothing here logs a token, a challenge, a signature, or a body.
+/// Replies arrive on a later turn of the event loop, never before the call returns.
+/// Nothing a request carries is logged.
 class HttpServerApi : public QObject, public ServerContract::ServerApi
 {
     Q_OBJECT
 
 public:
-    /// Long enough for a large blob on a slow connection.
-    static constexpr int TransferTimeoutMilliseconds = 60 * 1000;
+    static constexpr int TransferTimeoutMilliseconds = 30 * 1000;
 
     HttpServerApi(const AppSettings& settings, QObject* parent);
 
-    void challenge(ServerContract::Reply<QByteArray> reply) override;
-    void authenticate(const VerifyKey& device,
-                      const QByteArray& challenge,
-                      const QByteArray& signature,
-                      ServerContract::Reply<ServerContract::Session> reply) override;
-
-    void registerPerson(const ServerContract::Session& session,
-                        const ServerContract::Registration& registration,
-                        ServerContract::Reply<ServerContract::Done> reply) override;
-    void me(const ServerContract::Session& session, ServerContract::Reply<ServerContract::Me> reply) override;
-    void unlinkDevice(const ServerContract::Session& session,
-                      const Fingerprint& device,
-                      ServerContract::Reply<ServerContract::Done> reply) override;
-
-    void startLink(const ServerContract::Session& session,
-                   const PublicKey& publicKey,
-                   const QString& deviceName,
-                   ServerContract::Reply<QString> reply) override;
-    void link(const ServerContract::Session& session,
-              const QString& code,
-              ServerContract::Reply<ServerContract::LinkState> reply) override;
-    void approveLink(const ServerContract::Session& session,
-                     const QString& code,
-                     const QList<ServerContract::Resealing>& resealings,
-                     ServerContract::Reply<ServerContract::Done> reply) override;
-
-    void registerDocument(const ServerContract::Session& session,
+    void registerDocument(const ServerContract::Signer& signer,
                           const ServerContract::Upload& upload,
                           ServerContract::Reply<qint64> reply) override;
-    void head(const ServerContract::Session& session,
-              const QString& documentId,
-              ServerContract::Reply<ServerContract::Head> reply) override;
-    void download(const ServerContract::Session& session,
-                  const QString& documentId,
-                  ServerContract::Reply<ServerContract::Snapshot> reply) override;
-    void upload(const ServerContract::Session& session,
+    void head(const QString& documentId, ServerContract::Reply<ServerContract::Head> reply) override;
+    void download(const QString& documentId, ServerContract::Reply<ServerContract::Snapshot> reply) override;
+    void upload(const ServerContract::Signer& signer,
                 const QString& documentId,
                 qint64 baseVersion,
                 const ServerContract::Upload& upload,
                 ServerContract::Reply<qint64> reply) override;
-
-    void takeLease(const ServerContract::Session& session,
+    void takeLease(const ServerContract::Signer& signer,
                    const QString& documentId,
                    ServerContract::Reply<ServerContract::Lease> reply) override;
-    void releaseLease(const ServerContract::Session& session,
+    void releaseLease(const ServerContract::Signer& signer,
                       const QString& documentId,
                       ServerContract::Reply<ServerContract::Done> reply) override;
-
-    void history(const ServerContract::Session& session,
-                 const QString& documentId,
-                 qint64 after,
-                 ServerContract::Reply<QList<ServerContract::HistoryEntry>> reply) override;
-    void requestAccess(const ServerContract::Session& session,
-                       const QString& documentId,
-                       ServerContract::Reply<ServerContract::Done> reply) override;
-    void accessRequests(const ServerContract::Session& session,
-                        const QString& documentId,
-                        ServerContract::Reply<QList<ServerContract::AccessRequest>> reply) override;
-    void declineRequest(const ServerContract::Session& session,
-                        const QString& documentId,
-                        qint64 index,
-                        ServerContract::Reply<ServerContract::Done> reply) override;
-    void myRequestStatus(const ServerContract::Session& session,
-                         const QString& documentId,
-                         ServerContract::Reply<ServerContract::RequestStatus> reply) override;
-    void grant(const ServerContract::Session& session,
-               const QString& documentId,
-               qint64 index,
-               const ServerContract::Resealing& resealing,
-               ServerContract::Reply<ServerContract::Done> reply) override;
-    void removeMember(const ServerContract::Session& session,
-                      const QString& documentId,
-                      const MemberId& member,
-                      ServerContract::Reply<ServerContract::Done> reply) override;
-    void setRole(const ServerContract::Session& session,
-                 const QString& documentId,
-                 const MemberId& member,
-                 ServerContract::Role role,
-                 ServerContract::Reply<ServerContract::Done> reply) override;
-
     void advanceClock(qint64 seconds, ServerContract::Reply<ServerContract::Done> reply) override;
 
 private:
     /// One request: its method and path below the base URL, an optional JSON body,
-    /// and the session token when the call carries one.
+    /// and the signer when the call is signed.
     struct Call
     {
         QByteArray method;
         QString path;
         std::optional<QJsonObject> body;
-        QString token;
+        std::optional<ServerContract::Signer> signer;
     };
 
     /// Sends call and answers reply with read's reading of a 2xx body, or the

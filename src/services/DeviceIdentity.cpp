@@ -10,7 +10,7 @@ Reconcile::Self DeviceIdentity::self() const
     return Reconcile::Self{sealing, signing.verifyKey};
 }
 
-ServerContract::Registration DeviceIdentity::registration() const
+NamedDevice DeviceIdentity::device() const
 {
-    return ServerContract::Registration{member, displayName, deviceName, sealing.publicKey};
+    return NamedDevice{deviceName, keys()};
 }

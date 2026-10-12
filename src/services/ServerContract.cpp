@@ -1,25 +1,34 @@
 #include "ServerContract.h"
 
+#include "DocumentCrypto.h"
+
+#include <QJsonDocument>
+
 namespace ServerContract
 {
 
-bool Device::operator==(const Device& other) const
+Fingerprint Signer::fingerprint() const
 {
-    return fingerprint == other.fingerprint
-        && keys == other.keys
-        && name == other.name
-        && linkedBy == other.linkedBy
-        && linkedAt == other.linkedAt;
+    return DocumentCrypto::fingerprintOf(keys.publicKey, keys.verifyKey);
 }
 
-bool Person::operator==(const Person& other) const
+QByteArray signedBytes(QLatin1String call, const QString& documentId, qint64 baseVersion, const Upload& upload)
 {
-    return member == other.member && displayName == other.displayName && devices == other.devices;
+    // Each part on its own line, so no two inputs can run together into the same bytes.
+    QByteArray bytes = signedBytes(call, documentId);
+    bytes += QByteArray::number(baseVersion) + '\n';
+    bytes += DocumentCrypto::hash(HashDomain::SignedWrite,
+                                  QJsonDocument(upload.header.toJson()).toJson(QJsonDocument::Compact),
+                                  DocumentCrypto::PayloadHashSize)
+                 .toHex()
+           + '\n';
+    bytes += DocumentCrypto::hash(HashDomain::SignedWrite, upload.blob, DocumentCrypto::PayloadHashSize).toHex() + '\n';
+    return bytes;
 }
 
-bool LostAccess::operator==(const LostAccess& other) const
+QByteArray signedBytes(QLatin1String call, const QString& documentId)
 {
-    return how == other.how && byWhom == other.byWhom && when == other.when;
+    return QByteArray(call.data(), call.size()) + '\n' + documentId.toUtf8() + '\n';
 }
 
 } // namespace ServerContract

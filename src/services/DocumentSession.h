@@ -5,6 +5,7 @@
 #include "DocumentFile.h"
 #include "DocumentHeader.h"
 #include "DocumentRecords.h"
+#include "FileOpenRouter.h"
 #include "ServerConnection.h"
 #include "ServerVersion.h"
 #include "SessionTimers.h"
@@ -50,11 +51,11 @@ enum class SyncState
 /// ward. "Unpublished changes" is exact: the local header's save counter is above
 /// the base copy's, which the record holds.
 ///
-/// Every save of a shared ward applies the sealing-set rule against the latest
-/// head: devices the server no longer lists are pruned, with a fresh data key, and
-/// devices this client approved are added. A publish whose local file the rule
-/// would change is saved again first, so nothing is ever published sealed to a
-/// device the server has dropped.
+/// Every save applies the sealing-set rule against the version it builds on: when
+/// the roster now lacks a device or an invite that version sealed to, the data key
+/// is fresh, so whoever was taken out holds no key to anything written afterwards.
+/// The roster itself changes only through edits here - an invite made, a person or
+/// device removed, a role changed - and through join, which a new device makes once.
 ///
 /// One document operation runs at a time - a head check, a fetch, a publish, or
 /// the registration that shares the ward - so a save made during a publish
@@ -72,7 +73,8 @@ public:
     enum class Edit
     {
         Directory,
-        Response
+        Response,
+        Roster          ///< who has access: never refused, merged by person
     };
 
     enum class Refusal
@@ -95,8 +97,19 @@ public:
         NeedsNewerVersion,
         AccessLost,
         ServerFault,
-        WriteFailed,        ///< it validated, but could not be written on this device
-        NotYetSealed        ///< listed for this person, but no version is sealed to this device yet
+        WriteFailed         ///< it validated, but could not be written on this device
+    };
+
+    /// How joining a ward through an invite went.
+    enum class Join
+    {
+        Done,
+        Unreachable,
+        UnknownWard,        ///< the server has no such document
+        InviteUsed,         ///< the current version no longer seals to the invite
+        NeedsNewerVersion,
+        ServerFault,        ///< the version did not check out; the reason says why
+        WriteFailed
     };
 
     struct Context
@@ -138,11 +151,8 @@ public:
                                                  LoadFailure& failure,
                                                  QString* refusal);
 
-    /// What a download reports: how it went, on Done the document it wrote, and on
-    /// AccessLost why.
-    using Downloaded = std::function<void(Download outcome,
-                                          const std::optional<Document>& document,
-                                          const std::optional<ServerContract::LostAccess>& lost)>;
+    /// What a download reports: how it went, and on Done the document it wrote.
+    using Downloaded = std::function<void(Download outcome, const std::optional<Document>& document)>;
 
     /// Fetches a shared ward whose local file is missing or refused, writes it and
     /// its base once it validates, and reports; the caller then opens it. done is
@@ -152,6 +162,19 @@ public:
                          const DocumentPaths& paths,
                          QObject* receiver,
                          Downloaded done);
+
+    /// Joins the ward an invite link names: fetches the current version, unseals the
+    /// data key with the invite's keys, validates it as a download is validated,
+    /// writes the next version with this device in the invite's place - signed by the
+    /// invite, which the current header names - and writes the local file and base.
+    /// The caller then adds the ward to its library and opens it. done is called only
+    /// while receiver is alive; reason is set for ServerFault.
+    using Joined = std::function<void(Join outcome, const QString& reason)>;
+    static void join(const Context& context,
+                     const FileOpenRouter::InviteLink& link,
+                     const DocumentPaths& paths,
+                     QObject* receiver,
+                     Joined done);
 
     const Document& document() const { return m_document; }
     const DocumentHeader& header() const { return m_header; }
@@ -185,13 +208,18 @@ public:
 
     void setEmergencyActive(bool active);
 
-    /// The latest head the server answered, if any: its members and their roles and
-    /// devices, the lease holder, and the newest access-history entry.
+    /// The latest head the server answered, if any: its version, who published it,
+    /// and the lease holder.
     const std::optional<ServerContract::Head>& lastHead() const { return m_head; }
 
-    /// Registers the ward under its existing id, sealed to this device alone; the
-    /// next publish adds this device's linked devices once the head lists them.
+    /// Registers the ward under its existing id, sealed to this device alone.
     void share();
+
+    /// Writes a version sealed to a fresh invite keypair as well, publishes it, and
+    /// answers the link to send. A Device invite joins this person; a User invite
+    /// makes a new person with role. Whether this person may invite is the caller's
+    /// rule. nullopt for an unshared or lost ward.
+    std::optional<FileOpenRouter::InviteLink> invite(Invite::For purpose, Role role, const QString& label);
 
     /// The conflict waiting for a choice, if any. Head checks and publishing wait
     /// with it, so it can be asked about again until it is settled.
@@ -201,10 +229,10 @@ public:
     /// be written; a conflict whose local file was not written is still pending.
     bool resolve(Resolution resolution, QString* errorMessage);
 
-    /// The server says this device lost access: the files and record go, and the
-    /// session does nothing further. The session reaches it itself, and
-    /// DocumentManager reaches it when this person leaves.
-    void finishLost(const ServerContract::LostAccess& lost);
+    /// This device no longer holds the ward: the files and record go, and the session
+    /// does nothing further. The session reaches it itself, and DocumentManager
+    /// reaches it when this person leaves.
+    void finishLost(const ServerVersion::LostAccess& lost);
 
 signals:
     /// The in-memory document was replaced from outside an edit - a fast-forward,
@@ -229,7 +257,7 @@ signals:
     void shareFailed(ServerContract::ServerError error);
 
     /// Files and record gone; the session is finished.
-    void accessLost(const ServerContract::LostAccess& lost);
+    void accessLost(const ServerVersion::LostAccess& lost);
 
 private:
     DocumentSession(const Context& context,
@@ -245,8 +273,8 @@ private:
     void onTimer(SessionTimers::Timer timer);
     bool writeSave(QString* errorMessage);
 
-    /// What the sealing-set rule allows from the latest head; nullopt before one.
-    std::optional<ServerVersion::Access> access() const;
+    /// The name the roster gives a device's person, for a conflict's other side.
+    QString nameOf(const Document& document, const Fingerprint& device) const;
 
     /// Seals document on previous with dataKey and writes it as the local file.
     /// The session's header, key, and document follow only on success.
@@ -317,7 +345,6 @@ private:
     bool m_publishAgain = false;
     bool m_checkAgain = false;
     int m_retryDelay = SessionTimers::FirstRetryMilliseconds;
-    int m_allowListRefusals = 0;
     bool m_holdsLease = false;
     bool m_leaseHeldElsewhere = false;
     bool m_leaseRequested = false;

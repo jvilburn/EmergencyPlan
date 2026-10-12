@@ -1,6 +1,9 @@
 #pragma once
 
+#include <QByteArray>
 #include <QString>
+
+#include <optional>
 
 class DocumentLibrary;
 struct DeviceIdentity;
@@ -16,7 +19,7 @@ enum class Action
     OpenWard,               ///< a ward in the library: open it by id
     OpenCopy,               ///< an exported copy: open it read-only
     AddWard,                ///< a ward written for this device but not in its library
-    RequestAccess,          ///< a ward not written for this device
+    NotForThisDevice,       ///< a ward not written for this device: it takes an invite
     NeedsNewerVersion,      ///< written by a later version of Ward Planning
     NotAWardPlanningFile,   ///< no readable Ward Planning header
     Unreadable              ///< missing, or could not be read
@@ -30,15 +33,24 @@ struct Route
 
 Route route(const QString& path, const DocumentLibrary& library, const DeviceIdentity& identity);
 
-/// The invite link a shared ward is sent as. It grants nothing: whoever opens it
-/// asks for access.
-QString inviteLink(const QString& documentId);
+/// An invite: the ward, and the seed the invite's keypair is made from. Whoever holds
+/// it can read the ward and join it once.
+struct InviteLink
+{
+    static constexpr int SeedSize = 32;
 
-/// The ward an invite link names; empty for anything that is not one.
-QString invitedWard(const QString& argument);
+    QString documentId;
+    QByteArray seed;
 
-/// Where an invite link goes: the ward, when this device has it; otherwise a
-/// request for access.
-Route routeInvite(const QString& documentId, const DocumentLibrary& library);
+    /// `wardplanning:join/<document id>/<seed, base64url>`.
+    QString toString() const;
+
+    /// The link an argument is; nullopt for anything else, a malformed one included.
+    static std::optional<InviteLink> parse(const QString& argument);
+};
+
+/// What the person copies and sends: who invites them to which ward, where to get the
+/// app, and the link.
+QString inviteMessage(const QString& inviterName, const QString& wardName, const InviteLink& link);
 
 } // namespace FileOpenRouter

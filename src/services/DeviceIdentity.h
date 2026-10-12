@@ -3,7 +3,7 @@
 #include "CryptoTypes.h"
 #include "DocumentCrypto.h"
 #include "Reconcile.h"
-#include "ServerContract.h"
+#include "SealingSet.h"
 
 #include <QString>
 
@@ -21,6 +21,6 @@ struct DeviceIdentity
     Reconcile::Self self() const;
     DeviceKeys keys() const { return DeviceKeys{sealing.publicKey, signing.verifyKey}; }
 
-    /// What ServerConnection registers after every sign-in.
-    ServerContract::Registration registration() const;
+    /// This device as a roster lists it.
+    NamedDevice device() const;
 };

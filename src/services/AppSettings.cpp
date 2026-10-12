@@ -21,7 +21,6 @@ const QString DefaultServerAddress;
 
 // Part of the settings format.
 const QLatin1String KeyRecords("records");
-const QLatin1String KeyLinkedDevices("linkedDevices");
 const QLatin1String KeyWards("wards");
 const QLatin1String KeyWardName("wardName");
 const QLatin1String KeyLastOpened("lastOpened");
@@ -29,7 +28,6 @@ const QLatin1String KeyCopies("copies");
 const QLatin1String KeyCopyPath("path");
 const QLatin1String KeyCopyDocumentId("documentId");
 const QLatin1String KeyLastWard("lastWard");
-const QLatin1String KeyRequestedWards("requestedWards");
 const QLatin1String KeyDeveloperExport("developerExport");
 const QLatin1String KeyUpdateCheck("updateCheck");
 const QLatin1String KeyCheckedAt("checkedAt");
@@ -104,12 +102,6 @@ QStringList AppSettings::documentIds() const
     return m_records.keys();
 }
 
-void AppSettings::setLinkedDevices(const QList<DeviceKeys>& devices)
-{
-    m_linkedDevices = devices;
-    save();
-}
-
 // --- The document library's wards -------------------------------------------------
 
 bool AppSettings::WardEntry::operator==(const WardEntry& other) const
@@ -148,12 +140,6 @@ void AppSettings::removeWard(const QString& documentId)
 void AppSettings::setLastWardId(const QString& documentId)
 {
     m_lastWardId = documentId;
-    save();
-}
-
-void AppSettings::setRequestedWards(const QStringList& documentIds)
-{
-    m_requestedWards = documentIds;
     save();
 }
 
@@ -210,10 +196,8 @@ bool AppSettings::read(const QByteArray& bytes)
     QJsonObject wards;
     if (!StrictJson::hasOnlyKeys(json,
                                  {KeyRecords,
-                                  KeyLinkedDevices,
                                   KeyWards,
                                   KeyLastWard,
-                                  KeyRequestedWards,
                                   KeyDeveloperExport,
                                   KeyUpdateCheck,
                                   KeyDismissedUpdate,
@@ -264,41 +248,6 @@ bool AppSettings::read(const QByteArray& bytes)
             return false;
         }
         m_defaultLocation = location;
-    }
-
-    // Written only when there are any, and each names a file-to-be, so is an id.
-    if (json.contains(KeyRequestedWards))
-    {
-        if (!StrictJson::readStringArray(json, KeyRequestedWards, m_requestedWards) || m_requestedWards.isEmpty())
-        {
-            return false;
-        }
-        for (const QString& documentId : m_requestedWards)
-        {
-            if (!HexCodec::isCanonical(documentId, DocumentHeader::DocumentIdLength))
-            {
-                return false;
-            }
-        }
-    }
-
-    // Written only when there are any.
-    if (json.contains(KeyLinkedDevices))
-    {
-        QList<QJsonObject> devices;
-        if (!StrictJson::readObjectArray(json, KeyLinkedDevices, devices) || devices.isEmpty())
-        {
-            return false;
-        }
-        for (const QJsonObject& deviceJson : devices)
-        {
-            const std::optional<DeviceKeys> device = DeviceKeys::fromJson(deviceJson);
-            if (!device.has_value())
-            {
-                return false;
-            }
-            m_linkedDevices.append(device.value());
-        }
     }
 
     for (auto entry = records.constBegin(); entry != records.constEnd(); ++entry)
@@ -414,23 +363,10 @@ QByteArray AppSettings::write() const
 
     QJsonObject json;
     json[KeyRecords] = records;
-    if (!m_linkedDevices.isEmpty())
-    {
-        QJsonArray devices;
-        for (const DeviceKeys& device : m_linkedDevices)
-        {
-            devices.append(device.toJson());
-        }
-        json[KeyLinkedDevices] = devices;
-    }
     json[KeyWards] = wards;
     if (!m_lastWardId.isEmpty())
     {
         json[KeyLastWard] = m_lastWardId;
-    }
-    if (!m_requestedWards.isEmpty())
-    {
-        json[KeyRequestedWards] = QJsonArray::fromStringList(m_requestedWards);
     }
     if (m_developerExport)
     {

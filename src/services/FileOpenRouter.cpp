@@ -1,10 +1,13 @@
 #include "FileOpenRouter.h"
 
 #include "DeviceIdentity.h"
-#include "DocumentFile.h"
 #include "DocumentConstants.h"
+#include "DocumentFile.h"
 #include "DocumentLibrary.h"
 #include "HexCodec.h"
+#include "UpdateChecker.h"
+
+#include <QObject>
 
 namespace FileOpenRouter
 {
@@ -41,34 +44,48 @@ Route route(const QString& path, const DocumentLibrary& library, const DeviceIde
     {
         return Route{Action::AddWard, header.documentId};
     }
-    return Route{Action::RequestAccess, header.documentId};
+    return Route{Action::NotForThisDevice, header.documentId};
 }
 
-QString inviteLink(const QString& documentId)
+QString InviteLink::toString() const
 {
-    return QString::fromLatin1(DocumentConstants::InvitePrefix) + documentId;
+    return QString::fromLatin1(DocumentConstants::InvitePrefix) + documentId + '/'
+         + QString::fromLatin1(seed.toBase64(QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals));
 }
 
-QString invitedWard(const QString& argument)
+std::optional<InviteLink> InviteLink::parse(const QString& argument)
 {
     const QString prefix = QString::fromLatin1(DocumentConstants::InvitePrefix);
     if (!argument.startsWith(prefix, Qt::CaseInsensitive))
     {
-        return QString();
+        return std::nullopt;
     }
 
-    // A browser may add a trailing slash; anything else is not an id.
-    QString documentId = argument.mid(prefix.size());
-    if (documentId.endsWith('/'))
+    // A browser may add a trailing slash.
+    QString rest = argument.mid(prefix.size());
+    if (rest.endsWith('/'))
     {
-        documentId.chop(1);
+        rest.chop(1);
     }
-    return HexCodec::isCanonical(documentId, DocumentHeader::DocumentIdLength) ? documentId : QString();
+    const QStringList parts = rest.split('/');
+    if (parts.size() != 2 || !HexCodec::isCanonical(parts.at(0), DocumentHeader::DocumentIdLength))
+    {
+        return std::nullopt;
+    }
+
+    const QByteArray::FromBase64Result seed = QByteArray::fromBase64Encoding(
+        parts.at(1).toLatin1(), QByteArray::Base64UrlEncoding | QByteArray::AbortOnBase64DecodingErrors);
+    if (!seed || seed.decoded.size() != SeedSize)
+    {
+        return std::nullopt;
+    }
+    return InviteLink{parts.at(0), seed.decoded};
 }
 
-Route routeInvite(const QString& documentId, const DocumentLibrary& library)
+QString inviteMessage(const QString& inviterName, const QString& wardName, const InviteLink& link)
 {
-    return Route{library.contains(documentId) ? Action::OpenWard : Action::RequestAccess, documentId};
+    return QObject::tr("%1 has invited you to %2 in Ward Planning. Install it from %3, then open this link:\n%4")
+        .arg(inviterName, wardName, UpdateChecker::releasePage().toString(), link.toString());
 }
 
 } // namespace FileOpenRouter

@@ -124,7 +124,8 @@ DownloadCheck validateDownload(const QString& documentId,
 
 bool headerMatchesSealingSet(const DocumentHeader& header, const SealingSet& set)
 {
-    if (header.recipients.size() != set.size())
+    const QList<DeviceKeys> recipients = set.recipients();
+    if (header.recipients.size() != recipients.size())
     {
         return false;
     }
@@ -135,7 +136,7 @@ bool headerMatchesSealingSet(const DocumentHeader& header, const SealingSet& set
         entries.insert(entry.fingerprint.toHex());
     }
 
-    for (const DeviceKeys& device : set.devices())
+    for (const DeviceKeys& device : recipients)
     {
         if (!entries.contains(DocumentCrypto::fingerprintOf(device.publicKey, device.verifyKey).toHex()))
         {

@@ -20,7 +20,10 @@ enum class HashDomain
 {
     Fingerprint,        ///< "wp-fingerprint" - a device's two public keys
     Payload,            ///< "wp-payload"     - the encrypted payload, for the base copy's record
-    FormerKey           ///< "wp-former-key"  - a data key the ward used before its current one
+    FormerKey,          ///< "wp-former-key"  - a data key the ward used before its current one
+    SignedWrite,        ///< "wp-signed"      - a header or blob, inside what a write's signature covers
+    InviteSealing,      ///< "wp-invite-seal" - an invite's sealing keypair, from its seed
+    InviteSigning       ///< "wp-invite-sign" - an invite's signing keypair, from its seed
 };
 
 /// One device's sealing keys.
@@ -72,6 +75,10 @@ public:
     /// The sealing keypair a secret key belongs to. Invalid keys for an invalid secret.
     static Keypair keypairFromSecret(const SecretKey& secretKey);
 
+    /// The sealing keypair a seed makes, the same every time. Invalid keys for a seed
+    /// of the wrong size.
+    static Keypair keypairFromSeed(const QByteArray& seed);
+
     /// The seed a signing key was made from; empty for an invalid key.
     static QByteArray seedOf(const SigningKey& signingKey);
 
@@ -107,11 +114,10 @@ public:
 
     /// The one thing a device signs: the server's login challenge. Empty when the
     /// key is invalid or the challenge empty.
-    static QByteArray signChallenge(const QByteArray& challenge, const SigningKey& key);
+    /// Signs bytes; empty for an invalid key or no bytes.
+    static QByteArray sign(const QByteArray& bytes, const SigningKey& key);
 
-    static bool challengeVerifies(const QByteArray& challenge,
-                                  const QByteArray& signature,
-                                  const VerifyKey& key);
+    static bool verifies(const QByteArray& bytes, const QByteArray& signature, const VerifyKey& key);
 
     // --- Payload ---
 

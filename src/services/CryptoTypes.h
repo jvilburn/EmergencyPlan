@@ -124,8 +124,17 @@ struct DeviceKeys
     bool operator!=(const DeviceKeys& other) const { return !(*this == other); }
 };
 
-/// Identifies a person: 128 random bits, one server record across all their wards. A
-/// person who left or was removed may be granted again under the same id.
+/// What a person may do in a ward. Admins add people and remove them; everyone adds and
+/// removes their own devices. The rule is kept by the app, not by the server, which
+/// never sees it.
+enum class Role
+{
+    Admin,
+    Member
+};
+
+/// Identifies a person: 128 random bits, the same in every ward they are in. A person
+/// who left or was removed may be invited again under the same id.
 ///
 /// Not the directory's PersonId (src/models/Id.h): a MemberId identifies a
 /// person who may open the document, a PersonId a member of the ward directory.

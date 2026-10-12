@@ -23,10 +23,16 @@ namespace
 constexpr char FingerprintDomain[] = "wp-fingerprint";
 constexpr char PayloadDomain[] = "wp-payload";
 constexpr char FormerKeyDomain[] = "wp-former-key";
+constexpr char SignedWriteDomain[] = "wp-signed";
+constexpr char InviteSealingDomain[] = "wp-invite-seal";
+constexpr char InviteSigningDomain[] = "wp-invite-sign";
 
 static_assert(sizeof(FingerprintDomain) - 1 <= crypto_generichash_blake2b_PERSONALBYTES);
 static_assert(sizeof(PayloadDomain) - 1 <= crypto_generichash_blake2b_PERSONALBYTES);
 static_assert(sizeof(FormerKeyDomain) - 1 <= crypto_generichash_blake2b_PERSONALBYTES);
+static_assert(sizeof(SignedWriteDomain) - 1 <= crypto_generichash_blake2b_PERSONALBYTES);
+static_assert(sizeof(InviteSealingDomain) - 1 <= crypto_generichash_blake2b_PERSONALBYTES);
+static_assert(sizeof(InviteSigningDomain) - 1 <= crypto_generichash_blake2b_PERSONALBYTES);
 
 const char* domainText(HashDomain domain)
 {
@@ -38,6 +44,12 @@ const char* domainText(HashDomain domain)
         return PayloadDomain;
     case HashDomain::FormerKey:
         return FormerKeyDomain;
+    case HashDomain::SignedWrite:
+        return SignedWriteDomain;
+    case HashDomain::InviteSealing:
+        return InviteSealingDomain;
+    case HashDomain::InviteSigning:
+        return InviteSigningDomain;
     }
 
     // Unreachable for a value of the enumeration. A new domain added without a
@@ -87,6 +99,22 @@ SigningKeypair DocumentCrypto::generateSigningKeypair()
     SigningKeypair keys;
     keys.verifyKey.bytes = verifyBytes;
     keys.signingKey.bytes = signingBytes;
+    return keys;
+}
+
+Keypair DocumentCrypto::keypairFromSeed(const QByteArray& seed)
+{
+    Keypair keys;
+    if (seed.size() != crypto_box_SEEDBYTES)
+    {
+        return keys;
+    }
+
+    QByteArray publicBytes(PublicKey::Size, '\0');
+    QByteArray secretBytes(SecretKey::Size, '\0');
+    crypto_box_seed_keypair(asUnsigned(publicBytes), asUnsigned(secretBytes), asUnsigned(seed));
+    keys.publicKey.bytes = publicBytes;
+    keys.secretKey.bytes = secretBytes;
     return keys;
 }
 
@@ -247,9 +275,9 @@ std::optional<DataKey> DocumentCrypto::unsealDataKey(const QByteArray& sealed, c
     return key;
 }
 
-QByteArray DocumentCrypto::signChallenge(const QByteArray& challenge, const SigningKey& key)
+QByteArray DocumentCrypto::sign(const QByteArray& bytes, const SigningKey& key)
 {
-    if (!key.isValid() || challenge.isEmpty())
+    if (!key.isValid() || bytes.isEmpty())
     {
         return QByteArray();
     }
@@ -257,8 +285,8 @@ QByteArray DocumentCrypto::signChallenge(const QByteArray& challenge, const Sign
     QByteArray signature(SignatureSize, '\0');
     if (crypto_sign_detached(asUnsigned(signature),
                              nullptr,
-                             asUnsigned(challenge),
-                             challenge.size(),
+                             asUnsigned(bytes),
+                             bytes.size(),
                              asUnsigned(key.bytes))
         != 0)
     {
@@ -268,18 +296,16 @@ QByteArray DocumentCrypto::signChallenge(const QByteArray& challenge, const Sign
     return signature;
 }
 
-bool DocumentCrypto::challengeVerifies(const QByteArray& challenge,
-                                       const QByteArray& signature,
-                                       const VerifyKey& key)
+bool DocumentCrypto::verifies(const QByteArray& bytes, const QByteArray& signature, const VerifyKey& key)
 {
-    if (!key.isValid() || challenge.isEmpty() || signature.size() != SignatureSize)
+    if (!key.isValid() || bytes.isEmpty() || signature.size() != SignatureSize)
     {
         return false;
     }
 
     return crypto_sign_verify_detached(asUnsigned(signature),
-                                       asUnsigned(challenge),
-                                       challenge.size(),
+                                       asUnsigned(bytes),
+                                       bytes.size(),
                                        asUnsigned(key.bytes))
         == 0;
 }

@@ -34,7 +34,7 @@ enum class HeaderParse
 /// data, so anyone holding the data key detects any change to it on decrypt.
 struct DocumentHeader
 {
-    static constexpr int CurrentFormatVersion = 3;
+    static constexpr int CurrentFormatVersion = 4;
 
     /// 128 random bits as 32 hex characters.
     static constexpr int DocumentIdLength = 32;

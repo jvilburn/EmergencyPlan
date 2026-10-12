@@ -65,7 +65,7 @@ std::optional<Sealed> seal(const Document& document, const DocumentHeader& previ
 
     // Every entry is sealed afresh from the sealing set, so a mis-sealed entry
     // reaches no later version.
-    for (const DeviceKeys& device : document.sealingSet().devices())
+    for (const DeviceKeys& device : document.sealingSet().recipients())
     {
         const QByteArray sealedKey = DocumentCrypto::sealDataKey(dataKey, device.publicKey);
         if (sealedKey.isEmpty())

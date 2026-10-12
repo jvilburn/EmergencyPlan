@@ -11,6 +11,6 @@ constexpr const char* FileExtension = ".wardplanning";
 constexpr const char* FileGlob = "*.wardplanning";
 
 /// What an invite link starts with: wardplanning:open/<document id>.
-constexpr const char* InvitePrefix = "wardplanning:open/";
+constexpr const char* InvitePrefix = "wardplanning:join/";
 
 } // namespace DocumentConstants
