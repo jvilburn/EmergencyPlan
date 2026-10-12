@@ -36,5 +36,5 @@ private slots:
     void aDirectoryEditOnBothSidesIsAConflict();
     void noDirectoryChangeMergesTheResponse();
     void aRosterEditOnOneSideCarriesThrough();
-    void aRosterEditOnBothSidesIsAConflict();
+    void rosterEditsOnBothSidesMergeUnlessTheyTouchTheSameEntry();
 };

@@ -555,7 +555,7 @@ void ResponseMergeTest::aRosterEditOnOneSideCarriesThrough()
     Document mine = base;
     mine.setSealingSet(withInvite(base.sealingSet()));
     QCOMPARE(mine.sealingSet().invites().size(), 1);
-    QVERIFY(ResponseMerge::directoryChanged(mine, base));
+    QVERIFY(!ResponseMerge::directoryChanged(mine, base));
 
     Document theirs = base;
     EmergencyResponse response = theirs.emergencyResponse().value();
@@ -574,25 +574,48 @@ void ResponseMergeTest::aRosterEditOnOneSideCarriesThrough()
     QVERIFY(swapped->sealingSet() == mine.sealingSet());
 }
 
-void ResponseMergeTest::aRosterEditOnBothSidesIsAConflict()
+void ResponseMergeTest::rosterEditsOnBothSidesMergeUnlessTheyTouchTheSameEntry()
 {
     const Storm s = storm();
     const Document base = documentWith(s.adams, s);
     const MemberId person = base.sealingSet().people().first().id;
 
-    // Mine made an invite; theirs gave up the admin role.
+    // Mine made an invite; theirs gave up the admin role: two entries, both carried.
     Document mine = base;
     mine.setSealingSet(withInvite(base.sealingSet()));
     Document theirs = base;
     SealingSet stepped = base.sealingSet();
     QVERIFY(stepped.setRole(person, Role::Member));
     theirs.setSealingSet(stepped);
-    QVERIFY(!ResponseMerge::mergeDocuments(base, mine, theirs).has_value());
+    const std::optional<Document> merged = ResponseMerge::mergeDocuments(base, mine, theirs);
+    QVERIFY(merged.has_value());
+    QCOMPARE(merged->sealingSet().invites().size(), 1);
+    QVERIFY(merged->sealingSet().person(person)->role == Role::Member);
 
-    // A roster edit on one side and a family edit on the other is a conflict too.
+    // A roster edit on one side and a family edit on the other both carry.
     Document moved = base;
     moved.updateFamily(familyAt(s.adams, 41.5));
-    QVERIFY(!ResponseMerge::mergeDocuments(base, mine, moved).has_value());
+    const std::optional<Document> both = ResponseMerge::mergeDocuments(base, mine, moved);
+    QVERIFY(both.has_value());
+    QCOMPARE(both->sealingSet().invites().size(), 1);
+    QVERIFY(both->findFamilyById(s.adams).value().latitude() == std::optional<double>(41.5));
+
+    // The same person changed differently on each side is a conflict: Dave joins,
+    // then one side makes him an admin while the other removes him.
+    SealingSet withDave = withInvite(base.sealingSet());
+    const MemberId dave = newMember();
+    QVERIFY(withDave.join(withDave.invites().first().fingerprint(), NamedDevice{"Tablet", newKeys()}, dave, "Dave"));
+    Document joined = base;
+    joined.setSealingSet(withDave);
+    SealingSet daveAdmin = withDave;
+    QVERIFY(daveAdmin.setRole(dave, Role::Admin));
+    SealingSet daveGone = withDave;
+    QVERIFY(daveGone.removePerson(dave));
+    Document promoted = joined;
+    promoted.setSealingSet(daveAdmin);
+    Document dropped = joined;
+    dropped.setSealingSet(daveGone);
+    QVERIFY(!ResponseMerge::mergeDocuments(joined, promoted, dropped).has_value());
 
     // Anchor: the same roster edit on both sides is no conflict.
     QVERIFY(ResponseMerge::mergeDocuments(base, theirs, theirs).has_value());

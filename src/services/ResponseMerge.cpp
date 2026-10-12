@@ -313,13 +313,12 @@ EmergencyResponse mergeStartedOnBoth(const EmergencyResponse& mine, const Emerge
     return merged;
 }
 
-/// The document with everything the directory does not include taken out. Who has
-/// access counts as directory content: changed on one side, that side's roster wins;
-/// changed on both, it is a conflict for a person to look at.
+/// The document with everything the directory does not include taken out.
 Document directoryOf(const Document& document)
 {
     Document directory = document;
     directory.setEmergencyResponse(std::nullopt);
+    directory.setSealingSet(SealingSet());
     return directory;
 }
 
@@ -355,7 +354,17 @@ std::optional<Document> mergeDocuments(const Document& base, const Document& min
         return std::nullopt;
     }
 
+    // Who has access merges entry by entry; the same person or invite changed
+    // differently on both sides is a conflict like two edits to one family.
+    const std::optional<SealingSet> roster =
+        SealingSet::merge(base.sealingSet(), mine.sealingSet(), theirs.sealingSet());
+    if (!roster.has_value())
+    {
+        return std::nullopt;
+    }
+
     Document merged = mineChanged ? mine : theirs;
+    merged.setSealingSet(roster.value());
     merged.setEmergencyResponse(
         merge(base.emergencyResponse(), mine.emergencyResponse(), theirs.emergencyResponse()));
     return merged;

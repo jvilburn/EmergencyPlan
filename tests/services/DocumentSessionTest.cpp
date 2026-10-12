@@ -1943,9 +1943,10 @@ void DocumentSessionTest::rosterEditsOnBothSidesRaiseAConflict()
     bobSession->checkServer();
     ward.settle();
 
-    // Alice makes Bob an admin offline; Bob removes Carol and publishes first.
+    // Alice makes Carol an admin offline; Bob removes Carol and publishes first: the
+    // same person, changed differently on each side.
     ward.server.setOffline(true);
-    aliceSession->edit(DocumentSession::Edit::Roster, setRole(bob.identity.member, Role::Admin));
+    aliceSession->edit(DocumentSession::Edit::Roster, setRole(carol.identity.member, Role::Admin));
     QVERIFY(alice.timers->fire(Timer::Save));
     ward.settle();
     ward.server.setOffline(false);

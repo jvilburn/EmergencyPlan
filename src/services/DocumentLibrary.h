@@ -125,7 +125,7 @@ public:
     void fetchWard(const QString& documentId, ServerConnection& server, QObject* receiver, const WardFetched& fetched);
 
     /// Joins the ward an invite link names, as DocumentSession::join does, and on
-    /// Done adds it to the library named from what arrived.
+    /// Done adds it to the library, Untitled until it is opened.
     void join(const FileOpenRouter::InviteLink& link,
               ServerConnection& server,
               QObject* receiver,

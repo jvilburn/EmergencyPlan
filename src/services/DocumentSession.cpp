@@ -199,13 +199,6 @@ void fetchForJoin(const Joining& joining, bool mayRetry)
                          std::bind(&onJoinFetched, joining, mayRetry, _1));
 }
 
-/// Whether two rosters name the same people, devices, roles, and invites. The former
-/// keys each carries are the history of its data key, not who has access.
-bool sameAccess(const SealingSet& a, const SealingSet& b)
-{
-    return a.people() == b.people() && a.invites() == b.invites();
-}
-
 /// The one edit invite makes.
 bool addInviteTo(Document& document, const Invite& invite)
 {
@@ -977,15 +970,16 @@ bool DocumentSession::resolve(Resolution resolution, QString* errorMessage)
     Document resolved = resolution == Resolution::KeepTheirs ? theirs.document : m_document;
     resolved.setEmergencyResponse(response);
 
-    // Who has access is settled on its own: a roster only one side changed is that
-    // side's, whichever directory is kept, so keeping mine never puts back someone
-    // they removed and keeping theirs never drops someone this device added.
+    // Who has access merges on its own, whichever directory is kept, so keeping mine
+    // never puts back someone they removed and keeping theirs never drops someone
+    // this device added. Where the same entry differs on both sides, the kept side's
+    // roster stands.
     const SealingSet& baseRoster = m_base.has_value() ? m_base->document.sealingSet() : theirs.document.sealingSet();
-    const bool mineChanged = !sameAccess(m_document.sealingSet(), baseRoster);
-    const bool theirsChanged = !sameAccess(theirs.document.sealingSet(), baseRoster);
-    if (mineChanged != theirsChanged)
+    const std::optional<SealingSet> roster =
+        SealingSet::merge(baseRoster, m_document.sealingSet(), theirs.document.sealingSet());
+    if (roster.has_value())
     {
-        resolved.setSealingSet(mineChanged ? m_document.sealingSet() : theirs.document.sealingSet());
+        resolved.setSealingSet(roster.value());
     }
 
     bool written = false;

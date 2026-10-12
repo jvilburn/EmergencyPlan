@@ -10,6 +10,23 @@
 
 using namespace std::placeholders;
 
+namespace
+{
+
+/// Applies change to the document's roster, keeping the document as it was when
+/// change refuses.
+void applyToRoster(Document& document, const std::function<bool(SealingSet&)>& change, bool& changed)
+{
+    SealingSet roster = document.sealingSet();
+    changed = change(roster);
+    if (changed)
+    {
+        document.setSealingSet(roster);
+    }
+}
+
+} // namespace
+
 DocumentManager* DocumentManager::s_instance = nullptr;
 
 DocumentManager::DocumentManager(const DeviceIdentity& identity,
@@ -642,14 +659,7 @@ void DocumentManager::editRoster(const std::function<bool(SealingSet&)>& change)
     }
 
     bool changed = false;
-    m_session->edit(DocumentSession::Edit::Roster, [&change, &changed](Document& document) {
-        SealingSet roster = document.sealingSet();
-        changed = change(roster);
-        if (changed)
-        {
-            document.setSealingSet(roster);
-        }
-    });
+    m_session->edit(DocumentSession::Edit::Roster, std::bind(&applyToRoster, _1, change, std::ref(changed)));
     if (!changed)
     {
         return;

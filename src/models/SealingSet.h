@@ -121,6 +121,14 @@ public:
     bool removeDevice(const Fingerprint& device);
     bool setRole(const MemberId& id, Role role);
 
+    /// Three ways: mine and theirs each built on base. An entry - a person with their
+    /// devices and role, or an invite - changed on one side is taken from that side;
+    /// one changed differently on both is a conflict, and the merge is nullopt. The
+    /// former keys are theirs' with mine's appended, so the merged set descends from
+    /// both. This is what lets an invite made here and a join landing there cross
+    /// without troubling anyone.
+    static std::optional<SealingSet> merge(const SealingSet& base, const SealingSet& mine, const SealingSet& theirs);
+
     // --- The rule ---
 
     /// Whether a write of this set on top of a version that sealed to previousRecipients

@@ -37,10 +37,10 @@ std::optional<EmergencyResponse> merge(const std::optional<EmergencyResponse>& b
                                        const std::optional<EmergencyResponse>& mine,
                                        const std::optional<EmergencyResponse>& theirs);
 
-/// The whole decision: nullopt when both sides changed the directory differently
-/// (the conflict dialog); otherwise the directory from whichever side changed it
-/// (theirs when neither did) with the response merged. The roster is part of the
-/// directory, so a removal or an invite made on one side carries through.
+/// The whole decision: nullopt when both sides changed the directory differently, or
+/// changed the same person or invite differently (the conflict dialog); otherwise the
+/// directory from whichever side changed it (theirs when neither did), the roster
+/// merged entry by entry, and the response merged.
 std::optional<Document> mergeDocuments(const Document& base,
                                        const Document& mine,
                                        const Document& theirs);

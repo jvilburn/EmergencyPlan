@@ -66,8 +66,8 @@ QStringList describe(const SealingSet& previous, const SealingSet& current)
     {
         if (!previous.invite(now.fingerprint()).has_value())
         {
-            const std::optional<Holder> maker = current.person(now.person);
-            lines.append(QObject::tr("%1 made an invite, %2").arg(maker.has_value() ? maker->name : QObject::tr("Someone"), now.label));
+            // An invite is always some current person's: a removal takes theirs with them.
+            lines.append(QObject::tr("%1 made an invite, %2").arg(current.person(now.person)->name, now.label));
         }
     }
 
