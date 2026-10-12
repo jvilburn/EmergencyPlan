@@ -716,61 +716,11 @@ separate clocks, the lease beside them, the refused-publish route - with these c
 - **`versionAdopted`** goes; the notices read the server's history (Task 6).
 - `finishRemoved`, `proveRemoval`, `onRemovalChecked` go.
 
-#### 1.8 Carrying additions to every ward: `SealingQueue`
+#### 1.8 Carrying additions to every ward
 
-`RosterChangeQueue` becomes `SealingQueue`. Removals, role changes, and leaves are server
-calls now, so the only thing left to carry to wards is an addition, and an addition is
-not a change to queue but a condition to reach: every ward sealed to every approved
-device the server lists.
-
-```cpp
-/// Seals each ward's data key to the devices this device approved - a device it
-/// linked, a person it granted - that the server lists and the ward's current
-/// version does not yet seal to.
-///
-/// Additions only: removals take effect on the server at once, and the next write in
-/// each ward prunes them. Nothing here needs the lease, so no one holding it can hold
-/// off a link or a grant.
-///
-/// For the ward open in the window it asks the session to publish, which reseals; for
-/// any other it fetches the server's version, reseals it, and uploads it conditional
-/// on that version, leaving the local file to catch up when the ward next opens.
-class SealingQueue : public QObject
-{
-    Q_OBJECT
-
-public:
-    SealingQueue(const DeviceIdentity& identity,
-                 DocumentRecords& records,
-                 ServerConnection& server,
-                 std::unique_ptr<SessionTimers> timers,
-                 std::function<DocumentPaths(const QString&)> pathsFor,
-                 QObject* parent);
-
-    void setOpenSession(DocumentSession* session);
-
-    /// Checks every shared ward and seals where needed. Called at start, after a link
-    /// or a grant, and on Retry until every ward is done.
-    void sealEverywhere();
-
-    /// Wards still waiting for a seal this device owes them.
-    int pendingCount() const;
-
-signals:
-    void pendingChanged();
-
-    /// The server told this device it lost access to a ward; its files and record
-    /// are gone.
-    void accessLost(const QString& documentId, const ServerContract::LostAccess& lost);
-};
-```
-
-Per ward, one at a time: head; if the header lacks an approved device the allow-list
-lists, seal (open ward: `publishNow`; closed ward: fetch, `reseal`, upload).
-`VersionConflict` and `NotOnAllowList` start that ward again; `Unreachable` defers it to
-the next Retry while the others go ahead; `AccessLost` forgets the ward. A granted device
-leaves the record's `granted` list once a version this device published seals it, or
-once the allow-list no longer lists it.
+Superseded by `2026-10-11-atomic-grant-plan.md`: a grant and a link approval carry the
+resealed version with them, so nothing is carried to a ward afterwards and there is no
+queue.
 
 #### 1.9 `ServerConnection`
 
@@ -963,13 +913,13 @@ Commit as `feat: share a ward`.
 **Request.** Opening an invite link or a `.wardplanning` file for a ward this device
 lacks offers *Request access*, replacing the `RequestAccess` placeholder in
 `MainWindow::openPath`. One click calls `requestAccess`; the ward list shows the ward as
-*Requested* and polls `myRequestStatus` every minute; on Granted it
-fetches through `DocumentLibrary::fetchWard` and the ward shows *Waiting for access*
-until a version seals this device; on Declined it says so and drops the entry.
+*Requested* and polls `myRequestStatus` while it is pending; on Granted the ward is
+readable at once, since the grant carried the version sealed to this device (see
+`2026-10-11-atomic-grant-plan.md`); on Declined it says so and drops the entry.
 
 **Grant.** For an admin, the access dialog lists pending requests from
-`accessRequests`. Grant calls `grant`; on success the request's device keys join the
-record's `granted` list and `SealingQueue::sealEverywhere()` runs. A request whose
+`accessRequests`. Grant calls `grant`, with the ward's current version resealed to the
+device that asked, as `2026-10-11-atomic-grant-plan.md` describes. A request whose
 display name matches a current member is flagged: *Bob Wilson already has access. If
 this is Bob's new phone, Bob should link it from his other device instead.* Decline
 calls `declineRequest`. A member sees requests but no Grant.
@@ -992,8 +942,9 @@ expired code offers to start again. This replaces the **Yes** placeholder in
 
 **The approving device.** *Link a device* (the access dialog's `linkRequested` and the
 notice's `WardNotices::linkRequested`) asks for the code, reads `link(code)`, shows
-*Link "Pixel 8" to your account?*, and on confirmation calls `approveLink`, appends the
-device's keys to `linkedDevices`, and runs `sealEverywhere()`.
+*Link "Pixel 8" to your account?*, and on confirmation calls `approveLink` with every
+ward this device holds resealed to the new device, and appends the device's keys to
+`linkedDevices` (see `2026-10-11-atomic-grant-plan.md`).
 
 **Unlink.** On one of your own devices in the access dialog (`unlinkRequested`), confirm,
 listing every device the server records as linked by it - *This phone also linked "Dell

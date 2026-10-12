@@ -314,8 +314,9 @@ is built on, then:
 1. **Prunes** every device the server's current allow-list no longer lists - a removed
    person's devices, an unlinked device, a leaver's. Pruning only ever shrinks the set,
    so a server that lies here can deny someone access but can never gain it.
-2. **Adds** the devices this client approved and the server still lists: a person this
-   admin granted, by the device that asked, and a device this device linked.
+2. **Adds** the devices this client approved and the server still lists: a device this
+   device linked, and the one the write's own call admits - the device that asked, for a
+   grant; the new device, for a link approval - which the server lists in the same step.
 3. **Rotates the data key** when the prune removed anyone. The new key is sealed only to
    the devices that remain, and the old key joins the former keys.
 
@@ -398,15 +399,17 @@ devices and a role of its own.
    device's name - *Link "Pixel 8" to your account?* - and the person confirms.
 3. The server adds the new device to that person. The new device learns its member id
    and display name from the server, and the person's wards appear in its list.
-4. The approving device remembers the device it linked, and seals the data key to it in
-   every ward it holds, each through the background queue: applied on top of the
-   server's version and published, with no lease, retrying until every ward has it.
-   Until a ward is sealed to it, the new device shows that ward as *Waiting for access
-   from your other device*.
+4. The approving device sends, with the approval, every ward it holds resealed to the
+   new device, each built on the server's current version and needing no lease. The
+   server adds the device and stores those versions in one step, so the new device can
+   read every one of them the moment it is linked. A ward the approver did not hold at
+   that moment shows *Waiting for access* on the new device until the approver next
+   writes it.
 
-The approving device keeps doing this for every ward it later holds, so a ward granted to
-Bob after he linked his phone reaches the phone through Bob's laptop. A device sealed
-into a ward by another route - a grant that named it - needs nothing more.
+The approving device remembers the device it linked, and every write it makes seals to
+it, so a ward granted to Bob after he linked his phone reaches the phone through Bob's
+laptop. A device sealed into a ward by another route - a grant that named it - needs
+nothing more.
 
 **Unlinking a device** - a lost phone, a retired laptop - is done by the same person from
 any other of their devices. One server call takes the device off the person, and so off
@@ -477,7 +480,7 @@ implementation plan carries:
 | `DELETE /me/devices/{fingerprint}` | Unlink one of this person's devices; never the last |
 | `POST /links` | A new device posts its public keys and device name; returns a link code; rate-limited, expires in 10 minutes |
 | `GET /links/{code}` | For the approving device: the new device's name and keys. For the new device: whether it has been approved, and as whom |
-| `POST /links/{code}/approve` | Adds the new device to the caller's person |
+| `POST /links/{code}/approve` | Adds the new device to the caller's person. Carries every ward the approver holds, resealed to the new device, each conditional on the version it was built on; the device and the versions are stored together, or none of it is |
 | `POST /documents` | Register a newly shared document under its client-generated id, with its header and blob; the caller becomes its first admin |
 | `GET /documents/{id}/head` | Version, who published it and when, lease holder, the current header, and the members with their names, roles, and devices |
 | `GET /documents/{id}` | The current version number, its header, its blob, and who published it, in one response |
@@ -488,7 +491,7 @@ implementation plan carries:
 | `GET /documents/{id}/requests` | List pending requests, for members |
 | `DELETE /documents/{id}/requests/{n}` | Decline a request, for admins |
 | `GET /documents/{id}/requests/mine` | The requesting device's own request status - pending, granted, or declined |
-| `POST /documents/{id}/members` | Grant a pending request, for admins: its person becomes a member |
+| `POST /documents/{id}/members` | Grant a pending request, for admins: its person becomes a member. Carries the ward's current version resealed to the device that asked, conditional on the version it was built on; the membership and the version are stored together, or neither is |
 | `DELETE /documents/{id}/members/{member}` | Remove a person, for admins; or leave, for the person themselves |
 | `PUT /documents/{id}/members/{member}/role` | Promote or demote, for admins |
 
@@ -557,7 +560,8 @@ not match is ignored. The base copy is what lets a merge tell *what changed here
 
 **Sync state is a quiet, persistent indicator**, not a dialog: *Up to date*,
 *Changes not yet uploaded*, *Server unreachable*, *Read-only, another member is
-editing*, *Waiting for access*.
+editing*. A ward on its way to this device shows in the ward list as *Requested* or
+*Waiting for access*.
 
 **On open.** Sign in, fetch the head. If the server is ahead and nothing local is
 unpublished, download it, validate it completely, and only then replace the local
@@ -841,9 +845,10 @@ invite link carrying the id, which is not secret, since it grants no access on i
 carries a document id. The app offers "Request access", and one click posts a request
 carrying this device's public keys, the person's member id and display name, and the
 device name. The next admin to open the document sees the request and grants it: the
-server makes that person a member, and the admin's app seals the data key to the device
-that asked, through the background queue. The person's other devices are sealed by the
-devices that linked them, with no further grant.
+admin's app sends, with the grant, the ward's current version resealed to the device that
+asked, and the server makes that person a member and stores that version in one step, so
+the person can read the ward the moment they are a member. The person's other devices are
+sealed by the devices that linked them, with no further grant.
 
 **Every change to who has access is announced.** Each time a member's app checks the
 server, it shows **one** dismissible notice for the changes it has not yet shown - *3
@@ -971,7 +976,7 @@ Each gets its own message:
 |---|---|
 | No identity on this device | Ask whether they already use Ward Planning elsewhere; link, or request access |
 | Link code unknown or expired | The code was not found; start again on the new device |
-| No entry for this device in a version it should hold | Waiting for access from your other device, or from the admin who granted you |
+| Listed for this person, but no version sealed to this device | Waiting for access: the ward arrives when the device that linked this one next writes it |
 | Header unreadable | File is damaged |
 | Payload authentication fails | File was altered or truncated |
 | Identity file unreadable | Name the file; Ward Planning will not start a new identity over it |
@@ -1006,7 +1011,7 @@ data.
 | `HttpServerApi` | HTTP transport for the server contract; every call answers through a callback |
 | `ServerConnection` | Challenge-response sign-in and the bearer token, over any `ServerApi` |
 | `DocumentSession` | One open ward: the single write path, debounce, base version, publish queue, lease, adoption, conflict routing, lost access |
-| `RosterChangeQueue` | Sealing additions for every ward - a device this one linked, a person this admin granted - each built on the server's version and published on its own |
+| `ServerVersion` | Taking in and writing server versions: the base copy, the sealing-set rule applied to a version about to be written, and building the resealed version a grant or a link approval carries |
 | `DocumentManager` | Commands, undo, and geocoding over the open `DocumentSession` |
 
 There is deliberately **no storage abstraction with local and remote implementations**.
@@ -1079,9 +1084,9 @@ Against a fake server:
   lease
 - a person joins only through a granted request, and a device only through an approved
   link
-- a link: the approving device's queue seals the new device into every ward it holds,
-  and into a ward granted afterwards; the new device shows *Waiting for access* until
-  then
+- a grant or a link approval lands together with the versions it reseals, or not at
+  all; a ward the approver did not hold at the approval shows *Waiting for access* on
+  the new device until the approver next writes it
 - the access history lists each grant, removal, leave, and role change once, after the
   last entry a device read
 - a reinstall restores the ward list from the server, and the documents on it download
@@ -1117,8 +1122,8 @@ Against a fake server:
 - **A stolen, unlocked device acts as its owner**, with its owner's role. Unlinking it
   offers to unlink what it linked; otherwise any admin removes its owner.
 - **A device linked by a device that is later lost** can be left waiting for access in
-  wards the lost device never sealed it into; unlinking it and linking it again from a
-  device that holds those wards fixes it.
+  wards the lost device did not hold at the approval and never wrote afterwards;
+  unlinking it and linking it again from a device that holds those wards fixes it.
 - **Access must be granted before an emergency**, because granting needs the server.
 - **Reports stay plaintext.** `ReportGenerator` writes member-data PDFs to a
   user-chosen path. Out of scope here, but it belongs in the confidentiality story.
@@ -1225,6 +1230,9 @@ weekdays well below it:
   since each heartbeat updates the lease.
 - **The UTC reset helps a little.** Midnight UTC falls on Sunday afternoon or evening
   across US time zones, so late Sunday use counts against Monday's quota.
+- **A device polls only while something is on its way.** Between launches a device
+  with no pending request and no ward waiting for access makes no periodic calls; one
+  that is waiting checks once a minute, by head.
 - **Heartbeat interval is the main lever.** A 5-minute heartbeat with a 15-minute
   lease roughly doubles capacity, with the largest effect on Sunday when leases are
   held longest.
