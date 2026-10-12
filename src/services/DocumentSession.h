@@ -225,8 +225,7 @@ public:
     /// Publishes a version without this person, built from what is in memory, and
     /// once it lands finishes as Left: the local file is never written without this
     /// device. leaveFailed says why it did not land: the last person cannot leave,
-    /// nothing lands while a conflict waits for resolve, and another server call may
-    /// be in flight.
+    /// and another server call may be in flight.
     void leave();
 
     /// The conflict waiting for a choice, if any. Head checks and publishing wait
@@ -236,11 +235,6 @@ public:
     /// Settles the pending conflict. False, with the reason, when the ward could not
     /// be written; a conflict whose local file was not written is still pending.
     bool resolve(Resolution resolution, QString* errorMessage);
-
-    /// This device no longer holds the ward: the files and record go, and the session
-    /// does nothing further. The session reaches it itself, and DocumentManager
-    /// reaches it when this person leaves.
-    void finishLost(const ServerVersion::LostAccess& lost);
 
 signals:
     /// The in-memory document was replaced from outside an edit - a fast-forward,
@@ -295,9 +289,13 @@ private:
     /// The session's header, key, and document follow only on success.
     bool writeLocal(const Document& document, const DocumentHeader& previous, const DataKey& dataKey);
 
-    /// writeLocal with the sealing-set rule applied against previous first, for a
-    /// document taken in from the server: a roster carried through a merge rotates.
+    /// writeLocal with the sealing-set rule applied against previous first: every
+    /// save, and every write of a merged or resolved document.
     bool writeResealed(const Document& document, const DocumentHeader& previous, const DataKey& dataKey);
+
+    /// This device no longer holds the ward: the files and record go, accessLost is
+    /// emitted, and the session does nothing further.
+    void finishLost(const ServerVersion::LostAccess& lost);
 
     /// The exact bytes of a server version as the local file.
     bool writeLocal(const ServerVersion::Fetched& theirs);

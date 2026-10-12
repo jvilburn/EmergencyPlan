@@ -612,8 +612,7 @@ std::optional<DocumentManager::Invitation> DocumentManager::invite(Invite::For p
         return std::nullopt;
     }
 
-    const InviteLink link{m_session->documentId(),
-                                          DocumentCrypto::randomBytes(InviteLink::SeedSize)};
+    const InviteLink link{m_session->documentId(), DocumentCrypto::randomBytes(InviteLink::SeedSize)};
     SealingSet changed = roster();
     if (!changed.addInvite(link.invite(purpose, me->id, role, label)))
     {

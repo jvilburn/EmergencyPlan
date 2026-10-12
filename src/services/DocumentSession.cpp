@@ -1070,13 +1070,6 @@ void DocumentSession::onRegistered(const Result<qint64>& result, const DocumentF
 
 void DocumentSession::leave()
 {
-    // A version built on the old base cannot land while a conflict waits for resolve.
-    if (m_conflict.has_value())
-    {
-        emit leaveFailed(ServerError::VersionConflict);
-        return;
-    }
-
     const std::optional<Holder> me = self();
     if (!isShared() || m_lost || m_busy || !me.has_value())
     {

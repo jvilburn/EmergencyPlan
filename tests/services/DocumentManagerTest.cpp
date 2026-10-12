@@ -107,13 +107,6 @@ std::optional<DocumentManager::Invitation> inviteFrom(TestWard& ward,
     return made;
 }
 
-/// The fingerprints the server's current version seals to, as sorted hex.
-QStringList recipientsOnServer(TestWard& ward)
-{
-    const std::optional<ServerContract::Head> head = ward.head();
-    return head.has_value() ? ServerTestSupport::recipientsOf(head.value()) : QStringList();
-}
-
 QStringList sorted(QStringList list)
 {
     list.sort();
@@ -394,14 +387,8 @@ void DocumentManagerTest::accessChangesShowOnceAndStaySeenOnceDismissed()
     ward.settle();
     QVERIFY(app.manager.unseenRosterChanges().isEmpty());
 
-    // A later change, by Bob, shows alone.
-    std::unique_ptr<DocumentSession> bobSession = bob.open(ward.documentId);
-    QVERIFY(bobSession);
-    ward.settle();
-    bobSession->edit(DocumentSession::Edit::Roster, setRole(bob.identity.member, Role::Admin));
-    bobSession->publishNow();
-    ward.settle();
-    app.manager.session()->checkServer();
+    // A later change shows alone.
+    app.manager.setRole(bob.identity.member, Role::Admin);
     ward.settle();
     QCOMPARE(app.manager.unseenRosterChanges(), QStringList{"Bob is now an admin"});
 }
@@ -429,7 +416,7 @@ void DocumentManagerTest::aFetchThatFindsAccessLostSaysWhy()
     aliceSession->edit(DocumentSession::Edit::Roster, removePerson(bob.identity.member));
     aliceSession->publishNow();
     ward.settle();
-    QCOMPARE(recipientsOnServer(ward), QStringList{alice.identity.fingerprint().toHex()});
+    QCOMPARE(ward.recipientsOnServer(), QStringList{alice.identity.fingerprint().toHex()});
 
     QCOMPARE(app.manager.openDocument(ward.documentId, nullptr), DocumentManager::Open::Fetching);
     ward.settle();
@@ -513,7 +500,7 @@ void DocumentManagerTest::anInviteJoinsAUserOrAnotherDevice()
     QCOMPARE(roster.person(alice.identity.member)->devices.size(), 2);
     QVERIFY(roster.personOf(tablet.identity.fingerprint())->id == alice.identity.member);
     QVERIFY(roster.invites().isEmpty());
-    QCOMPARE(recipientsOnServer(ward),
+    QCOMPARE(ward.recipientsOnServer(),
              sorted({alice.identity.fingerprint().toHex(),
                      bob.identity.fingerprint().toHex(),
                      tablet.identity.fingerprint().toHex()}));
@@ -590,16 +577,16 @@ void DocumentManagerTest::anAdminRemovesWithdrawsAndChangesRoles()
     app.manager.removePerson(carol.identity.member);
     ward.settle();
     QCOMPARE(ward.head()->version, 7);
-    QVERIFY(!recipientsOnServer(ward).contains(carol.identity.fingerprint().toHex()));
-    QCOMPARE(recipientsOnServer(ward).size(), 2);
+    QVERIFY(!ward.recipientsOnServer().contains(carol.identity.fingerprint().toHex()));
+    QCOMPARE(ward.recipientsOnServer().size(), 2);
 
     const std::optional<DocumentManager::Invitation> forDave = inviteFrom(ward, app, Invite::For::User, Role::Member, "for Dave");
     QVERIFY(forDave.has_value());
-    QCOMPARE(recipientsOnServer(ward).size(), 3);
+    QCOMPARE(ward.recipientsOnServer().size(), 3);
     app.manager.withdrawInvite(app.manager.roster().invites().first().fingerprint());
     ward.settle();
     QCOMPARE(ward.head()->version, 9);
-    QCOMPARE(recipientsOnServer(ward).size(), 2);
+    QCOMPARE(ward.recipientsOnServer().size(), 2);
     Device& dave = ward.add(newIdentity("Dave", "Laptop"));
     QCOMPARE(ward.join(dave, forDave->link), std::optional<DocumentSession::Join>(DocumentSession::Join::InviteUsed));
 
@@ -651,7 +638,7 @@ void DocumentManagerTest::theLastAdminCannotStepDown()
     QCOMPARE(lost.first().at(1).value<ServerVersion::LostAccess>().how, ServerVersion::LostAccess::How::Left);
     QVERIFY(!QFile::exists(file));
     QVERIFY(!app.library.contains(documentId));
-    QCOMPARE(recipientsOnServer(ward), QStringList{bob.identity.fingerprint().toHex()});
+    QCOMPARE(ward.recipientsOnServer(), QStringList{bob.identity.fingerprint().toHex()});
 }
 
 void DocumentManagerTest::aMemberLeavesAndTheWardGoes()
@@ -671,7 +658,7 @@ void DocumentManagerTest::aMemberLeavesAndTheWardGoes()
     const DocumentPaths paths = app.library.pathsFor(ward.documentId);
     QVERIFY(QFile::exists(paths.file));
     QVERIFY(QFile::exists(paths.base));
-    QCOMPARE(recipientsOnServer(ward).size(), 2);
+    QCOMPARE(ward.recipientsOnServer().size(), 2);
     QSignalSpy lost(&app.manager, &DocumentManager::accessLost);
 
     app.manager.leave();
@@ -682,7 +669,7 @@ void DocumentManagerTest::aMemberLeavesAndTheWardGoes()
     QVERIFY(!QFile::exists(paths.base));
     QVERIFY(!app.library.contains(ward.documentId));
     QVERIFY(app.manager.documentId().isEmpty());
-    QCOMPARE(recipientsOnServer(ward), QStringList{alice.identity.fingerprint().toHex()});
+    QCOMPARE(ward.recipientsOnServer(), QStringList{alice.identity.fingerprint().toHex()});
 }
 
 namespace
@@ -713,7 +700,7 @@ struct BobsWard
         aliceSession->edit(DocumentSession::Edit::Roster, removePerson(bob));
         aliceSession->publishNow();
         ward.settle();
-        return aliceSession->syncState() == SyncState::UpToDate && recipientsOnServer(ward).size() == 1;
+        return aliceSession->syncState() == SyncState::UpToDate && ward.recipientsOnServer().size() == 1;
     }
 
     std::unique_ptr<DocumentSession> aliceSession;

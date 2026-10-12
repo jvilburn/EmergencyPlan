@@ -24,13 +24,13 @@ InviteKeys InviteLink::keys() const
 
 Invite InviteLink::invite(Invite::For purpose, const MemberId& maker, Role role, const QString& label) const
 {
-    Invite open;
-    open.purpose = purpose;
-    open.maker = maker;
-    open.role = role;
-    open.label = label;
-    open.keys = keys().publicKeys();
-    return open;
+    Invite made;
+    made.purpose = purpose;
+    made.maker = maker;
+    made.role = role;
+    made.label = label;
+    made.keys = keys().publicKeys();
+    return made;
 }
 
 QString InviteLink::toString() const

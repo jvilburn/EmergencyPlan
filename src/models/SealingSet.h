@@ -116,6 +116,8 @@ public:
 
     /// Never a person's last device; removePerson for that.
     bool removeDevice(const Fingerprint& device);
+
+    /// Refused for an unknown person, and for the role they have.
     bool setRole(const MemberId& id, Role role);
 
     /// Three ways: mine and theirs each built on base. An entry - a person with their
@@ -154,6 +156,14 @@ public:
 private:
     /// Whether keys could be added without sharing a key with any entry here.
     bool keysAreFree(const DeviceKeys& keys) const;
+
+    /// Where a device is: its person's key, and its index among their devices.
+    struct DeviceAt
+    {
+        QString person;
+        qsizetype index;
+    };
+    std::optional<DeviceAt> find(const Fingerprint& device) const;
 
     /// An invite is always some current person's: the one who made it.
     void dropInvitesWithoutAPerson();

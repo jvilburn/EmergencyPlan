@@ -27,7 +27,7 @@ class QTreeWidget;
 ///
 /// A member sees whom to ask: the ward's admins. The role is the app's rule, kept by
 /// every honest copy of it; the server never sees it. People sharing a display name
-/// are flagged, since the admin who added the second may be who the warning is for.
+/// are flagged, since a joiner chooses their own name, and two may look alike.
 ///
 /// The dialog decides nothing itself: each action is a signal.
 class AccessDialog : public QDialog

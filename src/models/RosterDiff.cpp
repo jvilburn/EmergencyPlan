@@ -55,13 +55,8 @@ QStringList describe(const SealingSet& previous, const SealingSet& current)
         }
     }
 
-    for (const Invite& was : previous.invites())
-    {
-        if (!current.invite(was.fingerprint()).has_value())
-        {
-            lines.append(QObject::tr("The invite %1 was used or withdrawn").arg(was.label));
-        }
-    }
+    // An invite gone is a join, a removal, or a withdrawal: the first two are news
+    // above, and a withdrawal is its maker's own business.
     for (const Invite& now : current.invites())
     {
         if (!previous.invite(now.fingerprint()).has_value())

@@ -69,7 +69,7 @@ void RosterDiffTest::theSameRosterSaysNothing()
     QCOMPARE(RosterDiff::describe(ward.roster, rotated).size(), 1);
 }
 
-void RosterDiffTest::aJoinSaysWhoAsWhatAndThatTheInviteWentWithIt()
+void RosterDiffTest::aJoinSaysWhoAsWhat()
 {
     const Ward ward;
     SealingSet invited = ward.roster;
@@ -78,8 +78,7 @@ void RosterDiffTest::aJoinSaysWhoAsWhatAndThatTheInviteWentWithIt()
     SealingSet joined = invited;
     QVERIFY(joined.join(forCarol.fingerprint(), NamedDevice{"Tablet", newKeys()}, newMember(), "Carol"));
 
-    QCOMPARE(RosterDiff::describe(invited, joined),
-             (QStringList{"Carol joined, as a member", "The invite for Carol was used or withdrawn"}));
+    QCOMPARE(RosterDiff::describe(invited, joined), QStringList{"Carol joined, as a member"});
 }
 
 void RosterDiffTest::aRemovalSaysWhoNoLongerHasAccess()
@@ -113,8 +112,7 @@ void RosterDiffTest::aDeviceAddedOrUnlinkedNamesBoth()
     SealingSet invited = ward.roster;
     QVERIFY(invited.addInvite(forTablet));
 
-    QCOMPARE(RosterDiff::describe(invited, added),
-             (QStringList{"Bob added a device, Tablet", "The invite for Tablet was used or withdrawn"}));
+    QCOMPARE(RosterDiff::describe(invited, added), QStringList{"Bob added a device, Tablet"});
 
     SealingSet unlinked = added;
     QVERIFY(unlinked.removeDevice(tablet.fingerprint()));
@@ -134,7 +132,7 @@ void RosterDiffTest::anInviteMadeNamesItsMakerAndLabel()
     QCOMPARE(RosterDiff::describe(ward.roster, forDevice), QStringList{"Alice made an invite, for Desktop"});
 }
 
-void RosterDiffTest::aWithdrawnInviteSaysSo()
+void RosterDiffTest::aWithdrawnInviteIsNotNews()
 {
     const Ward ward;
     SealingSet invited = ward.roster;
@@ -143,12 +141,15 @@ void RosterDiffTest::aWithdrawnInviteSaysSo()
     SealingSet withdrawn = invited;
     QVERIFY(withdrawn.removeInvite(forDave.fingerprint()));
 
-    QCOMPARE(RosterDiff::describe(invited, withdrawn), QStringList{"The invite for Dave was used or withdrawn"});
+    QVERIFY(RosterDiff::describe(invited, withdrawn).isEmpty());
+
+    // Anchor: the invite's making was news.
+    QCOMPARE(RosterDiff::describe(ward.roster, invited), QStringList{"Alice made an invite, for Dave"});
 }
 
 void RosterDiffTest::severalChangesComeInOrder()
 {
-    // People as they were, then those who are new, then invites gone, then invites made.
+    // People as they were, then those who are new, then invites made.
     const Ward ward;
     SealingSet previous = ward.roster;
     const Invite forCarol = newInvite(Invite::For::User, ward.alice, "for Carol");
@@ -160,8 +161,5 @@ void RosterDiffTest::severalChangesComeInOrder()
     QVERIFY(current.addInvite(newInvite(Invite::For::Device, ward.alice, "for Desktop")));
 
     QCOMPARE(RosterDiff::describe(previous, current),
-             (QStringList{"Bob no longer has access",
-                          "Carol joined, as a member",
-                          "The invite for Carol was used or withdrawn",
-                          "Alice made an invite, for Desktop"}));
+             (QStringList{"Bob no longer has access", "Carol joined, as a member", "Alice made an invite, for Desktop"}));
 }

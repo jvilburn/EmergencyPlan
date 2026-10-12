@@ -160,12 +160,6 @@ std::unique_ptr<DocumentSession> joinAndOpen(TestWard& ward, Device& device, con
     return session;
 }
 
-/// The fingerprints the server's current version seals to, as sorted hex.
-QStringList recipientsOnServer(TestWard& ward)
-{
-    return ServerTestSupport::recipientsOf(ward.head().value());
-}
-
 QStringList hexOf(const QList<const DeviceIdentity*>& devices)
 {
     QStringList fingerprints;
@@ -865,7 +859,7 @@ void DocumentSessionTest::aRemovalRotatesTheKeyPastWhoeverWasRemoved()
     QVERIFY(!canUnseal(copy.sealed.header, carol.identity));
     QVERIFY(canUnseal(copy.sealed.header, alice.identity));
     QVERIFY(canUnseal(copy.sealed.header, bob.identity));
-    QCOMPARE(recipientsOnServer(ward), hexOf({&alice.identity, &bob.identity}));
+    QCOMPARE(ward.recipientsOnServer(), hexOf({&alice.identity, &bob.identity}));
     QVERIFY(copy.dataKey != before);
     QVERIFY(copy.document.sealingSet().descendsFrom(before));
 
@@ -903,7 +897,7 @@ void DocumentSessionTest::aPublishThatPrunesNobodyKeepsTheKey()
     // An invite adds a recipient and keeps the key too.
     QVERIFY(ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Carol").has_value());
     QCOMPARE(keyOf(ward, alice), before);
-    QCOMPARE(recipientsOnServer(ward).size(), 3);
+    QCOMPARE(ward.recipientsOnServer().size(), 3);
 }
 
 void DocumentSessionTest::aRefusalAfterSomeoneLeftTakesTheirRosterAndPublishes()
@@ -1351,7 +1345,7 @@ void DocumentSessionTest::aLeaveReportsLeftOnceTheServerHasIt()
     QCOMPARE(copy.version, qint64(4));
     QCOMPARE(copy.published.device, bob.identity.fingerprint());
     QVERIFY(!copy.document.sealingSet().person(bob.identity.member).has_value());
-    QCOMPARE(recipientsOnServer(ward), hexOf({&alice.identity}));
+    QCOMPARE(ward.recipientsOnServer(), hexOf({&alice.identity}));
     QVERIFY(!canUnseal(copy.sealed.header, bob.identity));
 
     // Alice, now alone, cannot leave: a ward with nobody to read it is not a state.
@@ -1397,7 +1391,7 @@ void DocumentSessionTest::aLeaveRefusedAsAConflictTakesTheirsInAndThenLands()
     QCOMPARE(recorder.leaveFailures.size(), 1);
     QCOMPARE(headVersion(ward), alices + 1);
     QVERIFY(!bob.records.contains(ward.documentId));
-    QCOMPARE(recipientsOnServer(ward), hexOf({&alice.identity}));
+    QCOMPARE(ward.recipientsOnServer(), hexOf({&alice.identity}));
 }
 
 void DocumentSessionTest::aLeaveFromThisPersonsOtherDeviceReportsLeft()
@@ -1430,7 +1424,7 @@ void DocumentSessionTest::aLeaveFromThisPersonsOtherDeviceReportsLeft()
     QCOMPARE(recorder.lost->how, LostAccess::How::Left);
     QVERIFY(recorder.lost->byWhom.isEmpty());
     QVERIFY(!QFile::exists(bob.paths(ward.documentId).file));
-    QCOMPARE(recipientsOnServer(ward), hexOf({&alice.identity}));
+    QCOMPARE(ward.recipientsOnServer(), hexOf({&alice.identity}));
 }
 
 void DocumentSessionTest::aDeviceTakenOutByItsOwnPersonReportsUnlinked()
@@ -1451,7 +1445,7 @@ void DocumentSessionTest::aDeviceTakenOutByItsOwnPersonReportsUnlinked()
 
     // Bob's laptop takes the phone out.
     QVERIFY(editRosterOn(ward, *bobSession, removeDevice(bobsPhone.identity.fingerprint())));
-    QCOMPARE(recipientsOnServer(ward), hexOf({&alice.identity, &bob.identity}));
+    QCOMPARE(ward.recipientsOnServer(), hexOf({&alice.identity, &bob.identity}));
     QVERIFY(!canUnseal(ward.serverCopy(alice)->sealed.header, bobsPhone.identity));
     QVERIFY(bobsPhone.timers->fire(Timer::HeadCheck));
     ward.settle();
@@ -1822,7 +1816,7 @@ void DocumentSessionTest::aUserJoinsAndShowsInTheInvitersRosterAtTheNextHead()
     QVERIFY(roster.person(bob.identity.member)->role == Role::Member);
     QCOMPARE(roster.person(bob.identity.member)->devices.first().name, QString("Phone"));
     QVERIFY(roster.invites().isEmpty());
-    QCOMPARE(recipientsOnServer(ward), hexOf({&alice.identity, &bob.identity}));
+    QCOMPARE(ward.recipientsOnServer(), hexOf({&alice.identity, &bob.identity}));
     QCOMPARE(copy.published.device, invite);
     QVERIFY(copy.dataKey != invited);
     QVERIFY(roster.descendsFrom(invited));
@@ -1862,7 +1856,7 @@ void DocumentSessionTest::aDeviceJoinsAsAnotherDeviceOfItsPerson()
     QVERIFY(alice.role == Role::Admin);
     QCOMPARE(alice.devices.size(), qsizetype(2));
     QCOMPARE(roster.device(phone.identity.fingerprint())->name, QString("Phone"));
-    QCOMPARE(recipientsOnServer(ward), hexOf({&laptop.identity, &phone.identity}));
+    QCOMPARE(ward.recipientsOnServer(), hexOf({&laptop.identity, &phone.identity}));
     QVERIFY(roster == phoneSession->document().sealingSet());
 }
 
@@ -2012,7 +2006,7 @@ void DocumentSessionTest::twoDevicesOpeningOneLinkTheSecondFindsItUsed()
     QCOMPARE(bobJoined, std::optional<DocumentSession::Join>(DocumentSession::Join::Done));
     QCOMPARE(malloryJoined, std::optional<DocumentSession::Join>(DocumentSession::Join::InviteUsed));
     QCOMPARE(headVersion(ward), 3);
-    QCOMPARE(recipientsOnServer(ward), hexOf({&alice.identity, &bob.identity}));
+    QCOMPARE(ward.recipientsOnServer(), hexOf({&alice.identity, &bob.identity}));
     QVERIFY(!mallory.records.contains(ward.documentId));
     QVERIFY(!QFile::exists(mallory.paths(ward.documentId).file));
 }
@@ -2045,7 +2039,7 @@ void DocumentSessionTest::aJoinStartsAgainWhenTheWardMovedUnderIt()
 
     QCOMPARE(joined, std::optional<DocumentSession::Join>(DocumentSession::Join::Done));
     QCOMPARE(headVersion(ward), 4);
-    QCOMPARE(recipientsOnServer(ward), hexOf({&alice.identity, &bob.identity}));
+    QCOMPARE(ward.recipientsOnServer(), hexOf({&alice.identity, &bob.identity}));
     std::unique_ptr<DocumentSession> bobSession = bob.open(ward.documentId);
     QVERIFY(bobSession);
     ward.settle();
@@ -2188,7 +2182,7 @@ void DocumentSessionTest::aRosterEditCarriesThroughARefusedPublish()
     QVERIFY(!copy.document.sealingSet().person(carol.identity.member).has_value());
     QVERIFY(!canUnseal(copy.sealed.header, carol.identity));
     QVERIFY(copy.dataKey != carolKnows);
-    QCOMPARE(recipientsOnServer(ward), hexOf({&alice.identity, &bob.identity}));
+    QCOMPARE(ward.recipientsOnServer(), hexOf({&alice.identity, &bob.identity}));
     QCOMPARE(aliceSession->syncState(), SyncState::UpToDate);
 }
 

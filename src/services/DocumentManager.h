@@ -239,8 +239,9 @@ signals:
     /// A shared ward being fetched could not be.
     void fetchFailed(const QString& documentId, DocumentSession::Download outcome);
 
-    /// A shared ward was fetched, and opening it went as result says. Not reported
-    /// when another ward was opened while it was fetched.
+    /// A ward asked for by fetch or by join has been opened, as result says: a
+    /// fetched ward only if nothing else was opened meanwhile, a joined ward
+    /// regardless, and a ward a link names that was here already.
     void fetchFinished(const QString& documentId, DocumentManager::Open result, const QString& reason);
 
     // Geocoding progress

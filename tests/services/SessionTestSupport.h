@@ -113,10 +113,7 @@ public:
     /// An invite made on inviter's open session, as DocumentManager makes one, its
     /// version published: the link, or nullopt when the roster refused it or the
     /// publish did not land.
-    std::optional<InviteLink> invite(DocumentSession& inviter,
-                                                     Invite::For purpose,
-                                                     Role role,
-                                                     const QString& label);
+    std::optional<InviteLink> invite(DocumentSession& inviter, Invite::For purpose, Role role, const QString& label);
 
     /// Joins link on joiner, as opening the link does there.
     std::optional<DocumentSession::Join> join(Device& joiner, const InviteLink& link);
@@ -129,6 +126,10 @@ public:
 
     /// The server's head of the ward, read as anyone may.
     std::optional<ServerContract::Head> head();
+
+    /// The fingerprints the server's current version seals to, as sorted hex; none
+    /// when the server does not answer.
+    QStringList recipientsOnServer();
 
     /// The server's current version of the ward, or of wardId, as a device of
     /// it downloads it.

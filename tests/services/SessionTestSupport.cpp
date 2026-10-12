@@ -187,12 +187,12 @@ SealingSet rosterOf(const QList<DeviceIdentity>& devices)
     for (qsizetype i = 1; i < devices.size(); ++i)
     {
         const DeviceIdentity& joiner = devices.at(i);
-        Invite open;
-        open.maker = devices.first().member;
-        open.label = "for " + joiner.displayName;
-        open.keys = DeviceKeys{DocumentCrypto::generateKeypair().publicKey,
-                               DocumentCrypto::generateSigningKeypair().verifyKey};
-        if (!roster.addInvite(open) || !roster.join(open.fingerprint(), joiner.device(), joiner.member, joiner.displayName))
+        Invite invite;
+        invite.maker = devices.first().member;
+        invite.label = "for " + joiner.displayName;
+        invite.keys = DeviceKeys{DocumentCrypto::generateKeypair().publicKey,
+                                 DocumentCrypto::generateSigningKeypair().verifyKey};
+        if (!roster.addInvite(invite) || !roster.join(invite.fingerprint(), joiner.device(), joiner.member, joiner.displayName))
         {
             qFatal("rosterOf: a join refused");
         }
@@ -291,10 +291,7 @@ std::unique_ptr<DocumentSession> TestWard::createShared(Device& owner)
     return session;
 }
 
-std::optional<InviteLink> TestWard::invite(DocumentSession& inviter,
-                                                           Invite::For purpose,
-                                                           Role role,
-                                                           const QString& label)
+std::optional<InviteLink> TestWard::invite(DocumentSession& inviter, Invite::For purpose, Role role, const QString& label)
 {
     // As DocumentManager::invite makes one.
     const std::optional<Holder> me = inviter.self();
@@ -302,11 +299,10 @@ std::optional<InviteLink> TestWard::invite(DocumentSession& inviter,
     {
         return std::nullopt;
     }
-    const InviteLink link{inviter.documentId(),
-                                          DocumentCrypto::randomBytes(InviteLink::SeedSize)};
-    const Invite open = link.invite(purpose, me->id, role, label);
+    const InviteLink link{inviter.documentId(), DocumentCrypto::randomBytes(InviteLink::SeedSize)};
+    const Invite made = link.invite(purpose, me->id, role, label);
     SealingSet changed = inviter.document().sealingSet();
-    if (!changed.addInvite(open))
+    if (!changed.addInvite(made))
     {
         return std::nullopt;
     }
@@ -317,7 +313,7 @@ std::optional<InviteLink> TestWard::invite(DocumentSession& inviter,
     // Published: the server's current header seals to the new invite.
     const std::optional<Head> current = head();
     if (inviter.syncState() != SyncState::UpToDate || !current.has_value()
-        || !ServerTestSupport::recipientsOf(current.value()).contains(open.fingerprint().toHex()))
+        || !ServerTestSupport::recipientsOf(current.value()).contains(made.fingerprint().toHex()))
     {
         return std::nullopt;
     }
@@ -359,6 +355,12 @@ std::optional<Head> TestWard::head()
         return std::nullopt;
     }
     return answered.value;
+}
+
+QStringList TestWard::recipientsOnServer()
+{
+    const std::optional<Head> current = head();
+    return current.has_value() ? ServerTestSupport::recipientsOf(current.value()) : QStringList();
 }
 
 std::optional<ServerVersion::Fetched> TestWard::serverCopy(Device& reader)

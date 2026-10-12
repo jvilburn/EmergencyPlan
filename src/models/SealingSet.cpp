@@ -145,34 +145,31 @@ std::optional<Holder> SealingSet::person(const MemberId& id) const
     return found.value();
 }
 
-std::optional<Holder> SealingSet::personOf(const Fingerprint& device) const
+std::optional<SealingSet::DeviceAt> SealingSet::find(const Fingerprint& device) const
 {
-    for (const Holder& person : m_people)
+    for (auto person = m_people.constBegin(); person != m_people.constEnd(); ++person)
     {
-        for (const NamedDevice& candidate : person.devices)
+        for (qsizetype i = 0; i < person.value().devices.size(); ++i)
         {
-            if (candidate.fingerprint() == device)
+            if (person.value().devices.at(i).fingerprint() == device)
             {
-                return person;
+                return DeviceAt{person.key(), i};
             }
         }
     }
     return std::nullopt;
 }
 
+std::optional<Holder> SealingSet::personOf(const Fingerprint& device) const
+{
+    const std::optional<DeviceAt> at = find(device);
+    return at.has_value() ? std::optional<Holder>(m_people.value(at->person)) : std::nullopt;
+}
+
 std::optional<NamedDevice> SealingSet::device(const Fingerprint& fingerprint) const
 {
-    for (const Holder& person : m_people)
-    {
-        for (const NamedDevice& candidate : person.devices)
-        {
-            if (candidate.fingerprint() == fingerprint)
-            {
-                return candidate;
-            }
-        }
-    }
-    return std::nullopt;
+    const std::optional<DeviceAt> at = find(fingerprint);
+    return at.has_value() ? std::optional<NamedDevice>(m_people.value(at->person).devices.at(at->index)) : std::nullopt;
 }
 
 QList<Invite> SealingSet::invites() const
@@ -270,13 +267,13 @@ bool SealingSet::join(const Fingerprint& invite, const NamedDevice& device, cons
     {
         return false;
     }
-    const Invite open = found.value();
+    const Invite entry = found.value();
 
     QString personId;
-    switch (open.purpose)
+    switch (entry.purpose)
     {
     case Invite::For::Device:
-        personId = open.maker.toHex();
+        personId = entry.maker.toHex();
         if (!m_people.contains(personId))
         {
             return false;
@@ -288,7 +285,7 @@ bool SealingSet::join(const Fingerprint& invite, const NamedDevice& device, cons
         {
             return false;
         }
-        m_people.insert(personId, Holder{joiner, name.trimmed(), open.role, {}});
+        m_people.insert(personId, Holder{joiner, name.trimmed(), entry.role, {}});
         break;
     }
 
@@ -326,28 +323,19 @@ void SealingSet::dropInvitesWithoutAPerson()
 
 bool SealingSet::removeDevice(const Fingerprint& device)
 {
-    for (Holder& person : m_people)
+    const std::optional<DeviceAt> at = find(device);
+    if (!at.has_value() || m_people[at->person].devices.size() == 1)
     {
-        for (qsizetype i = 0; i < person.devices.size(); ++i)
-        {
-            if (person.devices.at(i).fingerprint() == device)
-            {
-                if (person.devices.size() == 1)
-                {
-                    return false;
-                }
-                person.devices.removeAt(i);
-                return true;
-            }
-        }
+        return false;
     }
-    return false;
+    m_people[at->person].devices.removeAt(at->index);
+    return true;
 }
 
 bool SealingSet::setRole(const MemberId& id, Role role)
 {
     const auto found = m_people.find(id.toHex());
-    if (found == m_people.end())
+    if (found == m_people.end() || found.value().role == role)
     {
         return false;
     }

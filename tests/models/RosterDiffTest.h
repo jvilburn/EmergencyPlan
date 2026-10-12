@@ -11,11 +11,11 @@ private slots:
     void initTestCase();
 
     void theSameRosterSaysNothing();
-    void aJoinSaysWhoAsWhatAndThatTheInviteWentWithIt();
+    void aJoinSaysWhoAsWhat();
     void aRemovalSaysWhoNoLongerHasAccess();
     void aRoleChangeSaysTheNewRole();
     void aDeviceAddedOrUnlinkedNamesBoth();
     void anInviteMadeNamesItsMakerAndLabel();
-    void aWithdrawnInviteSaysSo();
+    void aWithdrawnInviteIsNotNews();
     void severalChangesComeInOrder();
 };

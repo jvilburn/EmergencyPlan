@@ -93,22 +93,9 @@ QString addWardWithFiles(Fixture& fixture)
     return documentId;
 }
 
-void keepJoined(std::optional<DocumentSession::Join>& out,
-                DocumentSession::Join outcome,
-                const QString&,
-                const std::optional<Document>&)
-{
-    out = outcome;
-}
-
 void keepFetched(std::optional<DocumentSession::Download>& out, const QString&, DocumentSession::Download outcome)
 {
     out = outcome;
-}
-
-void nameTanglewood(Document& document)
-{
-    document.metadata().addOrUpdateWard("123456", "Tanglewood", "654321", "Riverside Stake");
 }
 
 /// Alice's two shared wards on the server, the first naming its ward.
@@ -131,7 +118,7 @@ bool shareTwoWards(ServerWards& wards)
         return false;
     }
     wards.named = wards.ward.documentId;
-    named->edit(DocumentSession::Edit::Directory, nameTanglewood);
+    named->edit(DocumentSession::Edit::Directory, nameTheWard);
     named->publishNow();
     wards.ward.settle();
     wards.sessions.push_back(std::move(named));
@@ -683,7 +670,7 @@ void DocumentLibraryTest::aJoinedWardIsAddedAndOpens()
     ServerConnection connection(ward.server, bob);
     QObject receiver;
     std::optional<DocumentSession::Join> joined;
-    library.join(link.value(), connection, &receiver, std::bind(&keepJoined, std::ref(joined), _1, _2, _3));
+    library.join(link.value(), connection, &receiver, std::bind(&keepJoin, std::ref(joined), _1, _2, _3));
     ward.settle();
 
     // Added under the ward's name, read from the version joined.
@@ -730,7 +717,7 @@ void DocumentLibraryTest::aJoinThatFailsAddsNothing()
     ServerConnection connection(ward.server, bob);
     QObject receiver;
     std::optional<DocumentSession::Join> joined;
-    library.join(link.value(), connection, &receiver, std::bind(&keepJoined, std::ref(joined), _1, _2, _3));
+    library.join(link.value(), connection, &receiver, std::bind(&keepJoin, std::ref(joined), _1, _2, _3));
     ward.settle();
 
     QVERIFY(joined == DocumentSession::Join::InviteUsed);
