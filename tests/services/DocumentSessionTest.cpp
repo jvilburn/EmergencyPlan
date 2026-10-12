@@ -1,6 +1,5 @@
 #include "DocumentSessionTest.h"
 
-#include "ChainTestSupport.h"
 #include "DocumentCrypto.h"
 #include "ServerTestSupport.h"
 #include "SessionTestSupport.h"
@@ -8,7 +7,12 @@
 #include <QFile>
 #include <QtTest>
 
-using namespace ServerContract;
+using ServerContract::Done;
+using ServerContract::Head;
+using ServerContract::LostAccess;
+using ServerContract::Reply;
+using ServerContract::ServerApi;
+using ServerContract::Session;
 using namespace SessionTestSupport;
 using namespace std::placeholders;
 
@@ -21,36 +25,24 @@ namespace
 struct Recorder
 {
     int replaced = 0;
-    int adopted = 0;
     QList<DocumentSession::Conflict> conflicts;
     QStringList saveFailures;
-    bool removed = false;
-    QString removedBy;
-    bool left = false;
+    std::optional<LostAccess> lost;
 
     void watch(DocumentSession& session);
 
     void onReplaced() { ++replaced; }
-    void onAdopted() { ++adopted; }
     void onConflict(const DocumentSession::Conflict& conflict) { conflicts.append(conflict); }
     void onSaveFailed(const QString& message) { saveFailures.append(message); }
-    void onRemoved(const QString& byWhom, bool byLeaving);
+    void onLost(const LostAccess& how) { lost = how; }
 };
 
 void Recorder::watch(DocumentSession& session)
 {
     QObject::connect(&session, &DocumentSession::documentReplaced, &session, std::bind(&Recorder::onReplaced, this));
-    QObject::connect(&session, &DocumentSession::versionAdopted, &session, std::bind(&Recorder::onAdopted, this));
     QObject::connect(&session, &DocumentSession::conflictRaised, &session, std::bind(&Recorder::onConflict, this, _1));
     QObject::connect(&session, &DocumentSession::saveFailed, &session, std::bind(&Recorder::onSaveFailed, this, _1));
-    QObject::connect(&session, &DocumentSession::removed, &session, std::bind(&Recorder::onRemoved, this, _1, _2));
-}
-
-void Recorder::onRemoved(const QString& byWhom, bool byLeaving)
-{
-    removed = true;
-    removedBy = byWhom;
-    left = byLeaving;
+    QObject::connect(&session, &DocumentSession::accessLost, &session, std::bind(&Recorder::onLost, this, _1));
 }
 
 void markCalled(bool& called, Document&)
@@ -116,21 +108,46 @@ bool openAliceAndBob(TestWard& ward,
     return bobSession != nullptr;
 }
 
+Head headFor(TestWard& ward, Device& reader)
+{
+    const Session session = ward.sessionFor(reader).value();
+    return ServerTestSupport::wait<Head>(std::bind(&ServerApi::head, &ward.server, session, ward.documentId, _1))
+        .value.value();
+}
+
 /// The server's current version, from the head alone, so it reads whatever
 /// format the current header is in.
 qint64 headVersion(TestWard& ward, Device& reader)
 {
-    const Session session = ServerTestSupport::signIn(ward.server, asTestDevice(reader.identity)).value();
-    return ServerTestSupport::wait<Head>([&](Reply<Head> reply) { ward.server.head(session, ward.documentId, reply); })
-        .value->version;
+    return headFor(ward, reader).version;
 }
 
 /// Who holds the lease, as the server tells a device of the ward.
 std::optional<Fingerprint> leaseHolder(TestWard& ward, Device& reader)
 {
-    const Session session = ServerTestSupport::signIn(ward.server, asTestDevice(reader.identity)).value();
-    return ServerTestSupport::wait<Head>([&](Reply<Head> reply) { ward.server.head(session, ward.documentId, reply); })
-        .value->leaseHolder;
+    return headFor(ward, reader).leaseHolder;
+}
+
+/// An admin's server call taking person off the ward.
+bool removeFromServer(TestWard& ward, Device& admin, const DeviceIdentity& person)
+{
+    const Session session = ward.sessionFor(admin).value();
+    return ServerTestSupport::wait<Done>(
+               std::bind(&ServerApi::removeMember, &ward.server, session, ward.documentId, person.member, _1))
+        .ok();
+}
+
+/// Whether a device can open the data key of a version.
+bool canUnseal(const DocumentHeader& header, const DeviceIdentity& device)
+{
+    const std::optional<RecipientEntry> entry = header.entryFor(device.fingerprint());
+    return entry.has_value() && DocumentCrypto::unsealDataKey(entry.value().sealedKey, device.sealing).has_value();
+}
+
+/// The data key a device opens from the server's current version.
+DataKey keyOf(TestWard& ward, Device& reader)
+{
+    return ward.serverCopy(reader).value().dataKey;
 }
 
 std::optional<DocumentSession::Download> downloadTo(TestWard& ward, Device& device)
@@ -144,23 +161,6 @@ std::optional<DocumentSession::Download> downloadTo(TestWard& ward, Device& devi
                               std::bind(&keepDownload, std::ref(result), _1));
     ward.settle();
     return result;
-}
-
-RosterChange removal(const DeviceIdentity& person)
-{
-    RosterChange change;
-    change.kind = RosterChange::Kind::Remove;
-    change.target = person.member;
-    return change;
-}
-
-RosterChange promotion(const DeviceIdentity& person)
-{
-    RosterChange change;
-    change.kind = RosterChange::Kind::SetRole;
-    change.target = person.member;
-    change.role = RosterPerson::Role::Admin;
-    return change;
 }
 
 /// Bob moves Adams to 50 while the server is unreachable and closes; then Alice
@@ -198,11 +198,11 @@ void DocumentSessionTest::initTestCase()
 
 // --- Creating and opening --------------------------------------------------------
 
-void DocumentSessionTest::aCreatedWardReopensWithOnePersonAndTheSameContent()
+void DocumentSessionTest::aCreatedWardReopensSealedToThisDeviceWithTheSameContent()
 {
     TestWard ward;
     Device& alice = ward.add(newIdentity("Alice", "Laptop"));
-    const QString documentId = ChainTestSupport::newDocumentId();
+    const QString documentId = ServerTestSupport::newDocumentId();
 
     std::unique_ptr<DocumentSession> created = alice.create(documentId);
     QVERIFY(created);
@@ -215,13 +215,7 @@ void DocumentSessionTest::aCreatedWardReopensWithOnePersonAndTheSameContent()
     QVERIFY(reopened);
     QVERIFY(reopened->document() == content);
     QCOMPARE(reopened->header().documentId, documentId);
-    QCOMPARE(reopened->header().keyGeneration, 1);
-
-    const AccessRoster& roster = reopened->document().accessRoster();
-    QCOMPARE(roster.personCount(), 1);
-    const RosterPerson person = roster.person(alice.identity.member).value();
-    QVERIFY(person.isAdmin());
-    QCOMPARE(person.devices(), QList<RosterDevice>{alice.identity.asRosterDevice()});
+    QVERIFY(reopened->document().sealingSet() == SealingSet::of(alice.identity.keys()));
     QCOMPARE(reopened->header().recipients.size(), qsizetype(1));
     QVERIFY(reopened->header().recipients.first().fingerprint == alice.identity.fingerprint());
 }
@@ -230,13 +224,13 @@ void DocumentSessionTest::openReportsEachFailure()
 {
     TestWard ward;
     Device& alice = ward.add(newIdentity("Alice", "Laptop"));
-    const QString documentId = ChainTestSupport::newDocumentId();
+    const QString documentId = ServerTestSupport::newDocumentId();
     const DocumentPaths paths = alice.paths(documentId);
     QVERIFY(alice.create(documentId));
     const QByteArray good = bytesOf(paths.file);
 
     LoadFailure failure = LoadFailure::None;
-    QVERIFY(!alice.open(ChainTestSupport::newDocumentId(), failure));
+    QVERIFY(!alice.open(ServerTestSupport::newDocumentId(), failure));
     QCOMPARE(failure, LoadFailure::NotFound);
 
     DocumentFile::Sealed later;
@@ -255,57 +249,6 @@ void DocumentSessionTest::openReportsEachFailure()
     QVERIFY(DocumentFile::write(paths.file, good, nullptr));
     QVERIFY(alice.open(documentId, failure));
     QCOMPARE(failure, LoadFailure::None);
-}
-
-void DocumentSessionTest::aFileRolledBackToALowerSaveCounterIsRefused()
-{
-    TestWard ward;
-    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
-    std::unique_ptr<DocumentSession> session = ward.createShared(alice);
-    QVERIFY(session);
-    const DocumentPaths paths = alice.paths(ward.documentId);
-    const QByteArray older = bytesOf(paths.file);
-
-    session->edit(DocumentSession::Edit::Directory, moveFamily(ward.adams, 45.0));
-    QVERIFY(alice.timers->fire(Timer::Save));
-    ward.settle();
-    QCOMPARE(session->syncState(), SyncState::UpToDate);
-    session.reset();
-
-    const QByteArray newer = bytesOf(paths.file);
-    QVERIFY(DocumentFile::write(paths.file, older, nullptr));
-    LoadFailure failure = LoadFailure::None;
-    QVERIFY(!alice.open(ward.documentId, failure));
-    QCOMPARE(failure, LoadFailure::Refused);
-
-    QVERIFY(DocumentFile::write(paths.file, newer, nullptr));
-    QVERIFY(alice.open(ward.documentId, failure));
-}
-
-void DocumentSessionTest::aFileRolledBackToALowerGenerationIsRefused()
-{
-    TestWard ward;
-    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
-    Device& carol = ward.add(newIdentity("Carol", "Tablet"));
-    std::unique_ptr<DocumentSession> session = ward.createShared(alice);
-    QVERIFY(session);
-    QVERIFY(ward.grant(alice, carol));
-    session->checkServer();
-    ward.settle();
-    const DocumentPaths paths = alice.paths(ward.documentId);
-    const QByteArray firstGeneration = bytesOf(paths.file);
-    QCOMPARE(headerOnDisk(paths.file)->keyGeneration, 1);
-
-    QVERIFY(ward.change(alice, removal(carol.identity)) == RosterChangeOutcome::Published);
-    session->checkServer();
-    ward.settle();
-    QCOMPARE(session->header().keyGeneration, 2);
-    session.reset();
-
-    QVERIFY(DocumentFile::write(paths.file, firstGeneration, nullptr));
-    LoadFailure failure = LoadFailure::None;
-    QVERIFY(!alice.open(ward.documentId, failure));
-    QCOMPARE(failure, LoadFailure::Refused);
 }
 
 void DocumentSessionTest::aSharedWardWhoseLocalFileWasDeletedIsDownloadedThenOpens()
@@ -394,7 +337,6 @@ void DocumentSessionTest::aheadWithNothingUnpublishedFastForwards()
     ward.settle();
 
     QVERIFY(latitudeOf(bobSession->document(), ward.adams) == 47.0);
-    QCOMPARE(recorder.adopted, 1);
     QCOMPARE(recorder.replaced, 1);
     QCOMPARE(bobSession->syncState(), SyncState::UpToDate);
 
@@ -484,7 +426,7 @@ void DocumentSessionTest::severalEditsThenOneSaveAdvanceTheCounterByOne()
 {
     TestWard ward;
     Device& alice = ward.add(newIdentity("Alice", "Laptop"));
-    const QString documentId = ChainTestSupport::newDocumentId();
+    const QString documentId = ServerTestSupport::newDocumentId();
     std::unique_ptr<DocumentSession> session = alice.create(documentId);
     QVERIFY(session);
     const QString file = alice.paths(documentId).file;
@@ -506,7 +448,7 @@ void DocumentSessionTest::flushWritesAScheduledSaveAtOnce()
 {
     TestWard ward;
     Device& alice = ward.add(newIdentity("Alice", "Laptop"));
-    const QString documentId = ChainTestSupport::newDocumentId();
+    const QString documentId = ServerTestSupport::newDocumentId();
     std::unique_ptr<DocumentSession> session = alice.create(documentId);
     QVERIFY(session);
     const QString file = alice.paths(documentId).file;
@@ -525,7 +467,7 @@ void DocumentSessionTest::directoryAndResponseEditsSaveThroughTheSamePath()
 {
     TestWard ward;
     Device& alice = ward.add(newIdentity("Alice", "Laptop"));
-    const QString documentId = ChainTestSupport::newDocumentId();
+    const QString documentId = ServerTestSupport::newDocumentId();
     std::unique_ptr<DocumentSession> session = alice.create(documentId);
     QVERIFY(session);
     const QString file = alice.paths(documentId).file;
@@ -549,7 +491,7 @@ void DocumentSessionTest::aFailedWriteReportsAndLeavesThePreviousFile()
 {
     TestWard ward;
     Device& alice = ward.add(newIdentity("Alice", "Laptop"));
-    const QString documentId = ChainTestSupport::newDocumentId();
+    const QString documentId = ServerTestSupport::newDocumentId();
     std::unique_ptr<DocumentSession> session = alice.create(documentId);
     QVERIFY(session);
     Recorder recorder;
@@ -691,7 +633,7 @@ void DocumentSessionTest::aSaveDuringAPublishPublishesAfterIt()
     QCOMPARE(copy.version, qint64(3));
     QVERIFY(latitudeOf(copy.document, ward.adams) == 51.0);
     QVERIFY(recorder.conflicts.isEmpty());
-    QCOMPARE(recorder.adopted, 0);
+    QCOMPARE(recorder.replaced, 0);
     QCOMPARE(session->syncState(), SyncState::UpToDate);
 }
 
@@ -746,7 +688,9 @@ void DocumentSessionTest::publishesAndFetchesWriteABaseCopyMatchingTheRecord()
         const std::optional<ServerVersion::BaseCopy> base =
             ServerVersion::readBase(ward.documentId, paths, device->records, device->identity.self());
         QVERIFY(base.has_value());
-        QCOMPARE(base.value().sealed.header.payloadHash, device->records.record(ward.documentId).baseHash);
+        QCOMPARE(DocumentCrypto::payloadHash(base.value().sealed.ciphertext),
+                 device->records.record(ward.documentId).baseHash);
+        QCOMPARE(base.value().sealed.header.saveCounter, device->records.record(ward.documentId).baseSaveCounter);
         QVERIFY(latitudeOf(base.value().document, ward.adams) == 53.0);
     }
 
@@ -765,19 +709,19 @@ void DocumentSessionTest::publishesAndFetchesWriteABaseCopyMatchingTheRecord()
 
 enum class Sabotage
 {
-    Unsealable,
-    HashMismatch,
-    BadSignature,
-    BrokenChain
+    OtherDocument,
+    NotSealedHere,
+    DisagreesWithItsSet,
+    NotDescended
 };
 
 void DocumentSessionTest::aServerVersionFailingValidationTouchesNothing_data()
 {
     QTest::addColumn<int>("sabotage");
-    QTest::newRow("unsealable") << int(Sabotage::Unsealable);
-    QTest::newRow("hash mismatch") << int(Sabotage::HashMismatch);
-    QTest::newRow("bad signature") << int(Sabotage::BadSignature);
-    QTest::newRow("broken chain") << int(Sabotage::BrokenChain);
+    QTest::newRow("another document") << int(Sabotage::OtherDocument);
+    QTest::newRow("not sealed to this device") << int(Sabotage::NotSealedHere);
+    QTest::newRow("header disagrees with its sealing set") << int(Sabotage::DisagreesWithItsSet);
+    QTest::newRow("a ward of the server's own making") << int(Sabotage::NotDescended);
 }
 
 void DocumentSessionTest::aServerVersionFailingValidationTouchesNothing()
@@ -796,37 +740,49 @@ void DocumentSessionTest::aServerVersionFailingValidationTouchesNothing()
     QVERIFY(alice.timers->fire(Timer::Save));
     ward.settle();
 
+    // What the server serves Bob instead of Alice's version, each built as a server
+    // could build it: from public keys and a key of its own.
     const ServerVersion::Fetched copy = ward.serverCopy(alice).value();
-    DocumentHeader forged = copy.sealed.header;
     const DeviceIdentity stranger = newIdentity("Stranger", "Laptop");
-
+    Document forgedDocument = copy.document;
+    DocumentHeader previous = copy.sealed.header;
+    DataKey key = DocumentCrypto::generateDataKey();
+    SealingSet set;
     switch (Sabotage(sabotage))
     {
-    case Sabotage::Unsealable:
-        for (RecipientEntry& entry : forged.recipients)
-        {
-            if (entry.fingerprint == bob.identity.fingerprint())
-            {
-                entry.sealedKey = DocumentCrypto::sealDataKey(copy.dataKey, stranger.sealing.publicKey);
-            }
-        }
-        forged.writerSignature = DocumentCrypto::signHeader(forged, alice.identity.signing.signingKey);
+    case Sabotage::OtherDocument:
+        // Alice's own ward under another id: sealed to Bob, his key, but not this ward.
+        previous.documentId = ServerTestSupport::newDocumentId();
+        key = copy.dataKey;
+        set = copy.document.sealingSet();
         break;
-    case Sabotage::HashMismatch:
-        forged.payloadHash = DocumentCrypto::payloadHash("some other ciphertext");
-        forged.writerSignature = DocumentCrypto::signHeader(forged, alice.identity.signing.signingKey);
+    case Sabotage::NotSealedHere:
+        key = copy.dataKey;
+        set = SealingSet::of(alice.identity.keys());
         break;
-    case Sabotage::BadSignature:
-        forged.writerSignature[0] = char(forged.writerSignature.at(0) ^ 0x01);
+    case Sabotage::DisagreesWithItsSet:
+        key = copy.dataKey;
+        set = copy.document.sealingSet();
         break;
-    case Sabotage::BrokenChain:
-        forged.lastWriter = stranger.fingerprint();
-        forged.writerPublicKey = stranger.sealing.publicKey;
-        forged.writerVerifyKey = stranger.signing.verifyKey;
-        forged.writerSignature = DocumentCrypto::signHeader(forged, stranger.signing.signingKey);
+    case Sabotage::NotDescended:
+        // Everything checks but descent: sealed to Bob and to the server's own device.
+        set = SealingSet::of(bob.identity.keys());
+        set.add(stranger.keys());
         break;
     }
-    ward.server.substituteHeader(ward.documentId, copy.version, forged);
+    forgedDocument.setSealingSet(set);
+    DocumentFile::Sealed forged = DocumentFile::seal(forgedDocument, previous, key).value();
+    if (Sabotage(sabotage) == Sabotage::DisagreesWithItsSet)
+    {
+        // A header naming a device its own payload does not seal to.
+        DocumentFile::Sealed wider = DocumentFile::seal(forgedDocument, previous, key).value();
+        wider.header.recipients.append(
+            RecipientEntry{stranger.fingerprint(), DocumentCrypto::sealDataKey(key, stranger.sealing.publicKey)});
+        const QByteArray plaintext = QJsonDocument(forgedDocument.toJson()).toJson(QJsonDocument::Compact);
+        wider.ciphertext = DocumentCrypto::encryptPayload(plaintext, key, wider.header);
+        forged = wider;
+    }
+    ward.server.serveInstead(ward.documentId, forged.header.toJson(), forged.ciphertext);
 
     const DocumentPaths paths = bob.paths(ward.documentId);
     const QByteArray file = bytesOf(paths.file);
@@ -840,46 +796,18 @@ void DocumentSessionTest::aServerVersionFailingValidationTouchesNothing()
     ward.settle();
 
     QCOMPARE(bobSession->syncState(), SyncState::ServerFault);
+    QVERIFY(!bobSession->faultReason().isEmpty());
     QCOMPARE(bytesOf(paths.file), file);
     QCOMPARE(bytesOf(paths.base), base);
     QVERIFY(bob.records.record(ward.documentId) == record);
     QCOMPARE(recorder.replaced, 0);
-    QVERIFY(!recorder.removed);
+    QVERIFY(!recorder.lost.has_value());
     QVERIFY(latitudeOf(bobSession->document(), ward.adams) == 40.0);
-}
-
-void DocumentSessionTest::aVersionBelowTheHighWaterMarkIsRefused()
-{
-    TestWard ward;
-    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
-    Device& bob = ward.add(newIdentity("Bob", "Phone"));
-    std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
-    QVERIFY(aliceSession);
-    QVERIFY(ward.grant(alice, bob));
-
-    // Bob has seen a later generation than the server now offers, and has no base
-    // copy to walk a chain from, so the version is judged by itself.
-    const DocumentPaths paths = bob.paths(ward.documentId);
-    QVERIFY(QFile::remove(paths.file));
-    QVERIFY(QFile::remove(paths.base));
-    DocumentRecord record = bob.records.record(ward.documentId);
-    record.highWaterMark.keyGeneration = 2;
-    bob.records.setRecord(ward.documentId, record);
-
-    QVERIFY(downloadTo(ward, bob) == DocumentSession::Download::ServerFault);
-    QVERIFY(!QFile::exists(paths.file));
-    QVERIFY(!QFile::exists(paths.base));
-    QVERIFY(bob.records.record(ward.documentId) == record);
-
-    // Anchor: at the generation the server serves, the same download succeeds.
-    record.highWaterMark.keyGeneration = 1;
-    bob.records.setRecord(ward.documentId, record);
-    QVERIFY(downloadTo(ward, bob) == DocumentSession::Download::Done);
 }
 
 // --- The refused-publish route ---------------------------------------------------
 
-void DocumentSessionTest::aRefusedPublishAdoptsTheirKeyGenerationAndRoster()
+void DocumentSessionTest::theNextPublishAfterARemovalPrunesAndRotates()
 {
     TestWard ward;
     Device& alice = ward.add(newIdentity("Alice", "Laptop"));
@@ -889,7 +817,185 @@ void DocumentSessionTest::aRefusedPublishAdoptsTheirKeyGenerationAndRoster()
     std::unique_ptr<DocumentSession> bobSession;
     QVERIFY(openAliceAndBob(ward, alice, bob, aliceSession, bobSession));
     QVERIFY(ward.grant(alice, carol));
-    QVERIFY(ward.change(alice, removal(carol.identity)) == RosterChangeOutcome::Published);
+    aliceSession->checkServer();
+    ward.settle();
+    const DataKey before = keyOf(ward, alice);
+    QVERIFY(canUnseal(ward.serverCopy(alice)->sealed.header, carol.identity));
+
+    QVERIFY(removeFromServer(ward, alice, carol.identity));
+    aliceSession->checkServer();
+    ward.settle();
+    aliceSession->edit(DocumentSession::Edit::Directory, moveFamily(ward.adams, 55.0));
+    QVERIFY(alice.timers->fire(Timer::Save));
+    ward.settle();
+
+    const ServerVersion::Fetched copy = ward.serverCopy(alice).value();
+    QVERIFY(latitudeOf(copy.document, ward.adams) == 55.0);
+    QVERIFY(!copy.document.sealingSet().contains(carol.identity.fingerprint()));
+    QVERIFY(!canUnseal(copy.sealed.header, carol.identity));
+    QVERIFY(canUnseal(copy.sealed.header, alice.identity));
+    QVERIFY(canUnseal(copy.sealed.header, bob.identity));
+    QVERIFY(copy.dataKey != before);
+    QVERIFY(copy.document.sealingSet().descendsFrom(before));
+
+    // Bob takes the rotated version in: it descends from the key he holds.
+    bobSession->checkServer();
+    ward.settle();
+    QCOMPARE(bobSession->syncState(), SyncState::UpToDate);
+    QVERIFY(latitudeOf(bobSession->document(), ward.adams) == 55.0);
+}
+
+void DocumentSessionTest::aPublishThatPrunesNobodyKeepsTheKey()
+{
+    TestWard ward;
+    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
+    Device& bob = ward.add(newIdentity("Bob", "Phone"));
+    std::unique_ptr<DocumentSession> aliceSession;
+    std::unique_ptr<DocumentSession> bobSession;
+    QVERIFY(openAliceAndBob(ward, alice, bob, aliceSession, bobSession));
+    const DataKey before = keyOf(ward, alice);
+
+    aliceSession->edit(DocumentSession::Edit::Directory, moveFamily(ward.adams, 56.0));
+    QVERIFY(alice.timers->fire(Timer::Save));
+    ward.settle();
+
+    const ServerVersion::Fetched copy = ward.serverCopy(alice).value();
+    QVERIFY(latitudeOf(copy.document, ward.adams) == 56.0);
+    QVERIFY(copy.dataKey == before);
+    QCOMPARE(copy.document.sealingSet().size(), 2);
+}
+
+void DocumentSessionTest::aDeviceLinkedHereIsSealedOnceTheServerListsIt()
+{
+    TestWard ward;
+    Device& laptop = ward.add(newIdentity("Alice", "Laptop"));
+    Device& phone = ward.add(newDeviceOf(laptop.identity, "Phone"));
+    std::unique_ptr<DocumentSession> session = ward.createShared(laptop);
+    QVERIFY(session);
+    QVERIFY(ward.link(phone, laptop));
+
+    // The phone is allow-listed but not yet sealed: it reads the ward's head, not
+    // its content.
+    QVERIFY(downloadTo(ward, phone) == DocumentSession::Download::ServerFault);
+
+    session->checkServer();
+    ward.settle();
+    session->edit(DocumentSession::Edit::Response, recordContact(ward.adams, ContactStatus::OK));
+    QVERIFY(laptop.timers->fire(Timer::Save));
+    ward.settle();
+
+    const ServerVersion::Fetched copy = ward.serverCopy(laptop).value();
+    QVERIFY(canUnseal(copy.sealed.header, phone.identity));
+    QVERIFY(downloadTo(ward, phone) == DocumentSession::Download::Done);
+    QCOMPARE(statusOf(phone.open(ward.documentId)->document(), ward.adams), ContactStatus::OK);
+}
+
+void DocumentSessionTest::aDeviceNobodyHereApprovedIsNeverSealed()
+{
+    TestWard ward;
+    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
+    Device& bob = ward.add(newIdentity("Bob", "Phone"));
+    Device& bobsTablet = ward.add(newDeviceOf(bob.identity, "Tablet"));
+    std::unique_ptr<DocumentSession> aliceSession;
+    std::unique_ptr<DocumentSession> bobSession;
+    QVERIFY(openAliceAndBob(ward, alice, bob, aliceSession, bobSession));
+    QVERIFY(ward.link(bobsTablet, bob));
+
+    // Alice publishes with the tablet on the allow-list; it is Bob's to seal.
+    aliceSession->checkServer();
+    ward.settle();
+    aliceSession->edit(DocumentSession::Edit::Directory, moveFamily(ward.adams, 57.0));
+    QVERIFY(alice.timers->fire(Timer::Save));
+    ward.settle();
+    QVERIFY(QStringList(ServerTestSupport::allowListOf(headFor(ward, alice))).contains(
+        bobsTablet.identity.fingerprint().toHex()));
+    QVERIFY(!canUnseal(ward.serverCopy(alice)->sealed.header, bobsTablet.identity));
+
+    // Bob's next publish seals it.
+    bobSession->checkServer();
+    ward.settle();
+    bobSession->edit(DocumentSession::Edit::Response, recordContact(ward.baker, ContactStatus::OK));
+    QVERIFY(bob.timers->fire(Timer::Save));
+    ward.settle();
+    QVERIFY(canUnseal(ward.serverCopy(alice)->sealed.header, bobsTablet.identity));
+}
+
+void DocumentSessionTest::aHeadLeavingThisDeviceOutIsAFaultAndSealsNothing()
+{
+    TestWard ward;
+    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
+    Device& bob = ward.add(newIdentity("Bob", "Phone"));
+    std::unique_ptr<DocumentSession> aliceSession;
+    std::unique_ptr<DocumentSession> bobSession;
+    QVERIFY(openAliceAndBob(ward, alice, bob, aliceSession, bobSession));
+    const QString file = bob.paths(ward.documentId).file;
+
+    ward.server.hideFromHeads(bob.identity.fingerprint());
+    QVERIFY(bob.timers->fire(Timer::HeadCheck));
+    ward.settle();
+    QCOMPARE(bobSession->syncState(), SyncState::ServerFault);
+
+    // A save still seals to Bob, who reopens his own file.
+    bobSession->edit(DocumentSession::Edit::Response, recordContact(ward.adams, ContactStatus::OK));
+    QVERIFY(bobSession->flush(nullptr));
+    QVERIFY(canUnseal(headerOnDisk(file).value(), bob.identity));
+    bobSession.reset();
+    std::unique_ptr<DocumentSession> reopened = bob.open(ward.documentId);
+    QVERIFY(reopened);
+    QCOMPARE(statusOf(reopened->document(), ward.adams), ContactStatus::OK);
+}
+
+void DocumentSessionTest::aRefusalOverTheAllowListPrunesAndPublishes()
+{
+    TestWard ward;
+    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
+    Device& bob = ward.add(newIdentity("Bob", "Phone"));
+    Device& carol = ward.add(newIdentity("Carol", "Tablet"));
+    std::unique_ptr<DocumentSession> aliceSession;
+    std::unique_ptr<DocumentSession> bobSession;
+    QVERIFY(openAliceAndBob(ward, alice, bob, aliceSession, bobSession));
+    QVERIFY(ward.grant(alice, carol));
+    bobSession->checkServer();
+    ward.settle();
+    QVERIFY(bobSession->document().sealingSet().contains(carol.identity.fingerprint()));
+
+    // Carol leaves while Bob's last head still lists her; his upload is refused,
+    // and the head after it prunes her.
+    QVERIFY(removeFromServer(ward, carol, carol.identity));
+    const qint64 version = headVersion(ward, alice);
+    bobSession->edit(DocumentSession::Edit::Response, recordContact(ward.adams, ContactStatus::OK));
+    QVERIFY(bob.timers->fire(Timer::Save));
+    ward.settle();
+
+    const ServerVersion::Fetched copy = ward.serverCopy(alice).value();
+    QCOMPARE(copy.version, version + 1);
+    QCOMPARE(statusOf(copy.document, ward.adams), ContactStatus::OK);
+    QVERIFY(!canUnseal(copy.sealed.header, carol.identity));
+    QCOMPARE(bobSession->syncState(), SyncState::UpToDate);
+    QVERIFY(!bob.timers->isRunning(Timer::Retry));
+}
+
+void DocumentSessionTest::aRefusedPublishAdoptsTheirKeyAndSealingSet()
+{
+    TestWard ward;
+    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
+    Device& bob = ward.add(newIdentity("Bob", "Phone"));
+    Device& carol = ward.add(newIdentity("Carol", "Tablet"));
+    std::unique_ptr<DocumentSession> aliceSession;
+    std::unique_ptr<DocumentSession> bobSession;
+    QVERIFY(openAliceAndBob(ward, alice, bob, aliceSession, bobSession));
+    QVERIFY(ward.grant(alice, carol));
+    bobSession->checkServer();
+    ward.settle();
+
+    // Alice removes Carol and publishes the rotated version.
+    QVERIFY(removeFromServer(ward, alice, carol.identity));
+    aliceSession->checkServer();
+    ward.settle();
+    aliceSession->edit(DocumentSession::Edit::Directory, moveFamily(ward.adams, 58.0));
+    QVERIFY(alice.timers->fire(Timer::Save));
+    ward.settle();
+    const DataKey rotated = keyOf(ward, alice);
 
     Recorder recorder;
     recorder.watch(*bobSession);
@@ -898,13 +1004,13 @@ void DocumentSessionTest::aRefusedPublishAdoptsTheirKeyGenerationAndRoster()
     ward.settle();
 
     QVERIFY(recorder.conflicts.isEmpty());
-    QCOMPARE(bobSession->header().keyGeneration, 2);
-    QVERIFY(!bobSession->document().accessRoster().contains(carol.identity.member));
+    QVERIFY(!bobSession->document().sealingSet().contains(carol.identity.fingerprint()));
     QVERIFY(!bobSession->header().entryFor(carol.identity.fingerprint()).has_value());
 
     const ServerVersion::Fetched copy = ward.serverCopy(bob).value();
     QCOMPARE(statusOf(copy.document, ward.adams), ContactStatus::OK);
-    QCOMPARE(copy.sealed.header.keyGeneration, 2);
+    QVERIFY(latitudeOf(copy.document, ward.adams) == 58.0);
+    QVERIFY(copy.dataKey == rotated);
     QVERIFY(copy.sealed.header == bobSession->header());
 }
 
@@ -980,7 +1086,7 @@ void DocumentSessionTest::twoRefusalsInARowBothMergeSilently()
 
     QVERIFY(carolRecorder.conflicts.isEmpty());
     QVERIFY(bobRecorder.conflicts.isEmpty());
-    QCOMPARE(carolRecorder.adopted, 2);
+    QCOMPARE(carolRecorder.replaced, 2);
 
     const ServerVersion::Fetched copy = ward.serverCopy(alice).value();
     QVERIFY(latitudeOf(copy.document, ward.adams) == 56.0);
@@ -1072,8 +1178,8 @@ void DocumentSessionTest::keepMineAfterTheyGrantedKeepsMyDirectoryAndTheirPerson
     const ServerVersion::Fetched copy = ward.serverCopy(alice).value();
     QCOMPARE(copy.version, theirs + 1);
     QVERIFY(latitudeOf(copy.document, ward.adams) == 50.0);
-    QVERIFY(copy.document.accessRoster().contains(carol.identity.member));
-    QVERIFY(copy.sealed.header.entryFor(carol.identity.fingerprint()).has_value());
+    QVERIFY(copy.document.sealingSet().contains(carol.identity.fingerprint()));
+    QVERIFY(canUnseal(copy.sealed.header, carol.identity));
     QCOMPARE(bobSession->syncState(), SyncState::UpToDate);
 }
 
@@ -1089,10 +1195,13 @@ void DocumentSessionTest::keepMineNeverRestoresAMemberTheyRemoved()
     QVERIFY(ward.grant(alice, carol));
     bobSession->checkServer();
     ward.settle();
-    QVERIFY(bobSession->document().accessRoster().contains(carol.identity.member));
+    QVERIFY(bobSession->document().sealingSet().contains(carol.identity.fingerprint()));
+    const DataKey carolKnows = keyOf(ward, alice);
 
+    QVERIFY(removeFromServer(ward, alice, carol.identity));
+    aliceSession->checkServer();
+    ward.settle();
     QVERIFY(divergeOnAdams(ward, bob, aliceSession, bobSession));
-    QVERIFY(ward.change(alice, removal(carol.identity)) == RosterChangeOutcome::Published);
 
     bobSession = bob.open(ward.documentId);
     QVERIFY(bobSession);
@@ -1101,14 +1210,18 @@ void DocumentSessionTest::keepMineNeverRestoresAMemberTheyRemoved()
     ward.settle();
     QCOMPARE(recorder.conflicts.size(), qsizetype(1));
 
+    // An edit while the conflict waits, then Keep mine: still never under Carol's key.
+    bobSession->edit(DocumentSession::Edit::Response, recordContact(ward.baker, ContactStatus::OK));
+    QVERIFY(bobSession->flush(nullptr));
     QVERIFY(bobSession->resolve(DocumentSession::Resolution::KeepMine, nullptr));
     ward.settle();
 
     const ServerVersion::Fetched copy = ward.serverCopy(alice).value();
     QVERIFY(latitudeOf(copy.document, ward.adams) == 50.0);
-    QVERIFY(!copy.document.accessRoster().contains(carol.identity.member));
-    QVERIFY(!copy.sealed.header.entryFor(carol.identity.fingerprint()).has_value());
-    QCOMPARE(copy.sealed.header.keyGeneration, 2);
+    QCOMPARE(statusOf(copy.document, ward.baker), ContactStatus::OK);
+    QVERIFY(!copy.document.sealingSet().contains(carol.identity.fingerprint()));
+    QVERIFY(!canUnseal(copy.sealed.header, carol.identity));
+    QVERIFY(copy.dataKey != carolKnows);
 }
 
 void DocumentSessionTest::keepTheirsHoldsTheirDirectoryAndTheMergedResponse()
@@ -1152,9 +1265,9 @@ void DocumentSessionTest::keepTheirsHoldsTheirDirectoryAndTheMergedResponse()
     QVERIFY(copy.document == bobSession->document());
 }
 
-// --- Removal ---------------------------------------------------------------------
+// --- Lost access -----------------------------------------------------------------
 
-void DocumentSessionTest::aProvenRevocationMidSessionDeletesEverything()
+void DocumentSessionTest::aRemovalMidSessionDeletesEverything()
 {
     TestWard ward;
     Device& alice = ward.add(newIdentity("Alice", "Laptop"));
@@ -1164,23 +1277,28 @@ void DocumentSessionTest::aProvenRevocationMidSessionDeletesEverything()
     QVERIFY(openAliceAndBob(ward, alice, bob, aliceSession, bobSession));
     Recorder recorder;
     recorder.watch(*bobSession);
+    const DocumentPaths paths = bob.paths(ward.documentId);
+    QVERIFY(QFile::exists(paths.file) && QFile::exists(paths.base));
 
-    QVERIFY(ward.change(alice, removal(bob.identity)) == RosterChangeOutcome::Published);
-    bobSession->checkServer();
+    QVERIFY(removeFromServer(ward, alice, bob.identity));
+    QVERIFY(bob.timers->fire(Timer::HeadCheck));
     ward.settle();
 
-    QVERIFY(recorder.removed);
-    QCOMPARE(recorder.removedBy, QString("Alice"));
-    QVERIFY(!recorder.left);
-    const DocumentPaths paths = bob.paths(ward.documentId);
+    QVERIFY(recorder.lost.has_value());
+    QCOMPARE(recorder.lost->how, LostAccess::How::Removed);
+    QCOMPARE(recorder.lost->byWhom, QString("Alice"));
     QVERIFY(!QFile::exists(paths.file));
     QVERIFY(!QFile::exists(paths.base));
     QVERIFY(!bob.records.contains(ward.documentId));
-    QVERIFY(!bob.timers->isRunning(Timer::HeadCheck));
-    QVERIFY(!bob.timers->isRunning(Timer::Heartbeat));
+
+    // Finished: nothing more is written.
+    QCOMPARE(bobSession->edit(DocumentSession::Edit::Response, recordContact(ward.adams, ContactStatus::OK)),
+             DocumentSession::Refusal::None);
+    QVERIFY(bobSession->flush(nullptr));
+    QVERIFY(!QFile::exists(paths.file));
 }
 
-void DocumentSessionTest::aProvenRevocationOnOpenDeletesEverything()
+void DocumentSessionTest::aRemovalOnOpenDeletesEverything()
 {
     TestWard ward;
     Device& alice = ward.add(newIdentity("Alice", "Laptop"));
@@ -1190,20 +1308,19 @@ void DocumentSessionTest::aProvenRevocationOnOpenDeletesEverything()
     QVERIFY(openAliceAndBob(ward, alice, bob, aliceSession, bobSession));
     bobSession.reset();
 
-    QVERIFY(ward.change(alice, removal(bob.identity)) == RosterChangeOutcome::Published);
-
+    QVERIFY(removeFromServer(ward, alice, bob.identity));
     bobSession = bob.open(ward.documentId);
     QVERIFY(bobSession);
     Recorder recorder;
     recorder.watch(*bobSession);
     ward.settle();
 
-    QVERIFY(recorder.removed);
+    QVERIFY(recorder.lost.has_value());
+    QCOMPARE(recorder.lost->how, LostAccess::How::Removed);
     QVERIFY(!QFile::exists(bob.paths(ward.documentId).file));
-    QVERIFY(!bob.records.contains(ward.documentId));
 }
 
-void DocumentSessionTest::aProvenRevocationOnAPublishDeletesEverything()
+void DocumentSessionTest::aRemovalOnAPublishDeletesEverything()
 {
     TestWard ward;
     Device& alice = ward.add(newIdentity("Alice", "Laptop"));
@@ -1214,156 +1331,39 @@ void DocumentSessionTest::aProvenRevocationOnAPublishDeletesEverything()
     Recorder recorder;
     recorder.watch(*bobSession);
 
-    QVERIFY(ward.change(alice, removal(bob.identity)) == RosterChangeOutcome::Published);
+    QVERIFY(removeFromServer(ward, alice, bob.identity));
     bobSession->edit(DocumentSession::Edit::Response, recordContact(ward.adams, ContactStatus::OK));
     QVERIFY(bob.timers->fire(Timer::Save));
     ward.settle();
 
-    QVERIFY(recorder.removed);
+    QVERIFY(recorder.lost.has_value());
+    QCOMPARE(recorder.lost->how, LostAccess::How::Removed);
     QVERIFY(!QFile::exists(bob.paths(ward.documentId).file));
-    QVERIFY(!bob.records.contains(ward.documentId));
-}
-
-void DocumentSessionTest::aRevocationByAnAdminGrantedAfterTheBaseIsProven()
-{
-    TestWard ward;
-    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
-    Device& bob = ward.add(newIdentity("Bob", "Phone"));
-    Device& carol = ward.add(newIdentity("Carol", "Tablet"));
-    std::unique_ptr<DocumentSession> aliceSession;
-    std::unique_ptr<DocumentSession> bobSession;
-    QVERIFY(openAliceAndBob(ward, alice, bob, aliceSession, bobSession));
-    Recorder recorder;
-    recorder.watch(*bobSession);
-
-    // Carol joins and is made an admin after Bob's base; then she removes him.
-    QVERIFY(ward.grant(alice, carol));
-    QVERIFY(ward.change(alice, promotion(carol.identity)) == RosterChangeOutcome::Published);
-    QVERIFY(ward.change(carol, removal(bob.identity)) == RosterChangeOutcome::Published);
-
-    bobSession->checkServer();
-    ward.settle();
-
-    QVERIFY(recorder.removed);
-    QVERIFY(!QFile::exists(bob.paths(ward.documentId).file));
-}
-
-void DocumentSessionTest::aWithheldHeaderDeletesNothing()
-{
-    TestWard ward;
-    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
-    Device& bob = ward.add(newIdentity("Bob", "Phone"));
-    Device& carol = ward.add(newIdentity("Carol", "Tablet"));
-    std::unique_ptr<DocumentSession> aliceSession;
-    std::unique_ptr<DocumentSession> bobSession;
-    QVERIFY(openAliceAndBob(ward, alice, bob, aliceSession, bobSession));
-    Recorder recorder;
-    recorder.watch(*bobSession);
-
-    QVERIFY(ward.grant(alice, carol));
-    QVERIFY(ward.change(alice, promotion(carol.identity)) == RosterChangeOutcome::Published);
-    const qint64 promotedAt = serverVersion(ward, alice);
-    QVERIFY(ward.change(carol, removal(bob.identity)) == RosterChangeOutcome::Published);
-
-    // Without the promotion, Carol's removal of Bob does not follow.
-    ward.server.withholdHeader(ward.documentId, promotedAt);
-    bobSession->checkServer();
-    ward.settle();
-
-    QVERIFY(!recorder.removed);
-    QCOMPARE(bobSession->syncState(), SyncState::ServerFault);
-    QVERIFY(QFile::exists(bob.paths(ward.documentId).file));
-    QVERIFY(QFile::exists(bob.paths(ward.documentId).base));
-    QVERIFY(bob.records.contains(ward.documentId));
-}
-
-void DocumentSessionTest::aSubstitutedHeaderDeletesNothing()
-{
-    TestWard ward;
-    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
-    Device& bob = ward.add(newIdentity("Bob", "Phone"));
-    std::unique_ptr<DocumentSession> aliceSession;
-    std::unique_ptr<DocumentSession> bobSession;
-    QVERIFY(openAliceAndBob(ward, alice, bob, aliceSession, bobSession));
-    Recorder recorder;
-    recorder.watch(*bobSession);
-
-    // A header that drops Bob, served in place of a real version: signed by
-    // someone who was never a member.
-    aliceSession->edit(DocumentSession::Edit::Directory, moveFamily(ward.adams, 57.0));
-    QVERIFY(alice.timers->fire(Timer::Save));
-    ward.settle();
-    const ServerVersion::Fetched copy = ward.serverCopy(alice).value();
-    const DeviceIdentity stranger = newIdentity("Stranger", "Laptop");
-    DocumentHeader forged = copy.sealed.header;
-    forged.recipients.removeIf([&bob](const RecipientEntry& entry) { return entry.member == bob.identity.member; });
-    forged.lastWriter = stranger.fingerprint();
-    forged.writerPublicKey = stranger.sealing.publicKey;
-    forged.writerVerifyKey = stranger.signing.verifyKey;
-    forged.writerSignature = DocumentCrypto::signHeader(forged, stranger.signing.signingKey);
-    ward.server.substituteHeader(ward.documentId, copy.version, forged);
-
-    bobSession->checkServer();
-    ward.settle();
-
-    QVERIFY(!recorder.removed);
-    QCOMPARE(bobSession->syncState(), SyncState::ServerFault);
-    QVERIFY(QFile::exists(bob.paths(ward.documentId).file));
-    QVERIFY(bob.records.contains(ward.documentId));
-}
-
-void DocumentSessionTest::aRefusalWithNoProvingChainDeletesNothing()
-{
-    TestWard ward;
-    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
-    Device& bob = ward.add(newIdentity("Bob", "Phone"));
-    std::unique_ptr<DocumentSession> aliceSession;
-    std::unique_ptr<DocumentSession> bobSession;
-    QVERIFY(openAliceAndBob(ward, alice, bob, aliceSession, bobSession));
-    Recorder recorder;
-    recorder.watch(*bobSession);
-
-    // The server refuses Bob, and Bob has no base copy to prove anything from.
-    QVERIFY(ward.change(alice, removal(bob.identity)) == RosterChangeOutcome::Published);
-    QVERIFY(QFile::remove(bob.paths(ward.documentId).base));
-    bobSession->checkServer();
-    ward.settle();
-
-    QVERIFY(!recorder.removed);
-    QCOMPARE(bobSession->syncState(), SyncState::ServerFault);
-    QVERIFY(QFile::exists(bob.paths(ward.documentId).file));
-    QVERIFY(bob.records.contains(ward.documentId));
+    QCOMPARE(statusOf(ward.serverCopy(alice)->document, ward.adams), ContactStatus::NotContacted);
 }
 
 void DocumentSessionTest::aLeaveFromThisPersonsOtherDeviceReportsLeft()
 {
     TestWard ward;
     Device& alice = ward.add(newIdentity("Alice", "Laptop"));
-    Device& laptop = ward.add(newIdentity("Bob", "Laptop"));
-    Device& phone = ward.add(newDeviceOf(laptop.identity, "Phone"));
+    Device& bob = ward.add(newIdentity("Bob", "Laptop"));
+    Device& bobsPhone = ward.add(newDeviceOf(bob.identity, "Phone"));
     std::unique_ptr<DocumentSession> aliceSession;
-    std::unique_ptr<DocumentSession> laptopSession;
-    QVERIFY(openAliceAndBob(ward, alice, laptop, aliceSession, laptopSession));
+    std::unique_ptr<DocumentSession> bobSession;
+    QVERIFY(openAliceAndBob(ward, alice, bob, aliceSession, bobSession));
+    QVERIFY(ward.link(bobsPhone, bob));
     Recorder recorder;
-    recorder.watch(*laptopSession);
+    recorder.watch(*bobSession);
 
-    QVERIFY(ward.pair(phone, laptop));
-    RosterChange link;
-    link.kind = RosterChange::Kind::Link;
-    link.device = phone.identity.asRosterDevice();
-    QVERIFY(ward.change(laptop, link) == RosterChangeOutcome::Published);
-    QVERIFY(downloadTo(ward, phone) == DocumentSession::Download::Done);
-
-    RosterChange leave;
-    leave.kind = RosterChange::Kind::Leave;
-    QVERIFY(ward.change(phone, leave) == RosterChangeOutcome::Published);
-
-    laptopSession->checkServer();
+    // Bob leaves from his phone.
+    QVERIFY(removeFromServer(ward, bobsPhone, bob.identity));
+    QVERIFY(bob.timers->fire(Timer::HeadCheck));
     ward.settle();
 
-    QVERIFY(recorder.removed);
-    QVERIFY(recorder.left);
-    QVERIFY(!QFile::exists(laptop.paths(ward.documentId).file));
+    QVERIFY(recorder.lost.has_value());
+    QCOMPARE(recorder.lost->how, LostAccess::How::Left);
+    QVERIFY(recorder.lost->byWhom.isEmpty());
+    QVERIFY(!QFile::exists(bob.paths(ward.documentId).file));
 }
 
 // --- Read-only and updates -------------------------------------------------------
@@ -1415,10 +1415,9 @@ void DocumentSessionTest::aLeaseWhoseHeartbeatStoppedIsTakenOverAfterExpiry()
 
     // Alice's app stops without releasing; her lease runs out.
     aliceSession.reset();
-    QVERIFY(ServerTestSupport::wait<Done>([&](Reply<Done> reply)
-    {
-        ward.server.advanceClock(FakeServer::Limits().leaseSeconds + 1, reply);
-    }).ok());
+    QVERIFY(ServerTestSupport::wait<Done>(
+                std::bind(&ServerApi::advanceClock, &ward.server, FakeServer::Limits().leaseSeconds + 1, _1))
+                .ok());
 
     QVERIFY(bob.timers->fire(Timer::HeadCheck));
     ward.settle();
@@ -1561,9 +1560,9 @@ void DocumentSessionTest::aLaterFormatRequiresAnUpdateUntilTheServerServesOneThi
     writer->publishNow();
     ward.settle();
     const ServerVersion::Fetched later = ward.serverCopy(alice).value();
-    DocumentHeader laterFormat = later.sealed.header;
-    laterFormat.formatVersion = DocumentHeader::CurrentFormatVersion + 1;
-    ward.server.substituteHeader(ward.documentId, later.version, laterFormat);
+    QJsonObject laterFormat = later.sealed.header.toJson();
+    laterFormat["formatVersion"] = DocumentHeader::CurrentFormatVersion + 1;
+    ward.server.serveInstead(ward.documentId, laterFormat, later.sealed.ciphertext);
 
     QVERIFY(bob.timers->fire(Timer::HeadCheck));
     ward.settle();
@@ -1585,6 +1584,7 @@ void DocumentSessionTest::aLaterFormatRequiresAnUpdateUntilTheServerServesOneThi
 
     // The server moves on to a version this build reads: the update clears and
     // the saved record publishes.
+    ward.server.serveInstead(ward.documentId, QJsonObject(), QByteArray());
     writer->edit(DocumentSession::Edit::Response, recordContact(ward.baker, ContactStatus::OK));
     writer->publishNow();
     ward.settle();
@@ -1636,14 +1636,14 @@ void DocumentSessionTest::sharingKeepsTheIdAndPathsAndRecordsABase()
 {
     TestWard ward;
     Device& alice = ward.add(newIdentity("Alice", "Laptop"));
-    const QString documentId = ChainTestSupport::newDocumentId();
+    const QString documentId = ServerTestSupport::newDocumentId();
     const DocumentPaths paths = alice.paths(documentId);
     std::unique_ptr<DocumentSession> session = alice.create(documentId);
     QVERIFY(session);
     QVERIFY(!session->isShared());
     QVERIFY(!QFile::exists(paths.base));
 
-    session->share({});
+    session->share();
     ward.settle();
 
     QVERIFY(session->isShared());
@@ -1674,41 +1674,32 @@ void DocumentSessionTest::aSecondDeviceGrantedAccessOpensIt()
     std::unique_ptr<DocumentSession> bobSession = bob.open(ward.documentId);
     QVERIFY(bobSession);
     QVERIFY(latitudeOf(bobSession->document(), ward.adams) == 40.0);
-    QVERIFY(bobSession->document().accessRoster().contains(bob.identity.member));
-    QVERIFY(!bobSession->document().accessRoster().person(bob.identity.member)->isAdmin());
+    QVERIFY(bobSession->document().sealingSet().contains(bob.identity.fingerprint()));
+    QVERIFY(bob.records.record(ward.documentId).baseVersion.has_value());
+    QVERIFY(alice.records.record(ward.documentId).granted.isEmpty());
 }
 
-void DocumentSessionTest::aLinkQueuedWhileUnsharedJoinsTheFirstHeader()
+void DocumentSessionTest::aDeviceLinkedBeforeSharingIsSealedAfterIt()
 {
     TestWard ward;
     Device& laptop = ward.add(newIdentity("Alice", "Laptop"));
     Device& phone = ward.add(newDeviceOf(laptop.identity, "Phone"));
+    QVERIFY(ward.sessionFor(laptop).has_value());
+    QVERIFY(ward.link(phone, laptop));
 
-    // Pairing needs the laptop to be a member somewhere.
-    std::unique_ptr<DocumentSession> other = ward.createShared(laptop);
-    QVERIFY(other);
-    QVERIFY(ward.pair(phone, laptop));
-
-    const QString documentId = ChainTestSupport::newDocumentId();
+    const QString documentId = ServerTestSupport::newDocumentId();
     std::unique_ptr<DocumentSession> session = laptop.create(documentId);
     QVERIFY(session);
 
-    RosterChange link;
-    link.kind = RosterChange::Kind::Link;
-    link.device = phone.identity.asRosterDevice();
-    std::unique_ptr<RosterChangeQueue> queue = laptop.queue();
-    queue->enqueue(documentId, link);
+    // Registered sealed to the laptop alone; the head after lists the phone too.
+    session->share();
     ward.settle();
-    QCOMPARE(queue->pending(documentId), QList<RosterChange>{link});
-
-    queue->setOpenSession(session.get());
-    queue->shareOpenWard();
-    ward.settle();
-
     QVERIFY(session->isShared());
-    QVERIFY(session->header().entryFor(phone.identity.fingerprint()).has_value());
-    QVERIFY(laptop.records.record(documentId).pendingChanges.isEmpty());
+    session->checkServer();
+    ward.settle();
 
+    QVERIFY(canUnseal(session->header(), phone.identity));
     ward.documentId = documentId;
     QVERIFY(downloadTo(ward, phone) == DocumentSession::Download::Done);
 }
+

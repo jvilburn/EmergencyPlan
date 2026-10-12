@@ -24,9 +24,8 @@ private slots:
     void twoSealsOfTheSameKeyDiffer();
     void unsealRefusesAMalformedSealedKey();
 
-    // Signing
+    // Signing the login challenge
     void signatureVerifiesAndRejectsTampering();
-    void signatureUnderOneTagFailsUnderEveryOther();
     void signatureFailsWithAnotherDevicesKey();
-    void signingRefusesAnInvalidKey();
+    void signingRefusesAnInvalidKeyOrAnEmptyChallenge();
 };

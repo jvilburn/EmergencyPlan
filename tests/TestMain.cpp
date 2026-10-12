@@ -1,11 +1,7 @@
-#include "AccessControlTest.h"
-#include "AccessEventsTest.h"
-#include "AccessRosterTest.h"
 #include "AppSettings.h"
 #include "AppSettingsTest.h"
 #include "CryptoLinkTest.h"
 #include "CryptoTypesTest.h"
-#include "DocumentChainTest.h"
 #include "DocumentCrypto.h"
 #include "DocumentCryptoTest.h"
 #include "DocumentFileTest.h"
@@ -23,10 +19,10 @@
 #include "IdentityFileTest.h"
 #include "IdentityServiceTest.h"
 #include "ModelParsersTest.h"
-#include "PairingTest.h"
 #include "ReconcileTest.h"
 #include "ResponseMergeTest.h"
-#include "RosterChangeQueueTest.h"
+#include "SealingQueueTest.h"
+#include "SealingSetTest.h"
 #include "ServerConformanceTest.h"
 #include "ServerConnectionTest.h"
 #include "SmokeTest.h"
@@ -94,13 +90,10 @@ int main(int argc, char** argv)
     status |= run<DocumentCryptoTest>(argc, argv);
     status |= run<DocumentHeaderTest>(argc, argv);
     status |= run<FormatVectorsTest>(argc, argv);
-    status |= run<DocumentChainTest>(argc, argv);
-    status |= run<AccessRosterTest>(argc, argv);
+    status |= run<SealingSetTest>(argc, argv);
     status |= run<ModelParsersTest>(argc, argv);
     status |= run<DocumentParseTest>(argc, argv);
     status |= run<WardDirectoryImportTest>(argc, argv);
-    status |= run<AccessControlTest>(argc, argv);
-    status |= run<AccessEventsTest>(argc, argv);
     status |= run<FakeServerTest>(argc, argv);
     status |= run<ServerConformanceTest>(argc, argv, makeFakeServer);
 
@@ -123,11 +116,10 @@ int main(int argc, char** argv)
     }
     status |= run<ReconcileTest>(argc, argv);
     status |= run<ResponseMergeTest>(argc, argv);
-    status |= run<PairingTest>(argc, argv);
     status |= run<ServerConnectionTest>(argc, argv);
     status |= run<DocumentFileTest>(argc, argv);
     status |= run<DocumentSessionTest>(argc, argv);
-    status |= run<RosterChangeQueueTest>(argc, argv);
+    status |= run<SealingQueueTest>(argc, argv);
     status |= run<AppSettingsTest>(argc, argv);
     status |= run<IdentityFileTest>(argc, argv);
     status |= run<IdentityServiceTest>(argc, argv);

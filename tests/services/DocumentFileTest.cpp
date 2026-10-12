@@ -1,6 +1,5 @@
 #include "DocumentFileTest.h"
 
-#include "ChainTestSupport.h"
 #include "DocumentCrypto.h"
 #include "DocumentFile.h"
 #include "Reconcile.h"
@@ -15,7 +14,7 @@ using namespace SessionTestSupport;
 namespace
 {
 
-/// A ward of Alice, its admin, and Bob, a member, written once by Alice.
+/// A ward sealed to Alice and Bob, written once.
 struct Written
 {
     QString documentId;
@@ -30,35 +29,27 @@ struct Written
 Written written()
 {
     Written w;
-    w.documentId = ChainTestSupport::newDocumentId();
+    w.documentId = ServerTestSupport::newDocumentId();
     w.alice = newIdentity("Alice", "Laptop");
     w.bob = newIdentity("Bob", "Phone");
     w.dataKey = DocumentCrypto::generateDataKey();
 
-    AccessRoster roster;
-    roster.addPerson(w.alice.asNewPerson());
-    RosterPerson bob = w.bob.asNewPerson();
-    bob.setRole(RosterPerson::Role::Member);
-    roster.addPerson(bob);
+    SealingSet set = SealingSet::of(w.alice.keys());
+    set.add(w.bob.keys());
 
     w.document = Document::empty();
-    w.document.setAccessRoster(roster);
+    w.document.setSealingSet(set);
 
     w.first.documentId = w.documentId;
     w.first.saveCounter = 0;
 
-    w.sealed = DocumentFile::seal(w.document, w.first, w.dataKey, w.alice).value();
+    w.sealed = DocumentFile::seal(w.document, w.first, w.dataKey).value();
     return w;
 }
 
 Reconcile::DownloadCheck openAs(const Written& w, const DocumentFile::Sealed& sealed, const DeviceIdentity& reader)
 {
-    return Reconcile::validateDownload(w.documentId,
-                                       std::nullopt,
-                                       {sealed.header},
-                                       sealed.ciphertext,
-                                       reader.self(),
-                                       Reconcile::HighWaterMark());
+    return Reconcile::validate(w.documentId, sealed.header, sealed.ciphertext, reader.self(), {});
 }
 
 } // namespace
@@ -117,23 +108,24 @@ void DocumentFileTest::theDocumentIdSurvivesARoundTripAndIsAuthenticated()
     QCOMPARE(read.header.documentId, w.documentId);
     QVERIFY(DocumentCrypto::decryptPayload(read.ciphertext, w.dataKey, read.header).has_value());
 
-    // Another id, re-signed by the writer so the signature is not what fails: the
-    // id is in the associated data, so the payload no longer opens.
+    // Another id: it is in the associated data, so the payload no longer opens.
     DocumentFile::Sealed renamed = read;
-    renamed.header.documentId = ChainTestSupport::newDocumentId();
-    renamed.header.writerSignature = DocumentCrypto::signHeader(renamed.header, w.alice.signing.signingKey);
+    renamed.header.documentId = ServerTestSupport::newDocumentId();
     QVERIFY(!DocumentCrypto::decryptPayload(renamed.ciphertext, w.dataKey, renamed.header).has_value());
 }
 
-void DocumentFileTest::aSignatureReplacedByAnotherMembersIsRefused()
+void DocumentFileTest::aSealedKeyMovedToAnotherEntryIsRefused()
 {
     const Written w = written();
 
-    DocumentFile::Sealed forged = w.sealed;
-    forged.header.writerSignature = DocumentCrypto::signHeader(forged.header, w.bob.signing.signingKey);
+    // Bob's sealed key copied over Alice's: her entry no longer opens, and the header
+    // no longer authenticates the payload for either.
+    DocumentFile::Sealed swapped = w.sealed;
+    swapped.header.recipients[0].sealedKey = swapped.header.recipients[1].sealedKey;
 
     QCOMPARE(openAs(w, w.sealed, w.bob).verdict, Reconcile::Verdict::Accept);
-    QCOMPARE(openAs(w, forged, w.bob).verdict, Reconcile::Verdict::ServerFault);
+    QCOMPARE(openAs(w, swapped, w.alice).verdict, Reconcile::Verdict::ServerFault);
+    QCOMPARE(openAs(w, swapped, w.bob).verdict, Reconcile::Verdict::ServerFault);
 }
 
 void DocumentFileTest::sealingAdvancesTheSaveCounterByOne()
@@ -141,17 +133,21 @@ void DocumentFileTest::sealingAdvancesTheSaveCounterByOne()
     const Written w = written();
     QCOMPARE(w.sealed.header.saveCounter, qint64(1));
 
-    const DocumentFile::Sealed second = DocumentFile::seal(w.document, w.sealed.header, w.dataKey, w.alice).value();
+    const DocumentFile::Sealed second = DocumentFile::seal(w.document, w.sealed.header, w.dataKey).value();
     QCOMPARE(second.header.saveCounter, qint64(2));
-    QCOMPARE(second.header.keyGeneration, w.sealed.header.keyGeneration);
-    QVERIFY(second.header.lastWriter == w.alice.fingerprint());
-    QVERIFY(DocumentCrypto::verifyLink(w.sealed.header, second.header));
+    QCOMPARE(second.header.documentId, w.documentId);
+    QCOMPARE(second.header.recipients.size(), qsizetype(2));
+
+    // The cap is a refusal, not a wrap.
+    DocumentHeader atCap = w.sealed.header;
+    atCap.saveCounter = DocumentHeader::MaxSaveCounter;
+    QVERIFY(!DocumentFile::seal(w.document, atCap, w.dataKey).has_value());
 }
 
 void DocumentFileTest::twoConsecutiveSealsUseDifferentNonces()
 {
     const Written w = written();
-    const DocumentFile::Sealed second = DocumentFile::seal(w.document, w.sealed.header, w.dataKey, w.alice).value();
+    const DocumentFile::Sealed second = DocumentFile::seal(w.document, w.sealed.header, w.dataKey).value();
 
     QCOMPARE(second.header.nonce.size(), qsizetype(DocumentCrypto::NonceSize));
     QVERIFY(second.header.nonce != w.sealed.header.nonce);
@@ -161,8 +157,8 @@ void DocumentFileTest::twoSealsFromTheSamePreviousHeaderUseDifferentNonces()
 {
     // Catches a nonce derived from the counter, which the consecutive test passes.
     const Written w = written();
-    const DocumentFile::Sealed one = DocumentFile::seal(w.document, w.sealed.header, w.dataKey, w.alice).value();
-    const DocumentFile::Sealed other = DocumentFile::seal(w.document, w.sealed.header, w.dataKey, w.alice).value();
+    const DocumentFile::Sealed one = DocumentFile::seal(w.document, w.sealed.header, w.dataKey).value();
+    const DocumentFile::Sealed other = DocumentFile::seal(w.document, w.sealed.header, w.dataKey).value();
 
     QCOMPARE(one.header.saveCounter, other.header.saveCounter);
     QVERIFY(one.header.nonce != other.header.nonce);

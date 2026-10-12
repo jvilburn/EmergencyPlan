@@ -2,8 +2,8 @@
 
 #include <QObject>
 
-/// Section 6.5: one open ward - saving, publishing, and keeping the local file
-/// safe - run against FakeServer with every timer fired by hand.
+/// One open ward - saving, publishing, the sealing-set rule, and keeping the local
+/// file safe - run against FakeServer with every timer fired by hand.
 class DocumentSessionTest : public QObject
 {
     Q_OBJECT
@@ -12,10 +12,8 @@ private slots:
     void initTestCase();
 
     // Creating and opening
-    void aCreatedWardReopensWithOnePersonAndTheSameContent();
+    void aCreatedWardReopensSealedToThisDeviceWithTheSameContent();
     void openReportsEachFailure();
-    void aFileRolledBackToALowerSaveCounterIsRefused();
-    void aFileRolledBackToALowerGenerationIsRefused();
     void aSharedWardWhoseLocalFileWasDeletedIsDownloadedThenOpens();
     void aSharedWardWhoseLocalFileWasCorruptedIsDownloadedThenOpens();
     void atBaseWithNothingUnpublishedOpensTheLocalFile();
@@ -41,10 +39,17 @@ private slots:
     // Downloads
     void aServerVersionFailingValidationTouchesNothing_data();
     void aServerVersionFailingValidationTouchesNothing();
-    void aVersionBelowTheHighWaterMarkIsRefused();
+
+    // The sealing-set rule
+    void theNextPublishAfterARemovalPrunesAndRotates();
+    void aPublishThatPrunesNobodyKeepsTheKey();
+    void aDeviceLinkedHereIsSealedOnceTheServerListsIt();
+    void aDeviceNobodyHereApprovedIsNeverSealed();
+    void aHeadLeavingThisDeviceOutIsAFaultAndSealsNothing();
+    void aRefusalOverTheAllowListPrunesAndPublishes();
 
     // The refused-publish route
-    void aRefusedPublishAdoptsTheirKeyGenerationAndRoster();
+    void aRefusedPublishAdoptsTheirKeyAndSealingSet();
     void aResponseChangeAndAFamilyEditMergeSilently();
     void twoRefusalsInARowBothMergeSilently();
     void aFamilyEditOnBothSidesRaisesAConflict();
@@ -53,14 +58,10 @@ private slots:
     void keepMineNeverRestoresAMemberTheyRemoved();
     void keepTheirsHoldsTheirDirectoryAndTheMergedResponse();
 
-    // Removal
-    void aProvenRevocationMidSessionDeletesEverything();
-    void aProvenRevocationOnOpenDeletesEverything();
-    void aProvenRevocationOnAPublishDeletesEverything();
-    void aRevocationByAnAdminGrantedAfterTheBaseIsProven();
-    void aWithheldHeaderDeletesNothing();
-    void aSubstitutedHeaderDeletesNothing();
-    void aRefusalWithNoProvingChainDeletesNothing();
+    // Lost access
+    void aRemovalMidSessionDeletesEverything();
+    void aRemovalOnOpenDeletesEverything();
+    void aRemovalOnAPublishDeletesEverything();
     void aLeaveFromThisPersonsOtherDeviceReportsLeft();
 
     // Read-only and updates
@@ -79,5 +80,5 @@ private slots:
     // Sharing
     void sharingKeepsTheIdAndPathsAndRecordsABase();
     void aSecondDeviceGrantedAccessOpensIt();
-    void aLinkQueuedWhileUnsharedJoinsTheFirstHeader();
+    void aDeviceLinkedBeforeSharingIsSealedAfterIt();
 };

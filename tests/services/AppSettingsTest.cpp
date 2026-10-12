@@ -1,7 +1,7 @@
 #include "AppSettingsTest.h"
 
 #include "AppSettings.h"
-#include "ChainTestSupport.h"
+#include "ServerTestSupport.h"
 #include "DocumentCrypto.h"
 #include "HexCodec.h"
 #include "SessionTestSupport.h"
@@ -30,8 +30,8 @@ DocumentRecord fullRecord()
     DocumentRecord record;
     record.baseVersion = 12;
     record.baseHash = DocumentCrypto::payloadHash("a base copy");
-    record.highWaterMark.keyGeneration = 3;
-    record.highWaterMark.saveCounter = 41;
+    record.baseSaveCounter = 41;
+    record.historySeen = 3;
     return record;
 }
 
@@ -79,7 +79,7 @@ void AppSettingsTest::everyValueReadsBackThroughASecondInstance()
     QTemporaryDir folder;
     QVERIFY(folder.isValid());
     const QString path = folder.filePath("nested/settings.json");
-    const QString documentId = ChainTestSupport::newDocumentId();
+    const QString documentId = ServerTestSupport::newDocumentId();
 
     {
         std::unique_ptr<AppSettings> settings = openAt(path);
@@ -113,11 +113,11 @@ void AppSettingsTest::numbersRoundTripAsNumbers()
     QTemporaryDir folder;
     QVERIFY(folder.isValid());
     const QString path = folder.filePath("settings.json");
-    const QString documentId = ChainTestSupport::newDocumentId();
+    const QString documentId = ServerTestSupport::newDocumentId();
 
     DocumentRecord record = fullRecord();
     record.baseVersion = DocumentHeader::MaxSaveCounter;
-    record.highWaterMark.saveCounter = DocumentHeader::MaxSaveCounter;
+    record.baseSaveCounter = DocumentHeader::MaxSaveCounter;
     {
         std::unique_ptr<AppSettings> settings = openAt(path);
         settings->setDefaultLocation(AppSettings::Location{40.123456789012, -111.987654321098});
@@ -134,7 +134,7 @@ void AppSettingsTest::numbersRoundTripAsNumbers()
     QVERIFY(json["map"].toObject()["defaultLat"].isDouble());
     const QJsonObject stored = json["records"].toObject()[documentId].toObject();
     QVERIFY(stored["baseVersion"].isDouble());
-    QVERIFY(stored["highWaterMark"].toObject()["saveCounter"].isDouble());
+    QVERIFY(stored["baseSaveCounter"].isDouble());
 }
 
 void AppSettingsTest::recordsForTwoIdsStaySeparate()
@@ -142,12 +142,12 @@ void AppSettingsTest::recordsForTwoIdsStaySeparate()
     QTemporaryDir folder;
     QVERIFY(folder.isValid());
     const QString path = folder.filePath("settings.json");
-    const QString first = ChainTestSupport::newDocumentId();
-    const QString second = ChainTestSupport::newDocumentId();
+    const QString first = ServerTestSupport::newDocumentId();
+    const QString second = ServerTestSupport::newDocumentId();
 
     DocumentRecord other;
-    other.highWaterMark.keyGeneration = 1;
-    other.highWaterMark.saveCounter = 2;
+    other.baseSaveCounter = 1;
+    other.historySeen = 2;
     {
         std::unique_ptr<AppSettings> settings = openAt(path);
         settings->setRecord(first, fullRecord());
@@ -159,32 +159,27 @@ void AppSettingsTest::recordsForTwoIdsStaySeparate()
     QVERIFY(reread->record(second) == other);
 }
 
-void AppSettingsTest::aRecordWithPendingRosterChangesRoundTrips()
+void AppSettingsTest::grantedAndLinkedDevicesRoundTrip()
 {
     QTemporaryDir folder;
     QVERIFY(folder.isValid());
     const QString path = folder.filePath("settings.json");
-    const QString documentId = ChainTestSupport::newDocumentId();
+    const QString documentId = ServerTestSupport::newDocumentId();
     const DeviceIdentity bob = newIdentity("Bob", "Phone");
-
-    RosterChange grant;
-    grant.kind = RosterChange::Kind::Grant;
-    grant.person = bob.asNewPerson();
-    RosterChange unlink;
-    unlink.kind = RosterChange::Kind::Unlink;
-    unlink.device = bob.asRosterDevice();
-    RosterChange role;
-    role.kind = RosterChange::Kind::SetRole;
-    role.target = bob.member;
-    role.role = RosterPerson::Role::Admin;
+    const DeviceIdentity carol = newIdentity("Carol", "Tablet");
+    const DeviceIdentity phone = newIdentity("Alice", "Phone");
 
     DocumentRecord record = fullRecord();
-    record.pendingChanges = {grant, unlink, role};
-    openAt(path)->setRecord(documentId, record);
+    record.granted = {bob.keys(), carol.keys()};
+    std::unique_ptr<AppSettings> settings = openAt(path);
+    settings->setRecord(documentId, record);
+    QVERIFY(settings->linkedDevices().isEmpty());
+    settings->setLinkedDevices({phone.keys()});
 
-    const DocumentRecord reread = openAt(path)->record(documentId);
-    QCOMPARE(reread.pendingChanges.size(), qsizetype(3));
-    QVERIFY(reread == record);
+    std::unique_ptr<AppSettings> reread = openAt(path);
+    QCOMPARE(reread->record(documentId).granted.size(), qsizetype(2));
+    QVERIFY(reread->record(documentId) == record);
+    QCOMPARE(reread->linkedDevices(), QList<DeviceKeys>{phone.keys()});
 }
 
 void AppSettingsTest::removingARecordLeavesTheOthers()
@@ -192,8 +187,8 @@ void AppSettingsTest::removingARecordLeavesTheOthers()
     QTemporaryDir folder;
     QVERIFY(folder.isValid());
     const QString path = folder.filePath("settings.json");
-    const QString gone = ChainTestSupport::newDocumentId();
-    const QString kept = ChainTestSupport::newDocumentId();
+    const QString gone = ServerTestSupport::newDocumentId();
+    const QString kept = ServerTestSupport::newDocumentId();
     {
         std::unique_ptr<AppSettings> settings = openAt(path);
         settings->setRecord(gone, fullRecord());
@@ -214,14 +209,14 @@ void AppSettingsTest::wardEntriesReadBackThroughASecondInstance()
     QTemporaryDir folder;
     QVERIFY(folder.isValid());
     const QString path = folder.filePath("settings.json");
-    const QString opened = ChainTestSupport::newDocumentId();
-    const QString fresh = ChainTestSupport::newDocumentId();
+    const QString opened = ServerTestSupport::newDocumentId();
+    const QString fresh = ServerTestSupport::newDocumentId();
 
     AppSettings::WardEntry openedWard;
     openedWard.wardName = "Tanglewood Ward";
     openedWard.lastOpened = QDateTime(QDate(2026, 10, 6), QTime(9, 30, 15, 250), QTimeZone::UTC);
-    openedWard.copies = {{"C:/Users/someone/Desktop/Tanglewood.wardplanning", ChainTestSupport::newDocumentId()},
-                         {"E:/Tanglewood.wardplanning", ChainTestSupport::newDocumentId()}};
+    openedWard.copies = {{"C:/Users/someone/Desktop/Tanglewood.wardplanning", ServerTestSupport::newDocumentId()},
+                         {"E:/Tanglewood.wardplanning", ServerTestSupport::newDocumentId()}};
 
     // A ward not yet named, never opened, with no copies.
     const AppSettings::WardEntry freshWard;
@@ -254,8 +249,8 @@ void AppSettingsTest::removingAWardLeavesItsRecordAndClearsTheLastWard()
     QTemporaryDir folder;
     QVERIFY(folder.isValid());
     const QString path = folder.filePath("settings.json");
-    const QString gone = ChainTestSupport::newDocumentId();
-    const QString kept = ChainTestSupport::newDocumentId();
+    const QString gone = ServerTestSupport::newDocumentId();
+    const QString kept = ServerTestSupport::newDocumentId();
 
     AppSettings::WardEntry ward;
     ward.wardName = "Tanglewood Ward";
@@ -283,9 +278,9 @@ void AppSettingsTest::removingAWardLeavesItsRecordAndClearsTheLastWard()
 
 void AppSettingsTest::aMalformedFileIsReportedAndLeftAlone_data()
 {
-    const QString id = ChainTestSupport::newDocumentId();
+    const QString id = ServerTestSupport::newDocumentId();
     const QString hash = HexCodec::encode(DocumentCrypto::payloadHash("a base copy"));
-    const QString mark = R"("highWaterMark": {"keyGeneration": 1, "saveCounter": 2})";
+    const QString mark = R"("baseSaveCounter": 2, "historySeen": 0)";
 
     QTest::addColumn<QByteArray>("bytes");
     QTest::newRow("not json") << QByteArray("{ not json");
@@ -298,18 +293,22 @@ void AppSettingsTest::aMalformedFileIsReportedAndLeftAlone_data()
     QTest::newRow("latitude as text")
         << QByteArray(R"({"records": {}, "wards": {}, "map": {"defaultLat": "40", "defaultLng": 1}})");
     QTest::newRow("empty document id")
-        << QString(R"({"records": {"": {%1, "pendingChanges": []}}, "wards": {}})").arg(mark).toUtf8();
+        << QString(R"({"records": {"": {%1, "granted": []}}, "wards": {}})").arg(mark).toUtf8();
     QTest::newRow("record not an object") << QString(R"({"records": {"%1": 7}, "wards": {}})").arg(id).toUtf8();
-    QTest::newRow("no high-water mark")
-        << QString(R"({"records": {"%1": {"pendingChanges": []}}, "wards": {}})").arg(id).toUtf8();
+    QTest::newRow("no base save counter")
+        << QString(R"({"records": {"%1": {"historySeen": 0, "granted": []}}, "wards": {}})").arg(id).toUtf8();
     QTest::newRow("base version without hash")
-        << QString(R"({"records": {"%1": {"baseVersion": 3, %2, "pendingChanges": []}}, "wards": {}})").arg(id, mark).toUtf8();
+        << QString(R"({"records": {"%1": {"baseVersion": 3, %2, "granted": []}}, "wards": {}})").arg(id, mark).toUtf8();
     QTest::newRow("hash of the wrong size")
-        << QString(R"({"records": {"%1": {"baseVersion": 3, "baseHash": "abcd", %2, "pendingChanges": []}}, "wards": {}})")
+        << QString(R"({"records": {"%1": {"baseVersion": 3, "baseHash": "abcd", %2, "granted": []}}, "wards": {}})")
                .arg(id, mark)
                .toUtf8();
-    QTest::newRow("a pending change of no kind")
-        << QString(R"({"records": {"%1": {%2, "pendingChanges": [{"kind": "promote"}]}}, "wards": {}})").arg(id, mark).toUtf8();
+    QTest::newRow("a granted device with a short key")
+        << QString(R"({"records": {"%1": {%2, "granted": [{"publicKey": "ab", "verifyKey": "cd"}]}}, "wards": {}})")
+               .arg(id, mark)
+               .toUtf8();
+    QTest::newRow("no linked devices listed as empty")
+        << QByteArray(R"({"records": {}, "wards": {}, "linkedDevices": []})");
 
     QTest::newRow("ward not an object") << QString(R"({"records": {}, "wards": {"%1": 7}})").arg(id).toUtf8();
     QTest::newRow("empty ward id") << QByteArray(R"({"records": {}, "wards": {"": {"wardName": "Tanglewood Ward"}}})");
@@ -333,11 +332,11 @@ void AppSettingsTest::aMalformedFileIsReportedAndLeftAlone_data()
 
     // Anchor: the same shapes, well formed, read.
     QTest::newRow("well formed")
-        << QString(R"({"records": {"%1": {"baseVersion": 3, "baseHash": "%2", %3, "pendingChanges": []}},)"
+        << QString(R"({"records": {"%1": {"baseVersion": 3, "baseHash": "%2", %3, "granted": []}},)"
                    R"( "wards": {"%1": {"wardName": "Tanglewood Ward", "lastOpened": "2026-10-06T09:30:15.250Z",)"
                    R"( "copies": [{"path": "E:/Tanglewood.wardplanning", "documentId": "%4"}]}, "%4": {}},)"
                    R"( "lastWard": "%1"})")
-               .arg(id, hash, mark, ChainTestSupport::newDocumentId())
+               .arg(id, hash, mark, ServerTestSupport::newDocumentId())
                .toUtf8();
 }
 

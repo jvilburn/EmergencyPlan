@@ -1,6 +1,6 @@
 #include "IdentityServiceTest.h"
 
-#include "ChainTestSupport.h"
+#include "ServerTestSupport.h"
 #include "DocumentCrypto.h"
 #include "IdentityService.h"
 
@@ -113,9 +113,9 @@ void IdentityServiceTest::joinPersonKeepsTheGivenIdAndNameAndSurvivesAReload()
     QTemporaryDir folder;
     QVERIFY(folder.isValid());
     const QString path = folder.filePath("identity.json");
-    const MemberId member = ChainTestSupport::newMember();
+    const MemberId member = ServerTestSupport::newMember();
 
-    // The display name exactly as handed over, as the roster carries it.
+    // The display name exactly as the server gave it.
     const QString handedOver(" Alice Adams ");
     std::unique_ptr<IdentityService> phone = openAt(path);
     QVERIFY(phone->joinPerson(member, handedOver, " Phone ", nullptr));
@@ -162,7 +162,7 @@ void IdentityServiceTest::aPersonIsSetOnce()
     QString error;
     QVERIFY(!service->createPerson("Someone Else", "Desktop", &error));
     QVERIFY(!error.isEmpty());
-    QVERIFY(!service->joinPerson(ChainTestSupport::newMember(), "Someone Else", "Desktop", nullptr));
+    QVERIFY(!service->joinPerson(ServerTestSupport::newMember(), "Someone Else", "Desktop", nullptr));
 
     QVERIFY(service->identity()->member == first.member);
     QCOMPARE(openAt(path)->identity()->displayName, QString("Alice Adams"));
@@ -180,7 +180,7 @@ void IdentityServiceTest::namesAndAMemberIdAreRequiredAndARefusalWritesNothing()
     QVERIFY(!service->createPerson("   ", "Laptop", &error));
     QVERIFY(!error.isEmpty());
     QVERIFY(!service->createPerson("Alice Adams", "", nullptr));
-    QVERIFY(!service->joinPerson(ChainTestSupport::newMember(), "  ", "Phone", nullptr));
+    QVERIFY(!service->joinPerson(ServerTestSupport::newMember(), "  ", "Phone", nullptr));
 
     // An invalid id says so, rather than asking for names.
     QString idError;

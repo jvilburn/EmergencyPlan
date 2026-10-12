@@ -1,134 +1,76 @@
 #include "ReconcileTest.h"
 
-#include "ChainTestSupport.h"
+#include "DocumentFile.h"
 #include "Reconcile.h"
+#include "ServerTestSupport.h"
 
-#include <QJsonArray>
 #include <QJsonDocument>
 #include <QtTest>
 
-using namespace ChainTestSupport;
 using Reconcile::DownloadCheck;
 using Reconcile::Verdict;
+using ServerTestSupport::TestDevice;
 
 namespace
 {
-
-/// One version as the server holds it: the header, the ciphertext it vouches for,
-/// and the document that was encrypted.
-struct Version
-{
-    DocumentHeader header;
-    QByteArray ciphertext;
-    QJsonObject payload;
-};
-
-/// A payload whose roster holds these devices and these admins.
-QJsonObject payloadFor(const QList<TestDevice>& devices, const QList<MemberId>& admins)
-{
-    Document document = Document::empty();
-    document.setAccessRoster(rosterOf(devices, admins));
-    return document.toJson();
-}
-
-/// Encrypts the payload under the header, then fills in the real payload hash and
-/// signs as the writer - the order a save path follows.
-Version seal(DocumentHeader header,
-             const TestDevice& writer,
-             const DataKey& dataKey,
-             const QJsonObject& payload)
-{
-    const QByteArray plaintext = QJsonDocument(payload).toJson(QJsonDocument::Compact);
-    const QByteArray ciphertext = DocumentCrypto::encryptPayload(plaintext, dataKey, header);
-    header.payloadHash = DocumentCrypto::payloadHash(ciphertext);
-    resign(header, writer);
-    return Version{header, ciphertext, payload};
-}
-
-/// A version listing these devices with a roster to match. The recipients stand in
-/// for the roster's people; the admins default to the first device's person.
-Version version(const QString& documentId,
-                int keyGeneration,
-                qint64 saveCounter,
-                const QList<TestDevice>& devices,
-                const TestDevice& writer,
-                const DataKey& dataKey,
-                const QList<MemberId>& admins)
-{
-    const DocumentHeader header =
-        buildHeader(documentId, keyGeneration, saveCounter, devices, writer, dataKey, admins);
-    return seal(header, writer, dataKey, payloadFor(devices, admins));
-}
 
 Reconcile::Self selfOf(const TestDevice& device)
 {
     return Reconcile::Self{device.sealing, device.signing.verifyKey};
 }
 
-/// Alice, Bob, and Carol at generation 1. Alice is the only admin. The base is the
-/// version this machine and the server last agreed on.
+SealingSet setOf(const QList<TestDevice>& devices)
+{
+    SealingSet set;
+    for (const TestDevice& device : devices)
+    {
+        set.add(device.keys());
+    }
+    return set;
+}
+
+/// A ward sealed to Alice and Bob under its first key, with one family.
 struct World
 {
     QString documentId;
-    DataKey dataKey;
     TestDevice alice;
     TestDevice bob;
     TestDevice carol;
-    Version base;
-
-    QList<TestDevice> everyone() const { return {alice, bob, carol}; }
-    QList<MemberId> admins() const { return {alice.member}; }
+    DataKey dataKey;
+    Document document;
+    DocumentFile::Sealed sealed;
 };
 
 World world()
 {
     World w;
-    w.documentId = newDocumentId();
+    w.documentId = ServerTestSupport::newDocumentId();
+    w.alice = ServerTestSupport::newPerson("Alice");
+    w.bob = ServerTestSupport::newPerson("Bob");
+    w.carol = ServerTestSupport::newPerson("Carol");
     w.dataKey = DocumentCrypto::generateDataKey();
-    w.alice = newPerson();
-    w.bob = newPerson();
-    w.carol = newPerson();
-    w.base = version(w.documentId, 1, 1, w.everyone(), w.alice, w.dataKey, w.admins());
+    w.document = Document::empty();
+    w.document.setSealingSet(setOf({w.alice, w.bob}));
+
+    DocumentHeader first;
+    first.documentId = w.documentId;
+    w.sealed = DocumentFile::seal(w.document, first, w.dataKey).value();
     return w;
 }
 
-/// Bob's next ordinary version on top of the base.
-Version bobsEdit(const World& w)
+DownloadCheck check(const World& w,
+                    const DocumentFile::Sealed& sealed,
+                    const TestDevice& reader,
+                    const QList<DataKey>& trusted)
 {
-    return version(w.documentId, 1, 2, w.everyone(), w.bob, w.dataKey, w.admins());
+    return Reconcile::validate(w.documentId, sealed.header, sealed.ciphertext, selfOf(reader), trusted);
 }
 
-/// The mark of a device that has seen generation 1 and nothing of its counter,
-/// which every version in these tests is at or above.
-const Reconcile::HighWaterMark FirstGeneration{1, 0};
-
-/// Validates a download of the world's document as this device would.
-DownloadCheck downloadAs(const World& w,
-                         const std::optional<DocumentHeader>& baseHeader,
-                         const QList<DocumentHeader>& laterHeaders,
-                         const QByteArray& ciphertext,
-                         const TestDevice& self)
+/// A fault, and nothing else set.
+bool isBareFault(const DownloadCheck& result)
 {
-    return Reconcile::validateDownload(
-        w.documentId, baseHeader, laterHeaders, ciphertext, selfOf(self), FirstGeneration);
-}
-
-/// The verdict on a version, with no base header, against this high-water mark.
-Verdict verdictAgainst(const World& w,
-                       const Version& version,
-                       const TestDevice& self,
-                       const Reconcile::HighWaterMark& mark)
-{
-    return Reconcile::validateDownload(
-               w.documentId, std::nullopt, {version.header}, version.ciphertext, selfOf(self), mark)
-        .verdict;
-}
-
-/// A fault with nothing else set, so no caller can act on half a result.
-bool isBareFault(const DownloadCheck& check)
-{
-    return check.verdict == Verdict::ServerFault && !check.reason.isEmpty()
-        && !check.header.has_value() && !check.dataKey.has_value() && !check.document.has_value();
+    return result.verdict == Verdict::ServerFault && !result.reason.isEmpty() && !result.header.has_value()
+        && !result.dataKey.has_value() && !result.document.has_value();
 }
 
 } // namespace
@@ -138,419 +80,173 @@ void ReconcileTest::initTestCase()
     QVERIFY(DocumentCrypto::initialise());
 }
 
-// --- Accept ------------------------------------------------------------------
+// --- Accept ------------------------------------------------------------------------
 
-void ReconcileTest::aValidNewerVersionIsAccepted()
+void ReconcileTest::aValidVersionIsAccepted()
 {
     const World w = world();
-    const Version next = bobsEdit(w);
-
-    const DownloadCheck check =
-        downloadAs(w, w.base.header, {next.header}, next.ciphertext, w.carol);
-
-    QCOMPARE(check.verdict, Verdict::Accept);
-    QVERIFY(check.reason.isEmpty());
-    QVERIFY(check.header.value() == next.header);
-    QVERIFY(check.dataKey.value() == w.dataKey);
-
-    // The document handed back is the one that was written, whole.
-    const std::optional<Document> written = Document::parse(next.payload);
-    QVERIFY(written.has_value());
-    QVERIFY(check.document.value() == written.value());
-    QVERIFY(written.value().accessRoster() == rosterOf(w.everyone(), w.admins()));
+    const DownloadCheck result = check(w, w.sealed, w.bob, {});
+    QCOMPARE(result.verdict, Verdict::Accept);
+    QVERIFY(result.header.value() == w.sealed.header);
+    QVERIFY(result.dataKey.value() == w.dataKey);
+    QVERIFY(result.document.value() == w.document);
 }
 
-void ReconcileTest::aValidNewerVersionIsAcceptedWithNoBaseHeader()
+void ReconcileTest::aVersionUnderATrustedKeyIsAccepted()
 {
     const World w = world();
-    const Version next = bobsEdit(w);
-
-    const DownloadCheck check =
-        downloadAs(w, std::nullopt, {next.header}, next.ciphertext, w.carol);
-
-    QCOMPARE(check.verdict, Verdict::Accept);
-    QVERIFY(check.document.has_value());
+    QCOMPARE(check(w, w.sealed, w.bob, {DocumentCrypto::generateDataKey(), w.dataKey}).verdict, Verdict::Accept);
 }
 
-void ReconcileTest::aVersionWrittenBySomeoneWhoJustLeftIsAccepted()
+void ReconcileTest::aVersionNamingATrustedKeyAmongItsFormerKeysIsAccepted()
 {
     const World w = world();
 
-    // Bob writes the version that drops him. He is on neither its recipients nor
-    // its roster.
-    const Version leave = version(w.documentId, 1, 2, {w.alice, w.carol}, w.bob, w.dataKey, w.admins());
+    // Two rotations since the key Bob holds: the second still names it.
+    Document rotated = w.document;
+    SealingSet set = rotated.sealingSet();
+    set.addFormerKey(w.dataKey);
+    const DataKey middle = DocumentCrypto::generateDataKey();
+    set.addFormerKey(middle);
+    rotated.setSealingSet(set);
+    const DataKey latest = DocumentCrypto::generateDataKey();
+    const DocumentFile::Sealed sealed = DocumentFile::seal(rotated, w.sealed.header, latest).value();
 
-    const DownloadCheck withBase =
-        downloadAs(w, w.base.header, {leave.header}, leave.ciphertext, w.carol);
-    QCOMPARE(withBase.verdict, Verdict::Accept);
-    QVERIFY(!withBase.document.value().accessRoster().contains(w.bob.member));
-
-    const DownloadCheck withoutBase =
-        downloadAs(w, std::nullopt, {leave.header}, leave.ciphertext, w.carol);
-    QCOMPARE(withoutBase.verdict, Verdict::Accept);
+    const DownloadCheck result = check(w, sealed, w.bob, {w.dataKey});
+    QCOMPARE(result.verdict, Verdict::Accept);
+    QVERIFY(result.dataKey.value() == latest);
 }
 
-// --- Failures ----------------------------------------------------------------
+void ReconcileTest::withNothingTrustedTheFirstVersionIsTakenAsItStands()
+{
+    World w = world();
+    Document other = w.document;
+    const DocumentFile::Sealed sealed =
+        DocumentFile::seal(other, w.sealed.header, DocumentCrypto::generateDataKey()).value();
+    QCOMPARE(check(w, sealed, w.bob, {}).verdict, Verdict::Accept);
+}
 
-void ReconcileTest::anUnsealableEntryIsAServerFault()
+// --- Failures ----------------------------------------------------------------------
+
+void ReconcileTest::aVersionNotDescendedFromATrustedKeyIsAServerFault()
 {
     const World w = world();
-    Version next = bobsEdit(w);
 
-    // Carol's entry keeps her keys but seals the data key to someone else.
-    for (RecipientEntry& entry : next.header.recipients)
+    // Everything a server could make: sealed to Bob and to a device of its own, under
+    // a key of its own, naming keys it made up.
+    Document forged = w.document;
+    SealingSet set = setOf({w.bob, w.carol});
+    set.addFormerKey(DocumentCrypto::generateDataKey());
+    forged.setSealingSet(set);
+    const DocumentFile::Sealed sealed =
+        DocumentFile::seal(forged, w.sealed.header, DocumentCrypto::generateDataKey()).value();
+
+    QVERIFY(isBareFault(check(w, sealed, w.bob, {w.dataKey})));
+
+    // Anchor: the same version is taken by a device that trusts nothing yet.
+    QCOMPARE(check(w, sealed, w.bob, {}).verdict, Verdict::Accept);
+}
+
+void ReconcileTest::aVersionNotSealedToThisDeviceIsAServerFault()
+{
+    const World w = world();
+    QCOMPARE(check(w, w.sealed, w.alice, {}).verdict, Verdict::Accept);
+    QVERIFY(isBareFault(check(w, w.sealed, w.carol, {})));
+}
+
+void ReconcileTest::anEntryThisDeviceCannotUnsealIsAServerFault()
+{
+    const World w = world();
+    DocumentFile::Sealed sealed = w.sealed;
+    for (RecipientEntry& entry : sealed.header.recipients)
     {
-        if (entry.fingerprint == w.carol.fingerprint())
+        if (entry.fingerprint == w.bob.fingerprint())
         {
-            entry.sealedKey =
-                DocumentCrypto::sealDataKey(w.dataKey, DocumentCrypto::generateKeypair().publicKey);
+            entry.sealedKey = DocumentCrypto::sealDataKey(w.dataKey, w.carol.sealing.publicKey);
         }
     }
-    next = seal(next.header, w.bob, w.dataKey, payloadFor(w.everyone(), w.admins()));
-
-    QVERIFY(isBareFault(
-        downloadAs(w, w.base.header, {next.header}, next.ciphertext, w.carol)));
-
-    // The control: the same version is readable by Alice, whose entry is sound.
-    QCOMPARE(downloadAs(w, w.base.header, {next.header}, next.ciphertext, w.alice)
-                 .verdict,
-             Verdict::Accept);
+    QVERIFY(isBareFault(check(w, sealed, w.bob, {})));
 }
 
-void ReconcileTest::aPayloadHashMismatchIsAServerFault()
+void ReconcileTest::aTamperedHeaderIsAServerFault()
 {
     const World w = world();
-    const Version next = bobsEdit(w);
+    DocumentFile::Sealed counter = w.sealed;
+    counter.header.saveCounter += 1;
+    QVERIFY(isBareFault(check(w, counter, w.bob, {})));
 
-    // Content the header never vouched for, encrypted under that header's own
-    // nonce and key by someone who holds the key. It decrypts cleanly, so only the
-    // payload hash stands in the way.
-    const QByteArray plaintext =
-        QJsonDocument(payloadFor(w.everyone(), w.admins())).toJson(QJsonDocument::Compact);
-    const QByteArray substituted = DocumentCrypto::encryptPayload(plaintext, w.dataKey, next.header);
-    QVERIFY(DocumentCrypto::decryptPayload(substituted, w.dataKey, next.header).has_value());
-    QVERIFY(substituted != next.ciphertext);
-
-    const DownloadCheck check = downloadAs(w, w.base.header, {next.header}, substituted, w.carol);
-    QVERIFY(isBareFault(check));
-    QCOMPARE(check.reason, QObject::tr("The server's document does not match its header."));
-}
-
-void ReconcileTest::aBadSignatureIsAServerFault()
-{
-    const World w = world();
-    Version next = bobsEdit(w);
-    next.header.writerSignature = QByteArray(DocumentCrypto::SignatureSize, '\0');
-
-    // With no base header the chain is not walked, so the signature check stands
-    // alone.
-    QVERIFY(isBareFault(
-        downloadAs(w, std::nullopt, {next.header}, next.ciphertext, w.carol)));
-    QVERIFY(isBareFault(
-        downloadAs(w, w.base.header, {next.header}, next.ciphertext, w.carol)));
-}
-
-void ReconcileTest::aBrokenChainIsAServerFault()
-{
-    const World w = world();
-
-    // Carol, a member, adds Dave. The version is otherwise sound and Alice can
-    // read it, but the chain refuses the grant.
-    const TestDevice dave = newPerson();
-    const QList<TestDevice> withDave = {w.alice, w.bob, w.carol, dave};
-    const Version next = version(w.documentId, 1, 2, withDave, w.carol, w.dataKey, w.admins());
-
-    QVERIFY(isBareFault(
-        downloadAs(w, w.base.header, {next.header}, next.ciphertext, w.alice)));
-}
-
-void ReconcileTest::aWithheldHeaderIsAServerFault()
-{
-    const World w = world();
-
-    // Alice grants Dave and makes him an admin; Dave then writes. Without the
-    // grant header, Dave writing is a stranger writing.
-    const TestDevice dave = newPerson();
-    const QList<TestDevice> withDave = {w.alice, w.bob, w.carol, dave};
-    const QList<MemberId> admins = {w.alice.member, dave.member};
-    const Version granted = version(w.documentId, 1, 2, withDave, w.alice, w.dataKey, admins);
-    const Version davesEdit = version(w.documentId, 1, 3, withDave, dave, w.dataKey, admins);
-
-    QCOMPARE(downloadAs(w, w.base.header, {granted.header, davesEdit.header}, davesEdit.ciphertext, w.carol)
-                 .verdict,
-             Verdict::Accept);
-
-    QVERIFY(isBareFault(downloadAs(w, w.base.header, {davesEdit.header}, davesEdit.ciphertext, w.carol)));
-}
-
-void ReconcileTest::aSubstitutedHeaderIsAServerFault()
-{
-    const World w = world();
-    const Version next = bobsEdit(w);
-
-    // A header from another ward, signed by one of its own members, served in
-    // place of this ward's.
-    const World elsewhere = world();
-    const Version foreign = bobsEdit(elsewhere);
-
-    QVERIFY(isBareFault(downloadAs(w, w.base.header, {foreign.header}, next.ciphertext, w.carol)));
-}
-
-void ReconcileTest::aVersionBelowTheHighWaterMarkIsAServerFault()
-{
-    const World w = world();
-    const Version next = bobsEdit(w);
-    const qint64 counter = next.header.saveCounter;
-
-    // The version this device last saw, seen again, is not older than itself.
-    QCOMPARE(verdictAgainst(w, next, w.carol, Reconcile::HighWaterMark{1, counter}), Verdict::Accept);
-
-    // An older key, or an older version under the current key.
-    QCOMPARE(verdictAgainst(w, next, w.carol, Reconcile::HighWaterMark{2, 0}), Verdict::ServerFault);
-    QCOMPARE(verdictAgainst(w, next, w.carol, Reconcile::HighWaterMark{1, counter + 1}), Verdict::ServerFault);
-
-    // A later generation outranks any counter from an earlier one.
-    QCOMPARE(verdictAgainst(w, next, w.carol, Reconcile::HighWaterMark{0, counter + 1000}), Verdict::Accept);
-}
-
-void ReconcileTest::anEntryWhoseKeysDoNotMatchItsFingerprintIsAServerFault()
-{
-    const World w = world();
-    Version next = bobsEdit(w);
-
-    // Carol's fingerprint, with another signing key behind it: the key would still
-    // unseal. A fingerprint fixes both keys, so this is refused as an ill-formed
-    // header before any check of the entry against this device.
-    for (RecipientEntry& entry : next.header.recipients)
-    {
-        if (entry.fingerprint == w.carol.fingerprint())
-        {
-            entry.verifyKey = DocumentCrypto::generateSigningKeypair().verifyKey;
-        }
-    }
-    next = seal(next.header, w.bob, w.dataKey, payloadFor(w.everyone(), w.admins()));
-
-    const DownloadCheck check = downloadAs(w, std::nullopt, {next.header}, next.ciphertext, w.carol);
-    QVERIFY(isBareFault(check));
-    QCOMPARE(check.reason, QObject::tr("The server's version is not a well-formed header."));
-}
-
-void ReconcileTest::aWriterListedButMissingFromTheRosterIsAServerFault()
-{
-    const World w = world();
-
-    // Bob writes a version that still lists him, so it is not a leave, but its
-    // roster leaves him out: an entry on the access list nobody can attribute. The
-    // header and roster disagree, which is what refuses it.
-    const DocumentHeader header =
-        buildHeader(w.documentId, 1, 2, w.everyone(), w.bob, w.dataKey, w.admins());
-    const Version next = seal(header, w.bob, w.dataKey, payloadFor({w.alice, w.carol}, w.admins()));
-
-    const DownloadCheck check = downloadAs(w, std::nullopt, {next.header}, next.ciphertext, w.carol);
-    QVERIFY(isBareFault(check));
-    QCOMPARE(check.reason, QObject::tr("The server's version disagrees with its own access list."));
+    DocumentFile::Sealed nonce = w.sealed;
+    nonce.header.nonce[0] = char(nonce.header.nonce.at(0) ^ 0x01);
+    QVERIFY(isBareFault(check(w, nonce, w.bob, {})));
 }
 
 void ReconcileTest::aVersionOfAnotherDocumentIsAServerFault()
 {
     const World w = world();
+    const DownloadCheck result =
+        Reconcile::validate(ServerTestSupport::newDocumentId(), w.sealed.header, w.sealed.ciphertext, selfOf(w.bob), {});
+    QVERIFY(isBareFault(result));
+}
 
-    // Another ward that Carol also belongs to, sealed to her own device: every
-    // check but the document id passes, which the control shows.
-    const QString otherId = newDocumentId();
-    const DataKey otherKey = DocumentCrypto::generateDataKey();
-    const Version foreign = version(otherId, 1, 2, w.everyone(), w.alice, otherKey, w.admins());
+void ReconcileTest::aHeaderDisagreeingWithItsSealingSetIsAServerFault()
+{
+    const World w = world();
 
-    QCOMPARE(Reconcile::validateDownload(otherId,
-                                         std::nullopt,
-                                         {foreign.header},
-                                         foreign.ciphertext,
-                                         selfOf(w.carol),
-                                         FirstGeneration)
+    // A header naming Carol, whom the payload does not seal to.
+    DocumentFile::Sealed wider = w.sealed;
+    wider.header.recipients.append(
+        RecipientEntry{w.carol.fingerprint(), DocumentCrypto::sealDataKey(w.dataKey, w.carol.sealing.publicKey)});
+    const QByteArray plaintext = QJsonDocument(w.document.toJson()).toJson(QJsonDocument::Compact);
+    wider.ciphertext = DocumentCrypto::encryptPayload(plaintext, w.dataKey, wider.header);
+    QVERIFY(isBareFault(check(w, wider, w.bob, {})));
+
+    // A payload sealing to Carol too, with a header that leaves her out.
+    Document more = w.document;
+    more.setSealingSet(setOf({w.alice, w.bob, w.carol}));
+    DocumentFile::Sealed narrower = w.sealed;
+    narrower.ciphertext = DocumentCrypto::encryptPayload(
+        QJsonDocument(more.toJson()).toJson(QJsonDocument::Compact), w.dataKey, narrower.header);
+    QVERIFY(isBareFault(check(w, narrower, w.bob, {})));
+
+    QVERIFY(Reconcile::headerMatchesSealingSet(w.sealed.header, w.document.sealingSet()));
+    QVERIFY(!Reconcile::headerMatchesSealingSet(wider.header, w.document.sealingSet()));
+}
+
+void ReconcileTest::anUnreadablePayloadIsAServerFault()
+{
+    const World w = world();
+    DocumentFile::Sealed sealed = w.sealed;
+    sealed.ciphertext = DocumentCrypto::encryptPayload("not a document", w.dataKey, sealed.header);
+    QVERIFY(isBareFault(check(w, sealed, w.bob, {})));
+
+    DocumentFile::Sealed flipped = w.sealed;
+    flipped.ciphertext[4] = char(flipped.ciphertext.at(4) ^ 0x01);
+    QVERIFY(isBareFault(check(w, flipped, w.bob, {})));
+}
+
+// --- Newer versions ----------------------------------------------------------------
+
+void ReconcileTest::aNewerHeaderFormatIsNeedsNewerVersion()
+{
+    const World w = world();
+    QJsonObject header = w.sealed.header.toJson();
+    header["formatVersion"] = DocumentHeader::CurrentFormatVersion + 1;
+
+    const DownloadCheck result =
+        Reconcile::validateDownload(w.documentId, header, w.sealed.ciphertext, selfOf(w.bob), {});
+    QCOMPARE(result.verdict, Verdict::NeedsNewerVersion);
+    QVERIFY(!result.document.has_value());
+
+    // Anchor: the stored header itself reads.
+    QCOMPARE(Reconcile::validateDownload(w.documentId, w.sealed.header.toJson(), w.sealed.ciphertext, selfOf(w.bob), {})
                  .verdict,
              Verdict::Accept);
-
-    const DownloadCheck check =
-        downloadAs(w, std::nullopt, {foreign.header}, foreign.ciphertext, w.carol);
-    QVERIFY(isBareFault(check));
-    QCOMPARE(check.reason, QObject::tr("The server sent a version of a different document."));
-
-    // Nor does a base header of the other ward prove anything about this one.
-    const Version otherBase = version(otherId, 1, 1, w.everyone(), w.alice, otherKey, w.admins());
-    const Version removal = version(otherId,
-                                    2,
-                                    3,
-                                    {w.alice, w.bob},
-                                    w.alice,
-                                    DocumentCrypto::generateDataKey(),
-                                    w.admins());
-    QCOMPARE(Reconcile::checkRemoval(otherId, otherBase.header, {removal.header}, w.carol.fingerprint()),
-             Verdict::Removed);
-    QCOMPARE(Reconcile::checkRemoval(w.documentId, otherBase.header, {removal.header}, w.carol.fingerprint()),
-             Verdict::ServerFault);
-}
-
-void ReconcileTest::aHeaderDisagreeingWithItsRosterIsAServerFault()
-{
-    const World w = world();
-
-    // The roster makes Carol an admin; the header does not.
-    const DocumentHeader header =
-        buildHeader(w.documentId, 1, 2, w.everyone(), w.alice, w.dataKey, w.admins());
-    const Version next =
-        seal(header, w.alice, w.dataKey, payloadFor(w.everyone(), {w.alice.member, w.carol.member}));
-
-    QVERIFY(isBareFault(
-        downloadAs(w, w.base.header, {next.header}, next.ciphertext, w.bob)));
-}
-
-void ReconcileTest::anEmptyHeaderListIsAServerFault()
-{
-    const World w = world();
-
-    QVERIFY(isBareFault(
-        downloadAs(w, w.base.header, {}, w.base.ciphertext, w.carol)));
-}
-
-// --- Removal -----------------------------------------------------------------
-
-void ReconcileTest::aChainProvenRemovalIsRemoved()
-{
-    const World w = world();
-    const Version removal = version(w.documentId,
-                                    2,
-                                    2,
-                                    {w.alice, w.bob},
-                                    w.alice,
-                                    DocumentCrypto::generateDataKey(),
-                                    w.admins());
-
-    const DownloadCheck check = downloadAs(w, w.base.header, {removal.header}, removal.ciphertext, w.carol);
-
-    QCOMPARE(check.verdict, Verdict::Removed);
-    QVERIFY(!check.header.has_value() && !check.dataKey.has_value() && !check.document.has_value());
-}
-
-void ReconcileTest::aRemovalByAnAdminPromotedAfterTheBaseIsRemoved()
-{
-    const World w = world();
-
-    // Alice grants Dave and makes him an admin; Dave removes Carol. Carol never saw
-    // Dave arrive.
-    const TestDevice dave = newPerson();
-    const QList<MemberId> admins = {w.alice.member, dave.member};
-    const Version granted =
-        version(w.documentId, 1, 2, {w.alice, w.bob, w.carol, dave}, w.alice, w.dataKey, admins);
-    const Version removal = version(w.documentId,
-                                    2,
-                                    3,
-                                    {w.alice, w.bob, dave},
-                                    dave,
-                                    DocumentCrypto::generateDataKey(),
-                                    admins);
-
-    QCOMPARE(downloadAs(w, w.base.header, {granted.header, removal.header}, removal.ciphertext, w.carol)
-                 .verdict,
-             Verdict::Removed);
-}
-
-void ReconcileTest::theLeaversOtherDeviceIsRemovedByTheLeave()
-{
-    World w = world();
-    const TestDevice bobPhone = newDeviceFor(w.bob.member);
-    const QList<TestDevice> withPhone = {w.alice, w.bob, w.carol, bobPhone};
-    w.base = version(w.documentId, 1, 1, withPhone, w.alice, w.dataKey, w.admins());
-
-    // Bob leaves from his laptop. His phone, offline at the time, learns it is out.
-    const Version leave = version(w.documentId, 1, 2, {w.alice, w.carol}, w.bob, w.dataKey, w.admins());
-
-    QCOMPARE(downloadAs(w, w.base.header, {leave.header}, leave.ciphertext, bobPhone)
-                 .verdict,
-             Verdict::Removed);
-    QCOMPARE(Reconcile::checkRemoval(w.documentId, w.base.header, {leave.header}, bobPhone.fingerprint()),
-             Verdict::Removed);
-}
-
-void ReconcileTest::withNoBaseHeaderAMissingEntryIsNeverRemoved()
-{
-    const World w = world();
-    const Version removal = version(w.documentId,
-                                    2,
-                                    2,
-                                    {w.alice, w.bob},
-                                    w.alice,
-                                    DocumentCrypto::generateDataKey(),
-                                    w.admins());
-
-    // The same removal that is Removed from the base proves nothing without it.
-    QVERIFY(isBareFault(downloadAs(w, std::nullopt, {removal.header}, removal.ciphertext, w.carol)));
-}
-
-void ReconcileTest::checkRemovalReachesTheSameVerdictsFromHeadersAlone()
-{
-    const World w = world();
-    const Version removal = version(w.documentId,
-                                    2,
-                                    2,
-                                    {w.alice, w.bob},
-                                    w.alice,
-                                    DocumentCrypto::generateDataKey(),
-                                    w.admins());
-    const Fingerprint carol = w.carol.fingerprint();
-
-    QCOMPARE(Reconcile::checkRemoval(w.documentId, w.base.header, {removal.header}, carol), Verdict::Removed);
-    QCOMPARE(Reconcile::checkRemoval(w.documentId, std::nullopt, {removal.header}, carol), Verdict::ServerFault);
-    QCOMPARE(Reconcile::checkRemoval(w.documentId, w.base.header, {}, carol), Verdict::ServerFault);
-
-    // Still listed is not removed.
-    QCOMPARE(Reconcile::checkRemoval(w.documentId, w.base.header, {removal.header}, w.bob.fingerprint()),
-             Verdict::ServerFault);
-
-    // A removal written by a member does not hold, so it proves nothing.
-    const Version byMember = version(w.documentId,
-                                     2,
-                                     2,
-                                     {w.alice, w.bob},
-                                     w.bob,
-                                     DocumentCrypto::generateDataKey(),
-                                     w.admins());
-    QCOMPARE(Reconcile::checkRemoval(w.documentId, w.base.header, {byMember.header}, carol), Verdict::ServerFault);
-}
-
-// --- Newer versions ----------------------------------------------------------
-
-void ReconcileTest::aNewerHeaderFormatAnywhereIsNeedsNewerVersion()
-{
-    const World w = world();
-    const Version next = bobsEdit(w);
-
-    QList<DocumentHeader> headers;
-    QCOMPARE(Reconcile::readHeaders({w.base.header.toJson(), next.header.toJson()}, headers),
-             Verdict::Accept);
-    QCOMPARE(headers.size(), qsizetype(2));
-    QVERIFY(headers.last() == next.header);
-
-    // A later format first in the list, and alongside a malformed one: a newer
-    // header is never read as a reason to delete anything.
-    QJsonObject newer = w.base.header.toJson();
-    newer["formatVersion"] = DocumentHeader::CurrentFormatVersion + 1;
-    QJsonObject malformed = next.header.toJson();
-    malformed.remove("nonce");
-
-    QList<DocumentHeader> untouched;
-    QCOMPARE(Reconcile::readHeaders({newer, next.header.toJson()}, untouched), Verdict::NeedsNewerVersion);
-    QCOMPARE(Reconcile::readHeaders({malformed, newer}, untouched), Verdict::NeedsNewerVersion);
-    QVERIFY(untouched.isEmpty());
 }
 
 void ReconcileTest::aMalformedHeaderIsAServerFault()
 {
     const World w = world();
-
-    QJsonObject malformed = bobsEdit(w).header.toJson();
-    malformed.remove("nonce");
-
-    QList<DocumentHeader> headers;
-    QCOMPARE(Reconcile::readHeaders({w.base.header.toJson(), malformed}, headers), Verdict::ServerFault);
-    QVERIFY(headers.isEmpty());
+    QJsonObject header = w.sealed.header.toJson();
+    header.remove("nonce");
+    QVERIFY(isBareFault(Reconcile::validateDownload(w.documentId, header, w.sealed.ciphertext, selfOf(w.bob), {})));
 }

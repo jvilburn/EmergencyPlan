@@ -34,15 +34,11 @@ struct Fixture
     DocumentLibrary library{*settings, folder.filePath("wards"), alice};
 };
 
-/// A document whose roster is only this device's person, holding the named ward
-/// when one is given.
+/// A document sealed only to this device, holding the named ward when one is given.
 Document wardDocument(const DeviceIdentity& identity, const QString& wardName)
 {
-    AccessRoster roster;
-    roster.addPerson(identity.asNewPerson());
-
     Document document = Document::empty();
-    document.setAccessRoster(roster);
+    document.setSealingSet(SealingSet::of(identity.keys()));
     if (!wardName.isEmpty())
     {
         document.metadata().addOrUpdateWard("123456", wardName, "654321", "Riverside Stake");
@@ -86,8 +82,7 @@ QString addWardWithFiles(Fixture& fixture)
     DocumentRecord record;
     record.baseVersion = 4;
     record.baseHash = DocumentCrypto::payloadHash("the ward's base copy");
-    record.highWaterMark.keyGeneration = 1;
-    record.highWaterMark.saveCounter = 7;
+    record.baseSaveCounter = 7;
     fixture.settings->setRecord(documentId, record);
     return documentId;
 }
@@ -245,11 +240,8 @@ void DocumentLibraryTest::aWardAddedFromAFileIsCopiedIn()
     DocumentHeader first;
     first.documentId = documentId;
     first.saveCounter = 0;
-    const QByteArray bytes = DocumentFile::encode(DocumentFile::seal(wardDocument(fixture.alice, "Tanglewood"),
-                                                                     first,
-                                                                     DocumentCrypto::generateDataKey(),
-                                                                     fixture.alice)
-                                                      .value());
+    const QByteArray bytes = DocumentFile::encode(
+        DocumentFile::seal(wardDocument(fixture.alice, "Tanglewood"), first, DocumentCrypto::generateDataKey()).value());
     const QString found = fixture.folder.filePath("found.wardplanning");
     QVERIFY(writeFile(found, bytes));
 
@@ -408,7 +400,7 @@ void DocumentLibraryTest::anExportedCopyHasAFreshIdAndTheWardAsItsOrigin()
     QCOMPARE(first.originDocumentId, documentId);
     QCOMPARE(second.originDocumentId, documentId);
 
-    // Sealed to the document's roster: Alice's device and no one else.
+    // Sealed to the document's sealing set: Alice's device and no one else.
     QCOMPARE(first.recipients.size(), qsizetype(1));
     QVERIFY(first.recipients.at(0).fingerprint == fixture.alice.fingerprint());
 
@@ -514,7 +506,7 @@ void DocumentLibraryTest::openCopySaysWhyItCannotOpenAFile()
     const QString ownPath = fixture.folder.filePath("own.wardplanning");
     QVERIFY(writeFile(ownPath,
                       DocumentFile::encode(
-                          DocumentFile::seal(document, own, DocumentCrypto::generateDataKey(), fixture.alice).value())));
+                          DocumentFile::seal(document, own, DocumentCrypto::generateDataKey()).value())));
     QVERIFY(!fixture.library.openCopy(ownPath, &error).has_value());
     QCOMPARE(error, QString("%1 is a ward's own file, not a copy.").arg(ownPath));
 
@@ -567,7 +559,7 @@ void DocumentLibraryTest::forgetRemovesTheFilesRecordAndEntryAndKeepsCopies()
     QVERIFY(fixture.settings->record(kept).baseVersion.has_value());
 }
 
-void DocumentLibraryTest::forgetRemovedDeletesCopiesStillAtTheirPaths()
+void DocumentLibraryTest::forgetLostDeletesCopiesStillAtTheirPaths()
 {
     Fixture fixture;
     QVERIFY(fixture.folder.isValid());
@@ -600,7 +592,7 @@ void DocumentLibraryTest::forgetRemovedDeletesCopiesStillAtTheirPaths()
     const QByteArray sameWardBytes = readFile(sameWard);
     QCOMPARE(sealedAt(sameWard).header.originDocumentId, removed);
 
-    fixture.library.forgetRemoved(removed);
+    fixture.library.forgetLost(removed);
 
     QVERIFY(!QFile::exists(stillThere));
     QVERIFY(QFile::exists(movedTo));
@@ -687,7 +679,7 @@ void DocumentLibraryTest::aListedWardWhoseFileWasDeletedIsFetchedOnRequest()
     QVERIFY(opens(library, *settings, *wards.alice, wards.named));
 }
 
-void DocumentLibraryTest::aRecoveryCopyOpensForEveryRosterDeviceAndIsRecorded()
+void DocumentLibraryTest::aRecoveryCopyOpensForEverySealedDeviceAndIsRecorded()
 {
     Fixture fixture;
     QVERIFY(fixture.folder.isValid());
@@ -696,14 +688,12 @@ void DocumentLibraryTest::aRecoveryCopyOpensForEveryRosterDeviceAndIsRecorded()
     fixture.library.add(documentId);
     fixture.library.noteDocument(documentId, wardDocument(fixture.alice, "Tanglewood"));
 
-    // The roster after a refused publish: Alice and the Bob they granted.
+    // The sealing set after a refused publish: Alice and the Bob they granted.
     const DeviceIdentity bob = newIdentity("Bob", "Phone");
     Document document = wardDocument(fixture.alice, "Tanglewood");
-    AccessRoster roster = document.accessRoster();
-    RosterPerson bobPerson = bob.asNewPerson();
-    bobPerson.setRole(RosterPerson::Role::Member);
-    QVERIFY(roster.addPerson(bobPerson));
-    document.setAccessRoster(roster);
+    SealingSet set = document.sealingSet();
+    QVERIFY(set.add(bob.keys()));
+    document.setSealingSet(set);
 
     QString path;
     QString error;
@@ -718,7 +708,7 @@ void DocumentLibraryTest::aRecoveryCopyOpensForEveryRosterDeviceAndIsRecorded()
     QCOMPARE(header.originDocumentId, documentId);
     QCOMPARE(header.recipients.size(), qsizetype(2));
 
-    // Every device on the roster opens it, and it holds the document given.
+    // Every device it is sealed to opens it, and it holds the document given.
     const std::optional<DocumentLibrary::Copy> copy = fixture.library.openCopy(path, &error);
     QVERIFY2(copy.has_value(), qPrintable(error));
     QVERIFY(copy->document == document);
@@ -832,7 +822,7 @@ void DocumentLibraryTest::aWardWhoseFetchIsCutShortIsNotAdded()
     QCOMPARE(library.entries().size(), qsizetype(2));
 }
 
-void DocumentLibraryTest::aWardProvenRemovedWhileFetchedKeepsItsEntryForForgetRemoved()
+void DocumentLibraryTest::aWardLostWhileFetchedKeepsItsEntryForForgetLost()
 {
     TestWard ward;
     Device& alice = ward.add(newIdentity("Alice", "Laptop"));
@@ -858,21 +848,25 @@ void DocumentLibraryTest::aWardProvenRemovedWhileFetchedKeepsItsEntryForForgetRe
     QVERIFY(library.exportCopy(ward.documentId, wardDocument(bob.identity, "Tanglewood"), copyPath, nullptr));
 
     // Alice removes Bob; Bob's file is gone, so opening it fetches.
-    RosterChange removal;
-    removal.kind = RosterChange::Kind::Remove;
-    removal.target = bob.identity.member;
-    QVERIFY(ward.change(alice, removal) == RosterChangeOutcome::Published);
+    const ServerContract::Session admin = ward.sessionFor(alice).value();
+    QVERIFY(ServerTestSupport::wait<ServerContract::Done>(std::bind(&ServerContract::ServerApi::removeMember,
+                                                                    &ward.server,
+                                                                    admin,
+                                                                    ward.documentId,
+                                                                    bob.identity.member,
+                                                                    std::placeholders::_1))
+                .ok());
     QVERIFY(QFile::remove(library.pathsFor(ward.documentId).file));
 
     fetched.reset();
     library.fetchWard(ward.documentId, bob.connection, &receiver, std::bind(&keepFetched, std::ref(fetched), _1, _2));
     ward.settle();
-    QVERIFY(fetched == DocumentSession::Download::Removed);
+    QVERIFY(fetched == DocumentSession::Download::AccessLost);
 
     // The entry is still there to name the ward and find its copies.
     QVERIFY(library.contains(ward.documentId));
     QCOMPARE(library.entries().at(0).wardName, QString("Tanglewood Ward"));
-    library.forgetRemoved(ward.documentId);
+    library.forgetLost(ward.documentId);
     QVERIFY(!QFile::exists(copyPath));
     QVERIFY(!library.contains(ward.documentId));
 }

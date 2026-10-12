@@ -4,20 +4,6 @@
 
 #include <QtTest>
 
-namespace
-{
-
-/// Every tag, so a test can assert across all of them and fail when a new tag is
-/// added without being considered here.
-const QList<SignatureTag> AllTags = {
-    SignatureTag::Auth,
-    SignatureTag::Request,
-    SignatureTag::Header,
-    SignatureTag::Pairing
-};
-
-} // namespace
-
 void DocumentCryptoTest::initTestCase()
 {
     QVERIFY(DocumentCrypto::initialise());
@@ -57,9 +43,7 @@ void DocumentCryptoTest::hashIsStableAndSeparatesDomains()
     const QList<HashDomain> domains = {
         HashDomain::Fingerprint,
         HashDomain::Payload,
-        HashDomain::PairingCommit,
-        HashDomain::PairingComparison,
-        HashDomain::Request
+        HashDomain::FormerKey
     };
 
     // Same length as well as same material, so the digests are told apart by the
@@ -215,67 +199,45 @@ void DocumentCryptoTest::unsealRefusesAMalformedSealedKey()
 void DocumentCryptoTest::signatureVerifiesAndRejectsTampering()
 {
     const SigningKeypair keys = DocumentCrypto::generateSigningKeypair();
-    const QByteArray message = "challenge";
-    const QByteArray signature = DocumentCrypto::sign(SignatureTag::Auth, message, keys.signingKey);
+    const QByteArray challenge = "challenge";
+    const QByteArray signature = DocumentCrypto::signChallenge(challenge, keys.signingKey);
 
     QCOMPARE(signature.size(), qsizetype(DocumentCrypto::SignatureSize));
-    QVERIFY(DocumentCrypto::verify(SignatureTag::Auth, message, signature, keys.verifyKey));
+    QVERIFY(DocumentCrypto::challengeVerifies(challenge, signature, keys.verifyKey));
+    QVERIFY(!DocumentCrypto::challengeVerifies("challenqe", signature, keys.verifyKey));
 
-    QVERIFY(!DocumentCrypto::verify(SignatureTag::Header, message, signature, keys.verifyKey));
-    QVERIFY(!DocumentCrypto::verify(SignatureTag::Auth, "challenqe", signature, keys.verifyKey));
+    QByteArray flipped = signature;
+    flipped[0] = char(flipped.at(0) ^ 0x01);
+    QVERIFY(!DocumentCrypto::challengeVerifies(challenge, flipped, keys.verifyKey));
 
     // A truncated or lengthened signature is refused before it reaches libsodium.
-    QVERIFY(!DocumentCrypto::verify(SignatureTag::Auth,
-                                    message,
-                                    signature.left(signature.size() - 1),
-                                    keys.verifyKey));
-    QVERIFY(!DocumentCrypto::verify(SignatureTag::Auth,
-                                    message,
-                                    signature + QByteArray(1, '\0'),
-                                    keys.verifyKey));
-}
-
-void DocumentCryptoTest::signatureUnderOneTagFailsUnderEveryOther()
-{
-    // A signature the server can influence (Auth) must never verify as document
-    // evidence (Header), and no tag may stand in for another.
-    const SigningKeypair keys = DocumentCrypto::generateSigningKeypair();
-    const QByteArray message = "the same bytes under every tag";
-
-    for (const SignatureTag signedUnder : AllTags)
-    {
-        const QByteArray signature = DocumentCrypto::sign(signedUnder, message, keys.signingKey);
-        QVERIFY(!signature.isEmpty());
-
-        for (const SignatureTag checkedUnder : AllTags)
-        {
-            const bool verified =
-                DocumentCrypto::verify(checkedUnder, message, signature, keys.verifyKey);
-            QCOMPARE(verified, signedUnder == checkedUnder);
-        }
-    }
+    QVERIFY(!DocumentCrypto::challengeVerifies(challenge, signature.left(signature.size() - 1), keys.verifyKey));
+    QVERIFY(!DocumentCrypto::challengeVerifies(challenge, signature + QByteArray(1, 'x'), keys.verifyKey));
 }
 
 void DocumentCryptoTest::signatureFailsWithAnotherDevicesKey()
 {
     const SigningKeypair keys = DocumentCrypto::generateSigningKeypair();
     const SigningKeypair other = DocumentCrypto::generateSigningKeypair();
-    const QByteArray message = "a header";
+    const QByteArray challenge = "a challenge";
 
-    const QByteArray signature =
-        DocumentCrypto::sign(SignatureTag::Header, message, keys.signingKey);
+    const QByteArray signature = DocumentCrypto::signChallenge(challenge, keys.signingKey);
 
-    QVERIFY(DocumentCrypto::verify(SignatureTag::Header, message, signature, keys.verifyKey));
-    QVERIFY(!DocumentCrypto::verify(SignatureTag::Header, message, signature, other.verifyKey));
-    QVERIFY(!DocumentCrypto::verify(SignatureTag::Header, message, signature, VerifyKey()));
+    QVERIFY(DocumentCrypto::challengeVerifies(challenge, signature, keys.verifyKey));
+    QVERIFY(!DocumentCrypto::challengeVerifies(challenge, signature, other.verifyKey));
+    QVERIFY(!DocumentCrypto::challengeVerifies(challenge, signature, VerifyKey()));
 }
 
-void DocumentCryptoTest::signingRefusesAnInvalidKey()
+void DocumentCryptoTest::signingRefusesAnInvalidKeyOrAnEmptyChallenge()
 {
     // A 32-byte value is a plausible mistake here, since every other key is 32.
     SigningKey tooShort;
     tooShort.bytes = QByteArray(32, 'k');
 
-    QVERIFY(DocumentCrypto::sign(SignatureTag::Header, "message", tooShort).isEmpty());
-    QVERIFY(DocumentCrypto::sign(SignatureTag::Header, "message", SigningKey()).isEmpty());
+    QVERIFY(DocumentCrypto::signChallenge("challenge", tooShort).isEmpty());
+    QVERIFY(DocumentCrypto::signChallenge("challenge", SigningKey()).isEmpty());
+
+    const SigningKeypair keys = DocumentCrypto::generateSigningKeypair();
+    QVERIFY(DocumentCrypto::signChallenge(QByteArray(), keys.signingKey).isEmpty());
+    QVERIFY(!DocumentCrypto::signChallenge("challenge", keys.signingKey).isEmpty());
 }

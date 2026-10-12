@@ -555,8 +555,12 @@ void DocumentManager::onHeadChanged()
 
     // Fetched only when the server has entries newer than the last one dismissed here.
     const std::optional<ServerContract::Head>& head = m_session->lastHead();
+    if (m_server == nullptr || !head.has_value())
+    {
+        return;
+    }
     const qint64 seen = m_records->record(m_session->documentId()).historySeen;
-    if (m_server != nullptr && head.has_value() && head.value().history > seen)
+    if (head.value().history > seen)
     {
         m_server->history(m_session->documentId(),
                           seen,

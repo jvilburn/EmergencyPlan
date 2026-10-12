@@ -14,6 +14,8 @@ private slots:
     void anExpiredSessionIsSignedIntoAgain();
     void aRefusedSignInGivesOneUnauthenticatedReplyAndNoRetry();
     void callsMadeBeforeTheFirstSignInShareOneChallenge();
-    void everyMutatingCallReachesTheServerSigned();
+    void signingInRegistersThePerson();
+    void aDeviceWithNoPersonSignsInToLink();
+    void anUnlinkedDeviceHearsItFromEveryCallWithoutSigningInAgain();
     void aReplyWhoseContextWasDestroyedIsDropped();
 };

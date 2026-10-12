@@ -14,7 +14,7 @@ private slots:
     void aThirdKeypairIsRefused();
     void aFlippedPayloadByteIsRefused();
     void theDocumentIdSurvivesARoundTripAndIsAuthenticated();
-    void aSignatureReplacedByAnotherMembersIsRefused();
+    void aSealedKeyMovedToAnotherEntryIsRefused();
     void sealingAdvancesTheSaveCounterByOne();
     void twoConsecutiveSealsUseDifferentNonces();
     void twoSealsFromTheSamePreviousHeaderUseDifferentNonces();

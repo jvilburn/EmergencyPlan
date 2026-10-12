@@ -20,15 +20,15 @@ private slots:
     void anExportedCopyHasAFreshIdAndTheWardAsItsOrigin();
     void aCopyOfAWardNotInTheLibraryIsRefused();
     void aCopyIntoTheWardsDirectoryIsRefused();
-    void aRecoveryCopyOpensForEveryRosterDeviceAndIsRecorded();
+    void aRecoveryCopyOpensForEverySealedDeviceAndIsRecorded();
     void aSecondRecoveryCopyInTheSameMinuteKeepsTheFirst();
     void aRecoveryCopyNameIsOneAnyFileSystemTakes();
     void openCopySaysWhyItCannotOpenAFile();
     void forgetRemovesTheFilesRecordAndEntryAndKeepsCopies();
-    void forgetRemovedDeletesCopiesStillAtTheirPaths();
+    void forgetLostDeletesCopiesStillAtTheirPaths();
     void aClearedLibraryIsRestoredFromTheServerAndEachOpens();
     void aListedWardWhoseFileWasDeletedIsFetchedOnRequest();
     void onlyAWardThatArrivesIsAdded();
     void aWardWhoseFetchIsCutShortIsNotAdded();
-    void aWardProvenRemovedWhileFetchedKeepsItsEntryForForgetRemoved();
+    void aWardLostWhileFetchedKeepsItsEntryForForgetLost();
 };

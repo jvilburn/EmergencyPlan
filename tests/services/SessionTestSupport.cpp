@@ -52,14 +52,6 @@ void keepDownload(std::optional<DocumentSession::Download>& out, DocumentSession
     out = download;
 }
 
-void keepOutcome(std::optional<RosterChangeOutcome>& out,
-                 const QString&,
-                 const RosterChange&,
-                 RosterChangeOutcome outcome)
-{
-    out = outcome;
-}
-
 /// Timers for a session or queue to own, with a pointer kept for the test to
 /// fire them.
 std::unique_ptr<SessionTimers> keptTimers(SessionTestSupport::ManualTimers*& kept)
@@ -132,7 +124,7 @@ DeviceIdentity newIdentity(const QString& displayName, const QString& deviceName
     DeviceIdentity identity;
     identity.sealing = DocumentCrypto::generateKeypair();
     identity.signing = DocumentCrypto::generateSigningKeypair();
-    identity.member = ChainTestSupport::newMember();
+    identity.member = ServerTestSupport::newMember();
     identity.displayName = displayName;
     identity.deviceName = deviceName;
     return identity;
@@ -145,9 +137,13 @@ DeviceIdentity newDeviceOf(const DeviceIdentity& person, const QString& deviceNa
     return identity;
 }
 
-ChainTestSupport::TestDevice asTestDevice(const DeviceIdentity& identity)
+ServerTestSupport::TestDevice asTestDevice(const DeviceIdentity& identity)
 {
-    return ChainTestSupport::TestDevice{identity.member, identity.sealing, identity.signing};
+    return ServerTestSupport::TestDevice{identity.member,
+                                         identity.displayName,
+                                         identity.deviceName,
+                                         identity.sealing,
+                                         identity.signing};
 }
 
 // --- Device ----------------------------------------------------------------------
@@ -186,14 +182,14 @@ std::unique_ptr<DocumentSession> Device::open(const QString& documentId, LoadFai
     return DocumentSession::open(context(), keptTimers(timers), documentId, paths(documentId), failure, nullptr);
 }
 
-std::unique_ptr<RosterChangeQueue> Device::queue()
+std::unique_ptr<SealingQueue> Device::queue()
 {
-    return std::make_unique<RosterChangeQueue>(identity,
-                                               records,
-                                               connection,
-                                               keptTimers(queueTimers),
-                                               std::bind(&Device::paths, this, _1),
-                                               nullptr);
+    return std::make_unique<SealingQueue>(identity,
+                                          records,
+                                          connection,
+                                          keptTimers(queueTimers),
+                                          std::bind(&Device::paths, this, _1),
+                                          nullptr);
 }
 
 // --- TestWard --------------------------------------------------------------------
@@ -223,7 +219,7 @@ void TestWard::settle()
 
 std::unique_ptr<DocumentSession> TestWard::createShared(Device& owner)
 {
-    documentId = ChainTestSupport::newDocumentId();
+    documentId = ServerTestSupport::newDocumentId();
     adams = FamilyId::generate();
     baker = FamilyId::generate();
 
@@ -242,7 +238,7 @@ std::unique_ptr<DocumentSession> TestWard::createShared(Device& owner)
         return nullptr;
     }
 
-    session->share({});
+    session->share();
     settle();
     if (!session->isShared())
     {
@@ -251,27 +247,30 @@ std::unique_ptr<DocumentSession> TestWard::createShared(Device& owner)
     return session;
 }
 
+std::optional<Session> TestWard::sessionFor(Device& device)
+{
+    return ServerTestSupport::join(server, asTestDevice(device.identity));
+}
+
 bool TestWard::grant(Device& admin, Device& newcomer)
 {
-    const ChainTestSupport::TestDevice asked = asTestDevice(newcomer.identity);
-    const std::optional<Session> session = ServerTestSupport::signIn(server, asked);
-    if (!session.has_value()
-        || !ServerTestSupport::signedRequestAccess(server,
-                                                   session.value(),
-                                                   documentId,
-                                                   ServerTestSupport::requestFor(asked, ""))
-                .ok())
+    const std::optional<Session> adminSession = sessionFor(admin);
+    const std::optional<Session> newcomerSession = sessionFor(newcomer);
+    if (!adminSession.has_value() || !newcomerSession.has_value()
+        || !ServerTestSupport::grantByRequest(server,
+                                              documentId,
+                                              adminSession.value(),
+                                              asTestDevice(newcomer.identity),
+                                              newcomerSession.value()))
     {
         return false;
     }
 
-    RosterChange grant;
-    grant.kind = RosterChange::Kind::Grant;
-    grant.person = newcomer.identity.asNewPerson();
-    if (change(admin, grant) != RosterChangeOutcome::Published)
-    {
-        return false;
-    }
+    // As the app does on a grant: the device that asked is owed a seal.
+    DocumentRecord record = admin.records.record(documentId);
+    record.granted.append(newcomer.identity.keys());
+    admin.records.setRecord(documentId, record);
+    seal(admin);
 
     QObject receiver;
     std::optional<DocumentSession::Download> downloaded;
@@ -284,45 +283,38 @@ bool TestWard::grant(Device& admin, Device& newcomer)
     return downloaded == DocumentSession::Download::Done;
 }
 
-std::optional<RosterChangeOutcome> TestWard::change(Device& device, const RosterChange& change)
+bool TestWard::link(Device& newDevice, Device& existing)
 {
-    std::unique_ptr<RosterChangeQueue> queue = device.queue();
-    std::optional<RosterChangeOutcome> outcome;
-    QObject::connect(queue.get(),
-                     &RosterChangeQueue::changeFinished,
-                     queue.get(),
-                     std::bind(&keepOutcome, std::ref(outcome), _1, _2, _3));
-    queue->enqueue(documentId, change);
-    settle();
-    return outcome;
+    const std::optional<Session> existingSession = sessionFor(existing);
+    if (!existingSession.has_value()
+        || !ServerTestSupport::link(server, asTestDevice(newDevice.identity), existingSession.value()).has_value())
+    {
+        return false;
+    }
+
+    QList<DeviceKeys> linked = existing.records.linkedDevices();
+    linked.append(newDevice.identity.keys());
+    existing.records.setLinkedDevices(linked);
+    return true;
 }
 
-bool TestWard::pair(Device& newDevice, Device& existing)
+void TestWard::seal(Device& device)
 {
-    const ChainTestSupport::TestDevice initiator = asTestDevice(newDevice.identity);
-    const ChainTestSupport::TestDevice responder = asTestDevice(existing.identity);
-    const std::optional<Session> initiatorSession = ServerTestSupport::signIn(server, initiator);
-    const std::optional<Session> responderSession = ServerTestSupport::signIn(server, responder);
-    return initiatorSession.has_value() && responderSession.has_value()
-        && ServerTestSupport::completePairing(server,
-                                              initiator,
-                                              initiatorSession.value(),
-                                              responder,
-                                              responderSession.value());
+    std::unique_ptr<SealingQueue> queue = device.queue();
+    queue->sealEverywhere();
+    settle();
 }
 
 std::optional<ServerVersion::Fetched> TestWard::serverCopy(Device& reader)
 {
-    // A throwaway record and paths no file has, so reading the server's copy
-    // changes nothing the device keeps.
-    MemoryRecords scratch;
+    // Fetched against no trusted key, so reading the server's copy changes nothing
+    // the device keeps and takes the version as it stands.
     QObject receiver;
     std::optional<ServerVersion::Fetched> fetched;
-    ServerVersion::fetch(reader.identity,
-                         scratch,
+    ServerVersion::fetch(reader.identity.self(),
+                         {},
                          reader.connection,
                          documentId,
-                         reader.paths("server copy"),
                          &receiver,
                          std::bind(&keepFetched, std::ref(fetched), _1));
     settle();

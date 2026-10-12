@@ -1,6 +1,6 @@
 #include "IdentityFileTest.h"
 
-#include "ChainTestSupport.h"
+#include "ServerTestSupport.h"
 #include "DocumentCrypto.h"
 #include "HexCodec.h"
 #include "IdentityFile.h"
@@ -21,7 +21,7 @@ IdentityRecord newRecord()
     IdentityRecord record;
     record.sealing = DocumentCrypto::generateKeypair();
     record.signing = DocumentCrypto::generateSigningKeypair();
-    record.person = IdentityRecord::Person{ChainTestSupport::newMember(), "Alice Adams", "Laptop"};
+    record.person = IdentityRecord::Person{ServerTestSupport::newMember(), "Alice Adams", "Laptop"};
     return record;
 }
 

@@ -10,33 +10,24 @@ private slots:
     void initTestCase();
 
     void roundTripsThroughJson();
-    void roundTripKeepsRecipientAndAdminOrder();
+    void roundTripKeepsRecipientOrder();
     void omitsOriginDocumentIdWhenAbsent();
-    void isAdminFindsOnlyListedMembers();
 
     void parseRefusesMissingOrIllFormedFields();
     void parseRefusesAWrongSizeNonce();
-    void parseRefusesAWrongSizeSignature();
-    void parseRefusesAWrongSizePayloadHash();
-    void parseRefusesAWrongSizeRecipientVerifyKey();
+    void parseRefusesAWrongSizeSealedKey();
     void parseRefusesAMalformedFingerprint();
     void parseRefusesANonObjectRecipient();
     void parseRefusesASaveCounterAboveTheCap();
     void parseRefusesAnUnknownKey();
-    void parseAcceptsAHeaderListingNoOne();
+    void parseRefusesAHeaderListingNoOne();
+    void parseRefusesARepeatedFingerprint();
     void parseRefusesAnEarlierFormatVersion();
-    void parseRefusesANonCanonicalTimestamp();
-    void parseRefusesNonCanonicalAdmins();
-    void parseRefusesWriterKeysThatAreNotTheLastWriters();
-
     void parseNeedsNewerVersionForALaterFormat();
 
-    void associatedDataDiffersWhenAnyCoveredFieldDiffers();
-    void associatedDataIgnoresPayloadHashAndSignature();
+    void associatedDataDiffersWhenAnyFieldDiffers();
     void associatedDataDiffersOnRecipientOrder();
     void associatedDataSurvivesAJsonRoundTrip();
-
-    void signedBytesDiffersWhenPayloadHashDiffers();
 
     void entryForFindsOnlyItsOwnFingerprint();
 };

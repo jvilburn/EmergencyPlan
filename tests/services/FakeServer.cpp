@@ -511,8 +511,12 @@ Result<Head> FakeServer::decideHead(const Session& session, const QString& docum
     Head head;
     head.version = document->version;
     head.published = document->published;
-    head.header = document->header;
+    head.header = document->servedHeader.value_or(document->header);
     head.members = membersOf(*document);
+    for (Member& member : head.members)
+    {
+        member.person.devices.removeIf(std::bind(&FakeServer::isHidden, this, std::placeholders::_1));
+    }
     head.history = document->history.isEmpty() ? 0 : document->history.last().index;
     if (document->lease.has_value() && document->lease.value().expires > m_now)
     {
@@ -532,6 +536,11 @@ Result<Snapshot> FakeServer::decideDownload(const Session& session, const QStrin
         return refused<Snapshot>(failure, lost);
     }
 
+    if (document->servedHeader.has_value())
+    {
+        return Result<Snapshot>::success(
+            Snapshot{document->version, document->published, document->servedHeader.value(), document->servedBlob});
+    }
     return Result<Snapshot>::success(Snapshot{document->version, document->published, document->header, document->blob});
 }
 
@@ -932,6 +941,22 @@ void FakeServer::holdLeaseAs(const QString& documentId, const Fingerprint& holde
     {
         found.value().lease = Lease{holder, m_now.addYears(1)};
     }
+}
+
+void FakeServer::serveInstead(const QString& documentId, const QJsonObject& header, const QByteArray& blob)
+{
+    // An empty header goes back to serving what is stored.
+    const auto found = m_documents.find(documentId);
+    if (found != m_documents.end())
+    {
+        found.value().servedHeader = header.isEmpty() ? std::nullopt : std::optional<QJsonObject>(header);
+        found.value().servedBlob = blob;
+    }
+}
+
+bool FakeServer::isHidden(const Device& device) const
+{
+    return m_hidden.contains(device.fingerprint.toHex());
 }
 
 void FakeServer::holdReplies(bool hold)

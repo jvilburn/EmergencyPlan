@@ -2,11 +2,10 @@
 
 #include "DocumentCrypto.h"
 #include "DocumentHeader.h"
-#include "Pairing.h"
-#include "ServerContract.h"
+#include "SealingSet.h"
 
 #include <QCryptographicHash>
-#include <QDateTime>
+#include <QJsonArray>
 #include <QtTest>
 
 #include <sodium.h>
@@ -25,43 +24,25 @@ QByteArray run(int first, int count)
     return bytes;
 }
 
-PublicKey writerPublicKey()
+PublicKey vectorPublicKey()
 {
     return PublicKey{run(0x01, PublicKey::Size)};
 }
 
-VerifyKey writerVerifyKey()
+VerifyKey vectorVerifyKey()
 {
     return VerifyKey{run(0x21, VerifyKey::Size)};
 }
 
-MemberId writerMember()
-{
-    return MemberId{run(0x10, MemberId::Size)};
-}
-
-/// One recipient, who wrote it and is its admin, with every other field fixed.
+/// One recipient, with every field fixed.
 DocumentHeader vectorHeader()
 {
-    RecipientEntry entry;
-    entry.member = writerMember();
-    entry.publicKey = writerPublicKey();
-    entry.verifyKey = writerVerifyKey();
-    entry.fingerprint = DocumentCrypto::fingerprintOf(entry.publicKey, entry.verifyKey);
-    entry.sealedKey = QByteArray(DocumentCrypto::SealedDataKeySize, '\xaa');
-
     DocumentHeader header;
     header.documentId = "00112233445566778899aabbccddeeff";
-    header.keyGeneration = 3;
     header.saveCounter = 42;
-    header.lastWriter = entry.fingerprint;
-    header.writerPublicKey = entry.publicKey;
-    header.writerVerifyKey = entry.verifyKey;
-    header.lastWriteTime = QDateTime::fromString("2026-09-27T12:34:56.789Z", Qt::ISODateWithMs);
     header.nonce = QByteArray(DocumentCrypto::NonceSize, '\x55');
-    header.recipients = {entry};
-    header.admins = {entry.member};
-    header.payloadHash = QByteArray(DocumentCrypto::PayloadHashSize, '\x77');
+    header.recipients = {RecipientEntry{DocumentCrypto::fingerprintOf(vectorPublicKey(), vectorVerifyKey()),
+                                        QByteArray(DocumentCrypto::SealedDataKeySize, '\xaa')}};
     return header;
 }
 
@@ -70,54 +51,28 @@ QByteArray sha256Hex(const QByteArray& bytes)
     return QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex();
 }
 
+/// The former-key hash as the sealing set writes it: wp-former-key BLAKE2b, 32 bytes.
+QString formerKeyHashOf(const DataKey& key)
+{
+    SealingSet set = SealingSet::of(DeviceKeys{DocumentCrypto::generateKeypair().publicKey,
+                                               DocumentCrypto::generateSigningKeypair().verifyKey});
+    set.addFormerKey(key);
+    return set.toJson()["formerKeys"].toArray().first().toString();
+}
+
+// Unchanged since format 2.
 const QByteArray FingerprintVector = "a8be42168ae4429c3b61d6a9107588e3";
-const QByteArray PayloadHashVector =
-    "d669c108b6b3d6d3a10956ce1d7ac55cde6223ab30012d8151de02810e129397";
-const QByteArray AssociatedDataSha256Vector =
-    "2864a3e80c25a1e0a1511367695384b4964ecf1b003cc78fcbd27d7b942e0fea";
-const QByteArray SignedBytesSha256Vector =
-    "7ecfad2bde50cc9d3a5e4b9efce2dfaa54673ddfd87581a9b4b0a94b24442e31";
-const QByteArray PairingCommitVector =
-    "9bff7eea1d0bb18e4a9dd8a8c7a5afb8432635beb852c6f3167f93e402aebe19";
-const QString PairingNumberVector = "764 409";
+const QByteArray PayloadHashVector = "d669c108b6b3d6d3a10956ce1d7ac55cde6223ab30012d8151de02810e129397";
+
+// Computed independently from the format description with Python's hashlib (BLAKE2b
+// with the personalisation, and each field length-prefixed), and matched by this
+// build: what a reimplementation must reproduce.
+const int AssociatedDataLength = 256;
+const QByteArray AssociatedDataSha256Vector = "9601ce8cb409071f5f3040a9e6cdaca97d267ba568d340781dd9b002e2892b2b";
+const QString FormerKeyHashVector = "36d056d33e83c4b4103e2fc65f56b4b227db717d529a430782316f9c1a8aa255";
 
 const QByteArray VectorCiphertext = "ciphertext bytes for the vector";
-
-/// Request messages in the session "vector-session", each the route, the session
-/// token, the document id, and the wp-request BLAKE2b of the canonical body, every
-/// field length-prefixed.
-///
-/// Taking the lease on the vector document: an empty body.
-const QByteArray TakeLeaseMessageVector =
-    "0000001a504f5354202f646f63756d656e74732f7b69647d2f6c65617365"
-    "0000000e766563746f722d73657373696f6e"
-    "000000203030313132323333343435353636373738383939616162626363646465656666"
-    "0000002077436f4937074fe7317986d86ed2f6364d05492034d327545b1899b2bb124e72";
-
-/// Uploading the vector header, signed 0x99 x 64, on base version 7.
-const QByteArray UploadMessageVector =
-    "00000013505554202f646f63756d656e74732f7b69647d0000000e766563746f"
-    "722d73657373696f6e0000002030303131323233333434353536363737383839"
-    "39616162626363646465656666000000206c68f93bd82347d17554536ba92f7f"
-    "5de74e0e8794c24b3b1accdd4e589f7753";
-
-/// Responding to pairing 48219301 with the responder keys 0x41... and 0x61...
-const QByteArray RespondMessageVector =
-    "0000001e505554202f70616972696e67732f7b636f64657d2f726573706f6e64"
-    "65720000000e766563746f722d73657373696f6e0000000000000020e3c52db2"
-    "384fd2dc0ad0bf37766cc56f9a453ed4fef3b35271ee7aa67a8ff433";
-
-/// Whether libsodium itself accepts the signature over the request tag, a zero
-/// byte, and these message bytes spelled out here.
-bool signedOver(const QByteArray& signature, const QByteArray& message, const VerifyKey& key)
-{
-    const QByteArray tagged = QByteArray("request") + QByteArray(1, '\0') + message;
-    return crypto_sign_verify_detached(reinterpret_cast<const unsigned char*>(signature.constData()),
-                                       reinterpret_cast<const unsigned char*>(tagged.constData()),
-                                       quint64(tagged.size()),
-                                       reinterpret_cast<const unsigned char*>(key.bytes.constData()))
-        == 0;
-}
+const DataKey VectorDataKey{run(0x41, DataKey::Size)};
 
 } // namespace
 
@@ -128,7 +83,7 @@ void FormatVectorsTest::initTestCase()
 
 void FormatVectorsTest::fingerprintMatchesTheVector()
 {
-    const Fingerprint fingerprint = DocumentCrypto::fingerprintOf(writerPublicKey(), writerVerifyKey());
+    const Fingerprint fingerprint = DocumentCrypto::fingerprintOf(vectorPublicKey(), vectorVerifyKey());
     QCOMPARE(fingerprint.bytes.toHex(), FingerprintVector);
 }
 
@@ -137,113 +92,43 @@ void FormatVectorsTest::payloadHashMatchesTheVector()
     QCOMPARE(DocumentCrypto::payloadHash(VectorCiphertext).toHex(), PayloadHashVector);
 }
 
-void FormatVectorsTest::associatedDataAndSignedBytesMatchTheVectors()
+void FormatVectorsTest::associatedDataMatchesTheVector()
 {
-    const DocumentHeader header = vectorHeader();
-
-    const QByteArray associated = header.associatedData();
-    QCOMPARE(associated.size(), qsizetype(674));
+    const QByteArray associated = vectorHeader().associatedData();
+    QCOMPARE(associated.size(), qsizetype(AssociatedDataLength));
     QCOMPARE(sha256Hex(associated), AssociatedDataSha256Vector);
-    QCOMPARE(sha256Hex(header.signedBytes()), SignedBytesSha256Vector);
 
-    // The first field as it appears: a four-byte big-endian length, then "2".
-    QCOMPARE(associated.left(5).toHex(), QByteArray("0000000132"));
+    // The first field as it appears: a four-byte big-endian length, then "3".
+    QCOMPARE(associated.left(5).toHex(), QByteArray("0000000133"));
 }
 
-void FormatVectorsTest::pairingCommitAndNumberMatchTheVectors()
+void FormatVectorsTest::formerKeyHashMatchesTheVector()
 {
-    const DeviceKeys initiator{writerPublicKey(), writerVerifyKey()};
-    const DeviceKeys responder{PublicKey{run(0x41, PublicKey::Size)}, VerifyKey{run(0x61, VerifyKey::Size)}};
-    const QByteArray nonce(32, '\x33');
-
-    QCOMPARE(Pairing::commit(initiator, nonce).toHex(), PairingCommitVector);
-    QCOMPARE(Pairing::comparisonNumber(initiator, responder, nonce), PairingNumberVector);
+    QCOMPARE(formerKeyHashOf(VectorDataKey), FormerKeyHashVector);
+    QCOMPARE(FormerKeyHashVector,
+             QString::fromLatin1(DocumentCrypto::hash(HashDomain::FormerKey, VectorDataKey.bytes, 32).toHex()));
 }
 
-void FormatVectorsTest::signaturesAreMadeOverTheTagThenAZeroByte()
+void FormatVectorsTest::aChallengeIsSignedAsItStands()
 {
-    const SigningKeypair keys = DocumentCrypto::generateSigningKeypair();
-    const QByteArray message = "a message";
+    // Plain Ed25519 over the challenge bytes, nothing prepended: what the server checks.
+    const SigningKeypair keys = DocumentCrypto::signingKeypairFromSeed(run(0x61, DocumentCrypto::SigningSeedSize));
+    const QByteArray challenge = run(0x81, 32);
+    const QByteArray signature = DocumentCrypto::signChallenge(challenge, keys.signingKey);
 
-    const QList<QPair<SignatureTag, QByteArray>> tags = {
-        {SignatureTag::Auth, "auth"},
-        {SignatureTag::Request, "request"},
-        {SignatureTag::Header, "header"},
-        {SignatureTag::Pairing, "pairing"},
-    };
-
-    for (const QPair<SignatureTag, QByteArray>& tag : tags)
-    {
-        const QByteArray signature = DocumentCrypto::sign(tag.first, message, keys.signingKey);
-        QCOMPARE(signature.size(), qsizetype(DocumentCrypto::SignatureSize));
-
-        // Checked with libsodium directly, over bytes spelled out here, so the tag
-        // text and the separator are pinned rather than recomputed.
-        const QByteArray tagged = tag.second + QByteArray(1, '\0') + message;
-        QCOMPARE(crypto_sign_verify_detached(
-                     reinterpret_cast<const unsigned char*>(signature.constData()),
-                     reinterpret_cast<const unsigned char*>(tagged.constData()),
-                     quint64(tagged.size()),
-                     reinterpret_cast<const unsigned char*>(keys.verifyKey.bytes.constData())),
-                 0);
-    }
-}
-
-void FormatVectorsTest::requestSignaturesCoverTheRouteDocumentAndBodyHash()
-{
-    const SigningKeypair keys = DocumentCrypto::generateSigningKeypair();
-    const ServerContract::Session session{"vector-session"};
-    const QString documentId = "00112233445566778899aabbccddeeff";
-
-    const QByteArray takeLease = ServerContract::signRequest(ServerContract::Endpoint::TakeLease,
-                                                             session,
-                                                             documentId,
-                                                             ServerContract::emptyBody(),
-                                                             keys.signingKey);
-    QVERIFY(signedOver(takeLease, QByteArray::fromHex(TakeLeaseMessageVector), keys.verifyKey));
-
-    ServerContract::Upload upload;
-    upload.header = vectorHeader();
-    upload.header.writerSignature = QByteArray(DocumentCrypto::SignatureSize, '\x99');
-    const QByteArray uploadSignature =
-        ServerContract::signRequest(ServerContract::Endpoint::Upload,
-                                    session,
-                                    documentId,
-                                    ServerContract::uploadBody(7, upload),
-                                    keys.signingKey);
-    QVERIFY(signedOver(uploadSignature, QByteArray::fromHex(UploadMessageVector), keys.verifyKey));
-
-    const DeviceKeys responder{PublicKey{run(0x41, PublicKey::Size)}, VerifyKey{run(0x61, VerifyKey::Size)}};
-    const QByteArray respondSignature =
-        ServerContract::signRequest(ServerContract::Endpoint::RespondToPairing,
-                                    session,
-                                    QString(),
-                                    ServerContract::respondToPairingBody("48219301", responder),
-                                    keys.signingKey);
-    QVERIFY(signedOver(respondSignature, QByteArray::fromHex(RespondMessageVector), keys.verifyKey));
-
-    // The oracle can fail: the same bytes under another route, and a body one
-    // version off, do not verify.
-    QByteArray otherRoute = QByteArray::fromHex(TakeLeaseMessageVector);
-    otherRoute.replace(4, 4, "PUT ");
-    QVERIFY(!signedOver(takeLease, otherRoute, keys.verifyKey));
-
-    const QByteArray otherBase =
-        ServerContract::signRequest(ServerContract::Endpoint::Upload,
-                                    session,
-                                    documentId,
-                                    ServerContract::uploadBody(8, upload),
-                                    keys.signingKey);
-    QVERIFY(!signedOver(otherBase, QByteArray::fromHex(UploadMessageVector), keys.verifyKey));
+    QCOMPARE(crypto_sign_verify_detached(reinterpret_cast<const unsigned char*>(signature.constData()),
+                                         reinterpret_cast<const unsigned char*>(challenge.constData()),
+                                         quint64(challenge.size()),
+                                         reinterpret_cast<const unsigned char*>(keys.verifyKey.bytes.constData())),
+             0);
 }
 
 void FormatVectorsTest::eachOracleRejectsACorruptedByte()
 {
-    // Each comparison above must be able to fail: flip one byte of each input and
+    // Each comparison above must be able to fail: change one byte of each input and
     // the result moves off its vector.
     const PublicKey otherKey{run(0x02, PublicKey::Size)};
-    QVERIFY(DocumentCrypto::fingerprintOf(otherKey, writerVerifyKey()).bytes.toHex()
-            != FingerprintVector);
+    QVERIFY(DocumentCrypto::fingerprintOf(otherKey, vectorVerifyKey()).bytes.toHex() != FingerprintVector);
 
     QByteArray otherCiphertext = VectorCiphertext;
     otherCiphertext[0] = char(otherCiphertext.at(0) ^ 0x01);
@@ -253,22 +138,13 @@ void FormatVectorsTest::eachOracleRejectsACorruptedByte()
     otherHeader.saveCounter = 43;
     QVERIFY(sha256Hex(otherHeader.associatedData()) != AssociatedDataSha256Vector);
 
-    otherHeader = vectorHeader();
-    otherHeader.payloadHash[0] = '\x78';
-    QVERIFY(sha256Hex(otherHeader.signedBytes()) != SignedBytesSha256Vector);
-    QCOMPARE(sha256Hex(otherHeader.associatedData()), AssociatedDataSha256Vector);
+    DataKey otherKeyValue = VectorDataKey;
+    otherKeyValue.bytes[0] = char(otherKeyValue.bytes.at(0) ^ 0x01);
+    QVERIFY(formerKeyHashOf(otherKeyValue) != FormerKeyHashVector);
 
-    const DeviceKeys initiator{writerPublicKey(), writerVerifyKey()};
-    QByteArray otherNonce(32, '\x33');
-    otherNonce[31] = '\x34';
-    QVERIFY(Pairing::commit(initiator, otherNonce).toHex() != PairingCommitVector);
-
-    const SigningKeypair keys = DocumentCrypto::generateSigningKeypair();
-    const QByteArray signature = DocumentCrypto::sign(SignatureTag::Header, "a message", keys.signingKey);
-    const QByteArray untagged = "a message";
-    QVERIFY(crypto_sign_verify_detached(reinterpret_cast<const unsigned char*>(signature.constData()),
-                                        reinterpret_cast<const unsigned char*>(untagged.constData()),
-                                        quint64(untagged.size()),
-                                        reinterpret_cast<const unsigned char*>(keys.verifyKey.bytes.constData()))
-            != 0);
+    const SigningKeypair keys = DocumentCrypto::signingKeypairFromSeed(run(0x61, DocumentCrypto::SigningSeedSize));
+    QByteArray challenge = run(0x81, 32);
+    const QByteArray signature = DocumentCrypto::signChallenge(challenge, keys.signingKey);
+    challenge[0] = char(challenge.at(0) ^ 0x01);
+    QVERIFY(!DocumentCrypto::challengeVerifies(challenge, signature, keys.verifyKey));
 }

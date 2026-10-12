@@ -11,17 +11,13 @@ enable_testing()
 # One runner: TestMain.cpp holds the only main() and runs every suite in turn.
 set(TEST_SOURCES
     TestMain.cpp
-    models/AccessRosterTest.cpp
     models/DocumentParseTest.cpp
+    models/SealingSetTest.cpp
     models/ModelParsersTest.cpp
     models/ModelSamples.cpp
-    services/AccessControlTest.cpp
-    services/AccessEventsTest.cpp
     services/AppSettingsTest.cpp
-    services/ChainTestSupport.cpp
     services/CryptoLinkTest.cpp
     services/CryptoTypesTest.cpp
-    services/DocumentChainTest.cpp
     services/DocumentCryptoTest.cpp
     services/DocumentFileTest.cpp
     services/DocumentHeaderTest.cpp
@@ -35,10 +31,9 @@ set(TEST_SOURCES
     services/FormatVectorsTest.cpp
     services/IdentityFileTest.cpp
     services/IdentityServiceTest.cpp
-    services/PairingTest.cpp
     services/ReconcileTest.cpp
     services/ResponseMergeTest.cpp
-    services/RosterChangeQueueTest.cpp
+    services/SealingQueueTest.cpp
     services/ServerConformanceTest.cpp
     services/ServerConnectionTest.cpp
     services/ServerTestSupport.cpp

@@ -31,7 +31,7 @@ QJsonObject task();             ///< assigned to p1, notified, resolved
 QJsonObject familyRecord();
 QJsonObject emergencyResponse();
 
-/// A whole payload using every sample above, with a one-person roster.
+/// A whole payload using every sample above, sealed to one device.
 QJsonObject document();
 
 } // namespace ModelSamples

@@ -27,8 +27,9 @@
 /// so.
 ///
 /// Beyond ServerApi it offers controls the real server must never have - going
-/// offline, holding or losing replies, forcing a conflict, and holding the lease as
-/// someone else - so the client's negative tests can make the server misbehave.
+/// offline, holding or losing replies, forcing a conflict, holding the lease as
+/// someone else, serving a version of its own making, and leaving a device out of
+/// what it says - so the client's negative tests can make the server misbehave.
 class FakeServer : public ServerContract::ServerApi
 {
 public:
@@ -157,6 +158,14 @@ public:
     /// Another device holds the lease until the test says otherwise.
     void holdLeaseAs(const QString& documentId, const Fingerprint& holder);
 
+    /// Every head and download of this document serves this header and blob in
+    /// place of the stored ones, as a hostile or broken server would. Uploads still
+    /// build on the stored version. An empty header serves the stored one again.
+    void serveInstead(const QString& documentId, const QJsonObject& header, const QByteArray& blob);
+
+    /// Heads list every member without this device, while it keeps its access.
+    void hideFromHeads(const Fingerprint& device) { m_hidden.insert(device.toHex()); }
+
     const QDateTime& now() const { return m_now; }
 
 private:
@@ -178,6 +187,8 @@ private:
         QHash<QString, ServerContract::LostAccess> lost;        ///< by member id hex
         std::optional<ServerContract::Lease> lease;
         bool forceConflict = false;
+        std::optional<QJsonObject> servedHeader;
+        QByteArray servedBlob;
     };
 
     struct StoredLink
@@ -297,6 +308,7 @@ private:
                                       std::optional<ServerContract::LostAccess>& lost);
 
     QSet<QString> allowListOf(const StoredDocument& document) const;
+    bool isHidden(const ServerContract::Device& device) const;
     QList<ServerContract::Member> membersOf(const StoredDocument& document) const;
     bool keepsAnAdmin(const StoredDocument& document) const;
 
@@ -332,6 +344,7 @@ private:
     QHash<QByteArray, QString> m_unlinkedFrom;                  ///< verify key bytes to member id hex
     QHash<QString, StoredDocument> m_documents;
     QHash<QString, StoredLink> m_links;
+    QSet<QString> m_hidden;     ///< fingerprint hex
     QHash<QString, SessionRecord> m_sessions;
     QSet<QByteArray> m_challenges;
     QHash<QByteArray, QList<QDateTime>> m_registrations;

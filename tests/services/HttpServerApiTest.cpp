@@ -1,9 +1,9 @@
 #include "HttpServerApiTest.h"
 
 #include "AppSettings.h"
-#include "ChainTestSupport.h"
 #include "DocumentCrypto.h"
 #include "DocumentFile.h"
+#include "DocumentLibrary.h"
 #include "HttpServerApi.h"
 #include "HttpWire.h"
 #include "SessionTestSupport.h"
@@ -40,17 +40,65 @@ QString base64(const QByteArray& bytes)
 Upload firstUpload()
 {
     const DeviceIdentity alice = SessionTestSupport::newIdentity("Alice", "Laptop");
-    AccessRoster roster;
-    roster.addPerson(alice.asNewPerson());
     Document document = Document::empty();
-    document.setAccessRoster(roster);
+    document.setSealingSet(SealingSet::of(alice.keys()));
 
     DocumentHeader first;
-    first.documentId = ChainTestSupport::newDocumentId();
-    first.saveCounter = 0;
-    const DocumentFile::Sealed sealed =
-        DocumentFile::seal(document, first, DocumentCrypto::generateDataKey(), alice).value();
+    first.documentId = DocumentLibrary::newDocumentId();
+    const DocumentFile::Sealed sealed = DocumentFile::seal(document, first, DocumentCrypto::generateDataKey()).value();
     return Upload{sealed.header, sealed.ciphertext};
+}
+
+const char* const When = "2026-10-11T09:00:00.000Z";
+
+PublicKey aliceLaptopKey()
+{
+    return PublicKey{QByteArray(32, '\x0a')};
+}
+
+VerifyKey aliceLaptopVerifyKey()
+{
+    return VerifyKey{QByteArray(32, '\x0b')};
+}
+
+Fingerprint aliceLaptopFingerprint()
+{
+    return DocumentCrypto::fingerprintOf(aliceLaptopKey(), aliceLaptopVerifyKey());
+}
+
+/// A device as the wire carries it.
+QJsonObject deviceJson(const PublicKey& publicKey, const VerifyKey& verifyKey, const QString& name)
+{
+    return QJsonObject{{"fingerprint", DocumentCrypto::fingerprintOf(publicKey, verifyKey).toHex()},
+                       {"publicKey", base64(publicKey.bytes)},
+                       {"verifyKey", base64(verifyKey.bytes)},
+                       {"name", name},
+                       {"linkedAt", When}};
+}
+
+QJsonObject aliceLaptop()
+{
+    return deviceJson(aliceLaptopKey(), aliceLaptopVerifyKey(), "Laptop");
+}
+
+QJsonObject otherDevice()
+{
+    return deviceJson(PublicKey{QByteArray(32, '\x0c')}, VerifyKey{QByteArray(32, '\x0d')}, "Phone");
+}
+
+QJsonObject personJson(const QString& member, const QString& name, const QList<QJsonObject>& devices)
+{
+    QJsonArray array;
+    for (const QJsonObject& device : devices)
+    {
+        array.append(device);
+    }
+    return QJsonObject{{"member", member}, {"displayName", name}, {"devices", array}};
+}
+
+void markAnswered(bool& answered)
+{
+    answered = true;
 }
 
 QByteArray httpResponse(int status, const QByteArray& body)
@@ -196,35 +244,18 @@ void HttpServerApiTest::requestsAreWrittenInTheWireFormat()
     QCOMPARE(HttpWire::uploadRequest(7, upload),
              (QJsonObject{{"baseVersion", 7}, {"header", upload.header.toJson()}, {"blob", base64(upload.blob)}}));
 
-    DeviceKeys keys;
-    keys.publicKey.bytes = QByteArray(32, '\x03');
-    keys.verifyKey.bytes = QByteArray(32, '\x04');
-    AccessRequest request;
-    request.member = MemberId::fromHex("00112233445566778899aabbccddeeff");
-    request.displayName = "Bob";
-    request.device = RosterDevice::create("Phone", keys.publicKey, keys.verifyKey);
-    const QJsonObject withoutCode{{"member", "00112233445566778899aabbccddeeff"},
-                                  {"displayName", "Bob"},
-                                  {"deviceName", "Phone"},
-                                  {"publicKey", base64(keys.publicKey.bytes)},
-                                  {"verifyKey", base64(keys.verifyKey.bytes)}};
-    QCOMPARE(HttpWire::accessRequestRequest(request), withoutCode);
-    request.pairingCode = "K7Q2M9";
-    QJsonObject withCode = withoutCode;
-    withCode["pairingCode"] = "K7Q2M9";
-    QCOMPARE(HttpWire::accessRequestRequest(request), withCode);
-
-    const QByteArray commitment(32, '\x05');
-    QCOMPARE(HttpWire::startPairingRequest("Phone", commitment),
-             (QJsonObject{{"deviceName", "Phone"}, {"commitment", base64(commitment)}}));
-    QCOMPARE(HttpWire::deviceKeysRequest(keys),
-             (QJsonObject{{"publicKey", base64(keys.publicKey.bytes)}, {"verifyKey", base64(keys.verifyKey.bytes)}}));
-    const QByteArray nonce(32, '\x06');
-    QCOMPARE(HttpWire::revealPairingRequest(keys, nonce),
-             (QJsonObject{{"publicKey", base64(keys.publicKey.bytes)},
-                          {"verifyKey", base64(keys.verifyKey.bytes)},
-                          {"nonce", base64(nonce)}}));
-    QCOMPARE(HttpWire::handOverRequest("signed handover"), (QJsonObject{{"handover", base64("signed handover")}}));
+    const PublicKey publicKey{QByteArray(32, '\x03')};
+    const Registration registration{MemberId::fromHex("00112233445566778899aabbccddeeff"), "Bob", "Phone", publicKey};
+    QCOMPARE(HttpWire::registerPersonRequest(registration),
+             (QJsonObject{{"member", "00112233445566778899aabbccddeeff"},
+                          {"displayName", "Bob"},
+                          {"deviceName", "Phone"},
+                          {"publicKey", base64(publicKey.bytes)}}));
+    QCOMPARE(HttpWire::startLinkRequest(publicKey, "Phone"),
+             (QJsonObject{{"publicKey", base64(publicKey.bytes)}, {"deviceName", "Phone"}}));
+    QCOMPARE(HttpWire::grantRequest(4), (QJsonObject{{"request", 4}}));
+    QCOMPARE(HttpWire::setRoleRequest(Role::Admin), (QJsonObject{{"role", "admin"}}));
+    QCOMPARE(HttpWire::setRoleRequest(Role::Member), (QJsonObject{{"role", "member"}}));
     QCOMPARE(HttpWire::advanceClockRequest(86400), (QJsonObject{{"seconds", 86400}}));
 }
 
@@ -233,205 +264,194 @@ void HttpServerApiTest::answersAreReadFromTheWireFormat()
     QCOMPARE(HttpWire::readChallenge(jsonOf(R"({"challenge": "b25lLXRpbWU="})")).value(), QByteArray("one-time"));
     QCOMPARE(HttpWire::readSession(jsonOf(R"({"token": "abc.def"})"))->token, QString("abc.def"));
     QCOMPARE(HttpWire::readVersion(jsonOf(R"({"version": 12})")).value(), qint64(12));
-
-    const std::optional<Head> free = HttpWire::readHead(jsonOf(R"({"version": 3})"));
-    QCOMPARE(free->version, qint64(3));
-    QVERIFY(!free->leaseHolder.has_value());
-    const std::optional<Head> held =
-        HttpWire::readHead(jsonOf(R"({"version": 4, "leaseHolder": "00112233445566778899aabbccddeeff"})"));
-    QCOMPARE(held->leaseHolder->toHex(), QString("00112233445566778899aabbccddeeff"));
+    QCOMPARE(HttpWire::readLinkCode(jsonOf(R"({"code": "K7Q2M9"})")).value(), QString("K7Q2M9"));
 
     const Upload upload = firstUpload();
-    QJsonObject snapshotJson{{"version", 5},
-                             {"headers", QJsonArray{upload.header.toJson()}},
-                             {"blob", base64(upload.blob)}};
-    const std::optional<Snapshot> snapshot = HttpWire::readSnapshot(snapshotJson);
-    QCOMPARE(snapshot->version, qint64(5));
-    QCOMPARE(snapshot->headers, QList<QJsonObject>{upload.header.toJson()});
+    const QJsonObject alice = personJson("00112233445566778899aabbccddeeff", "Alice", {aliceLaptop()});
+
+    // A head: who published, the header, the members and roles, the history index.
+    const std::optional<Head> head = HttpWire::readHead(QJsonObject{
+        {"version", 4},
+        {"published", QJsonObject{{"name", "Alice"}, {"device", aliceLaptopFingerprint().toHex()}, {"when", When}}},
+        {"leaseHolder", aliceLaptopFingerprint().toHex()},
+        {"header", upload.header.toJson()},
+        {"members", QJsonArray{QJsonObject{{"person", alice}, {"role", "admin"}}}},
+        {"history", 2}});
+    QVERIFY(head.has_value());
+    QCOMPARE(head->version, qint64(4));
+    QCOMPARE(head->published.name, QString("Alice"));
+    QCOMPARE(head->published.when, QDateTime::fromString(When, Qt::ISODateWithMs));
+    QCOMPARE(head->leaseHolder, std::optional<Fingerprint>(aliceLaptopFingerprint()));
+    QCOMPARE(head->header, upload.header.toJson());
+    QCOMPARE(head->history, qint64(2));
+    QCOMPARE(head->members.size(), 1);
+    QCOMPARE(head->members.first().role, Role::Admin);
+    QCOMPARE(head->members.first().person.displayName, QString("Alice"));
+    QCOMPARE(head->members.first().person.devices.first().name, QString("Laptop"));
+    QVERIFY(!head->members.first().person.devices.first().linkedBy.has_value());
+
+    const std::optional<Snapshot> snapshot = HttpWire::readSnapshot(QJsonObject{
+        {"version", 4},
+        {"published", QJsonObject{{"name", "Alice"}, {"device", aliceLaptopFingerprint().toHex()}, {"when", When}}},
+        {"header", upload.header.toJson()},
+        {"blob", base64(upload.blob)}});
+    QVERIFY(snapshot.has_value());
+    QCOMPARE(snapshot->header, upload.header.toJson());
     QCOMPARE(snapshot->blob, upload.blob);
-    QCOMPARE(HttpWire::readHeaderChain(QJsonObject{{"headers", QJsonArray{upload.header.toJson()}}})->headers,
-             QList<QJsonObject>{upload.header.toJson()});
 
-    const std::optional<Lease> lease = HttpWire::readLease(
-        jsonOf(R"({"holder": "00112233445566778899aabbccddeeff", "expires": "2026-10-07T12:00:00.000Z"})"));
-    QCOMPARE(lease->holder.toHex(), QString("00112233445566778899aabbccddeeff"));
-    QCOMPARE(lease->expires, QDateTime(QDate(2026, 10, 7), QTime(12, 0), QTimeZone::UTC));
+    const QString first = DocumentLibrary::newDocumentId();
+    const std::optional<Me> me = HttpWire::readMe(QJsonObject{{"person", alice}, {"documents", QJsonArray{first}}});
+    QVERIFY(me.has_value());
+    QCOMPARE(me->documents, QStringList{first});
+    QCOMPARE(me->person.member, MemberId::fromHex("00112233445566778899aabbccddeeff"));
 
-    const QString keyA = base64(QByteArray(32, '\x03'));
-    const QString keyB = base64(QByteArray(32, '\x04'));
+    // A link before and after approval.
+    const QJsonObject phone = aliceLaptop();
+    QJsonObject pending{{"deviceName", "Phone"},
+                        {"publicKey", phone["publicKey"]},
+                        {"verifyKey", phone["verifyKey"]},
+                        {"expires", When}};
+    QVERIFY(!HttpWire::readLinkState(pending)->approvedAs.has_value());
+    pending["approvedAs"] = alice;
+    QCOMPARE(HttpWire::readLinkState(pending)->approvedAs->displayName, QString("Alice"));
+
+    const std::optional<QList<HistoryEntry>> history = HttpWire::readHistory(QJsonObject{{"entries", QJsonArray{
+        QJsonObject{{"index", 1}, {"kind", "added"}, {"actor", "Alice"}, {"subject", "Bob"}, {"when", When}},
+        QJsonObject{{"index", 2}, {"kind", "madeMember"}, {"actor", "Bob"}, {"subject", "Bob"}, {"when", When}}}}});
+    QVERIFY(history.has_value());
+    QCOMPARE(history->size(), 2);
+    QCOMPARE(history->at(0).kind, HistoryEntry::Kind::Added);
+    QCOMPARE(history->at(1).kind, HistoryEntry::Kind::MadeMember);
+    QCOMPARE(history->at(1).index, qint64(2));
+
     const std::optional<QList<AccessRequest>> requests = HttpWire::readAccessRequests(QJsonObject{
-        {"requests",
-         QJsonArray{QJsonObject{{"member", "00112233445566778899aabbccddeeff"},
-                                {"displayName", "Bob"},
-                                {"deviceName", "Phone"},
-                                {"publicKey", keyA},
-                                {"verifyKey", keyB},
-                                {"pairingCode", "K7Q2M9"}}}}});
-    QCOMPARE(requests->size(), qsizetype(1));
-    QCOMPARE(requests->at(0).member.toHex(), QString("00112233445566778899aabbccddeeff"));
-    QCOMPARE(requests->at(0).displayName, QString("Bob"));
-    QCOMPARE(requests->at(0).device.deviceName(), QString("Phone"));
-    QCOMPARE(requests->at(0).device.publicKey().bytes, QByteArray(32, '\x03'));
-    QCOMPARE(requests->at(0).device.verifyKey().bytes, QByteArray(32, '\x04'));
-    QCOMPARE(requests->at(0).pairingCode, QString("K7Q2M9"));
+        {"requests", QJsonArray{QJsonObject{{"index", 3}, {"person", alice}, {"when", When}}}}});
+    QVERIFY(requests.has_value());
+    QCOMPARE(requests->first().index, qint64(3));
+    QCOMPARE(requests->first().person.displayName, QString("Alice"));
     QVERIFY(HttpWire::readAccessRequests(jsonOf(R"({"requests": []})"))->isEmpty());
 
     QCOMPARE(HttpWire::readRequestStatus(jsonOf(R"({"status": "pending"})")).value(), RequestStatus::Pending);
     QCOMPARE(HttpWire::readRequestStatus(jsonOf(R"({"status": "granted"})")).value(), RequestStatus::Granted);
-    QCOMPARE(HttpWire::readRequestStatus(jsonOf(R"({"status": "withdrawn"})")).value(), RequestStatus::Withdrawn);
+    QCOMPARE(HttpWire::readRequestStatus(jsonOf(R"({"status": "declined"})")).value(), RequestStatus::Declined);
 
-    const QString first = ChainTestSupport::newDocumentId();
-    const QString second = ChainTestSupport::newDocumentId();
-    QCOMPARE(HttpWire::readDocumentIds(QJsonObject{{"documents", QJsonArray{first, second}}}).value(),
-             (QStringList{first, second}));
-    QCOMPARE(HttpWire::readPairingCode(jsonOf(R"({"code": "K7Q2M9"})")).value(), QString("K7Q2M9"));
-
-    // A pairing as first posted, and once every step is written.
-    const std::optional<PairingState> started = HttpWire::readPairingState(QJsonObject{
-        {"code", "K7Q2M9"},
-        {"initiatorDeviceName", "Phone"},
-        {"commitment", base64(QByteArray(32, '\x05'))},
-        {"expires", "2026-10-07T12:10:00.000Z"}});
-    QCOMPARE(started->code, QString("K7Q2M9"));
-    QCOMPARE(started->initiatorDeviceName, QString("Phone"));
-    QCOMPARE(started->commitment, QByteArray(32, '\x05'));
-    QVERIFY(!started->responder.has_value());
-    QVERIFY(!started->initiator.has_value());
-    QVERIFY(started->nonce.isEmpty());
-    QVERIFY(started->handover.isEmpty());
-
-    const std::optional<PairingState> finished = HttpWire::readPairingState(QJsonObject{
-        {"code", "K7Q2M9"},
-        {"initiatorDeviceName", "Phone"},
-        {"commitment", base64(QByteArray(32, '\x05'))},
-        {"responder", QJsonObject{{"publicKey", keyA}, {"verifyKey", keyB}}},
-        {"initiator", QJsonObject{{"publicKey", keyB}, {"verifyKey", keyA}}},
-        {"nonce", base64(QByteArray(32, '\x06'))},
-        {"handover", base64("signed handover")},
-        {"expires", "2026-10-07T12:10:00.000Z"}});
-    QCOMPARE(finished->responder->publicKey.bytes, QByteArray(32, '\x03'));
-    QCOMPARE(finished->initiator->publicKey.bytes, QByteArray(32, '\x04'));
-    QCOMPARE(finished->nonce, QByteArray(32, '\x06'));
-    QCOMPARE(finished->handover, QByteArray("signed handover"));
-    QCOMPARE(finished->expires, QDateTime(QDate(2026, 10, 7), QTime(12, 10), QTimeZone::UTC));
-
-    // An answer may carry fields a later server adds.
-    QCOMPARE(HttpWire::readVersion(jsonOf(R"({"version": 2, "keyGeneration": 1})")).value(), qint64(2));
+    const std::optional<Lease> lease = HttpWire::readLease(
+        QJsonObject{{"holder", aliceLaptopFingerprint().toHex()}, {"expires", When}});
+    QCOMPARE(lease->holder, aliceLaptopFingerprint());
 }
 
 void HttpServerApiTest::illFormedAnswersAreRefused_data()
 {
     QTest::addColumn<QString>("reader");
-    QTest::addColumn<QByteArray>("json");
+    QTest::addColumn<QJsonObject>("answer");
 
-    QTest::newRow("challenge not base64") << "challenge" << QByteArray(R"({"challenge": "not base64!"})");
-    QTest::newRow("empty challenge") << "challenge" << QByteArray(R"({"challenge": ""})");
-    QTest::newRow("empty token") << "session" << QByteArray(R"({"token": ""})");
-    QTest::newRow("version zero") << "version" << QByteArray(R"({"version": 0})");
-    QTest::newRow("version as text") << "version" << QByteArray(R"({"version": "3"})");
-    QTest::newRow("lease holder too short") << "head" << QByteArray(R"({"version": 3, "leaseHolder": "0011"})");
-    QTest::newRow("lease holder in capitals")
-        << "head" << QByteArray(R"({"version": 3, "leaseHolder": "00112233445566778899AABBCCDDEEFF"})");
-    QTest::newRow("no headers") << "snapshot" << QByteArray(R"({"version": 3, "headers": [], "blob": ""})");
-    QTest::newRow("no blob") << "snapshot" << QByteArray(R"({"version": 3, "headers": [{}]})");
-    QTest::newRow("lease with no expiry") << "lease" << QByteArray(R"({"holder": "00112233445566778899aabbccddeeff"})");
-    QTest::newRow("request with a bad member")
+    const QJsonObject alice = personJson("00112233445566778899aabbccddeeff", "Alice", {aliceLaptop()});
+    const QJsonObject published{{"name", "Alice"}, {"device", aliceLaptopFingerprint().toHex()}, {"when", When}};
+    const QJsonObject header = firstUpload().header.toJson();
+    const QJsonObject head{{"version", 4},
+                           {"published", published},
+                           {"header", header},
+                           {"members", QJsonArray{QJsonObject{{"person", alice}, {"role", "admin"}}}},
+                           {"history", 0}};
+    QTest::newRow("a good head") << "good head" << head;
+
+    QJsonObject noVersion = head;
+    noVersion.remove("version");
+    QTest::newRow("head with no version") << "head" << noVersion;
+
+    QJsonObject badRole = head;
+    badRole["members"] = QJsonArray{QJsonObject{{"person", alice}, {"role", "owner"}}};
+    QTest::newRow("head with an unknown role") << "head" << badRole;
+
+    // A device whose fingerprint is not its keys' names one device and seals to another.
+    QJsonObject wrongDevice = aliceLaptop();
+    wrongDevice["fingerprint"] = QString(32, QLatin1Char('0'));
+    QJsonObject wrongFingerprint = head;
+    wrongFingerprint["members"] = QJsonArray{QJsonObject{
+        {"person", personJson("00112233445566778899aabbccddeeff", "Alice", {wrongDevice})}, {"role", "admin"}}};
+    QTest::newRow("head with a device not its keys") << "head" << wrongFingerprint;
+
+    QJsonObject noDevices = head;
+    noDevices["members"] = QJsonArray{
+        QJsonObject{{"person", personJson("00112233445566778899aabbccddeeff", "Alice", {})}, {"role", "admin"}}};
+    QTest::newRow("head with a person with no devices") << "head" << noDevices;
+
+    QJsonObject negativeHistory = head;
+    negativeHistory["history"] = -1;
+    QTest::newRow("head with negative history") << "head" << negativeHistory;
+
+    QJsonObject noPublished = head;
+    noPublished.remove("published");
+    QTest::newRow("head with nobody published") << "head" << noPublished;
+
+    QTest::newRow("snapshot with no blob")
+        << "snapshot" << QJsonObject{{"version", 3}, {"published", published}, {"header", header}};
+
+    QTest::newRow("me with a document that is not an id")
+        << "me" << QJsonObject{{"person", alice}, {"documents", QJsonArray{"../../etc"}}};
+
+    QTest::newRow("history with an unknown kind")
+        << "history"
+        << QJsonObject{{"entries", QJsonArray{QJsonObject{
+               {"index", 1}, {"kind", "promoted"}, {"actor", "A"}, {"subject", "B"}, {"when", When}}}}};
+
+    QTest::newRow("a request listing two devices")
         << "requests"
-        << QByteArray(R"({"requests": [{"member": "zz", "displayName": "Bob", "deviceName": "Phone",)"
-                      R"( "publicKey": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM=",)"
-                      R"( "verifyKey": "BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ="}]})");
-    QTest::newRow("request with a short key")
-        << "requests"
-        << QByteArray(R"({"requests": [{"member": "00112233445566778899aabbccddeeff", "displayName": "Bob",)"
-                      R"( "deviceName": "Phone", "publicKey": "AwM=",)"
-                      R"( "verifyKey": "BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ="}]})");
-    QTest::newRow("unknown status") << "status" << QByteArray(R"({"status": "maybe"})");
-    QTest::newRow("empty document id") << "documents" << QByteArray(R"({"documents": [""]})");
-    QTest::newRow("document id that is a path") << "documents" << QByteArray(R"({"documents": ["../../x"]})");
-    QTest::newRow("document id too short") << "documents" << QByteArray(R"({"documents": ["a1"]})");
-    QTest::newRow("document id in capitals")
-        << "documents" << QByteArray(R"({"documents": ["0123456789ABCDEF0123456789ABCDEF"]})");
-    QTest::newRow("pairing with no expiry")
-        << "pairing" << QByteArray(R"({"code": "K7Q2M9", "initiatorDeviceName": "Phone", "commitment": "BQU="})");
-    QTest::newRow("pairing expiry without milliseconds")
-        << "pairing"
-        << QByteArray(R"({"code": "K7Q2M9", "initiatorDeviceName": "Phone", "commitment": "BQU=",)"
-                      R"( "expires": "2026-10-07T12:10:00Z"})");
-    QTest::newRow("pairing responder with a short key")
-        << "pairing"
-        << QByteArray(R"({"code": "K7Q2M9", "initiatorDeviceName": "Phone", "commitment": "BQU=",)"
-                      R"( "responder": {"publicKey": "AwM=",)"
-                      R"( "verifyKey": "BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ="},)"
-                      R"( "expires": "2026-10-07T12:10:00.000Z"})");
-    QTest::newRow("pairing initiator not an object")
-        << "pairing"
-        << QByteArray(R"({"code": "K7Q2M9", "initiatorDeviceName": "Phone", "commitment": "BQU=",)"
-                      R"( "initiator": "keys", "expires": "2026-10-07T12:10:00.000Z"})");
-    QTest::newRow("pairing nonce not base64")
-        << "pairing"
-        << QByteArray(R"({"code": "K7Q2M9", "initiatorDeviceName": "Phone", "commitment": "BQU=",)"
-                      R"( "nonce": "not base64!", "expires": "2026-10-07T12:10:00.000Z"})");
-    QTest::newRow("holder in capitals")
-        << "lease"
-        << QByteArray(R"({"holder": "00112233445566778899AABBCCDDEEFF", "expires": "2026-10-07T12:00:00.000Z"})");
-    QTest::newRow("no headers in a chain") << "chain" << QByteArray(R"({"headers": []})");
-    QTest::newRow("no pairing code") << "code" << QByteArray(R"({})");
-    QTest::newRow("empty pairing code") << "code" << QByteArray(R"({"code": ""})");
+        << QJsonObject{{"requests", QJsonArray{QJsonObject{
+               {"index", 1},
+               {"person", personJson("00112233445566778899aabbccddeeff", "Alice", {aliceLaptop(), otherDevice()})},
+               {"when", When}}}}};
+
+    QTest::newRow("a status this build does not know") << "status" << QJsonObject{{"status", "withdrawn"}};
+    QTest::newRow("an empty link code") << "code" << QJsonObject{{"code", ""}};
+    QTest::newRow("a link with no expiry")
+        << "link"
+        << QJsonObject{{"deviceName", "Phone"},
+                       {"publicKey", aliceLaptop()["publicKey"]},
+                       {"verifyKey", aliceLaptop()["verifyKey"]}};
 }
 
 void HttpServerApiTest::illFormedAnswersAreRefused()
 {
     QFETCH(QString, reader);
-    QFETCH(QByteArray, json);
-    const QJsonObject object = QJsonDocument::fromJson(json).object();
+    QFETCH(QJsonObject, answer);
 
-    if (reader == "challenge")
+    if (reader == "good head")
     {
-        QVERIFY(!HttpWire::readChallenge(object).has_value());
-    }
-    else if (reader == "session")
-    {
-        QVERIFY(!HttpWire::readSession(object).has_value());
-    }
-    else if (reader == "version")
-    {
-        QVERIFY(!HttpWire::readVersion(object).has_value());
+        // Anchor: the shape every refused row departs from reads.
+        QVERIFY(HttpWire::readHead(answer).has_value());
     }
     else if (reader == "head")
     {
-        QVERIFY(!HttpWire::readHead(object).has_value());
+        QVERIFY(!HttpWire::readHead(answer).has_value());
     }
     else if (reader == "snapshot")
     {
-        QVERIFY(!HttpWire::readSnapshot(object).has_value());
+        QVERIFY(!HttpWire::readSnapshot(answer).has_value());
     }
-    else if (reader == "lease")
+    else if (reader == "me")
     {
-        QVERIFY(!HttpWire::readLease(object).has_value());
+        QVERIFY(!HttpWire::readMe(answer).has_value());
+    }
+    else if (reader == "history")
+    {
+        QVERIFY(!HttpWire::readHistory(answer).has_value());
     }
     else if (reader == "requests")
     {
-        QVERIFY(!HttpWire::readAccessRequests(object).has_value());
+        QVERIFY(!HttpWire::readAccessRequests(answer).has_value());
     }
     else if (reader == "status")
     {
-        QVERIFY(!HttpWire::readRequestStatus(object).has_value());
-    }
-    else if (reader == "documents")
-    {
-        QVERIFY(!HttpWire::readDocumentIds(object).has_value());
-    }
-    else if (reader == "pairing")
-    {
-        QVERIFY(!HttpWire::readPairingState(object).has_value());
-    }
-    else if (reader == "chain")
-    {
-        QVERIFY(!HttpWire::readHeaderChain(object).has_value());
+        QVERIFY(!HttpWire::readRequestStatus(answer).has_value());
     }
     else if (reader == "code")
     {
-        QVERIFY(!HttpWire::readPairingCode(object).has_value());
+        QVERIFY(!HttpWire::readLinkCode(answer).has_value());
+    }
+    else if (reader == "link")
+    {
+        QVERIFY(!HttpWire::readLinkState(answer).has_value());
     }
     else
     {
@@ -448,19 +468,16 @@ void HttpServerApiTest::errorsAreReadByNameThenStatus_data()
     // Each name the server sends.
     const QList<std::pair<const char*, ServerError>> names = {
         {"unauthenticated", ServerError::Unauthenticated},
-        {"notAllowListed", ServerError::NotAllowListed},
+        {"notMember", ServerError::NotMember},
+        {"notAdmin", ServerError::NotAdmin},
+        {"lastAdmin", ServerError::LastAdmin},
+        {"notOnAllowList", ServerError::NotOnAllowList},
         {"unknownDocument", ServerError::UnknownDocument},
         {"versionConflict", ServerError::VersionConflict},
         {"leaseHeld", ServerError::LeaseHeld},
-        {"chainRefused", ServerError::ChainRefused},
-        {"payloadMismatch", ServerError::PayloadMismatch},
-        {"counterJump", ServerError::CounterJump},
-        {"deviceNotInvited", ServerError::DeviceNotInvited},
         {"idTaken", ServerError::IdTaken},
         {"rateLimited", ServerError::RateLimited},
         {"notFound", ServerError::NotFound},
-        {"alreadyWritten", ServerError::AlreadyWritten},
-        {"outOfOrder", ServerError::OutOfOrder},
         {"expired", ServerError::Expired},
         {"invalidRequest", ServerError::InvalidRequest},
     };
@@ -471,6 +488,11 @@ void HttpServerApiTest::errorsAreReadByNameThenStatus_data()
 
     // A name this build does not know is not acted on as another.
     QTest::newRow("unknown name") << 409 << QByteArray(R"({"error": "somethingNew"})") << ServerError::InvalidRequest;
+
+    // An accessLost answer deletes a ward, so one that does not read in full is not one.
+    QTest::newRow("access lost without how")
+        << 403 << QByteArray(R"({"error": "accessLost", "when": "2026-10-11T09:00:00.000Z"})")
+        << ServerError::InvalidRequest;
 
     // With no name, only what a front end may send for the server means anything.
     QTest::newRow("bare 401") << 401 << QByteArray() << ServerError::Unauthenticated;
@@ -490,10 +512,37 @@ void HttpServerApiTest::errorsAreReadByNameThenStatus()
     QFETCH(int, status);
     QFETCH(QByteArray, body);
     QFETCH(ServerError, error);
-    QCOMPARE(HttpWire::readError(status, body), error);
+    const HttpWire::Failure failure = HttpWire::readFailure(status, body);
+    QCOMPARE(failure.error, error);
+    QVERIFY(!failure.lost.has_value());
 }
 
-void HttpServerApiTest::aCallTravelsWithItsTokenSignatureAndBody()
+void HttpServerApiTest::lostAccessIsReadInFull()
+{
+    const HttpWire::Failure removed = HttpWire::readFailure(
+        403, R"({"error": "accessLost", "how": "removed", "byWhom": "Alice", "when": "2026-10-11T09:00:00.000Z"})");
+    QCOMPARE(removed.error, ServerError::AccessLost);
+    QVERIFY(removed.lost.has_value());
+    QCOMPARE(removed.lost->how, LostAccess::How::Removed);
+    QCOMPARE(removed.lost->byWhom, QString("Alice"));
+    QCOMPARE(removed.lost->when, QDateTime::fromString("2026-10-11T09:00:00.000Z", Qt::ISODateWithMs));
+
+    const HttpWire::Failure left =
+        HttpWire::readFailure(403, R"({"error": "accessLost", "how": "left", "when": "2026-10-11T09:00:00.000Z"})");
+    QCOMPARE(left.lost->how, LostAccess::How::Left);
+    QVERIFY(left.lost->byWhom.isEmpty());
+
+    const HttpWire::Failure unlinked = HttpWire::readFailure(
+        403, R"({"error": "accessLost", "how": "unlinked", "byWhom": "Laptop", "when": "2026-10-11T09:00:00.000Z"})");
+    QCOMPARE(unlinked.lost->how, LostAccess::How::Unlinked);
+
+    const HttpWire::Failure unknownHow = HttpWire::readFailure(
+        403, R"({"error": "accessLost", "how": "banished", "when": "2026-10-11T09:00:00.000Z"})");
+    QCOMPARE(unknownHow.error, ServerError::InvalidRequest);
+    QVERIFY(!unknownHow.lost.has_value());
+}
+
+void HttpServerApiTest::aCallTravelsWithItsTokenAndBody()
 {
     CannedServer canned(httpResponse(200, R"({"version": 8})"));
     QVERIFY(canned.isListening());
@@ -504,7 +553,7 @@ void HttpServerApiTest::aCallTravelsWithItsTokenSignatureAndBody()
 
     const Upload upload = firstUpload();
     std::optional<Result<qint64>> result;
-    api.upload(Session{"session-token"}, upload.header.documentId, 7, upload, QByteArray(64, '\x07'), recordTo(result));
+    api.upload(Session{"session-token"}, upload.header.documentId, 7, upload, recordTo(result));
     QTRY_VERIFY_WITH_TIMEOUT(result.has_value(), AnswerMilliseconds);
 
     QVERIFY(result->ok());
@@ -513,9 +562,27 @@ void HttpServerApiTest::aCallTravelsWithItsTokenSignatureAndBody()
     QCOMPARE(request.method, QByteArray("PUT"));
     QCOMPARE(request.path, "/documents/" + upload.header.documentId.toLatin1());
     QCOMPARE(request.headers.value("authorization"), QByteArray("Bearer session-token"));
-    QCOMPARE(request.headers.value("x-request-signature"), QByteArray(64, '\x07').toBase64());
+    QVERIFY(!request.headers.contains("x-request-signature"));
     QCOMPARE(request.headers.value("content-type"), QByteArray("application/json"));
     QCOMPARE(QJsonDocument::fromJson(request.body).object(), HttpWire::uploadRequest(7, upload));
+}
+
+void HttpServerApiTest::anAccessLostAnswerCarriesHowThroughTheReply()
+{
+    CannedServer canned(httpResponse(
+        403, R"({"error": "accessLost", "how": "removed", "byWhom": "Alice", "when": "2026-10-11T09:00:00.000Z"})"));
+    QVERIFY(canned.isListening());
+    QTemporaryDir folder;
+    QVERIFY(folder.isValid());
+    const std::unique_ptr<AppSettings> settings = settingsFor(folder, canned.address());
+    HttpServerApi api(*settings, nullptr);
+
+    std::optional<Result<Head>> result;
+    api.head(Session{"token"}, DocumentLibrary::newDocumentId(), recordTo(result));
+    QTRY_VERIFY_WITH_TIMEOUT(result.has_value(), AnswerMilliseconds);
+    QCOMPARE(result->error, ServerError::AccessLost);
+    QVERIFY(result->lost.has_value());
+    QCOMPARE(result->lost->byWhom, QString("Alice"));
 }
 
 void HttpServerApiTest::everyCallTakesItsRoute_data()
@@ -524,32 +591,31 @@ void HttpServerApiTest::everyCallTakesItsRoute_data()
     QTest::addColumn<QByteArray>("method");
     QTest::addColumn<QString>("path");
     QTest::addColumn<bool>("withToken");
-    QTest::addColumn<bool>("signedRequest");
 
-    // %1 is the document id, %2 the pairing code, %3 a device fingerprint.
-    QTest::newRow("challenge") << "challenge" << QByteArray("POST") << "/auth/challenge" << false << false;
-    QTest::newRow("authenticate") << "authenticate" << QByteArray("POST") << "/auth/session" << false << false;
-    QTest::newRow("registerDocument") << "registerDocument" << QByteArray("POST") << "/documents" << true << true;
-    QTest::newRow("head") << "head" << QByteArray("GET") << "/documents/%1/head" << true << false;
-    QTest::newRow("headers") << "headers" << QByteArray("GET") << "/documents/%1/headers?after=3" << true << false;
-    QTest::newRow("download") << "download" << QByteArray("GET") << "/documents/%1?after=3" << true << false;
-    QTest::newRow("upload") << "upload" << QByteArray("PUT") << "/documents/%1" << true << true;
-    QTest::newRow("takeLease") << "takeLease" << QByteArray("POST") << "/documents/%1/lease" << true << true;
-    QTest::newRow("releaseLease") << "releaseLease" << QByteArray("DELETE") << "/documents/%1/lease" << true << true;
-    QTest::newRow("requestAccess") << "requestAccess" << QByteArray("POST") << "/documents/%1/requests" << true << true;
-    QTest::newRow("accessRequests") << "accessRequests" << QByteArray("GET") << "/documents/%1/requests" << true << false;
-    QTest::newRow("clearAccessRequest")
-        << "clearAccessRequest" << QByteArray("DELETE") << "/documents/%1/requests?device=%3" << true << true;
-    QTest::newRow("myRequestStatus")
-        << "myRequestStatus" << QByteArray("GET") << "/documents/%1/requests/mine" << true << false;
-    QTest::newRow("myDocuments") << "myDocuments" << QByteArray("GET") << "/me/documents" << true << false;
-    QTest::newRow("startPairing") << "startPairing" << QByteArray("POST") << "/pairings" << true << true;
-    QTest::newRow("pairing") << "pairing" << QByteArray("GET") << "/pairings/%2" << true << false;
-    QTest::newRow("respondToPairing")
-        << "respondToPairing" << QByteArray("PUT") << "/pairings/%2/responder" << true << true;
-    QTest::newRow("revealPairing") << "revealPairing" << QByteArray("PUT") << "/pairings/%2/reveal" << true << true;
-    QTest::newRow("handOver") << "handOver" << QByteArray("PUT") << "/pairings/%2/handover" << true << true;
-    QTest::newRow("advanceClock") << "advanceClock" << QByteArray("POST") << "/dev/clock" << false << false;
+    // %1 is the document id, %2 the link code, %3 a device fingerprint, %4 a member id.
+    QTest::newRow("challenge") << "challenge" << QByteArray("POST") << "/auth/challenge" << false;
+    QTest::newRow("authenticate") << "authenticate" << QByteArray("POST") << "/auth/token" << false;
+    QTest::newRow("registerPerson") << "registerPerson" << QByteArray("PUT") << "/me" << true;
+    QTest::newRow("me") << "me" << QByteArray("GET") << "/me" << true;
+    QTest::newRow("unlinkDevice") << "unlinkDevice" << QByteArray("DELETE") << "/me/devices/%3" << true;
+    QTest::newRow("startLink") << "startLink" << QByteArray("POST") << "/links" << true;
+    QTest::newRow("link") << "link" << QByteArray("GET") << "/links/%2" << true;
+    QTest::newRow("approveLink") << "approveLink" << QByteArray("POST") << "/links/%2/approve" << true;
+    QTest::newRow("registerDocument") << "registerDocument" << QByteArray("POST") << "/documents" << true;
+    QTest::newRow("head") << "head" << QByteArray("GET") << "/documents/%1/head" << true;
+    QTest::newRow("download") << "download" << QByteArray("GET") << "/documents/%1" << true;
+    QTest::newRow("upload") << "upload" << QByteArray("PUT") << "/documents/%1" << true;
+    QTest::newRow("takeLease") << "takeLease" << QByteArray("POST") << "/documents/%1/lease" << true;
+    QTest::newRow("releaseLease") << "releaseLease" << QByteArray("DELETE") << "/documents/%1/lease" << true;
+    QTest::newRow("history") << "history" << QByteArray("GET") << "/documents/%1/history?after=3" << true;
+    QTest::newRow("requestAccess") << "requestAccess" << QByteArray("POST") << "/documents/%1/requests" << true;
+    QTest::newRow("accessRequests") << "accessRequests" << QByteArray("GET") << "/documents/%1/requests" << true;
+    QTest::newRow("declineRequest") << "declineRequest" << QByteArray("DELETE") << "/documents/%1/requests/5" << true;
+    QTest::newRow("myRequestStatus") << "myRequestStatus" << QByteArray("GET") << "/documents/%1/requests/mine" << true;
+    QTest::newRow("grant") << "grant" << QByteArray("POST") << "/documents/%1/members" << true;
+    QTest::newRow("removeMember") << "removeMember" << QByteArray("DELETE") << "/documents/%1/members/%4" << true;
+    QTest::newRow("setRole") << "setRole" << QByteArray("PUT") << "/documents/%1/members/%4/role" << true;
+    QTest::newRow("advanceClock") << "advanceClock" << QByteArray("POST") << "/dev/clock" << false;
 }
 
 void HttpServerApiTest::everyCallTakesItsRoute()
@@ -558,7 +624,6 @@ void HttpServerApiTest::everyCallTakesItsRoute()
     QFETCH(QByteArray, method);
     QFETCH(QString, path);
     QFETCH(bool, withToken);
-    QFETCH(bool, signedRequest);
 
     // Every call is refused, so each reply comes with no answer to read.
     CannedServer canned(httpResponse(409, R"({"error": "versionConflict"})"));
@@ -568,125 +633,122 @@ void HttpServerApiTest::everyCallTakesItsRoute()
     const std::unique_ptr<AppSettings> settings = settingsFor(folder, canned.address());
     HttpServerApi api(*settings, nullptr);
 
-    const QString documentId = ChainTestSupport::newDocumentId();
+    const QString documentId = DocumentLibrary::newDocumentId();
     const QString code = "K7Q2M9";
     const Session session{"session-token"};
     const QByteArray signature(64, '\x07');
     const Upload upload = firstUpload();
-    DeviceKeys keys;
-    keys.publicKey.bytes = QByteArray(32, '\x03');
-    keys.verifyKey.bytes = QByteArray(32, '\x04');
-    const Fingerprint device = DocumentCrypto::fingerprintOf(keys.publicKey, keys.verifyKey);
-    AccessRequest request;
-    request.member = MemberId::fromHex("00112233445566778899aabbccddeeff");
-    request.displayName = "Bob";
-    request.device = RosterDevice::create("Phone", keys.publicKey, keys.verifyKey);
+    const PublicKey publicKey{QByteArray(32, '\x03')};
+    const VerifyKey verifyKey{QByteArray(32, '\x04')};
+    const Fingerprint device = DocumentCrypto::fingerprintOf(publicKey, verifyKey);
+    const MemberId member = MemberId::fromHex("00112233445566778899aabbccddeeff");
+    const Registration registration{member, "Bob", "Phone", publicKey};
 
-    // The body each call sends; none for a call that sends none.
+    // The body each call sends; none for a call that sends none. Each reply records
+    // that it came.
     std::optional<QJsonObject> body;
-    std::optional<ServerError> error;
-    std::optional<Result<Done>> done;
-    std::optional<Result<QByteArray>> bytes;
-    std::optional<Result<Session>> signedIn;
-    std::optional<Result<qint64>> version;
-    std::optional<Result<Head>> head;
-    std::optional<Result<HeaderChain>> chain;
-    std::optional<Result<Snapshot>> snapshot;
-    std::optional<Result<Lease>> lease;
-    std::optional<Result<QList<AccessRequest>>> requests;
-    std::optional<Result<RequestStatus>> status;
-    std::optional<Result<QStringList>> documents;
-    std::optional<Result<QString>> pairingCode;
-    std::optional<Result<PairingState>> pairing;
+    bool answered = false;
+    const std::function<void()> note = std::bind(&markAnswered, std::ref(answered));
 
     if (call == "challenge")
     {
-        api.challenge(recordTo(bytes));
+        api.challenge(std::bind(note));
     }
     else if (call == "authenticate")
     {
-        body = HttpWire::authenticateRequest(keys.verifyKey, "challenge", signature);
-        api.authenticate(keys.verifyKey, "challenge", signature, recordTo(signedIn));
+        body = HttpWire::authenticateRequest(verifyKey, "challenge", signature);
+        api.authenticate(verifyKey, "challenge", signature, std::bind(note));
+    }
+    else if (call == "registerPerson")
+    {
+        body = HttpWire::registerPersonRequest(registration);
+        api.registerPerson(session, registration, std::bind(note));
+    }
+    else if (call == "me")
+    {
+        api.me(session, std::bind(note));
+    }
+    else if (call == "unlinkDevice")
+    {
+        api.unlinkDevice(session, device, std::bind(note));
+    }
+    else if (call == "startLink")
+    {
+        body = HttpWire::startLinkRequest(publicKey, "Phone");
+        api.startLink(session, publicKey, "Phone", std::bind(note));
+    }
+    else if (call == "link")
+    {
+        api.link(session, code, std::bind(note));
+    }
+    else if (call == "approveLink")
+    {
+        api.approveLink(session, code, std::bind(note));
     }
     else if (call == "registerDocument")
     {
         body = HttpWire::registerRequest(upload);
-        api.registerDocument(session, upload, signature, recordTo(version));
+        api.registerDocument(session, upload, std::bind(note));
     }
     else if (call == "head")
     {
-        api.head(session, documentId, recordTo(head));
-    }
-    else if (call == "headers")
-    {
-        api.headers(session, documentId, 3, recordTo(chain));
+        api.head(session, documentId, std::bind(note));
     }
     else if (call == "download")
     {
-        api.download(session, documentId, 3, recordTo(snapshot));
+        api.download(session, documentId, std::bind(note));
     }
     else if (call == "upload")
     {
         body = HttpWire::uploadRequest(5, upload);
-        api.upload(session, documentId, 5, upload, signature, recordTo(version));
+        api.upload(session, documentId, 5, upload, std::bind(note));
     }
     else if (call == "takeLease")
     {
-        api.takeLease(session, documentId, signature, recordTo(lease));
+        api.takeLease(session, documentId, std::bind(note));
     }
     else if (call == "releaseLease")
     {
-        api.releaseLease(session, documentId, signature, recordTo(done));
+        api.releaseLease(session, documentId, std::bind(note));
+    }
+    else if (call == "history")
+    {
+        api.history(session, documentId, 3, std::bind(note));
     }
     else if (call == "requestAccess")
     {
-        body = HttpWire::accessRequestRequest(request);
-        api.requestAccess(session, documentId, request, signature, recordTo(done));
+        api.requestAccess(session, documentId, std::bind(note));
     }
     else if (call == "accessRequests")
     {
-        api.accessRequests(session, documentId, recordTo(requests));
+        api.accessRequests(session, documentId, std::bind(note));
     }
-    else if (call == "clearAccessRequest")
+    else if (call == "declineRequest")
     {
-        api.clearAccessRequest(session, documentId, device, signature, recordTo(done));
+        api.declineRequest(session, documentId, 5, std::bind(note));
     }
     else if (call == "myRequestStatus")
     {
-        api.myRequestStatus(session, documentId, recordTo(status));
+        api.myRequestStatus(session, documentId, std::bind(note));
     }
-    else if (call == "myDocuments")
+    else if (call == "grant")
     {
-        api.myDocuments(session, recordTo(documents));
+        body = HttpWire::grantRequest(5);
+        api.grant(session, documentId, 5, std::bind(note));
     }
-    else if (call == "startPairing")
+    else if (call == "removeMember")
     {
-        body = HttpWire::startPairingRequest("Phone", QByteArray(32, '\x05'));
-        api.startPairing(session, "Phone", QByteArray(32, '\x05'), signature, recordTo(pairingCode));
+        api.removeMember(session, documentId, member, std::bind(note));
     }
-    else if (call == "pairing")
+    else if (call == "setRole")
     {
-        api.pairing(session, code, recordTo(pairing));
-    }
-    else if (call == "respondToPairing")
-    {
-        body = HttpWire::deviceKeysRequest(keys);
-        api.respondToPairing(session, code, keys, signature, recordTo(done));
-    }
-    else if (call == "revealPairing")
-    {
-        body = HttpWire::revealPairingRequest(keys, QByteArray(32, '\x06'));
-        api.revealPairing(session, code, keys, QByteArray(32, '\x06'), signature, recordTo(done));
-    }
-    else if (call == "handOver")
-    {
-        body = HttpWire::handOverRequest("signed handover");
-        api.handOver(session, code, "signed handover", signature, recordTo(done));
+        body = HttpWire::setRoleRequest(Role::Admin);
+        api.setRole(session, documentId, member, Role::Admin, std::bind(note));
     }
     else if (call == "advanceClock")
     {
         body = HttpWire::advanceClockRequest(60);
-        api.advanceClock(60, recordTo(done));
+        api.advanceClock(60, std::bind(note));
     }
     else
     {
@@ -695,17 +757,15 @@ void HttpServerApiTest::everyCallTakesItsRoute()
 
     // The reply comes, once the server has answered.
     QTRY_VERIFY_WITH_TIMEOUT(canned.captured().has_value(), AnswerMilliseconds);
-    QTRY_VERIFY_WITH_TIMEOUT(done || bytes || signedIn || version || head || chain || snapshot || lease || requests
-                                 || status || documents || pairingCode || pairing,
-                             AnswerMilliseconds);
+    QTRY_VERIFY_WITH_TIMEOUT(answered, AnswerMilliseconds);
 
     const Captured& sent = canned.captured().value();
     QCOMPARE(sent.method, method);
     QString expected = path;
-    expected.replace("%1", documentId).replace("%2", code).replace("%3", device.toHex());
+    expected.replace("%1", documentId).replace("%2", code).replace("%3", device.toHex()).replace("%4", member.toHex());
     QCOMPARE(QString::fromLatin1(sent.path), expected);
     QCOMPARE(sent.headers.value("authorization"), withToken ? QByteArray("Bearer session-token") : QByteArray());
-    QCOMPARE(sent.headers.value("x-request-signature"), signedRequest ? signature.toBase64() : QByteArray());
+    QVERIFY(!sent.headers.contains("x-request-signature"));
     if (body.has_value())
     {
         QCOMPARE(QJsonDocument::fromJson(sent.body).object(), body.value());
@@ -732,7 +792,7 @@ void HttpServerApiTest::aFailedAnswerIsItsNamedError()
     HttpServerApi api(*settings, nullptr);
 
     std::optional<Result<Lease>> result;
-    api.takeLease(Session{"token"}, ChainTestSupport::newDocumentId(), QByteArray(64, '\x01'), recordTo(result));
+    api.takeLease(Session{"token"}, DocumentLibrary::newDocumentId(), recordTo(result));
     QTRY_VERIFY_WITH_TIMEOUT(result.has_value(), AnswerMilliseconds);
     QVERIFY(!result->ok());
     QCOMPARE(result->error, ServerError::LeaseHeld);
@@ -760,7 +820,7 @@ void HttpServerApiTest::anUnreadableOrFailingServerIsUnreachable()
             QTest::ignoreMessage(QtWarningMsg, QRegularExpression("Unreadable server answer to \"POST /documents\""));
         }
         std::optional<Result<qint64>> result;
-        api.registerDocument(Session{"token"}, firstUpload(), QByteArray(64, '\x01'), recordTo(result));
+        api.registerDocument(Session{"token"}, firstUpload(), recordTo(result));
 
         // The reply comes: Unreachable here is the answer, not a wait that gave up.
         QTRY_VERIFY_WITH_TIMEOUT(result.has_value(), AnswerMilliseconds);
@@ -775,7 +835,7 @@ void HttpServerApiTest::anUnreadableOrFailingServerIsUnreachable()
     const std::unique_ptr<AppSettings> settings = settingsFor(folder, canned.address());
     HttpServerApi api(*settings, nullptr);
     std::optional<Result<Done>> released;
-    api.releaseLease(Session{"token"}, ChainTestSupport::newDocumentId(), QByteArray(64, '\x01'), recordTo(released));
+    api.releaseLease(Session{"token"}, DocumentLibrary::newDocumentId(), recordTo(released));
     QTRY_VERIFY_WITH_TIMEOUT(released.has_value(), AnswerMilliseconds);
     QVERIFY(released->ok());
 }
@@ -810,7 +870,7 @@ void HttpServerApiTest::aRefusedConnectionIsUnreachable()
     HttpServerApi api(*settings, nullptr);
 
     std::optional<Result<Head>> result;
-    api.head(Session{"token"}, ChainTestSupport::newDocumentId(), recordTo(result));
+    api.head(Session{"token"}, DocumentLibrary::newDocumentId(), recordTo(result));
     QTRY_VERIFY_WITH_TIMEOUT(result.has_value(), AnswerMilliseconds);
     QCOMPARE(result->error, ServerError::Unreachable);
 }

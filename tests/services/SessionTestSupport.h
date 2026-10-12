@@ -1,12 +1,12 @@
 #pragma once
 
-#include "ChainTestSupport.h"
 #include "DeviceIdentity.h"
 #include "DocumentRecords.h"
 #include "DocumentSession.h"
 #include "FakeServer.h"
-#include "RosterChangeQueue.h"
+#include "SealingQueue.h"
 #include "ServerConnection.h"
+#include "ServerTestSupport.h"
 #include "SessionTimers.h"
 
 #include <QHash>
@@ -32,11 +32,14 @@ public:
     void setRecord(const QString& documentId, const DocumentRecord& record) override;
     void removeRecord(const QString& documentId) override;
     QStringList documentIds() const override;
+    QList<DeviceKeys> linkedDevices() const override { return m_linked; }
+    void setLinkedDevices(const QList<DeviceKeys>& devices) override { m_linked = devices; }
 
     bool contains(const QString& documentId) const { return m_records.contains(documentId); }
 
 private:
     QHash<QString, DocumentRecord> m_records;
+    QList<DeviceKeys> m_linked;
 };
 
 /// Records each running timer and its interval, and fires one on fire().
@@ -64,7 +67,7 @@ DeviceIdentity newIdentity(const QString& displayName, const QString& deviceName
 /// Another device of the same person.
 DeviceIdentity newDeviceOf(const DeviceIdentity& person, const QString& deviceName);
 
-ChainTestSupport::TestDevice asTestDevice(const DeviceIdentity& identity);
+ServerTestSupport::TestDevice asTestDevice(const DeviceIdentity& identity);
 
 /// One installation: its identity, its records, its timers, its connection, and its
 /// own folder.
@@ -89,7 +92,7 @@ public:
     std::unique_ptr<DocumentSession> create(const QString& documentId);
     std::unique_ptr<DocumentSession> open(const QString& documentId);
     std::unique_ptr<DocumentSession> open(const QString& documentId, LoadFailure& failure);
-    std::unique_ptr<RosterChangeQueue> queue();
+    std::unique_ptr<SealingQueue> queue();
 };
 
 /// A ward's devices over one FakeServer.
@@ -107,16 +110,19 @@ public:
     /// response recording both, then shares it. documentId is set.
     std::unique_ptr<DocumentSession> createShared(Device& owner);
 
-    /// Asks for access as newcomer, has admin grant it through the queue, and
-    /// downloads the ward to newcomer.
+    /// Asks for access as newcomer, has admin grant it and seal it in through
+    /// admin's queue, and downloads the ward to newcomer.
     bool grant(Device& admin, Device& newcomer);
 
-    /// Queues one change to the ward on device and lets it publish; the outcome it
-    /// finished with.
-    std::optional<RosterChangeOutcome> change(Device& device, const RosterChange& change);
+    /// Links newDevice to existing's person, as existing's approval does: the server
+    /// adds it, and existing remembers it to seal.
+    bool link(Device& newDevice, Device& existing);
 
-    /// Pairs newDevice with existing, which must already be a member somewhere.
-    bool pair(Device& newDevice, Device& existing);
+    /// Runs a fresh queue on device over every ward it holds, until it settles.
+    void seal(Device& device);
+
+    /// A server session for device, signed in and registered.
+    std::optional<ServerContract::Session> sessionFor(Device& device);
 
     /// The server's current version of the ward, as a device of it downloads it.
     std::optional<ServerVersion::Fetched> serverCopy(Device& reader);

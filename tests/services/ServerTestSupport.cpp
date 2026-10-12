@@ -1,303 +1,158 @@
 #include "ServerTestSupport.h"
 
-#include "DocumentCrypto.h"
-#include "Pairing.h"
-
-#include <QHash>
-
-using namespace ChainTestSupport;
 using namespace ServerContract;
-
-namespace
-{
-
-/// Session tokens are random and fresh per sign-in, so one table serves every
-/// server a run creates.
-QHash<QString, TestDevice>& signers()
-{
-    static QHash<QString, TestDevice> table;
-    return table;
-}
-
-QByteArray signAs(const Session& session, Endpoint endpoint, const QString& documentId, const QByteArray& body)
-{
-    const SigningKey& key = ServerTestSupport::signerOf(session).signing.signingKey;
-    return signRequest(endpoint, session, documentId, body, key);
-}
-
-} // namespace
+using namespace std::placeholders;
 
 namespace ServerTestSupport
 {
 
+Fingerprint TestDevice::fingerprint() const
+{
+    return DocumentCrypto::fingerprintOf(sealing.publicKey, signing.verifyKey);
+}
+
+Registration TestDevice::registration() const
+{
+    return Registration{member, displayName, deviceName, sealing.publicKey};
+}
+
+MemberId newMember()
+{
+    MemberId member;
+    member.bytes = DocumentCrypto::randomBytes(MemberId::Size);
+    return member;
+}
+
+QString newDocumentId()
+{
+    return QString::fromLatin1(DocumentCrypto::randomBytes(DocumentHeader::DocumentIdLength / 2).toHex());
+}
+
+TestDevice newPerson(const QString& displayName)
+{
+    TestDevice device;
+    device.member = newMember();
+    device.displayName = displayName;
+    device.deviceName = displayName + "'s laptop";
+    device.sealing = DocumentCrypto::generateKeypair();
+    device.signing = DocumentCrypto::generateSigningKeypair();
+    return device;
+}
+
+TestDevice newDeviceOf(const TestDevice& person, const QString& deviceName)
+{
+    TestDevice device = newPerson(person.displayName);
+    device.member = person.member;
+    device.deviceName = deviceName;
+    return device;
+}
+
 std::optional<Session> signIn(ServerApi& server, const TestDevice& device)
 {
-    const Result<QByteArray> challenge =
-        wait<QByteArray>([&](Reply<QByteArray> reply) { server.challenge(reply); });
+    const Result<QByteArray> challenge = wait<QByteArray>(std::bind(&ServerApi::challenge, &server, _1));
     if (!challenge.ok())
     {
         return std::nullopt;
     }
 
-    const QByteArray signature = DocumentCrypto::sign(SignatureTag::Auth,
-                                                      challenge.value.value(),
-                                                      device.signing.signingKey);
-    const std::optional<Session> session =
-        wait<Session>([&](Reply<Session> reply)
-        {
-            server.authenticate(device.signing.verifyKey, challenge.value.value(), signature, reply);
-        }).value;
-    if (session.has_value())
+    const QByteArray signature = DocumentCrypto::signChallenge(challenge.value.value(), device.signing.signingKey);
+    const Result<Session> session = wait<Session>(
+        std::bind(&ServerApi::authenticate, &server, device.signing.verifyKey, challenge.value.value(), signature, _1));
+    return session.value;
+}
+
+std::optional<Session> join(ServerApi& server, const TestDevice& device)
+{
+    const std::optional<Session> session = signIn(server, device);
+    if (!session.has_value()
+        || !wait<Done>(std::bind(&ServerApi::registerPerson, &server, session.value(), device.registration(), _1)).ok())
     {
-        signers().insert(session.value().token, device);
+        return std::nullopt;
     }
     return session;
 }
 
-const TestDevice& signerOf(const Session& session)
+Upload uploadFor(const QString& documentId, const QList<TestDevice>& devices, qint64 saveCounter)
 {
-    const auto found = signers().constFind(session.token);
-    if (found == signers().constEnd())
-    {
-        qFatal("signerOf: a session that did not come from signIn");
-    }
-    return found.value();
-}
+    const DataKey dataKey = DocumentCrypto::generateDataKey();
 
-Result<qint64> signedRegisterDocument(ServerApi& server, const Session& session, const Upload& upload)
-{
-    const QByteArray signature =
-        signAs(session, Endpoint::RegisterDocument, upload.header.documentId, registerBody(upload));
-    return wait<qint64>([&](Reply<qint64> reply)
-    {
-        server.registerDocument(session, upload, signature, reply);
-    });
-}
-
-Result<qint64> signedUpload(ServerApi& server,
-                            const Session& session,
-                            const QString& documentId,
-                            qint64 baseVersion,
-                            const Upload& upload)
-{
-    const QByteArray signature = signAs(session, Endpoint::Upload, documentId, uploadBody(baseVersion, upload));
-    return wait<qint64>([&](Reply<qint64> reply)
-    {
-        server.upload(session, documentId, baseVersion, upload, signature, reply);
-    });
-}
-
-Result<Lease> signedTakeLease(ServerApi& server, const Session& session, const QString& documentId)
-{
-    const QByteArray signature = signAs(session, Endpoint::TakeLease, documentId, emptyBody());
-    return wait<Lease>([&](Reply<Lease> reply) { server.takeLease(session, documentId, signature, reply); });
-}
-
-Result<Done> signedReleaseLease(ServerApi& server, const Session& session, const QString& documentId)
-{
-    const QByteArray signature = signAs(session, Endpoint::ReleaseLease, documentId, emptyBody());
-    return wait<Done>([&](Reply<Done> reply) { server.releaseLease(session, documentId, signature, reply); });
-}
-
-Result<Done> signedRequestAccess(ServerApi& server,
-                                 const Session& session,
-                                 const QString& documentId,
-                                 const AccessRequest& request)
-{
-    const QByteArray signature =
-        signAs(session, Endpoint::RequestAccess, documentId, requestAccessBody(request));
-    return wait<Done>([&](Reply<Done> reply)
-    {
-        server.requestAccess(session, documentId, request, signature, reply);
-    });
-}
-
-Result<Done> signedClearAccessRequest(ServerApi& server,
-                                      const Session& session,
-                                      const QString& documentId,
-                                      const Fingerprint& device)
-{
-    const QByteArray signature =
-        signAs(session, Endpoint::ClearAccessRequest, documentId, clearAccessRequestBody(device));
-    return wait<Done>([&](Reply<Done> reply)
-    {
-        server.clearAccessRequest(session, documentId, device, signature, reply);
-    });
-}
-
-Result<QString> signedStartPairing(ServerApi& server,
-                                   const Session& session,
-                                   const QString& deviceName,
-                                   const QByteArray& commitment)
-{
-    const QByteArray signature =
-        signAs(session, Endpoint::StartPairing, QString(), startPairingBody(deviceName, commitment));
-    return wait<QString>([&](Reply<QString> reply)
-    {
-        server.startPairing(session, deviceName, commitment, signature, reply);
-    });
-}
-
-Result<Done> signedRespondToPairing(ServerApi& server,
-                                    const Session& session,
-                                    const QString& code,
-                                    const DeviceKeys& responder)
-{
-    const QByteArray signature =
-        signAs(session, Endpoint::RespondToPairing, QString(), respondToPairingBody(code, responder));
-    return wait<Done>([&](Reply<Done> reply)
-    {
-        server.respondToPairing(session, code, responder, signature, reply);
-    });
-}
-
-Result<Done> signedRevealPairing(ServerApi& server,
-                                 const Session& session,
-                                 const QString& code,
-                                 const DeviceKeys& initiator,
-                                 const QByteArray& nonce)
-{
-    const QByteArray signature =
-        signAs(session, Endpoint::RevealPairing, QString(), revealPairingBody(code, initiator, nonce));
-    return wait<Done>([&](Reply<Done> reply)
-    {
-        server.revealPairing(session, code, initiator, nonce, signature, reply);
-    });
-}
-
-Result<Done> signedHandOver(ServerApi& server,
-                            const Session& session,
-                            const QString& code,
-                            const QByteArray& handover)
-{
-    const QByteArray signature = signAs(session, Endpoint::HandOver, QString(), handOverBody(code, handover));
-    return wait<Done>([&](Reply<Done> reply) { server.handOver(session, code, handover, signature, reply); });
-}
-
-DeviceKeys keysOf(const TestDevice& device)
-{
-    DeviceKeys keys;
-    keys.publicKey = device.sealing.publicKey;
-    keys.verifyKey = device.signing.verifyKey;
-    return keys;
-}
-
-Upload sealedUpload(DocumentHeader header, const TestDevice& writer)
-{
     Upload upload;
-    upload.blob = DocumentCrypto::generateNonce() + QByteArray("opaque to the server");
-    header.payloadHash = DocumentCrypto::payloadHash(upload.blob);
-    resign(header, writer);
-    upload.header = header;
+    upload.header.documentId = documentId;
+    upload.header.saveCounter = saveCounter;
+    upload.header.nonce = DocumentCrypto::generateNonce();
+    for (const TestDevice& device : devices)
+    {
+        upload.header.recipients.append(
+            RecipientEntry{device.fingerprint(), DocumentCrypto::sealDataKey(dataKey, device.sealing.publicKey)});
+    }
+    upload.blob = DocumentCrypto::randomBytes(64);
     return upload;
 }
 
-AccessRequest requestFor(const TestDevice& device, const QString& pairingCode)
+QStringList allowListOf(const Head& head)
 {
-    AccessRequest request;
-    request.member = device.member;
-    request.displayName = "Requesting Person";
-    request.device = rosterDevice(device, "Laptop");
-    request.pairingCode = pairingCode;
-    return request;
-}
-
-bool signInAll(ServerApi& server, SharedDocument& ward)
-{
-    const std::optional<Session> alice = signIn(server, ward.alice);
-    const std::optional<Session> bob = signIn(server, ward.bob);
-    const std::optional<Session> carol = signIn(server, ward.carol);
-    if (!alice.has_value() || !bob.has_value() || !carol.has_value())
+    QStringList fingerprints;
+    for (const Member& member : head.members)
     {
-        return false;
+        for (const Device& device : member.person.devices)
+        {
+            fingerprints.append(device.fingerprint.toHex());
+        }
     }
-
-    ward.aliceSession = alice.value();
-    ward.bobSession = bob.value();
-    ward.carolSession = carol.value();
-    return true;
-}
-
-bool advance(ServerApi& server, SharedDocument& ward, qint64 seconds)
-{
-    return wait<Done>([&](Reply<Done> reply) { server.advanceClock(seconds, reply); }).ok()
-        && signInAll(server, ward);
-}
-
-std::optional<SharedDocument> registerWardWith(ServerApi& server,
-                                               const TestDevice& alice,
-                                               const QList<TestDevice>& aliceDevices)
-{
-    SharedDocument ward;
-    ward.id = newDocumentId();
-    ward.dataKey = DocumentCrypto::generateDataKey();
-    ward.alice = alice;
-    ward.bob = newPerson();
-    ward.carol = newPerson();
-
-    if (!signInAll(server, ward))
-    {
-        return std::nullopt;
-    }
-
-    const Upload upload =
-        sealedUpload(buildHeader(ward.id, 1, 1, aliceDevices, ward.alice, ward.dataKey), ward.alice);
-
-    const Result<qint64> result = signedRegisterDocument(server, ward.aliceSession, upload);
-    if (!result.ok())
-    {
-        return std::nullopt;
-    }
-
-    ward.current = upload.header;
-    ward.version = result.value.value();
-    return ward;
+    fingerprints.sort();
+    return fingerprints;
 }
 
 std::optional<SharedDocument> registerWard(ServerApi& server)
 {
-    const TestDevice alice = newPerson();
-    return registerWardWith(server, alice, {alice});
-}
+    SharedDocument ward;
+    ward.id = newDocumentId();
+    ward.alice = newPerson("Alice");
+    ward.bob = newPerson("Bob");
+    ward.carol = newPerson("Carol");
 
-DocumentHeader nextHeader(const SharedDocument& ward,
-                          const QList<TestDevice>& devices,
-                          const TestDevice& writer)
-{
-    return buildHeader(ward.id,
-                       ward.current.keyGeneration,
-                       ward.current.saveCounter + 1,
-                       devices,
-                       writer,
-                       ward.dataKey);
-}
-
-DocumentHeader removalHeader(const SharedDocument& ward,
-                             const QList<TestDevice>& devices,
-                             const TestDevice& writer)
-{
-    return buildHeader(ward.id,
-                       ward.current.keyGeneration + 1,
-                       ward.current.saveCounter + 1,
-                       devices,
-                       writer,
-                       DocumentCrypto::generateDataKey());
-}
-
-ServerError publish(ServerApi& server,
-                    SharedDocument& ward,
-                    const Session& session,
-                    const TestDevice& writer,
-                    const DocumentHeader& header)
-{
-    const Upload upload = sealedUpload(header, writer);
-    const Result<qint64> result = signedUpload(server, session, ward.id, ward.version, upload);
-    if (result.ok())
+    const std::optional<Session> alice = join(server, ward.alice);
+    if (!alice.has_value())
     {
-        ward.version = result.value.value();
-        ward.current = upload.header;
+        return std::nullopt;
     }
-    return result.error;
+    ward.aliceSession = alice.value();
+
+    const Result<qint64> version = wait<qint64>(
+        std::bind(&ServerApi::registerDocument, &server, ward.aliceSession, uploadFor(ward.id, {ward.alice}, 1), _1));
+    if (!version.ok())
+    {
+        return std::nullopt;
+    }
+    ward.version = version.value.value();
+    return ward;
+}
+
+bool grantByRequest(ServerApi& server,
+                    const QString& documentId,
+                    const Session& admin,
+                    const TestDevice& device,
+                    const Session& deviceSession)
+{
+    if (!wait<Done>(std::bind(&ServerApi::requestAccess, &server, deviceSession, documentId, _1)).ok())
+    {
+        return false;
+    }
+
+    const Result<QList<AccessRequest>> requests =
+        wait<QList<AccessRequest>>(std::bind(&ServerApi::accessRequests, &server, admin, documentId, _1));
+    if (!requests.ok())
+    {
+        return false;
+    }
+    for (const AccessRequest& request : requests.value.value())
+    {
+        if (request.person.member == device.member)
+        {
+            return wait<Done>(std::bind(&ServerApi::grant, &server, admin, documentId, request.index, _1)).ok();
+        }
+    }
+    return false;
 }
 
 std::optional<SharedDocument> wardOfThree(ServerApi& server)
@@ -308,44 +163,72 @@ std::optional<SharedDocument> wardOfThree(ServerApi& server)
         return std::nullopt;
     }
 
-    SharedDocument& w = ward.value();
-    if (!signedRequestAccess(server, w.bobSession, w.id, requestFor(w.bob, "")).ok()
-        || !signedRequestAccess(server, w.carolSession, w.id, requestFor(w.carol, "")).ok())
+    const std::optional<Session> bob = join(server, ward->bob);
+    const std::optional<Session> carol = join(server, ward->carol);
+    if (!bob.has_value() || !carol.has_value()
+        || !grantByRequest(server, ward->id, ward->aliceSession, ward->bob, bob.value())
+        || !grantByRequest(server, ward->id, ward->aliceSession, ward->carol, carol.value()))
     {
         return std::nullopt;
     }
-
-    const DocumentHeader header = nextHeader(w, {w.alice, w.bob, w.carol}, w.alice);
-    if (publish(server, w, w.aliceSession, w.alice, header) != ServerError::None)
-    {
-        return std::nullopt;
-    }
-
+    ward->bobSession = bob.value();
+    ward->carolSession = carol.value();
     return ward;
 }
 
-bool completePairing(ServerApi& server,
-                     const TestDevice& initiator,
-                     const Session& initiatorSession,
-                     const TestDevice& responder,
-                     const Session& responderSession)
+std::optional<Session> link(ServerApi& server, const TestDevice& newDevice, const Session& existing)
 {
-    const Result<QString> code = signedStartPairing(server, initiatorSession, "Phone", "a commitment");
-    if (!code.ok())
+    const std::optional<Session> session = signIn(server, newDevice);
+    if (!session.has_value())
+    {
+        return std::nullopt;
+    }
+
+    const Result<QString> code = wait<QString>(
+        std::bind(&ServerApi::startLink, &server, session.value(), newDevice.sealing.publicKey, newDevice.deviceName, _1));
+    if (!code.ok()
+        || !wait<Done>(std::bind(&ServerApi::approveLink, &server, existing, code.value.value(), _1)).ok())
+    {
+        return std::nullopt;
+    }
+    return session;
+}
+
+ServerError publish(ServerApi& server, SharedDocument& ward, const Session& session, const QList<TestDevice>& devices)
+{
+    ++ward.saveCounter;
+    const Result<qint64> version = wait<qint64>(std::bind(&ServerApi::upload,
+                                                          &server,
+                                                          session,
+                                                          ward.id,
+                                                          ward.version,
+                                                          uploadFor(ward.id, devices, ward.saveCounter),
+                                                          _1));
+    if (version.ok())
+    {
+        ward.version = version.value.value();
+    }
+    return version.error;
+}
+
+bool advance(ServerApi& server, SharedDocument& ward, qint64 seconds)
+{
+    if (!wait<Done>(std::bind(&ServerApi::advanceClock, &server, seconds, _1)).ok())
     {
         return false;
     }
 
-    const Result<PairingState> read = wait<PairingState>([&](Reply<PairingState> reply)
+    const std::optional<Session> alice = signIn(server, ward.alice);
+    const std::optional<Session> bob = signIn(server, ward.bob);
+    const std::optional<Session> carol = signIn(server, ward.carol);
+    if (!alice.has_value() || !bob.has_value() || !carol.has_value())
     {
-        server.pairing(responderSession, code.value.value(), reply);
-    });
-
-    return read.ok()
-        && signedRespondToPairing(server, responderSession, code.value.value(), keysOf(responder)).ok()
-        && signedRevealPairing(server, initiatorSession, code.value.value(), keysOf(initiator), Pairing::newNonce())
-               .ok()
-        && signedHandOver(server, responderSession, code.value.value(), "a signed handover").ok();
+        return false;
+    }
+    ward.aliceSession = alice.value();
+    ward.bobSession = bob.value();
+    ward.carolSession = carol.value();
+    return true;
 }
 
 } // namespace ServerTestSupport

@@ -14,7 +14,7 @@ private slots:
     void everyValueReadsBackThroughASecondInstance();
     void numbersRoundTripAsNumbers();
     void recordsForTwoIdsStaySeparate();
-    void aRecordWithPendingRosterChangesRoundTrips();
+    void grantedAndLinkedDevicesRoundTrip();
     void removingARecordLeavesTheOthers();
     void wardEntriesReadBackThroughASecondInstance();
     void removingAWardLeavesItsRecordAndClearsTheLastWard();

@@ -17,9 +17,6 @@ private slots:
     void offlineRefusesEverything();
     void aForcedConflictRefusesTheNextUploadOnly();
     void aLeaseCanBeHeldByAnotherMember();
-    void aWithheldHeaderIsLeftOutOfTheChain();
-    void aSubstitutedHeaderIsServedInItsPlace();
-    void scriptedPairingReadsAreServedInOrder();
     void limitsAreConfigurable();
 
     // Replies

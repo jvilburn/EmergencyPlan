@@ -2,13 +2,10 @@
 
 #include <QObject>
 
-/// Known-answer vectors for the document format.
-///
-/// Every other test compares the code with itself, so a reordered associated-data
-/// field or a renamed personalisation string would change both sides and stay
-/// green while every existing file and signature became unreadable. These pin the
-/// bytes. The expected values were computed by an independent implementation of
-/// the format (Python's hashlib and struct), not by this code.
+/// Known-answer vectors for the parts of the format the companion server and any
+/// later reader must reproduce byte for byte: the device fingerprint, the payload
+/// hash, a header's associated data, the former-key hash, and how a login challenge
+/// is signed.
 class FormatVectorsTest : public QObject
 {
     Q_OBJECT
@@ -18,9 +15,8 @@ private slots:
 
     void fingerprintMatchesTheVector();
     void payloadHashMatchesTheVector();
-    void associatedDataAndSignedBytesMatchTheVectors();
-    void pairingCommitAndNumberMatchTheVectors();
-    void signaturesAreMadeOverTheTagThenAZeroByte();
-    void requestSignaturesCoverTheRouteDocumentAndBodyHash();
+    void associatedDataMatchesTheVector();
+    void formerKeyHashMatchesTheVector();
+    void aChallengeIsSignedAsItStands();
     void eachOracleRejectsACorruptedByte();
 };

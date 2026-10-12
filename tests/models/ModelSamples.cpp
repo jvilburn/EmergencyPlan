@@ -1,10 +1,8 @@
 #include "ModelSamples.h"
 
-#include "AccessRoster.h"
 #include "Document.h"
 #include "DocumentCrypto.h"
-#include "RosterDevice.h"
-#include "RosterPerson.h"
+#include "SealingSet.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -193,19 +191,11 @@ QJsonObject emergencyResponse()
 
 QJsonObject document()
 {
-    const RosterDevice device = RosterDevice::create("Laptop",
-                                                     DocumentCrypto::generateKeypair().publicKey,
-                                                     DocumentCrypto::generateSigningKeypair().verifyKey);
-    MemberId member;
-    member.bytes = DocumentCrypto::generateDataKey().bytes.left(MemberId::Size);
-    AccessRoster roster;
-    if (!roster.addPerson(RosterPerson::create(member, "Alice Reed", device, RosterPerson::Role::Admin)))
-    {
-        qFatal("ModelSamples::document: the roster refused its one person");
-    }
+    const SealingSet sealingSet = SealingSet::of(
+        DeviceKeys{DocumentCrypto::generateKeypair().publicKey, DocumentCrypto::generateSigningKeypair().verifyKey});
 
     QJsonObject json;
-    json["accessRoster"] = roster.toJson();
+    json["sealingSet"] = sealingSet.toJson();
     json["stakes"] = QJsonArray{stake()};
     json["wards"] = QJsonArray{ward()};
     json["families"] = QJsonArray{family()};

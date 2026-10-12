@@ -17,7 +17,9 @@ private slots:
     void errorsAreReadByNameThenStatus_data();
     void errorsAreReadByNameThenStatus();
 
-    void aCallTravelsWithItsTokenSignatureAndBody();
+    void lostAccessIsReadInFull();
+    void aCallTravelsWithItsTokenAndBody();
+    void anAccessLostAnswerCarriesHowThroughTheReply();
     void everyCallTakesItsRoute_data();
     void everyCallTakesItsRoute();
     void aFailedAnswerIsItsNamedError();

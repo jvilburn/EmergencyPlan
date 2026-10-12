@@ -1,12 +1,10 @@
 #include "ResponseMergeTest.h"
 
-#include "AccessRoster.h"
 #include "Address.h"
 #include "DocumentCrypto.h"
 #include "Family.h"
 #include "ResponseMerge.h"
-#include "RosterDevice.h"
-#include "RosterPerson.h"
+#include "SealingSet.h"
 
 #include <QtTest>
 
@@ -98,20 +96,10 @@ Family familyAt(const FamilyId& id, double latitude)
     return Family::createWithId(id, latitude, -111.0, Address(), {});
 }
 
-AccessRoster rosterOfOne(const QString& name)
+SealingSet setOfOne()
 {
-    MemberId member;
-    member.bytes = DocumentCrypto::generateDataKey().bytes.left(MemberId::Size);
-    const RosterDevice device = RosterDevice::create("Laptop",
-                                                     DocumentCrypto::generateKeypair().publicKey,
-                                                     DocumentCrypto::generateSigningKeypair().verifyKey);
-
-    AccessRoster roster;
-    if (!roster.addPerson(RosterPerson::create(member, name, device, RosterPerson::Role::Admin)))
-    {
-        qFatal("could not build a one-person roster");
-    }
-    return roster;
+    return SealingSet::of(
+        DeviceKeys{DocumentCrypto::generateKeypair().publicKey, DocumentCrypto::generateSigningKeypair().verifyKey});
 }
 
 /// A document with one family and the storm under way.
@@ -120,7 +108,7 @@ Document documentWith(const FamilyId& family, const Storm& s)
     Document document = Document::empty();
     document.addFamily(familyAt(family, 40.0));
     document.setEmergencyResponse(s.response);
-    document.setAccessRoster(rosterOfOne("Alice Reed"));
+    document.setSealingSet(setOfOne());
     return document;
 }
 
@@ -534,23 +522,23 @@ void ResponseMergeTest::noDirectoryChangeMergesTheResponse()
     QVERIFY(hasAttempt(recordOf(response, s.baker), theirsCalled.id()));
 }
 
-void ResponseMergeTest::theRosterIsAlwaysTheirs()
+void ResponseMergeTest::theSealingSetIsAlwaysTheirs()
 {
     const Storm s = storm();
     const Document base = documentWith(s.adams, s);
 
     Document mine = base;
     mine.updateFamily(familyAt(s.adams, 41.5));
-    mine.setAccessRoster(rosterOfOne("Mine's view"));
+    mine.setSealingSet(setOfOne());
 
     Document theirs = base;
-    theirs.setAccessRoster(rosterOfOne("Validated"));
+    theirs.setSealingSet(setOfOne());
 
     const std::optional<Document> result = ResponseMerge::mergeDocuments(base, mine, theirs);
     QVERIFY(result.has_value());
-    QVERIFY(result.value().accessRoster() == theirs.accessRoster());
-    QVERIFY(!(result.value().accessRoster() == mine.accessRoster()));
+    QVERIFY(result.value().sealingSet() == theirs.sealingSet());
+    QVERIFY(!(result.value().sealingSet() == mine.sealingSet()));
 
-    // A roster change alone is not a directory change.
+    // A change to who it is sealed to alone is not a directory change.
     QVERIFY(!ResponseMerge::directoryChanged(theirs, base));
 }

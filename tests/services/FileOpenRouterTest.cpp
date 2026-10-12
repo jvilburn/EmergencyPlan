@@ -24,18 +24,16 @@ bool writeFile(const QString& path, const QByteArray& bytes)
     return file.open(QIODevice::WriteOnly | QIODevice::Truncate) && file.write(bytes) == bytes.size();
 }
 
-/// A document whose roster is only this device's person.
+/// A document sealed only to this device.
 Document documentFor(const DeviceIdentity& identity)
 {
-    AccessRoster roster;
-    roster.addPerson(identity.asNewPerson());
     Document document = Document::empty();
-    document.setAccessRoster(roster);
+    document.setSealingSet(SealingSet::of(identity.keys()));
     return document;
 }
 
-/// A file under documentId, sealed by identity for its person, with the origin and
-/// format version given.
+/// A file under documentId, sealed to identity's device, with the origin and format
+/// version given.
 QByteArray wardFile(const QString& documentId,
                     const DeviceIdentity& identity,
                     const QString& originDocumentId,
@@ -46,7 +44,7 @@ QByteArray wardFile(const QString& documentId,
     first.originDocumentId = originDocumentId;
     first.saveCounter = 0;
     DocumentFile::Sealed sealed =
-        DocumentFile::seal(documentFor(identity), first, DocumentCrypto::generateDataKey(), identity).value();
+        DocumentFile::seal(documentFor(identity), first, DocumentCrypto::generateDataKey()).value();
     sealed.header.formatVersion = formatVersion;
     return DocumentFile::encode(sealed);
 }
@@ -70,7 +68,7 @@ void FileOpenRouterTest::eachFileTakesItsRoute_data()
     QTest::newRow("a copy") << "copy" << FileOpenRouter::Action::OpenCopy << false;
     QTest::newRow("written for this device") << "this device" << FileOpenRouter::Action::AddWard << true;
     QTest::newRow("written for another of this person's devices")
-        << "other device" << FileOpenRouter::Action::LinkDevice << true;
+        << "other device" << FileOpenRouter::Action::RequestAccess << true;
     QTest::newRow("another person's ward") << "stranger" << FileOpenRouter::Action::RequestAccess << true;
     QTest::newRow("a later format") << "later" << FileOpenRouter::Action::NeedsNewerVersion << false;
     QTest::newRow("not a Ward Planning file") << "not ours" << FileOpenRouter::Action::NotAWardPlanningFile << false;
