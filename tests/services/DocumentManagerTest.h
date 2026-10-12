@@ -23,6 +23,7 @@ private slots:
     void aFetchThatFindsAccessLostSaysWhy();
     void shareAnnouncesTheWardAndOfflineSaysWhy();
     void anInviteJoinsAUserOrAnotherDevice();
+    void aLinkForAWardAlreadyHereOpensItAndWritesNothing();
     void anAdminRemovesWithdrawsAndChangesRoles();
     void theLastAdminCannotStepDown();
     void aMemberLeavesAndTheWardGoes();

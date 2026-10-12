@@ -1,6 +1,5 @@
 #include "ResponseMerge.h"
 
-
 #include <QHash>
 #include <QSet>
 

@@ -207,9 +207,9 @@ void AccessDialog::fillTree()
                 continue;
             }
             const bool forDevice = invite.purpose == Invite::For::Device;
-            const QString what = forDevice ? tr("Invite for a device") : tr("Invite for a new user");
+            const QString what = forDevice ? tr("%1 (invite for a device)") : tr("%1 (invite for a new user)");
             QTreeWidgetItem* inviteRow =
-                new QTreeWidgetItem(row, {tr("%1: %2").arg(what, invite.label), forDevice ? tr("Open") : roleText(invite.role)});
+                new QTreeWidgetItem(row, {what.arg(invite.label), forDevice ? QString() : roleText(invite.role)});
             inviteRow->setData(0, InviteRole, invite.fingerprint().toHex());
         }
     }

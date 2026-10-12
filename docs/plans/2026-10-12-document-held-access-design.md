@@ -107,8 +107,8 @@ An invite is a one-time bearer key.
 Two people changing who has access at the same moment merges entry by entry, like the
 emergency response, and never asks: a person or an invite changed on one side is taken
 from that side; one changed differently on both is the server's, and a removed person's
-invites go with them. Where the entries taken together are not a sound set, the server's
-set stands whole. An invite made here and a join landing there cross without troubling
+invites go with them. Where removals on both sides leave nobody, the server's set stands
+whole. An invite made here and a join landing there cross without troubling
 anyone. The last person cannot leave: a ward with nobody to read it is not a state.
 Leaving needs the server, since the version without you must be held there before your
 copy goes.

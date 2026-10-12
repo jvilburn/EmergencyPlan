@@ -1,6 +1,7 @@
 #pragma once
 
 #include "DocumentCrypto.h"
+#include "SealingSet.h"
 
 #include <QByteArray>
 #include <QString>
@@ -56,6 +57,9 @@ struct InviteLink
     QByteArray seed;
 
     InviteKeys keys() const;
+
+    /// The roster entry this link joins with.
+    Invite invite(Invite::For purpose, const MemberId& maker, Role role, const QString& label) const;
 
     /// `wardplanning:join/<document id>/<seed, base64url>`.
     QString toString() const;

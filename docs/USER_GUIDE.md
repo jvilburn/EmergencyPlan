@@ -210,7 +210,7 @@ The link works once. Whoever opens it first is in, and everyone with access sees
 
 ### Adding a device of your own
 
-Your wards can live on more than one of your devices. On a device you already use, choose **Add a Device** and send the message to yourself; open the link on the new device. It joins as another of your devices, with your name and your role. Keep this in mind: anyone who opens that link becomes one of your devices, so send it only to yourself, and remove any device you do not recognise.
+Your wards can live on more than one of your devices. On a device you already use, choose **Add a Device** and send the message to yourself; open the link on the new device. It joins as another of your devices, with your name and your role. Keep this in mind: anyone who opens that link becomes one of your devices, so send it only to yourself, and unlink any device of yours you do not recognise.
 
 ### Admins and members
 
@@ -222,13 +222,13 @@ The admin rule is kept by the app, not by the server: it exists to keep well-mea
 
 An admin selects a person in **Who Has Access** and chooses **Remove**. From that moment their devices cannot read anything saved afterwards, and their app deletes its copy the next time it checks the server. A copy they saved outside the app beforehand keeps what it had.
 
-**Unlink** does the same for one of your own devices, say a lost phone. **Withdraw Invite** cancels an invite nobody has used yet.
+**Unlink** does the same for one of your own devices, say a lost phone. **Withdraw Invite** cancels an invite nobody has used yet: one you made, or any invite if you are an admin.
 
 **Leave** takes you out of the ward yourself. It needs the server, since your leaving has to be held there before your copy goes. The last person in a ward cannot leave it.
 
 ### Who has access changed
 
-Every join, removal, role change, device, and invite is announced to everyone with access, once, as a notice above the ward - *3 changes to who has access* - that expands to the list. Dismiss it and it stays dismissed; new changes bring a new notice.
+Every join, removal, role change, device, and invite is announced on each device with access, once, as a notice above the ward - *3 changes to who has access* - that expands to the list. Dismiss it and it stays dismissed; new changes bring a new notice.
 
 ### The sync indicator
 

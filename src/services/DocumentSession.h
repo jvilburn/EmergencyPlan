@@ -54,8 +54,9 @@ enum class SyncState
 /// Every save applies the sealing-set rule against the version it builds on: when
 /// the roster now lacks a device or an invite that version sealed to, the data key
 /// is fresh, so whoever was taken out holds no key to anything written afterwards.
-/// The roster itself changes only through edits here - an invite made, a person or
-/// device removed, a role changed - and through join, which a new device makes once.
+/// The roster changes by a roster edit on some device - an invite made, a person or
+/// device removed, a role changed - or by a join, which a new device makes once; this
+/// session takes others' changes in like any version.
 ///
 /// One document operation runs at a time - a head check, a fetch, a publish, the
 /// registration that shares the ward, or a leave - so a save made during a publish
@@ -108,7 +109,7 @@ public:
         UnknownWard,        ///< the server has no such document
         InviteUsed,         ///< this device could not take the invite's place, and the current version is not its
         NeedsNewerVersion,
-        ServerFault,        ///< the version did not check out; the reason says why
+        ServerFault,        ///< the version did not check out, could not be sealed here, or was refused; the reason says why
         WriteFailed
     };
 

@@ -2,7 +2,6 @@
 
 #include "ResponseMerge.h"
 
-
 using namespace ServerContract;
 using namespace std::placeholders;
 using ServerVersion::Fetched;

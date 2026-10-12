@@ -474,9 +474,9 @@ counter tells whether the local file has unpublished changes, and a three-way me
 against it tells what changed here from what changed there. The roster merges entry by
 entry, and never conflicts: a person or an invite changed on one side is taken from that
 side; one changed differently on both is the server's; a removed person's invites go with
-them; and where the entries taken together are not a sound set, the server's set stands
-whole. A refused publish fetches the server's version, validates it, merges, reseals, and
-publishes again.
+them; and where removals on both sides leave nobody, the server's set stands whole. A
+refused publish fetches the server's version, validates it, merges, reseals, and publishes
+again.
 
 ## File Formats
 

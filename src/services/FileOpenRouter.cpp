@@ -63,6 +63,17 @@ InviteKeys InviteLink::keys() const
     return keys;
 }
 
+Invite InviteLink::invite(Invite::For purpose, const MemberId& maker, Role role, const QString& label) const
+{
+    Invite open;
+    open.purpose = purpose;
+    open.maker = maker;
+    open.role = role;
+    open.label = label;
+    open.keys = keys().publicKeys();
+    return open;
+}
+
 QString InviteLink::toString() const
 {
     return QString::fromLatin1(DocumentConstants::InvitePrefix) + documentId + '/'

@@ -254,7 +254,6 @@ bool DocumentManager::newDocument(QString* errorMessage)
     {
         return false;
     }
-    m_fetching.clear();
 
     const QString documentId = DocumentLibrary::newDocumentId();
     m_library->add(documentId);
@@ -281,7 +280,6 @@ DocumentManager::Open DocumentManager::openDocument(const QString& documentId, Q
     {
         return Open::Opened;
     }
-    m_fetching.clear();
     return open(documentId, refusal, true);
 }
 
@@ -381,7 +379,6 @@ bool DocumentManager::showCopy(const DocumentLibrary::Copy& copy, QString* error
     {
         return false;
     }
-    m_fetching.clear();
 
     m_copy = copy;
     onDocumentReplaced();
@@ -456,6 +453,8 @@ bool DocumentManager::close(QString* errorMessage)
 
 bool DocumentManager::closeCurrent(QString* errorMessage)
 {
+    // Whatever shows next, a ward still being fetched waits in the library.
+    m_fetching.clear();
     m_copy.reset();
     if (!m_session)
     {
@@ -613,18 +612,10 @@ std::optional<FileOpenRouter::InviteLink> DocumentManager::invite(Invite::For pu
         return std::nullopt;
     }
 
-    // The link carries the seed; the roster carries the keys made from it.
     const FileOpenRouter::InviteLink link{m_session->documentId(),
                                           DocumentCrypto::randomBytes(FileOpenRouter::InviteLink::SeedSize)};
-    Invite open;
-    open.purpose = purpose;
-    open.maker = me->id;
-    open.role = role;
-    open.label = label;
-    open.keys = link.keys().publicKeys();
-
     SealingSet changed = roster();
-    if (!changed.addInvite(open))
+    if (!changed.addInvite(link.invite(purpose, me->id, role, label)))
     {
         return std::nullopt;
     }

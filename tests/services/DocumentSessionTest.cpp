@@ -1350,7 +1350,7 @@ void DocumentSessionTest::aLeaveReportsLeftOnceTheServerHasIt()
     ward.settle();
     aliceSession->leave();
     ward.settle();
-    QCOMPARE(aliceRecorder.leaveFailures.size(), 1);
+    QCOMPARE(aliceRecorder.leaveFailures, QList<ServerContract::ServerError>{ServerContract::ServerError::InvalidRequest});
     QVERIFY(!aliceRecorder.lost.has_value());
     QCOMPARE(headVersion(ward), 4);
 }

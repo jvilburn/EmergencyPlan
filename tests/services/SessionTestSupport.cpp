@@ -192,8 +192,10 @@ SealingSet rosterOf(const QList<DeviceIdentity>& devices)
         open.label = "for " + joiner.displayName;
         open.keys = DeviceKeys{DocumentCrypto::generateKeypair().publicKey,
                                DocumentCrypto::generateSigningKeypair().verifyKey};
-        roster.addInvite(open);
-        roster.join(open.fingerprint(), joiner.device(), joiner.member, joiner.displayName);
+        if (!roster.addInvite(open) || !roster.join(open.fingerprint(), joiner.device(), joiner.member, joiner.displayName))
+        {
+            qFatal("rosterOf: a join refused");
+        }
     }
     return roster;
 }
@@ -302,12 +304,7 @@ std::optional<FileOpenRouter::InviteLink> TestWard::invite(DocumentSession& invi
     }
     const FileOpenRouter::InviteLink link{inviter.documentId(),
                                           DocumentCrypto::randomBytes(FileOpenRouter::InviteLink::SeedSize)};
-    Invite open;
-    open.purpose = purpose;
-    open.maker = me->id;
-    open.role = role;
-    open.label = label;
-    open.keys = link.keys().publicKeys();
+    const Invite open = link.invite(purpose, me->id, role, label);
     SealingSet changed = inviter.document().sealingSet();
     if (!changed.addInvite(open))
     {

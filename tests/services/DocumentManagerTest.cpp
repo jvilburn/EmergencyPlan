@@ -513,6 +513,53 @@ void DocumentManagerTest::anInviteJoinsAUserOrAnotherDevice()
                      tablet.identity.fingerprint().toHex()}));
 }
 
+void DocumentManagerTest::aLinkForAWardAlreadyHereOpensItAndWritesNothing()
+{
+    TestWard ward;
+    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
+    Device& bob = ward.add(newIdentity("Bob", "Phone"));
+    std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
+    QVERIFY(aliceSession);
+    const std::optional<FileOpenRouter::InviteLink> forBob =
+        ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Bob");
+    QVERIFY(forBob.has_value());
+    App app(bob);
+    QVERIFY(joinInApp(ward, app, forBob.value()));
+    const std::optional<FileOpenRouter::InviteLink> forCarol =
+        ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Carol");
+    QVERIFY(forCarol.has_value());
+
+    // Bob records a contact while out of reach, then opens the second link: the ward
+    // he holds is opened as it is, his unpublished work untouched.
+    const qint64 head = ward.head()->version;
+    ward.server.setOffline(true);
+    QCOMPARE(app.manager.session()->edit(DocumentSession::Edit::Response, recordContact(ward.adams, ContactStatus::OK)),
+             DocumentSession::Refusal::None);
+    QVERIFY(app.manager.session()->flush(nullptr));
+    const QString file = app.library.pathsFor(ward.documentId).file;
+    QFile written(file);
+    QVERIFY(written.open(QIODevice::ReadOnly));
+    const QByteArray before = written.readAll();
+    written.close();
+
+    QSignalSpy finished(&app.manager, &DocumentManager::fetchFinished);
+    QSignalSpy failed(&app.manager, &DocumentManager::joinFailed);
+    app.manager.joinWard(forCarol.value());
+    ward.settle();
+    ward.server.setOffline(false);
+
+    QCOMPARE(finished.count(), 1);
+    QCOMPARE(finished.first().at(1).value<DocumentManager::Open>(), DocumentManager::Open::Opened);
+    QCOMPARE(failed.count(), 0);
+    QCOMPARE(app.manager.documentId(), ward.documentId);
+    QCOMPARE(statusOf(app.manager.document(), ward.adams), ContactStatus::OK);
+    QCOMPARE(app.manager.session()->syncState(), SyncState::PendingUpload);
+    QFile after(file);
+    QVERIFY(after.open(QIODevice::ReadOnly));
+    QCOMPARE(after.readAll(), before);
+    QCOMPARE(ward.head()->version, head);
+}
+
 void DocumentManagerTest::anAdminRemovesWithdrawsAndChangesRoles()
 {
     TestWard ward;
