@@ -1,5 +1,6 @@
 #include "DocumentManager.h"
 #include "BackgroundGeocodingService.h"
+#include "RosterDiff.h"
 #include "ServerVersion.h"
 #include "ServerConnection.h"
 #include "UnitLookupService.h"
@@ -335,12 +336,10 @@ DocumentManager::Open DocumentManager::open(const QString& documentId, QString* 
 void DocumentManager::fetch(const QString& documentId)
 {
     m_fetching = documentId;
-    m_library->fetchWard(documentId, *m_server, this, std::bind(&DocumentManager::onFetched, this, _1, _2, _3));
+    m_library->fetchWard(documentId, *m_server, this, std::bind(&DocumentManager::onFetched, this, _1, _2));
 }
 
-void DocumentManager::onFetched(const QString& documentId,
-                                DocumentSession::Download outcome,
-                                const std::optional<ServerContract::LostAccess>& lost)
+void DocumentManager::onFetched(const QString& documentId, DocumentSession::Download outcome)
 {
     // Another ward was shown meanwhile; this one waits in the library.
     if (m_fetching != documentId)
@@ -360,13 +359,14 @@ void DocumentManager::onFetched(const QString& documentId,
         return;
     }
     case DocumentSession::Download::AccessLost:
-        forgetLostWard(documentId, lost.value_or(ServerContract::LostAccess()));
+        // Without the ward's roster there is no saying who; the version simply does
+        // not seal to this device any more.
+        forgetLostWard(documentId, ServerVersion::LostAccess{ServerVersion::LostAccess::How::Removed, QString()});
         return;
     case DocumentSession::Download::Unreachable:
     case DocumentSession::Download::NeedsNewerVersion:
     case DocumentSession::Download::ServerFault:
     case DocumentSession::Download::WriteFailed:
-    case DocumentSession::Download::NotYetSealed:
         emit fetchFailed(documentId, outcome);
         return;
     }
@@ -471,7 +471,7 @@ bool DocumentManager::closeCurrent(QString* errorMessage)
 void DocumentManager::resetWard()
 {
     m_copy.reset();
-    m_unseenHistory.clear();
+    m_rosterChanges.clear();
     m_pendingWardLookups.clear();
     m_pendingStakeLookups.clear();
     onDocumentReplaced();
@@ -483,12 +483,14 @@ void DocumentManager::install(std::unique_ptr<DocumentSession> session)
 {
     m_copy.reset();
     m_session = std::move(session);
-    m_unseenHistory.clear();
+    m_rosterChanges.clear();
     m_pendingWardLookups.clear();
     m_pendingStakeLookups.clear();
 
     DocumentSession* opened = m_session.get();
     connect(opened, &DocumentSession::documentReplaced, this, &DocumentManager::onDocumentReplaced);
+    connect(opened, &DocumentSession::rosterChanged, this, &DocumentManager::refreshRosterChanges);
+    connect(opened, &DocumentSession::leaveFailed, this, &DocumentManager::leaveFailed);
     connect(opened, &DocumentSession::readOnlyChanged, this, &DocumentManager::onReadOnlyChanged);
     connect(opened, &DocumentSession::syncStateChanged, this, &DocumentManager::syncStateChanged);
     connect(opened, &DocumentSession::conflictRaised, this, &DocumentManager::conflictRaised);
@@ -501,6 +503,7 @@ void DocumentManager::install(std::unique_ptr<DocumentSession> session)
 
     opened->setEmergencyActive(opened->document().emergencyResponse().has_value());
     onDocumentReplaced();
+    refreshRosterChanges();
     emit documentOpened();
     emit readOnlyChanged();
     emit syncStateChanged(opened->syncState());
@@ -541,37 +544,57 @@ void DocumentManager::onReadOnlyChanged()
 void DocumentManager::onHeadChanged()
 {
     emit headChanged();
+}
 
-    // Fetched only when the server has entries newer than the last one dismissed
-    // here, and one fetch at a time; a failed one is tried at the next head.
-    const std::optional<ServerContract::Head>& head = m_session->lastHead();
-    if (m_server == nullptr || !head.has_value() || m_fetchingHistory)
+SealingSet DocumentManager::roster() const
+{
+    return m_session && !m_copy.has_value() ? m_session->document().sealingSet() : SealingSet();
+}
+
+std::optional<Holder> DocumentManager::self() const
+{
+    return roster().personOf(m_identity.fingerprint());
+}
+
+void DocumentManager::refreshRosterChanges()
+{
+    QStringList changes;
+    if (m_session && !m_copy.has_value())
     {
-        return;
+        // Shown for the first time, a ward's roster is what it is; from then on, what
+        // changed since the notice was last dismissed.
+        DocumentRecord record = m_records->record(m_session->documentId());
+        const std::optional<SealingSet> previous = SealingSet::fromJson(record.rosterShown);
+        if (!previous.has_value())
+        {
+            record.rosterShown = roster().toJson();
+            m_records->setRecord(m_session->documentId(), record);
+        }
+        else
+        {
+            changes = RosterDiff::describe(previous.value(), roster());
+        }
     }
-    const qint64 seen = m_records->record(m_session->documentId()).historySeen;
-    const qint64 shown = m_unseenHistory.isEmpty() ? seen : m_unseenHistory.last().index;
-    if (head.value().history > shown)
+
+    if (changes != m_rosterChanges)
     {
-        m_fetchingHistory = true;
-        m_server->history(m_session->documentId(),
-                          seen,
-                          this,
-                          std::bind(&DocumentManager::onHistory, this, m_session->documentId(), _1));
+        m_rosterChanges = changes;
+        emit accessChanged();
     }
 }
 
-void DocumentManager::onHistory(const QString& documentId,
-                                const ServerContract::Result<QList<ServerContract::HistoryEntry>>& history)
+void DocumentManager::dismissRosterChanges()
 {
-    m_fetchingHistory = false;
-
-    // Another ward opened meanwhile reads its own.
-    if (!history.ok() || !m_session || m_session->documentId() != documentId)
+    if (!m_session || m_rosterChanges.isEmpty())
     {
         return;
     }
-    m_unseenHistory = history.value.value();
+
+    // Seen for good, on the record, so the next sync shows only what is newer.
+    DocumentRecord record = m_records->record(m_session->documentId());
+    record.rosterShown = roster().toJson();
+    m_records->setRecord(m_session->documentId(), record);
+    m_rosterChanges.clear();
     emit accessChanged();
 }
 
@@ -583,195 +606,129 @@ void DocumentManager::share()
     }
 }
 
-void DocumentManager::fetchRequests(QObject* receiver, const RequestsFetched& done)
+std::optional<FileOpenRouter::InviteLink> DocumentManager::invite(Invite::For purpose, const QString& label)
 {
-    if (!m_session || m_server == nullptr || !m_session->isShared())
+    const std::optional<Holder> me = self();
+    if (!m_session || !me.has_value())
     {
-        return;
+        return std::nullopt;
     }
-    m_server->accessRequests(m_session->documentId(), receiver, std::bind(&DocumentManager::onRequests, this, done, _1));
+
+    // A device invite joins this person as they are; a new person starts as a member.
+    const Role role = purpose == Invite::For::Device ? me->role : Role::Member;
+    const std::optional<FileOpenRouter::InviteLink> link = m_session->invite(purpose, role, label);
+    if (link.has_value())
+    {
+        DocumentRecord record = m_records->record(m_session->documentId());
+        record.rosterShown = roster().toJson();
+        m_records->setRecord(m_session->documentId(), record);
+    }
+    return link;
 }
 
-void DocumentManager::onRequests(const RequestsFetched& done,
-                                 const ServerContract::Result<QList<ServerContract::AccessRequest>>& requests)
+QString DocumentManager::inviteMessage(const FileOpenRouter::InviteLink& link) const
 {
-    done(requests.value.value_or(QList<ServerContract::AccessRequest>()));
+    const QString ward = wardNameOf(link.documentId);
+    return FileOpenRouter::inviteMessage(m_identity.displayName, ward.isEmpty() ? tr("a ward") : ward, link);
 }
 
-void DocumentManager::grant(const ServerContract::AccessRequest& request)
+void DocumentManager::editRoster(const std::function<bool(SealingSet&)>& change)
 {
-    if (!m_session || m_server == nullptr || !m_session->isShared())
-    {
-        return;
-    }
-    if (request.person.devices.isEmpty())
-    {
-        emit grantBlocked(tr("The request names no device to seal the ward to."));
-        return;
-    }
-    startGrant(request, true);
-}
-
-void DocumentManager::startGrant(const ServerContract::AccessRequest& request, bool mayRetry)
-{
-    const QString documentId = m_session->documentId();
-    ServerVersion::buildResealing(
-        m_identity.self(),
-        ServerVersion::trustedKeys(documentId, m_library->pathsFor(documentId), *m_records, m_identity.self()),
-        m_records->linkedDevices(),
-        request.person.devices.first().keys,
-        *m_server,
-        documentId,
-        this,
-        std::bind(&DocumentManager::onGrantBuilt, this, documentId, request, mayRetry, _1, _2));
-}
-
-void DocumentManager::onGrantBuilt(const QString& documentId,
-                                   const ServerContract::AccessRequest& request,
-                                   bool mayRetry,
-                                   const ServerVersion::Fetched& theirs,
-                                   const std::optional<ServerContract::Resealing>& built)
-{
-    // The ward may have closed while the version was fetched.
-    if (!m_session || m_session->documentId() != documentId)
+    if (!m_session || m_copy.has_value())
     {
         return;
     }
 
-    switch (theirs.outcome)
-    {
-    case ServerVersion::Fetched::Outcome::Accepted:
-        break;
-    case ServerVersion::Fetched::Outcome::AccessLost:
-        emit accessCallFailed(ServerContract::ServerError::AccessLost);
-        return;
-    case ServerVersion::Fetched::Outcome::CallFailed:
-        emit accessCallFailed(theirs.error);
-        return;
-    case ServerVersion::Fetched::Outcome::NeedsNewerVersion:
-        emit grantBlocked(tr("This ward's current version was written by a newer Ward Planning."));
-        return;
-    case ServerVersion::Fetched::Outcome::ServerFault:
-        emit grantBlocked(theirs.reason);
-        return;
-    }
-
-    m_server->grant(built->documentId,
-                    request.index,
-                    built.value(),
-                    this,
-                    std::bind(&DocumentManager::onGranted, this, request, mayRetry, _1));
-}
-
-void DocumentManager::onGranted(const ServerContract::AccessRequest& request,
-                                bool mayRetry,
-                                const ServerContract::Result<ServerContract::Done>& result)
-{
-    // Someone published between the fetch and the grant: once more on their version.
-    if (result.error == ServerContract::ServerError::VersionConflict && mayRetry && m_session)
-    {
-        startGrant(request, false);
-        return;
-    }
-    onAccessCall(result);
-}
-
-void DocumentManager::decline(const ServerContract::AccessRequest& request)
-{
-    if (m_session && m_server != nullptr)
-    {
-        m_server->declineRequest(m_session->documentId(),
-                                 request.index,
-                                 this,
-                                 std::bind(&DocumentManager::onAccessCall, this, _1));
-    }
-}
-
-void DocumentManager::remove(const MemberId& member)
-{
-    if (m_session && m_server != nullptr)
-    {
-        m_server->removeMember(m_session->documentId(), member, this, std::bind(&DocumentManager::onAccessCall, this, _1));
-    }
-}
-
-void DocumentManager::setRole(const MemberId& member, ServerContract::Role role)
-{
-    if (m_session && m_server != nullptr)
-    {
-        m_server->setRole(m_session->documentId(), member, role, this, std::bind(&DocumentManager::onAccessCall, this, _1));
-    }
-}
-
-void DocumentManager::leave(const std::optional<MemberId>& successor)
-{
-    if (!m_session || m_server == nullptr)
-    {
-        return;
-    }
-
-    const QString documentId = m_session->documentId();
-    if (successor.has_value())
-    {
-        m_server->setRole(documentId,
-                          successor.value(),
-                          ServerContract::Role::Admin,
-                          this,
-                          std::bind(&DocumentManager::onSuccessorMade, this, documentId, _1));
-        return;
-    }
-    sendLeave(documentId);
-}
-
-void DocumentManager::onSuccessorMade(const QString& documentId, const ServerContract::Result<ServerContract::Done>& result)
-{
-    if (!result.ok())
-    {
-        emit accessCallFailed(result.error);
-        return;
-    }
-    sendLeave(documentId);
-}
-
-void DocumentManager::sendLeave(const QString& documentId)
-{
-    m_server->removeMember(documentId, m_identity.member, this, std::bind(&DocumentManager::onLeft, this, documentId, _1));
-}
-
-void DocumentManager::onLeft(const QString& documentId, const ServerContract::Result<ServerContract::Done>& result)
-{
-    if (!result.ok())
-    {
-        emit accessCallFailed(result.error);
-        return;
-    }
-
-    // Gone from this device at once: the session closes without a last save, then the
-    // files, copies, record, and entry go.
-    if (m_session && m_session->documentId() == documentId)
-    {
-        ServerContract::LostAccess left;
-        left.how = ServerContract::LostAccess::How::Left;
-        m_session->finishLost(left);
-        return;
-    }
-    forgetLostWard(documentId, ServerContract::LostAccess{ServerContract::LostAccess::How::Left, QString(), QDateTime()});
-}
-
-void DocumentManager::onAccessCall(const ServerContract::Result<ServerContract::Done>& result)
-{
-    if (result.ok())
-    {
-        emit accessCallDone();
-        if (m_session)
+    bool changed = false;
+    m_session->edit(DocumentSession::Edit::Roster, [&change, &changed](Document& document) {
+        SealingSet roster = document.sealingSet();
+        changed = change(roster);
+        if (changed)
         {
-            m_session->checkServer();
+            document.setSealingSet(roster);
         }
-    }
-    else
+    });
+    if (!changed)
     {
-        emit accessCallFailed(result.error);
+        return;
     }
+
+    DocumentRecord record = m_records->record(m_session->documentId());
+    record.rosterShown = roster().toJson();
+    m_records->setRecord(m_session->documentId(), record);
+    m_session->publishNow();
+}
+
+void DocumentManager::removePerson(const MemberId& id)
+{
+    // Leaving is its own call; a roster without this person is never saved here.
+    const std::optional<Holder> me = self();
+    if (!me.has_value() || me->id == id)
+    {
+        return;
+    }
+    editRoster([&id](SealingSet& roster) { return roster.removePerson(id); });
+}
+
+void DocumentManager::removeDevice(const Fingerprint& device)
+{
+    if (device == m_identity.fingerprint())
+    {
+        return;
+    }
+    editRoster([&device](SealingSet& roster) { return roster.removeDevice(device); });
+}
+
+void DocumentManager::revokeInvite(const Fingerprint& invite)
+{
+    editRoster([&invite](SealingSet& roster) { return roster.removeInvite(invite); });
+}
+
+void DocumentManager::setRole(const MemberId& id, Role role)
+{
+    editRoster([&id, role](SealingSet& roster) { return roster.setRole(id, role); });
+}
+
+void DocumentManager::leave()
+{
+    if (m_session && !m_copy.has_value())
+    {
+        m_session->leave();
+    }
+}
+
+void DocumentManager::joinWard(const FileOpenRouter::InviteLink& link)
+{
+    if (m_library == nullptr || m_server == nullptr)
+    {
+        return;
+    }
+    if (m_library->contains(link.documentId))
+    {
+        QString reason;
+        emit fetchFinished(link.documentId, openDocument(link.documentId, &reason), reason);
+        return;
+    }
+    m_fetching = link.documentId;
+    m_library->join(link, *m_server, this, std::bind(&DocumentManager::onJoined, this, link.documentId, _1, _2));
+}
+
+void DocumentManager::onJoined(const QString& documentId, DocumentSession::Join outcome, const QString& reason)
+{
+    if (m_fetching != documentId)
+    {
+        return;
+    }
+    m_fetching.clear();
+
+    if (outcome != DocumentSession::Join::Done)
+    {
+        emit joinFailed(outcome, reason);
+        return;
+    }
+    QString refusal;
+    const Open result = open(documentId, &refusal, false);
+    emit fetchFinished(documentId, result, refusal);
 }
 
 void DocumentManager::onShared()
@@ -779,21 +736,7 @@ void DocumentManager::onShared()
     emit shared(m_session->documentId());
 }
 
-void DocumentManager::dismissHistory()
-{
-    if (!m_session || m_unseenHistory.isEmpty())
-    {
-        return;
-    }
-
-    DocumentRecord record = m_records->record(m_session->documentId());
-    record.historySeen = qMax(record.historySeen, m_unseenHistory.last().index);
-    m_records->setRecord(m_session->documentId(), record);
-    m_unseenHistory.clear();
-    emit accessChanged();
-}
-
-void DocumentManager::onSessionLost(const ServerContract::LostAccess& lost)
+void DocumentManager::onSessionLost(const ServerVersion::LostAccess& lost)
 {
     const QString documentId = m_session->documentId();
 
@@ -804,22 +747,7 @@ void DocumentManager::onSessionLost(const ServerContract::LostAccess& lost)
     forgetLostWard(documentId, lost);
 }
 
-void DocumentManager::onWardLostElsewhere(const QString& documentId, const ServerContract::LostAccess& lost)
-{
-    if (m_session && m_session->documentId() == documentId)
-    {
-        m_session->finishLost(lost);
-        return;
-    }
-
-    // A ward no longer in the library has already gone.
-    if (m_library->contains(documentId))
-    {
-        forgetLostWard(documentId, lost);
-    }
-}
-
-void DocumentManager::forgetLostWard(const QString& documentId, const ServerContract::LostAccess& lost)
+void DocumentManager::forgetLostWard(const QString& documentId, const ServerVersion::LostAccess& lost)
 {
     const QString wardName = wardNameOf(documentId);
     if (m_library != nullptr)

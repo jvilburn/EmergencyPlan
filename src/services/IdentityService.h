@@ -13,8 +13,8 @@
 /// and device name - resolved before any document exists. Its product is the
 /// DeviceIdentity value the core takes.
 ///
-/// The keys exist from the first run; the person from the moment it is created
-/// here or joined through linking.
+/// The keys exist from the first run; the person from the moment it is created on
+/// the first screen.
 class IdentityService
 {
 public:
@@ -35,26 +35,12 @@ public:
     /// Empty until a person exists.
     std::optional<DeviceIdentity> identity() const;
 
-    /// This device's public keys, which linking presents before a person exists.
-    DeviceKeys deviceKeys() const;
-
-    /// This device with no person: its keys and a name, enough to sign in and link.
-    DeviceIdentity deviceOnly(const QString& deviceName) const;
-
     /// The machine's host name, offered for editing on the first screen.
     static QString defaultDeviceName();
 
     /// A new person, under a fresh member id, with the names a person typed. Refused
     /// once a person exists, and for an empty name.
     bool createPerson(const QString& displayName, const QString& deviceName, QString* errorMessage);
-
-    /// An existing person, by the member id and display name the server gave when
-    /// another of their devices approved this one's link. Refused once a person
-    /// exists, and for an invalid id or an empty name.
-    bool joinPerson(const MemberId& member,
-                    const QString& displayName,
-                    const QString& deviceName,
-                    QString* errorMessage);
 
 private:
     IdentityService(const QString& path, const IdentityRecord& record);

@@ -27,7 +27,10 @@ QJsonObject DocumentRecord::toJson() const
     }
 
     json[KeyBaseSaveCounter] = baseSaveCounter;
-    json[KeyRosterShown] = rosterShown;
+    if (!rosterShown.isEmpty())
+    {
+        json[KeyRosterShown] = rosterShown;
+    }
     return json;
 }
 
@@ -35,8 +38,11 @@ std::optional<DocumentRecord> DocumentRecord::fromJson(const QJsonObject& json)
 {
     DocumentRecord record;
     if (!StrictJson::hasOnlyKeys(json, {KeyBaseVersion, KeyBaseHash, KeyBaseSaveCounter, KeyRosterShown})
-        || !StrictJson::readInt64(json, KeyBaseSaveCounter, record.baseSaveCounter)
-        || !StrictJson::readInt64(json, KeyRosterShown, record.rosterShown))
+        || !StrictJson::readInt64(json, KeyBaseSaveCounter, record.baseSaveCounter))
+    {
+        return std::nullopt;
+    }
+    if (json.contains(KeyRosterShown) && !StrictJson::readObject(json, KeyRosterShown, record.rosterShown))
     {
         return std::nullopt;
     }

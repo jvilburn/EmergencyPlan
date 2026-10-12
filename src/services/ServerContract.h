@@ -92,11 +92,16 @@ struct Signer
     Fingerprint fingerprint() const;
 };
 
+/// The header as it travels and is signed: its JSON, compact, keys sorted, exactly as
+/// headerText gives it. A server verifies the signature over the text it received and
+/// parses it afterwards, so it never has to reproduce a serialisation.
+QByteArray headerText(const DocumentHeader& header);
+
 /// What a write's signature covers: the call's name, the document id, the base version
-/// (0 for the first version), and a hash of the header and the blob. One function
-/// builds it on both sides. The lease calls cover the call and the document id only; a
-/// captured one replays, which takes or releases a lease the signer could take or
-/// release anyway.
+/// (0 for the first version), and a hash of the header text and one of the blob. One
+/// function builds it on both sides. The lease calls cover the call and the document
+/// id only; a captured one replays, which takes or releases a lease the signer could
+/// take or release anyway.
 QByteArray signedBytes(QLatin1String call, const QString& documentId, qint64 baseVersion, const Upload& upload);
 QByteArray signedBytes(QLatin1String call, const QString& documentId);
 

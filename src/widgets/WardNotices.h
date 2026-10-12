@@ -15,10 +15,10 @@ class UpdateChecker;
 /// - A newer version of Ward Planning is published, with or without a ward open.
 /// - The ward was saved by a newer version of Ward Planning, until it is updated.
 /// - Only you can open this ward: lose your devices and it cannot be recovered.
-/// - With one device, a gentler suggestion to link a second.
+/// - With one device, a gentler suggestion to add a second.
 /// - You are the only admin while others remain.
-/// - Who has access changed: the server's history since this device last dismissed
-///   it, expanding to the list.
+/// - Who has access changed: what differs from the roster this device last dismissed,
+///   expanding to the list.
 ///
 /// The others stay dismissed for that ward while the app runs; the access changes,
 /// once dismissed, stay seen across runs.
@@ -36,8 +36,8 @@ signals:
     /// The notice's own button: add someone, make someone an admin.
     void accessRequested();
 
-    /// The notice suggesting a second device: link one from here.
-    void linkRequested();
+    /// The notice suggesting a second device: add one from here.
+    void addDeviceRequested();
 
 private:
     enum class Kind

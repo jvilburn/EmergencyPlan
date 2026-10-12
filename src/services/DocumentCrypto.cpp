@@ -8,6 +8,7 @@ static_assert(DocumentCrypto::SignatureSize == crypto_sign_BYTES);
 static_assert(DocumentCrypto::SealedDataKeySize == DataKey::Size + crypto_box_SEALBYTES);
 static_assert(DocumentCrypto::NonceSize == crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
 static_assert(DocumentCrypto::SigningSeedSize == crypto_sign_SEEDBYTES);
+static_assert(DocumentCrypto::SealingSeedSize == crypto_box_SEEDBYTES);
 static_assert(DocumentCrypto::PayloadHashSize >= crypto_generichash_blake2b_BYTES_MIN);
 static_assert(DocumentCrypto::PayloadHashSize <= crypto_generichash_blake2b_BYTES_MAX);
 
@@ -105,7 +106,7 @@ SigningKeypair DocumentCrypto::generateSigningKeypair()
 Keypair DocumentCrypto::keypairFromSeed(const QByteArray& seed)
 {
     Keypair keys;
-    if (seed.size() != crypto_box_SEEDBYTES)
+    if (seed.size() != SealingSeedSize)
     {
         return keys;
     }

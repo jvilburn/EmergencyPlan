@@ -64,6 +64,9 @@ public:
     /// The seed an Ed25519 signing keypair is made from.
     static constexpr int SigningSeedSize = 32;
 
+    /// The seed an X25519 sealing keypair is made from.
+    static constexpr int SealingSeedSize = 32;
+
     /// Wraps sodium_init(). Must run before any other call here - libsodium's
     /// failure mode without it is platform-dependent, not a clean crash. Called
     /// once at startup by main(), and by the test runner.
@@ -112,8 +115,6 @@ public:
     /// recipient but its own - not an error to report.
     static std::optional<DataKey> unsealDataKey(const QByteArray& sealed, const Keypair& keys);
 
-    /// The one thing a device signs: the server's login challenge. Empty when the
-    /// key is invalid or the challenge empty.
     /// Signs bytes; empty for an invalid key or no bytes.
     static QByteArray sign(const QByteArray& bytes, const SigningKey& key);
 

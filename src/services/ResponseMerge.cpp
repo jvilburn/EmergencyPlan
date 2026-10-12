@@ -313,12 +313,13 @@ EmergencyResponse mergeStartedOnBoth(const EmergencyResponse& mine, const Emerge
     return merged;
 }
 
-/// The document with everything the directory does not include taken out.
+/// The document with everything the directory does not include taken out. Who has
+/// access counts as directory content: changed on one side, that side's roster wins;
+/// changed on both, it is a conflict for a person to look at.
 Document directoryOf(const Document& document)
 {
     Document directory = document;
     directory.setEmergencyResponse(std::nullopt);
-    directory.setSealingSet(SealingSet());
     return directory;
 }
 
@@ -355,7 +356,6 @@ std::optional<Document> mergeDocuments(const Document& base, const Document& min
     }
 
     Document merged = mineChanged ? mine : theirs;
-    merged.setSealingSet(theirs.sealingSet());
     merged.setEmergencyResponse(
         merge(base.emergencyResponse(), mine.emergencyResponse(), theirs.emergencyResponse()));
     return merged;

@@ -38,7 +38,7 @@ struct SecretKey
     bool operator!=(const SecretKey& other) const { return !(*this == other); }
 };
 
-/// Ed25519 verify key: checks a device's login signature.
+/// Ed25519 verify key: checks a device's signature on what it writes.
 struct VerifyKey
 {
     static constexpr int Size = 32;

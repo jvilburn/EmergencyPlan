@@ -5,6 +5,7 @@
 #include "Document.h"
 #include "DocumentRecords.h"
 #include "DocumentSession.h"
+#include "FileOpenRouter.h"
 
 #include <QDateTime>
 #include <QList>
@@ -114,31 +115,8 @@ public:
     /// this device can open. A ward's own file is not a copy.
     std::optional<Copy> openCopy(const QString& sourcePath, QString* errorMessage) const;
 
-    /// How fetching one ward went, and on AccessLost why.
-    using WardFetched = std::function<void(const QString& documentId,
-                                           DocumentSession::Download outcome,
-                                           const std::optional<ServerContract::LostAccess>& lost)>;
-
-    /// A shared ward here that the server no longer lists for this person, and why.
-    using WardLost = std::function<void(const QString& documentId, const ServerContract::LostAccess& lost)>;
-
-    /// The listed wards the library lacks, as of one answer from the server.
-    using WardsListed = std::function<void(const QStringList& onTheirWay)>;
-
-    /// Asks the server which wards it lists for this person. The listed wards the
-    /// library lacks - after a reinstall, cleared app data, a grant, or a link - are
-    /// reported through listed, then each is fetched once its head seals to this
-    /// device, and reported through fetched as NotYetSealed until then. Only a ward
-    /// that arrives is added, so one that does not is tried afresh by the next
-    /// restore. A listed id that is not a document id is passed over. Each shared ward
-    /// here that the list lacks has been lost - removed, left elsewhere - and is
-    /// reported through lost with what its head says. Replies come only while
-    /// receiver lives.
-    void restore(ServerConnection& server,
-                 QObject* receiver,
-                 const WardsListed& listed,
-                 const WardFetched& fetched,
-                 const WardLost& lost);
+    /// How fetching one ward went.
+    using WardFetched = std::function<void(const QString& documentId, DocumentSession::Download outcome)>;
 
     /// Fetches one shared ward from the server. On arrival it is added to the
     /// library, if it was not there, and its entry named from what arrived. A ward
@@ -146,29 +124,22 @@ public:
     /// delete its copies through forgetLost.
     void fetchWard(const QString& documentId, ServerConnection& server, QObject* receiver, const WardFetched& fetched);
 
+    /// Joins the ward an invite link names, as DocumentSession::join does, and on
+    /// Done adds it to the library named from what arrived.
+    void join(const FileOpenRouter::InviteLink& link,
+              ServerConnection& server,
+              QObject* receiver,
+              const DocumentSession::Joined& joined);
+
 private:
     /// Where a ward's files are, whether or not it is in the library yet.
     DocumentPaths pathsIn(const QString& documentId) const;
 
-    void onListed(ServerConnection& server,
-                  QObject* receiver,
-                  const WardsListed& listed,
-                  const WardFetched& fetched,
-                  const WardLost& lost,
-                  const ServerContract::Result<ServerContract::Me>& me);
-    void onHeadToFetch(const QString& documentId,
-                       ServerConnection& server,
-                       QObject* receiver,
-                       const WardFetched& fetched,
-                       const ServerContract::Result<ServerContract::Head>& head);
-    static void onHeadOfLost(const QString& documentId,
-                             const WardLost& lost,
-                             const ServerContract::Result<ServerContract::Head>& head);
     void onWardFetched(const QString& documentId,
                        const WardFetched& fetched,
                        DocumentSession::Download outcome,
-                       const std::optional<Document>& document,
-                       const std::optional<ServerContract::LostAccess>& lost);
+                       const std::optional<Document>& document);
+    void onJoined(const QString& documentId, const DocumentSession::Joined& joined, DocumentSession::Join outcome, const QString& reason);
 
     /// A name in directory that no file has yet: the base name, then "(2)", "(3)"...
     static QString unusedPath(const QString& directory, const QString& baseName);

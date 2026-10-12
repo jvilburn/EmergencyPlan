@@ -9,7 +9,6 @@
 #include <QNetworkRequest>
 #include <QStandardPaths>
 #include "AppSettings.h"
-#include "DeviceLinks.h"
 #include "DocumentConstants.h"
 #include "DocumentCrypto.h"
 #include "DocumentLibrary.h"
@@ -20,7 +19,6 @@
 #include "HttpServerApi.h"
 #include "IdentityService.h"
 #include "MainWindow.h"
-#include "IncomingWards.h"
 #include "ServerConnection.h"
 #include "SingleInstance.h"
 #include "TileService.h"
@@ -32,19 +30,6 @@
 
 namespace
 {
-
-/// Replaces this device's identity, and drops what the old one kept in settings: the
-/// devices it linked, which it seals into its wards, and the wards it asked for.
-std::unique_ptr<IdentityService> replaceIdentity(const QString& path, AppSettings& settings, QString* error)
-{
-    std::unique_ptr<IdentityService> identity = IdentityService::startOver(path, error);
-    if (identity)
-    {
-        settings.setLinkedDevices({});
-        settings.setRequestedWards({});
-    }
-    return identity;
-}
 
 /// On macOS a file or a wardplanning: link opened from elsewhere arrives as an
 /// event, not as arguments; it goes where the arguments would.
@@ -76,7 +61,7 @@ private:
 /// This device's identity, or nullptr once the person has been told why there is
 /// none and chosen to quit. A damaged file is offered a fresh start; one a newer
 /// version wrote is left alone, since starting afresh would orphan it for nothing.
-std::unique_ptr<IdentityService> resolveIdentity(const QString& path, AppSettings& settings)
+std::unique_ptr<IdentityService> resolveIdentity(const QString& path)
 {
     IdentityFile::Load outcome = IdentityFile::Load::NotFound;
     QString error;
@@ -128,7 +113,7 @@ std::unique_ptr<IdentityService> resolveIdentity(const QString& path, AppSetting
         return nullptr;
     }
 
-    identity = replaceIdentity(path, settings, &error);
+    identity = IdentityService::startOver(path, &error);
     if (!identity)
     {
         QMessageBox::critical(nullptr, QObject::tr("Ward Planning"), error);
@@ -138,10 +123,10 @@ std::unique_ptr<IdentityService> resolveIdentity(const QString& path, AppSetting
 
 /// A fresh identity in place of this device's, then the app closes so the next
 /// launch asks the first question afresh.
-void startOver(const QString& identityPath, AppSettings& settings)
+void startOver(const QString& identityPath)
 {
     QString error;
-    if (!replaceIdentity(identityPath, settings, &error))
+    if (!IdentityService::startOver(identityPath, &error))
     {
         QMessageBox::critical(nullptr, QObject::tr("Ward Planning"), error);
     }
@@ -169,7 +154,7 @@ bool namesADocument(const QStringList& arguments)
     for (qsizetype i = 1; i < arguments.size(); ++i)
     {
         if (arguments.at(i).endsWith(DocumentConstants::FileExtension, Qt::CaseInsensitive)
-            || !FileOpenRouter::invitedWard(arguments.at(i)).isEmpty())
+            || FileOpenRouter::InviteLink::parse(arguments.at(i)).has_value())
         {
             return true;
         }
@@ -233,18 +218,17 @@ int main(int argc, char *argv[])
 
     // Resolved before any document exists: there is no document without an identity.
     const QString identityPath = deviceData.filePath("identity.json");
-    std::unique_ptr<IdentityService> identityService = resolveIdentity(identityPath, *settings);
+    std::unique_ptr<IdentityService> identityService = resolveIdentity(identityPath);
     if (!identityService)
     {
         return 1;
     }
 
-    // The first screen, while no person exists on this device. Linking reaches the
-    // server before the rest of the app exists.
+    // The first screen, while no person exists on this device.
     HttpServerApi serverApi(*settings, nullptr);
     if (!identityService->identity().has_value())
     {
-        FirstRunDialog firstRun(*identityService, serverApi, nullptr);
+        FirstRunDialog firstRun(*identityService, nullptr);
         if (firstRun.exec() != QDialog::Accepted)
         {
             return 0;
@@ -266,29 +250,17 @@ int main(int argc, char *argv[])
     TileService::setInstance(&tileService);
     tileService.initialize();
 
-    IncomingWards incoming(*settings, library, server, nullptr);
-    QObject::connect(&incoming, &IncomingWards::lostAccess, &documentManager, &DocumentManager::onWardLostElsewhere);
-    DeviceLinks links(identity,
-                      *settings,
-                      server,
-                      std::bind(&DocumentLibrary::pathsFor, &library, std::placeholders::_1),
-                      nullptr);
     QNetworkAccessManager releaseNetwork;
     UpdateChecker updates(*settings,
                           WARD_PLANNING_VERSION,
                           std::bind(&fetchRelease, std::ref(releaseNetwork), std::placeholders::_1, std::placeholders::_2),
                           nullptr);
     QObject::connect(&documentManager, &DocumentManager::requiresUpdateChanged, &updates, std::bind(&UpdateChecker::check, &updates, true));
-    MainWindow window(*settings, library, incoming, links, updates, nullptr);
+    MainWindow window(*settings, library, updates, nullptr);
     QObject::connect(&window,
                      &MainWindow::startOverRequested,
                      &app,
-                     std::bind(&startOver, identityPath, std::ref(*settings)));
-
-    // Told outside the call that found out, which is still delivering its replies.
-    server.setUnlinkedHandler([&window](const ServerContract::LostAccess& lost) {
-        QMetaObject::invokeMethod(&window, std::bind(&MainWindow::unlinkedHere, &window, lost), Qt::QueuedConnection);
-    });
+                     std::bind(&startOver, identityPath));
 
     FileOpenForwarder fileOpen(window);
     app.installEventFilter(&fileOpen);
@@ -307,10 +279,7 @@ int main(int argc, char *argv[])
 
     QObject::connect(&instance, &SingleInstance::argumentsReceived, &window, &MainWindow::handleArguments);
 
-    // Every ward the server lists for this person and the library lacks: after a
-    // reinstall, cleared app data, a grant, or a link. And whether a newer Ward
-    // Planning is out.
-    incoming.checkNow();
+    // Whether a newer Ward Planning is out.
     updates.check(false);
 
     return app.exec();

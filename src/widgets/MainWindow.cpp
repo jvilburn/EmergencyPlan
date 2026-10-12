@@ -1,9 +1,9 @@
 #include "MainWindow.h"
 #include "AppSettings.h"
 #include "DocumentLibrary.h"
-#include "DeviceLinks.h"
+
 #include "FileOpenRouter.h"
-#include "IncomingWards.h"
+
 #include "OpenWardDialog.h"
 #include "AccessDialog.h"
 #include "WardNotices.h"
@@ -58,17 +58,10 @@
 #include <QCloseEvent>
 #include <QLocale>
 
-MainWindow::MainWindow(AppSettings& settings,
-                       DocumentLibrary& library,
-                       IncomingWards& incoming,
-                       DeviceLinks& links,
-                       UpdateChecker& updates,
-                       QWidget* parent)
+MainWindow::MainWindow(AppSettings& settings, DocumentLibrary& library, UpdateChecker& updates, QWidget* parent)
     : QMainWindow(parent)
     , m_settings(settings)
     , m_library(library)
-    , m_requests(incoming)
-    , m_links(links)
     , m_updates(updates)
 {
     setupUi();
@@ -90,10 +83,11 @@ void MainWindow::handleArguments(const QStringList& arguments)
     // Files of any other extension are other applications'.
     for (qsizetype i = 1; i < arguments.size(); ++i)
     {
-        const QString invited = FileOpenRouter::invitedWard(arguments.at(i));
-        if (!invited.isEmpty())
+        const std::optional<FileOpenRouter::InviteLink> invite = FileOpenRouter::InviteLink::parse(arguments.at(i));
+        if (invite.has_value())
         {
-            followRoute(FileOpenRouter::routeInvite(invited, m_library), QString());
+            statusBar()->showMessage(tr("Joining the ward..."));
+            DocumentManager::instance()->joinWard(invite.value());
         }
         else if (arguments.at(i).endsWith(DocumentConstants::FileExtension, Qt::CaseInsensitive))
         {
@@ -128,8 +122,11 @@ void MainWindow::followRoute(const FileOpenRouter::Route& route, const QString& 
         openWard(route.documentId);
         break;
     }
-    case FileOpenRouter::Action::RequestAccess:
-        offerRequest(route.documentId);
+    case FileOpenRouter::Action::NotForThisDevice:
+        QMessageBox::information(this,
+                                 tr("Ward Planning"),
+                                 tr("This ward is not on this device. Ask someone who has it to send you an invite "
+                                    "from Who Has Access."));
         break;
     case FileOpenRouter::Action::NeedsNewerVersion:
         QMessageBox::warning(this, tr("Ward Planning"), tr("%1 was written by a newer version of Ward Planning.").arg(path));
@@ -173,7 +170,7 @@ void MainWindow::setupUi()
     m_wardNotices->setUpdateChecker(&m_updates);
     centralLayout->addWidget(m_wardNotices);
     connect(m_wardNotices, &WardNotices::accessRequested, this, &MainWindow::onShowAccess);
-    connect(m_wardNotices, &WardNotices::linkRequested, this, &MainWindow::onLinkDevice);
+    connect(m_wardNotices, &WardNotices::addDeviceRequested, this, &MainWindow::onAddDevice);
     centralLayout->addWidget(m_splitter, 1);
     setCentralWidget(centralContainer);
 
@@ -329,21 +326,11 @@ void MainWindow::setupConnections()
             this, &MainWindow::onFetchFinished);
     connect(DocumentManager::instance(), &DocumentManager::accessLost,
             this, &MainWindow::onAccessLost);
-    connect(DocumentManager::instance(), &DocumentManager::shared,
-            this, &MainWindow::showInviteLink, Qt::QueuedConnection);
+    connect(DocumentManager::instance(), &DocumentManager::shared, this, &MainWindow::onShared, Qt::QueuedConnection);
     connect(DocumentManager::instance(), &DocumentManager::shareFailed,
             this, &MainWindow::onShareFailed);
-    connect(DocumentManager::instance(), &DocumentManager::accessCallFailed,
-            this, &MainWindow::onAccessCallFailed);
-    connect(DocumentManager::instance(), &DocumentManager::grantBlocked, this, &MainWindow::onGrantBlocked);
-    connect(&m_requests, &IncomingWards::requested, this, &MainWindow::onRequested);
-    connect(&m_requests, &IncomingWards::requestFailed, this, &MainWindow::onRequestFailed);
-    connect(&m_requests, &IncomingWards::fetched, this, &MainWindow::onWardRestored);
-    connect(&m_links, &DeviceLinks::linkRead, this, &MainWindow::onLinkRead);
-    connect(&m_links, &DeviceLinks::approved, this, &MainWindow::onLinkApproved);
-    connect(&m_links, &DeviceLinks::unlinked, this, &MainWindow::onUnlinked);
-    connect(&m_links, &DeviceLinks::failed, this, &MainWindow::onLinkFailed);
-    connect(&m_requests, &IncomingWards::declined, this, &MainWindow::onRequestDeclined);
+    connect(DocumentManager::instance(), &DocumentManager::joinFailed, this, &MainWindow::onJoinFailed);
+    connect(DocumentManager::instance(), &DocumentManager::leaveFailed, this, &MainWindow::onLeaveFailed);
     connect(DocumentManager::instance(), &DocumentManager::fetchFailed,
             this, &MainWindow::onFetchFailed);
     connect(DocumentManager::instance(), &DocumentManager::conflictRaised,
@@ -405,7 +392,7 @@ void MainWindow::onNewWard()
 
 void MainWindow::onOpenWard()
 {
-    OpenWardDialog dialog(m_library.entries(), m_requests.pending(), m_requests.waiting(), this);
+    OpenWardDialog dialog(m_library.entries(), this);
     if (dialog.exec() == QDialog::Accepted && !dialog.selectedDocumentId().isEmpty())
     {
         openWard(dialog.selectedDocumentId());
@@ -416,38 +403,6 @@ void MainWindow::openWard(const QString& documentId)
 {
     QString reason;
     reportOpen(documentId, DocumentManager::instance()->openDocument(documentId, &reason), reason);
-}
-
-void MainWindow::onWardRestored(const QString& documentId, DocumentSession::Download outcome)
-{
-    switch (outcome)
-    {
-    case DocumentSession::Download::Done:
-    {
-        const QString name = DocumentManager::instance()->wardNameOf(documentId);
-        statusBar()->showMessage(tr("%1 restored from the server").arg(name), 5000);
-
-        // The first to arrive opens, unless something is open or on its way.
-        const DocumentManager* manager = DocumentManager::instance();
-        if (manager->documentId().isEmpty() && !manager->copy().has_value() && !manager->isFetching())
-        {
-            openWard(documentId);
-        }
-        break;
-    }
-    case DocumentSession::Download::NeedsNewerVersion:
-        statusBar()->showMessage(tr("A ward shared with you needs a newer version of Ward Planning."), 10000);
-        break;
-    case DocumentSession::Download::WriteFailed:
-        statusBar()->showMessage(tr("A ward shared with you could not be saved on this device."), 10000);
-        break;
-    case DocumentSession::Download::Unreachable:
-    case DocumentSession::Download::AccessLost:
-    case DocumentSession::Download::ServerFault:
-    case DocumentSession::Download::NotYetSealed:
-        // IncomingWards keeps these to itself and tries again.
-        break;
-    }
 }
 
 void MainWindow::onFetchFinished(const QString& documentId, DocumentManager::Open result, const QString& reason)
@@ -833,19 +788,22 @@ void MainWindow::updateCopyBanner()
     m_copyBanner->show();
 }
 
-void MainWindow::onAccessLost(const QString& wardName, const ServerContract::LostAccess& lost)
+void MainWindow::onAccessLost(const QString& wardName, const ServerVersion::LostAccess& lost)
 {
     const QString ward = wardName.isEmpty() ? tr("a ward") : wardName;
     QString message;
     switch (lost.how)
     {
-    case ServerContract::LostAccess::How::Left:
+    case ServerVersion::LostAccess::How::Left:
         message = tr("You left %1, so it is no longer on this device.").arg(ward);
         break;
-    case ServerContract::LostAccess::How::Unlinked:
-        unlinkedHere(lost);
-        return;
-    case ServerContract::LostAccess::How::Removed:
+    case ServerVersion::LostAccess::How::Unlinked:
+        message = lost.byWhom.isEmpty()
+                      ? tr("This device was unlinked from %1, so it is no longer on this device.").arg(ward)
+                      : tr("Your device %1 unlinked this one from %2, so it is no longer on this device.")
+                            .arg(lost.byWhom, ward);
+        break;
+    case ServerVersion::LostAccess::How::Removed:
         message = lost.byWhom.isEmpty()
                       ? tr("Your access to %1 was removed, so it is no longer on this device.").arg(ward)
                       : tr("%1 removed your access to %2, so it is no longer on this device.").arg(lost.byWhom, ward);
@@ -876,7 +834,6 @@ void MainWindow::onFetchFailed(const QString& documentId, DocumentSession::Downl
     case DocumentSession::Download::Done:
     case DocumentSession::Download::AccessLost:
     case DocumentSession::Download::ServerFault:
-    case DocumentSession::Download::NotYetSealed:
         QMessageBox::warning(this,
                              tr("Open Ward"),
                              tr("The server's copy of this ward could not be checked, so it was not opened."));
@@ -962,43 +919,80 @@ void MainWindow::onShowAccess()
         return;
     }
 
-    AccessDialog dialog(currentMembers(), manager->identity(), manager->session()->isShared(), this);
+    AccessDialog dialog(manager->roster(), manager->identity(), manager->session()->isShared(), this);
 
     connect(&dialog, &AccessDialog::shareRequested, manager, &DocumentManager::share);
-    connect(&dialog, &AccessDialog::grantRequested, manager, &DocumentManager::grant);
-    connect(&dialog, &AccessDialog::linkRequested, this, &MainWindow::onLinkDevice);
+    connect(&dialog, &AccessDialog::addDeviceRequested, this, &MainWindow::onAddDevice);
+    connect(&dialog, &AccessDialog::addUserRequested, this, &MainWindow::onAddUser);
+    connect(&dialog, &AccessDialog::removeRequested, this, &MainWindow::onRemovePerson);
     connect(&dialog, &AccessDialog::unlinkRequested, this, &MainWindow::onUnlinkDevice);
-    connect(&dialog, &AccessDialog::removeRequested, this, &MainWindow::onRemoveMember);
+    connect(&dialog, &AccessDialog::withdrawRequested, this, &MainWindow::onWithdrawInvite);
     connect(&dialog, &AccessDialog::roleRequested, manager, &DocumentManager::setRole);
     connect(&dialog, &AccessDialog::leaveRequested, &dialog, &QDialog::accept);
     connect(&dialog, &AccessDialog::leaveRequested, this, &MainWindow::onLeave, Qt::QueuedConnection);
-    connect(&dialog, &AccessDialog::declineRequested, manager, &DocumentManager::decline);
-    connect(manager, &DocumentManager::accessCallDone, &dialog, std::bind(&MainWindow::refreshAccessDialog, this, &dialog));
-    manager->fetchRequests(&dialog, std::bind(&AccessDialog::setRequests, &dialog, std::placeholders::_1));
-    connect(&dialog, &AccessDialog::inviteLinkRequested, this, std::bind(&MainWindow::showInviteLink, this, manager->documentId()));
 
-    // Current while it is open: a head check's changes show, and another ward closes it.
-    connect(manager, &DocumentManager::headChanged, &dialog, std::bind(&MainWindow::refreshAccessDialog, this, &dialog));
+    // Current while it is open: every change to the roster shows, and another ward
+    // closes it.
+    connect(manager, &DocumentManager::documentChanged, &dialog, std::bind(&MainWindow::refreshAccessDialog, this, &dialog));
+    connect(manager, &DocumentManager::accessChanged, &dialog, std::bind(&MainWindow::refreshAccessDialog, this, &dialog));
     connect(manager, &DocumentManager::documentOpened, &dialog, &QDialog::reject);
     connect(manager, &DocumentManager::shared, &dialog, &QDialog::reject);
     dialog.exec();
 }
 
-void MainWindow::showInviteLink(const QString& documentId)
+void MainWindow::onAddDevice()
 {
-    const QString link = FileOpenRouter::inviteLink(documentId);
+    showInvite(DocumentManager::instance()->invite(Invite::For::Device, tr("for another device of mine")));
+}
 
-    QMessageBox message(QMessageBox::Information, tr("Invite Link"), tr("Send this link to someone you want to add."),
-                        QMessageBox::Close, this);
-    message.setInformativeText(tr("%1\n\nWhoever opens it can ask for access. You or another admin then grant it "
-                                  "from Who Has Access.").arg(link));
+void MainWindow::onAddUser()
+{
+    bool entered = false;
+    const QString name = QInputDialog::getText(this,
+                                               tr("Add a User"),
+                                               tr("Who is this invite for? (Shown until they join.)"),
+                                               QLineEdit::Normal,
+                                               QString(),
+                                               &entered);
+    if (!entered || name.trimmed().isEmpty())
+    {
+        return;
+    }
+    showInvite(DocumentManager::instance()->invite(Invite::For::User, tr("for %1").arg(name.trimmed())));
+}
+
+void MainWindow::showInvite(const std::optional<FileOpenRouter::InviteLink>& link)
+{
+    if (!link.has_value())
+    {
+        QMessageBox::warning(this, tr("Invite"), tr("Share the ward first; an invite needs the server to hold it."));
+        return;
+    }
+
+    const QString text = DocumentManager::instance()->inviteMessage(link.value());
+    QMessageBox message(QMessageBox::Information, tr("Invite"), tr("Copy this message and send it by email or text."), QMessageBox::Close, this);
+    message.setInformativeText(text);
     message.setTextInteractionFlags(Qt::TextSelectableByMouse);
-    QPushButton* copy = message.addButton(tr("Copy Link"), QMessageBox::ActionRole);
+    QPushButton* copy = message.addButton(tr("Copy Message"), QMessageBox::ActionRole);
     message.exec();
     if (message.clickedButton() == copy)
     {
-        QGuiApplication::clipboard()->setText(link);
-        statusBar()->showMessage(tr("Invite link copied"), 5000);
+        QGuiApplication::clipboard()->setText(text);
+        statusBar()->showMessage(tr("Invite copied"), 5000);
+    }
+}
+
+void MainWindow::onShared()
+{
+    const QMessageBox::StandardButton answer = QMessageBox::question(
+        this,
+        tr("Shared"),
+        tr("This ward is now on the server. Add someone to it now?"),
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::Yes);
+    if (answer == QMessageBox::Yes)
+    {
+        onAddUser();
     }
 }
 
@@ -1020,373 +1014,140 @@ void MainWindow::onShareFailed(ServerContract::ServerError error)
 
 void MainWindow::refreshAccessDialog(AccessDialog* dialog)
 {
-    dialog->setMembers(currentMembers());
-    DocumentManager::instance()->fetchRequests(dialog,
-                                               std::bind(&AccessDialog::setRequests, dialog, std::placeholders::_1));
+    dialog->setRoster(DocumentManager::instance()->roster());
 }
 
-void MainWindow::offerRequest(const QString& documentId)
+void MainWindow::onJoinFailed(DocumentSession::Join outcome, const QString& reason)
 {
-    if (m_requests.pending().contains(documentId))
+    statusBar()->clearMessage();
+    QString message;
+    switch (outcome)
     {
-        QMessageBox::information(this,
-                                 tr("Ward Planning"),
-                                 tr("You have already asked for this ward. It appears here once an admin grants it."));
+    case DocumentSession::Join::Done:
         return;
+    case DocumentSession::Join::Unreachable:
+        message = tr("Connect to the internet to join a ward, then open the link again.");
+        break;
+    case DocumentSession::Join::UnknownWard:
+        message = tr("The server has no such ward. It was deleted, or the link is wrong.");
+        break;
+    case DocumentSession::Join::InviteUsed:
+        message = tr("This invite has been used or withdrawn. Ask for another.");
+        break;
+    case DocumentSession::Join::NeedsNewerVersion:
+        message = tr("This ward was saved by a newer version of Ward Planning. Update to join it.");
+        break;
+    case DocumentSession::Join::ServerFault:
+        message = tr("The ward could not be joined. %1").arg(reason);
+        break;
+    case DocumentSession::Join::WriteFailed:
+        message = tr("The ward arrived but could not be saved on this device.");
+        break;
+    case DocumentSession::Join::Busy:
+        message = tr("The ward is being changed right now. Open the link again in a moment.");
+        break;
     }
-
-    const QMessageBox::StandardButton answer = QMessageBox::question(
-        this,
-        tr("Request Access"),
-        tr("This ward is not on this device yet. Ask its admins for access?"),
-        QMessageBox::Yes | QMessageBox::No,
-        QMessageBox::Yes);
-    if (answer == QMessageBox::Yes)
-    {
-        m_requests.request(documentId);
-    }
+    QMessageBox::warning(this, tr("Join a Ward"), message);
 }
 
-void MainWindow::onRequested(const QString& documentId)
+void MainWindow::onLeaveFailed(ServerContract::ServerError error)
 {
-    Q_UNUSED(documentId);
-    QMessageBox::information(this,
-                             tr("Request Access"),
-                             tr("Your request was sent. The ward appears in your list once an admin grants it, "
-                                "which they do from Who Has Access."));
+    QMessageBox::warning(this,
+                         tr("Leave"),
+                         error == ServerContract::ServerError::Unreachable
+                             ? tr("Connect to the internet to leave a ward; the server has to hold your leaving.")
+                             : tr("You could not leave just now. Try again in a moment."));
 }
 
-void MainWindow::onRequestFailed(const QString& documentId, ServerContract::ServerError error)
+void MainWindow::onRemovePerson(const MemberId& person)
 {
-    Q_UNUSED(documentId);
-    switch (error)
-    {
-    case ServerContract::ServerError::UnknownDocument:
-        QMessageBox::warning(this, tr("Request Access"), tr("The server has no such ward. It was deleted, or the link is wrong."));
-        return;
-    case ServerContract::ServerError::RateLimited:
-        QMessageBox::warning(this, tr("Request Access"), tr("The server is busy. Open the link again in a little while."));
-        return;
-    default:
-        QMessageBox::warning(this,
-                             tr("Request Access"),
-                             tr("The request could not be sent. Connect to the internet and open the link again."));
-        return;
-    }
-}
-
-void MainWindow::onRequestDeclined(const QString& documentId)
-{
-    Q_UNUSED(documentId);
-    QMessageBox::information(this, tr("Request Access"), tr("An admin declined your request for access to a ward."));
-}
-
-void MainWindow::onLinkDevice()
-{
-    bool entered = false;
-    const QString code = QInputDialog::getText(this,
-                                               tr("Link a Device"),
-                                               tr("Enter the code your new device shows:"),
-                                               QLineEdit::Normal,
-                                               QString(),
-                                               &entered);
-    if (entered && !code.trimmed().isEmpty())
-    {
-        m_links.read(code);
-    }
-}
-
-void MainWindow::onLinkRead(const QString& code, const ServerContract::LinkState& state)
-{
-    if (state.approvedAs.has_value())
-    {
-        QMessageBox::information(this, tr("Link a Device"), tr("That code has already been used."));
-        return;
-    }
-
-    const QMessageBox::StandardButton answer = QMessageBox::question(
-        this,
-        tr("Link a Device"),
-        tr("Link \"%1\" to your account? It will open every ward you have, and you can unlink it later.")
-            .arg(state.deviceName),
-        QMessageBox::Yes | QMessageBox::No,
-        QMessageBox::Yes);
-    if (answer == QMessageBox::Yes)
-    {
-        m_links.approve(code, state.keys);
-    }
-}
-
-void MainWindow::onLinkApproved(const QString& deviceName)
-{
-    statusBar()->showMessage(tr("%1 is linked. Your wards are on their way to it.").arg(deviceName), 10000);
-    if (DocumentManager::instance()->session() != nullptr)
-    {
-        DocumentManager::instance()->session()->checkServer();
-    }
-}
-
-void MainWindow::onUnlinkDevice(const Fingerprint& device)
-{
-    // This person's devices as the server last said, and which of them the lost one
-    // linked: a device planted from a stolen phone should not outlive the phone.
-    QList<ServerContract::Device> mine;
-    for (const ServerContract::Member& member : currentMembers())
-    {
-        if (member.person.member == DocumentManager::instance()->identity().member)
-        {
-            mine = member.person.devices;
-        }
-    }
-
-    QString name;
-    QList<Fingerprint> alsoLinked;
-    QStringList alsoNames;
-    for (const ServerContract::Device& listed : mine)
-    {
-        if (listed.fingerprint == device)
-        {
-            name = listed.name;
-        }
-        else if (listed.linkedBy == device && listed.fingerprint != DocumentManager::instance()->identity().fingerprint())
-        {
-            alsoLinked.append(listed.fingerprint);
-            alsoNames.append(tr("\"%1\" on %2").arg(listed.name,
-                                                    QLocale().toString(listed.linkedAt.toLocalTime().date(),
-                                                                       QLocale::ShortFormat)));
-        }
-    }
-
-    QMessageBox confirm(QMessageBox::Question,
-                        tr("Unlink"),
-                        tr("Unlink \"%1\"? It loses every ward at once, and deletes them when it next connects.")
-                            .arg(name),
-                        QMessageBox::Cancel,
-                        this);
-    QPushButton* both = nullptr;
-    if (!alsoLinked.isEmpty())
-    {
-        confirm.setInformativeText(tr("It also linked %1. Unlink those too?").arg(QLocale().createSeparatedList(alsoNames)));
-        both = confirm.addButton(alsoLinked.size() == 1 ? tr("Unlink Both") : tr("Unlink All"), QMessageBox::AcceptRole);
-        confirm.setDefaultButton(both);
-    }
-    QPushButton* justThis = confirm.addButton(alsoLinked.isEmpty() ? tr("Unlink") : tr("Just This One"),
-                                              QMessageBox::DestructiveRole);
-    confirm.exec();
-
-    if (confirm.clickedButton() == both)
-    {
-        m_links.unlink(QList<Fingerprint>{device} + alsoLinked);
-    }
-    else if (confirm.clickedButton() == justThis)
-    {
-        m_links.unlink({device});
-    }
-}
-
-void MainWindow::unlinkedHere(const ServerContract::LostAccess& lost)
-{
-    // Reported once, however many wards and calls hear it.
-    if (m_unlinkedHere)
+    const std::optional<Holder> who = DocumentManager::instance()->roster().person(person);
+    if (!who.has_value())
     {
         return;
-    }
-    m_unlinkedHere = true;
-
-    DocumentManager::instance()->close(nullptr);
-    for (const DocumentLibrary::Entry& entry : m_library.entries())
-    {
-        m_library.forgetLost(entry.documentId);
-    }
-    QMessageBox::information(this,
-                             tr("Ward Planning"),
-                             lost.byWhom.isEmpty()
-                                 ? tr("This device was unlinked, so its wards have been deleted from it. Ward Planning "
-                                      "will close; start it again to set this device up.")
-                                 : tr("%1 unlinked this device, so its wards have been deleted from it. Ward Planning "
-                                      "will close; start it again to set this device up.")
-                                       .arg(lost.byWhom));
-    emit startOverRequested();
-}
-
-void MainWindow::onRemoveMember(const MemberId& member)
-{
-    QString name;
-    for (const ServerContract::Member& listed : currentMembers())
-    {
-        if (listed.person.member == member)
-        {
-            name = listed.person.displayName;
-        }
     }
 
     const QMessageBox::StandardButton answer = QMessageBox::question(
         this,
         tr("Remove"),
-        tr("Remove %1? They lose access at once, and their app deletes its copy of this ward the next time it "
-           "connects. A copy they took out of the app beforehand keeps what it had.")
-            .arg(name),
+        tr("Remove %1? Their devices can no longer read anything saved from now on, and their app deletes its "
+           "copy of this ward the next time it checks the server. A copy they took out of the app beforehand "
+           "keeps what it had.")
+            .arg(who->name),
         QMessageBox::Yes | QMessageBox::Cancel,
         QMessageBox::Cancel);
     if (answer == QMessageBox::Yes)
     {
-        DocumentManager::instance()->remove(member);
+        DocumentManager::instance()->removePerson(person);
     }
+}
+
+void MainWindow::onUnlinkDevice(const Fingerprint& device)
+{
+    const std::optional<NamedDevice> which = DocumentManager::instance()->roster().device(device);
+    if (!which.has_value())
+    {
+        return;
+    }
+
+    const QMessageBox::StandardButton answer = QMessageBox::question(
+        this,
+        tr("Unlink"),
+        tr("Unlink \"%1\" from this ward? It can no longer read anything saved from now on, and deletes its copy "
+           "the next time it checks the server.")
+            .arg(which->name),
+        QMessageBox::Yes | QMessageBox::Cancel,
+        QMessageBox::Cancel);
+    if (answer == QMessageBox::Yes)
+    {
+        DocumentManager::instance()->removeDevice(device);
+    }
+}
+
+void MainWindow::onWithdrawInvite(const Fingerprint& invite)
+{
+    DocumentManager::instance()->revokeInvite(invite);
 }
 
 void MainWindow::onLeave()
 {
     DocumentManager* manager = DocumentManager::instance();
-    const QList<ServerContract::Member> members = currentMembers();
-    const MemberId self = manager->identity().member;
-
-    bool selfAdmin = false;
-    int admins = 0;
-    QList<ServerContract::Member> others;
-    for (const ServerContract::Member& member : members)
+    const SealingSet roster = manager->roster();
+    const std::optional<Holder> me = manager->self();
+    if (!me.has_value())
     {
-        admins += member.isAdmin() ? 1 : 0;
-        if (member.person.member == self)
-        {
-            selfAdmin = member.isAdmin();
-        }
-        else
-        {
-            others.append(member);
-        }
+        return;
     }
 
-    // The last admin names a successor, so the ward can still add and remove people.
-    std::optional<MemberId> successor;
-    if (selfAdmin && admins == 1 && !others.isEmpty())
+    // A ward always keeps someone, and an admin: the last person stays, and the last
+    // admin makes someone else an admin first.
+    if (roster.people().size() == 1)
     {
-        // Each named with their devices, so two people sharing a name are told apart.
-        QStringList labels;
-        for (const ServerContract::Member& member : others)
-        {
-            QStringList devices;
-            for (const ServerContract::Device& device : member.person.devices)
-            {
-                devices.append(device.name);
-            }
-            labels.append(tr("%1 (%2)").arg(member.person.displayName, QLocale().createSeparatedList(devices)));
-        }
-
-        bool chosen = false;
-        const QString label = QInputDialog::getItem(this,
-                                                    tr("Leave"),
-                                                    tr("Before you leave, choose who will be admin:"),
-                                                    labels,
-                                                    0,
-                                                    false,
-                                                    &chosen);
-        if (!chosen)
-        {
-            return;
-        }
-        successor = others.at(labels.indexOf(label)).person.member;
+        QMessageBox::information(this,
+                                 tr("Leave"),
+                                 tr("You are the only one with access, so there is nobody to leave this ward to."));
+        return;
+    }
+    if (me->isAdmin() && roster.adminCount() == 1)
+    {
+        QMessageBox::information(this,
+                                 tr("Leave"),
+                                 tr("You are the only admin. Make someone else an admin first, so the ward can "
+                                    "still add and remove people."));
+        return;
     }
 
     const QMessageBox::StandardButton answer = QMessageBox::question(
         this,
         tr("Leave"),
-        others.isEmpty()
-            ? tr("Leave this ward? You are the only one with access, so nobody will be able to open it again.")
-            : tr("Leave this ward? Its copy on this device is deleted at once, and on your other devices when they "
-                 "next connect."),
+        tr("Leave this ward? Its copy on this device is deleted once the server has your leaving, and on your "
+           "other devices when they next check the server."),
         QMessageBox::Yes | QMessageBox::Cancel,
         QMessageBox::Cancel);
     if (answer == QMessageBox::Yes)
     {
-        manager->leave(successor);
+        manager->leave();
     }
-}
-
-void MainWindow::onUnlinked(int count)
-{
-    statusBar()->showMessage(tr("%n device(s) unlinked", "", count), 10000);
-    if (DocumentManager::instance()->session() != nullptr)
-    {
-        DocumentManager::instance()->session()->checkServer();
-    }
-}
-
-void MainWindow::onGrantBlocked(const QString& reason)
-{
-    QMessageBox::warning(this, tr("Who Has Access"), tr("Nobody can be added yet. %1").arg(reason));
-}
-
-void MainWindow::onAccessCallFailed(ServerContract::ServerError error)
-{
-    QString message;
-    switch (error)
-    {
-    case ServerContract::ServerError::NotAdmin:
-    {
-        QStringList admins;
-        for (const ServerContract::Member& member : currentMembers())
-        {
-            if (member.isAdmin())
-            {
-                admins.append(member.person.displayName);
-            }
-        }
-        message = admins.isEmpty()
-                      ? tr("Only an admin can change who has access.")
-                      : tr("Only an admin can change who has access. Ask %1.").arg(QLocale().createSeparatedList(admins));
-        break;
-    }
-    case ServerContract::ServerError::LastAdmin:
-        message = tr("Make someone else an admin first, so the ward can still add and remove people.");
-        break;
-    case ServerContract::ServerError::Unreachable:
-        message = tr("Connect to the internet to change who has access.");
-        break;
-    case ServerContract::ServerError::RateLimited:
-        message = tr("The server is busy. Try again in a little while.");
-        break;
-    case ServerContract::ServerError::NotFound:
-        message = tr("That has already changed. Look again at Who Has Access.");
-        break;
-    default:
-        message = tr("The server did not accept the change.");
-        break;
-    }
-    QMessageBox::warning(this, tr("Who Has Access"), message);
-}
-
-void MainWindow::onLinkFailed(ServerContract::ServerError error)
-{
-    QString message;
-    switch (error)
-    {
-    case ServerContract::ServerError::NotFound:
-        message = tr("No device is showing that code. Check it, or start again on the new device.");
-        break;
-    case ServerContract::ServerError::Expired:
-        message = tr("That code has expired. Start again on the new device.");
-        break;
-    case ServerContract::ServerError::Unreachable:
-        message = tr("Connect to the internet to link or unlink a device.");
-        break;
-    case ServerContract::ServerError::RateLimited:
-        message = tr("The server is busy. Try again in a little while.");
-        break;
-    default:
-        message = tr("The server did not accept the change.");
-        break;
-    }
-    QMessageBox::warning(this, tr("Link a Device"), message);
-}
-
-QList<ServerContract::Member> MainWindow::currentMembers() const
-{
-    const DocumentSession* session = DocumentManager::instance()->session();
-    if (session == nullptr || !session->lastHead().has_value())
-    {
-        return {};
-    }
-    return session->lastHead().value().members;
 }
 
 void MainWindow::onStartOver()

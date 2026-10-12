@@ -34,9 +34,10 @@ void onSnapshot(const Reconcile::Self& self,
         return;
     }
 
-    // A version not sealed to this device is one this device no longer holds.
+    // A version of this document not sealed to this device is one this device no
+    // longer holds. One of another document is the server's fault, judged below.
     DocumentHeader header;
-    if (DocumentHeader::parse(snapshot.value->header, header) == HeaderParse::Ok
+    if (DocumentHeader::parse(snapshot.value->header, header) == HeaderParse::Ok && header.documentId == documentId
         && !header.entryFor(self.fingerprint()).has_value())
     {
         Fetched lost = outcomeOnly(Fetched::Outcome::AccessLost);
@@ -157,7 +158,20 @@ QList<DataKey> trustedKeys(const QString& documentId,
     return keys;
 }
 
-LostAccess whyLost(const SealingSet& previousRoster, const Fingerprint& self, const Fingerprint& publisher)
+QSet<QString> recipientsOf(const DocumentHeader& header)
+{
+    QSet<QString> recipients;
+    for (const RecipientEntry& entry : header.recipients)
+    {
+        recipients.insert(entry.fingerprint.toHex());
+    }
+    return recipients;
+}
+
+LostAccess whyLost(const SealingSet& previousRoster,
+                   const Fingerprint& self,
+                   const Fingerprint& publisher,
+                   const QSet<QString>& recipients)
 {
     const std::optional<Holder> me = previousRoster.personOf(self);
     const std::optional<Holder> writer = previousRoster.personOf(publisher);
@@ -166,32 +180,29 @@ LostAccess whyLost(const SealingSet& previousRoster, const Fingerprint& self, co
         return LostAccess{LostAccess::How::Removed, writer.has_value() ? writer->name : QString()};
     }
 
-    // My own person wrote it: a leave from another device, or an unlink of this one.
-    if (publisher == self || me->devices.size() == 1)
+    // My own person wrote it: a leave when none of my devices remain, else an unlink
+    // of this one.
+    for (const NamedDevice& device : me->devices)
     {
-        return LostAccess{LostAccess::How::Left, QString()};
+        if (recipients.contains(device.fingerprint().toHex()))
+        {
+            const std::optional<NamedDevice> by = previousRoster.device(publisher);
+            return LostAccess{LostAccess::How::Unlinked, by.has_value() ? by->name : QString()};
+        }
     }
-    const std::optional<NamedDevice> device = previousRoster.device(publisher);
-    return LostAccess{LostAccess::How::Unlinked, device.has_value() ? device->name : QString()};
+    return LostAccess{LostAccess::How::Left, QString()};
 }
 
 Resealed reseal(const Document& document, const DataKey& dataKey, const DocumentHeader& previous)
 {
-    QSet<QString> previousRecipients;
-    for (const RecipientEntry& entry : previous.recipients)
-    {
-        previousRecipients.insert(entry.fingerprint.toHex());
-    }
-    const SealingSet::Next next = document.sealingSet().next(previousRecipients);
-
     Resealed resealed{document, dataKey};
-    SealingSet sealingSet = next.set;
-    if (next.rotate)
+    if (document.sealingSet().rotatesFrom(recipientsOf(previous)))
     {
+        SealingSet sealingSet = document.sealingSet();
         sealingSet.addFormerKey(dataKey);
+        resealed.document.setSealingSet(sealingSet);
         resealed.dataKey = DocumentCrypto::generateDataKey();
     }
-    resealed.document.setSealingSet(sealingSet);
     return resealed;
 }
 

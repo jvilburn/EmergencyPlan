@@ -2,7 +2,6 @@
 
 #include "ResponseMerge.h"
 
-#include <QPointer>
 
 using namespace ServerContract;
 using namespace std::placeholders;
@@ -78,86 +77,97 @@ InviteKeys inviteKeys(const QByteArray& seed)
 {
     InviteKeys keys;
     keys.sealing = DocumentCrypto::keypairFromSeed(
-        DocumentCrypto::hash(HashDomain::InviteSealing, seed, DocumentCrypto::SigningSeedSize));
+        DocumentCrypto::hash(HashDomain::InviteSealing, seed, DocumentCrypto::SealingSeedSize));
     keys.signing = DocumentCrypto::signingKeypairFromSeed(
         DocumentCrypto::hash(HashDomain::InviteSigning, seed, DocumentCrypto::SigningSeedSize));
     return keys;
 }
 
-/// The joined version landed, or not: the local file and base are written only once
-/// the server holds the version they are of.
-void onJoinUploaded(DocumentRecords& records,
-                    const QString& documentId,
-                    const DocumentPaths& paths,
-                    const DocumentFile::Sealed& sealed,
-                    const DocumentSession::Joined& done,
-                    const Result<qint64>& result)
+/// One join in progress: everything its steps need.
+struct Joining
+{
+    DocumentSession::Context context;
+    FileOpenRouter::InviteLink link;
+    InviteKeys keys;
+    DocumentPaths paths;
+    QObject* receiver;
+    DocumentSession::Joined done;
+};
+
+void fetchForJoin(const Joining& joining, bool mayRetry);
+
+/// The joined version landed, or not. The base is written first and the file second,
+/// so a failure leaves nothing that reads as a ward.
+void onJoinUploaded(const Joining& joining, bool mayRetry, const DocumentFile::Sealed& sealed, const Result<qint64>& result)
 {
     switch (result.error)
     {
     case ServerError::None:
         break;
+    case ServerError::VersionConflict:
+        // Someone published between the fetch and the upload: once more on theirs.
+        if (mayRetry)
+        {
+            fetchForJoin(joining, false);
+            return;
+        }
+        joining.done(DocumentSession::Join::Busy, QString());
+        return;
     case ServerError::NotAKeyHolder:
-        done(DocumentSession::Join::InviteUsed, QString());
+        joining.done(DocumentSession::Join::InviteUsed, QString());
         return;
     case ServerError::UnknownDocument:
-        done(DocumentSession::Join::UnknownWard, QString());
+        joining.done(DocumentSession::Join::UnknownWard, QString());
         return;
     case ServerError::Unreachable:
     case ServerError::RateLimited:
-        done(DocumentSession::Join::Unreachable, QString());
+        joining.done(DocumentSession::Join::Unreachable, QString());
         return;
     default:
-        done(DocumentSession::Join::ServerFault, QObject::tr("The server refused the version that joins this device."));
+        joining.done(DocumentSession::Join::ServerFault, QObject::tr("The server refused the version that joins this device."));
         return;
     }
 
-    if (!DocumentFile::write(paths.file, DocumentFile::encode(sealed), nullptr)
-        || !ServerVersion::writeBase(records, documentId, paths, sealed, result.value.value(), nullptr))
+    if (!ServerVersion::writeBase(joining.context.records, joining.link.documentId, joining.paths, sealed, result.value.value(), nullptr)
+        || !DocumentFile::write(joining.paths.file, DocumentFile::encode(sealed), nullptr))
     {
-        done(DocumentSession::Join::WriteFailed, QString());
+        ServerVersion::forget(joining.context.records, joining.link.documentId, joining.paths);
+        joining.done(DocumentSession::Join::WriteFailed, QString());
         return;
     }
-    done(DocumentSession::Join::Done, QString());
+    joining.done(DocumentSession::Join::Done, QString());
 }
 
 /// The current version, read as the invite: this device takes the invite's place and
-/// the result goes up signed by the invite. A version that moved meanwhile is read
-/// again, once.
-void onJoinFetched(const DocumentSession::Context& context,
-                   const FileOpenRouter::InviteLink& link,
-                   const InviteKeys& keys,
-                   const DocumentPaths& paths,
-                   QObject* receiver,
-                   const DocumentSession::Joined& done,
-                   bool mayRetry,
-                   const Fetched& theirs)
+/// the result goes up signed by the invite.
+void onJoinFetched(const Joining& joining, bool mayRetry, const Fetched& theirs)
 {
     switch (theirs.outcome)
     {
     case Fetched::Outcome::Accepted:
         break;
     case Fetched::Outcome::AccessLost:
-        done(DocumentSession::Join::InviteUsed, QString());
+        joining.done(DocumentSession::Join::InviteUsed, QString());
         return;
     case Fetched::Outcome::NeedsNewerVersion:
-        done(DocumentSession::Join::NeedsNewerVersion, QString());
+        joining.done(DocumentSession::Join::NeedsNewerVersion, QString());
         return;
     case Fetched::Outcome::CallFailed:
-        done(theirs.error == ServerError::UnknownDocument ? DocumentSession::Join::UnknownWard
-                                                          : DocumentSession::Join::Unreachable,
-             QString());
+        joining.done(theirs.error == ServerError::UnknownDocument ? DocumentSession::Join::UnknownWard
+                                                                  : DocumentSession::Join::Unreachable,
+                     QString());
         return;
     case Fetched::Outcome::ServerFault:
-        done(DocumentSession::Join::ServerFault, theirs.reason);
+        joining.done(DocumentSession::Join::ServerFault, theirs.reason);
         return;
     }
 
+    const DeviceIdentity& identity = joining.context.identity;
     Document document = theirs.document;
     SealingSet roster = document.sealingSet();
-    if (!roster.join(keys.fingerprint(), context.identity.device(), context.identity.member, context.identity.displayName))
+    if (!roster.join(joining.keys.fingerprint(), identity.device(), identity.member, identity.displayName))
     {
-        done(DocumentSession::Join::ServerFault, QObject::tr("The version does not carry this invite."));
+        joining.done(DocumentSession::Join::ServerFault, QObject::tr("The version does not carry this invite."));
         return;
     }
     document.setSealingSet(roster);
@@ -167,26 +177,35 @@ void onJoinFetched(const DocumentSession::Context& context,
         DocumentFile::seal(resealed.document, theirs.sealed.header, resealed.dataKey);
     if (!sealed.has_value())
     {
-        done(DocumentSession::Join::ServerFault, QObject::tr("The version could not be sealed on this device."));
+        joining.done(DocumentSession::Join::ServerFault, QObject::tr("The version could not be sealed on this device."));
         return;
     }
 
-    const QPointer<QObject> alive(receiver);
-    context.server.uploadAs(
-        ServerConnection::Writer{keys.keys(), keys.signing.signingKey},
-        link.documentId,
-        theirs.version,
-        Upload{sealed->header, sealed->ciphertext},
-        receiver,
-        [context, link, keys, paths, receiver, done, mayRetry, sealed, alive](const Result<qint64>& result) {
-            if (result.error == ServerError::VersionConflict && mayRetry && alive)
-            {
-                ServerVersion::fetch(keys.self(), {}, context.server, link.documentId, receiver,
-                                     std::bind(&onJoinFetched, context, link, keys, paths, receiver, done, false, _1));
-                return;
-            }
-            onJoinUploaded(context.records, link.documentId, paths, sealed.value(), done, result);
-        });
+    joining.context.server.uploadAs(ServerConnection::Writer{joining.keys.keys(), joining.keys.signing.signingKey},
+                                    joining.link.documentId,
+                                    theirs.version,
+                                    Upload{sealed->header, sealed->ciphertext},
+                                    joining.receiver,
+                                    std::bind(&onJoinUploaded, joining, mayRetry, sealed.value(), _1));
+}
+
+void fetchForJoin(const Joining& joining, bool mayRetry)
+{
+    ServerVersion::fetch(joining.keys.self(),
+                         {},
+                         joining.context.server,
+                         joining.link.documentId,
+                         joining.receiver,
+                         std::bind(&onJoinFetched, joining, mayRetry, _1));
+}
+
+/// The one edit invite makes.
+bool addInviteTo(Document& document, const Invite& invite)
+{
+    SealingSet roster = document.sealingSet();
+    const bool added = roster.addInvite(invite);
+    document.setSealingSet(roster);
+    return added;
 }
 
 } // namespace
@@ -339,13 +358,7 @@ void DocumentSession::join(const Context& context,
                            QObject* receiver,
                            Joined done)
 {
-    const InviteKeys keys = inviteKeys(link.seed);
-    ServerVersion::fetch(keys.self(),
-                         {},
-                         context.server,
-                         link.documentId,
-                         receiver,
-                         std::bind(&onJoinFetched, context, link, keys, paths, receiver, done, true, _1));
+    fetchForJoin(Joining{context, link, inviteKeys(link.seed), paths, receiver, done}, true);
 }
 
 bool DocumentSession::isShared() const
@@ -482,6 +495,17 @@ bool DocumentSession::writeSave(QString* errorMessage)
     return true;
 }
 
+std::optional<Holder> DocumentSession::self() const
+{
+    return m_document.sealingSet().personOf(m_context.identity.fingerprint());
+}
+
+bool DocumentSession::writeResealed(const Document& document, const DocumentHeader& previous, const DataKey& dataKey)
+{
+    const ServerVersion::Resealed resealed = ServerVersion::reseal(document, dataKey, previous);
+    return writeLocal(resealed.document, previous, resealed.dataKey);
+}
+
 QString DocumentSession::nameOf(const Document& document, const Fingerprint& device) const
 {
     const std::optional<Holder> person = document.sealingSet().personOf(device);
@@ -523,14 +547,20 @@ void DocumentSession::install(const Document& document)
         return;
     }
 
-    // Who the document is sealed to is not content, so a reseal keeps undo.
+    // Who the document is sealed to is not undoable content, so a changed roster
+    // keeps undo and is announced on its own.
     Document content = document;
     content.setSealingSet(m_document.sealingSet());
     const bool replaced = content != m_document;
+    const bool rosterReplaced = document.sealingSet() != m_document.sealingSet();
     m_document = document;
     if (replaced)
     {
         emit documentReplaced();
+    }
+    if (rosterReplaced)
+    {
+        emit rosterChanged();
     }
 }
 
@@ -594,12 +624,10 @@ void DocumentSession::onHead(const Result<Head>& head)
     // the roster it last read says who wrote it out. A header this build cannot read
     // is judged by the fetch below.
     DocumentHeader header;
-    if (DocumentHeader::parse(head.value->header, header) == HeaderParse::Ok
+    if (DocumentHeader::parse(head.value->header, header) == HeaderParse::Ok && header.documentId == m_documentId
         && !header.entryFor(m_context.identity.fingerprint()).has_value())
     {
-        finishLost(ServerVersion::whyLost(m_document.sealingSet(),
-                                          m_context.identity.fingerprint(),
-                                          head.value->published.device));
+        finishLost(whyLost(head.value->published.device, ServerVersion::recipientsOf(header)));
         return;
     }
 
@@ -624,6 +652,14 @@ void DocumentSession::onHead(const Result<Head>& head)
 
     finishOperation();
     publish();
+}
+
+ServerVersion::LostAccess DocumentSession::whyLost(const Fingerprint& publisher, const QSet<QString>& recipients) const
+{
+    // Judged by the roster the writer built on, which the base holds; the in-memory
+    // one may carry this device's own unpublished edits.
+    const SealingSet& previous = m_base.has_value() ? m_base->document.sealingSet() : m_document.sealingSet();
+    return ServerVersion::whyLost(previous, m_context.identity.fingerprint(), publisher, recipients);
 }
 
 void DocumentSession::fetchTheirs()
@@ -662,9 +698,7 @@ void DocumentSession::onFetched(const Fetched& theirs)
         adopt(theirs);
         break;
     case Fetched::Outcome::AccessLost:
-        finishLost(ServerVersion::whyLost(m_document.sealingSet(),
-                                          m_context.identity.fingerprint(),
-                                          theirs.published.device));
+        finishLost(whyLost(theirs.published.device, ServerVersion::recipientsOf(theirs.sealed.header)));
         return;
     case Fetched::Outcome::NeedsNewerVersion:
         // The local file and record stay untouched; re-evaluated on every head
@@ -863,17 +897,13 @@ void DocumentSession::fastForward(const Fetched& theirs)
     }
 
     settleSyncState();
-
-    // Nothing to send unless the rule now seals differently - a device this one
-    // approved that their version lacks, or one the server has dropped.
-    m_publishAgain = true;
 }
 
 void DocumentSession::mergeWith(const Fetched& theirs, const Document& merged)
 {
     // The local file first, then the base, so unpublished work is never covered by
     // a base that moved over a file that did not.
-    if (!writeLocal(merged, theirs.sealed.header, theirs.dataKey))
+    if (!writeResealed(merged, theirs.sealed.header, theirs.dataKey))
     {
         emit saveFailed(tr("The ward could not be saved to %1.").arg(m_paths.file));
         return;
@@ -890,12 +920,11 @@ void DocumentSession::mergeWith(const Fetched& theirs, const Document& merged)
 
 void DocumentSession::raiseConflict(const Fetched& theirs)
 {
-    // The local file takes this session's work under their sealing set and key, so
-    // every later save builds on it. The base stays where it was, so a crash
-    // before resolve meets the same conflict on reopen.
-    Document mine = m_document;
-    mine.setSealingSet(theirs.document.sealingSet());
-    if (!writeLocal(mine, theirs.sealed.header, theirs.dataKey))
+    // The local file takes this session's work on their header and key - rotated
+    // where this roster lacks someone theirs sealed to - so every later save builds
+    // on it. The base stays where it was, so a crash before resolve meets the same
+    // conflict on reopen.
+    if (!writeResealed(m_document, theirs.sealed.header, theirs.dataKey))
     {
         emit saveFailed(tr("The ward could not be saved to %1.").arg(m_paths.file));
         return;
@@ -935,10 +964,9 @@ bool DocumentSession::resolve(Resolution resolution, QString* errorMessage)
     const std::optional<EmergencyResponse> response =
         ResponseMerge::merge(baseResponse, m_document.emergencyResponse(), theirs.document.emergencyResponse());
 
-    // Keep theirs: their directory with the merged response. Keep mine: the local
-    // file as it stands - this session's directory, the merged response, and the
-    // adopted sealing set and key - which was sealed on their header, so it never
-    // restores anyone they removed.
+    // Keep theirs: their directory and roster with the merged response. Keep mine:
+    // the local file as it stands - this session's directory and roster, the merged
+    // response - sealed on their header when the conflict was raised.
     Document resolved = resolution == Resolution::KeepTheirs ? theirs.document : m_document;
     resolved.setEmergencyResponse(response);
 
@@ -952,7 +980,7 @@ bool DocumentSession::resolve(Resolution resolution, QString* errorMessage)
         // Each document with the key it is sealed by: an edit made while the conflict
         // waited may have rotated this session's key.
         written = resolution == Resolution::KeepMine ? writeLocal(resolved, m_header, m_dataKey)
-                                                     : writeLocal(resolved, theirs.sealed.header, theirs.dataKey);
+                                                     : writeResealed(resolved, theirs.sealed.header, theirs.dataKey);
     }
 
     // The local file first, as in a merge; the base then moves to theirs. A base
@@ -1061,7 +1089,8 @@ void DocumentSession::onRegistered(const Result<qint64>& result, const DocumentF
 
 std::optional<FileOpenRouter::InviteLink> DocumentSession::invite(Invite::For purpose, Role role, const QString& label)
 {
-    if (!isShared() || m_lost)
+    const std::optional<Holder> me = self();
+    if (!isShared() || m_lost || m_requiresUpdate || !me.has_value())
     {
         return std::nullopt;
     }
@@ -1070,17 +1099,14 @@ std::optional<FileOpenRouter::InviteLink> DocumentSession::invite(Invite::For pu
     const InviteKeys keys = inviteKeys(seed);
     Invite open;
     open.purpose = purpose;
-    open.person = m_context.identity.member;
+    open.person = me->id;
     open.role = role;
     open.label = label;
     open.keys = keys.keys();
 
     bool added = false;
-    edit(Edit::Roster, [&open, &added](Document& document) {
-        SealingSet roster = document.sealingSet();
-        added = roster.addInvite(open);
-        document.setSealingSet(roster);
-    });
+    edit(Edit::Roster, std::bind(&addInviteTo, _1, open));
+    added = m_document.sealingSet().invite(keys.fingerprint()).has_value();
     if (!added)
     {
         return std::nullopt;
@@ -1088,6 +1114,60 @@ std::optional<FileOpenRouter::InviteLink> DocumentSession::invite(Invite::For pu
 
     publishNow();
     return FileOpenRouter::InviteLink{m_documentId, seed};
+}
+
+void DocumentSession::leave()
+{
+    const std::optional<Holder> me = self();
+    if (!isShared() || m_lost || m_busy || !me.has_value())
+    {
+        emit leaveFailed(ServerError::InvalidRequest);
+        return;
+    }
+
+    QString error;
+    if (!flush(&error))
+    {
+        emit saveFailed(error);
+        return;
+    }
+
+    // Built in memory only: the local file stays readable here until the server
+    // holds the version without this person.
+    Document gone = m_document;
+    SealingSet roster = gone.sealingSet();
+    if (!roster.removePerson(me->id))
+    {
+        emit leaveFailed(ServerError::InvalidRequest);
+        return;
+    }
+    gone.setSealingSet(roster);
+    const ServerVersion::Resealed resealed = ServerVersion::reseal(gone, m_dataKey, m_header);
+    const std::optional<DocumentFile::Sealed> sealed = DocumentFile::seal(resealed.document, m_header, resealed.dataKey);
+    if (!sealed.has_value())
+    {
+        emit leaveFailed(ServerError::InvalidRequest);
+        return;
+    }
+
+    m_busy = true;
+    m_context.server.upload(m_documentId,
+                            m_context.records.record(m_documentId).baseVersion.value(),
+                            Upload{sealed->header, sealed->ciphertext},
+                            this,
+                            std::bind(&DocumentSession::onLeft, this, _1));
+}
+
+void DocumentSession::onLeft(const Result<qint64>& result)
+{
+    m_busy = false;
+    if (result.ok())
+    {
+        finishLost(ServerVersion::LostAccess{ServerVersion::LostAccess::How::Left, QString()});
+        return;
+    }
+    emit leaveFailed(result.error);
+    finishOperation();
 }
 
 // --- The lease -------------------------------------------------------------------

@@ -30,7 +30,10 @@
 ///
 /// A signed request carries three headers: `X-Signer-Public` and `X-Signer-Verify`, the
 /// signer's keys in base64, and `X-Signature`, the Ed25519 signature in base64 over
-/// ServerContract::signedBytes. `published` is `{device, when}`.
+/// ServerContract::signedBytes. In a request body, `header` is the header's JSON as a
+/// string, compact with keys sorted, and the signature's hash is over that string
+/// exactly as sent: the server verifies the bytes it received, then parses them. In an
+/// answer, `header` is the parsed object. `published` is `{device, when}`.
 ///
 /// A request that fails answers with `{error}`, the ServerError's name with a
 /// lowercase first letter, and this status:

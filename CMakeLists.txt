@@ -88,6 +88,7 @@ set(MODEL_SOURCES
     src/models/DocumentMetadata.cpp
     src/models/Document.cpp
     src/models/SealingSet.cpp
+    src/models/RosterDiff.cpp
     src/models/MinisteringGroup.cpp
     src/models/MinisteringDistrict.cpp
     src/models/EmergencyAsset.cpp
@@ -114,6 +115,7 @@ set(MODEL_HEADERS
     src/models/DocumentMetadata.h
     src/models/Document.h
     src/models/SealingSet.h
+    src/models/RosterDiff.h
     src/models/MinisteringGroup.h
     src/models/MinisteringDistrict.h
     src/models/EmergencyAsset.h

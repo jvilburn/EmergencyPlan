@@ -191,9 +191,11 @@ becomes the signer: it holds the identity, builds `Signer` for each write with
 `DocumentCrypto::sign`, and forwards reads as they are. Its lifetime guard and
 context-bound replies stay.
 
-`HttpWire`: the signer travels as headers `X-Signer-Key`, `X-Signer-Verify`,
+`HttpWire`: the signer travels as headers `X-Signer-Public`, `X-Signer-Verify`,
 `X-Signature` (base64) on `POST /documents`, `PUT /documents/{id}`, and the lease calls;
-no `Authorization`. The table in `HttpWire.h` shrinks to the five calls.
+no `Authorization`. The header in a request body is its compact JSON as a string, and the
+signature's hash is over that string as sent. The table in `HttpWire.h` shrinks to the
+five calls.
 
 `DocumentCrypto` gains `sign(bytes, SigningKey)` and `verifies(bytes, signature,
 VerifyKey)` (rename of the challenge pair) and `keypairFromSeed(seed)` for X25519

@@ -73,9 +73,6 @@ struct Invite
 class SealingSet
 {
 public:
-    /// What the next write seals to, and whether it needs a fresh data key.
-    struct Next;
-
     SealingSet() = default;
 
     /// A new ward's set: its maker, an admin, on one device.
@@ -112,11 +109,12 @@ public:
     bool removeInvite(const Fingerprint& invite);
 
     /// The joiner's device takes the invite's place: under the invite's person for a
-    /// Device invite, with that person's role; for a User invite under the person
-    /// joiner names - a new one, named name with the invite's role, or an existing one
-    /// as another device.
+    /// Device invite, with that person's role; for a User invite under a new person,
+    /// joiner, named name, with the invite's role.
     bool join(const Fingerprint& invite, const NamedDevice& device, const MemberId& joiner, const QString& name);
 
+    /// Never the last person: a ward with nobody to read it is not a state. The
+    /// invites that person made go with them.
     bool removePerson(const MemberId& id);
 
     /// Never a person's last device; removePerson for that.
@@ -125,11 +123,11 @@ public:
 
     // --- The rule ---
 
-    /// The next write seals to exactly this set. It rotates the data key when the
-    /// version it builds on sealed to anyone this set lacks, so a device or an invite
-    /// taken out holds no key to anything written afterwards. previousRecipients holds
-    /// fingerprint hex.
-    Next next(const QSet<QString>& previousRecipients) const;
+    /// Whether a write of this set on top of a version that sealed to previousRecipients
+    /// needs a fresh data key: it does when that version sealed to anyone this set
+    /// lacks, so a device or an invite taken out holds no key to anything written
+    /// afterwards. previousRecipients holds fingerprint hex.
+    bool rotatesFrom(const QSet<QString>& previousRecipients) const;
 
     /// Records the key this ward used until now, at a rotation.
     void addFormerKey(const DataKey& key);
@@ -157,8 +155,3 @@ private:
     QStringList m_formerKeys;               ///< FormerKey hashes as hex, oldest first
 };
 
-struct SealingSet::Next
-{
-    SealingSet set;
-    bool rotate = false;
-};

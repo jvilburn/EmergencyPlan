@@ -75,8 +75,15 @@ struct LostAccess
 };
 
 /// The reason a header that leaves out self gives, from the roster this device last
-/// read and the device that published the version.
-LostAccess whyLost(const SealingSet& previousRoster, const Fingerprint& self, const Fingerprint& publisher);
+/// read, the device that published the version, and whom that version still seals to
+/// (fingerprint hex).
+LostAccess whyLost(const SealingSet& previousRoster,
+                   const Fingerprint& self,
+                   const Fingerprint& publisher,
+                   const QSet<QString>& recipients);
+
+/// The fingerprints a header seals to, as hex.
+QSet<QString> recipientsOf(const DocumentHeader& header);
 
 /// The sealing-set rule applied to a document about to be written on top of the
 /// version whose header is previous: the data key is fresh when that version sealed

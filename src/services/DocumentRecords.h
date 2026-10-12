@@ -4,6 +4,7 @@
 
 #include <QByteArray>
 #include <QJsonObject>
+#include <QJsonObject>
 #include <QList>
 #include <QString>
 #include <QStringList>
@@ -24,10 +25,10 @@ struct DocumentRecord
     /// The base copy's save counter. A local file above it has unpublished changes.
     qint64 baseSaveCounter = 0;
 
-    /// The server version whose roster the access notices last showed and had
-    /// dismissed, so a notice shows only what changed since - across syncs, ward
-    /// switches, and runs.
-    qint64 rosterShown = 0;
+    /// The roster as the access notices last showed it and had it dismissed, so a
+    /// notice shows only what changed since - across syncs, ward switches, and runs.
+    /// Empty until the ward is first shown.
+    QJsonObject rosterShown;
 
     QJsonObject toJson() const;
 

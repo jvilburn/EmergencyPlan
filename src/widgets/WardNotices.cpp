@@ -13,33 +13,7 @@
 
 #include <functional>
 
-using ServerContract::HistoryEntry;
-using ServerContract::Member;
 
-namespace
-{
-
-/// One line for the list: "Bob Wilson added Tom Hale", "Tom Hale left".
-QString describe(const HistoryEntry& entry)
-{
-    switch (entry.kind)
-    {
-    case HistoryEntry::Kind::Added:
-        return QObject::tr("%1 added %2").arg(entry.actor, entry.subject);
-    case HistoryEntry::Kind::Removed:
-        return QObject::tr("%1 removed %2").arg(entry.actor, entry.subject);
-    case HistoryEntry::Kind::Left:
-        return QObject::tr("%1 left").arg(entry.subject);
-    case HistoryEntry::Kind::MadeAdmin:
-        return QObject::tr("%1 made %2 an admin").arg(entry.actor, entry.subject);
-    case HistoryEntry::Kind::MadeMember:
-        return entry.actor == entry.subject ? QObject::tr("%1 stepped down as admin").arg(entry.actor)
-                                            : QObject::tr("%1 made %2 a member").arg(entry.actor, entry.subject);
-    }
-    return QString();
-}
-
-} // namespace
 
 WardNotices::WardNotices(QWidget* parent)
     : QWidget(parent)
@@ -88,32 +62,18 @@ QList<WardNotices::Notice> WardNotices::currentNotices() const
                               QString()});
     }
 
-    // An unshared ward is this person's alone; a shared one counts what the server
-    // last said, and says nothing until it has.
-    QList<Member> members;
-    if (session->lastHead().has_value())
-    {
-        members = session->lastHead().value().members;
-    }
-    std::optional<Member> self;
-    int admins = 0;
-    for (const Member& member : members)
-    {
-        if (member.person.member == manager->identity().member)
-        {
-            self = member;
-        }
-        admins += member.isAdmin() ? 1 : 0;
-    }
+    // The roster is the ward's own; an unshared ward's is this person alone.
+    const SealingSet roster = manager->roster();
+    const std::optional<Holder> self = manager->self();
 
-    if (!session->isShared() || members.size() == 1)
+    if (!session->isShared() || roster.people().size() == 1)
     {
         notices.append(Notice{Kind::OnlyKeyHolder,
                               tr("Only you can open this ward. If you lose your devices, it cannot be recovered. "
                                  "Add someone now."),
                               QString()});
     }
-    else if (self.has_value() && self->isAdmin() && admins == 1)
+    else if (self.has_value() && self->isAdmin() && roster.adminCount() == 1)
     {
         notices.append(Notice{Kind::OnlyAdmin,
                               tr("You are the only admin. If you lose your devices, nobody can add or remove people. "
@@ -121,24 +81,19 @@ QList<WardNotices::Notice> WardNotices::currentNotices() const
                               QString()});
     }
 
-    if (self.has_value() && self->person.devices.size() == 1)
+    if (session->isShared() && self.has_value() && self->devices.size() == 1)
     {
         notices.append(Notice{Kind::OneDevice,
-                              tr("This ward is on one of your devices. Linking a second keeps it if this one is lost."),
+                              tr("This ward is on one of your devices. Adding a second keeps it if this one is lost."),
                               QString()});
     }
 
-    const QList<HistoryEntry> history = manager->unseenHistory();
-    if (!history.isEmpty())
+    const QStringList changes = manager->unseenRosterChanges();
+    if (!changes.isEmpty())
     {
-        QStringList lines;
-        for (const HistoryEntry& entry : history)
-        {
-            lines.append(describe(entry));
-        }
         notices.append(Notice{Kind::AccessChanged,
-                              tr("%n change(s) to who has access", "", int(history.size())),
-                              lines.join("\n")});
+                              tr("%n change(s) to who has access", "", int(changes.size())),
+                              changes.join("\n")});
     }
 
     const QSet<Kind> dismissed = m_dismissed.value(manager->documentId());
@@ -213,9 +168,9 @@ QWidget* WardNotices::makeNotice(const Notice& notice)
     }
     case Kind::OneDevice:
     {
-        QPushButton* action = new QPushButton(tr("Link a Device..."), frame);
+        QPushButton* action = new QPushButton(tr("Add a Device..."), frame);
         row->addWidget(action);
-        connect(action, &QPushButton::clicked, this, &WardNotices::linkRequested);
+        connect(action, &QPushButton::clicked, this, &WardNotices::addDeviceRequested);
         break;
     }
     case Kind::RequiresUpdate:
@@ -256,7 +211,7 @@ void WardNotices::dismiss(Kind kind)
     if (kind == Kind::AccessChanged)
     {
         // Seen for good, on the record, so the next sync shows only what is newer.
-        manager->dismissHistory();
+        manager->dismissRosterChanges();
         return;
     }
     m_dismissed[manager->documentId()].insert(kind);

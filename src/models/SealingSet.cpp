@@ -286,23 +286,19 @@ bool SealingSet::join(const Fingerprint& invite, const NamedDevice& device, cons
     {
     case Invite::For::Device:
         personId = open.person.toHex();
-        break;
-    case Invite::For::User:
-        if (!joiner.isValid() || name.trimmed().isEmpty())
+        if (!m_people.contains(personId))
         {
             return false;
         }
-        personId = joiner.toHex();
         break;
-    }
-
-    if (!m_people.contains(personId))
-    {
-        if (open.purpose == Invite::For::Device)
+    case Invite::For::User:
+        personId = joiner.toHex();
+        if (!joiner.isValid() || name.trimmed().isEmpty() || m_people.contains(personId))
         {
             return false;
         }
         m_people.insert(personId, Holder{joiner, name.trimmed(), open.role, {}});
+        break;
     }
 
     Holder& person = m_people[personId];
@@ -314,7 +310,7 @@ bool SealingSet::join(const Fingerprint& invite, const NamedDevice& device, cons
 
 bool SealingSet::removePerson(const MemberId& id)
 {
-    if (m_people.remove(id.toHex()) == 0)
+    if (m_people.size() == 1 || m_people.remove(id.toHex()) == 0)
     {
         return false;
     }
@@ -365,11 +361,8 @@ bool SealingSet::setRole(const MemberId& id, Role role)
 
 // --- The rule --------------------------------------------------------------------
 
-SealingSet::Next SealingSet::next(const QSet<QString>& previousRecipients) const
+bool SealingSet::rotatesFrom(const QSet<QString>& previousRecipients) const
 {
-    Next next;
-    next.set = *this;
-
     QSet<QString> current;
     for (const DeviceKeys& keys : recipients())
     {
@@ -379,10 +372,10 @@ SealingSet::Next SealingSet::next(const QSet<QString>& previousRecipients) const
     {
         if (!current.contains(previous))
         {
-            next.rotate = true;
+            return true;
         }
     }
-    return next;
+    return false;
 }
 
 void SealingSet::addFormerKey(const DataKey& key)

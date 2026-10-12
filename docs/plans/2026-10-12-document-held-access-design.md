@@ -99,7 +99,14 @@ An invite is a one-time bearer key.
    entry - under the inviter's person for a device invite, under a new person for a user
    invite, named by the joiner - signed by the invite's verify key, which the current
    header names. From then on the device signs as itself. The ward opens.
-3. **Revoking** an unused invite is a write without its entry, by anyone holding the key.
+3. **Withdrawing** an unused invite is a write without its entry, by whoever made it or
+   by an admin. Removing a person withdraws the invites they made.
+
+Two people changing who has access at the same moment is the ordinary conflict, shown
+in the conflict dialog like two edits to the directory; the roster is directory content
+for merging. The last person cannot leave: a ward with nobody to read it is not a state.
+Leaving needs the server, since the version without you must be held there before your
+copy goes.
 
 The link is the gate. Whoever opens it first gets in, visibly, and can be removed.
 Interception of a device invite puts the interceptor in as one of the inviter's devices,

@@ -18,9 +18,7 @@ class AppSettings;
 class DocumentLibrary;
 class QLabel;
 class AccessDialog;
-class DeviceLinks;
 class UpdateChecker;
-class IncomingWards;
 class WardNotices;
 class QProgressBar;
 class EmergencyAssetView;
@@ -40,12 +38,7 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    MainWindow(AppSettings& settings,
-               DocumentLibrary& library,
-               IncomingWards& incoming,
-               DeviceLinks& links,
-               UpdateChecker& updates,
-               QWidget* parent);
+    MainWindow(AppSettings& settings, DocumentLibrary& library, UpdateChecker& updates, QWidget* parent);
     ~MainWindow();
 
     /// This launch's arguments, or those a later launch handed to this one: each
@@ -55,10 +48,6 @@ public:
 
     /// Opens a ward by id and tells the person how it went.
     void openWard(const QString& documentId);
-
-    /// This device was unlinked: every ward and copy goes, and the app closes to set
-    /// the device up afresh. Reported once, however many calls hear it.
-    void unlinkedHere(const ServerContract::LostAccess& lost);
 
 signals:
     /// The person asked to set this device up afresh and confirmed it; the app
@@ -92,7 +81,7 @@ private slots:
     // Wards
     void onSaveFailed(const QString& errorMessage);
     void onDocumentOpened();
-    void onAccessLost(const QString& wardName, const ServerContract::LostAccess& lost);
+    void onAccessLost(const QString& wardName, const ServerVersion::LostAccess& lost);
     void onFetchFailed(const QString& documentId, DocumentSession::Download outcome);
     void onStartOver();
     void onShowAccess();
@@ -127,8 +116,6 @@ private:
     void updateCopyBanner();
     void refreshAccessDialog(AccessDialog* dialog);
 
-    /// The open ward's members as the server last said; empty with none.
-    QList<ServerContract::Member> currentMembers() const;
     bool settleConflict(ConflictDialog::Choice choice, QString* errorMessage);
     void setupUi();
     void setupMenus();
@@ -141,38 +128,26 @@ private:
     /// there is one, for the messages.
     void followRoute(const FileOpenRouter::Route& route, const QString& path);
 
-    /// The invite link for a shared ward, to copy and send.
-    void showInviteLink(const QString& documentId);
+    /// The ward was shared: say so, and offer the first invite.
+    void onShared();
     void onShareFailed(ServerContract::ServerError error);
 
-    /// Asks whether to request access to a ward this device lacks, and does.
-    void offerRequest(const QString& documentId);
-    void onRequested(const QString& documentId);
-    void onRequestFailed(const QString& documentId, ServerContract::ServerError error);
+    /// Add a Device and Add a User: an invite, shown as the message to send.
+    void onAddDevice();
+    void onAddUser();
+    void showInvite(const std::optional<FileOpenRouter::InviteLink>& link);
 
-    void onRequestDeclined(const QString& documentId);
-
-    /// A change to who has access the server refused, said plainly.
-    void onAccessCallFailed(ServerContract::ServerError error);
-
-    /// Link a Device: asks for the code the new device shows, then what it names.
-    void onLinkDevice();
-    void onLinkRead(const QString& code, const ServerContract::LinkState& state);
-    void onLinkApproved(const QString& deviceName);
-
-    /// Unlink one of this person's devices, and each it linked, as the person chooses.
+    /// Remove, unlink, withdraw, change a role, and leave, from the access dialog,
+    /// each confirmed where it cannot be undone.
+    void onRemovePerson(const MemberId& person);
     void onUnlinkDevice(const Fingerprint& device);
-    void onUnlinked(int count);
-
-    /// Remove, change a role, and leave, from the access dialog, each confirmed.
-    void onRemoveMember(const MemberId& member);
+    void onWithdrawInvite(const Fingerprint& invite);
     void onLeave();
 
-    /// A ward the server listed for this device was fetched, or could not be.
-    void onWardRestored(const QString& documentId, DocumentSession::Download outcome);
+    /// An invite link opened here that did not reach an open ward.
+    void onJoinFailed(DocumentSession::Join outcome, const QString& reason);
+    void onLeaveFailed(ServerContract::ServerError error);
 
-    void onLinkFailed(ServerContract::ServerError error);
-    void onGrantBlocked(const QString& reason);
     void reportOpen(const QString& documentId, DocumentManager::Open result, const QString& reason);
     void openCopy(const QString& sourcePath);
     void closeEditPanelInternal();
@@ -183,10 +158,7 @@ private:
 
     AppSettings& m_settings;
     DocumentLibrary& m_library;
-    IncomingWards& m_requests;
-    DeviceLinks& m_links;
     UpdateChecker& m_updates;
-    bool m_unlinkedHere = false;
 
     // Widgets
     QSplitter* m_splitter;

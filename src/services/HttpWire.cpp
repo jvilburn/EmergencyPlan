@@ -73,7 +73,7 @@ bool readIndex(const QJsonObject& json, QLatin1String key, qint64& out)
 QJsonObject uploadJson(const Upload& upload)
 {
     QJsonObject json;
-    json[KeyHeader] = upload.header.toJson();
+    json[KeyHeader] = QString::fromUtf8(headerText(upload.header));
     json[KeyBlob] = toBase64(upload.blob);
     return json;
 }

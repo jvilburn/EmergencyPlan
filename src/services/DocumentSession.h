@@ -109,7 +109,8 @@ public:
         InviteUsed,         ///< the current version no longer seals to the invite
         NeedsNewerVersion,
         ServerFault,        ///< the version did not check out; the reason says why
-        WriteFailed
+        WriteFailed,
+        Busy                ///< the ward changed under the join twice; open the link again
     };
 
     struct Context
@@ -216,10 +217,16 @@ public:
     void share();
 
     /// Writes a version sealed to a fresh invite keypair as well, publishes it, and
-    /// answers the link to send. A Device invite joins this person; a User invite
-    /// makes a new person with role. Whether this person may invite is the caller's
-    /// rule. nullopt for an unshared or lost ward.
+    /// answers the link to send; the invite works once that publish has landed, which
+    /// the sync state shows. A Device invite joins this person; a User invite makes a
+    /// new person with role. Whether this person may invite is the caller's rule.
+    /// nullopt for an unshared or lost ward, or one a newer build has written.
     std::optional<FileOpenRouter::InviteLink> invite(Invite::For purpose, Role role, const QString& label);
+
+    /// Publishes a version without this person, built from what is in memory, and
+    /// once it lands finishes as Left: the local file is never written without this
+    /// device. leaveFailed says why it did not land; the last person cannot leave.
+    void leave();
 
     /// The conflict waiting for a choice, if any. Head checks and publishing wait
     /// with it, so it can be asked about again until it is settled.
@@ -259,6 +266,12 @@ signals:
     /// Files and record gone; the session is finished.
     void accessLost(const ServerVersion::LostAccess& lost);
 
+    /// The version that leaves was refused, or could not be built.
+    void leaveFailed(ServerContract::ServerError error);
+
+    /// Who has access changed from outside an edit: a version taken in.
+    void rosterChanged();
+
 private:
     DocumentSession(const Context& context,
                     std::unique_ptr<SessionTimers> timers,
@@ -280,6 +293,13 @@ private:
     /// The session's header, key, and document follow only on success.
     bool writeLocal(const Document& document, const DocumentHeader& previous, const DataKey& dataKey);
 
+    /// writeLocal with the sealing-set rule applied against previous first, for a
+    /// document taken in from the server: a roster carried through a merge rotates.
+    bool writeResealed(const Document& document, const DocumentHeader& previous, const DataKey& dataKey);
+
+    /// This person as the roster lists it; nullopt when the roster does not.
+    std::optional<Holder> self() const;
+
     /// The exact bytes of a server version as the local file.
     bool writeLocal(const ServerVersion::Fetched& theirs);
 
@@ -294,11 +314,13 @@ private:
     void startShared();
     void checkHead();
     void onHead(const ServerContract::Result<ServerContract::Head>& head);
+    ServerVersion::LostAccess whyLost(const Fingerprint& publisher, const QSet<QString>& recipients) const;
     void fetchTheirs();
     void onFetched(const ServerVersion::Fetched& theirs);
     void publish();
     void onPublished(const ServerContract::Result<qint64>& result, const DocumentFile::Sealed& published);
     void scheduleRetry();
+    void onLeft(const ServerContract::Result<qint64>& result);
     void onRegistered(const ServerContract::Result<qint64>& result, const DocumentFile::Sealed& registered);
     void finishOperation();
 

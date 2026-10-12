@@ -14,6 +14,7 @@
 #include "DocumentChange.h"
 #include "DocumentLibrary.h"
 #include "DocumentSession.h"
+#include "SealingSet.h"
 
 class BackgroundGeocodingService;
 class ServerConnection;
@@ -120,47 +121,47 @@ public:
     /// A shared ward is being fetched to open.
     bool isFetching() const { return !m_fetching.isEmpty(); }
 
-    /// The open ward's access changes this device has not yet dismissed, oldest first.
-    const QList<ServerContract::HistoryEntry>& unseenHistory() const { return m_unseenHistory; }
+    /// Who has access to the open ward, from the ward itself; empty with none open.
+    SealingSet roster() const;
 
-    /// Marks every unseen access change seen, on the ward's record.
-    void dismissHistory();
+    /// This person in the open ward's roster; nullopt with no ward open.
+    std::optional<Holder> self() const;
+
+    /// What changed in who has access since the notice was last dismissed, one line
+    /// each; this device's own changes count as seen.
+    const QStringList& unseenRosterChanges() const { return m_rosterChanges; }
+    void dismissRosterChanges();
 
     /// Registers the open ward with the server, sealed to this device alone; shared
     /// or shareFailed reports how it went.
     void share();
 
-    /// The open ward's pending access requests, answered only while receiver lives;
-    /// an empty list when the server cannot say, and no answer for an unshared ward.
-    using RequestsFetched = std::function<void(const QList<ServerContract::AccessRequest>& requests)>;
-    void fetchRequests(QObject* receiver, const RequestsFetched& done);
+    /// An invite to the open ward: a Device invite joins this person, a User invite
+    /// makes a new member. Whether this person may invite is the window's rule.
+    /// nullopt for a ward that is not shared.
+    std::optional<FileOpenRouter::InviteLink> invite(Invite::For purpose, const QString& label);
 
-    /// An admin's grant: the open ward's current version, resealed to the device that
-    /// asked, goes up with the grant, so the person can read the ward the moment they
-    /// are a member. A conflict with a publish that landed meanwhile is built again
-    /// once.
-    void grant(const ServerContract::AccessRequest& request);
-    void decline(const ServerContract::AccessRequest& request);
+    /// What the person copies and sends for link.
+    QString inviteMessage(const FileOpenRouter::InviteLink& link) const;
 
-    /// An admin's removal of a person: their devices are cut off at once, and the next
-    /// version anyone writes is sealed without them.
-    void remove(const MemberId& member);
+    /// Each a write of the open ward; the next version is sealed without whoever
+    /// was taken out, under a fresh key. Neither takes out this person or this
+    /// device: that is leave.
+    void removePerson(const MemberId& id);
+    void removeDevice(const Fingerprint& device);
+    void revokeInvite(const Fingerprint& invite);
+    void setRole(const MemberId& id, Role role);
 
-    /// An admin's promotion or demotion, their own stepping down included.
-    void setRole(const MemberId& member, ServerContract::Role role);
+    /// This person leaves the open ward: a version without them goes up, and once
+    /// it has, the ward and its copies go from this device, reported as accessLost.
+    void leave();
 
-    /// This person leaves the open ward. A successor is made admin first, for the last
-    /// admin leaving others behind. Once the server accepts it, the ward and its
-    /// copies go from this device, reported as accessLost.
-    void leave(const std::optional<MemberId>& successor);
+    /// Joins the ward an invite link names and opens it. fetchFinished reports the
+    /// open; joinFailed reports a join that did not get that far.
+    void joinWard(const FileOpenRouter::InviteLink& link);
 
     /// Saves now and publishes. A local failure is the one reported.
     bool publishNow(QString* errorMessage);
-
-    /// A ward this device has lost - removed, or left on another device - as the
-    /// server's list of this person's wards shows: its files, copies, record, and
-    /// entry go, and the person is told. The open ward goes through its session.
-    void onWardLostElsewhere(const QString& documentId, const ServerContract::LostAccess& lost);
 
     /// Saves and closes the open ward, releasing its lease. False, with the reason,
     /// when the save failed; the ward then stays open.
@@ -200,26 +201,24 @@ signals:
     /// server now says.
     void headChanged();
 
-    /// unseenHistory() changed.
+    /// unseenRosterChanges() changed.
     void accessChanged();
 
     /// The open ward is now shared.
     void shared(const QString& documentId);
     void shareFailed(ServerContract::ServerError error);
 
-    /// A change to who has access went through, or was refused and why.
-    void accessCallDone();
-    void accessCallFailed(ServerContract::ServerError error);
+    /// Joining through an invite link did not reach an open ward.
+    void joinFailed(DocumentSession::Join outcome, const QString& reason);
 
-    /// A grant could not be prepared here: the ward's current version could not be
-    /// read on this device. reason says why, in the person's words.
-    void grantBlocked(const QString& reason);
+    /// Leaving did not go through; the ward stays.
+    void leaveFailed(ServerContract::ServerError error);
 
     /// The server holds a version this build cannot read, or no longer does.
     void requiresUpdateChanged();
 
     /// This device lost access to a ward, which has left the library.
-    void accessLost(const QString& wardName, const ServerContract::LostAccess& lost);
+    void accessLost(const QString& wardName, const ServerVersion::LostAccess& lost);
 
     /// A shared ward being fetched could not be.
     void fetchFailed(const QString& documentId, DocumentSession::Download outcome);
@@ -265,30 +264,18 @@ private:
     void onReadOnlyChanged();
     void onHeadChanged();
     void onShared();
-    void onRequests(const RequestsFetched& done, const ServerContract::Result<QList<ServerContract::AccessRequest>>& requests);
-    void startGrant(const ServerContract::AccessRequest& request, bool mayRetry);
-    void onGrantBuilt(const QString& documentId,
-                      const ServerContract::AccessRequest& request,
-                      bool mayRetry,
-                      const ServerVersion::Fetched& theirs,
-                      const std::optional<ServerContract::Resealing>& built);
-    void onGranted(const ServerContract::AccessRequest& request,
-                   bool mayRetry,
-                   const ServerContract::Result<ServerContract::Done>& result);
-    void onAccessCall(const ServerContract::Result<ServerContract::Done>& result);
-    void onSuccessorMade(const QString& documentId, const ServerContract::Result<ServerContract::Done>& result);
-    void sendLeave(const QString& documentId);
-    void onLeft(const QString& documentId, const ServerContract::Result<ServerContract::Done>& result);
-    void onHistory(const QString& documentId, const ServerContract::Result<QList<ServerContract::HistoryEntry>>& history);
-    void onSessionLost(const ServerContract::LostAccess& lost);
+    /// Applies change to the open ward's roster and publishes; nothing when change
+    /// refuses. This device's own change counts as seen.
+    void editRoster(const std::function<bool(SealingSet&)>& change);
+    void refreshRosterChanges();
+    void onJoined(const QString& documentId, DocumentSession::Join outcome, const QString& reason);
+    void onSessionLost(const ServerVersion::LostAccess& lost);
 
     /// The ward's files, copies, record, and entry go, and the person is told.
-    void forgetLostWard(const QString& documentId, const ServerContract::LostAccess& lost);
+    void forgetLostWard(const QString& documentId, const ServerVersion::LostAccess& lost);
 
     void fetch(const QString& documentId);
-    void onFetched(const QString& documentId,
-                   DocumentSession::Download outcome,
-                   const std::optional<ServerContract::LostAccess>& lost);
+    void onFetched(const QString& documentId, DocumentSession::Download outcome);
     void refuse(DocumentSession::Refusal refusal);
     void resetWard();
 
@@ -305,8 +292,7 @@ private:
     /// The shared ward being fetched to open, until it opens or another is shown.
     QString m_fetching;
 
-    QList<ServerContract::HistoryEntry> m_unseenHistory;
-    bool m_fetchingHistory = false;
+    QStringList m_rosterChanges;
     Document m_empty;
     CommandHistory m_commandHistory;
 
