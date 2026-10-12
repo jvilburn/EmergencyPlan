@@ -614,7 +614,7 @@ void DocumentManagerTest::aGrantOnAnUnreadableVersionIsBlocked()
     ward.settle();
 
     QCOMPARE(blocked.count(), 1);
-    QCOMPARE(blocked.first().first().toString(), QString("The document could not be decrypted."));
+    QCOMPARE(blocked.first().first().toString(), QString("The document could not be decrypted: the file was altered or truncated."));
     QCOMPARE(done.count(), 0);
     QCOMPARE(failed.count(), 0);
     QCOMPARE(statusOf(ward, bob), ServerContract::RequestStatus::Pending);

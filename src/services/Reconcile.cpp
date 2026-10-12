@@ -64,7 +64,7 @@ DownloadCheck validate(const QString& documentId,
     const std::optional<QByteArray> plaintext = DocumentCrypto::decryptPayload(ciphertext, dataKey.value(), header);
     if (!plaintext.has_value())
     {
-        return fault(QObject::tr("The document could not be decrypted."));
+        return fault(QObject::tr("The document could not be decrypted: the file was altered or truncated."));
     }
 
     QJsonParseError parseError;

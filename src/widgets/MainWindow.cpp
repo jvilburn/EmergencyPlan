@@ -401,7 +401,7 @@ void MainWindow::onOpenWard()
 void MainWindow::openWard(const QString& documentId)
 {
     QString reason;
-    reportOpen(DocumentManager::instance()->openDocument(documentId, &reason), reason);
+    reportOpen(documentId, DocumentManager::instance()->openDocument(documentId, &reason), reason);
 }
 
 void MainWindow::onWardRestored(const QString& documentId, DocumentSession::Download outcome)
@@ -438,13 +438,13 @@ void MainWindow::onWardRestored(const QString& documentId, DocumentSession::Down
 
 void MainWindow::onFetchFinished(const QString& documentId, DocumentManager::Open result, const QString& reason)
 {
-    Q_UNUSED(documentId);
     statusBar()->clearMessage();
-    reportOpen(result, reason);
+    reportOpen(documentId, result, reason);
 }
 
-void MainWindow::reportOpen(DocumentManager::Open result, const QString& reason)
+void MainWindow::reportOpen(const QString& documentId, DocumentManager::Open result, const QString& reason)
 {
+    const QString name = DocumentManager::instance()->wardNameOf(documentId);
     switch (result)
     {
     case DocumentManager::Open::Opened:
@@ -454,13 +454,17 @@ void MainWindow::reportOpen(DocumentManager::Open result, const QString& reason)
         statusBar()->showMessage(tr("Fetching the ward from the server..."));
         break;
     case DocumentManager::Open::NotFound:
-        QMessageBox::warning(this, tr("Open Ward"), tr("This ward's file is missing from this device."));
+        QMessageBox::warning(this,
+                             tr("Open Ward"),
+                             tr("The file for %1 is missing from this device, and the ward is not shared, so there is "
+                                "nowhere to fetch it from.")
+                                 .arg(name));
         break;
     case DocumentManager::Open::NeedsNewerVersion:
-        QMessageBox::warning(this, tr("Open Ward"), tr("This ward was saved by a newer version of Ward Planning."));
+        QMessageBox::warning(this, tr("Open Ward"), tr("%1 was saved by a newer version of Ward Planning.").arg(name));
         break;
     case DocumentManager::Open::Refused:
-        QMessageBox::warning(this, tr("Open Ward"), tr("This ward's file on this device cannot be opened. %1").arg(reason));
+        QMessageBox::warning(this, tr("Open Ward"), tr("The file for %1 on this device cannot be opened. %2").arg(name, reason));
         break;
     case DocumentManager::Open::NotClosed:
         QMessageBox::warning(this, tr("Open Ward"), tr("The open ward could not be saved, so it stays open. %1").arg(reason));
@@ -951,8 +955,10 @@ void MainWindow::onShareFailed(ServerContract::ServerError error)
     switch (error)
     {
     case ServerContract::ServerError::Unreachable:
-    case ServerContract::ServerError::RateLimited:
         QMessageBox::warning(this, tr("Share"), tr("The server could not be reached. Connect to the internet and share again."));
+        return;
+    case ServerContract::ServerError::RateLimited:
+        QMessageBox::warning(this, tr("Share"), tr("The server is busy. Share again in a little while."));
         return;
     default:
         QMessageBox::warning(this, tr("Share"), tr("The server did not accept this ward, so it was not shared."));
@@ -1001,14 +1007,20 @@ void MainWindow::onRequested(const QString& documentId)
 void MainWindow::onRequestFailed(const QString& documentId, ServerContract::ServerError error)
 {
     Q_UNUSED(documentId);
-    if (error == ServerContract::ServerError::UnknownDocument)
+    switch (error)
     {
+    case ServerContract::ServerError::UnknownDocument:
         QMessageBox::warning(this, tr("Request Access"), tr("The server has no such ward. It was deleted, or the link is wrong."));
         return;
+    case ServerContract::ServerError::RateLimited:
+        QMessageBox::warning(this, tr("Request Access"), tr("The server is busy. Open the link again in a little while."));
+        return;
+    default:
+        QMessageBox::warning(this,
+                             tr("Request Access"),
+                             tr("The request could not be sent. Connect to the internet and open the link again."));
+        return;
     }
-    QMessageBox::warning(this,
-                         tr("Request Access"),
-                         tr("The request could not be sent. Connect to the internet and open the link again."));
 }
 
 void MainWindow::onRequestDeclined(const QString& documentId)
@@ -1276,8 +1288,10 @@ void MainWindow::onAccessCallFailed(ServerContract::ServerError error)
         message = tr("Make someone else an admin first, so the ward can still add and remove people.");
         break;
     case ServerContract::ServerError::Unreachable:
-    case ServerContract::ServerError::RateLimited:
         message = tr("Connect to the internet to change who has access.");
+        break;
+    case ServerContract::ServerError::RateLimited:
+        message = tr("The server is busy. Try again in a little while.");
         break;
     case ServerContract::ServerError::NotFound:
         message = tr("That has already changed. Look again at Who Has Access.");
@@ -1301,8 +1315,10 @@ void MainWindow::onLinkFailed(ServerContract::ServerError error)
         message = tr("That code has expired. Start again on the new device.");
         break;
     case ServerContract::ServerError::Unreachable:
-    case ServerContract::ServerError::RateLimited:
         message = tr("Connect to the internet to link or unlink a device.");
+        break;
+    case ServerContract::ServerError::RateLimited:
+        message = tr("The server is busy. Try again in a little while.");
         break;
     default:
         message = tr("The server did not accept the change.");

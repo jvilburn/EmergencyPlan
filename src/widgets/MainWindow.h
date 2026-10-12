@@ -170,7 +170,7 @@ private:
 
     void onLinkFailed(ServerContract::ServerError error);
     void onGrantBlocked(const QString& reason);
-    void reportOpen(DocumentManager::Open result, const QString& reason);
+    void reportOpen(const QString& documentId, DocumentManager::Open result, const QString& reason);
     void openCopy(const QString& sourcePath);
     void closeEditPanelInternal();
 
