@@ -235,8 +235,10 @@ void IncomingWardsTest::aWardTheLinkerLackedWaitsForItsNextWrite()
     const QString lacked = ward.documentId;
     QVERIFY(ward.grant(carol, laptop));
 
+    // The held ward is downloaded; the lacked one is found unsealed by its head alone.
     BobsApp app(phone);
     QSignalSpy fetched(&app.requests, &IncomingWards::fetched);
+    const int downloadsBefore = ward.server.downloadsServed();
     app.requests.checkNow();
     ward.settle();
     QCOMPARE(fetched.count(), 1);
@@ -244,6 +246,16 @@ void IncomingWardsTest::aWardTheLinkerLackedWaitsForItsNextWrite()
     QVERIFY(app.library.contains(held));
     QCOMPARE(app.requests.waiting(), QStringList{lacked});
     QVERIFY(!app.library.contains(lacked));
+    QCOMPARE(ward.server.downloadsServed(), downloadsBefore + 1);
+    QVERIFY(app.requests.isWatching());
+
+    // While it waits, each check costs a head and no download.
+    const int headsWhileWaiting = ward.server.headsServed();
+    app.requests.checkNow();
+    ward.settle();
+    QCOMPARE(ward.server.headsServed(), headsWhileWaiting + 1);
+    QCOMPARE(ward.server.downloadsServed(), downloadsBefore + 1);
+    QCOMPARE(app.requests.waiting(), QStringList{lacked});
 
     // The laptop opens and edits it; its publish seals to the phone it linked.
     std::unique_ptr<DocumentSession> session = laptop.open(lacked);
@@ -260,4 +272,74 @@ void IncomingWardsTest::aWardTheLinkerLackedWaitsForItsNextWrite()
     QCOMPARE(fetched.at(1).at(1).value<DocumentSession::Download>(), DocumentSession::Download::Done);
     QVERIFY(app.library.contains(lacked));
     QVERIFY(app.requests.waiting().isEmpty());
+    QCOMPARE(ward.server.downloadsServed(), downloadsBefore + 2);
+    QVERIFY(!app.requests.isWatching());
+}
+
+void IncomingWardsTest::aDeviceWithNothingOnItsWayDoesNotWatch()
+{
+    TestWard ward;
+    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
+    Device& bob = ward.add(newIdentity("Bob", "Phone"));
+    std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
+    QVERIFY(aliceSession);
+    aliceSession.reset();
+
+    BobsApp app(bob);
+    QVERIFY(!app.requests.isWatching());
+    app.requests.checkNow();
+    ward.settle();
+    QVERIFY(!app.requests.isWatching());
+
+    // A request is something to watch for; its grant ends the watch.
+    app.requests.request(ward.documentId);
+    ward.settle();
+    QCOMPARE(app.requests.pending(), QStringList{ward.documentId});
+    QVERIFY(app.requests.isWatching());
+
+    QVERIFY(grantOnServer(ward, alice));
+    app.requests.checkNow();
+    ward.settle();
+    QVERIFY(app.library.contains(ward.documentId));
+    QVERIFY(app.requests.pending().isEmpty());
+    QVERIFY(!app.requests.isWatching());
+}
+
+void IncomingWardsTest::aWardRemovedWhileClosedIsReportedLost()
+{
+    TestWard ward;
+    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
+    Device& bob = ward.add(newIdentity("Bob", "Phone"));
+    std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
+    QVERIFY(aliceSession);
+    aliceSession.reset();
+
+    BobsApp app(bob);
+    app.requests.request(ward.documentId);
+    ward.settle();
+    QVERIFY(grantOnServer(ward, alice));
+    app.requests.checkNow();
+    ward.settle();
+    QVERIFY(app.library.contains(ward.documentId));
+
+    // Alice removes Bob while his copy sits closed; his next check hears why.
+    QSignalSpy lost(&app.requests, &IncomingWards::lostAccess);
+    QVERIFY(ServerTestSupport::wait<Done>(std::bind(&ServerApi::removeMember,
+                                                    &ward.server,
+                                                    ward.sessionFor(alice).value(),
+                                                    ward.documentId,
+                                                    bob.identity.member,
+                                                    _1))
+                .ok());
+    app.requests.checkNow();
+    ward.settle();
+    QCOMPARE(lost.count(), 1);
+    QCOMPARE(lost.first().first().toString(), ward.documentId);
+    const ServerContract::LostAccess how = lost.first().at(1).value<ServerContract::LostAccess>();
+    QCOMPARE(how.how, ServerContract::LostAccess::How::Removed);
+    QCOMPARE(how.byWhom, QString("Alice"));
+
+    // Deleting the copy is the manager's job; the library still holds it here.
+    QVERIFY(app.library.contains(ward.documentId));
+    QVERIFY(!app.requests.isWatching());
 }

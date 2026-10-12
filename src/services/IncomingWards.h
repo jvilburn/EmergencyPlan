@@ -12,16 +12,18 @@
 
 /// The wards on their way to this device: each this device asked for and an admin has
 /// not yet answered, and each the server lists for this person that the library
-/// lacks - after a grant, a link, a reinstall, or cleared app data.
+/// lacks - after a grant, a link, a reinstall, or cleared app data. Also the wards
+/// here that the server has stopped listing for this person: taken away, or left on
+/// another device.
 ///
 /// A request lasts until it is answered or the server no longer has it; a granted one
-/// becomes a listed ward. A listed ward arrives once a version sealed to this device
-/// does. The device that approved it seals it - the granting admin's, or the one that
-/// linked this device - so it may lag the grant or the link a little; until then it
-/// waits for access.
+/// becomes a listed ward, readable at once, since the version sealed to the device that
+/// asked went up with the grant. A ward a linked device's approver did not hold at the
+/// approval waits for access until that approver next writes it.
 ///
-/// Checked every minute, so a ward arrives soon after it is sealed. Requests are kept
-/// in AppSettings, so they outlive closing the app.
+/// Checked at launch, and then every minute only while a request or a ward is waiting,
+/// so a device with nothing on its way makes no periodic calls. Requests are kept in
+/// AppSettings, so they outlive closing the app.
 class IncomingWards : public QObject
 {
     Q_OBJECT
@@ -40,7 +42,11 @@ public:
     /// The listed wards not yet sealed to this device, as of the last check.
     const QStringList& waiting() const { return m_waiting; }
 
-    /// Checks every request, and fetches every listed ward this device lacks, now.
+    /// Whether the periodic check is running: it is while anything is pending or waiting.
+    bool isWatching() const { return m_timer.isActive(); }
+
+    /// Checks every request, every listed ward this device lacks, and every shared ward
+    /// here against the server's list, now.
     void checkNow();
 
 signals:
@@ -52,6 +58,10 @@ signals:
     /// WriteFailed. One still waiting for access is not reported.
     void fetched(const QString& documentId, DocumentSession::Download outcome);
 
+    /// A shared ward here has been lost - removed, or left on another device - and the
+    /// server says how. Its files and copies are still here for the receiver to delete.
+    void lostAccess(const QString& documentId, const ServerContract::LostAccess& lost);
+
 private:
     void onRequested(const QString& documentId, const ServerContract::Result<ServerContract::Done>& result);
     void onStatus(const QString& documentId, const ServerContract::Result<ServerContract::RequestStatus>& status);
@@ -59,6 +69,9 @@ private:
 
     void add(const QString& documentId);
     void drop(const QString& documentId);
+
+    /// Runs the timer exactly while something is pending or waiting.
+    void settleWatch();
 
     AppSettings& m_settings;
     DocumentLibrary& m_library;

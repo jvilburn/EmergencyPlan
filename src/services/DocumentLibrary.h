@@ -119,12 +119,18 @@ public:
                                            DocumentSession::Download outcome,
                                            const std::optional<ServerContract::LostAccess>& lost)>;
 
-    /// Fetches every ward the server lists for this person that the library lacks:
-    /// after a reinstall, cleared app data, or a grant. Each reports through
-    /// fetched as it ends. Only a ward that arrives is added, so one that does not
-    /// is tried afresh by the next restore. A listed id that is not a document id
-    /// is passed over. Replies come only while receiver lives.
-    void restore(ServerConnection& server, QObject* receiver, const WardFetched& fetched);
+    /// A shared ward here that the server no longer lists for this person, and why.
+    using WardLost = std::function<void(const QString& documentId, const ServerContract::LostAccess& lost)>;
+
+    /// Asks the server which wards it lists for this person. Each listed ward the
+    /// library lacks - after a reinstall, cleared app data, a grant, or a link - is
+    /// fetched once its head seals to this device, and reported through fetched as
+    /// NotYetSealed until then. Only a ward that arrives is added, so one that does not
+    /// is tried afresh by the next restore. A listed id that is not a document id is
+    /// passed over. Each shared ward here that the list lacks has been lost - removed,
+    /// left elsewhere - and is reported through lost with what its head says. Replies
+    /// come only while receiver lives.
+    void restore(ServerConnection& server, QObject* receiver, const WardFetched& fetched, const WardLost& lost);
 
     /// Fetches one shared ward from the server. On arrival it is added to the
     /// library, if it was not there, and its entry named from what arrived. A ward
@@ -139,7 +145,16 @@ private:
     void onListed(ServerConnection& server,
                   QObject* receiver,
                   const WardFetched& fetched,
+                  const WardLost& lost,
                   const ServerContract::Result<ServerContract::Me>& listed);
+    void onHeadToFetch(const QString& documentId,
+                       ServerConnection& server,
+                       QObject* receiver,
+                       const WardFetched& fetched,
+                       const ServerContract::Result<ServerContract::Head>& head);
+    static void onHeadOfLost(const QString& documentId,
+                             const WardLost& lost,
+                             const ServerContract::Result<ServerContract::Head>& head);
     void onWardFetched(const QString& documentId,
                        const WardFetched& fetched,
                        DocumentSession::Download outcome,

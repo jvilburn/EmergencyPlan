@@ -430,6 +430,7 @@ void MainWindow::onWardRestored(const QString& documentId, DocumentSession::Down
     case DocumentSession::Download::Unreachable:
     case DocumentSession::Download::AccessLost:
     case DocumentSession::Download::ServerFault:
+    case DocumentSession::Download::NotYetSealed:
         // IncomingWards keeps these to itself and tries again.
         break;
     }
@@ -823,6 +824,7 @@ void MainWindow::onFetchFailed(const QString& documentId, DocumentSession::Downl
     case DocumentSession::Download::Done:
     case DocumentSession::Download::AccessLost:
     case DocumentSession::Download::ServerFault:
+    case DocumentSession::Download::NotYetSealed:
         QMessageBox::warning(this,
                              tr("Open Ward"),
                              tr("The server's copy of this ward could not be checked, so it was not opened."));

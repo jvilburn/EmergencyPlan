@@ -17,4 +17,6 @@ private slots:
     void aRequestTheServerNoLongerHasIsDropped();
     void aLinkedDevicesWardsArriveAtOnce();
     void aWardTheLinkerLackedWaitsForItsNextWrite();
+    void aDeviceWithNothingOnItsWayDoesNotWatch();
+    void aWardRemovedWhileClosedIsReportedLost();
 };

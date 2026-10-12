@@ -366,6 +366,7 @@ void DocumentManager::onFetched(const QString& documentId,
     case DocumentSession::Download::NeedsNewerVersion:
     case DocumentSession::Download::ServerFault:
     case DocumentSession::Download::WriteFailed:
+    case DocumentSession::Download::NotYetSealed:
         emit fetchFailed(documentId, outcome);
         return;
     }
@@ -798,7 +799,7 @@ void DocumentManager::onSessionLost(const ServerContract::LostAccess& lost)
     forgetLostWard(documentId, lost);
 }
 
-void DocumentManager::onQueueLost(const QString& documentId, const ServerContract::LostAccess& lost)
+void DocumentManager::onWardLostElsewhere(const QString& documentId, const ServerContract::LostAccess& lost)
 {
     // A ward no longer in the library has already gone.
     if (m_library->contains(documentId))

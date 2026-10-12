@@ -157,6 +157,10 @@ public:
     /// Saves now and publishes. A local failure is the one reported.
     bool publishNow(QString* errorMessage);
 
+    /// A closed ward this device has lost - removed, or left on another device: its
+    /// files, copies, record, and entry go, and the person is told.
+    void onWardLostElsewhere(const QString& documentId, const ServerContract::LostAccess& lost);
+
     /// Saves and closes the open ward, releasing its lease. False, with the reason,
     /// when the save failed; the ward then stays open.
     bool close(QString* errorMessage);
@@ -276,7 +280,6 @@ private:
     void onLeft(const QString& documentId, const ServerContract::Result<ServerContract::Done>& result);
     void onHistory(const QString& documentId, const ServerContract::Result<QList<ServerContract::HistoryEntry>>& history);
     void onSessionLost(const ServerContract::LostAccess& lost);
-    void onQueueLost(const QString& documentId, const ServerContract::LostAccess& lost);
 
     /// The ward's files, copies, record, and entry go, and the person is told.
     void forgetLostWard(const QString& documentId, const ServerContract::LostAccess& lost);

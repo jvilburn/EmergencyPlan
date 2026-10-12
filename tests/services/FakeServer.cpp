@@ -100,11 +100,13 @@ void FakeServer::registerDocument(const Session& session, const Upload& upload, 
 
 void FakeServer::head(const Session& session, const QString& documentId, Reply<Head> reply)
 {
+    ++m_headsServed;
     answer(decideHead(session, documentId), reply);
 }
 
 void FakeServer::download(const Session& session, const QString& documentId, Reply<Snapshot> reply)
 {
+    ++m_downloadsServed;
     answer(decideDownload(session, documentId), reply);
 }
 

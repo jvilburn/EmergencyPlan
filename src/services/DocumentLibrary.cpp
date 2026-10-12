@@ -310,14 +310,18 @@ std::optional<DocumentLibrary::Copy> DocumentLibrary::openCopy(const QString& so
 
 // --- From the server -------------------------------------------------------------
 
-void DocumentLibrary::restore(ServerConnection& server, QObject* receiver, const WardFetched& fetched)
+void DocumentLibrary::restore(ServerConnection& server,
+                              QObject* receiver,
+                              const WardFetched& fetched,
+                              const WardLost& lost)
 {
-    server.me(receiver, std::bind(&DocumentLibrary::onListed, this, std::ref(server), receiver, fetched, _1));
+    server.me(receiver, std::bind(&DocumentLibrary::onListed, this, std::ref(server), receiver, fetched, lost, _1));
 }
 
 void DocumentLibrary::onListed(ServerConnection& server,
                                QObject* receiver,
                                const WardFetched& fetched,
+                               const WardLost& lost,
                                const ServerContract::Result<ServerContract::Me>& listed)
 {
     if (!listed.ok())
@@ -332,8 +336,62 @@ void DocumentLibrary::onListed(ServerConnection& server,
     {
         if (HexCodec::isCanonical(documentId, DocumentHeader::DocumentIdLength) && !contains(documentId))
         {
-            fetchWard(documentId, server, receiver, fetched);
+            server.head(documentId,
+                        receiver,
+                        std::bind(&DocumentLibrary::onHeadToFetch, this, documentId, std::ref(server), receiver, fetched, _1));
         }
+    }
+
+    // A shared ward here that the server no longer lists for this person was taken
+    // from it, or left on another device; its head says which.
+    for (const Entry& entry : entries())
+    {
+        if (entry.shared && !documentIds.contains(entry.documentId))
+        {
+            server.head(entry.documentId, receiver, std::bind(&DocumentLibrary::onHeadOfLost, entry.documentId, lost, _1));
+        }
+    }
+}
+
+void DocumentLibrary::onHeadToFetch(const QString& documentId,
+                                    ServerConnection& server,
+                                    QObject* receiver,
+                                    const WardFetched& fetched,
+                                    const ServerContract::Result<ServerContract::Head>& head)
+{
+    if (head.error == ServerContract::ServerError::AccessLost)
+    {
+        fetched(documentId, DocumentSession::Download::AccessLost, head.lost);
+        return;
+    }
+    if (!head.ok())
+    {
+        fetched(documentId, DocumentSession::Download::Unreachable, std::nullopt);
+        return;
+    }
+
+    // Downloading a version that is not sealed to this device would only fail; the
+    // head says so for the price of a header. A header this build cannot read goes to
+    // the download, which reports it as such.
+    DocumentHeader header;
+    if (DocumentHeader::parse(head.value.value().header, header) == HeaderParse::Ok
+        && !header.entryFor(m_identity.fingerprint()).has_value())
+    {
+        fetched(documentId, DocumentSession::Download::NotYetSealed, std::nullopt);
+        return;
+    }
+    fetchWard(documentId, server, receiver, fetched);
+}
+
+void DocumentLibrary::onHeadOfLost(const QString& documentId,
+                                   const WardLost& lost,
+                                   const ServerContract::Result<ServerContract::Head>& head)
+{
+    // Any other answer - not reached, or a list that was stale - waits for the next
+    // restore.
+    if (head.error == ServerContract::ServerError::AccessLost)
+    {
+        lost(documentId, head.lost.value());
     }
 }
 

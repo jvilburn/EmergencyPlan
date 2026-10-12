@@ -11,7 +11,7 @@ IncomingWards::IncomingWards(AppSettings& settings, DocumentLibrary& library, Se
 {
     m_timer.setInterval(CheckMilliseconds);
     connect(&m_timer, &QTimer::timeout, this, &IncomingWards::checkNow);
-    m_timer.start();
+    settleWatch();
 }
 
 void IncomingWards::request(const QString& documentId)
@@ -43,7 +43,10 @@ void IncomingWards::checkNow()
     {
         m_server.myRequestStatus(documentId, this, std::bind(&IncomingWards::onStatus, this, documentId, _1));
     }
-    m_library.restore(m_server, this, std::bind(&IncomingWards::onFetched, this, _1, _2));
+    m_library.restore(m_server,
+                      this,
+                      std::bind(&IncomingWards::onFetched, this, _1, _2),
+                      std::bind(&IncomingWards::lostAccess, this, _1, _2));
 }
 
 void IncomingWards::onStatus(const QString& documentId, const Result<RequestStatus>& status)
@@ -86,21 +89,23 @@ void IncomingWards::onFetched(const QString& documentId, DocumentSession::Downlo
     case DocumentSession::Download::WriteFailed:
         m_waiting.removeAll(documentId);
         emit fetched(documentId, outcome);
-        return;
-    case DocumentSession::Download::ServerFault:
-        // Listed, but no version is sealed to this device yet: tried again next time.
+        break;
+    case DocumentSession::Download::NotYetSealed:
+        // Checked again next time, until its approver writes it.
         if (!m_waiting.contains(documentId))
         {
             m_waiting.append(documentId);
         }
-        return;
+        break;
     case DocumentSession::Download::AccessLost:
         m_waiting.removeAll(documentId);
-        return;
+        break;
     case DocumentSession::Download::Unreachable:
-        // Not reached: tried again next time.
-        return;
+    case DocumentSession::Download::ServerFault:
+        // Not reached, or a version that did not check out: tried again next time.
+        break;
     }
+    settleWatch();
 }
 
 void IncomingWards::add(const QString& documentId)
@@ -111,6 +116,7 @@ void IncomingWards::add(const QString& documentId)
         wards.append(documentId);
         m_settings.setRequestedWards(wards);
     }
+    settleWatch();
 }
 
 void IncomingWards::drop(const QString& documentId)
@@ -119,5 +125,19 @@ void IncomingWards::drop(const QString& documentId)
     if (wards.removeAll(documentId) > 0)
     {
         m_settings.setRequestedWards(wards);
+    }
+    settleWatch();
+}
+
+void IncomingWards::settleWatch()
+{
+    const bool watching = !pending().isEmpty() || !m_waiting.isEmpty();
+    if (watching && !m_timer.isActive())
+    {
+        m_timer.start();
+    }
+    else if (!watching)
+    {
+        m_timer.stop();
     }
 }

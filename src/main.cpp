@@ -248,6 +248,7 @@ int main(int argc, char *argv[])
     tileService.initialize();
 
     IncomingWards incoming(*settings, library, server, nullptr);
+    QObject::connect(&incoming, &IncomingWards::lostAccess, &documentManager, &DocumentManager::onWardLostElsewhere);
     DeviceLinks links(identity,
                       *settings,
                       server,

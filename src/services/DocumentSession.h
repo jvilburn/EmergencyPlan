@@ -95,7 +95,8 @@ public:
         NeedsNewerVersion,
         AccessLost,
         ServerFault,
-        WriteFailed         ///< it validated, but could not be written on this device
+        WriteFailed,        ///< it validated, but could not be written on this device
+        NotYetSealed        ///< listed for this person, but no version is sealed to this device yet
     };
 
     struct Context
