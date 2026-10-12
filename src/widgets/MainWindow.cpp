@@ -911,6 +911,10 @@ void MainWindow::onShowAccess()
     connect(&dialog, &AccessDialog::grantRequested, manager, &DocumentManager::grant);
     connect(&dialog, &AccessDialog::linkRequested, this, &MainWindow::onLinkDevice);
     connect(&dialog, &AccessDialog::unlinkRequested, this, &MainWindow::onUnlinkDevice);
+    connect(&dialog, &AccessDialog::removeRequested, this, &MainWindow::onRemoveMember);
+    connect(&dialog, &AccessDialog::roleRequested, manager, &DocumentManager::setRole);
+    connect(&dialog, &AccessDialog::leaveRequested, &dialog, &QDialog::accept);
+    connect(&dialog, &AccessDialog::leaveRequested, this, &MainWindow::onLeave, Qt::QueuedConnection);
     connect(&dialog, &AccessDialog::declineRequested, manager, &DocumentManager::decline);
     connect(manager, &DocumentManager::accessCallDone, &dialog, std::bind(&MainWindow::refreshAccessDialog, this, &dialog));
     manager->fetchRequests(&dialog, std::bind(&AccessDialog::setRequests, &dialog, std::placeholders::_1));
@@ -1136,6 +1140,89 @@ void MainWindow::unlinkedHere()
     emit startOverRequested();
 }
 
+void MainWindow::onRemoveMember(const MemberId& member)
+{
+    QString name;
+    for (const ServerContract::Member& listed : currentMembers())
+    {
+        if (listed.person.member == member)
+        {
+            name = listed.person.displayName;
+        }
+    }
+
+    const QMessageBox::StandardButton answer = QMessageBox::question(
+        this,
+        tr("Remove"),
+        tr("Remove %1? They lose access at once, and their app deletes its copy of this ward the next time it "
+           "connects. A copy they took out of the app beforehand keeps what it had.")
+            .arg(name),
+        QMessageBox::Yes | QMessageBox::Cancel,
+        QMessageBox::Cancel);
+    if (answer == QMessageBox::Yes)
+    {
+        DocumentManager::instance()->remove(member);
+    }
+}
+
+void MainWindow::onLeave()
+{
+    DocumentManager* manager = DocumentManager::instance();
+    const QList<ServerContract::Member> members = currentMembers();
+    const MemberId self = manager->identity().member;
+
+    bool selfAdmin = false;
+    int admins = 0;
+    QStringList others;
+    QList<MemberId> otherIds;
+    for (const ServerContract::Member& member : members)
+    {
+        admins += member.isAdmin() ? 1 : 0;
+        if (member.person.member == self)
+        {
+            selfAdmin = member.isAdmin();
+        }
+        else
+        {
+            others.append(member.person.displayName);
+            otherIds.append(member.person.member);
+        }
+    }
+
+    // The last admin names a successor, so the ward can still add and remove people.
+    std::optional<MemberId> successor;
+    if (selfAdmin && admins == 1 && !others.isEmpty())
+    {
+        bool chosen = false;
+        const QString name = QInputDialog::getItem(this,
+                                                   tr("Leave"),
+                                                   tr("Before you leave, choose who will be admin:"),
+                                                   others,
+                                                   0,
+                                                   false,
+                                                   &chosen);
+        if (!chosen)
+        {
+            return;
+        }
+        successor = otherIds.at(others.indexOf(name));
+    }
+
+    const QMessageBox::StandardButton answer = QMessageBox::question(
+        this,
+        tr("Leave"),
+        others.isEmpty()
+            ? tr("Leave this ward? You are the only one with access, so nobody will be able to open it again.")
+            : tr("Leave this ward? Its copy on this device is deleted at once, and on your other devices when they "
+                 "next connect."),
+        QMessageBox::Yes | QMessageBox::Cancel,
+        QMessageBox::Cancel);
+    if (answer == QMessageBox::Yes)
+    {
+        manager->leave(successor);
+    }
+}
+
 void MainWindow::onUnlinked(int count)
 {
     statusBar()->showMessage(tr("%n device(s) unlinked", "", count), 10000);
@@ -1151,8 +1238,18 @@ void MainWindow::onAccessCallFailed(ServerContract::ServerError error)
     switch (error)
     {
     case ServerContract::ServerError::NotAdmin:
-        message = tr("Only an admin can change who has access.");
+    {
+        QStringList admins;
+        for (const ServerContract::Member& member : currentMembers())
+        {
+            if (member.isAdmin())
+            {
+                admins.append(member.person.displayName);
+            }
+        }
+        message = tr("Only an admin can change who has access. Ask %1.").arg(admins.join(tr(", ")));
         break;
+    }
     case ServerContract::ServerError::LastAdmin:
         message = tr("Make someone else an admin first, so the ward can still add and remove people.");
         break;

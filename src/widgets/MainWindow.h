@@ -159,6 +159,10 @@ private:
     void onUnlinkDevice(const Fingerprint& device);
     void onUnlinked(int count);
 
+    /// Remove, change a role, and leave, from the access dialog, each confirmed.
+    void onRemoveMember(const MemberId& member);
+    void onLeave();
+
     /// This device was unlinked: every ward and copy goes, and the app closes to set
     /// the device up afresh.
     void unlinkedHere();

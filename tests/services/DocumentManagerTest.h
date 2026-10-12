@@ -21,4 +21,8 @@ private slots:
     // Access history and lost access, through the app's own services
     void accessChangesShowOnceAndStaySeenOnceDismissed();
     void aFetchThatFindsAccessLostSaysWhy();
+    void shareAnnouncesTheWardAndOfflineSaysWhy();
+    void aGrantSealsTheDeviceThatAskedAndADeclineSaysSo();
+    void anAdminRemovesAndChangesRoles();
+    void theLastAdminLeavesThroughASuccessorAndTheWardGoes();
 };

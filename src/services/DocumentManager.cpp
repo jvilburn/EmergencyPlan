@@ -665,6 +665,77 @@ void DocumentManager::decline(const ServerContract::AccessRequest& request)
     }
 }
 
+void DocumentManager::remove(const MemberId& member)
+{
+    if (m_session && m_server != nullptr)
+    {
+        m_server->removeMember(m_session->documentId(), member, this, std::bind(&DocumentManager::onAccessCall, this, _1));
+    }
+}
+
+void DocumentManager::setRole(const MemberId& member, ServerContract::Role role)
+{
+    if (m_session && m_server != nullptr)
+    {
+        m_server->setRole(m_session->documentId(), member, role, this, std::bind(&DocumentManager::onAccessCall, this, _1));
+    }
+}
+
+void DocumentManager::leave(const std::optional<MemberId>& successor)
+{
+    if (!m_session || m_server == nullptr)
+    {
+        return;
+    }
+
+    const QString documentId = m_session->documentId();
+    if (successor.has_value())
+    {
+        m_server->setRole(documentId,
+                          successor.value(),
+                          ServerContract::Role::Admin,
+                          this,
+                          std::bind(&DocumentManager::onSuccessorMade, this, documentId, _1));
+        return;
+    }
+    sendLeave(documentId);
+}
+
+void DocumentManager::onSuccessorMade(const QString& documentId, const ServerContract::Result<ServerContract::Done>& result)
+{
+    if (!result.ok())
+    {
+        emit accessCallFailed(result.error);
+        return;
+    }
+    sendLeave(documentId);
+}
+
+void DocumentManager::sendLeave(const QString& documentId)
+{
+    m_server->removeMember(documentId, m_identity.member, this, std::bind(&DocumentManager::onLeft, this, documentId, _1));
+}
+
+void DocumentManager::onLeft(const QString& documentId, const ServerContract::Result<ServerContract::Done>& result)
+{
+    if (!result.ok())
+    {
+        emit accessCallFailed(result.error);
+        return;
+    }
+
+    // Gone from this device at once: the session closes without a last save, then the
+    // files, copies, record, and entry go.
+    if (m_session && m_session->documentId() == documentId)
+    {
+        ServerContract::LostAccess left;
+        left.how = ServerContract::LostAccess::How::Left;
+        m_session->finishLost(left);
+        return;
+    }
+    forgetLostWard(documentId, ServerContract::LostAccess{ServerContract::LostAccess::How::Left, QString(), QDateTime()});
+}
+
 void DocumentManager::onAccessCall(const ServerContract::Result<ServerContract::Done>& result)
 {
     if (result.ok())

@@ -142,6 +142,18 @@ public:
     void grant(const ServerContract::AccessRequest& request);
     void decline(const ServerContract::AccessRequest& request);
 
+    /// An admin's removal of a person: their devices are cut off at once, and the next
+    /// version anyone writes is sealed without them.
+    void remove(const MemberId& member);
+
+    /// An admin's promotion or demotion, their own stepping down included.
+    void setRole(const MemberId& member, ServerContract::Role role);
+
+    /// This person leaves the open ward. A successor is made admin first, for the last
+    /// admin leaving others behind. Once the server accepts it, the ward and its
+    /// copies go from this device, reported as accessLost.
+    void leave(const std::optional<MemberId>& successor);
+
     /// Saves now and publishes. A local failure is the one reported.
     bool publishNow(QString* errorMessage);
 
@@ -249,6 +261,9 @@ private:
                    const DeviceKeys& device,
                    const ServerContract::Result<ServerContract::Done>& result);
     void onAccessCall(const ServerContract::Result<ServerContract::Done>& result);
+    void onSuccessorMade(const QString& documentId, const ServerContract::Result<ServerContract::Done>& result);
+    void sendLeave(const QString& documentId);
+    void onLeft(const QString& documentId, const ServerContract::Result<ServerContract::Done>& result);
     void onHistory(const QString& documentId, const ServerContract::Result<QList<ServerContract::HistoryEntry>>& history);
     void onSessionLost(const ServerContract::LostAccess& lost);
     void onQueueLost(const QString& documentId, const ServerContract::LostAccess& lost);
