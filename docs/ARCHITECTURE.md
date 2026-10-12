@@ -468,9 +468,9 @@ against the version it builds on; it never touches the network. Publishing uploa
 saved file conditional on the server version this session started from. The **base
 copy** beside the local file is the file exactly as it stood at that version; its save
 counter tells whether the local file has unpublished changes, and a three-way merge
-against it tells what changed here from what changed there. The roster is directory
-content for that merge: changed on one side, that side's roster wins; changed on both,
-the conflict dialog. A refused publish fetches the server's version, validates it,
+against it tells what changed here from what changed there. The roster merges entry by
+entry: a person or an invite changed on one side is taken from that side, and only the
+same entry changed differently on both is a conflict. A refused publish fetches the server's version, validates it,
 merges, reseals, and publishes again.
 
 ## File Formats

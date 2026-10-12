@@ -102,9 +102,10 @@ An invite is a one-time bearer key.
 3. **Withdrawing** an unused invite is a write without its entry, by whoever made it or
    by an admin. Removing a person withdraws the invites they made.
 
-Two people changing who has access at the same moment is the ordinary conflict, shown
-in the conflict dialog like two edits to the directory; the roster is directory content
-for merging. The last person cannot leave: a ward with nobody to read it is not a state.
+Two people changing who has access at the same moment merges entry by entry, like the
+emergency response: a person or an invite changed on one side is taken from that side,
+and only the same entry changed differently on both is a conflict, shown in the conflict
+dialog. An invite made here and a join landing there cross without troubling anyone. The last person cannot leave: a ward with nobody to read it is not a state.
 Leaving needs the server, since the version without you must be held there before your
 copy goes.
 

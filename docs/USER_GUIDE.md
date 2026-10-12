@@ -246,7 +246,7 @@ The status bar shows how the open ward stands with the server:
 
 Family and member details take turns: while one person is editing the directory and connected, others see it read-only. Emergency responses - welfare checks, tasks - never wait, from anyone, at any time.
 
-When two devices have both changed the same ward out of each other's sight, Ward Planning merges what it can. Where it cannot, including two people changing who has access at the same moment, **File > Choose Between Two Versions** names the other person and offers to keep yours, keep theirs, or save yours as a copy so nothing is lost.
+When two devices have both changed the same ward out of each other's sight, Ward Planning merges what it can. Where it cannot, **File > Choose Between Two Versions** names the other person and offers to keep yours, keep theirs, or save yours as a copy so nothing is lost. Changes to who has access merge on their own unless two people changed the same person at once.
 
 ### Working offline
 
