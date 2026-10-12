@@ -152,15 +152,6 @@ DeviceIdentity newIdentity(const QString& displayName, const QString& deviceName
     return identity;
 }
 
-DeviceIdentity newDeviceOf(const DeviceIdentity& person, const QString& deviceName)
-{
-    DeviceIdentity identity = person;
-    identity.sealing = DocumentCrypto::generateKeypair();
-    identity.signing = DocumentCrypto::generateSigningKeypair();
-    identity.deviceName = deviceName;
-    return identity;
-}
-
 ServerTestSupport::TestDevice asTestDevice(const DeviceIdentity& identity)
 {
     return ServerTestSupport::TestDevice{identity.deviceName, identity.sealing, identity.signing};
@@ -182,11 +173,8 @@ SealingSet rosterOf(const QList<DeviceIdentity>& devices)
     for (qsizetype i = 1; i < devices.size(); ++i)
     {
         const DeviceIdentity& joiner = devices.at(i);
-        const bool known = roster.person(joiner.member).has_value();
-
         Invite open;
-        open.purpose = known ? Invite::For::Device : Invite::For::User;
-        open.person = known ? joiner.member : devices.first().member;
+        open.person = devices.first().member;
         open.label = "for " + joiner.displayName;
         open.keys = DeviceKeys{DocumentCrypto::generateKeypair().publicKey,
                                DocumentCrypto::generateSigningKeypair().verifyKey};

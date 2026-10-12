@@ -59,9 +59,6 @@ private:
 /// A new person with one device.
 DeviceIdentity newIdentity(const QString& displayName, const QString& deviceName);
 
-/// Another device of the same person.
-DeviceIdentity newDeviceOf(const DeviceIdentity& person, const QString& deviceName);
-
 ServerTestSupport::TestDevice asTestDevice(const DeviceIdentity& identity);
 
 /// A Joined that keeps the outcome in out.
@@ -71,8 +68,7 @@ void keepJoin(std::optional<DocumentSession::Join>& out,
               const std::optional<Document>& document);
 
 /// A roster of these devices as invites would build it: the first its maker, an
-/// admin; each later one joined through an invite of its own, as another device of a
-/// person already listed under its member id, else as a new member.
+/// admin; each later one joined as a new member through an invite of the maker's.
 SealingSet rosterOf(const QList<DeviceIdentity>& devices);
 
 /// One installation: its identity, its records, its timers, its connection, and its

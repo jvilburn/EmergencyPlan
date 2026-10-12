@@ -48,8 +48,8 @@ struct Invite
     };
 
     For purpose = For::User;
-    MemberId person;                    ///< whom a Device invite joins; who made a User invite
-    Role role = Role::Member;           ///< what a User invite's joiner becomes; a Device joins as its person
+    MemberId person;                    ///< who made it; a Device invite joins its maker
+    Role role = Role::Member;           ///< what a User invite's joiner becomes; a Device joins as its maker
     QString label;                      ///< shown while the invite is open: "for Bob"
     DeviceKeys keys;
 
@@ -92,9 +92,6 @@ public:
     QList<Invite> invites() const;
     std::optional<Invite> invite(const Fingerprint& fingerprint) const;
 
-    /// A device or an invite.
-    bool contains(const Fingerprint& fingerprint) const;
-    bool isEmpty() const { return m_people.isEmpty() && m_invites.isEmpty(); }
     int adminCount() const;
 
     /// Every device and every invite, sorted by fingerprint hex: what the header seals
@@ -159,8 +156,7 @@ private:
     /// from the entry at fingerprint except.
     bool keysAreFree(const DeviceKeys& keys, const QString& except) const;
 
-    /// An invite is always some current person's: whom a Device invite joins, who
-    /// made a User invite.
+    /// An invite is always some current person's: the one who made it.
     void dropInvitesWithoutAPerson();
 
     QHash<QString, Holder> m_people;        ///< by person id hex

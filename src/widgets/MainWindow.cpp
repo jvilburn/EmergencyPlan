@@ -917,7 +917,7 @@ bool MainWindow::settleConflict(ConflictDialog::Choice choice, QString* errorMes
 void MainWindow::onShowAccess()
 {
     DocumentManager* manager = DocumentManager::instance();
-    if (manager->copy().has_value() || manager->session() == nullptr)
+    if (manager->session() == nullptr)
     {
         QMessageBox::information(this, tr("Who Has Access"), tr("Open a ward to see who has access to it."));
         return;
@@ -946,7 +946,7 @@ void MainWindow::onShowAccess()
 
 void MainWindow::onAddDevice()
 {
-    showInvite(DocumentManager::instance()->invite(Invite::For::Device, Role::Member, tr("for another device of mine")));
+    showInvite(DocumentManager::instance()->invite(Invite::For::Device, Role::Member, tr("for another device")));
 }
 
 void MainWindow::onAddUser()
@@ -1045,7 +1045,7 @@ void MainWindow::onJoinFailed(DocumentSession::Join outcome, const QString& reas
         message = tr("The server has no such ward. It was deleted, or the link is wrong.");
         break;
     case DocumentSession::Join::InviteUsed:
-        message = tr("This invite has been used or withdrawn. Ask for another.");
+        message = tr("This invite has been used or withdrawn, or has not reached the server yet. Ask the sender.");
         break;
     case DocumentSession::Join::NeedsNewerVersion:
         message = tr("This ward was saved by a newer version of Ward Planning. Update to join it.");

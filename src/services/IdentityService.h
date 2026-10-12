@@ -9,9 +9,10 @@
 #include <memory>
 #include <optional>
 
-/// This device's keypairs, and the person it belongs to - member id, display name,
-/// and device name - resolved before any document exists. Its product is the
-/// DeviceIdentity value the core takes.
+/// This device's keypairs and its person - display name, device name, and the member
+/// id under which it makes a person in a ward it creates or joins as a new user -
+/// resolved before any document exists. Its product is the DeviceIdentity value the
+/// core takes.
 ///
 /// The keys exist from the first run; the person from the moment it is created on
 /// the first screen.

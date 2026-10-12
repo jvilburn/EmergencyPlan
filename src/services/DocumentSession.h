@@ -57,8 +57,8 @@ enum class SyncState
 /// The roster itself changes only through edits here - an invite made, a person or
 /// device removed, a role changed - and through join, which a new device makes once.
 ///
-/// One document operation runs at a time - a head check, a fetch, a publish, or
-/// the registration that shares the ward - so a save made during a publish
+/// One document operation runs at a time - a head check, a fetch, a publish, the
+/// registration that shares the ward, or a leave - so a save made during a publish
 /// publishes after it, and a head check asked for meanwhile runs when it ends. The
 /// lease runs beside them.
 ///
@@ -106,7 +106,7 @@ public:
         Done,
         Unreachable,
         UnknownWard,        ///< the server has no such document
-        InviteUsed,         ///< the current version seals to neither the invite nor this device
+        InviteUsed,         ///< this device could not take the invite's place, and the current version is not its
         NeedsNewerVersion,
         ServerFault,        ///< the version did not check out; the reason says why
         WriteFailed
@@ -315,7 +315,6 @@ private:
     // --- The server ---
 
     void startShared();
-    void checkHead();
     void onHead(const ServerContract::Result<ServerContract::Head>& head);
     ServerVersion::LostAccess whyLost(const Fingerprint& publisher, const QSet<QString>& recipients) const;
     void fetchTheirs();

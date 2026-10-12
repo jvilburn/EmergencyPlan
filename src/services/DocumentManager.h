@@ -122,9 +122,6 @@ public:
     /// The ward's name as the library lists it; empty for one not there.
     QString wardNameOf(const QString& documentId) const;
 
-    /// A shared ward is being fetched to open.
-    bool isFetching() const { return !m_fetching.isEmpty(); }
-
     /// Who has access to the open ward, from the ward itself; empty with none open.
     SealingSet roster() const;
 
@@ -165,8 +162,9 @@ public:
     /// is the caller's rule.
     void leave();
 
-    /// Joins the ward an invite link names and opens it. fetchFinished reports the
-    /// open; joinFailed reports a join that did not get that far.
+    /// Joins the ward an invite link names and opens it, whatever was opened
+    /// meanwhile. fetchFinished reports the open; joinFailed reports a join that did
+    /// not get that far.
     void joinWard(const FileOpenRouter::InviteLink& link);
 
     /// Saves now and publishes. A local failure is the one reported.
@@ -270,7 +268,6 @@ private:
     void onDocumentReplaced();
     void afterChange(const DocumentChange& change);
     void onReadOnlyChanged();
-    void onHeadChanged();
     void onShared();
     /// Takes roster as the open ward's and publishes it.
     void publishRoster(const SealingSet& roster);

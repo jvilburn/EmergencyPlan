@@ -473,15 +473,15 @@ counter tells whether the local file has unpublished changes, and a three-way me
 against it tells what changed here from what changed there. The roster merges entry by
 entry, and never conflicts: a person or an invite changed on one side is taken from that
 side; one changed differently on both is the server's; a removed person's invites go with
-them; and where the entries taken together are not a sound set, the server's set stands whole. A
-refused publish fetches the server's version, validates it, merges, reseals, and publishes
-again.
+them; and where the entries taken together are not a sound set, the server's set stands
+whole. A refused publish fetches the server's version, validates it, merges, reseals, and
+publishes again.
 
 ## File Formats
 
 ### The encrypted file
 
-A `.wardplanning` file, on disk or on the server, is a header line of JSON followed by ciphertext. The header holds the format version, document id, save counter, nonce, and one recipient entry per device: its fingerprint and the data key sealed to it. The whole header is the payload's associated data, so any change to it fails decryption. The payload is the document JSON below, compressed and encrypted.
+A `.wardplanning` file, on disk or on the server, is a header line of JSON followed by ciphertext. The header holds the format version, document id, save counter, nonce, and one recipient entry per device and open invite: its fingerprint and the data key sealed to it. The whole header is the payload's associated data, so any change to it fails decryption. The payload is the document JSON below, compressed and encrypted.
 
 ### Document JSON Structure
 

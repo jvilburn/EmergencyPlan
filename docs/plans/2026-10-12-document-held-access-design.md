@@ -1,9 +1,8 @@
 # Document-Held Access
 
 The ward is its own access list. Supersedes the server-held access parts of
-`2026-08-30-encrypted-shared-document-design.md` and both plans of 2026-10-11; the
-format, crypto, save and publish, merge, lease, and local library parts of that design
-stand.
+`2026-08-30-encrypted-shared-document-design.md`; the format, crypto, save and publish,
+merge, lease, and local library parts of that design stand.
 
 ## Why
 
@@ -31,7 +30,8 @@ A versioned store of encrypted documents, with a lease. Nothing about people.
 | `POST`, `DELETE /documents/{id}/lease` | a key holder | Take, refresh, release the edit lease. Signed. |
 
 **Signed requests.** A write carries the signer's two public keys and an Ed25519
-signature over the request's document id, base version, and the payload's hash. The
+signature over the call's name, the document id, the base version, and hashes of the
+header text and the blob. The
 server computes the signer's fingerprint from the keys exactly as clients do and accepts
 the write only if the *current* header names that fingerprint. There are no sessions, no
 challenge, no registration, no token. The first version of a document is the exception:
@@ -52,7 +52,7 @@ The sealing set inside the payload grows from a list of device keys to a small r
 ```
 sealingSet:
   people:
-    - person: <person id>
+    - id: <person id>
       name: "Alice Smith"
       role: admin | member
       devices:
@@ -107,10 +107,9 @@ An invite is a one-time bearer key.
 Two people changing who has access at the same moment merges entry by entry, like the
 emergency response, and never asks: a person or an invite changed on one side is taken
 from that side; one changed differently on both is the server's, and a removed person's
-invites go with them. Where the entries taken
-together are not a sound set, the server's set stands whole. An invite made here and a
-join landing there cross without troubling anyone. The
-last person cannot leave: a ward with nobody to read it is not a state.
+invites go with them. Where the entries taken together are not a sound set, the server's
+set stands whole. An invite made here and a join landing there cross without troubling
+anyone. The last person cannot leave: a ward with nobody to read it is not a state.
 Leaving needs the server, since the version without you must be held there before your
 copy goes.
 
@@ -137,8 +136,8 @@ the fragment, which browsers do not send to the server.
 - **Lost access**: a head whose header lacks this device. The reason is read off the
   previous roster and the publisher: removed by *name*, or left, or this device unlinked.
   The copy is deleted and the person told, as now.
-- **Last admin**: a client rule, as now: an admin cannot step down or leave while others
-  remain and no other admin exists. The single-admin and single-holder notices stay.
+- **Last admin**: a client rule, as now: the only admin cannot step down, and cannot
+  leave while others remain. The single-admin and single-holder notices stay.
 - **A second device of your own**: *Add a device*, send yourself the link, open it there.
   The first-run screen asks for a name and a device name, nothing else; a new device
   that is really a second device gets its wards by opening links.

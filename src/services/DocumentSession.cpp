@@ -149,8 +149,8 @@ void onJoinUploaded(const Joining& joining, const Result<qint64>& result)
         finishJoin(joining, DocumentSession::Join::Unreachable);
         return;
     case ServerError::VersionConflict:
-        // Someone published between the fetch and the upload; the invite is still
-        // open, since that is checked first. Once more from the current version.
+        // Someone published between the fetch and the upload: once more from the
+        // current version.
         DocumentSession::join(joining.context, joining.link, joining.paths, joining.receiver, joining.done);
         return;
     case ServerError::UnknownDocument:
@@ -424,11 +424,6 @@ void DocumentSession::publishNow()
     publish();
 }
 
-void DocumentSession::checkServer()
-{
-    checkHead();
-}
-
 bool DocumentSession::isDirectoryReadOnly() const
 {
     return isShared() && m_leaseHeldElsewhere;
@@ -475,7 +470,7 @@ void DocumentSession::onTimer(SessionTimers::Timer timer)
         takeLease();
         break;
     case SessionTimers::Timer::HeadCheck:
-        checkHead();
+        checkServer();
         restartHeadCheck();
         break;
     }
@@ -584,11 +579,11 @@ bool DocumentSession::hasUnpublishedChanges() const
 void DocumentSession::startShared()
 {
     takeLease();
-    checkHead();
+    checkServer();
     restartHeadCheck();
 }
 
-void DocumentSession::checkHead()
+void DocumentSession::checkServer()
 {
     // Paused while a conflict waits for resolve.
     if (!isShared() || m_lost || m_conflict.has_value())
@@ -812,7 +807,7 @@ void DocumentSession::onPublished(const Result<qint64>& result, const DocumentFi
         // The current version does not seal to this device: the head says who wrote
         // it out.
         m_publishAgain = false;
-        checkHead();
+        checkServer();
         finishOperation();
         return;
 
@@ -844,7 +839,7 @@ void DocumentSession::finishOperation()
     if (m_checkAgain)
     {
         m_checkAgain = false;
-        checkHead();
+        checkServer();
     }
 
     if (m_publishAgain)
@@ -981,27 +976,13 @@ bool DocumentSession::resolve(Resolution resolution, QString* errorMessage)
 
     // Who has access merges on its own, whichever directory is kept, so keeping mine
     // never puts back someone they removed and keeping theirs never drops someone
-    // this device added.
-    const SealingSet& baseRoster = m_base.has_value() ? m_base->document.sealingSet() : theirs.document.sealingSet();
+    // this device added. With no base to judge by, every difference is theirs'.
+    const SealingSet& baseRoster = m_base.has_value() ? m_base->document.sealingSet() : m_document.sealingSet();
     resolved.setSealingSet(SealingSet::merge(baseRoster, m_document.sealingSet(), theirs.document.sealingSet()));
 
-    bool written = false;
-    if (resolved == theirs.document)
-    {
-        written = writeLocal(theirs);
-    }
-    else if (resolution == Resolution::KeepMine && resolved.sealingSet() == m_document.sealingSet())
-    {
-        // Mine, roster and all, as the local file holds it: sealed by the key that file
-        // is, since an edit made while the conflict waited may have rotated it.
-        written = writeLocal(resolved, m_header, m_dataKey);
-    }
-    else
-    {
-        // Their roster, or their directory: on their header and key, rotated where the
-        // roster lacks someone they sealed to.
-        written = writeResealed(resolved, theirs.sealed.header, theirs.dataKey);
-    }
+    // On their header and key, rotated where the roster lacks someone they sealed to.
+    const bool written = resolved == theirs.document ? writeLocal(theirs)
+                                                      : writeResealed(resolved, theirs.sealed.header, theirs.dataKey);
 
     // The local file first, as in a merge; the base then moves to theirs. A base
     // not written leaves the resolved file ahead of the old base, so the next head

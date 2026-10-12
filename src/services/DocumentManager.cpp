@@ -497,7 +497,7 @@ void DocumentManager::install(std::unique_ptr<DocumentSession> session)
     connect(opened, &DocumentSession::syncStateChanged, this, &DocumentManager::syncStateChanged);
     connect(opened, &DocumentSession::conflictRaised, this, &DocumentManager::conflictRaised);
     connect(opened, &DocumentSession::requiresUpdateChanged, this, &DocumentManager::requiresUpdateChanged);
-    connect(opened, &DocumentSession::headChanged, this, &DocumentManager::onHeadChanged);
+    connect(opened, &DocumentSession::headChanged, this, &DocumentManager::headChanged);
     connect(opened, &DocumentSession::shared, this, &DocumentManager::onShared);
     connect(opened, &DocumentSession::shareFailed, this, &DocumentManager::shareFailed);
     connect(opened, &DocumentSession::saveFailed, this, &DocumentManager::saveFailed);
@@ -543,14 +543,9 @@ void DocumentManager::onReadOnlyChanged()
     emit readOnlyChanged();
 }
 
-void DocumentManager::onHeadChanged()
-{
-    emit headChanged();
-}
-
 SealingSet DocumentManager::roster() const
 {
-    return m_session && !m_copy.has_value() ? m_session->document().sealingSet() : SealingSet();
+    return m_session ? m_session->document().sealingSet() : SealingSet();
 }
 
 std::optional<Holder> DocumentManager::self() const
@@ -561,7 +556,7 @@ std::optional<Holder> DocumentManager::self() const
 void DocumentManager::refreshRosterChanges()
 {
     QStringList changes;
-    if (m_session && !m_copy.has_value())
+    if (m_session)
     {
         // Shown for the first time, a ward's roster is what it is; from then on, what
         // changed since the notice was last dismissed.
@@ -602,7 +597,7 @@ void DocumentManager::dismissRosterChanges()
 
 void DocumentManager::share()
 {
-    if (m_session && !m_copy.has_value())
+    if (m_session)
     {
         m_session->share();
     }
@@ -622,16 +617,20 @@ std::optional<FileOpenRouter::InviteLink> DocumentManager::invite(Invite::For pu
 
 QString DocumentManager::inviteMessage(const FileOpenRouter::InviteLink& link) const
 {
+    // Named as the roster names this person, which the recipient will see.
+    const std::optional<Holder> me = self();
     const QString ward = wardNameOf(link.documentId);
-    return FileOpenRouter::inviteMessage(m_identity.displayName, ward.isEmpty() ? tr("a ward") : ward, link);
+    return FileOpenRouter::inviteMessage(me.has_value() ? me->name : m_identity.displayName,
+                                         ward.isEmpty() ? tr("a ward") : ward,
+                                         link);
 }
-
-// Each roster edit below starts from roster(), which is empty unless the open ward is
-// a session's own, and every change to an empty set is refused: so a change made is a
-// change to the open ward.
 
 void DocumentManager::publishRoster(const SealingSet& roster)
 {
+    if (!m_session)
+    {
+        return;
+    }
     m_session->edit(DocumentSession::Edit::Roster, std::bind(&Document::setSealingSet, _1, roster));
     m_session->publishNow();
     refreshRosterChanges();
@@ -683,12 +682,10 @@ void DocumentManager::setRole(const MemberId& id, Role role)
 
 void DocumentManager::leave()
 {
-    if (!m_session || m_copy.has_value())
+    if (m_session)
     {
-        return;
+        m_session->leave();
     }
-
-    m_session->leave();
 }
 
 void DocumentManager::joinWard(const FileOpenRouter::InviteLink& link)
@@ -703,7 +700,6 @@ void DocumentManager::joinWard(const FileOpenRouter::InviteLink& link)
         emit fetchFinished(link.documentId, openDocument(link.documentId, &reason), reason);
         return;
     }
-    m_fetching = link.documentId;
     m_library->join(link, *m_server, this, std::bind(&DocumentManager::onJoined, this, link.documentId, _1, _2));
 }
 
@@ -715,12 +711,6 @@ void DocumentManager::onJoined(const QString& documentId, DocumentSession::Join 
         return;
     }
 
-    // Opened unless another ward was opened meanwhile; it is in the library either way.
-    if (m_fetching != documentId)
-    {
-        return;
-    }
-    m_fetching.clear();
     QString refusal;
     const Open result = open(documentId, &refusal, false);
     emit fetchFinished(documentId, result, refusal);
@@ -770,7 +760,7 @@ QString DocumentManager::wardNameOf(const QString& documentId) const
 
 bool DocumentManager::mayWriteDirectory() const
 {
-    return m_session && !m_copy.has_value() && m_session->mayWriteDirectory();
+    return m_session && m_session->mayWriteDirectory();
 }
 
 // ============================================================================

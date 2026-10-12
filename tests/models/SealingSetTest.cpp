@@ -95,10 +95,10 @@ void SealingSetTest::ofMakesItsMakerAnAdminOnOneDevice()
     QCOMPARE(set.recipients(), QList<DeviceKeys>{laptop.keys});
     QVERIFY(set.invites().isEmpty());
     QVERIFY(set.personOf(laptop.fingerprint()) == maker);
-    QVERIFY(!set.isEmpty());
+    QVERIFY(!set.people().isEmpty());
 
-    QVERIFY(SealingSet::of(MemberId(), "Alice", laptop).isEmpty());
-    QVERIFY(SealingSet::of(alice, "Alice", NamedDevice{"Laptop", DeviceKeys()}).isEmpty());
+    QVERIFY(SealingSet::of(MemberId(), "Alice", laptop).people().isEmpty());
+    QVERIFY(SealingSet::of(alice, "Alice", NamedDevice{"Laptop", DeviceKeys()}).people().isEmpty());
 }
 
 void SealingSetTest::anInviteIsARecipientUntilItIsJoined()
@@ -109,7 +109,7 @@ void SealingSetTest::anInviteIsARecipientUntilItIsJoined()
 
     QVERIFY(set.addInvite(forBob));
     QCOMPARE(set.recipients().size(), 2);
-    QVERIFY(set.contains(forBob.fingerprint()));
+    QVERIFY(set.invite(forBob.fingerprint()).has_value());
     QVERIFY(set.invite(forBob.fingerprint()) == forBob);
     QCOMPARE(set.invites(), QList<Invite>{forBob});
 
@@ -120,7 +120,7 @@ void SealingSetTest::anInviteIsARecipientUntilItIsJoined()
 
     // Withdrawn, it is no recipient.
     QVERIFY(set.removeInvite(forBob.fingerprint()));
-    QVERIFY(!set.contains(forBob.fingerprint()));
+    QVERIFY(!set.invite(forBob.fingerprint()).has_value());
     QCOMPARE(set.recipients().size(), 1);
     QVERIFY(!set.removeInvite(forBob.fingerprint()));
 }
@@ -146,8 +146,8 @@ void SealingSetTest::aUserInviteJoinsAsANewPerson()
 
     // The invite's place is taken: it is gone, and the phone is sealed to instead.
     QVERIFY(set.invites().isEmpty());
-    QVERIFY(!set.contains(forBob.fingerprint()));
-    QVERIFY(set.contains(phone.fingerprint()));
+    QVERIFY(!set.invite(forBob.fingerprint()).has_value());
+    QVERIFY(set.device(phone.fingerprint()).has_value());
     QCOMPARE(set.recipients().size(), 2);
 }
 
@@ -239,7 +239,7 @@ void SealingSetTest::removeDeviceRefusesAPersonsLastDevice()
 
     QVERIFY(set.removeDevice(phone.fingerprint()));
     QCOMPARE(set.person(alice)->devices, QList<NamedDevice>{laptop});
-    QVERIFY(!set.contains(phone.fingerprint()));
+    QVERIFY(!set.device(phone.fingerprint()).has_value());
 
     // The laptop is now her last: taking it out is removePerson's to do.
     QVERIFY(!set.removeDevice(laptop.fingerprint()));
@@ -483,6 +483,21 @@ void SealingSetTest::fromJsonRefusesAnythingIllFormed()
     unknownPerson["person"] = newMember().toHex();
     orphan["invites"] = QJsonArray{unknownPerson};
     bad.append(orphan);
+
+    // An invite with a device's keys.
+    QJsonObject sharedKey = good;
+    QJsonObject borrowed = invites.first().toObject();
+    const QJsonObject aliceLaptop = alice["devices"].toArray().first().toObject();
+    borrowed["publicKey"] = aliceLaptop["publicKey"];
+    borrowed["verifyKey"] = aliceLaptop["verifyKey"];
+    sharedKey["invites"] = QJsonArray{borrowed};
+    bad.append(sharedKey);
+
+    QJsonObject badInviteRole = good;
+    QJsonObject duke = invites.first().toObject();
+    duke["role"] = "duke";
+    badInviteRole["invites"] = QJsonArray{duke};
+    bad.append(badInviteRole);
 
     QJsonObject shortKey = good;
     QJsonObject truncated = alice;

@@ -17,10 +17,10 @@ class QTreeWidget;
 /// applies:
 ///
 /// - Add a Device, for anyone: an invite that joins this person
-/// - Add a User, for an admin: an invite that makes a new member
+/// - Add a User, for an admin: an invite that makes a new member or admin
 /// - on another person, for an admin: Remove, and Make Admin or Make Member
-/// - on this person: Make Member for an admin stepping down (not the last admin
-///   while anyone else remains), and Leave
+/// - on this person: Make Member for an admin stepping down (never the last admin),
+///   and Leave
 /// - on one of this person's own devices but this one: Unlink
 /// - on an open invite: Withdraw
 /// - Details for anyone, revealing device fingerprints
@@ -61,8 +61,8 @@ private slots:
 private:
     void fillTree();
 
-    /// The person a row is about, the device when it is a device's row, and the
-    /// invite when it is an invite's row.
+    /// The person a person's or device's row is about, the device when it is a
+    /// device's row, and the invite when it is an invite's row.
     std::optional<Holder> selectedPerson() const;
     std::optional<NamedDevice> selectedDevice() const;
     std::optional<Invite> selectedInvite() const;

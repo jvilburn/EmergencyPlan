@@ -198,11 +198,6 @@ std::optional<Invite> SealingSet::invite(const Fingerprint& fingerprint) const
     return found.value();
 }
 
-bool SealingSet::contains(const Fingerprint& fingerprint) const
-{
-    return m_invites.contains(fingerprint.toHex()) || device(fingerprint).has_value();
-}
-
 int SealingSet::adminCount() const
 {
     int admins = 0;

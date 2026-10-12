@@ -472,7 +472,7 @@ void DocumentManagerTest::anInviteJoinsAUserOrAnotherDevice()
     TestWard ward;
     Device& alice = ward.add(newIdentity("Alice", "Laptop"));
     Device& bob = ward.add(newIdentity("Bob", "Phone"));
-    Device& tablet = ward.add(newDeviceOf(alice.identity, "Tablet"));
+    Device& tablet = ward.add(newIdentity("Alice", "Tablet"));
     App app(alice);
     QVERIFY(shareFrom(ward, app));
 

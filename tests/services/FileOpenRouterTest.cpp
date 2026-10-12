@@ -116,7 +116,7 @@ void FileOpenRouterTest::eachFileTakesItsRoute()
     }
     else if (file == "other device")
     {
-        QVERIFY(writeFile(path, wardFile(documentId, newDeviceOf(laptop, "Phone"), QString(), current)));
+        QVERIFY(writeFile(path, wardFile(documentId, newIdentity("Alice", "Phone"), QString(), current)));
     }
     else if (file == "stranger")
     {
