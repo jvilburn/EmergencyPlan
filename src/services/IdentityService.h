@@ -45,8 +45,6 @@ public:
 private:
     IdentityService(const QString& path, const IdentityRecord& record);
 
-    bool setPerson(const IdentityRecord::Person& person, QString* errorMessage);
-
     QString m_path;
     IdentityRecord m_record;
 };

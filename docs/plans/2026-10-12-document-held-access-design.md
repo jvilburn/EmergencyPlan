@@ -98,14 +98,18 @@ An invite is a one-time bearer key.
    download is validated, then write the next version: the invite entry becomes a device
    entry - under the inviter's person for a device invite, under a new person for a user
    invite, named by the joiner - signed by the invite's verify key, which the current
-   header names. From then on the device signs as itself. The ward opens.
+   header names. The device then downloads the current version as itself and writes it,
+   so a link opened again after a lost answer or a failed write finishes the same way.
+   From then on the device signs as itself. The ward opens.
 3. **Withdrawing** an unused invite is a write without its entry, by whoever made it or
    by an admin. Removing a person withdraws the invites they made.
 
 Two people changing who has access at the same moment merges entry by entry, like the
-emergency response: a person or an invite changed on one side is taken from that side,
-and only the same entry changed differently on both is a conflict, shown in the conflict
-dialog. An invite made here and a join landing there cross without troubling anyone. The last person cannot leave: a ward with nobody to read it is not a state.
+emergency response, and never asks: a person or an invite changed on one side is taken
+from that side; one changed differently on both is the server's. Where the entries taken
+together are not a sound set, the server's set stands whole. An invite made here and a
+join landing there cross without troubling anyone. The
+last person cannot leave: a ward with nobody to read it is not a state.
 Leaving needs the server, since the version without you must be held there before your
 copy goes.
 
@@ -124,10 +128,11 @@ the fragment, which browsers do not send to the server.
 
 - **Who has access**: the roster, read from the open ward. Add a device, Add a user,
   Remove, Make admin / Make member, Leave, Unlink (own devices), Details.
-- **Access notices**: the client diffs the roster between the version it last showed and
-  the current one: joined (as whom, via whose invite), removed, left, role changed.
-  Attribution is the publisher of the version that made the change, whose fingerprint
-  the head gives and whose name the roster gives.
+- **Access notices**: the client diffs the roster between the version it last dismissed
+  and the current one, one line per entry that differs: joined as member or admin, no
+  longer has access, now an admin or a member, a device added or unlinked, an invite
+  made or used. The lines say what the roster now says, with nobody named as the cause;
+  this device's own edits are news like any other.
 - **Lost access**: a head whose header lacks this device. The reason is read off the
   previous roster and the publisher: removed by *name*, or left, or this device unlinked.
   The copy is deleted and the person told, as now.

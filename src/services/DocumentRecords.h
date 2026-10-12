@@ -4,7 +4,6 @@
 
 #include <QByteArray>
 #include <QJsonObject>
-#include <QJsonObject>
 #include <QList>
 #include <QString>
 #include <QStringList>

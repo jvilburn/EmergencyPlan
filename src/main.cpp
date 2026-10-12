@@ -100,8 +100,8 @@ std::unique_ptr<IdentityService> resolveIdentity(const QString& path)
                         QMessageBox::NoButton,
                         nullptr);
     confirm.setInformativeText(
-        QObject::tr("Wards shared with others come back once you link this device to one of your other "
-                    "devices, or someone grants it access again.\n\n"
+        QObject::tr("Shared wards come back when you open an invite link here from one of your other "
+                    "devices, or from someone else in the ward.\n\n"
                     "Wards that were never shared from this device will not open, unless the damaged "
                     "file is restored."));
     QPushButton* cancel = confirm.addButton(QMessageBox::Cancel);

@@ -36,5 +36,7 @@ private slots:
     void aDirectoryEditOnBothSidesIsAConflict();
     void noDirectoryChangeMergesTheResponse();
     void aRosterEditOnOneSideCarriesThrough();
-    void rosterEditsOnBothSidesMergeUnlessTheyTouchTheSameEntry();
+    void rosterEditsOnBothSidesMergeEntryByEntry();
+    void theSameEntryChangedOnBothSidesIsTheirs();
+    void anUnsoundMergeIsTheirsWhole();
 };

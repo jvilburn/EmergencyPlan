@@ -156,8 +156,8 @@ private:
                                           StoredDocument*& document);
 
     static QSet<QString> recipientsOf(const DocumentHeader& header);
-
-    bool withinLimits(const QHash<QByteArray, QList<QDateTime>>& log, const VerifyKey& device, int perHour) const;
+    static bool wellFormed(const QString& documentId);
+    bool withinUploadLimit(const VerifyKey& device) const;
 
     Limits m_limits;
     QDateTime m_now;

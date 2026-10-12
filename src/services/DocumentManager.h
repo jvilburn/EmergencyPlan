@@ -206,8 +206,7 @@ signals:
     /// The pending conflict was settled.
     void conflictSettled();
 
-    /// The open ward's head answered: who has access, and the lease holder, as the
-    /// server now says.
+    /// The open ward's head answered: the lease holder, as the server now says.
     void headChanged();
 
     /// unseenRosterChanges() changed.
@@ -273,9 +272,8 @@ private:
     void onReadOnlyChanged();
     void onHeadChanged();
     void onShared();
-    /// Applies change to the open ward's roster and publishes; nothing when change
-    /// refuses. This device's own change counts as seen.
-    void editRoster(const std::function<bool(SealingSet&)>& change);
+    /// Takes roster as the open ward's and publishes it.
+    void publishRoster(const SealingSet& roster);
     void refreshRosterChanges();
     void onJoined(const QString& documentId, DocumentSession::Join outcome, const QString& reason);
     void onSessionLost(const ServerVersion::LostAccess& lost);

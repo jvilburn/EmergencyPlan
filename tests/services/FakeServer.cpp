@@ -1,6 +1,7 @@
 #include "FakeServer.h"
 
 #include "DocumentCrypto.h"
+#include "HexCodec.h"
 
 #include <QTimer>
 
@@ -81,7 +82,7 @@ Result<qint64> FakeServer::decideRegisterDocument(const Signer& signer, const Up
     }
 
     const QString documentId = upload.header.documentId;
-    if (documentId.isEmpty() || upload.header.recipients.isEmpty() || upload.blob.size() > m_limits.maxBlobBytes
+    if (!wellFormed(documentId) || upload.header.recipients.isEmpty() || upload.blob.size() > m_limits.maxBlobBytes
         || !signer.keys.isValid()
         || !DocumentCrypto::verifies(signedBytes(CallRegister, documentId, 0, upload), signer.signature, signer.keys.verifyKey))
     {
@@ -115,6 +116,10 @@ Result<Head> FakeServer::decideHead(const QString& documentId)
     {
         return Result<Head>::failure(ServerError::Unreachable);
     }
+    if (!wellFormed(documentId))
+    {
+        return Result<Head>::failure(ServerError::InvalidRequest);
+    }
     const auto found = m_documents.constFind(documentId);
     if (found == m_documents.constEnd())
     {
@@ -138,6 +143,10 @@ Result<Snapshot> FakeServer::decideDownload(const QString& documentId)
     if (m_offline)
     {
         return Result<Snapshot>::failure(ServerError::Unreachable);
+    }
+    if (!wellFormed(documentId))
+    {
+        return Result<Snapshot>::failure(ServerError::InvalidRequest);
     }
     const auto found = m_documents.constFind(documentId);
     if (found == m_documents.constEnd())
@@ -166,7 +175,7 @@ Result<qint64> FakeServer::decideUpload(const Signer& signer,
         return Result<qint64>::failure(failure);
     }
 
-    if (!withinLimits(m_uploads, signer.keys.verifyKey, m_limits.uploadsPerHour))
+    if (!withinUploadLimit(signer.keys.verifyKey))
     {
         return Result<qint64>::failure(ServerError::RateLimited);
     }
@@ -334,6 +343,10 @@ ServerError FakeServer::keyHolder(const Signer& signer,
     {
         return ServerError::Unreachable;
     }
+    if (!wellFormed(documentId))
+    {
+        return ServerError::InvalidRequest;
+    }
     const auto found = m_documents.find(documentId);
     if (found == m_documents.end())
     {
@@ -361,15 +374,20 @@ QSet<QString> FakeServer::recipientsOf(const DocumentHeader& header)
     return recipients;
 }
 
-bool FakeServer::withinLimits(const QHash<QByteArray, QList<QDateTime>>& log, const VerifyKey& device, int perHour) const
+bool FakeServer::wellFormed(const QString& documentId)
+{
+    return HexCodec::isCanonical(documentId, DocumentHeader::DocumentIdLength);
+}
+
+bool FakeServer::withinUploadLimit(const VerifyKey& device) const
 {
     int recent = 0;
-    for (const QDateTime& time : log.value(device.bytes))
+    for (const QDateTime& time : m_uploads.value(device.bytes))
     {
         if (time.secsTo(m_now) < SecondsPerHour)
         {
             ++recent;
         }
     }
-    return recent < perHour;
+    return recent < m_limits.uploadsPerHour;
 }

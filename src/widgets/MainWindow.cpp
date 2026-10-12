@@ -965,7 +965,10 @@ void MainWindow::showInvite(const std::optional<FileOpenRouter::InviteLink>& lin
 {
     if (!link.has_value())
     {
-        QMessageBox::warning(this, tr("Invite"), tr("Share the ward first; an invite needs the server to hold it."));
+        QMessageBox::warning(this,
+                             tr("Invite"),
+                             tr("Share the ward first. An invite is a version of the ward on the server, so the ward "
+                                "must be shared, and readable by this version of Ward Planning."));
         return;
     }
 
@@ -1052,11 +1055,20 @@ void MainWindow::onJoinFailed(DocumentSession::Join outcome, const QString& reas
 
 void MainWindow::onLeaveFailed(ServerContract::ServerError error)
 {
-    QMessageBox::warning(this,
-                         tr("Leave"),
-                         error == ServerContract::ServerError::Unreachable
-                             ? tr("Connect to the internet to leave a ward; the server has to hold your leaving.")
-                             : tr("You could not leave just now. Try again in a moment."));
+    QString message;
+    switch (error)
+    {
+    case ServerContract::ServerError::Unreachable:
+        message = tr("Connect to the internet to leave a ward; the server has to hold your leaving.");
+        break;
+    case ServerContract::ServerError::InvalidRequest:
+        message = tr("The ward keeps its last person and its last admin. Make someone else an admin first.");
+        break;
+    default:
+        message = tr("You could not leave just now. Try again in a moment.");
+        break;
+    }
+    QMessageBox::warning(this, tr("Leave"), message);
 }
 
 void MainWindow::onRemovePerson(const MemberId& person)

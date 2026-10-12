@@ -354,17 +354,9 @@ std::optional<Document> mergeDocuments(const Document& base, const Document& min
         return std::nullopt;
     }
 
-    // Who has access merges entry by entry; the same person or invite changed
-    // differently on both sides is a conflict like two edits to one family.
-    const std::optional<SealingSet> roster =
-        SealingSet::merge(base.sealingSet(), mine.sealingSet(), theirs.sealingSet());
-    if (!roster.has_value())
-    {
-        return std::nullopt;
-    }
-
+    // Who has access and the response each merge on their own.
     Document merged = mineChanged ? mine : theirs;
-    merged.setSealingSet(roster.value());
+    merged.setSealingSet(SealingSet::merge(base.sealingSet(), mine.sealingSet(), theirs.sealingSet()));
     merged.setEmergencyResponse(
         merge(base.emergencyResponse(), mine.emergencyResponse(), theirs.emergencyResponse()));
     return merged;

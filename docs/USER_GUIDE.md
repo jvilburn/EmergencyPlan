@@ -10,7 +10,7 @@ Ward Planning is a desktop application for managing ward family data, ministerin
 
 ### The First Time
 
-Ward Planning asks whether you already use it on another device. Give your name as your ward knows you and a name for this device. If you already use Ward Planning on another device, choose **Add a Device** there and open the link it gives you here, so your wards come to this device too.
+Ward Planning asks for your name, as your ward knows you, and a name for this device. If you already use Ward Planning on another device, choose **Add a Device** there and open the link it gives you here, so your wards come to this device too.
 
 ### Creating or Opening a Ward
 
@@ -196,7 +196,7 @@ A ward starts on one device, readable by nobody else. Sharing puts an encrypted 
 
 ### What the server knows
 
-The server holds each ward's encrypted versions and nothing else: no names, no list of who has access, no key. The ward itself reaches the server already encrypted, with a key the server never has, so nobody who runs or breaks into the server can read a family's details. Who has access is written inside the ward, where only the people with access can read it.
+The server holds each ward's encrypted versions and nothing else: no names, no key. It sees which devices each version is sealed to, as keys, and nothing of whose they are. The ward itself reaches the server already encrypted, with a key the server never has, so nobody who runs or breaks into the server can read a family's details. Who has access is written inside the ward, where only the people with access can read it.
 
 ### Share
 

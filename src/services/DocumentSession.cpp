@@ -96,14 +96,60 @@ struct Joining
 
 void fetchForJoin(const Joining& joining, bool mayRetry);
 
-/// The joined version landed, or not. The base is written first and the file second,
-/// so a failure leaves nothing that reads as a ward.
-void onJoinUploaded(const Joining& joining, bool mayRetry, const DocumentFile::Sealed& sealed, const Result<qint64>& result)
+/// The last step of every join: the current version, fetched as this device and
+/// written as any download is. One not sealed to this device ends the join as
+/// whenNotHeld says.
+void onJoinDownloaded(const Joining& joining,
+                      DocumentSession::Join whenNotHeld,
+                      DocumentSession::Download outcome,
+                      const std::optional<Document>&)
+{
+    switch (outcome)
+    {
+    case DocumentSession::Download::Done:
+        joining.done(DocumentSession::Join::Done, QString());
+        return;
+    case DocumentSession::Download::AccessLost:
+        joining.done(whenNotHeld, QString());
+        return;
+    case DocumentSession::Download::Unreachable:
+        joining.done(DocumentSession::Join::Unreachable, QString());
+        return;
+    case DocumentSession::Download::NeedsNewerVersion:
+        joining.done(DocumentSession::Join::NeedsNewerVersion, QString());
+        return;
+    case DocumentSession::Download::ServerFault:
+        joining.done(DocumentSession::Join::ServerFault, QObject::tr("The joined version did not check out."));
+        return;
+    case DocumentSession::Download::WriteFailed:
+        joining.done(DocumentSession::Join::WriteFailed, QString());
+        return;
+    }
+}
+
+void finishJoin(const Joining& joining, DocumentSession::Join whenNotHeld)
+{
+    DocumentSession::download(joining.context,
+                              joining.link.documentId,
+                              joining.paths,
+                              joining.receiver,
+                              std::bind(&onJoinDownloaded, joining, whenNotHeld, _1, _2));
+}
+
+/// The joined version was answered. Whatever the answer, the server's current version
+/// decides: one whose reply was lost after it landed still names this device.
+void onJoinUploaded(const Joining& joining, bool mayRetry, const Result<qint64>& result)
 {
     switch (result.error)
     {
     case ServerError::None:
-        break;
+    case ServerError::NotAKeyHolder:
+        finishJoin(joining, DocumentSession::Join::InviteUsed);
+        return;
+    case ServerError::Unreachable:
+    case ServerError::RateLimited:
+        finishJoin(joining, DocumentSession::Join::Unreachable);
+        return;
     case ServerError::VersionConflict:
         // Someone published between the fetch and the upload: once more on theirs.
         if (mayRetry)
@@ -113,29 +159,13 @@ void onJoinUploaded(const Joining& joining, bool mayRetry, const DocumentFile::S
         }
         joining.done(DocumentSession::Join::Busy, QString());
         return;
-    case ServerError::NotAKeyHolder:
-        joining.done(DocumentSession::Join::InviteUsed, QString());
-        return;
     case ServerError::UnknownDocument:
         joining.done(DocumentSession::Join::UnknownWard, QString());
-        return;
-    case ServerError::Unreachable:
-    case ServerError::RateLimited:
-        joining.done(DocumentSession::Join::Unreachable, QString());
         return;
     default:
         joining.done(DocumentSession::Join::ServerFault, QObject::tr("The server refused the version that joins this device."));
         return;
     }
-
-    if (!ServerVersion::writeBase(joining.context.records, joining.link.documentId, joining.paths, sealed, result.value.value(), nullptr)
-        || !DocumentFile::write(joining.paths.file, DocumentFile::encode(sealed), nullptr))
-    {
-        ServerVersion::forget(joining.context.records, joining.link.documentId, joining.paths);
-        joining.done(DocumentSession::Join::WriteFailed, QString());
-        return;
-    }
-    joining.done(DocumentSession::Join::Done, QString());
 }
 
 /// The current version, read as the invite: this device takes the invite's place and
@@ -147,7 +177,9 @@ void onJoinFetched(const Joining& joining, bool mayRetry, const Fetched& theirs)
     case Fetched::Outcome::Accepted:
         break;
     case Fetched::Outcome::AccessLost:
-        joining.done(DocumentSession::Join::InviteUsed, QString());
+        // The invite is spent: by someone else, or by this device on an earlier
+        // opening of the link that did not get as far as writing the ward.
+        finishJoin(joining, DocumentSession::Join::InviteUsed);
         return;
     case Fetched::Outcome::NeedsNewerVersion:
         joining.done(DocumentSession::Join::NeedsNewerVersion, QString());
@@ -167,7 +199,8 @@ void onJoinFetched(const Joining& joining, bool mayRetry, const Fetched& theirs)
     SealingSet roster = document.sealingSet();
     if (!roster.join(joining.keys.fingerprint(), identity.device(), identity.member, identity.displayName))
     {
-        joining.done(DocumentSession::Join::ServerFault, QObject::tr("The version does not carry this invite."));
+        joining.done(DocumentSession::Join::ServerFault,
+                     QObject::tr("This ward already lists you. Use Add a Device on one of your other devices to bring it here."));
         return;
     }
     document.setSealingSet(roster);
@@ -186,7 +219,7 @@ void onJoinFetched(const Joining& joining, bool mayRetry, const Fetched& theirs)
                                     theirs.version,
                                     Upload{sealed->header, sealed->ciphertext},
                                     joining.receiver,
-                                    std::bind(&onJoinUploaded, joining, mayRetry, sealed.value(), _1));
+                                    std::bind(&onJoinUploaded, joining, mayRetry, _1));
 }
 
 void fetchForJoin(const Joining& joining, bool mayRetry)
@@ -197,15 +230,6 @@ void fetchForJoin(const Joining& joining, bool mayRetry)
                          joining.link.documentId,
                          joining.receiver,
                          std::bind(&onJoinFetched, joining, mayRetry, _1));
-}
-
-/// The one edit invite makes.
-bool addInviteTo(Document& document, const Invite& invite)
-{
-    SealingSet roster = document.sealingSet();
-    const bool added = roster.addInvite(invite);
-    document.setSealingSet(roster);
-    return added;
 }
 
 } // namespace
@@ -972,15 +996,9 @@ bool DocumentSession::resolve(Resolution resolution, QString* errorMessage)
 
     // Who has access merges on its own, whichever directory is kept, so keeping mine
     // never puts back someone they removed and keeping theirs never drops someone
-    // this device added. Where the same entry differs on both sides, the kept side's
-    // roster stands.
+    // this device added.
     const SealingSet& baseRoster = m_base.has_value() ? m_base->document.sealingSet() : theirs.document.sealingSet();
-    const std::optional<SealingSet> roster =
-        SealingSet::merge(baseRoster, m_document.sealingSet(), theirs.document.sealingSet());
-    if (roster.has_value())
-    {
-        resolved.setSealingSet(roster.value());
-    }
+    resolved.setSealingSet(SealingSet::merge(baseRoster, m_document.sealingSet(), theirs.document.sealingSet()));
 
     bool written = false;
     if (resolved == theirs.document)
@@ -1121,14 +1139,12 @@ std::optional<FileOpenRouter::InviteLink> DocumentSession::invite(Invite::For pu
     open.label = label;
     open.keys = keys.keys();
 
-    bool added = false;
-    edit(Edit::Roster, std::bind(&addInviteTo, _1, open));
-    added = m_document.sealingSet().invite(keys.fingerprint()).has_value();
-    if (!added)
+    SealingSet roster = m_document.sealingSet();
+    if (!roster.addInvite(open))
     {
         return std::nullopt;
     }
-
+    edit(Edit::Roster, std::bind(&Document::setSealingSet, _1, roster));
     publishNow();
     return FileOpenRouter::InviteLink{m_documentId, seed};
 }
@@ -1183,7 +1199,14 @@ void DocumentSession::onLeft(const Result<qint64>& result)
         finishLost(ServerVersion::LostAccess{ServerVersion::LostAccess::How::Left, QString()});
         return;
     }
+
     emit leaveFailed(result.error);
+
+    // The server moved past the base: taken in now, so the next try builds on it.
+    if (result.error == ServerError::VersionConflict)
+    {
+        m_checkAgain = true;
+    }
     finishOperation();
 }
 

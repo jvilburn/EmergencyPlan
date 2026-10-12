@@ -71,6 +71,30 @@ void ServerConformanceTest::aRegistrationMustNameItsSigner()
     QCOMPARE(headOf(server(), id).value->published.device, bob.fingerprint());
 }
 
+void ServerConformanceTest::aRegistrationWithABadSignatureIsAnInvalidRequest()
+{
+    const TestDevice alice = newDevice("Alice");
+    const QString id = newDocumentId();
+    const Upload upload = uploadFor(id, {alice}, 1);
+
+    // Signed as an upload rather than a registration.
+    const Signer asUpload = alice.signer(signedBytes(CallUpload, id, 0, upload));
+    QCOMPARE(wait<qint64>(std::bind(&ServerApi::registerDocument, &server(), asUpload, upload, _1)).error,
+             ServerError::InvalidRequest);
+    QCOMPARE(headOf(server(), id).error, ServerError::UnknownDocument);
+
+    // Signed over another header, the same blob.
+    Upload otherHeader = upload;
+    otherHeader.header.saveCounter = 2;
+    const Signer wrongHeader = alice.signer(signedBytes(CallRegister, id, 0, otherHeader));
+    QCOMPARE(wait<qint64>(std::bind(&ServerApi::registerDocument, &server(), wrongHeader, upload, _1)).error,
+             ServerError::InvalidRequest);
+    QCOMPARE(headOf(server(), id).error, ServerError::UnknownDocument);
+
+    // The same upload, signed as it is sent, lands.
+    QVERIFY(registerAs(server(), alice, upload).ok());
+}
+
 void ServerConformanceTest::refusesATakenDocumentId()
 {
     std::optional<SharedDocument> ward = registerWard(server());
@@ -82,6 +106,27 @@ void ServerConformanceTest::refusesATakenDocumentId()
     const Result<Head> head = headOf(server(), ward->id);
     QCOMPARE(head.value->version, 1);
     QCOMPARE(head.value->published.device, ward->alice.fingerprint());
+}
+
+void ServerConformanceTest::aMalformedIdIsAnInvalidRequest()
+{
+    const TestDevice alice = newDevice("Alice");
+    const QString wellFormed = newDocumentId();
+    const QStringList malformed{"not-an-id", wellFormed.toUpper(), wellFormed.left(31), wellFormed + "0"};
+
+    for (const QString& id : malformed)
+    {
+        QCOMPARE(headOf(server(), id).error, ServerError::InvalidRequest);
+        QCOMPARE(downloadOf(server(), id).error, ServerError::InvalidRequest);
+        QCOMPARE(registerAs(server(), alice, uploadFor(id, {alice}, 1)).error, ServerError::InvalidRequest);
+        QCOMPARE(uploadAs(server(), alice, id, 1, uploadFor(id, {alice}, 2)).error, ServerError::InvalidRequest);
+        QCOMPARE(takeLeaseAs(server(), alice, id).error, ServerError::InvalidRequest);
+        QCOMPARE(releaseLeaseAs(server(), alice, id).error, ServerError::InvalidRequest);
+    }
+
+    // Anchor: the well-formed id, with the same calls, is unknown until registered.
+    QCOMPARE(headOf(server(), wellFormed).error, ServerError::UnknownDocument);
+    QVERIFY(registerAs(server(), alice, uploadFor(wellFormed, {alice}, 1)).ok());
 }
 
 void ServerConformanceTest::readsNeedNoSigner()
@@ -130,6 +175,19 @@ void ServerConformanceTest::anUploadByAKeyTheHeaderDoesNotNameIsRefused()
     const Result<Head> head = headOf(server(), ward->id);
     QCOMPARE(head.value->version, 2);
     QCOMPARE(head.value->published.device, ward->alice.fingerprint());
+}
+
+void ServerConformanceTest::anUploadWhoseHeaderNamesAnotherDocumentIsRefused()
+{
+    std::optional<SharedDocument> ward = wardOfThree(server());
+    QVERIFY(ward.has_value());
+
+    // Well signed, by a key holder, on the right base: the header's own id is what is
+    // wrong.
+    const Upload elsewhere = uploadFor(newDocumentId(), {ward->alice, ward->bob, ward->carol}, 5);
+    QCOMPARE(uploadAs(server(), ward->bob, ward->id, ward->version, elsewhere).error, ServerError::InvalidRequest);
+    QCOMPARE(headOf(server(), ward->id).value->version, 2);
+    QCOMPARE(headOf(server(), elsewhere.header.documentId).error, ServerError::UnknownDocument);
 }
 
 void ServerConformanceTest::aKeyTheCurrentHeaderDropsCanNoLongerWrite()

@@ -1763,6 +1763,7 @@ void DocumentSessionTest::aUserJoinsAndShowsInTheInvitersRosterAtTheNextHead()
         ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Bob");
     QVERIFY(link.has_value());
     const DataKey invited = keyOf(ward, alice);
+    const Fingerprint invite = aliceSession->document().sealingSet().invites().first().fingerprint();
     QVERIFY(!bob.open(ward.documentId));
 
     std::unique_ptr<DocumentSession> bobSession = joinAndOpen(ward, bob, link.value());
@@ -1782,8 +1783,7 @@ void DocumentSessionTest::aUserJoinsAndShowsInTheInvitersRosterAtTheNextHead()
     QCOMPARE(roster.person(bob.identity.member)->devices.first().name, QString("Phone"));
     QVERIFY(roster.invites().isEmpty());
     QCOMPARE(recipientsOnServer(ward), hexOf({&alice.identity, &bob.identity}));
-    QVERIFY(copy.published.device != bob.identity.fingerprint());
-    QVERIFY(copy.published.device != alice.identity.fingerprint());
+    QCOMPARE(copy.published.device, invite);
     QVERIFY(copy.dataKey != invited);
     QVERIFY(roster.descendsFrom(invited));
 
@@ -1858,6 +1858,47 @@ void DocumentSessionTest::aUsedLinkGivesInviteUsedAndWritesNothing()
     QVERIFY(!mallory.records.contains(ward.documentId));
 }
 
+void DocumentSessionTest::aJoinWhoseAnswerWasLostFinishesWhenTheLinkIsOpenedAgain()
+{
+    TestWard ward;
+    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
+    Device& bob = ward.add(newIdentity("Bob", "Phone"));
+    std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
+    QVERIFY(aliceSession);
+    const std::optional<FileOpenRouter::InviteLink> link =
+        ward.invite(*aliceSession, Invite::For::User, Role::Member, "for Bob");
+    QVERIFY(link.has_value());
+
+    // The joined version lands, but its answer and everything after it are lost.
+    QObject receiver;
+    std::optional<DocumentSession::Join> joined;
+    ward.server.holdReplies(true);
+    DocumentSession::join(bob.context(),
+                          link.value(),
+                          bob.paths(ward.documentId),
+                          &receiver,
+                          [&joined](DocumentSession::Join outcome, const QString&) { joined = outcome; });
+    ward.server.loseReplies(true);
+    QVERIFY(ward.server.deliverNext());
+    ward.server.holdReplies(false);
+    ward.settle();
+    ward.server.loseReplies(false);
+    QCOMPARE(joined, std::optional<DocumentSession::Join>(DocumentSession::Join::Unreachable));
+    QCOMPARE(headVersion(ward), 3);
+    QVERIFY(!bob.records.contains(ward.documentId));
+    QVERIFY(!QFile::exists(bob.paths(ward.documentId).file));
+
+    // The same link again: the invite is spent, but the current version is Bob's.
+    QCOMPARE(ward.join(bob, link.value()), std::optional<DocumentSession::Join>(DocumentSession::Join::Done));
+    QCOMPARE(headVersion(ward), 3);
+    QCOMPARE(bob.records.record(ward.documentId).baseVersion, std::optional<qint64>(3));
+    std::unique_ptr<DocumentSession> bobSession = bob.open(ward.documentId);
+    QVERIFY(bobSession);
+    ward.settle();
+    QCOMPARE(bobSession->syncState(), SyncState::UpToDate);
+    QCOMPARE(bobSession->document().sealingSet().person(bob.identity.member)->name, QString("Bob"));
+}
+
 void DocumentSessionTest::aJoinSaysWhyItCouldNotReachTheWard()
 {
     TestWard ward;
@@ -1929,7 +1970,7 @@ void DocumentSessionTest::aRosterEditCarriesThroughARefusedPublish()
     QCOMPARE(aliceSession->syncState(), SyncState::UpToDate);
 }
 
-void DocumentSessionTest::rosterEditsOnBothSidesRaiseAConflict()
+void DocumentSessionTest::theSamePersonChangedOnBothSidesMergesWithoutAsking()
 {
     TestWard ward;
     Device& alice = ward.add(newIdentity("Alice", "Laptop"));
@@ -1944,7 +1985,7 @@ void DocumentSessionTest::rosterEditsOnBothSidesRaiseAConflict()
     ward.settle();
 
     // Alice makes Carol an admin offline; Bob removes Carol and publishes first: the
-    // same person, changed differently on each side.
+    // same person, changed differently on each side, and the server's version stands.
     ward.server.setOffline(true);
     aliceSession->edit(DocumentSession::Edit::Roster, setRole(carol.identity.member, Role::Admin));
     QVERIFY(alice.timers->fire(Timer::Save));
@@ -1958,16 +1999,12 @@ void DocumentSessionTest::rosterEditsOnBothSidesRaiseAConflict()
     QVERIFY(alice.timers->fire(Timer::Retry));
     ward.settle();
 
-    QCOMPARE(recorder.conflicts.size(), qsizetype(1));
-    QCOMPARE(recorder.conflicts.first().writerName, QString("Bob"));
-    QCOMPARE(headVersion(ward), bobs);
-
-    // Keeping theirs takes Bob's roster as it stands, with nothing more to publish.
-    QVERIFY(aliceSession->resolve(DocumentSession::Resolution::KeepTheirs, nullptr));
-    ward.settle();
+    // Bob's version, taken in as it stands: nothing of Alice's is left to publish.
+    QVERIFY(recorder.conflicts.isEmpty());
+    QCOMPARE(recorder.rosterChanges, 1);
     QCOMPARE(headVersion(ward), bobs);
     QVERIFY(aliceSession->document().sealingSet() == bobSession->document().sealingSet());
-    QVERIFY(aliceSession->document().sealingSet().person(bob.identity.member)->role == Role::Member);
     QVERIFY(!aliceSession->document().sealingSet().person(carol.identity.member).has_value());
+    QVERIFY(!canUnseal(aliceSession->header(), carol.identity));
     QCOMPARE(aliceSession->syncState(), SyncState::UpToDate);
 }

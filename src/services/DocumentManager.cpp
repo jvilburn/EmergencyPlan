@@ -10,23 +10,6 @@
 
 using namespace std::placeholders;
 
-namespace
-{
-
-/// Applies change to the document's roster, keeping the document as it was when
-/// change refuses.
-void applyToRoster(Document& document, const std::function<bool(SealingSet&)>& change, bool& changed)
-{
-    SealingSet roster = document.sealingSet();
-    changed = change(roster);
-    if (changed)
-    {
-        document.setSealingSet(roster);
-    }
-}
-
-} // namespace
-
 DocumentManager* DocumentManager::s_instance = nullptr;
 
 DocumentManager::DocumentManager(const DeviceIdentity& identity,
@@ -636,12 +619,7 @@ std::optional<FileOpenRouter::InviteLink> DocumentManager::invite(Invite::For pu
     // A device invite joins this person as they are; a new person starts as a member.
     const Role role = purpose == Invite::For::Device ? me->role : Role::Member;
     const std::optional<FileOpenRouter::InviteLink> link = m_session->invite(purpose, role, label);
-    if (link.has_value())
-    {
-        DocumentRecord record = m_records->record(m_session->documentId());
-        record.rosterShown = roster().toJson();
-        m_records->setRecord(m_session->documentId(), record);
-    }
+    refreshRosterChanges();
     return link;
 }
 
@@ -651,59 +629,59 @@ QString DocumentManager::inviteMessage(const FileOpenRouter::InviteLink& link) c
     return FileOpenRouter::inviteMessage(m_identity.displayName, ward.isEmpty() ? tr("a ward") : ward, link);
 }
 
-void DocumentManager::editRoster(const std::function<bool(SealingSet&)>& change)
+// Each roster edit below starts from roster(), which is empty unless the open ward is
+// a session's own, and every change to an empty set is refused: so a change made is a
+// change to the open ward.
+
+void DocumentManager::publishRoster(const SealingSet& roster)
 {
-    if (!m_session || m_copy.has_value())
-    {
-        return;
-    }
-
-    bool changed = false;
-    m_session->edit(DocumentSession::Edit::Roster, std::bind(&applyToRoster, _1, change, std::ref(changed)));
-    if (!changed)
-    {
-        return;
-    }
-
-    DocumentRecord record = m_records->record(m_session->documentId());
-    record.rosterShown = roster().toJson();
-    m_records->setRecord(m_session->documentId(), record);
+    m_session->edit(DocumentSession::Edit::Roster, std::bind(&Document::setSealingSet, _1, roster));
     m_session->publishNow();
+    refreshRosterChanges();
 }
 
 void DocumentManager::removePerson(const MemberId& id)
 {
     // Leaving is its own call; a roster without this person is never saved here.
     const std::optional<Holder> me = self();
-    if (!me.has_value() || me->id == id)
+    SealingSet changed = roster();
+    if (me.has_value() && me->id != id && changed.removePerson(id))
     {
-        return;
+        publishRoster(changed);
     }
-    editRoster([&id](SealingSet& roster) { return roster.removePerson(id); });
 }
 
 void DocumentManager::removeDevice(const Fingerprint& device)
 {
-    if (device == m_identity.fingerprint())
+    SealingSet changed = roster();
+    if (device != m_identity.fingerprint() && changed.removeDevice(device))
     {
-        return;
+        publishRoster(changed);
     }
-    editRoster([&device](SealingSet& roster) { return roster.removeDevice(device); });
 }
 
 void DocumentManager::revokeInvite(const Fingerprint& invite)
 {
-    editRoster([&invite](SealingSet& roster) { return roster.removeInvite(invite); });
+    SealingSet changed = roster();
+    if (changed.removeInvite(invite))
+    {
+        publishRoster(changed);
+    }
 }
 
 void DocumentManager::setRole(const MemberId& id, Role role)
 {
-    const std::optional<Holder> person = roster().person(id);
-    if (role == Role::Member && person.has_value() && person->isAdmin() && roster().adminCount() == 1)
+    // A ward always keeps an admin: the last admin makes someone else one first.
+    SealingSet changed = roster();
+    const std::optional<Holder> person = changed.person(id);
+    if (role == Role::Member && person.has_value() && person->isAdmin() && changed.adminCount() == 1)
     {
         return;
     }
-    editRoster([&id, role](SealingSet& roster) { return roster.setRole(id, role); });
+    if (changed.setRole(id, role))
+    {
+        publishRoster(changed);
+    }
 }
 
 void DocumentManager::leave()

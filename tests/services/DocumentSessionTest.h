@@ -84,9 +84,10 @@ private slots:
     void aUserJoinsAndShowsInTheInvitersRosterAtTheNextHead();
     void aDeviceJoinsAsAnotherDeviceOfItsPerson();
     void aUsedLinkGivesInviteUsedAndWritesNothing();
+    void aJoinWhoseAnswerWasLostFinishesWhenTheLinkIsOpenedAgain();
     void aJoinSaysWhyItCouldNotReachTheWard();
 
     // The roster across a refused publish
     void aRosterEditCarriesThroughARefusedPublish();
-    void rosterEditsOnBothSidesRaiseAConflict();
+    void theSamePersonChangedOnBothSidesMergesWithoutAsking();
 };

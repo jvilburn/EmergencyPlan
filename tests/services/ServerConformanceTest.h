@@ -32,10 +32,13 @@ private slots:
     // Documents and versions
     void registersVersionOneByItsMaker();
     void aRegistrationMustNameItsSigner();
+    void aRegistrationWithABadSignatureIsAnInvalidRequest();
     void refusesATakenDocumentId();
+    void aMalformedIdIsAnInvalidRequest();
     void readsNeedNoSigner();
     void anUploadByAKeyTheHeaderNamesLands();
     void anUploadByAKeyTheHeaderDoesNotNameIsRefused();
+    void anUploadWhoseHeaderNamesAnotherDocumentIsRefused();
     void aKeyTheCurrentHeaderDropsCanNoLongerWrite();
     void aBadSignatureIsAnInvalidRequest();
     void writesAreConditionalOnTheStartingVersion();

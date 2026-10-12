@@ -364,11 +364,10 @@ bool SealingSet::setRole(const MemberId& id, Role role)
 namespace
 {
 
-/// One entry's three sides, by its key in each map. The merged value: theirs when mine
-/// is as base, mine when theirs is as base, either when both agree, nullopt when they
-/// differ. absent is a value too.
+/// One entry's three sides, by its key in each map, into merged: mine when theirs is
+/// as base, else theirs. absent is a value too.
 template<typename T>
-bool mergeEntry(const QHash<QString, T>& base,
+void mergeEntry(const QHash<QString, T>& base,
                 const QHash<QString, T>& mine,
                 const QHash<QString, T>& theirs,
                 const QString& key,
@@ -378,20 +377,7 @@ bool mergeEntry(const QHash<QString, T>& base,
     const std::optional<T> m = mine.contains(key) ? std::optional<T>(mine.value(key)) : std::nullopt;
     const std::optional<T> t = theirs.contains(key) ? std::optional<T>(theirs.value(key)) : std::nullopt;
 
-    std::optional<T> result;
-    if (m == b)
-    {
-        result = t;
-    }
-    else if (t == b || m == t)
-    {
-        result = m;
-    }
-    else
-    {
-        return false;
-    }
-
+    const std::optional<T> result = t == b ? m : t;
     if (result.has_value())
     {
         merged.insert(key, result.value());
@@ -400,7 +386,6 @@ bool mergeEntry(const QHash<QString, T>& base,
     {
         merged.remove(key);
     }
-    return true;
 }
 
 template<typename T>
@@ -419,22 +404,16 @@ QSet<QString> allKeys(const QHash<QString, T>& a, const QHash<QString, T>& b, co
 
 } // namespace
 
-std::optional<SealingSet> SealingSet::merge(const SealingSet& base, const SealingSet& mine, const SealingSet& theirs)
+SealingSet SealingSet::merge(const SealingSet& base, const SealingSet& mine, const SealingSet& theirs)
 {
     SealingSet merged = theirs;
     for (const QString& id : allKeys(base.m_people, mine.m_people, theirs.m_people))
     {
-        if (!mergeEntry(base.m_people, mine.m_people, theirs.m_people, id, merged.m_people))
-        {
-            return std::nullopt;
-        }
+        mergeEntry(base.m_people, mine.m_people, theirs.m_people, id, merged.m_people);
     }
     for (const QString& fingerprint : allKeys(base.m_invites, mine.m_invites, theirs.m_invites))
     {
-        if (!mergeEntry(base.m_invites, mine.m_invites, theirs.m_invites, fingerprint, merged.m_invites))
-        {
-            return std::nullopt;
-        }
+        mergeEntry(base.m_invites, mine.m_invites, theirs.m_invites, fingerprint, merged.m_invites);
     }
     for (const QString& hash : mine.m_formerKeys)
     {
@@ -444,9 +423,10 @@ std::optional<SealingSet> SealingSet::merge(const SealingSet& base, const Sealin
         }
     }
 
-    // Two sides can each add a sound entry and still clash on a key; the parse is the
-    // one judge of a whole set.
-    return fromJson(merged.toJson());
+    // Sound entries can still make an unsound set: two removals that leave nobody, an
+    // invite whose maker the other side removed, a key shared by two additions. The
+    // parse is the one judge, and theirs, which the server holds, stands then.
+    return fromJson(merged.toJson()).value_or(theirs);
 }
 
 // --- The rule --------------------------------------------------------------------
@@ -470,7 +450,11 @@ bool SealingSet::rotatesFrom(const QSet<QString>& previousRecipients) const
 
 void SealingSet::addFormerKey(const DataKey& key)
 {
-    m_formerKeys.append(formerKeyHash(key));
+    const QString hash = formerKeyHash(key);
+    if (!m_formerKeys.contains(hash))
+    {
+        m_formerKeys.append(hash);
+    }
 }
 
 bool SealingSet::descendsFrom(const DataKey& key) const
@@ -608,7 +592,7 @@ std::optional<SealingSet> SealingSet::fromJson(const QJsonObject& json)
         }
         invite.person = MemberId::fromHex(person);
         invite.role = roleOf(role).value();
-        if (!set.addInvite(invite))
+        if (person != invite.person.toHex() || !set.addInvite(invite))
         {
             return std::nullopt;
         }

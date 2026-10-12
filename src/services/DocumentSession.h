@@ -106,7 +106,7 @@ public:
         Done,
         Unreachable,
         UnknownWard,        ///< the server has no such document
-        InviteUsed,         ///< the current version no longer seals to the invite
+        InviteUsed,         ///< the current version seals to neither the invite nor this device
         NeedsNewerVersion,
         ServerFault,        ///< the version did not check out; the reason says why
         WriteFailed,
@@ -122,7 +122,7 @@ public:
 
     struct Conflict
     {
-        QString writerName;         ///< as the server recorded who published their version
+        QString writerName;         ///< the roster's name for the device that published their version
         QDateTime writeTime;
     };
 
@@ -164,12 +164,14 @@ public:
                          QObject* receiver,
                          Downloaded done);
 
-    /// Joins the ward an invite link names: fetches the current version, unseals the
-    /// data key with the invite's keys, validates it as a download is validated,
-    /// writes the next version with this device in the invite's place - signed by the
-    /// invite, which the current header names - and writes the local file and base.
-    /// The caller then adds the ward to its library and opens it. done is called only
-    /// while receiver is alive; reason is set for ServerFault.
+    /// Joins the ward an invite link names: fetches the current version as the invite,
+    /// validates it as a download is validated, and writes the next version with this
+    /// device in the invite's place, signed by the invite, which the current header
+    /// names. The current version is then downloaded as this device and written as
+    /// the local file and base, so a link opened again after a lost answer or a failed
+    /// write finishes the same way. The caller then adds the ward to its library and
+    /// opens it. done is called only while receiver is alive; reason is set for
+    /// ServerFault.
     using Joined = std::function<void(Join outcome, const QString& reason)>;
     static void join(const Context& context,
                      const FileOpenRouter::InviteLink& link,

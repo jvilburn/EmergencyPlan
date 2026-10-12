@@ -160,8 +160,10 @@ DeviceIdentity newIdentity(const QString& displayName, const QString& deviceName
 
 DeviceIdentity newDeviceOf(const DeviceIdentity& person, const QString& deviceName)
 {
-    DeviceIdentity identity = newIdentity(person.displayName, deviceName);
-    identity.member = person.member;
+    DeviceIdentity identity = person;
+    identity.sealing = DocumentCrypto::generateKeypair();
+    identity.signing = DocumentCrypto::generateSigningKeypair();
+    identity.deviceName = deviceName;
     return identity;
 }
 

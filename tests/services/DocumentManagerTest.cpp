@@ -363,27 +363,28 @@ void DocumentManagerTest::accessChangesShowOnceAndStaySeenOnceDismissed()
     QVERIFY(shareFrom(ward, app));
     QVERIFY(app.manager.unseenRosterChanges().isEmpty());
 
-    // Alice's own invite counts as seen; Bob joining with it shows at the next head, once.
+    // Alice's own invite is news like any other change; Bob joining with it shows at
+    // the next head, as what changed since the roster was last dismissed.
     const std::optional<FileOpenRouter::InviteLink> link = inviteFrom(ward, app, Invite::For::User, "for Bob");
     QVERIFY(link.has_value());
-    QVERIFY(app.manager.unseenRosterChanges().isEmpty());
+    QCOMPARE(app.manager.unseenRosterChanges(), QStringList{"Alice made an invite, for Bob"});
+    QCOMPARE(changed.count(), 1);
     QCOMPARE(ward.join(bob, link.value()), std::optional<DocumentSession::Join>(DocumentSession::Join::Done));
     app.manager.session()->checkServer();
     ward.settle();
-    QCOMPARE(app.manager.unseenRosterChanges(),
-             (QStringList{"Bob joined, as a member", "The invite for Bob was used or withdrawn"}));
-    QCOMPARE(changed.count(), 1);
+    QCOMPARE(app.manager.unseenRosterChanges(), QStringList{"Bob joined, as a member"});
+    QCOMPARE(changed.count(), 2);
 
     // A second head with nothing new shows the same, unannounced.
     app.manager.session()->checkServer();
     ward.settle();
-    QCOMPARE(app.manager.unseenRosterChanges().size(), 2);
-    QCOMPARE(changed.count(), 1);
+    QCOMPARE(app.manager.unseenRosterChanges().size(), 1);
+    QCOMPARE(changed.count(), 2);
 
     // Dismissed: seen on the record, so later heads show nothing.
     app.manager.dismissRosterChanges();
     QVERIFY(app.manager.unseenRosterChanges().isEmpty());
-    QCOMPARE(changed.count(), 2);
+    QCOMPARE(changed.count(), 3);
     QCOMPARE(SealingSet::fromJson(app.settings->record(ward.documentId).rosterShown).value(), app.manager.roster());
     app.manager.session()->checkServer();
     ward.settle();

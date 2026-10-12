@@ -83,25 +83,21 @@ QString IdentityService::defaultDeviceName()
 
 bool IdentityService::createPerson(const QString& displayName, const QString& deviceName, QString* errorMessage)
 {
-    MemberId member;
-    member.bytes = DocumentCrypto::randomBytes(MemberId::Size);
-    return setPerson(IdentityRecord::Person{member, displayName.trimmed(), deviceName.trimmed()}, errorMessage);
-}
-
-bool IdentityService::setPerson(const IdentityRecord::Person& person, QString* errorMessage)
-{
     if (m_record.person.has_value())
     {
         return refuse(QObject::tr("This device already belongs to a person."), errorMessage);
     }
-    if (person.displayName.trimmed().isEmpty() || person.deviceName.isEmpty())
+    if (displayName.trimmed().isEmpty() || deviceName.trimmed().isEmpty())
     {
         return refuse(QObject::tr("A name for you and for this device are both needed."), errorMessage);
     }
 
+    MemberId member;
+    member.bytes = DocumentCrypto::randomBytes(MemberId::Size);
+
     // Stored before it is taken, so the person in memory is always the one on disk.
     IdentityRecord record = m_record;
-    record.person = person;
+    record.person = IdentityRecord::Person{member, displayName.trimmed(), deviceName.trimmed()};
     if (!IdentityFile::store(m_path, record, errorMessage))
     {
         return false;

@@ -123,11 +123,12 @@ public:
 
     /// Three ways: mine and theirs each built on base. An entry - a person with their
     /// devices and role, or an invite - changed on one side is taken from that side;
-    /// one changed differently on both is a conflict, and the merge is nullopt. The
-    /// former keys are theirs' with mine's appended, so the merged set descends from
-    /// both. This is what lets an invite made here and a join landing there cross
-    /// without troubling anyone.
-    static std::optional<SealingSet> merge(const SealingSet& base, const SealingSet& mine, const SealingSet& theirs);
+    /// one changed differently on both is theirs', which the server holds. The former
+    /// keys are theirs' with mine's appended, so the merged set descends from both.
+    /// Where the entries taken together are not a sound set, theirs stands whole.
+    /// This is what lets an invite made here and a join landing there cross without
+    /// troubling anyone.
+    static SealingSet merge(const SealingSet& base, const SealingSet& mine, const SealingSet& theirs);
 
     // --- The rule ---
 
@@ -137,7 +138,7 @@ public:
     /// afterwards. previousRecipients holds fingerprint hex.
     bool rotatesFrom(const QSet<QString>& previousRecipients) const;
 
-    /// Records the key this ward used until now, at a rotation.
+    /// Records the key this ward used until now, at a rotation; once for any key.
     void addFormerKey(const DataKey& key);
 
     /// Whether key is this ward's current key's ancestor.
