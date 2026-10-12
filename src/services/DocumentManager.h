@@ -179,8 +179,8 @@ signals:
     /// The pending conflict was settled.
     void conflictSettled();
 
-    /// The open ward's head answered with different members, roles, lease holder,
-    /// or newest access-history entry.
+    /// The open ward's head answered: who has access, and the lease holder, as the
+    /// server now says.
     void headChanged();
 
     /// unseenHistory() changed.
@@ -257,7 +257,9 @@ private:
     void forgetLostWard(const QString& documentId, const ServerContract::LostAccess& lost);
 
     void fetch(const QString& documentId);
-    void onFetched(const QString& documentId, DocumentSession::Download outcome);
+    void onFetched(const QString& documentId,
+                   DocumentSession::Download outcome,
+                   const std::optional<ServerContract::LostAccess>& lost);
     void refuse(DocumentSession::Refusal refusal);
     void resetWard();
 
@@ -276,6 +278,7 @@ private:
     QString m_fetching;
 
     QList<ServerContract::HistoryEntry> m_unseenHistory;
+    bool m_fetchingHistory = false;
     Document m_empty;
     CommandHistory m_commandHistory;
 

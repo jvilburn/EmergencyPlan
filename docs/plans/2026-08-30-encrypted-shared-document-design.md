@@ -519,7 +519,10 @@ its own person, start a link, post an access request, and check its status.
   remain.
 - A person becomes a member only by an admin granting their request. A device joins a
   person only by a link that person approved, or as the first device of a new person.
-- When the last person leaves, the document is deleted.
+- When the last person leaves, the document's content goes. Its id stays taken, and
+  the record of who lost access stays, so the leaver's other devices still learn they
+  left; anyone else is told they are not a member, and a request for it finds no
+  ward.
 
 Blob size is capped and requests are rate-limited.
 
@@ -895,8 +898,9 @@ delete theirs when they next connect. The next version anyone writes prunes the 
 and rotates the key. Leaving needs the server, like every access change; offline, the
 app says to connect first.
 
-**When the last person leaves**, the server deletes the document: nobody can read or
-write it again, and it does not come back after a reinstall.
+**When the last person leaves**, the server drops the document's content: nobody can
+read or write it again, and it does not come back after a reinstall. It keeps the id
+and who lost access, so the leaver's other devices still learn they left.
 
 **The last admin names a successor before leaving.** A ward with members and no admin
 could never grant or remove anyone again, so when the last admin presses Leave while
@@ -1082,7 +1086,8 @@ Against a fake server:
   last entry a device read
 - a reinstall restores the ward list from the server, and the documents on it download
   again
-- the last person leaving deletes the document
+- the last person leaving ends the ward: its other devices hear they left, a request
+  for it finds no ward, and its id stays taken
 
 ---
 

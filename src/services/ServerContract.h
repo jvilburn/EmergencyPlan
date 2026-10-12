@@ -103,7 +103,7 @@ struct LostAccess
     };
 
     How how = How::Removed;
-    QString byWhom;     ///< display name at the time; empty for Left
+    QString byWhom;     ///< the admin's display name; for Unlinked, the unlinking device's name; empty for Left
     QDateTime when;
 
     bool operator==(const LostAccess& other) const;

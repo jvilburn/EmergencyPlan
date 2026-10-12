@@ -43,18 +43,18 @@ void finishDownload(DocumentRecords& records,
 
     if (theirs.outcome != Fetched::Outcome::Accepted)
     {
-        done(downloadOutcome(theirs.outcome), std::nullopt);
+        done(downloadOutcome(theirs.outcome), std::nullopt, theirs.lost);
         return;
     }
 
     if (!DocumentFile::write(paths.file, theirs.bytes(), nullptr)
         || !ServerVersion::writeBase(records, documentId, paths, theirs.sealed, theirs.version, nullptr))
     {
-        done(DocumentSession::Download::WriteFailed, std::nullopt);
+        done(DocumentSession::Download::WriteFailed, std::nullopt, std::nullopt);
         return;
     }
 
-    done(DocumentSession::Download::Done, theirs.document);
+    done(DocumentSession::Download::Done, theirs.document, std::nullopt);
 }
 
 void ignoreRelease(const Result<Done>&)
@@ -454,6 +454,13 @@ void DocumentSession::onHead(const Result<Head>& head)
         return;
     }
 
+    if (head.error == ServerError::NotMember || head.error == ServerError::UnknownDocument)
+    {
+        setFault(tr("The server no longer has this ward."));
+        finishOperation();
+        return;
+    }
+
     if (!head.ok())
     {
         // A call that did not get through. There is no lease to take, so the
@@ -472,14 +479,8 @@ void DocumentSession::onHead(const Result<Head>& head)
         return;
     }
 
-    const bool changed = !m_head.has_value() || m_head.value().members != head.value->members
-                      || m_head.value().leaseHolder != head.value->leaseHolder
-                      || m_head.value().history != head.value->history;
     m_head = head.value.value();
-    if (changed)
-    {
-        emit headChanged();
-    }
+    emit headChanged();
 
     const std::optional<Fingerprint>& holder = head.value->leaseHolder;
     if (holder.has_value() && holder.value() != m_context.identity.fingerprint())
@@ -660,8 +661,10 @@ void DocumentSession::onPublished(const Result<qint64>& result, const DocumentFi
             finishOperation();
             return;
         }
-        finishOperation();
+        // The publish after the head covers a save made meanwhile.
+        m_publishAgain = false;
         checkHead();
+        finishOperation();
         return;
 
     case ServerError::AccessLost:

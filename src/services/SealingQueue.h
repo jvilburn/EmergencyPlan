@@ -20,9 +20,10 @@
 /// linked, a person it granted - that the server lists and the ward's current
 /// version does not yet seal to.
 ///
-/// Additions only: removals take effect on the server at once, and the next write in
-/// each ward prunes them. Nothing here needs the lease, so no one holding it can hold
-/// off a link or a grant.
+/// Prompted only by additions: removals take effect on the server at once, and the
+/// next write in each ward prunes them. The version it writes applies the whole rule,
+/// so it prunes too. Nothing here needs the lease, so no one holding it can hold off a
+/// link or a grant.
 ///
 /// For the ward open in the window it asks the session to publish, which reseals; for
 /// any other it fetches the server's version, reseals it, and uploads it conditional

@@ -521,7 +521,8 @@ std::optional<QList<HistoryEntry>> readHistory(const QJsonObject& json)
     {
         HistoryEntry entry;
         QString kind;
-        if (!readIndex(object, KeyIndex, entry.index)
+        if (!StrictJson::hasOnlyKeys(object, {KeyIndex, KeyKind, KeyActor, KeySubject, KeyWhen})
+            || !readIndex(object, KeyIndex, entry.index)
             || !StrictJson::readString(object, KeyKind, kind)
             || !StrictJson::readNonEmptyString(object, KeyActor, entry.actor)
             || !StrictJson::readNonEmptyString(object, KeySubject, entry.subject)

@@ -200,7 +200,7 @@ int main(int argc, char *argv[])
                        *settings,
                        server,
                        std::make_unique<QtSessionTimers>(),
-                       [&library](const QString& documentId) { return library.pathsFor(documentId); },
+                       std::bind(&DocumentLibrary::pathsFor, &library, std::placeholders::_1),
                        nullptr);
 
     // Stack locals, so the window goes first and the manager outlives it.

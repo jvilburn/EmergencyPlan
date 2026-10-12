@@ -348,20 +348,21 @@ void DocumentLibrary::fetchWard(const QString& documentId,
                               documentId,
                               pathsIn(documentId),
                               receiver,
-                              std::bind(&DocumentLibrary::onWardFetched, this, documentId, fetched, _1, _2));
+                              std::bind(&DocumentLibrary::onWardFetched, this, documentId, fetched, _1, _2, _3));
 }
 
 void DocumentLibrary::onWardFetched(const QString& documentId,
                                     const WardFetched& fetched,
                                     DocumentSession::Download outcome,
-                                    const std::optional<Document>& document)
+                                    const std::optional<Document>& document,
+                                    const std::optional<ServerContract::LostAccess>& lost)
 {
     if (outcome == DocumentSession::Download::Done)
     {
         add(documentId);
         noteDocument(documentId, document.value());
     }
-    fetched(documentId, outcome);
+    fetched(documentId, outcome, lost);
 }
 
 DocumentPaths DocumentLibrary::pathsIn(const QString& documentId) const

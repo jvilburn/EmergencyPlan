@@ -16,6 +16,7 @@ private slots:
     void aGrantSealsTheDeviceThatAskedAndLeavesTheRecord();
     void aLeaseHeldElsewhereHoldsNothingOff();
     void anUnreachableServerIsRetriedUntilEveryWardIsDone();
+    void aConflictStartsTheWardAgainOnTheNewerVersion();
     void aWardThisDeviceLostIsForgotten();
     void aWardOwingNothingIsLeftUntouched();
 };

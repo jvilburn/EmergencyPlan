@@ -17,4 +17,8 @@ private slots:
     void batchGeocodingDoesNotStartWithoutTheLease();
     void aGeocodingResultAfterTheLeaseIsLostChangesNothing();
     void aConflictWaitsUntilItIsSettled();
+
+    // Access history and lost access, through the app's own services
+    void accessChangesShowOnceAndStaySeenOnceDismissed();
+    void aFetchThatFindsAccessLostSaysWhy();
 };

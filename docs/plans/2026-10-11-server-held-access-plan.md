@@ -75,6 +75,29 @@ changes; a change to `tests/CMakeLists.txt` alone needs
 
 ### Task 1: The access model, the server that holds it, and the sealing-set rule
 
+> **Done, with these differences.** Where the code differs from the sections below,
+> the code is the reference:
+> - **Former keys.** The sealing set also lists a hash of every earlier data key, and
+>   `Reconcile::validate` / `validateDownload` take the keys this device holds of the
+>   ward (`ServerVersion::trustedKeys`): a version under another key must name one of
+>   them, so a server cannot hand a device a ward of its own making. A device's first
+>   download is taken as it stands, an accepted limit in the design. A device whose
+>   base copy is unreadable while its local file holds an unpublished rotation trusts
+>   only the local key, so a server version rotated from the base key is refused until
+>   the base is readable again; accepted as rare.
+> - A head that leaves this device out is a fault and is never applied
+>   (`ServerVersion::listsDevice`); one refused as NotMember or UnknownDocument is a
+>   fault, not Unreachable.
+> - `ServerVersion::isCurrent(document, access)` takes no header;
+>   `ServerVersion::settleGranted` drops granted devices after this device's own
+>   accepted upload.
+> - `ServerContract.cpp` stays, for the multi-line `operator==` definitions.
+> - The session signals every answered head (`headChanged`), and the manager fetches
+>   history whenever the head's index is past what it has shown.
+> - The last person's leave keeps a tombstone: the id and lost-access records.
+> - `ServerConnection` remembers a refused registration and answers every later call
+>   with it.
+
 **Everything that decides who may fetch, who can read, and how a write keeps the two in
 step, written as one artifact.** The server contract and the fake server that enforces
 its rules; the sealing set and the rule over it; the slimmed header, crypto, and file
@@ -394,7 +417,9 @@ The rules, each a refusal with its `ServerError`:
   rate-limited per device.
 - `grant`, `removeMember` of another, `setRole`, `declineRequest`: `NotAdmin` from a
   member. `removeMember`, `setRole` to Member, and a leave: `LastAdmin` when the ward
-  would keep people and no admin. A leave by the last person deletes the document.
+  would keep people and no admin. A leave by the last person drops the document's
+  content and keeps its id and lost-access records, so its other devices hear they
+  left; a request for it is `UnknownDocument`, and a stranger's read `NotMember`.
 - `grant` makes the request's person a member with role Member and appends `Added`;
   removal appends `Removed` and records lost access; a leave appends `Left` and records
   it; `setRole` appends `MadeAdmin` or `MadeMember`.
@@ -852,7 +877,7 @@ upload naming a removed device is `NotOnAllowList` and one naming fewer devices 
 allow-list is accepted; a removed person's devices get `AccessLost` with the remover's
 name; an unlinked device gets `AccessLost` Unlinked on every ward and on `registerPerson`;
 a person joins only through a granted request and a device only through an approved link;
-the last person's leave deletes the document; the history lists each change once after a
+the last person's leave ends the ward; the history lists each change once after a
 given index; session, lease, and link-code expiry through `advanceClock`.
 
 **`DocumentSessionTest`:** publishing from the base succeeds; a stale base adopts their

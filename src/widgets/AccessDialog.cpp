@@ -211,7 +211,7 @@ void AccessDialog::fillTree()
     m_offline->setVisible(m_shared && !known);
 
     const QStringList warnings = sharedNames(m_members);
-    m_sharedNames->setText(warnings.join(" ") + " " + tr("Check each is who you expect."));
+    m_sharedNames->setText(tr("%1 Check each is who you expect.").arg(warnings.join(" ")));
     m_sharedNames->setVisible(!warnings.isEmpty());
 
     QStringList admins;

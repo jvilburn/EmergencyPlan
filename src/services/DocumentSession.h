@@ -137,8 +137,11 @@ public:
                                                  LoadFailure& failure,
                                                  QString* refusal);
 
-    /// What a download reports: how it went, and on Done the document it wrote.
-    using Downloaded = std::function<void(Download outcome, const std::optional<Document>& document)>;
+    /// What a download reports: how it went, on Done the document it wrote, and on
+    /// AccessLost why.
+    using Downloaded = std::function<void(Download outcome,
+                                          const std::optional<Document>& document,
+                                          const std::optional<ServerContract::LostAccess>& lost)>;
 
     /// Fetches a shared ward whose local file is missing or refused, writes it and
     /// its base once it validates, and reports; the caller then opens it. done is
@@ -207,8 +210,7 @@ signals:
     /// a merge, a resolve: undo no longer applies.
     void documentReplaced();
 
-    /// A head check answered with different members, roles, lease holder, or
-    /// newest access-history entry.
+    /// A head check answered; lastHead() holds what it said.
     void headChanged();
 
     void syncStateChanged(SyncState state);

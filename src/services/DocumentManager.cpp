@@ -343,10 +343,12 @@ DocumentManager::Open DocumentManager::open(const QString& documentId, QString* 
 void DocumentManager::fetch(const QString& documentId)
 {
     m_fetching = documentId;
-    m_library->fetchWard(documentId, *m_server, this, std::bind(&DocumentManager::onFetched, this, _1, _2));
+    m_library->fetchWard(documentId, *m_server, this, std::bind(&DocumentManager::onFetched, this, _1, _2, _3));
 }
 
-void DocumentManager::onFetched(const QString& documentId, DocumentSession::Download outcome)
+void DocumentManager::onFetched(const QString& documentId,
+                                DocumentSession::Download outcome,
+                                const std::optional<ServerContract::LostAccess>& lost)
 {
     // Another ward was shown meanwhile; this one waits in the library.
     if (m_fetching != documentId)
@@ -366,7 +368,7 @@ void DocumentManager::onFetched(const QString& documentId, DocumentSession::Down
         return;
     }
     case DocumentSession::Download::AccessLost:
-        forgetLostWard(documentId, ServerContract::LostAccess());
+        forgetLostWard(documentId, lost.value_or(ServerContract::LostAccess()));
         return;
     case DocumentSession::Download::Unreachable:
     case DocumentSession::Download::NeedsNewerVersion:
@@ -555,15 +557,18 @@ void DocumentManager::onHeadChanged()
 {
     emit headChanged();
 
-    // Fetched only when the server has entries newer than the last one dismissed here.
+    // Fetched only when the server has entries newer than the last one dismissed
+    // here, and one fetch at a time; a failed one is tried at the next head.
     const std::optional<ServerContract::Head>& head = m_session->lastHead();
-    if (m_server == nullptr || !head.has_value())
+    if (m_server == nullptr || !head.has_value() || m_fetchingHistory)
     {
         return;
     }
     const qint64 seen = m_records->record(m_session->documentId()).historySeen;
-    if (head.value().history > seen)
+    const qint64 shown = m_unseenHistory.isEmpty() ? seen : m_unseenHistory.last().index;
+    if (head.value().history > shown)
     {
+        m_fetchingHistory = true;
         m_server->history(m_session->documentId(),
                           seen,
                           this,
@@ -574,6 +579,8 @@ void DocumentManager::onHeadChanged()
 void DocumentManager::onHistory(const QString& documentId,
                                 const ServerContract::Result<QList<ServerContract::HistoryEntry>>& history)
 {
+    m_fetchingHistory = false;
+
     // Another ward opened meanwhile reads its own.
     if (!history.ok() || !m_session || m_session->documentId() != documentId)
     {

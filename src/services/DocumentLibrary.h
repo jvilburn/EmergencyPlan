@@ -114,8 +114,10 @@ public:
     /// this device can open. A ward's own file is not a copy.
     std::optional<Copy> openCopy(const QString& sourcePath, QString* errorMessage) const;
 
-    /// How fetching one ward went.
-    using WardFetched = std::function<void(const QString& documentId, DocumentSession::Download outcome)>;
+    /// How fetching one ward went, and on AccessLost why.
+    using WardFetched = std::function<void(const QString& documentId,
+                                           DocumentSession::Download outcome,
+                                           const std::optional<ServerContract::LostAccess>& lost)>;
 
     /// Fetches every ward the server lists for this person that the library lacks:
     /// after a reinstall, cleared app data, or a grant. Each reports through
@@ -141,7 +143,8 @@ private:
     void onWardFetched(const QString& documentId,
                        const WardFetched& fetched,
                        DocumentSession::Download outcome,
-                       const std::optional<Document>& document);
+                       const std::optional<Document>& document,
+                       const std::optional<ServerContract::LostAccess>& lost);
 
     /// A name in directory that no file has yet: the base name, then "(2)", "(3)"...
     static QString unusedPath(const QString& directory, const QString& baseName);

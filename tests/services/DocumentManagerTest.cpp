@@ -1,12 +1,16 @@
 #include "DocumentManagerTest.h"
 
+#include "AppSettings.h"
 #include "DocumentCrypto.h"
+#include "DocumentLibrary.h"
 #include "DocumentManager.h"
 #include "EmergencyManager.h"
 #include "FamilyCommands.h"
+#include "SealingQueue.h"
 #include "SessionTestSupport.h"
 
 #include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QtTest>
 
 using namespace SessionTestSupport;
@@ -45,6 +49,36 @@ void addUnmappedFamily(Document& document, const FamilyId& family)
     address.addLine("12 Elm Street");
     address.addLine("Provo, UT 84604");
     document.addFamily(Family::createWithId(family, std::nullopt, std::nullopt, address, {}));
+}
+
+/// One device's app, as main.cpp builds it: settings and a library in a folder of
+/// their own, the device's connection, a sealing queue, and the manager over them.
+struct App
+{
+    explicit App(Device& device)
+        : settings(AppSettings::open(folder.filePath("settings.json"), nullptr))
+        , library(*settings, folder.filePath("wards"), device.identity)
+        , queue(device.identity,
+                *settings,
+                device.connection,
+                std::make_unique<ManualTimers>(),
+                std::bind(&DocumentLibrary::pathsFor, &library, std::placeholders::_1),
+                nullptr)
+        , manager(device.identity, *settings, device.connection, library, queue, nullptr)
+    {
+    }
+
+    QTemporaryDir folder;
+    std::unique_ptr<AppSettings> settings;
+    DocumentLibrary library;
+    SealingQueue queue;
+    DocumentManager manager;
+    EmergencyManager emergency{nullptr};
+};
+
+ServerContract::Session sessionOf(TestWard& ward, Device& device)
+{
+    return ward.sessionFor(device).value();
 }
 
 } // namespace
@@ -282,4 +316,99 @@ void DocumentManagerTest::aConflictWaitsUntilItIsSettled()
     QVERIFY(!manager.pendingConflict().has_value());
     QCOMPARE(settled.count(), 1);
     QVERIFY(latitudeOf(manager.document(), ward.adams) == 60.0);
+}
+
+void DocumentManagerTest::accessChangesShowOnceAndStaySeenOnceDismissed()
+{
+    TestWard ward;
+    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
+    Device& bob = ward.add(newIdentity("Bob", "Phone"));
+    App app(alice);
+    QSignalSpy changed(&app.manager, &DocumentManager::accessChanged);
+
+    QVERIFY(app.manager.newDocument(nullptr));
+    app.manager.share();
+    ward.settle();
+    ward.documentId = app.manager.documentId();
+    QVERIFY(app.manager.session()->isShared());
+    QVERIFY(app.manager.unseenHistory().isEmpty());
+
+    // Alice grants Bob: the next head shows it, once.
+    const ServerContract::Session bobSession = sessionOf(ward, bob);
+    QVERIFY(ServerTestSupport::grantByRequest(ward.server,
+                                              ward.documentId,
+                                              sessionOf(ward, alice),
+                                              asTestDevice(bob.identity),
+                                              bobSession));
+    app.manager.session()->checkServer();
+    ward.settle();
+    QCOMPARE(app.manager.unseenHistory().size(), 1);
+    QCOMPARE(app.manager.unseenHistory().first().kind, ServerContract::HistoryEntry::Kind::Added);
+    QCOMPARE(app.manager.unseenHistory().first().actor, QString("Alice"));
+    QCOMPARE(app.manager.unseenHistory().first().subject, QString("Bob"));
+    QCOMPARE(changed.count(), 1);
+
+    // A second head with nothing new fetches nothing and shows the same.
+    app.manager.session()->checkServer();
+    ward.settle();
+    QCOMPARE(app.manager.unseenHistory().size(), 1);
+    QCOMPARE(changed.count(), 1);
+
+    // Dismissed: seen on the record, so later heads show nothing.
+    app.manager.dismissHistory();
+    QVERIFY(app.manager.unseenHistory().isEmpty());
+    QCOMPARE(app.settings->record(ward.documentId).historySeen, 1);
+    app.manager.session()->checkServer();
+    ward.settle();
+    QVERIFY(app.manager.unseenHistory().isEmpty());
+
+    // A later change shows alone.
+    QVERIFY(ServerTestSupport::wait<ServerContract::Done>(std::bind(&ServerContract::ServerApi::setRole,
+                                                                    &ward.server,
+                                                                    sessionOf(ward, alice),
+                                                                    ward.documentId,
+                                                                    bob.identity.member,
+                                                                    ServerContract::Role::Admin,
+                                                                    std::placeholders::_1))
+                .ok());
+    app.manager.session()->checkServer();
+    ward.settle();
+    QCOMPARE(app.manager.unseenHistory().size(), 1);
+    QCOMPARE(app.manager.unseenHistory().first().kind, ServerContract::HistoryEntry::Kind::MadeAdmin);
+    QCOMPARE(app.manager.unseenHistory().first().index, 2);
+}
+
+void DocumentManagerTest::aFetchThatFindsAccessLostSaysWhy()
+{
+    TestWard ward;
+    Device& alice = ward.add(newIdentity("Alice", "Laptop"));
+    Device& bob = ward.add(newIdentity("Bob", "Laptop"));
+    std::unique_ptr<DocumentSession> aliceSession = ward.createShared(alice);
+    QVERIFY(aliceSession);
+    QVERIFY(ward.grant(alice, bob));
+
+    // Bob's app knows the ward but has no file of it, so opening it fetches.
+    App app(bob);
+    app.library.add(ward.documentId);
+    DocumentRecord record;
+    record.baseVersion = 1;
+    app.settings->setRecord(ward.documentId, record);
+    QSignalSpy lost(&app.manager, &DocumentManager::accessLost);
+
+    // Bob leaves from another of his devices' sessions, here his own on the server.
+    QVERIFY(ServerTestSupport::wait<ServerContract::Done>(std::bind(&ServerContract::ServerApi::removeMember,
+                                                                    &ward.server,
+                                                                    sessionOf(ward, bob),
+                                                                    ward.documentId,
+                                                                    bob.identity.member,
+                                                                    std::placeholders::_1))
+                .ok());
+
+    QCOMPARE(app.manager.openDocument(ward.documentId, nullptr), DocumentManager::Open::Fetching);
+    ward.settle();
+
+    QCOMPARE(lost.count(), 1);
+    const ServerContract::LostAccess how = lost.first().at(1).value<ServerContract::LostAccess>();
+    QCOMPARE(how.how, ServerContract::LostAccess::How::Left);
+    QVERIFY(!app.library.contains(ward.documentId));
 }

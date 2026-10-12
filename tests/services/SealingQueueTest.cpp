@@ -21,9 +21,10 @@ using Timer = SessionTimers::Timer;
 namespace
 {
 
-void keepLost(QStringList& out, const QString& documentId, const LostAccess&)
+void keepLost(QStringList& out, QList<LostAccess>& reasons, const QString& documentId, const LostAccess& lost)
 {
     out.append(documentId);
+    reasons.append(lost);
 }
 
 void keepDownload(std::optional<DocumentSession::Download>& out, DocumentSession::Download download)
@@ -194,6 +195,25 @@ void SealingQueueTest::anUnreachableServerIsRetriedUntilEveryWardIsDone()
     QVERIFY(sealsTo(ward, laptop, ward.documentId, phone.identity));
 }
 
+void SealingQueueTest::aConflictStartsTheWardAgainOnTheNewerVersion()
+{
+    TestWard ward;
+    Device& laptop = ward.add(newIdentity("Alice", "Laptop"));
+    Device& phone = ward.add(newDeviceOf(laptop.identity, "Phone"));
+    std::unique_ptr<DocumentSession> session = ward.createShared(laptop);
+    QVERIFY(session);
+    session.reset();
+    QVERIFY(ward.link(phone, laptop));
+    const qint64 before = versionOf(ward, laptop, ward.documentId);
+
+    ward.server.forceConflict(ward.documentId);
+    ward.seal(laptop);
+
+    // The first upload refused, the second, built afresh, accepted: one new version.
+    QVERIFY(sealsTo(ward, laptop, ward.documentId, phone.identity));
+    QCOMPARE(versionOf(ward, laptop, ward.documentId), before + 1);
+}
+
 void SealingQueueTest::aWardThisDeviceLostIsForgotten()
 {
     TestWard ward;
@@ -212,11 +232,17 @@ void SealingQueueTest::aWardThisDeviceLostIsForgotten()
 
     std::unique_ptr<SealingQueue> queue = bob.queue();
     QStringList lost;
-    QObject::connect(queue.get(), &SealingQueue::accessLost, queue.get(), std::bind(&keepLost, std::ref(lost), _1, _2));
+    QList<LostAccess> reasons;
+    QObject::connect(queue.get(),
+                     &SealingQueue::accessLost,
+                     queue.get(),
+                     std::bind(&keepLost, std::ref(lost), std::ref(reasons), _1, _2));
     queue->sealEverywhere();
     ward.settle();
 
     QCOMPARE(lost, QStringList{ward.documentId});
+    QCOMPARE(reasons.first().how, LostAccess::How::Removed);
+    QCOMPARE(reasons.first().byWhom, QString("Alice"));
     QVERIFY(!QFile::exists(paths.file));
     QVERIFY(!QFile::exists(paths.base));
     QVERIFY(!bob.records.contains(ward.documentId));

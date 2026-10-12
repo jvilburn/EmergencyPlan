@@ -17,7 +17,8 @@
 /// Every body is a JSON object. Raw bytes travel as standard base64 with padding;
 /// fingerprints and member ids as lowercase hex, as in a header; times as ISO 8601
 /// UTC with milliseconds; a header as the JSON object of its file's header line.
-/// Every call after signing in carries `Authorization: Bearer <token>`.
+/// Every call but challenge, authenticate, and advanceClock carries
+/// `Authorization: Bearer <token>`; advanceClock exists only on a development server.
 ///
 /// | Call | Route | Request | Answer |
 /// |---|---|---|---|
@@ -54,7 +55,8 @@
 /// - `published` is `{name, device, when}`: who published the version, and when.
 /// - `history` is the newest entry's index, 0 for none; an entry is
 ///   `{index, kind, actor, subject, when}`, kind one of `added`, `removed`, `left`,
-///   `madeAdmin`, `madeMember`.
+///   `madeAdmin`, `madeMember`. actor and subject are display names, never empty; for
+///   `left`, and a `madeMember` that is someone stepping down, actor is the subject.
 /// - An access request is `{index, person, when}`, its person listing only the device
 ///   that asked.
 /// - `documents` holds document ids; `version` and `index` are positive integers.
@@ -74,8 +76,9 @@
 /// | 423 | `leaseHeld` |
 /// | 429 | `rateLimited` |
 ///
-/// `accessLost` also carries `how` (`removed`, `left`, or `unlinked`), `byWhom` (absent
-/// for `left`), and `when`.
+/// `accessLost` also carries `how` (`removed`, `left`, or `unlinked`), `byWhom`, and
+/// `when`. byWhom is the removing admin's display name for `removed`, the name of the
+/// device that did the unlinking for `unlinked`, and absent for `left`.
 ///
 /// The client reads the name. An answer naming none it knows is `invalidRequest`.
 /// One with no `{error}` at all - a proxy's page, a wrong address - is Unreachable,
