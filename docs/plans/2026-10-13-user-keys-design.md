@@ -81,8 +81,8 @@ document's kind:
 
 Writes also build on the current version.
 
-A device invite expires a few minutes after it is made: it is used while both devices
-are in hand, and the expiry bounds how long a copy left in an email or text admits
+A device invite expires 30 minutes after it is made: long enough to send the link to
+yourself and open it on the new device, and the expiry bounds how long a copy left in an email or text admits
 anyone. A user invite travels to someone who may open it days later, so it lasts until
 it is used or withdrawn.
 
@@ -164,6 +164,9 @@ In a ward document, the actor being this user:
 - **Remove a user**: an admin, removing someone else. Removing yourself is leaving.
 - **Change someone's admin flag**: an admin. The last admin steps down only by making
   someone else an admin first.
+- **Re-invite a user**: an admin, for someone who lost every device. One write removes
+  their entry, so their lost devices are refused at once, and adds a user invite with
+  their admin flag, labeled for them. They join as a new user.
 - **Withdraw a user invite**: its maker, or an admin.
 - **Leave**: anyone but the last admin while others remain, who makes someone else an
   admin first. The last user leaving deletes the ward document, after a warning that
@@ -174,6 +177,8 @@ In a user document, the actor being this device:
 
 - **Add a device**, **withdraw a device invite**: any device.
 - **Unlink a device**: any device, unlinking another; never the last.
+- **Remove this device**: any device but the last, unlinking itself; it then drops its
+  local copies and starts over at first run.
 
 Each action is one function on the model that takes the actor and answers the changed
 list, or nothing when the actor may not:
@@ -184,23 +189,54 @@ std::optional<AccessList> AccessList::settingAdmin(const UserId& actor, const Us
 std::optional<AccessList> AccessList::leaving(const UserId& actor) const;
 ```
 
-and likewise `inviting` and `withdrawing`, and on `UserDocument` `addingDevice`,
-`unlinking` and `withdrawing`. A dialog enables a button exactly when the call answers
+and likewise `inviting`, `reinviting` and `withdrawing`, and on `UserDocument`
+`addingDevice`, `unlinking` and `withdrawing`. A dialog enables a button exactly when the call answers
 a value, and the action publishes that value, so each rule is written once, beside
 what it changes.
 
 An unshared ward document is on this device alone; deleting it is local.
 
+Uninstalling deletes this device's local data: the identity file, the user document
+and the ward documents. With its keys gone, the device's entry in the user document
+admits nobody; it shows in My Devices until another device unlinks it.
+
+## Notices
+
+Two notices show what changed since the person last dismissed them, each read as the
+difference between the list now and the list last dismissed:
+
+- **Who has access**, above a ward document: users joining, leaving or removed, admin
+  changes, and invites made. `RosterDiff` keeps this role, over the access list.
+- **Your devices**: a device added to this user or unlinked from it. Someone linking a
+  device to you is the change most worth seeing.
+
 ## The links
 
 ```
-wardplanning:invite/<ward document id>/<seed>   a user invite to a ward document
-wardplanning:device/<user id>/<seed>            a device invite to a user
+wardplanning:user-invite/<ward document id>/<seed>   a user invite to a ward document
+wardplanning:device-invite/<user id>/<seed>        a device invite to a user
 ```
 
-The prefix says which flow the link starts, so a fresh device knows before any fetch
-whether it is joining a ward document or a user. Both keep `InviteLink`'s shape: a
-document id and a 32-byte seed from which the invite's keypairs are derived. The app
+Both hold the same data, a document id and a 32-byte seed from which the invite's
+keypairs are derived, and differ only in the flow they start, so they are one type:
+
+```cpp
+struct InviteLink
+{
+    enum class Kind
+    {
+        User,
+        Device
+    };
+
+    Kind kind;
+    QString documentId;
+    QByteArray seed;
+};
+```
+
+The prefix carries the kind, so a fresh device knows before any fetch whether it is
+joining a ward document or a user. The app
 shows a device link as text to copy and as a QR code, for a phone to read.
 
 ## Joining
@@ -288,7 +324,5 @@ maker's name.
 
 ## Open
 
-- **A notice for the user document.** Whether a device added to this user is shown, the
-  way a change to who has access is shown above a ward document.
 - **Shared sync code.** `ServerVersion`, `Reconcile` and the base-copy rules are written
   against the ward document's `Document`. The plan decides how the user document reuses them.
