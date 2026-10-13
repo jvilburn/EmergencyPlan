@@ -73,7 +73,7 @@ Calls:
 - `takeLease` / `releaseLease`: signed by the device. The holder is that device.
 
 A publication and a lease holder are reported as the device and the user it signed
-for, so the client names the user from the ward's roster.
+for, so the client names the user from the ward's access list.
 
 ## The two payloads
 
@@ -95,7 +95,7 @@ struct UserInvite
     DeviceKeys keys;              // from the link's seed
 };
 
-class WardRoster
+class AccessList
 {
     QHash<QString, User> m_users;               // by user id
     QHash<QString, UserInvite> m_invites;       // by fingerprint hex
@@ -124,7 +124,7 @@ class UserDocument
 };
 ```
 
-Each header has exactly one entry per roster entry, as
+Each header has exactly one entry per access list entry, as
 `Reconcile::headerMatchesSealingSet` checks now: user entries match users by id, key
 entries match invites and devices by fingerprint. A ward always has a user; a user
 document always has a device.
@@ -173,7 +173,7 @@ document and every ward, and starts over at first run.
 
 ## Merging
 
-Both rosters merge three ways, entry by entry, against the base copy:
+Both access lists merge three ways, entry by entry, against the base copy:
 
 - An entry changed on one side takes that side's value.
 - An entry removed on one side and changed on the other is removed. Removal is the
@@ -186,7 +186,7 @@ Both rosters merge three ways, entry by entry, against the base copy:
 
 ## What goes
 
-- Devices in ward rosters, device invites in wards, `removeDevice` on a ward, the
+- Devices in ward access lists, device invites in wards, `removeDevice` on a ward, the
   last-device rule in wards, and device rows in Who Has Access. Devices get their own
   dialog, My Devices, with Add a Device and Unlink.
 - Fresh data keys on removal: `SealingSet::rotatesFrom`, `ServerVersion::reseal`, and
