@@ -93,10 +93,10 @@ Calls:
 - `documentsFor`: signed by a device, answers the ids of its user document and of
   every ward document that names its user. A device joining its user finds its ward
   documents this way.
-- `takeLease` / `releaseLease`: signed by the device. The holder is that device.
 
-A publication and a lease holder are reported as the device and the user it signed
-for, so the client names the user from the ward document's access list.
+A publication is reported as the time and the user its signer signed for, so the
+client names the user from the ward document's access list. A join is signed by its
+invite and carries no user; the client names it generically.
 
 ## The two payloads
 
@@ -215,6 +215,13 @@ Both access lists merge three ways, entry by entry, against the base copy:
 - A merge that would leave nobody - no user in a ward document, no device in a user
   document - takes the server's side whole.
 
+Every device edits freely, since edits of any kind are rare. The directory merges
+record by record in the same way: each collection (families, teams, tags, districts,
+groups, assets) three ways by id, through one generic merge. The conflict dialog is
+for a record changed differently on both sides, a deletion against an edit included.
+Two devices making the same automatic update, such as geocoding a family, write the
+same value, which merges silently.
+
 ## What goes
 
 - Devices in ward document access lists, device invites in ward documents,
@@ -223,6 +230,11 @@ Both access lists merge three ways, entry by entry, against the base copy:
   Unlink.
 - Fresh data keys on removal: `SealingSet::rotatesFrom`, `ServerVersion::reseal`, and
   the former-key hashes with `descendsFrom` and `trustedKeys`.
+- The edit lease: the lease calls, `Lease`, `LeaseHeld`, the lease holder in `Head`,
+  `advanceClock`, the heartbeat timer, the session's lease state, `isDirectoryReadOnly`,
+  `mayWriteDirectory`, `Refusal::DirectoryReadOnly`, `readOnlyChanged`, and the
+  window's read-only state.
+- The directory merged as one value, in `DocumentMerge::mergeDocuments`.
 - `LostAccess` and `whyLost`: a refused device reads nothing more of the ward
   document, so it reports it gone without saying by whom.
 - `Holder` becomes `User`, `MemberId` becomes `UserId`, `Role` becomes `bool admin`,
