@@ -206,8 +206,9 @@ by one rule. On a version conflict, each keyed collection merges three ways agai
 the base copy, record by record, through one generic merge:
 
 - A record changed on one side takes that side's value.
-- A record changed differently on both sides takes this device's, the later publisher.
-- A record removed on one side and changed on the other is removed.
+- A record changed on both sides takes this device's, the later publisher's.
+
+Absence is a value: a removal is a change like any other.
 
 It covers the access lists, the directory (families, teams, tags, districts, groups,
 assets) and the emergency response alike. The response's nested collections are keyed
