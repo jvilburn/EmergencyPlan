@@ -1,6 +1,6 @@
 #include "DocumentSession.h"
 
-#include "ResponseMerge.h"
+#include "DocumentMerge.h"
 
 using namespace ServerContract;
 using namespace std::placeholders;
@@ -384,11 +384,15 @@ DocumentSession::Refusal DocumentSession::edit(Edit kind, const std::function<vo
     change(m_document);
     m_saveScheduled = true;
     m_timers->start(SessionTimers::Timer::Save, SaveDelayMilliseconds);
-    if (kind == Edit::Roster)
-    {
-        emit rosterChanged();
-    }
     return Refusal::None;
+}
+
+void DocumentSession::setRoster(const SealingSet& roster)
+{
+    m_document.setSealingSet(roster);
+    m_saveScheduled = true;
+    m_timers->start(SessionTimers::Timer::Save, SaveDelayMilliseconds);
+    emit rosterChanged();
 }
 
 bool DocumentSession::flush(QString* errorMessage)
@@ -848,7 +852,7 @@ void DocumentSession::adopt(const Fetched& theirs)
     }
 
     const std::optional<Document> merged =
-        ResponseMerge::mergeDocuments(m_base.value().document, m_document, theirs.document);
+        DocumentMerge::mergeDocuments(m_base.value().document, m_document, theirs.document);
     if (!merged.has_value())
     {
         raiseConflict(theirs);
@@ -946,7 +950,7 @@ bool DocumentSession::resolve(Resolution resolution, QString* errorMessage)
         baseResponse = m_base.value().document.emergencyResponse();
     }
     const std::optional<EmergencyResponse> response =
-        ResponseMerge::merge(baseResponse, m_document.emergencyResponse(), theirs.document.emergencyResponse());
+        DocumentMerge::merge(baseResponse, m_document.emergencyResponse(), theirs.document.emergencyResponse());
 
     // Keep theirs: their directory with the merged response. Keep mine: the local
     // file as it stands - this session's directory, the merged response - sealed on

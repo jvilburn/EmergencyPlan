@@ -114,10 +114,6 @@ bool Invite::operator==(const Invite& other) const
 SealingSet SealingSet::of(const MemberId& person, const QString& name, const NamedDevice& device)
 {
     SealingSet set;
-    if (!person.isValid() || !device.keys.isValid())
-    {
-        return set;
-    }
     set.m_people.insert(person.toHex(), Holder{person, name, Role::Admin, {device}});
     return set;
 }

@@ -281,7 +281,7 @@ private:
     void onReadOnlyChanged();
     void onShared();
     /// Takes roster as the open ward's and publishes it.
-    void publishRoster(const SealingSet& roster);
+    void publishRoster(const SealingSet& changed);
     void refreshRosterChanges();
     void onJoined(const QString& documentId, DocumentSession::Join outcome, const QString& reason);
     void onSessionLost(const ServerVersion::LostAccess& lost);

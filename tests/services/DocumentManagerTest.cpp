@@ -413,7 +413,7 @@ void DocumentManagerTest::aFetchThatFindsAccessLostSaysWhy()
     // Alice removes Bob.
     aliceSession->checkServer();
     ward.settle();
-    aliceSession->edit(DocumentSession::Edit::Roster, removePerson(bob.identity.member));
+    changeRoster(*aliceSession, removePerson(bob.identity.member));
     aliceSession->publishNow();
     ward.settle();
     QCOMPARE(ward.recipientsOnServer(), QStringList{alice.identity.fingerprint().toHex()});
@@ -468,7 +468,9 @@ void DocumentManagerTest::anInviteJoinsAUserOrAnotherDevice()
     QVERIFY(app.manager.roster().invites().isEmpty());
     QVERIFY(shareFrom(ward, app));
 
-    // A user invite: a new admin, named by the joiner.
+    // A user invite: a new admin, named by the joiner. The message names the ward as
+    // its directory does.
+    QCOMPARE(app.manager.session()->edit(DocumentSession::Edit::Directory, &nameTheWard), DocumentSession::Refusal::None);
     const std::optional<DocumentManager::Invitation> forBob = inviteFrom(ward, app, Invite::For::User, Role::Admin, "for Bob");
     QVERIFY(forBob.has_value());
     QCOMPARE(forBob->link.documentId, ward.documentId);
@@ -476,7 +478,7 @@ void DocumentManagerTest::anInviteJoinsAUserOrAnotherDevice()
     QCOMPARE(app.manager.roster().invites().size(), 1);
     QVERIFY(app.manager.roster().invites().first().role == Role::Admin);
     QCOMPARE(forBob->message,
-             "Alice has invited you to a ward in Ward Planning. Install it from "
+             "Alice has invited you to Tanglewood Ward in Ward Planning. Install it from "
              "https://github.com/jvilburn/EmergencyPlan/releases/latest, then open this link:\n"
                  + forBob->link.toString());
     QCOMPARE(ward.join(bob, forBob->link), std::optional<DocumentSession::Join>(DocumentSession::Join::Done));
@@ -697,7 +699,7 @@ struct BobsWard
     /// Alice writes Bob out.
     bool removeBob(TestWard& ward, const MemberId& bob)
     {
-        aliceSession->edit(DocumentSession::Edit::Roster, removePerson(bob));
+        changeRoster(*aliceSession, removePerson(bob));
         aliceSession->publishNow();
         ward.settle();
         return aliceSession->syncState() == SyncState::UpToDate && ward.recipientsOnServer().size() == 1;

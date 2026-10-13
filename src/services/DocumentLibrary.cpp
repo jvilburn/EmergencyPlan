@@ -331,8 +331,7 @@ void DocumentLibrary::onWardFetched(const QString& documentId,
 {
     if (outcome == DocumentSession::Download::Done)
     {
-        add(documentId);
-        noteDocument(documentId, document.value());
+        takeIn(documentId, document.value());
     }
     fetched(documentId, outcome);
 }
@@ -358,10 +357,15 @@ void DocumentLibrary::onJoined(const QString& documentId,
 {
     if (outcome == DocumentSession::Join::Done)
     {
-        add(documentId);
-        noteDocument(documentId, document.value());
+        takeIn(documentId, document.value());
     }
     joined(outcome, reason, document);
+}
+
+void DocumentLibrary::takeIn(const QString& documentId, const Document& document)
+{
+    add(documentId);
+    noteDocument(documentId, document);
 }
 
 DocumentPaths DocumentLibrary::pathsIn(const QString& documentId) const

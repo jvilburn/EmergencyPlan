@@ -46,12 +46,6 @@ Document wardDocument(const DeviceIdentity& identity, const QString& wardName)
     return document;
 }
 
-/// A directory edit that names the ward Tanglewood.
-void nameTheWard(Document& document)
-{
-    document.metadata().addOrUpdateWard("123456", "Tanglewood", "654321", "Riverside Stake");
-}
-
 bool writeFile(const QString& path, const QByteArray& bytes)
 {
     QFile file(path);
@@ -900,7 +894,7 @@ void DocumentLibraryTest::aWardLostWhileFetchedKeepsItsEntryForForgetLost()
     aliceSession->checkServer();
     ward.settle();
     QVERIFY(aliceSession->document().sealingSet().person(bob.identity.member).has_value());
-    aliceSession->edit(DocumentSession::Edit::Roster, removePerson(bob.identity.member));
+    changeRoster(*aliceSession, removePerson(bob.identity.member));
     aliceSession->publishNow();
     ward.settle();
     QVERIFY(aliceSession->syncState() == SyncState::UpToDate);

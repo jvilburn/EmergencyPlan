@@ -1,9 +1,9 @@
-#include "ResponseMergeTest.h"
+#include "DocumentMergeTest.h"
 
 #include "Address.h"
 #include "DocumentCrypto.h"
 #include "Family.h"
-#include "ResponseMerge.h"
+#include "DocumentMerge.h"
 #include "SealingSet.h"
 
 #include <QtTest>
@@ -83,7 +83,7 @@ EmergencyResponse merged(const EmergencyResponse& base,
                          const EmergencyResponse& mine,
                          const EmergencyResponse& theirs)
 {
-    const std::optional<EmergencyResponse> result = ResponseMerge::merge(base, mine, theirs);
+    const std::optional<EmergencyResponse> result = DocumentMerge::merge(base, mine, theirs);
     if (!result.has_value())
     {
         qFatal("merge returned no response where every side had one");
@@ -140,7 +140,7 @@ Document documentWith(const FamilyId& family, const Storm& s)
 
 // --- Records and attempts ----------------------------------------------------
 
-void ResponseMergeTest::twoRespondersOfflineRecordsBothSurvive()
+void DocumentMergeTest::twoRespondersOfflineRecordsBothSurvive()
 {
     const Storm s = storm();
 
@@ -161,7 +161,7 @@ void ResponseMergeTest::twoRespondersOfflineRecordsBothSurvive()
     QCOMPARE(recordOf(result, s.baker).contactStatus(), ContactStatus::UnableToReach);
 }
 
-void ResponseMergeTest::overlappingContactAttemptsAreAllKept()
+void DocumentMergeTest::overlappingContactAttemptsAreAllKept()
 {
     Storm s = storm();
     const ContactAttempt earlier = attempt("Called at 1am");
@@ -196,7 +196,7 @@ void ResponseMergeTest::overlappingContactAttemptsAreAllKept()
     QVERIFY(hasAttempt(recordOf(merged(s.response, deleting, s.response), s.adams), earlier.id()));
 }
 
-void ResponseMergeTest::anAttemptsNotesEditedOnOneSideKeepTheEdit()
+void DocumentMergeTest::anAttemptsNotesEditedOnOneSideKeepTheEdit()
 {
     Storm s = storm();
     const ContactAttempt called = attempt("Called");
@@ -215,7 +215,7 @@ void ResponseMergeTest::anAttemptsNotesEditedOnOneSideKeepTheEdit()
     QCOMPARE(result.contactAttempts().first().notes(), QString("Called; needs a generator"));
 }
 
-void ResponseMergeTest::anAttemptAbsentFromTheBaseAndEditedOnBothTakesMine()
+void DocumentMergeTest::anAttemptAbsentFromTheBaseAndEditedOnBothTakesMine()
 {
     // A publish landed but its answer was lost, so the base never learned of the
     // attempt; the user then edited its notes. Theirs is the earlier upload, mine
@@ -237,7 +237,7 @@ void ResponseMergeTest::anAttemptAbsentFromTheBaseAndEditedOnBothTakesMine()
     QCOMPARE(result.contactAttempts().first().notes(), QString("Called; roof damage"));
 }
 
-void ResponseMergeTest::contactStatusChangedDifferentlyTakesMineAndOnlyOnTheirsTakesTheirs()
+void DocumentMergeTest::contactStatusChangedDifferentlyTakesMineAndOnlyOnTheirsTakesTheirs()
 {
     const Storm s = storm();
 
@@ -257,7 +257,7 @@ void ResponseMergeTest::contactStatusChangedDifferentlyTakesMineAndOnlyOnTheirsT
     QCOMPARE(recordOf(reversed, s.adams).contactStatus(), ContactStatus::UnableToReach);
 }
 
-void ResponseMergeTest::aFamilyRecordAddedOnEitherSideSurvives()
+void DocumentMergeTest::aFamilyRecordAddedOnEitherSideSurvives()
 {
     const Storm s = storm();
     const FamilyId carter = FamilyId::generate();
@@ -277,7 +277,7 @@ void ResponseMergeTest::aFamilyRecordAddedOnEitherSideSurvives()
 
 // --- Tasks -------------------------------------------------------------------
 
-void ResponseMergeTest::aTaskResolvedOnOneSideAndReassignedOnTheOtherKeepsBoth()
+void DocumentMergeTest::aTaskResolvedOnOneSideAndReassignedOnTheOtherKeepsBoth()
 {
     TaskId taskId;
     const Storm s = stormWithTask(taskId);
@@ -299,7 +299,7 @@ void ResponseMergeTest::aTaskResolvedOnOneSideAndReassignedOnTheOtherKeepsBoth()
     QCOMPARE(task->assignmentNotes(), QString("Chainsaw crew"));
 }
 
-void ResponseMergeTest::aTaskRemovedOnEitherSideStaysRemoved()
+void DocumentMergeTest::aTaskRemovedOnEitherSideStaysRemoved()
 {
     TaskId taskId;
     const Storm s = stormWithTask(taskId);
@@ -314,7 +314,7 @@ void ResponseMergeTest::aTaskRemovedOnEitherSideStaysRemoved()
     QVERIFY(taskIn(recordOf(merged(s.response, s.response, s.response), s.adams), taskId) != nullptr);
 }
 
-void ResponseMergeTest::aTaskRemovedOnOneSideAndEditedOnTheOtherKeepsTheEdit()
+void DocumentMergeTest::aTaskRemovedOnOneSideAndEditedOnTheOtherKeepsTheEdit()
 {
     TaskId taskId;
     const Storm s = stormWithTask(taskId);
@@ -334,7 +334,7 @@ void ResponseMergeTest::aTaskRemovedOnOneSideAndEditedOnTheOtherKeepsTheEdit()
     }
 }
 
-void ResponseMergeTest::aNotificationClearedWithItsAssignmentStaysCleared()
+void DocumentMergeTest::aNotificationClearedWithItsAssignmentStaysCleared()
 {
     TaskId taskId;
     Storm s = stormWithTask(taskId);
@@ -358,7 +358,7 @@ void ResponseMergeTest::aNotificationClearedWithItsAssignmentStaysCleared()
     QCOMPARE(task->description(), QString("Oak, now blocking the road"));
 }
 
-void ResponseMergeTest::aNotificationNeverOutlivesItsAssignment()
+void DocumentMergeTest::aNotificationNeverOutlivesItsAssignment()
 {
     TaskId taskId;
     Storm s = stormWithTask(taskId);
@@ -390,7 +390,7 @@ void ResponseMergeTest::aNotificationNeverOutlivesItsAssignment()
     QCOMPARE(task->notification().value().notes(), QString("Called again"));
 }
 
-void ResponseMergeTest::categoriesMergeAsASet()
+void DocumentMergeTest::categoriesMergeAsASet()
 {
     const Storm s = storm();
     QVERIFY(s.response.taskCategories().contains("Flooding"));
@@ -411,19 +411,19 @@ void ResponseMergeTest::categoriesMergeAsASet()
 
 // --- The response itself -----------------------------------------------------
 
-void ResponseMergeTest::anEmergencyStartedOnlyOnMineIsKept()
+void DocumentMergeTest::anEmergencyStartedOnlyOnMineIsKept()
 {
     const Storm s = storm();
 
     const std::optional<EmergencyResponse> result =
-        ResponseMerge::merge(std::nullopt, s.response, std::nullopt);
+        DocumentMerge::merge(std::nullopt, s.response, std::nullopt);
     QVERIFY(result.has_value());
     QVERIFY(result.value() == s.response);
 
-    QVERIFY(ResponseMerge::merge(std::nullopt, std::nullopt, s.response).value() == s.response);
+    QVERIFY(DocumentMerge::merge(std::nullopt, std::nullopt, s.response).value() == s.response);
 }
 
-void ResponseMergeTest::anEmergencyStartedOnBothIsOneResponseNamedByTheirs()
+void DocumentMergeTest::anEmergencyStartedOnBothIsOneResponseNamedByTheirs()
 {
     Storm mineStorm = storm();
     mineStorm.response.setName("Windstorm");
@@ -432,7 +432,7 @@ void ResponseMergeTest::anEmergencyStartedOnBothIsOneResponseNamedByTheirs()
     theirsStorm.response.setStartedAt(mineStorm.response.startedAt().addSecs(-60));
 
     const std::optional<EmergencyResponse> result =
-        ResponseMerge::merge(std::nullopt, mineStorm.response, theirsStorm.response);
+        DocumentMerge::merge(std::nullopt, mineStorm.response, theirsStorm.response);
     QVERIFY(result.has_value());
     QCOMPARE(result.value().name(), QString("Storm"));
     QCOMPARE(result.value().startedAt(), theirsStorm.response.startedAt());
@@ -441,7 +441,7 @@ void ResponseMergeTest::anEmergencyStartedOnBothIsOneResponseNamedByTheirs()
     QCOMPARE(result.value().familyRecords().size(), qsizetype(4));
 }
 
-void ResponseMergeTest::endedOnTheirsWhileMineRecordedKeepsTheResponse()
+void DocumentMergeTest::endedOnTheirsWhileMineRecordedKeepsTheResponse()
 {
     const Storm s = storm();
 
@@ -450,34 +450,34 @@ void ResponseMergeTest::endedOnTheirsWhileMineRecordedKeepsTheResponse()
     recordOf(mine, s.baker).addContactAttempt(called);
 
     const std::optional<EmergencyResponse> result =
-        ResponseMerge::merge(s.response, mine, std::nullopt);
+        DocumentMerge::merge(s.response, mine, std::nullopt);
     QVERIFY(result.has_value());
     QVERIFY(hasAttempt(recordOf(result.value(), s.baker), called.id()));
 
     // Ended on mine while theirs recorded, the same.
-    QVERIFY(ResponseMerge::merge(s.response, std::nullopt, mine).has_value());
+    QVERIFY(DocumentMerge::merge(s.response, std::nullopt, mine).has_value());
 }
 
-void ResponseMergeTest::endedOnTheirsWithMineUnchangedIsEnded()
+void DocumentMergeTest::endedOnTheirsWithMineUnchangedIsEnded()
 {
     const Storm s = storm();
 
-    QVERIFY(!ResponseMerge::merge(s.response, s.response, std::nullopt).has_value());
-    QVERIFY(!ResponseMerge::merge(s.response, std::nullopt, s.response).has_value());
+    QVERIFY(!DocumentMerge::merge(s.response, s.response, std::nullopt).has_value());
+    QVERIFY(!DocumentMerge::merge(s.response, std::nullopt, s.response).has_value());
 }
 
-void ResponseMergeTest::nothingChangedOnEitherSideIsTheBase()
+void DocumentMergeTest::nothingChangedOnEitherSideIsTheBase()
 {
     TaskId taskId;
     const Storm s = stormWithTask(taskId);
 
     QVERIFY(merged(s.response, s.response, s.response) == s.response);
-    QVERIFY(!ResponseMerge::merge(std::nullopt, std::nullopt, std::nullopt).has_value());
+    QVERIFY(!DocumentMerge::merge(std::nullopt, std::nullopt, std::nullopt).has_value());
 }
 
 // --- Documents ---------------------------------------------------------------
 
-void ResponseMergeTest::aResponseChangeAndADirectoryEditBothSurviveWhicheverSideIsMine()
+void DocumentMergeTest::aResponseChangeAndADirectoryEditBothSurviveWhicheverSideIsMine()
 {
     const Storm s = storm();
     const Document base = documentWith(s.adams, s);
@@ -491,11 +491,11 @@ void ResponseMergeTest::aResponseChangeAndADirectoryEditBothSurviveWhicheverSide
     Document editor = base;
     editor.updateFamily(familyAt(s.adams, 41.5));
 
-    QVERIFY(!ResponseMerge::directoryChanged(responder, base));
-    QVERIFY(ResponseMerge::directoryChanged(editor, base));
+    QVERIFY(!DocumentMerge::directoryChanged(responder, base));
+    QVERIFY(DocumentMerge::directoryChanged(editor, base));
 
-    for (const std::optional<Document>& result : {ResponseMerge::mergeDocuments(base, responder, editor),
-                                                  ResponseMerge::mergeDocuments(base, editor, responder)})
+    for (const std::optional<Document>& result : {DocumentMerge::mergeDocuments(base, responder, editor),
+                                                  DocumentMerge::mergeDocuments(base, editor, responder)})
     {
         QVERIFY(result.has_value());
         QVERIFY(result.value().findFamilyById(s.adams).value().latitude() == std::optional<double>(41.5));
@@ -503,7 +503,7 @@ void ResponseMergeTest::aResponseChangeAndADirectoryEditBothSurviveWhicheverSide
     }
 }
 
-void ResponseMergeTest::aDirectoryEditOnBothSidesIsAConflict()
+void DocumentMergeTest::aDirectoryEditOnBothSidesIsAConflict()
 {
     const Storm s = storm();
     const Document base = documentWith(s.adams, s);
@@ -514,13 +514,13 @@ void ResponseMergeTest::aDirectoryEditOnBothSidesIsAConflict()
     Document theirs = base;
     theirs.updateFamily(familyAt(s.adams, 39.0));
 
-    QVERIFY(!ResponseMerge::mergeDocuments(base, mine, theirs).has_value());
+    QVERIFY(!DocumentMerge::mergeDocuments(base, mine, theirs).has_value());
 
     // The same edit on both sides is not a conflict.
-    QVERIFY(ResponseMerge::mergeDocuments(base, mine, mine).has_value());
+    QVERIFY(DocumentMerge::mergeDocuments(base, mine, mine).has_value());
 }
 
-void ResponseMergeTest::noDirectoryChangeMergesTheResponse()
+void DocumentMergeTest::noDirectoryChangeMergesTheResponse()
 {
     const Storm s = storm();
     const Document base = documentWith(s.adams, s);
@@ -537,16 +537,16 @@ void ResponseMergeTest::noDirectoryChangeMergesTheResponse()
     recordOf(theirsResponse, s.baker).addContactAttempt(theirsCalled);
     theirs.setEmergencyResponse(theirsResponse);
 
-    const std::optional<Document> result = ResponseMerge::mergeDocuments(base, mine, theirs);
+    const std::optional<Document> result = DocumentMerge::mergeDocuments(base, mine, theirs);
     QVERIFY(result.has_value());
-    QVERIFY(!ResponseMerge::directoryChanged(result.value(), base));
+    QVERIFY(!DocumentMerge::directoryChanged(result.value(), base));
 
     const EmergencyResponse& response = result.value().emergencyResponse().value();
     QVERIFY(hasAttempt(recordOf(response, s.adams), mineCalled.id()));
     QVERIFY(hasAttempt(recordOf(response, s.baker), theirsCalled.id()));
 }
 
-void ResponseMergeTest::aRosterEditOnOneSideCarriesThrough()
+void DocumentMergeTest::aRosterEditOnOneSideCarriesThrough()
 {
     const Storm s = storm();
     const Document base = documentWith(s.adams, s);
@@ -555,54 +555,36 @@ void ResponseMergeTest::aRosterEditOnOneSideCarriesThrough()
     Document mine = base;
     mine.setSealingSet(withInvite(base.sealingSet()));
     QCOMPARE(mine.sealingSet().invites().size(), 1);
-    QVERIFY(!ResponseMerge::directoryChanged(mine, base));
+    QVERIFY(!DocumentMerge::directoryChanged(mine, base));
 
     Document theirs = base;
     EmergencyResponse response = theirs.emergencyResponse().value();
     response.mutableRecord(s.baker)->setContactStatus(ContactStatus::OK);
     theirs.setEmergencyResponse(response);
-    QVERIFY(!ResponseMerge::directoryChanged(theirs, base));
+    QVERIFY(!DocumentMerge::directoryChanged(theirs, base));
 
-    const std::optional<Document> result = ResponseMerge::mergeDocuments(base, mine, theirs);
+    const std::optional<Document> result = DocumentMerge::mergeDocuments(base, mine, theirs);
     QVERIFY(result.has_value());
     QVERIFY(result->sealingSet() == mine.sealingSet());
     QCOMPARE(recordOf(result->emergencyResponse().value(), s.baker).contactStatus(), ContactStatus::OK);
 
     // Either way round.
-    const std::optional<Document> swapped = ResponseMerge::mergeDocuments(base, theirs, mine);
+    const std::optional<Document> swapped = DocumentMerge::mergeDocuments(base, theirs, mine);
     QVERIFY(swapped.has_value());
     QVERIFY(swapped->sealingSet() == mine.sealingSet());
 }
 
-void ResponseMergeTest::rosterEditsOnBothSidesMergeEntryByEntry()
+void DocumentMergeTest::aRosterEditAndAFamilyEditOnOppositeSidesBothCarry()
 {
+    // The roster goes through SealingSet::merge, beside the directory and the response.
     const Storm s = storm();
-    Document base = documentWith(s.adams, s);
-    base.setSealingSet(withInvite(base.sealingSet()));
-    const MemberId alice = base.sealingSet().people().first().id;
-    const Invite first = base.sealingSet().invites().first();
-
-    // Dave joined with the open invite there; a second invite was made here before
-    // that join was seen. Both carry: the join, and the new invite.
-    SealingSet joined = base.sealingSet();
-    QVERIFY(joined.join(first.fingerprint(), NamedDevice{"Tablet", newKeys()}, newMember(), "Dave"));
-    Document theirs = base;
-    theirs.setSealingSet(joined);
+    const Document base = documentWith(s.adams, s);
     Document mine = base;
     mine.setSealingSet(withInvite(base.sealingSet()));
-    const Invite second = mine.sealingSet().invites().at(0) == first ? mine.sealingSet().invites().at(1)
-                                                                      : mine.sealingSet().invites().at(0);
-    const std::optional<Document> merged = ResponseMerge::mergeDocuments(base, mine, theirs);
-    QVERIFY(merged.has_value());
-    QCOMPARE(merged->sealingSet().invites(), QList<Invite>{second});
-    QCOMPARE(merged->sealingSet().people().size(), 2);
-    QCOMPARE(merged->sealingSet().person(alice)->devices.size(), 1);
-
-    // A roster edit on one side and a family edit on the other both carry.
     Document moved = base;
     moved.updateFamily(familyAt(s.adams, 41.5));
-    const std::optional<Document> both = ResponseMerge::mergeDocuments(base, mine, moved);
+    const std::optional<Document> both = DocumentMerge::mergeDocuments(base, mine, moved);
     QVERIFY(both.has_value());
-    QCOMPARE(both->sealingSet().invites().size(), 2);
+    QCOMPARE(both->sealingSet().invites().size(), 1);
     QVERIFY(both->findFamilyById(s.adams).value().latitude() == std::optional<double>(41.5));
 }

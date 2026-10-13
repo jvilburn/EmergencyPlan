@@ -1,4 +1,4 @@
-#include "ResponseMerge.h"
+#include "DocumentMerge.h"
 
 #include <QHash>
 #include <QSet>
@@ -323,7 +323,7 @@ Document directoryOf(const Document& document)
 
 } // namespace
 
-namespace ResponseMerge
+namespace DocumentMerge
 {
 
 bool directoryChanged(const Document& doc, const Document& base)
@@ -361,4 +361,4 @@ std::optional<Document> mergeDocuments(const Document& base, const Document& min
     return merged;
 }
 
-} // namespace ResponseMerge
+} // namespace DocumentMerge

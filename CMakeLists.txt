@@ -173,7 +173,7 @@ set(SERVICE_SOURCES
     src/services/DocumentHeader.cpp
     src/services/HexCodec.cpp
     src/services/Reconcile.cpp
-    src/services/ResponseMerge.cpp
+    src/services/DocumentMerge.cpp
     src/services/ServerContract.cpp
     src/services/DeviceIdentity.cpp
     src/services/DocumentFile.cpp
@@ -224,7 +224,7 @@ set(SERVICE_HEADERS
     src/services/DocumentHeader.h
     src/services/HexCodec.h
     src/services/Reconcile.h
-    src/services/ResponseMerge.h
+    src/services/DocumentMerge.h
     src/services/ServerContract.h
     src/services/DeviceIdentity.h
     src/services/DocumentFile.h

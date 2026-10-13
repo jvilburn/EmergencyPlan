@@ -49,44 +49,36 @@ void keepFetched(std::optional<ServerVersion::Fetched>& out, const ServerVersion
 
 // A refused roster change is a test's mistake, and loud.
 
-void applyRemovePerson(Document& document, const MemberId& person)
+void applyRemovePerson(SealingSet& roster, const MemberId& person)
 {
-    SealingSet roster = document.sealingSet();
     if (!roster.removePerson(person))
     {
         qFatal("removePerson refused");
     }
-    document.setSealingSet(roster);
 }
 
-void applyRemoveDevice(Document& document, const Fingerprint& device)
+void applyRemoveDevice(SealingSet& roster, const Fingerprint& device)
 {
-    SealingSet roster = document.sealingSet();
     if (!roster.removeDevice(device))
     {
         qFatal("removeDevice refused");
     }
-    document.setSealingSet(roster);
 }
 
-void applyRemoveInvite(Document& document, const Fingerprint& invite)
+void applyRemoveInvite(SealingSet& roster, const Fingerprint& invite)
 {
-    SealingSet roster = document.sealingSet();
     if (!roster.removeInvite(invite))
     {
         qFatal("removeInvite refused");
     }
-    document.setSealingSet(roster);
 }
 
-void applySetRole(Document& document, const MemberId& person, Role role)
+void applySetRole(SealingSet& roster, const MemberId& person, Role role)
 {
-    SealingSet roster = document.sealingSet();
     if (!roster.setRole(person, role))
     {
         qFatal("setRole refused");
     }
-    document.setSealingSet(roster);
 }
 
 /// Timers for a session to own, with a pointer kept for the test to fire them.
@@ -306,7 +298,7 @@ std::optional<InviteLink> TestWard::invite(DocumentSession& inviter, Invite::For
     {
         return std::nullopt;
     }
-    inviter.edit(DocumentSession::Edit::Roster, std::bind(&Document::setSealingSet, _1, changed));
+    inviter.setRoster(changed);
     inviter.publishNow();
     settle();
 
@@ -365,11 +357,6 @@ QStringList TestWard::recipientsOnServer()
 
 std::optional<ServerVersion::Fetched> TestWard::serverCopy(Device& reader)
 {
-    return serverCopy(reader, documentId);
-}
-
-std::optional<ServerVersion::Fetched> TestWard::serverCopy(Device& reader, const QString& wardId)
-{
     // Fetched against no trusted key, so reading the server's copy changes nothing
     // the device keeps and takes the version as it stands.
     QObject receiver;
@@ -377,7 +364,7 @@ std::optional<ServerVersion::Fetched> TestWard::serverCopy(Device& reader, const
     ServerVersion::fetch(reader.identity.self(),
                          {},
                          reader.connection,
-                         wardId,
+                         documentId,
                          &receiver,
                          std::bind(&keepFetched, std::ref(fetched), _1));
     settle();
@@ -405,24 +392,36 @@ std::function<void(Document&)> recordContact(const FamilyId& family, ContactStat
     return std::bind(&applyContact, _1, family, status);
 }
 
-std::function<void(Document&)> removePerson(const MemberId& person)
+std::function<void(SealingSet&)> removePerson(const MemberId& person)
 {
     return std::bind(&applyRemovePerson, _1, person);
 }
 
-std::function<void(Document&)> removeDevice(const Fingerprint& device)
+std::function<void(SealingSet&)> removeDevice(const Fingerprint& device)
 {
     return std::bind(&applyRemoveDevice, _1, device);
 }
 
-std::function<void(Document&)> removeInvite(const Fingerprint& invite)
+std::function<void(SealingSet&)> removeInvite(const Fingerprint& invite)
 {
     return std::bind(&applyRemoveInvite, _1, invite);
 }
 
-std::function<void(Document&)> setRole(const MemberId& person, Role role)
+std::function<void(SealingSet&)> setRole(const MemberId& person, Role role)
 {
     return std::bind(&applySetRole, _1, person, role);
+}
+
+void changeRoster(DocumentSession& session, const std::function<void(SealingSet&)>& change)
+{
+    SealingSet changed = session.document().sealingSet();
+    change(changed);
+    session.setRoster(changed);
+}
+
+void nameTheWard(Document& document)
+{
+    document.metadata().addOrUpdateWard("123456", "Tanglewood", "654321", "Riverside Stake");
 }
 
 std::optional<double> latitudeOf(const Document& document, const FamilyId& family)

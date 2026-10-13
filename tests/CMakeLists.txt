@@ -34,7 +34,7 @@ set(TEST_SOURCES
     services/IdentityFileTest.cpp
     services/IdentityServiceTest.cpp
     services/ReconcileTest.cpp
-    services/ResponseMergeTest.cpp
+    services/DocumentMergeTest.cpp
     services/ServerConformanceTest.cpp
     services/ServerConnectionTest.cpp
     services/ServerTestSupport.cpp

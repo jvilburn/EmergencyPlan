@@ -74,8 +74,7 @@ public:
     enum class Edit
     {
         Directory,
-        Response,
-        Roster          ///< who has access: never refused, merged entry by entry
+        Response        ///< never refused
     };
 
     enum class Refusal
@@ -188,6 +187,10 @@ public:
     /// Applies change unless refused, then schedules a save. A refusal changes
     /// nothing and never calls change.
     Refusal edit(Edit kind, const std::function<void(Document&)>& change);
+
+    /// Takes roster as the ward's, schedules a save, and announces it. Never refused:
+    /// who has access is not directory content.
+    void setRoster(const SealingSet& roster);
 
     /// Writes a scheduled save now. A save that fails stays scheduled.
     bool flush(QString* errorMessage);

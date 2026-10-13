@@ -139,6 +139,9 @@ private:
                        const WardFetched& fetched,
                        DocumentSession::Download outcome,
                        const std::optional<Document>& document);
+    /// A ward whose file the server just wrote here: listed, under its name.
+    void takeIn(const QString& documentId, const Document& document);
+
     void onJoined(const QString& documentId,
                   const DocumentSession::Joined& joined,
                   DocumentSession::Join outcome,

@@ -626,9 +626,9 @@ std::optional<DocumentManager::Invitation> DocumentManager::invite(Invite::For p
     return Invitation{link, link.message(me->name, ward.isEmpty() ? tr("a ward") : ward)};
 }
 
-void DocumentManager::publishRoster(const SealingSet& roster)
+void DocumentManager::publishRoster(const SealingSet& changed)
 {
-    m_session->edit(DocumentSession::Edit::Roster, std::bind(&Document::setSealingSet, _1, roster));
+    m_session->setRoster(changed);
     m_session->publishNow();
 }
 

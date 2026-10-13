@@ -127,11 +127,11 @@ std::optional<Fingerprint> leaseHolder(TestWard& ward)
 
 /// A roster edit made on by, which catches up first, and published. True once the
 /// version with the change has landed.
-bool editRosterOn(TestWard& ward, DocumentSession& by, const std::function<void(Document&)>& change)
+bool editRosterOn(TestWard& ward, DocumentSession& by, const std::function<void(SealingSet&)>& change)
 {
     by.checkServer();
     ward.settle();
-    by.edit(DocumentSession::Edit::Roster, change);
+    changeRoster(by, change);
     by.publishNow();
     ward.settle();
     return by.syncState() == SyncState::UpToDate;
@@ -953,7 +953,7 @@ void DocumentSessionTest::aRefusedPublishAdoptsTheirKeyAndSealingSet()
     // Alice removes Carol and moves Adams in one rotated version.
     aliceSession->checkServer();
     ward.settle();
-    aliceSession->edit(DocumentSession::Edit::Roster, removePerson(carol.identity.member));
+    changeRoster(*aliceSession, removePerson(carol.identity.member));
     aliceSession->edit(DocumentSession::Edit::Directory, moveFamily(ward.adams, 58.0));
     QVERIFY(alice.timers->fire(Timer::Save));
     ward.settle();
@@ -2158,7 +2158,7 @@ void DocumentSessionTest::aRosterEditCarriesThroughARefusedPublish()
 
     // Alice removes Carol offline; Bob records a contact and publishes first.
     ward.server.setOffline(true);
-    aliceSession->edit(DocumentSession::Edit::Roster, removePerson(carol.identity.member));
+    changeRoster(*aliceSession, removePerson(carol.identity.member));
     QVERIFY(alice.timers->fire(Timer::Save));
     ward.settle();
     ward.server.setOffline(false);
@@ -2203,7 +2203,7 @@ void DocumentSessionTest::theSamePersonChangedOnBothSidesMergesWithoutAsking()
     // Alice makes Carol an admin offline; Bob removes Carol and publishes first: the
     // same person, changed differently on each side, and the server's version stands.
     ward.server.setOffline(true);
-    aliceSession->edit(DocumentSession::Edit::Roster, setRole(carol.identity.member, Role::Admin));
+    changeRoster(*aliceSession, setRole(carol.identity.member, Role::Admin));
     QVERIFY(alice.timers->fire(Timer::Save));
     ward.settle();
     ward.server.setOffline(false);

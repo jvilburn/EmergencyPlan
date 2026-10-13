@@ -78,10 +78,6 @@ public:
 
     qsizetype waitingReplies() const { return m_replies.size(); }
 
-    /// Head and download calls taken, whatever they answered.
-    int headsServed() const { return m_headsServed; }
-    int downloadsServed() const { return m_downloadsServed; }
-
     /// Calls still take effect, and their replies arrive as Unreachable - a
     /// request the server acted on whose answer never came back.
     void loseReplies(bool lose) { m_loseReplies = lose; }
@@ -166,9 +162,6 @@ private:
 
     QHash<QString, StoredDocument> m_documents;
     QHash<QByteArray, QList<QDateTime>> m_uploads;
-
-    int m_headsServed = 0;
-    int m_downloadsServed = 0;
 
     QList<std::function<void()>> m_replies;
     bool m_holdReplies = false;

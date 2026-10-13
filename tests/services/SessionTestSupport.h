@@ -131,10 +131,8 @@ public:
     /// when the server does not answer.
     QStringList recipientsOnServer();
 
-    /// The server's current version of the ward, or of wardId, as a device of
-    /// it downloads it.
+    /// The server's current version of the ward, as a device of it downloads it.
     std::optional<ServerVersion::Fetched> serverCopy(Device& reader);
-    std::optional<ServerVersion::Fetched> serverCopy(Device& reader, const QString& wardId);
 
     QString documentId;
     FamilyId adams;
@@ -155,12 +153,16 @@ std::function<void(Document&)> addFamily(const FamilyId& family, double latitude
 /// A response edit: records a contact.
 std::function<void(Document&)> recordContact(const FamilyId& family, ContactStatus status);
 
-/// Roster edits, as DocumentManager makes them through Edit::Roster; one the roster
-/// refuses ends the run.
-std::function<void(Document&)> removePerson(const MemberId& person);
-std::function<void(Document&)> removeDevice(const Fingerprint& device);
-std::function<void(Document&)> removeInvite(const Fingerprint& invite);
-std::function<void(Document&)> setRole(const MemberId& person, Role role);
+/// Roster changes, as DocumentManager makes them; one the roster refuses ends the
+/// run. changeRoster applies one to a session's roster, as DocumentManager does.
+std::function<void(SealingSet&)> removePerson(const MemberId& person);
+std::function<void(SealingSet&)> removeDevice(const Fingerprint& device);
+std::function<void(SealingSet&)> removeInvite(const Fingerprint& invite);
+std::function<void(SealingSet&)> setRole(const MemberId& person, Role role);
+void changeRoster(DocumentSession& session, const std::function<void(SealingSet&)>& change);
+
+/// A directory edit that names the ward Tanglewood, in Riverside Stake.
+void nameTheWard(Document& document);
 
 std::optional<double> latitudeOf(const Document& document, const FamilyId& family);
 ContactStatus statusOf(const Document& document, const FamilyId& family);

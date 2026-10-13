@@ -38,13 +38,11 @@ void FakeServer::registerDocument(const Signer& signer, const Upload& upload, Re
 
 void FakeServer::head(const QString& documentId, Reply<Head> reply)
 {
-    ++m_headsServed;
     answer(decideHead(documentId), reply);
 }
 
 void FakeServer::download(const QString& documentId, Reply<Snapshot> reply)
 {
-    ++m_downloadsServed;
     answer(decideDownload(documentId), reply);
 }
 

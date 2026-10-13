@@ -21,7 +21,7 @@
 #include "IdentityServiceTest.h"
 #include "ModelParsersTest.h"
 #include "ReconcileTest.h"
-#include "ResponseMergeTest.h"
+#include "DocumentMergeTest.h"
 #include "RosterDiffTest.h"
 #include "SealingSetTest.h"
 #include "ServerConformanceTest.h"
@@ -118,7 +118,7 @@ int main(int argc, char** argv)
         qInfo("%s is not set: the conformance run against a real server is skipped.", ServerAddressVariable);
     }
     status |= run<ReconcileTest>(argc, argv);
-    status |= run<ResponseMergeTest>(argc, argv);
+    status |= run<DocumentMergeTest>(argc, argv);
     status |= run<ServerConnectionTest>(argc, argv);
     status |= run<DocumentFileTest>(argc, argv);
     status |= run<DocumentSessionTest>(argc, argv);

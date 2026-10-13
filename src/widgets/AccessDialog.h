@@ -22,7 +22,7 @@ class QTreeWidget;
 /// - on another person, for an admin: Remove, and Make Admin or Make Member
 /// - on this person: Make Member for an admin stepping down (never the last admin)
 /// - on one of this person's own devices but this one: Unlink
-/// - on an open invite: Withdraw
+/// - on an open invite, for its maker or an admin: Withdraw
 /// - Details for anyone, revealing device fingerprints
 ///
 /// A member sees whom to ask: the ward's admins. The role is the app's rule, kept by

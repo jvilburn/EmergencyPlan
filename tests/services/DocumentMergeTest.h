@@ -3,7 +3,7 @@
 #include <QObject>
 
 /// Section 1.10: emergency response records merged three ways on reconnect.
-class ResponseMergeTest : public QObject
+class DocumentMergeTest : public QObject
 {
     Q_OBJECT
 
@@ -36,5 +36,5 @@ private slots:
     void aDirectoryEditOnBothSidesIsAConflict();
     void noDirectoryChangeMergesTheResponse();
     void aRosterEditOnOneSideCarriesThrough();
-    void rosterEditsOnBothSidesMergeEntryByEntry();
+    void aRosterEditAndAFamilyEditOnOppositeSidesBothCarry();
 };

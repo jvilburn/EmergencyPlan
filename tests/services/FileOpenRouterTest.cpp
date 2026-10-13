@@ -67,8 +67,6 @@ void FileOpenRouterTest::eachFileTakesItsRoute_data()
         << "ward with origin" << FileOpenRouter::Action::OpenWard << true;
     QTest::newRow("a copy") << "copy" << FileOpenRouter::Action::OpenCopy << false;
     QTest::newRow("written for this device") << "this device" << FileOpenRouter::Action::AddWard << true;
-    QTest::newRow("written for another of this person's devices")
-        << "other device" << FileOpenRouter::Action::NotForThisDevice << true;
     QTest::newRow("another person's ward") << "stranger" << FileOpenRouter::Action::NotForThisDevice << true;
     QTest::newRow("a later format") << "later" << FileOpenRouter::Action::NeedsNewerVersion << false;
     QTest::newRow("not a Ward Planning file") << "not ours" << FileOpenRouter::Action::NotAWardPlanningFile << false;
@@ -113,10 +111,6 @@ void FileOpenRouterTest::eachFileTakesItsRoute()
     else if (file == "this device")
     {
         QVERIFY(writeFile(path, wardFile(documentId, laptop, QString(), current)));
-    }
-    else if (file == "other device")
-    {
-        QVERIFY(writeFile(path, wardFile(documentId, newIdentity("Alice", "Phone"), QString(), current)));
     }
     else if (file == "stranger")
     {

@@ -5,8 +5,9 @@
 #include <QStringList>
 
 /// What changed between two rosters, in a person's words, one line per change:
-/// who joined or was removed, whose role changed, which devices and invites came and
-/// went. The access notice reads from it; the server records nothing of the kind.
+/// who joined or was removed, whose role changed, which devices came and went, and
+/// which invites were made. The access notice reads from it; the server records
+/// nothing of the kind.
 namespace RosterDiff
 {
 

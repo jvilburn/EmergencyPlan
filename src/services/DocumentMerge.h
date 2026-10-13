@@ -26,7 +26,7 @@
 /// and so is its resolution (notes and time).
 ///
 /// Who has access merges by SealingSet::merge, where a both-sides change is theirs.
-namespace ResponseMerge
+namespace DocumentMerge
 {
 
 /// True when doc differs from base outside the emergency response and sealing set.
@@ -46,4 +46,4 @@ std::optional<Document> mergeDocuments(const Document& base,
                                        const Document& mine,
                                        const Document& theirs);
 
-} // namespace ResponseMerge
+} // namespace DocumentMerge

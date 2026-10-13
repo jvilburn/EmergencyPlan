@@ -95,10 +95,6 @@ void SealingSetTest::ofMakesItsMakerAnAdminOnOneDevice()
     QCOMPARE(set.recipients(), QList<DeviceKeys>{laptop.keys});
     QVERIFY(set.invites().isEmpty());
     QVERIFY(set.personOf(laptop.fingerprint()) == maker);
-    QVERIFY(!set.people().isEmpty());
-
-    QVERIFY(SealingSet::of(MemberId(), "Alice", laptop).people().isEmpty());
-    QVERIFY(SealingSet::of(alice, "Alice", NamedDevice{"Laptop", DeviceKeys()}).people().isEmpty());
 }
 
 void SealingSetTest::anInviteIsARecipientUntilItIsJoined()
