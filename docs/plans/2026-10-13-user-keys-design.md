@@ -240,25 +240,28 @@ document and every ward document, and starts over at first run.
 ## Merging
 
 Every device edits freely, since edits of any kind are rare, and every document merges
-by one rule. On a version conflict, each keyed collection merges three ways against
-the base copy, record by record, through one generic merge:
+by last writer wins: on a version conflict, what changed on one side takes that side,
+and what changed on both takes this device's, the later publisher's.
 
-- A record changed on one side takes that side's value.
-- A record changed on both sides takes this device's, the later publisher's.
+Most collections merge record by record: three ways against the base copy, by id,
+through one generic merge. Absence is a value, so a removal is a change like any
+other. That covers the directory (families, teams, tags, districts, groups, assets),
+the emergency response, and both kinds of invite. The response's nested collections
+are keyed by id, so contact attempts recorded on both sides are separate records and
+both stay, and task categories are a keyed set. Two admins inviting different people
+keep both invites. Two devices making the same automatic update, such as geocoding a
+family, write the same value, which merges silently.
 
-Absence is a value: a removal is a change like any other.
+The user list in a ward document and the device list in a user document each merge
+whole: changed on both sides, this device's list is taken as it stands. Each side's
+list always has a user and an admin, or a device, since no single write removes the
+last, so the merged one does too. The races it settles - two removals at once, a
+leave crossing an admin change - are rare. A join never merges: one that crosses
+another write meets a version conflict and starts again from the current version.
 
-It covers the access lists, the directory (families, teams, tags, districts, groups,
-assets) and the emergency response alike. The response's nested collections are keyed
-by id, so contact attempts recorded on both sides are separate records and both stay,
-and task categories are a keyed set. Two devices making the same automatic update,
-such as geocoding a family, write the same value, which merges silently.
-
-The same rule holds for the list as a whole. A merge that would leave a ward document
-with no user or no admin, or a user document with no device, takes this device's list
-whole: each side alone always has them, since no single write removes the last, and
-this device is the later writer. Two admins stepping down at once is the case it
-settles.
+An invite whose maker was removed at the same moment stays in the list. It still
+admits whoever opens it, an admin can withdraw it, and the dialog shows it without the
+maker's name.
 
 ## What goes
 
