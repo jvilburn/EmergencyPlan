@@ -89,8 +89,8 @@ it is used or withdrawn.
 Calls:
 
 - `register`, `head`, `download`, `upload`: as in `ServerContract.h`, with `head` and
-  `download` signed. `head` answers the version and header; `download` the version,
-  header and blob.
+  `download` signed. `head` answers the version alone, since a refusal already says
+  this device has lost access; `download` answers the version, header and blob.
 - `documentsFor`: signed by a device, answers the ids of its user document and of
   every ward document that names its user. A device joining its user finds its ward
   documents this way.
