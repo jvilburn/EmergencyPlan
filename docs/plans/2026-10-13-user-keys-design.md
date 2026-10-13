@@ -51,7 +51,9 @@ Users and devices each have their own words, in the app and in the code alike:
 An **access action** is any action that changes an access list: inviting a user,
 withdrawing an invite, removing a user, changing an admin flag and leaving, in a ward
 document; adding a device, cancelling the pending device and removing a device, in a
-user document. Joining and claiming change access lists too, and run the same way.
+user document. An access action is an ordinary edit: it changes the local copy and is
+saved and published like any other, offline included. Joining and claiming are how an
+invite or a pending device is accepted (see "Joining and claiming").
 
 ## Identity
 
@@ -269,20 +271,6 @@ Two buttons ask a question instead: Delete Ward Document asks `mayDelete(actor)`
 Invite a User asks `isAdmin(actor)`, the check `inviting` makes, since an invite's
 keys are made only once the person asks for one.
 
-An access action works on the local copy and publishes at once:
-
-1. Bring the local copy up to date by taking in the server's current version.
-2. Apply the action to the local copy's access list.
-3. Publish.
-4. On a version conflict, go back to step 1: the action is applied again to the newer
-   list. If it is no longer allowed, the person is told why.
-5. If the server cannot be reached, the access list goes back to how it was, and the
-   person is told the action needs a connection.
-
-An access change exists locally only while its publish is in flight, so the local
-access list otherwise matches the server's, and taking in a version takes the server's
-access list.
-
 A ward document whose only admin loses every device keeps its users, who read and edit
 as before; managing access needs a new ward document. The notice for an only admin
 nudges them to make a second admin first.
@@ -380,19 +368,19 @@ Each is one access action, and the server refuses the one taken out from then on
 
 ## Merging
 
-Every device edits the directory and the emergency response freely, since edits of any
-kind are rare, and these merge by last writer wins: on a version conflict, what changed
-on one side takes that side, and what changed on both takes this device's, the later
-publisher's. A merge that comes out identical to the server's version publishes
-nothing. Access lists are never merged: taking in a version takes the server's
-access list, and an access action is applied again on a conflict.
+Every device edits freely, since edits of any kind are rare, and every document merges
+by last writer wins: on a version conflict, what changed on one side takes that side,
+and what changed on both takes this device's, the later publisher's. A merge that
+comes out identical to the server's version publishes nothing.
 
 Collections merge record by record: three ways against the base copy, by id, through
 one generic merge. Absence is a value, so a removal is a change like any other. That
 covers:
 
 - the directory: families, teams, tags, districts, groups, assets, wards and stakes;
-- the emergency response, whose nested collections are keyed by id.
+- the emergency response, whose nested collections are keyed by id;
+- the users and invites of an access list, and the devices and pending device of a
+  user document.
 
 Single values, such as the two import dates, take the same rule.
 
@@ -400,6 +388,12 @@ The response follows the rule like everything else: a deletion or an ending that
 publishes second wins over the other side's records. Its contact attempts recorded on
 both sides are separate records, so both stay. Task categories become a keyed set, and
 a nested list merged by id is re-sorted newest first.
+
+Access lists follow the same rule, so a join crossing an admin's edit keeps both: the
+joiner is a record of their own. Two access edits at the same moment can leave an
+edge: two admins stepping down at once leave no admin, which is handled as an admin
+losing every device is, and the last two users leaving at once leave nobody, which
+amounts to deleting the ward document. Both are accepted.
 
 Every device geocodes families missing coordinates. A geocode and a person's edit to
 the same family at the same moment keep the later publisher's family; a person moved
@@ -427,12 +421,14 @@ Decided in discussion, each with its reason. A review takes these as given.
   local-only ward document and no Share action.
 - **Every device edits freely, with no edit lease.** Edits of any kind are rare, so
   conflicts are rarer still.
-- **Last writer wins for the directory and the response,** with absence as a value.
+- **Last writer wins everywhere, access lists and the response included,** with
+  absence as a value.
   One rule keeps the code simple; the old edit-beats-delete protections for the
   response are given up knowingly. There is no conflict dialog.
-- **Access lists are never merged.** An access action publishes at once, is applied
-  again on a version conflict, and needs a connection; otherwise the local access list
-  is the server's.
+- **Access lists merge record by record, like everything else,** and an access action
+  is an ordinary edit, offline included. Two admins stepping down at once, leaving no
+  admin, and the last two users leaving at once, leaving nobody, are accepted: each
+  needs two access edits at the same moment.
 - **A geocode crossing an edit to the same family, and a person moved out of a family
   edited elsewhere, are accepted.** Each needs two edits to one family at once.
 - **Removing a device, or being removed, drops the documents with no warning.** Every
