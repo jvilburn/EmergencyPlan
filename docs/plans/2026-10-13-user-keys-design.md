@@ -4,6 +4,10 @@ Settled in discussion 2026-10-13. The server is not written yet, so its contract
 changes freely. "Settled questions" at the end records the decisions a review takes as
 given.
 
+Edits of any kind are rare, so two edits crossing is rare, and several crossing within
+seconds is rarer still. The design keeps simple rules and accepts what such races do,
+rather than adding a rule for each one.
+
 "Ward" here is the church unit; the document holding a ward's plan is a ward document.
 
 ## The idea
@@ -411,6 +415,10 @@ the header, parse the header, and check that header and access list agree.
 ## Settled questions
 
 Decided in discussion, each with its reason. A review takes these as given.
+
+- **Races between edits made at nearly the same moment are accepted.** Edits are rare,
+  so such races are rarer still: one person acting while another acts and a third
+  removes the second, all within seconds. Simple rules win over handling each race.
 
 - **The design is built fresh from `master`.** It describes what is built, not changes
   to earlier encryption work, so it lists nothing as replaced.
