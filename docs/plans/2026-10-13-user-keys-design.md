@@ -48,6 +48,11 @@ Users and devices each have their own words, in the app and in the code alike:
 
 "Remove" always comes with its object, user or device.
 
+An **access action** is any action that changes an access list: inviting a user,
+withdrawing an invite, removing a user, changing an admin flag and leaving, in a ward
+document; adding a device, cancelling the pending device and removing a device, in a
+user document. Joining and claiming change access lists too, and run the same way.
+
 ## Identity
 
 A user is identified by their user document: `UserId` is the user document's id.
