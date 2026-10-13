@@ -43,13 +43,15 @@ the first of:
 - **Creating a ward document.**
 - **Opening a device link**, which joins it to an existing user instead (see "Joining").
 
-For the first two, the device makes its user document then: a fresh user keypair,
-sealed to this device alone, which makes it the user's first device. The user
-document is registered with the server before anything that names it reaches the
-server: sharing a ward document, or joining one.
+For the first two, the device makes its user document then: it asks the person's name,
+and makes a fresh user keypair, sealed to this device alone, which makes it the user's
+first device. The name is asked this once and kept in the user document; every join
+uses it. The user document is registered with the server before anything that names
+it reaches the server: sharing a ward document, or joining one.
 
 A device that has a user joins ward documents as that user, and every device of the
-user comes with it.
+user comes with it. It belongs to one user: a device link opened on a device that
+already has a user is refused, with "remove this device first".
 
 ## What the server holds
 
@@ -71,8 +73,8 @@ struct UserHeader
 };
 ```
 
-Every call on a document is signed, reads included, and the server allows it by the
-document's kind:
+A document's kind is fixed when it is registered. Every call on a document is signed,
+reads included, and the server allows it by the document's kind:
 
 - **On a user document:** the signer is one of its devices, or one of its invites
   that has not expired.
@@ -82,20 +84,25 @@ document's kind:
 Writes also build on the current version.
 
 A device invite expires 30 minutes after it is made: long enough to send the link to
-yourself and open it on the new device, and the expiry bounds how long a copy left in an email or text admits
-anyone. A user invite travels to someone who may open it days later, so it lasts until
-it is used or withdrawn.
+yourself and open it on the new device, and short enough that a copy left in an email
+or text soon admits nobody. The expiry lives in the header alone, since only the
+server enforces it. A user invite travels to someone who may open it days later, so it
+lasts until it is used or withdrawn.
 
 Calls:
 
-- `register`, `head`, `download`, `upload`: as in `ServerContract.h`, with `head` and
-  `download` signed. `head` answers the version alone, since a refusal already says
-  this device has lost access; `download` answers the version, header and blob.
+- `register`: stores version 1 of a document under its client-made id, with its kind.
+- `head`: the current version number. A refusal says this device has lost access.
+- `download`: the current version, header and blob, as one consistent state.
+- `upload`: the next version, conditional on the base version.
 - `documentsFor`: signed by a device, answers the ids of its user document and of
-  every ward document that names its user. A device joining its user finds its ward
-  documents this way.
-- `delete`: allowed as a write is, and removes the document. Every device then finds
-  it gone and drops it.
+  every ward document that names its user.
+- `delete`: allowed as a write is, except for a signer that is an invite. The server
+  keeps a record of the deleted id and answers later calls on it with `Deleted`.
+
+Every answer carries the minimum app version the server accepts. A device below it
+stops syncing and asks the person to update; its edits keep saving locally and publish
+once it is updated. The minimum rises when a release changes a format.
 
 ## The two payloads
 
@@ -104,7 +111,7 @@ Calls:
 struct User
 {
     UserId id;                    // their user document's id
-    QString name;                 // chosen by the user when they joined
+    QString name;                 // from their user document, when they joined
     bool admin;                   // adds and removes users
     PublicKey key;                // the user's sealing key
 };
@@ -139,18 +146,17 @@ struct DeviceInvite
 
 class UserDocument
 {
-    QString m_name;               // offered as the name when joining a ward document
+    QString m_name;               // the person's name, used when joining a ward document
     Keypair m_key;                // the user's sealing keypair, held by every device
     QHash<QString, Device> m_devices;           // by fingerprint hex
     QHash<QString, DeviceInvite> m_invites;     // by fingerprint hex
 };
 ```
 
-Each header has exactly one entry per access list entry, as
-`Reconcile::headerMatchesSealingSet` checks now: `UserEntry` to `User` by user id,
-`UserInviteEntry` to `UserInvite`, `DeviceEntry` to `Device` and `DeviceInviteEntry`
-to `DeviceInvite` by fingerprint. A ward document always has a user; a user document
-always has a device.
+Each header has exactly one entry per access list entry: `UserEntry` to `User` by user
+id, `UserInviteEntry` to `UserInvite`, `DeviceEntry` to `Device` and
+`DeviceInviteEntry` to `DeviceInvite` by fingerprint. A ward document always has a
+user; a user document always has a device.
 
 ## Admin rules
 
@@ -162,23 +168,27 @@ In a ward document, the actor being this user:
 
 - **Invite a user**: an admin.
 - **Remove a user**: an admin, removing someone else. Removing yourself is leaving.
+  The invites they made stay, shown without a maker's name, for an admin to withdraw.
 - **Change someone's admin flag**: an admin. The last admin steps down only by making
   someone else an admin first.
 - **Re-invite a user**: an admin, for someone who lost every device. One write removes
   their entry, so their lost devices are refused at once, and adds a user invite with
-  their admin flag, labeled for them. They join as a new user.
+  their admin flag, labeled for them. They join as a new user. Each ward document's
+  admins re-invite for their own ward document, and the old user document stays on
+  the server, admitting nobody new.
 - **Withdraw a user invite**: its maker, or an admin.
 - **Leave**: anyone but the last admin while others remain, who makes someone else an
-  admin first. The last user leaving deletes the ward document, after a warning that
-  it is gone for good, on the server and on every device.
-- **Delete the ward document**: an admin, for everyone.
+  admin first.
+- **Delete the ward document**: an admin, for everyone. For the last user, Leave reads
+  Delete Ward Document, with a warning that it is gone for good, on the server and on
+  every device.
 
 In a user document, the actor being this device:
 
 - **Add a device**, **withdraw a device invite**: any device.
-- **Unlink a device**: any device, unlinking another; never the last.
-- **Remove this device**: any device but the last, unlinking itself; it then drops its
-  local copies and starts over at first run.
+- **Unlink a device**: any device, the last excepted. Unlinking itself is Remove This
+  Device: it then drops its local data, unshared ward documents included, and starts
+  over at first run.
 
 Each action is one function on the model that takes the actor and answers the changed
 list, or nothing when the actor may not:
@@ -189,10 +199,16 @@ std::optional<AccessList> AccessList::settingAdmin(const UserId& actor, const Us
 std::optional<AccessList> AccessList::leaving(const UserId& actor) const;
 ```
 
-and likewise `inviting`, `reinviting` and `withdrawing`, and on `UserDocument`
-`addingDevice`, `unlinking` and `withdrawing`. A dialog enables a button exactly when the call answers
-a value, and the action publishes that value, so each rule is written once, beside
-what it changes.
+and likewise `inviting`, `reinviting`, `withdrawing` and `joining`, and on
+`UserDocument` `addingDevice`, `unlinking`, `withdrawing` and `joining`. A dialog
+enables a button exactly when the call answers a value, and the action publishes that
+value, so each rule is written once, beside what it changes. Delete Ward Document asks
+`deleting(actor)`, and Add a User asks `isAdmin(actor)`, the check `inviting` makes,
+since an invite's keys are made only once the person asks for one.
+
+A ward document whose only admin loses every device keeps its users, who read and edit
+as before; managing access needs a new ward document. The notice for an only admin
+nudges them to make a second one first.
 
 An unshared ward document is on this device alone; deleting it is local.
 
@@ -206,7 +222,7 @@ Two notices show what changed since the person last dismissed them, each read as
 difference between the list now and the list last dismissed:
 
 - **Who has access**, above a ward document: users joining, leaving or removed, admin
-  changes, and invites made. `RosterDiff` keeps this role, over the access list.
+  changes, and invites made.
 - **Your devices**: a device added to this user or unlinked from it. Someone linking a
   device to you is the change most worth seeing.
 
@@ -214,7 +230,7 @@ difference between the list now and the list last dismissed:
 
 ```
 wardplanning:user-invite/<ward document id>/<seed>   a user invite to a ward document
-wardplanning:device-invite/<user id>/<seed>        a device invite to a user
+wardplanning:device-invite/<user id>/<seed>          a device invite to a user
 ```
 
 Both hold the same data, a document id and a 32-byte seed from which the invite's
@@ -236,26 +252,37 @@ struct InviteLink
 ```
 
 The prefix carries the kind, so a fresh device knows before any fetch whether it is
-joining a ward document or a user. The app
-shows a device link as text to copy and as a QR code, for a phone to read.
+joining a ward document or a user. The app shows a device link as text to copy and as
+a QR code, for a phone to read.
 
 ## Joining
 
-Both joins are the flow `DocumentSession::join` has now, on their own document:
+Both joins run the same steps on their own document:
 
 1. Fetch the current version, signed by the invite, and validate it.
-2. Put the joiner in the invite's place: a `User` with this user's id and key, for a
-   ward document; a `Device` with this device's keys and name, for a user document.
-   The data key stays; the invite's entry gives way to the joiner's.
+2. Put the joiner in the invite's place with `joining`: a `User` with this user's id,
+   name and key, for a ward document; a `Device` with this device's keys and name, for
+   a user document. The data key stays; the invite's entry gives way to the joiner's.
 3. Upload, signed by the invite.
-4. Whatever the answer, download as the joiner. An allowed download whose header names
-   the joiner means the join landed; a refused one means the invite was spent.
+4. Unless the upload met a version conflict (start again from step 1) or the document
+   is gone, download as the joiner. An allowed download whose header names the joiner
+   means the join landed; a refused one means the invite was spent.
 
 A link opened again after a lost answer finishes the same way: the fetch as the invite
 is refused, since the invite is spent, and step 4 settles it. An expired device link
-is refused at step 1, and the person makes a new one.
+is refused at step 1, and the person makes a new one. A user invite to a ward document
+this user is already in reports "you already have access" and leaves the invite open.
 
-After a device joins its user, it asks `documentsFor` and downloads each ward document.
+## Staying in sync
+
+Every device head-checks its user document on the same schedule as its ward
+documents, and asks `documentsFor` at startup and on each head check. A ward document
+it does not hold yet is downloaded and added to its library, so a ward document joined
+or shared on one device reaches the user's others.
+
+A head check of the user document that finds an expired device invite writes the user
+document without it. Two devices doing so at once remove the same record, which merges
+to the same result.
 
 ## Taking access away
 
@@ -264,14 +291,16 @@ Each is one write, and the server refuses the one taken out from then on:
 - **Removing a user from a ward document**: an admin writes the ward document without
   them.
 - **Leaving a ward document**: this user writes it without themselves, built in
-  memory, as `DocumentSession::leave` does now. The last user deletes it instead.
+  memory, so the local file stays readable until the server holds the version.
 - **Unlinking a device**: any device of the user writes the user document without it.
   The unlinked device is refused on the user document and on every ward document of
   its user.
 
-A device refused on a ward document, or finding it deleted, drops it, with its copies,
-and says it is no longer available to this person. A device refused on its user document drops the user
-document and every ward document, and starts over at first run.
+A device refused on a ward document, or answered `Deleted`, drops it with its copies
+and says it is no longer available to this person. A device refused on its user
+document drops the user document and every ward document, unshared ones included, and
+starts over at first run. An answer that a document is unknown is a fault: the device
+keeps its copies and reports it.
 
 ## Merging
 
@@ -279,50 +308,41 @@ Every device edits freely, since edits of any kind are rare, and every document 
 by last writer wins: on a version conflict, what changed on one side takes that side,
 and what changed on both takes this device's, the later publisher's.
 
-Most collections merge record by record: three ways against the base copy, by id,
-through one generic merge. Absence is a value, so a removal is a change like any
-other. That covers the directory (families, teams, tags, districts, groups, assets),
-the emergency response, and both kinds of invite. The response's nested collections
-are keyed by id, so contact attempts recorded on both sides are separate records and
-both stay, and task categories are a keyed set. Two admins inviting different people
-keep both invites. Two devices making the same automatic update, such as geocoding a
-family, write the same value, which merges silently.
+Collections merge record by record: three ways against the base copy, by id, through
+one generic merge. Absence is a value, so a removal is a change like any other. That
+covers:
 
-The user list in a ward document and the device list in a user document each merge
-whole: changed on both sides, this device's list is taken as it stands. Each side's
-list always has a user and an admin, or a device, since no single write removes the
-last, so the merged one does too. The races it settles - two removals at once, a
-leave crossing an admin change - are rare. A join never merges: one that crosses
-another write meets a version conflict and starts again from the current version.
+- the directory: families, teams, tags, districts, groups, assets, wards and stakes;
+- the emergency response, whose nested collections are keyed by id;
+- the users and invites of an access list, and the devices and invites of a user
+  document.
 
-An invite whose maker was removed at the same moment stays in the list. It still
-admits whoever opens it, an admin can withdraw it, and the dialog shows it without the
+Single values, such as the two import dates, take the same rule.
+
+The response follows the rule like everything else: a deletion or an ending that
+publishes second wins over the other side's records. Its contact attempts recorded on
+both sides are separate records, so both stay. Task categories become a keyed set, and
+a nested list merged by id is re-sorted newest first.
+
+A merge that would leave a ward document with no user or no admin, or a user document
+with no device, takes this device's list whole. Each side's list always has them,
+since no single write removes the last, and this device is the later writer. Two
+admins stepping down at once is the case it settles.
+
+A join never merges: one that crosses another write meets a version conflict and
+starts again from the current version. Two admins inviting different people keep both
+invites. An invite whose maker was removed at the same moment stays, shown without a
 maker's name.
 
-## What goes
+Every device geocodes families missing coordinates. A geocode and a person's edit to
+the same family at the same moment keep the later publisher's family; a person moved
+out of a family while that family is edited elsewhere ends up in both. Both are
+accepted: each needs two edits to one family at once.
 
-- Devices in ward document access lists, device invites in ward documents,
-  `removeDevice` on a ward document, the last-device rule there, and device rows in
-  Who Has Access. Devices get their own dialog, My Devices, with Add a Device and
-  Unlink.
-- Fresh data keys on removal: `SealingSet::rotatesFrom`, `ServerVersion::reseal`, and
-  the former-key hashes with `descendsFrom` and `trustedKeys`.
-- The edit lease: the lease calls, `Lease`, `LeaseHeld`, the lease holder in `Head`,
-  `advanceClock`, the heartbeat timer, the session's lease state, `isDirectoryReadOnly`,
-  `mayWriteDirectory`, `Refusal::DirectoryReadOnly`, `readOnlyChanged`, and the
-  window's read-only state.
-- The directory merged as one value, and the separate merge rules for the access list
-  and the response.
-- The conflict dialog: `raiseConflict`, `resolve`, `pendingConflict`, `Resolution`, the
-  recovery copy, and the pause of head checks and publishing while a conflict waits.
-- `LostAccess` and `whyLost`: a refused device reads nothing more of the ward
-  document, so it reports it gone without saying by whom.
-- `Publication` in `Head` and `Snapshot`: who published a version and when, read only
-  by the conflict dialog and `whyLost`.
-- `Holder` becomes `User`, `MemberId` becomes `UserId`, `Role` becomes `bool admin`,
-  and the `Invite::For` enum gives way to the two invite types.
+## One sync engine
 
-## Open
-
-- **Shared sync code.** `ServerVersion`, `Reconcile` and the base-copy rules are written
-  against the ward document's `Document`. The plan decides how the user document reuses them.
+The ward document and the user document share one sync engine: the base copy, head
+checks, fetching, validating, publishing, and merging on a version conflict. Its
+per-kind parts are three: reading the payload, merging it, and checking the header
+against the access list. The plan decides whether they arrive as a template or an
+interface.
