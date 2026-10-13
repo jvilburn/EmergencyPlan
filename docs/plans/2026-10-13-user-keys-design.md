@@ -269,12 +269,19 @@ Two buttons ask a question instead: Delete Ward Document asks `mayDelete(actor)`
 Invite a User asks `isAdmin(actor)`, the check `inviting` makes, since an invite's
 keys are made only once the person asks for one.
 
-Every access action runs on the server's current version, the way a join does: fetch
-it, apply the action, upload, and on a version conflict start again from the fetch. If
-the action is no longer allowed on the current version, the person is told why. An
-access action needs a connection: without one it changes nothing and says so. The
-local copy takes in the published version through ordinary sync, so a local copy never
-changes its own access list.
+An access action works on the local copy and publishes at once:
+
+1. Bring the local copy up to date by taking in the server's current version.
+2. Apply the action to the local copy's access list.
+3. Publish.
+4. On a version conflict, go back to step 1: the action is applied again to the newer
+   list. If it is no longer allowed, the person is told why.
+5. If the server cannot be reached, the access list goes back to how it was, and the
+   person is told the action needs a connection.
+
+An access change exists locally only while its publish is in flight, so the local
+access list otherwise matches the server's, and taking in a version takes the server's
+access list.
 
 A ward document whose only admin loses every device keeps its users, who read and edit
 as before; managing access needs a new ward document. The notice for an only admin
@@ -377,8 +384,8 @@ Every device edits the directory and the emergency response freely, since edits 
 kind are rare, and these merge by last writer wins: on a version conflict, what changed
 on one side takes that side, and what changed on both takes this device's, the later
 publisher's. A merge that comes out identical to the server's version publishes
-nothing. Access lists are never merged: a local copy takes the server's, and access
-actions run on the server's current version.
+nothing. Access lists are never merged: taking in a version takes the server's
+access list, and an access action is applied again on a conflict.
 
 Collections merge record by record: three ways against the base copy, by id, through
 one generic merge. Absence is a value, so a removal is a change like any other. That
@@ -423,8 +430,9 @@ Decided in discussion, each with its reason. A review takes these as given.
 - **Last writer wins for the directory and the response,** with absence as a value.
   One rule keeps the code simple; the old edit-beats-delete protections for the
   response are given up knowingly. There is no conflict dialog.
-- **Access lists are never merged.** Access actions run on the server's current
-  version and need a connection; a local copy only takes the server's access list.
+- **Access lists are never merged.** An access action publishes at once, is applied
+  again on a version conflict, and needs a connection; otherwise the local access list
+  is the server's.
 - **A geocode crossing an edit to the same family, and a person moved out of a family
   edited elsewhere, are accepted.** Each needs two edits to one family at once.
 - **Removing a device, or being removed, drops the documents with no warning.** Every
