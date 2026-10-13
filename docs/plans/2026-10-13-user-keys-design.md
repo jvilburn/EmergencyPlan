@@ -204,23 +204,22 @@ document and every ward document, and starts over at first run.
 
 ## Merging
 
-Both access lists merge three ways, entry by entry, against the base copy:
+Every device edits freely, since edits of any kind are rare, and every document merges
+by one rule. On a version conflict, each keyed collection merges three ways against
+the base copy, record by record, through one generic merge:
 
-- An entry changed on one side takes that side's value.
-- An entry removed on one side and changed on the other is removed. Removal is the
-  protective act.
-- Every field holds a single value that only one side can change: names are chosen at
-  join, the user key is fixed, and two admin flags changed from the same base agree.
-  Entries are otherwise only added or removed.
-- A merge that would leave nobody - no user in a ward document, no device in a user
-  document - takes the server's side whole.
+- A record changed on one side takes that side's value.
+- A record changed differently on both sides takes this device's, the later publisher.
+- A record removed on one side and changed on the other is removed.
 
-Every device edits freely, since edits of any kind are rare. The directory merges
-record by record in the same way: each collection (families, teams, tags, districts,
-groups, assets) three ways by id, through one generic merge. The conflict dialog is
-for a record changed differently on both sides, a deletion against an edit included.
-Two devices making the same automatic update, such as geocoding a family, write the
-same value, which merges silently.
+It covers the access lists, the directory (families, teams, tags, districts, groups,
+assets) and the emergency response alike. The response's nested collections are keyed
+by id, so contact attempts recorded on both sides are separate records and both stay,
+and task categories are a keyed set. Two devices making the same automatic update,
+such as geocoding a family, write the same value, which merges silently.
+
+One invariant stands beside the rule: a merge that would leave nobody - no user in a
+ward document, no device in a user document - takes the server's side whole.
 
 ## What goes
 
@@ -234,7 +233,10 @@ same value, which merges silently.
   `advanceClock`, the heartbeat timer, the session's lease state, `isDirectoryReadOnly`,
   `mayWriteDirectory`, `Refusal::DirectoryReadOnly`, `readOnlyChanged`, and the
   window's read-only state.
-- The directory merged as one value, in `DocumentMerge::mergeDocuments`.
+- The directory merged as one value, and the separate merge rules for the access list
+  and the response.
+- The conflict dialog: `raiseConflict`, `resolve`, `pendingConflict`, `Resolution`, the
+  recovery copy, and the pause of head checks and publishing while a conflict waits.
 - `LostAccess` and `whyLost`: a refused device reads nothing more of the ward
   document, so it reports it gone without saying by whom.
 - `Holder` becomes `User`, `MemberId` becomes `UserId`, `Role` becomes `bool admin`,
