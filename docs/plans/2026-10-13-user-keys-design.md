@@ -135,7 +135,9 @@ kind:
 - **On a ward document:** the signer is one of its invites, or a device of one of its
   users.
 
-Writes also build on the current version. A ward header whose user entries name
+Writes also build on the current version. An upload or a delete is checked against the
+current version's header, so a leave or a join, whose new header drops its signer,
+still lands; a `register` is checked against the header it brings. A ward header whose user entries name
 anything but registered user documents is refused.
 
 A pending device expires 30 minutes after it first appears in its user document's
@@ -407,7 +409,9 @@ accepted: each needs two edits to one family at once.
 ## One sync engine
 
 The ward document and the user document share one sync engine: the base copy,
-checking, fetching, validating, publishing, and merging on a version conflict. It is
+fetching, validating, publishing, and merging on a version conflict. `check`, and
+acting on its answer as "Staying in sync" describes, runs once for the whole device,
+not per document. It is
 one `QObject` holding a small per-kind interface, with `WardKind` and `UserKind` as
 its two implementations. Each kind does five things: read the payload, merge it, build
 the header, parse the header, and check that header and access list agree.
