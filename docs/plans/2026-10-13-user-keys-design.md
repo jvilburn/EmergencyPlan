@@ -89,14 +89,11 @@ it is used or withdrawn.
 Calls:
 
 - `register`, `head`, `download`, `upload`: as in `ServerContract.h`, with `head` and
-  `download` signed.
+  `download` signed. `head` answers the version and header; `download` the version,
+  header and blob.
 - `documentsFor`: signed by a device, answers the ids of its user document and of
   every ward document that names its user. A device joining its user finds its ward
   documents this way.
-
-A publication is reported as the time and the user its signer signed for, so the
-client names the user from the ward document's access list. A join is signed by its
-invite and carries no user; the client names it generically.
 
 ## The two payloads
 
@@ -239,6 +236,8 @@ ward document, no device in a user document - takes the server's side whole.
   recovery copy, and the pause of head checks and publishing while a conflict waits.
 - `LostAccess` and `whyLost`: a refused device reads nothing more of the ward
   document, so it reports it gone without saying by whom.
+- `Publication` in `Head` and `Snapshot`: who published a version and when, read only
+  by the conflict dialog and `whyLost`.
 - `Holder` becomes `User`, `MemberId` becomes `UserId`, `Role` becomes `bool admin`,
   and the `Invite::For` enum gives way to the two invite types.
 
