@@ -98,16 +98,24 @@ a user document never has fewer than one device.
 
 ## This device
 
-The identity file holds the device's own keypairs, its device name, and the id of its
-user document. The user document is kept on the device the way a ward is, as a local
-file and a base copy, so the device opens its wards offline.
+The identity file holds the device's own keypairs, its device name, and, once it has
+one, the id of its user document. The user document is kept on the device the way a
+ward is, as a local file and a base copy, so the device opens its wards offline.
 
-First run offers two paths:
+First run names the device. A device has no user until it first needs one, which is
+the first of:
 
-- **I'm new**: makes a user document with a fresh user keypair, sealed to this device.
-  It stays local until its first device invite, the way a ward stays local until it
-  is shared.
-- **Add this device to my account**: opens a device link (see below).
+- **Accepting a user invite** to a ward.
+- **Creating a ward.**
+- **Opening a device link**, which joins it to an existing user instead (see below).
+
+For the first two, the device makes its user document then: a fresh user keypair,
+sealed to this device alone, which makes it the user's first device. The user
+document stays local until its first device invite, the way a ward stays local until
+it is shared.
+
+A device that has a user joins wards as that user, and every device of the user comes
+with it.
 
 ## The links
 
