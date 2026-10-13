@@ -94,6 +94,8 @@ Calls:
 - `documentsFor`: signed by a device, answers the ids of its user document and of
   every ward document that names its user. A device joining its user finds its ward
   documents this way.
+- `delete`: allowed as a write is, and removes the document. Every device then finds
+  it gone and drops it.
 
 ## The two payloads
 
@@ -150,8 +152,44 @@ Each header has exactly one entry per access list entry, as
 to `DeviceInvite` by fingerprint. A ward document always has a user; a user document
 always has a device.
 
+## Admin rules
+
 Admin is the app's rule, kept by every honest copy of it, and lives only in the
-access list; the server reads headers alone.
+access list; the server reads headers alone. Every user sees the whole access list,
+admins marked, so a user who is not an admin knows whom to ask.
+
+In a ward document, the actor being this user:
+
+- **Invite a user**: an admin.
+- **Remove a user**: an admin, removing someone else. Removing yourself is leaving.
+- **Change someone's admin flag**: an admin. The last admin steps down only by making
+  someone else an admin first.
+- **Withdraw a user invite**: its maker, or an admin.
+- **Leave**: anyone but the last admin while others remain, who makes someone else an
+  admin first. The last user leaving deletes the ward document, after a warning that
+  it is gone for good, on the server and on every device.
+- **Delete the ward document**: an admin, for everyone.
+
+In a user document, the actor being this device:
+
+- **Add a device**, **withdraw a device invite**: any device.
+- **Unlink a device**: any device, unlinking another; never the last.
+
+Each action is one function on the model that takes the actor and answers the changed
+list, or nothing when the actor may not:
+
+```cpp
+std::optional<AccessList> AccessList::removing(const UserId& actor, const UserId& user) const;
+std::optional<AccessList> AccessList::settingAdmin(const UserId& actor, const UserId& user, bool admin) const;
+std::optional<AccessList> AccessList::leaving(const UserId& actor) const;
+```
+
+and likewise `inviting` and `withdrawing`, and on `UserDocument` `addingDevice`,
+`unlinking` and `withdrawing`. A dialog enables a button exactly when the call answers
+a value, and the action publishes that value, so each rule is written once, beside
+what it changes.
+
+An unshared ward document is on this device alone; deleting it is local.
 
 ## The links
 
@@ -190,13 +228,13 @@ Each is one write, and the server refuses the one taken out from then on:
 - **Removing a user from a ward document**: an admin writes the ward document without
   them.
 - **Leaving a ward document**: this user writes it without themselves, built in
-  memory, as `DocumentSession::leave` does now.
+  memory, as `DocumentSession::leave` does now. The last user deletes it instead.
 - **Unlinking a device**: any device of the user writes the user document without it.
   The unlinked device is refused on the user document and on every ward document of
   its user.
 
-A device refused on a ward document drops it, with its copies, and says it is no
-longer available to this person. A device refused on its user document drops the user
+A device refused on a ward document, or finding it deleted, drops it, with its copies,
+and says it is no longer available to this person. A device refused on its user document drops the user
 document and every ward document, and starts over at first run.
 
 ## Merging
@@ -216,8 +254,11 @@ by id, so contact attempts recorded on both sides are separate records and both 
 and task categories are a keyed set. Two devices making the same automatic update,
 such as geocoding a family, write the same value, which merges silently.
 
-One invariant stands beside the rule: a merge that would leave nobody - no user in a
-ward document, no device in a user document - takes the server's side whole.
+The same rule holds for the list as a whole. A merge that would leave a ward document
+with no user or no admin, or a user document with no device, takes this device's list
+whole: each side alone always has them, since no single write removes the last, and
+this device is the later writer. Two admins stepping down at once is the case it
+settles.
 
 ## What goes
 
@@ -244,8 +285,6 @@ ward document, no device in a user document - takes the server's side whole.
 
 ## Open
 
-- **Admin rules.** Where the admin, last-admin and not-yourself checks live: today in
-  `DocumentManager`, `AccessDialog` and `MainWindow`.
 - **A notice for the user document.** Whether a device added to this user is shown, the
   way a change to who has access is shown above a ward document.
 - **Shared sync code.** `ServerVersion`, `Reconcile` and the base-copy rules are written
