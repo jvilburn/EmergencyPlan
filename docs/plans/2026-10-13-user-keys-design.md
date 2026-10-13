@@ -346,3 +346,36 @@ checks, fetching, validating, publishing, and merging on a version conflict. Its
 per-kind parts are three: reading the payload, merging it, and checking the header
 against the access list. The plan decides whether they arrive as a template or an
 interface.
+
+## Settled questions
+
+Decided in discussion, each with its reason. A review takes these as given.
+
+- **The design is built fresh from `master`.** It describes what is built, not changes
+  to earlier encryption work, so it lists nothing as replaced.
+- **The server does access control; encryption keeps plaintext off the server.** A
+  data key stays for the life of its document: a device or user taken out is refused
+  by the server, so keys never rotate and versions carry no former-key hashes.
+- **Every device edits freely, with no edit lease.** Edits of any kind are rare, so
+  conflicts are rarer still.
+- **Last writer wins everywhere, the emergency response included,** with absence as a
+  value. One rule keeps the code simple; the old edit-beats-delete protections for the
+  response are given up knowingly. There is no conflict dialog.
+- **A geocode crossing an edit to the same family, and a person moved out of a family
+  edited elsewhere, are accepted.** Each needs two edits to one family at once.
+- **Removing a device, or being unlinked, drops all local data with no warning,**
+  unshared ward documents included.
+- **The last admin makes someone else an admin before leaving.** A ward document whose
+  only admin loses every device is accepted: its users keep reading and editing, and
+  managing access needs a new ward document.
+- **A removed user's invites stay,** in sequence and in a merge alike.
+- **Re-invite works per ward document,** and the old user document stays on the server.
+- **Each document kind has its own header, and each invite kind its own type,** named
+  for what it is. The link is one type with a kind, since both links hold the same data.
+- **A device invite is a full URL that expires after 30 minutes,** shown as text and as
+  a QR code. A typed short code is not used.
+- **The server announces a minimum app version,** raised when a format changes; a
+  device below it waits to sync. Updates are forced only by format changes.
+- **A device that loses access is not told by whom,** and server answers carry no
+  record of who published a version.
+- **Admin is a flag on the user,** checked only by the app.
