@@ -162,7 +162,8 @@ with the content, and it is not trusted with who has access either: both live in
 encrypted payload, and a client seals the data key only to a device it approved itself or
 that an earlier version already held. A client takes a new version only when it descends
 from one it already holds, under the same key or naming that key among its former keys,
-so the server cannot hand it a ward of the server's own making.
+so once a device holds a version, the server cannot hand it a ward of the server's own
+making; its first download is the accepted exception below.
 
 **Defended against.** The server operator reading member data; the operator is the
 application's author, and the design keeps that from being a matter of trust. Anyone who
@@ -172,12 +173,16 @@ an admin reading a later version obtained some other way, which is under a key t
 held.
 Silent corruption or truncation.
 
-**No server answer destroys anything.** A head that leaves this device out stops this
-copy pushing until a head names this device again, and tells the user they no longer have
-access; the device keeps reading the head while the ward is open, and resumes syncing if a
-later one includes it. The copy itself stays until they remove it. Deleting a local copy is tidiness, not enforcement, so it is the user's
-action rather than the server's. A hostile operator, or a bug, can therefore cut a member
-off from sharing, which it could do anyway by refusing to serve, and can destroy nothing.
+**No server answer destroys anything the user has not chosen to give up.** A head that
+leaves this device out stops this copy pushing until a head names this device again, and
+tells the user they no longer have access; the device keeps reading the head while the ward
+is open, and resumes syncing if a later one includes it. The copy itself stays until they
+remove it. Deleting a local copy is tidiness, not enforcement, so it is the user's action
+rather than the server's. The one copy a server answer removes is the one whose user chose
+*Delete ward*: a head naming no one confirms that push landed when its reply was lost, and
+a hostile server confirming it falsely leaves on the server only a ward the user chose to
+give up. A hostile operator, or a bug, can therefore cut a member off from sharing, which
+it could do anyway by refusing to serve, and can destroy nothing the user has kept.
 
 **Detected, not prevented.** Tampering with a local file's header, including its document
 id: the header is bound as associated data, so a modified local file fails to decrypt
@@ -230,10 +235,10 @@ first version to descend from, so a hostile operator could hand it a ward of its
 making at that moment. What the device then writes into it would be readable by the
 operator. Every later version must descend from the one it took.
 
-**Accepted: a leaver knows the next key.** Leaving is the leaver's own push, and that push
-rotates, so the leaver's device generates the new key; a modified client could keep it and
-read later versions. Leaving is voluntary and the leaver already held everything, and the
-next removal rotates again.
+**Accepted: a departing device knows the next key.** Leave and *Remove this device* are
+the departing device's own push, and that push rotates, so that device generates the new
+key; a modified client could keep it and read later versions. Both are voluntary, the
+device already held everything, and the next removal rotates again.
 
 **Accepted: a channel-open signature replays.** It covers the call and the document id,
 so a captured one could make a third party appear present. The gain to an attacker is a
