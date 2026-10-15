@@ -410,8 +410,9 @@ long-lived, so a repeated nonce would XOR two versions of the ward directory aga
 other and expose the Poly1305 one-time key.
 
 **The header and the access list are two views of the same set, and must match exactly**:
-every recipient entry's fingerprint is computed from exactly one key in the access list, and
-every device and open invite in the access list has exactly one entry. A version that fails
+every recipient entry's fingerprint is computed from exactly one device's or invite's pair
+of public keys in the access list, and every device and open invite in the access list has
+exactly one entry. A version that fails
 this is refused like any other invalid version. Only a bug or a tampered app could write
 one, and an unattributable key must never sit in the header.
 
@@ -1624,8 +1625,9 @@ Format and crypto, in `tests/services`:
 - a header or payload with a missing or malformed required field is refused, never read in
   part; a payload written by the previous format version reads correctly, through its
   upgrade where the release has one
-- a version whose header lists a key the access list lacks, or whose access list has a key with no
-  header entry, is refused
+- a version whose header has a fingerprint matching no device's or invite's key pair, one
+  built from one device's X25519 key and another's verify key included, or whose access
+  list has a device or invite with no header entry, is refused
 - a head whose version is below this copy's is refused and changes nothing
 - a removal rotates the key, after which the removed user's devices cannot unseal; a write
   that removes nobody keeps the key; the written header has exactly the expected entries,
