@@ -652,6 +652,7 @@ a pushed version holds - the ward, its access list and the landed marks - plus, 
 - dismissals of the single-holder and single-admin notices
 - the failed list of addresses and unit numbers that did not resolve
 - whether the ward is no longer this device's, so a device reopened offline still knows
+- the seed of each open invite this device made (see *Invites*)
 
 A pushed version's payload holds the ward, its access list and the landed marks. In memory these are separate, so a push serialises the ward and
 the local save writes the ward with the device's own state beside it; nothing is trimmed. One `QSaveFile` write
@@ -1142,7 +1143,7 @@ access:
         - { name: "Laptop", publicKey, verifyKey }
         - { name: "Pixel 8", publicKey, verifyKey }
   invites:
-    - { for: device | user, maker: <user id>, role (user invites only), label: "for Bob", publicKey, verifyKey }
+    - { for: device | user, maker: <user id>, role and label: "Bob" (user invites only), publicKey, verifyKey }
   formerKeys: [...]
 ```
 
@@ -1154,9 +1155,11 @@ names no recipient and which carries no payload. The server sees fingerprints on
 *Add a user*, so they are per ward and distinct from the directory's `PersonId`, which
 names a ward member. A device joining through an *Add a device* invite takes the inviter's
 user id, name and role; one joining
-through an *Add a user* invite makes a new user with the name it gives. An invite's
-`label` is the inviter's note, so open invites can be told apart in the list; it is not
-carried onto the user.
+through an *Add a user* invite makes a new user with the name it gives. A user invite's
+`label` is who the inviter made it for, so open invites can be told apart in the list; it
+is not carried onto the user. A device invite has no label and shows as *a device for* its
+maker's name: every open device invite a user made joins as one of that user's devices, so
+any of them serves any of their devices.
 
 **Roles are a convention among honest clients.** The server cannot read the access list, so it
 cannot tell an admin from a member. The rule (admins add users and remove users; everyone
@@ -1204,9 +1207,16 @@ An invite is a one-time bearer key. Its 32-byte seed yields both of its keypairs
 
 1. **Add a device** or **Add a user** (admins only for the latter) generates an invite
    keypair from a random 32-byte seed, writes a new version whose header seals the data key
-   to it, with an `invites` entry saying what it is for, and pushes it. Both are offered
-   only while connected, and the link is shown only once that version is on the server,
-   so every link a user can copy is one that works. Then it shows the link:
+   to it, with an `invites` entry saying what it is for, and pushes it. *Add a user* first
+   asks who the invite is for, and makes nothing until that is answered; the answer is the
+   invite's `label`. Both are offered only while connected, and the link is shown only once
+   that version is on the server, so every link a user can copy is one that works.
+
+   The device that made the invite keeps its seed in its device-local state, saved with the
+   invite before the push, for as long as the access list it holds names that invite. So
+   *Copy link* on the open invite in *Who has access* shows the link again on that device,
+   and a push whose reply is lost needs nothing more: once the next fetch shows the invite
+   landed, the link is there. The link is:
    `https://<server>/join#<document id>/<seed, base64url>`. It is an ordinary web link, so
    mail and text apps make it clickable, and the ward id and seed ride in the `#` fragment,
    which browsers do not send to the server. What the user copies is a short message:
@@ -1248,7 +1258,8 @@ can show it for a camera later if a phone client ever wants one.
 ## Everything else, from the document
 
 - **Who has access**: the access list, read from the open ward. Add a device, Add a user,
-  Remove, Make admin / Make member, Withdraw invite, Leave, Remove device (own devices), Details.
+  Remove, Make admin / Make member, Withdraw invite, Copy link (open invites this device
+  made), Leave, Remove device (own devices), Details.
 - **Access notices**: the client diffs the access list between the version it last dismissed and
   the current one, one line per entry that differs: joined as member or admin, no longer
   has access, now an admin or a member, a device added or removed, an invite made or used.
@@ -1631,6 +1642,10 @@ The journal and replay, in `tests/services`:
   the next head, naming no one, removes this device's copy without asking again
 - Add a user and Add a device are not offered offline, and an invite's link is shown only
   after the version naming it is on the server; an invite whose push loses shows no link
+- an invite whose push is stored but whose reply is dropped, with the app closed before the
+  next fetch, offers *Copy link* after that fetch, and the link joins; once the invite is
+  used, withdrawn, or abandoned in a replay, the seed is gone from the local file and no
+  link is offered; *Add a user* with no answer to who it is for makes no invite
 - Leave and Remove this device are not offered offline; on a push that loses, the local
   file is unchanged and still opens on this device; on a push that succeeds, the local file
   still opens on this device, holding the version pushed from, marked no longer this
