@@ -891,7 +891,12 @@ replay:
 - **The update check** is new: on start, the app reads the server's `GET /releases/latest`
   and, when it is newer than the running version, shows a dismissible notice offering the
   download. Installers are published to the server, which serves them and the download
-  page.
+  page. The app states no version today: `main.cpp` sets no `setApplicationVersion`,
+  `CMakeLists.txt`'s `project` declares none, and `1.0.1` lives only in `installer.iss`. The
+  version moves to `project(... VERSION x.y.z)`, which reaches the app as its application
+  version and is written at configure time into a file `installer.iss` includes in place of
+  its own `MyAppVersion`, so it is stated once. Versions compare numerically, part by part,
+  so 1.10.0 is newer than 1.9.0.
 - **Receiving an invitation** is new: *Join a ward*, which reads the clipboard when clicked
   and otherwise offers a paste box, and the Windows instance lock. `installer.iss` registers
   `.emergencyplan` today, and that association is removed; nothing is registered in its
