@@ -802,9 +802,13 @@ replay:
   `ContactAttempt` gains a `std::optional<ContactOutcome>` (`OK` or `UnableToReach`), the two
   buttons each record an attempt carrying their outcome, and a family's status is the outcome
   of its latest attempt that has one, or Not Contacted when none does. Latest means the
-  greatest `timestamp`, ties broken by `ContactAttemptId`; list order carries no meaning,
-  since replay appends in push order, and the display sorts by timestamp. Timestamps come
-  from each device's clock, so a wrong clock can show an older outcome as current; every
+  greatest `timestamp`, ties broken by `ContactAttemptId`. A command inserts an attempt at
+  its place in that order, most recent first, as `CODING_STYLE.md` asks of embedded child
+  objects, and a task likewise by `createdAt`, ties broken by `TaskId`; `prepend` does this
+  today only because attempts arrive in time order on one device. So the stored order is the
+  displayed order whatever order replay lands them in, the same attempts always make an
+  equal list, and a family's status is its first attempt that has an outcome. Timestamps
+  come from each device's clock, so a wrong clock can show an older outcome as current; every
   attempt stays in the history, and this is accepted. `method` and `who`
   become optional: a button press records only its outcome and time, shown as *Marked OK*
   or *Marked Unable to Reach*, while the contact dialog fills in both. `ContactStatus` and
@@ -1659,7 +1663,8 @@ The journal and replay, in `tests/services`:
   in one record holding both attempts
 - two responders offline mark the same family OK and Unable to Reach: both attempts land,
   neither journal is abandoned, and the family's status is the outcome with the later
-  timestamp, whichever responder reconnects first
+  timestamp, whichever responder reconnects first; the two reconnect orders leave equal
+  documents, with the attempts newest first
 - two responders who each start a response offline produce two events, each holding its own
   responder's attempts, and neither journal is abandoned
 - ending a response saves a report holding every one of its attempts and tasks, then removes
