@@ -106,6 +106,8 @@ design's answer, not a gap:
   by a server bug or a renumbered restore, is not detected.
 - **Server error recovery is out of scope**: repairing a bad version, restoring from backup,
   and what an export must carry for a successor belong to the server's own design.
+- **Directory-import matching is settled during implementation**, against real
+  directories (see *Imports*).
 - **Two directory imports can add one new family or member twice** when both list it and
   neither has landed when the other is built. An import gives each family and member it
   cannot match a fresh id, so the one that lands second finds none of its additions already
@@ -1148,13 +1150,8 @@ will make, each with its before and after:
 A family an import updates is held at the same typed level as `UpdateFamilyCommand` -
 address, coordinates, and a change per member keyed by `PersonId` - and only for families
 that actually differ. The import service builds merged families, and the command compares
-them with the existing ones field by field, holding only what differs. **The directory
-import matches through `PersonMatching`**, as `IMPORT_DESIGN.md` describes:
-`findFamilyByMembers`, then `findReplacedFamily` for a family whose surname changed, and
-`findBestPersonMatch` for members. Today it matches on surname and display name, then
-first name alone (`WardDirectoryImportService.cpp:89-123`), so a surname change gives the
-family a new id and removes the old one with its notes and memberships; with the shared
-matching, that family keeps its id and its members theirs.
+them with the existing ones field by field, holding only what differs. How the directory
+import matches families and members is settled during implementation (see *Settled*).
 **An import never changes a person's special-need note, and keeps a family's coordinates
 unless its address changed.** `WardDirectoryImportService::preserveIds` copies the existing
 person's note onto the rebuilt person and passes the existing coordinates when the address
@@ -1768,9 +1765,6 @@ The journal and replay, in `tests/services`:
   and ministering memberships
 - re-importing the same directory keeps every special-need note and every family's
   coordinates, and holds no change for families the PDF leaves as they were
-- a directory re-import in which one family's surname has changed keeps that family's id
-  and its members' ids, asserted by id, along with their special-need notes and team
-  memberships, and removes no family
 - a ministering import from a PDF older than the directory, naming one family and one member
   of a matched family that the directory does not list, applies on its first run, adds
   neither, and leaves no group or district holding an id the document lacks
