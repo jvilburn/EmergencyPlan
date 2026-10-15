@@ -304,8 +304,10 @@ value is base64url without padding: the document id is 16 bytes (22 characters),
 (107 characters), a 32-byte data key plus `crypto_box_SEALBYTES`, which is 48.
 
 **A deleted ward's final version** is an ordinary header with an empty `recipients` array
-and a fresh `nonce`, as on any write, and its body ends at the header's `\n` with nothing
-after it; the signed line's payload hash is BLAKE2b-256 of zero bytes. A reader recognises
+and a fresh `nonce`, as on any write, so a header has one shape and one parse; its body
+ends at the header's `\n` with nothing after it, and the signed line's payload hash is
+BLAKE2b-256 of zero bytes. Nothing can be written after it: its header names no signer, so
+every `PUT` is refused, and a `POST` of the same id finds it already exists. A reader recognises
 it by the empty `recipients`, before any payload rule applies (see *Who has access, changed
 by two users*). No local file takes this form: the deleting device removes its copy, and
 every other device keeps the copy it had.
@@ -632,7 +634,7 @@ several responders are logging attempts at once, and the design carries no bandw
 estimate because none would change it.
 
 **A download replaces nothing until it validates.** The header names the document id this
-device asked for, the key unseals, the payload decrypts
+device asked for, which the client checks whatever the server accepted, the key unseals, the payload decrypts
 and reads strictly as a version, without `device`, the header matches the access list, the
 version is not below the base this device holds,
 and the version descends from one this device holds. Any failure keeps the local file
@@ -726,7 +728,8 @@ birthday, callings, parent flag, units, special-need note - each judged on its o
 member added carries the whole new `Person`, and its result holds if that `PersonId` is
 already there; a member removed carries the person as last seen, and every field of that
 is its start condition, so an edit to that member since makes the removal conflict, and
-its undo re-adds exactly what it removed. Its result holds if they are already gone.
+its undo re-adds exactly what it removed. Even a phone change blocks it: the remover was
+looking at the old phone, and being told someone changed that person first costs a redo. Its result holds if they are already gone.
 Deleting a family, and an import's removal of one, hold the whole family as last seen the
 same way. Members are matched by `PersonId`, and their order is not part of
 any start condition.
@@ -1250,7 +1253,9 @@ An invite is a one-time bearer key. Its 32-byte seed yields both of its keypairs
    invite before the push, for as long as the access list it holds names that invite. So
    *Copy link* on the open invite in *Who has access* shows the link again on that device,
    and a push whose reply is lost needs nothing more: once the next fetch shows the invite
-   landed, the link is there. The link is:
+   landed, the link is there. The seed regenerates the invite's private keys, and it sits in
+   the same encrypted file as the data key those keys unseal, so keeping it exposes nothing
+   that file does not already hold. The link is:
    `https://<server>/join#<document id>/<seed, base64url>`. It is an ordinary web link, so
    mail and text apps make it clickable, and the ward id and seed ride in the `#` fragment,
    which browsers do not send to the server. What the user copies is a short message:
@@ -1310,7 +1315,9 @@ can show it for a camera later if a phone client ever wants one.
   user accepts, the copy stays open for editing as before: every edit is journalled and
   saved locally, and the journal replays if a later head names this device, whether the
   ward was taken away by a server fault or the user is invited again (see *Invites*).
-  Accepting deletes the copy and its journal.
+  Accepting deletes the copy and its journal. Editing stays open because the device cannot
+  tell a real removal from a server fault or a hostile head that leaves it out, and a
+  server answer may deny sharing but not use (see *Availability* under *Threat model*).
 - **Last admin**: a client rule: the only admin cannot step down, and cannot leave while
   others remain.
 - **A second device of your own**: *Add a device*, send yourself the link, open it there.
