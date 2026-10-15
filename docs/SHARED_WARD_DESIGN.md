@@ -133,7 +133,8 @@ This document uses its terms for precision; the interface uses these:
 | journal, unpushed changes | *Your changes are saved here and will go up when the connection returns* |
 | no longer this device's | *You no longer have access to this ward* / *You left this ward* |
 
-Terms with no place in the interface at all: push, fetch, replay, version, head, base,
+Terms with no place in the interface at all: push, fetch, replay, version (of a ward; the
+app's own version is an everyday word), head, base,
 journal, landed mark, key, data key, rotation, seal, fingerprint, header, payload, document
 id, link (as a verb), unlink. New interface text follows the same rule: a word a casual
 user would use, or none.
@@ -1318,7 +1319,7 @@ can show it for a camera later if a phone client ever wants one.
 
 **A command writes and pushes as it is made.** Every command in the app is a completed
 action: a note is one command carrying its finished text when the user clicks OK, and so
-is a contact status, a contact attempt, a task change or an assignment. They arrive at the
+is a contact attempt, an OK or Unable to Reach, a task change or an assignment. They arrive at the
 speed a user fills in a dialog, so there is nothing to batch, and a local write is a
 compress, an encrypt and a `QSaveFile` of a couple of hundred kilobytes. Saving on a timer
 would buy nothing and would hold a change back from everyone else for as long as it ran.
@@ -1468,7 +1469,7 @@ link open the app directly. This is an option for then, not part of this design.
 ## Single key holder notice
 
 While the ward has exactly one user, the app shows a **persistent, dismissible notice**,
-not a per-save interruption: *Only you can open this document. If you lose your devices, it
+not a per-save interruption: *Only you can open this ward. If you lose your devices, it
 cannot be recovered. Add someone now.* A user with a single device also sees a gentler
 suggestion to add a second one.
 
@@ -1533,8 +1534,8 @@ returns.
 | A rule refused a replayed command | The wording the app gives for that operation, as it would if the user tried it now: *You are the only admin...* |
 | The local save failed | Your change could not be saved: *reason*. It is kept while the app stays open and saved as soon as saving works again; closing asks first. |
 | The server is unreachable | Working offline. Your changes are saved here and will go up when the connection returns. |
-| Head is older than this copy | The server returned an older version of this ward. Nothing was changed. Your copy is safe and you can keep working; sharing resumes when the server has the latest version. |
-| Head fails validation | The ward's latest version on the server could not be read. Your copy is safe and you can keep working; sharing resumes when the server has a readable version. |
+| Head is older than this copy | The server has an older copy of this ward than yours. Nothing was changed. Your copy is safe and you can keep working; sharing resumes when the server catches up. |
+| Head fails validation | The ward on the server could not be read. Your copy is safe and you can keep working; sharing resumes when the server has a readable copy. |
 | Header format is newer | This ward was saved by a newer version of Ward Planning. Update to see the latest changes and share your work. |
 | Invite link already used or withdrawn | This invite has been used or withdrawn. Ask the sender. |
 | Invite link for a ward the server does not have | The server has no such ward. Check the link. |
@@ -1542,7 +1543,7 @@ returns.
 | Leave or Remove this device while offline | Connect to the internet to leave this ward. / Connect to the internet to remove this device. |
 | Add a user or Add a device while offline | Connect to the internet to invite someone. |
 | The invite's push loses to a conflict | Your invite could not be created, because the ward changed first. Try again. |
-| Not an admin | In *Who has access*, a member sees *To add or remove users, ask an admin: names* in place of the Add a User button. |
+| Not an admin | In *Who has access*, a member sees *To add or remove users, ask an admin: names* in place of the *Add a user* button. |
 | Head lacks this device | You left this ward. / You no longer have access to this ward. Either with an offer to delete this copy. |
 | Head names no recipient | Tanglewood Ward has been deleted, with an offer to remove this copy. |
 | A leave lands where its user is now the only one | You are now the only member, so leaving would delete Tanglewood Ward. |
