@@ -1027,7 +1027,12 @@ will make, each with its before and after:
   removed and added anyway. Only this import creates or rearranges them; the cleanup of a
   removed member also changes them, and a cleanup or another ministering import landing
   in the meantime makes the import conflict. The people and families its groups refer to
-  follow *References stay whole*.
+  follow *References stay whole*. When the directory is the newer source - the ministering
+  PDF is older than the directory's, or has no date once a directory is imported - a family
+  or person the import cannot match is not added, and the import leaves them out of the
+  groups and districts it builds. `mergeFamilies` points the groups at such an unadded id
+  today (`MinisteringImportService.cpp:156-164` and `:330-334`); an older PDF naming someone
+  the newer directory does not list is out of date about them.
 
 A family an import updates is held at the same typed level as `UpdateFamilyCommand` -
 address, coordinates, and a change per member keyed by `PersonId` - and only for families
@@ -1586,6 +1591,9 @@ The journal and replay, in `tests/services`:
   and ministering memberships
 - re-importing the same directory keeps every special-need note and every family's
   coordinates, and holds no change for families the PDF leaves as they were
+- a ministering import from a PDF older than the directory, naming one family and one member
+  of a matched family that the directory does not list, applies on its first run, adds
+  neither, and leaves no group or district holding an id the document lacks
 - a ministering import replayed after a member removal's cleanup changed a group conflicts,
   and the group keeps the cleanup's result
 - deleting a family in a family-level tag and a ministering group's families, whose people
