@@ -1393,8 +1393,14 @@ fails changes nothing on this device; one that succeeds puts the device in the
 no-longer-yours state, with its copy kept until the user deletes it. The save after that
 push writes the version the device pushed from, not the one it pushed: the document as it
 stood before the leave, under the access list and key it already carries and so still
-sealed to this device, with the no-longer-yours flag set and the journal emptied by the
-landed mark.
+sealed to this device, with the no-longer-yours flag set and the journal emptied of every
+entry up to and including the Leave, all of which that push carried. The Leave version
+holds no landed mark for this device, since its access list no longer names it, so the
+trim goes by what the push carried. A Leave whose reply is lost is settled the same way by
+the next head that lacks this device. That head cannot say whether the Leave landed or
+someone removed the device first; in the second case the entries the Leave carried are
+dropped without landing, which its user gave up by choosing to go. Entries made after the
+Leave stay, like any edit in the no-longer-yours state.
 
 **An undo is the command's inverse, run like any other command.** `Command` has
 `CommandPtr inverse() const` in place of `undo`: for an update, the same command with
@@ -1733,7 +1739,9 @@ The journal and replay, in `tests/services`:
 - Leave and Remove this device are not offered offline; on a push that loses, the local
   file is unchanged and still opens on this device; on a push that succeeds, the local file
   still opens on this device, holding the version pushed from, marked no longer this
-  device's, and with every journal entry the push carried gone from the journal
+  device's, and with every journal entry the push carried gone from the journal; with the
+  Leave's reply dropped and a command made after it, the next head ends in the same state,
+  with only that later command left in the journal
 - a save that fails leaves the local file as it was and nothing pushed, with the change
   still in memory; once saving works again, regaining focus saves and pushes it with no
   further command; closing while saves still fail asks before discarding it
