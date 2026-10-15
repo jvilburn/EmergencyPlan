@@ -109,7 +109,9 @@ design's answer, not a gap:
 - **Two directory imports can add one new family or member twice** when both list it and
   neither has landed when the other is built. An import gives each family and member it
   cannot match a fresh id, so the one that lands second finds none of its additions already
-  there and adds them. The duplicate stays until a user removes it.
+  there and adds them. The duplicate stays until a user removes it, or until the next
+  directory import that is the newer source: that import matches one copy and removes the
+  other, with anything attached only to it.
 
 ### Words the user sees
 
@@ -497,10 +499,10 @@ use XSalsa20-Poly1305 internally, not the XChaCha20-Poly1305 of the payload; for
 data key this is immaterial, but it is worth not mis-stating. `crypto_sign` (Ed25519)
 signs each write and each channel open.
 
-**Library pin.** CVE-2025-69277 (`crypto_core_ed25519_is_valid_point` accepting points
-outside the main subgroup; fixed by `ad3004e`, released in 1.0.20-stable and 1.0.21) does
-not affect any call this design makes. The build requires 1.0.22, the current release,
-regardless: it adds `libsodium` to `vcpkg.json`, which lists only `libmupdf` today, with
+**Library pin.** The facts in this paragraph were looked up on 2026-10-15. CVE-2025-69277
+(`crypto_core_ed25519_is_valid_point` accepting points outside the main subgroup; fixed by
+`ad3004e`, released in 1.0.20-stable and 1.0.21) does not affect any call this design
+makes. The build requires 1.0.22 or later, the current release at that date, regardless: it adds `libsodium` to `vcpkg.json`, which lists only `libmupdf` today, with
 `"version>=": "1.0.22"` and a `builtin-baseline`, under the `x64-windows-static-md` triplet
 that MuPDF already uses.
 
@@ -912,16 +914,17 @@ replay:
   and, when it is newer than the running version, shows a dismissible notice offering the
   download. Installers are published to the server, which serves them and the download
   page. The app states no version today: `main.cpp` sets no `setApplicationVersion`,
-  `CMakeLists.txt`'s `project` declares none, and `1.0.1` lives only in `installer.iss`. The
-  version moves to `project(... VERSION x.y.z)`, which reaches the app as its application
-  version and is written at configure time into a file `installer.iss` includes in place of
-  its own `MyAppVersion`, so it is stated once. Versions compare numerically, part by part,
+  `CMakeLists.txt`'s `project` declares none, `installer.iss` says `1.0.1`, and
+  `vcpkg.json` says `1.0.0`. The version moves to `project(... VERSION x.y.z)`, which
+  reaches the app as its application version and is written at configure time into a file
+  `installer.iss` includes in place of its own `MyAppVersion`; `vcpkg.json` drops its
+  `version`, which a top-level manifest does not need, so it is stated once. Versions compare numerically, part by part,
   so 1.10.0 is newer than 1.9.0.
 - **The app is renamed Ward Planning throughout.** The application name (`main.cpp:12`),
   the window title (`MainWindow.cpp:530`), the installer's name and publisher
   (`installer.iss`), the executable, and the CMake project and its targets (`EmergencyPlan`,
   `EmergencyPlanLib`) take the new name, with everything that names them, such as
-  `build.bat`'s deploy step. The installer keeps its `AppId`, so the release upgrades the
+  `build.bat`'s deploy step and the `name` in `vcpkg.json`. The installer keeps its `AppId`, so the release upgrades the
   old install in place. App data and the tile cache are named by Qt after the application,
   so both move; nothing is carried over from the old directories (see *Earlier versions*),
   and the tile cache refills as maps are viewed.
