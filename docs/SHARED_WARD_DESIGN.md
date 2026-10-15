@@ -1758,6 +1758,9 @@ The journal and replay, in `tests/services`:
   and ministering memberships
 - re-importing the same directory keeps every special-need note and every family's
   coordinates, and holds no change for families the PDF leaves as they were
+- a directory re-import in which one family's surname has changed keeps that family's id
+  and its members' ids, asserted by id, along with their special-need notes and team
+  memberships, and removes no family
 - a ministering import from a PDF older than the directory, naming one family and one member
   of a matched family that the directory does not list, applies on its first run, adds
   neither, and leaves no group or district holding an id the document lacks
