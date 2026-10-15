@@ -1605,7 +1605,10 @@ starts here: one Qt Test executable linked against `WardPlanningLib`, with `test
 for format, crypto, journal and replay, and `tests/server` for the fake server and the
 conformance suite. The instance lock needs two processes, so `tests/lock` is a second,
 small executable that starts copies of itself, each taking the lock through the app's own
-lock function.
+lock function. `tests/spec` is a third, a reader of the format built without Qt or any of
+the app's code, from `nlohmann-json`, `zlib` and `libsodium`, which `vcpkg.json` gains as
+dependencies, so that it shows the specification complete rather than the app agreeing
+with itself.
 
 - **The server interface** is one abstract class in the client with the calls the app
   makes: create, head, fetch, push, open channel, and latest release. `HttpServer` implements it for the
@@ -1635,12 +1638,16 @@ Format and crypto, in `tests/services`:
 
 - `DocumentCrypto` round-trip
 - two consecutive saves of an unchanged document produce different nonces
-- mutating any header byte causes decryption to fail, including the document id
+- the header is bound as associated data: with the unmutated file opening as the positive
+  control, a header changed only where parsing, unsealing and the document id check all
+  accept it - another recipient's `sealedKey`, re-encoded validly - fails the payload's
+  AEAD check, asserted as that failure; and a local file whose header id and file name are
+  both changed to another ward's id fails the same way
 - the known-answer vectors for the fingerprint, the invite keypairs derived from a fixed
   seed, and the signed line for each of `create`, `push` and `channel`
 - a fixed local file holding a value in every field of every part, written by the app, is
-  read back by a reader written only from this section and `docs/FORMAT.md` - plain JSON,
-  base64url, zlib and libsodium, without Qt - which parses every field strictly and
+  read back by the reader in `tests/spec`, written only from this section and
+  `docs/FORMAT.md`, which parses every field strictly and
   recovers each of those values, so a `toJson` change that `docs/FORMAT.md` lacks fails it
 - a header with an unknown format version is refused whole; nothing pushes while every
   edit journals and saves locally; the state clears as soon as the server again serves a
