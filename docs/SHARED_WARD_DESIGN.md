@@ -58,7 +58,7 @@ Two related ideas surfaced during design and are deferred to their own work:
 | Server address | Built into the app, with an advanced override; documents carry only their id |
 | Local copy | Complete, always present, fully editable offline |
 | Running instances | One per user (see *Receiving an invitation*) |
-| Where the local file lives | Application data, keyed by document id; the user never chooses a path |
+| Where the local file lives | Local application data (`QStandardPaths::AppLocalDataLocation`), keyed by document id; the user never chooses a path |
 | Third-party sync folders | Not built. Continuity rests on the project being open source. |
 | The split of responsibility | **The ward says who may read it; the server stores versions and relays changes.** Besides the version condition, the server checks only that a write is signed by a device the current header names. |
 | Who has access | The access list inside the encrypted payload: users, their devices, and open invites |
@@ -897,6 +897,14 @@ replay:
   version and is written at configure time into a file `installer.iss` includes in place of
   its own `MyAppVersion`, so it is stated once. Versions compare numerically, part by part,
   so 1.10.0 is newer than 1.9.0.
+- **The app is renamed Ward Planning throughout.** The application name (`main.cpp:12`),
+  the window title (`MainWindow.cpp:530`), the installer's name and publisher
+  (`installer.iss`), the executable, and the CMake project and its targets (`EmergencyPlan`,
+  `EmergencyPlanLib`) take the new name, with everything that names them, such as
+  `build.bat`'s deploy step. The installer keeps its `AppId`, so the release upgrades the
+  old install in place. App data and the tile cache are named by Qt after the application,
+  so both move; nothing is carried over from the old directories (see *Earlier versions*),
+  and the tile cache refills as maps are viewed.
 - **Receiving an invitation** is new: *Join a ward*, which reads the clipboard when clicked
   and otherwise offers a paste box, and the Windows instance lock. `installer.iss` registers
   `.emergencyplan` today, and that association is removed; nothing is registered in its
@@ -1391,6 +1399,11 @@ document id, and **the user never chooses or sees a path in the normal flow.** "
 list of the wards this device has access to, not a file browser. This is the largest of the
 ease-of-setup simplifications.
 
+App data, wherever this design says it, is `QStandardPaths::AppLocalDataLocation`, which
+on Windows is under the user's local, non-roaming AppData. The ward files, the device keys
+and the instance lock all live there, so a roaming profile never carries ward files to
+another machine without the keys that open them.
+
 **The list is local**, built from the wards this device holds. The server keeps no index of
 who holds what, so the list is this device's own record and nothing restores it from the
 server.
@@ -1540,7 +1553,7 @@ is possible. There is no exported recovery key file.
 ## Testing
 
 **The harness is part of the work.** `tests/CMakeLists.txt` lists no sources, so the suite
-starts here: one Qt Test executable linked against `EmergencyPlanLib`, with `tests/services`
+starts here: one Qt Test executable linked against `WardPlanningLib`, with `tests/services`
 for format, crypto, journal and replay, and `tests/server` for the fake server and the
 conformance suite. The instance lock needs two processes, so `tests/lock` is a second,
 small executable that starts copies of itself, each taking the lock through the app's own
