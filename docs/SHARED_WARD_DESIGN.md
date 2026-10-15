@@ -1229,12 +1229,23 @@ stops mattering. A ward cannot be emptied by two users leaving at once.
 Leaving needs the server, since the version without you must be held there before your
 copy goes: Leave pushes first and saves after (see *Saving*).
 
-**The last user's Leave deletes the ward.** It is how a throwaway ward is removed. The
+**The last user's Leave deletes the ward.** Leave is one command: it takes its user out of
+the access list, with their devices and every invite they made. When no one remains, the
+version it writes has an empty access list, and that is a deleted ward (see *File
+format*): its header names no recipient, and it carries no payload, since no one is left
+to read one. It is how a throwaway ward is removed. When the user is the only one, the
 confirmation says so: *You are the only member of Tanglewood Ward. Leaving deletes it: it
 stops being shared and is removed from this device, and any other device of yours will
-offer to remove it too.* **Delete ward** / Cancel. The push is a final version whose
-header names no recipient, which also withdraws any open invites, and which carries no
-payload to read. A head with no recipients is a deleted ward to every device: this device
+offer to remove it too.* **Delete ward** / Cancel.
+
+An empty access list comes only this way: a user cannot remove their own last device, and
+removing others always leaves the admin who removed them. On replay the existing rules
+decide. A Leave confirmed as a deletion that replays where another user has since joined
+is refused by the last-admin rule when the newcomer is a member, and otherwise leaves the
+ward to them. A Leave made while others remained is refused where its user is now the only
+one, so no ward is deleted by a leave that did not ask to delete it.
+
+A head with no recipients is a deleted ward to every device: this device
 removes its copy, and any other device of the same user shows *Tanglewood Ward has been
 deleted*, and offers to remove its copy, keeping the copy and its journal until the user
 agrees, as with any head that leaves a device out. If the answer to that final push is lost, the next head, naming no one, tells the
@@ -1730,6 +1741,10 @@ The journal and replay, in `tests/services`:
   shows the ward as deleted and keeps its copy and journal until the user agrees; an
   invitee's later join is refused as withdrawn; with the answer to that final push dropped,
   the next head, naming no one, removes this device's copy without asking again
+- the only user's Leave, made while an invite is open and replayed after that invite's join
+  landed: with the newcomer a member, it is refused with the last-admin wording and the
+  ward keeps both users; with the newcomer an admin, it applies, the ward stays with the
+  newcomer, and nothing is deleted
 - Add a user and Add a device are not offered offline, and an invite's link is shown only
   after the version naming it is on the server; an invite whose push loses shows no link
 - an invite whose push is stored but whose reply is dropped, with the app closed before the
