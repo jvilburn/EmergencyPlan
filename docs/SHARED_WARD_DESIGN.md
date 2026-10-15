@@ -1558,7 +1558,12 @@ lock function.
   holds and one where it conflicts. The round-trip test iterates the registry.
 - **Every outside dependency has a fake in `WardSession`**: the server, the geocoder, the
   ward and stake lookup, and the clock that stamps attempts and resolutions. A test sets
-  each, so nothing reaches the network and timestamp ordering is decided by the test.
+  each, so nothing reaches the network and timestamp ordering is decided by the test. The
+  models read the system clock themselves today, in `TaskNotification::create`,
+  `ContactAttempt::create`, `ResponseTask::create`, `ResponseTask::resolve` and
+  `EmergencyResponse::create`; each takes the time as an argument instead, which a command
+  reads from `WardSession`'s clock at construction, and the report's end time comes from
+  the same clock.
 
 Format and crypto, in `tests/services`:
 
