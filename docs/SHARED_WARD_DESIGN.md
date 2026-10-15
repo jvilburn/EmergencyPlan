@@ -363,6 +363,27 @@ one write. The compression is Qt's `qCompress`: a 4-byte big-endian uncompressed
 followed by a standard zlib stream, so a reader outside Qt drops the four bytes and
 inflates the rest.
 
+**Layout.** The decrypted, inflated payload is one JSON object:
+
+```
+{
+  "ward":   { ... },
+  "access": { "users": [ ... ], "invites": [ ... ], "formerKeys": [ ... ] },
+  "landed": { "<fingerprint>": <sequence number>, ... },
+  "device": { ... }
+}
+```
+
+`ward` is the ward's content: families, teams, tags, emergency assets, ministering,
+emergencies in progress, the PDF dates, and the ward and stake records. `access` is the
+access list (see *What the document carries*). `landed` maps each device's fingerprint to
+its landed mark (see *The journal*). `device` is this device's own state. A local file and a
+version on the server are the payload's two shapes, each read strictly: a local file must
+carry `device`, and a version must not, so a version that does is refused like any other
+invalid version. Every field of each part - its JSON key, type and encoding - is specified in
+`docs/FORMAT.md`, under the same format version as the header, and binary values are
+base64url without padding, as everywhere else.
+
 **Nonce.** 192 bits from `randombytes_buf`, drawn fresh on **every write** and derived
 from nothing in the file. XChaCha20-Poly1305's extended nonce is wide enough that random
 nonces are safe without a counter or any stored state, which is why the header carries no
@@ -590,8 +611,8 @@ protocol built for traffic that does not exist. This holds during an emergency t
 several responders are logging attempts at once, and the design carries no bandwidth
 estimate because none would change it.
 
-**A download replaces nothing until it validates.** The key unseals, the payload decrypts,
-the header matches the access list, the version is not below the base this device holds,
+**A download replaces nothing until it validates.** The key unseals, the payload decrypts
+and reads strictly in a version's shape, the header matches the access list, the version is not below the base this device holds,
 and the version descends from one this device holds. Any failure keeps the local file
 untouched: the local file is the one copy that has to survive a version nobody can read.
 The device keeps working on that copy and pushes nothing while the head fails; see the
@@ -610,8 +631,9 @@ kind of thing: an edit to one encrypted document. **The journal holds this devic
 commands that it has not yet seen land on the server**, and the interface shows that
 changes are waiting while it holds any.
 
-**The journal lives inside the local file.** The local file's encrypted payload holds the
-ward and its access list, plus the state that belongs to this device alone:
+**The journal lives inside the local file.** The local file's encrypted payload holds what
+a pushed version holds - the ward, its access list and the landed marks - plus, under
+`device`, the state that belongs to this device alone:
 
 - the journal and its sequence counter
 - the to-redo list
@@ -861,6 +883,10 @@ replay:
   and otherwise offers a paste box, and the Windows instance lock. `installer.iss` registers
   `.emergencyplan` today, and that association is removed; nothing is registered in its
   place.
+- **`docs/FORMAT.md` is new**, written with the code since the models change in this work.
+  It specifies every field of the payload, `device` included, and changes in the same
+  commit as any `toJson` it describes; a release that changes it raises the format version,
+  as under *File format*.
 - **`ARCHITECTURE.md`, `IMPORT_DESIGN.md` and `USER_GUIDE.md` change with the code they
   describe.**
   `ARCHITECTURE.md` gives commands `execute` and `undo`, `CommandHistory`'s stacks and an
@@ -1095,10 +1121,11 @@ names what to do again:
 ## What the document carries
 
 The access list inside the payload names everyone who may read the ward, and carries each
-device's public keys, because those are what the data key is sealed to:
+device's public keys, because those are what the data key is sealed to. In outline, with
+each field's key and encoding in `docs/FORMAT.md`:
 
 ```
-accessList:
+access:
   users:
     - id: <user id>
       name: "Alice Smith"
@@ -1412,7 +1439,8 @@ which costs nothing to hold on to:
    file, so every member can open, edit and share it with no server state to restore. A
    successor needs the blobs and nothing else.
 2. **The format is documented publicly** in the repository, as a specification rather than
-   only an implementation. This is what makes "someone could adapt it" true rather than
+   only an implementation: the header, sealing and wire in this design, and every payload
+   field in `docs/FORMAT.md`. This is what makes "someone could adapt it" true rather than
    aspirational.
 3. **Every member holds a complete, readable copy**, a `.wardplanning` file in app data that
    *Show in folder* reveals.
@@ -1516,9 +1544,10 @@ Format and crypto, in `tests/services`:
 - mutating any header byte causes decryption to fail, including the document id
 - the known-answer vectors for the fingerprint, the invite keypairs derived from a fixed
   seed, and the signed line for each of `create`, `push` and `channel`
-- a fixed document written by the app is read back by a reader written only from this
-  section - plain JSON, base64url, zlib and libsodium, without Qt - so the specification
-  is shown complete
+- a fixed local file holding a value in every field of every part, written by the app, is
+  read back by a reader written only from this section and `docs/FORMAT.md` - plain JSON,
+  base64url, zlib and libsodium, without Qt - which parses every field strictly and
+  recovers each of those values, so a `toJson` change that `docs/FORMAT.md` lacks fails it
 - a header with an unknown format version is refused whole; nothing pushes while every
   edit journals and saves locally; the state clears as soon as the server again serves a
   version the app understands, and the journal then replays
@@ -1583,7 +1612,8 @@ The journal and replay, in `tests/services`:
   expected heading and lines, values included, after the family it names is renamed
 - after an abandoned replay, a new command pushes successfully
 - every item of the device-local state round-trips through the local file, and a pushed
-  version's payload carries none of it
+  version's payload carries none of it; a version from the server carrying `device` is
+  refused and changes nothing
 - the only user's Leave asks before deleting, pushes a version naming no recipient that
   withdraws any open invites, and removes this device's copy; the user's second device
   shows the ward as deleted and keeps its copy and journal until the user agrees; an
