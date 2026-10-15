@@ -356,6 +356,12 @@ reaches members only while the old address still answers; continuity keeps the d
 (see *If the server goes away*), and a move made after the old address is gone reaches
 members as a release they install by hand.
 
+The override is app-wide, and an invitation works only between apps using the same server:
+joining looks the document id up on this app's own server, and the host in a pasted join
+link is ignored. A link that chose the server could send a new member to a server of an
+attacker's making at the one moment its first download is taken as it stands (see *Threat
+model*). Testers and self-hosters set the override on every app that shares their wards.
+
 **One id for the document's whole life.** The id names the local file, keys the local
 record, and is bound into the header from the first save. The first push registers that
 same id with the server, so nothing is renamed, re-keyed, or re-encrypted when the document
@@ -1614,8 +1620,8 @@ Format and crypto, in `tests/services`:
 - after a join, and after a withdrawal, the invite's seed can no longer unseal the current
   version
 - the invitation reader, which *Join a ward* gives the clipboard's text or the paste box's,
-  reads a copied invitation and a full join link to the same document id and seed, and
-  finds no invitation in other text
+  reads a copied invitation and a full join link to the same document id and seed, gives
+  the same result for a join link on another host, and finds no invitation in other text
 
 The journal and replay, in `tests/services`:
 
