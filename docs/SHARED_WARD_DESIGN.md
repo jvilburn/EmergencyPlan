@@ -724,8 +724,11 @@ different members of one family both apply.
 The same holds one level down. A member change is per field - name, gender, phones, email,
 birthday, callings, parent flag, units, special-need note - each judged on its own. A
 member added carries the whole new `Person`, and its result holds if that `PersonId` is
-already there; a member removed carries the person as last seen, and its result holds if
-they are already gone. Members are matched by `PersonId`, and their order is not part of
+already there; a member removed carries the person as last seen, and every field of that
+is its start condition, so an edit to that member since makes the removal conflict, and
+its undo re-adds exactly what it removed. Its result holds if they are already gone.
+Deleting a family, and an import's removal of one, hold the whole family as last seen the
+same way. Members are matched by `PersonId`, and their order is not part of
 any start condition.
 
 Every update command takes this shape, not only the family's. Single values - a name, a
@@ -1670,6 +1673,9 @@ The journal and replay, in `tests/services`:
   reopening the app, or by a command that clears other coordinates - until its text changes
 - a command that changes no address starts no geocoding
 - two offline edits to different members of one family both apply
+- an offline removal of a member, replayed after someone changed that member's phone,
+  conflicts and leaves the member with the new phone; the same removal replayed onto an
+  unchanged member applies, and its undo restores a member equal to the one removed
 - a special-need note edit and a phone edit to the same person, offline on two devices,
   both apply
 - two users offline each add a different member to the same team, and both members are
