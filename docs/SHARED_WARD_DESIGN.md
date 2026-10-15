@@ -1421,6 +1421,13 @@ who holds what, so the list is this device's own record and nothing restores it 
 server.
 
 A new document is created in app data under a fresh id, and naming it is a display concern.
+**A ward's name comes from what it has imported**, by the rule
+`DocumentMetadata::suggestedFilename` applies today, renamed `displayName` since no file is
+named by it: *name* Ward for one ward and *name* Stake for wards of one known stake, among
+its cases. A ward the rule gives no name, such as one that has imported nothing, shows as
+*Untitled ward*. The name is read
+from the payload, so the ward list, the window title, the invite message and the join
+confirmation all use it, and a joiner sees it once the invite's key has unsealed the ward.
 Its first push is `POST /documents`, made as soon as the network allows, and its journal
 empties then like any other.
 
