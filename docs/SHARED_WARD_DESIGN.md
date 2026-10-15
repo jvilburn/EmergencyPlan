@@ -631,7 +631,8 @@ protocol built for traffic that does not exist. This holds during an emergency t
 several responders are logging attempts at once, and the design carries no bandwidth
 estimate because none would change it.
 
-**A download replaces nothing until it validates.** The key unseals, the payload decrypts
+**A download replaces nothing until it validates.** The header names the document id this
+device asked for, the key unseals, the payload decrypts
 and reads strictly as a version, without `device`, the header matches the access list, the
 version is not below the base this device holds,
 and the version descends from one this device holds. Any failure keeps the local file
@@ -1636,8 +1637,9 @@ Format and crypto, in `tests/services`:
 - a device the server mentions but this client did not admit is never sealed to
 - a version under a key this device never held for the ward, naming none of its keys
   among its former keys, is refused and changes nothing
-- a version of another ward this device holds, served under this ward's id, is refused and
-  changes nothing
+- a version of another ward this device holds, served under this ward's id, is refused by
+  the document id check before anything is unsealed, and changes nothing; the same version
+  with its header's id rewritten to this ward's fails to decrypt and changes nothing
 - after a join, and after a withdrawal, the invite's seed can no longer unseal the current
   version
 - the invitation reader, which *Join a ward* gives the clipboard's text or the paste box's,
