@@ -57,7 +57,7 @@ Two related ideas surfaced during design and are deferred to their own work:
 | Where the authoritative copy lives | A Ward Planning server, reached by the app directly |
 | Server address | Built into the app, with an advanced override; documents carry only their id |
 | Local copy | Complete, always present, fully editable offline |
-| Running instances | One per user; links go to the running app (see *Links and launches*) |
+| Running instances | One per user (see *Receiving an invitation*) |
 | Where the local file lives | Application data, keyed by document id; the user never chooses a path |
 | Third-party sync folders | Not built. Continuity rests on the project being open source. |
 | The split of responsibility | **The ward says who may read it; the server stores versions and relays changes.** Besides the version condition, the server checks only that a write is signed by a device the current header names. |
@@ -68,7 +68,7 @@ Two related ideas surfaced during design and are deferred to their own work:
 | Joining | A one-time invite link |
 | Roles | Admin or member, held in the access list, a convention among honest clients |
 | Who may add | An admin adds a user; anyone adds their own devices |
-| Who may remove | An admin removes a user; anyone unlinks their own devices, or leaves |
+| Who may remove | An admin removes a user; anyone removes their own devices, or leaves |
 | Removal | One push without their devices, which rotates the data key |
 | Concurrent use | Presence while connected, every edit a version, and offline commands replayed onto the current version. Content and access changes take the same path. |
 | A replay that changes nothing | Runs to completion and pushes, though the pushed version matches the server's. It is rare, so it follows the ordinary path. |
@@ -92,11 +92,43 @@ design's answer, not a gap:
   needs and notes are not carried over.
 - **An unreadable or restored head stalls sharing** until the operator repairs it (see
   *Threat model*); there is no client-side republish.
-- **The tag commands stay**, converted with the rest, though nothing calls them yet.
+- **Tags stay**: add, update and delete are converted with the rest, though nothing calls
+  them yet.
 - **No bandwidth estimate**; whole-blob-per-edit holds during an emergency too.
 - **No guards against a future developer's mistake**, such as a command type left out of
   the registry.
 - **Items under *Open points* are known**, the live channel's wire detail among them.
+- **The server is trusted to number versions.** Older content served under a higher number,
+  by a server bug or a renumbered restore, is not detected.
+- **Server error recovery is out of scope**: repairing a bad version, restoring from backup,
+  and what an export must carry for a successor belong to the server's own design.
+
+### Words the user sees
+
+The app is for casual users, so what it shows is plain words, never the design's own terms.
+This document uses its terms for precision; the interface uses these:
+
+| In this design | In the app |
+|---|---|
+| document | ward |
+| access list | *Who has access* |
+| user | user, or the user's name |
+| device | device |
+| invite (user / device) | *Add a user* / *Add a device*, and the link message |
+| remove a user | *Remove* |
+| remove a device | *Remove device*; *Remove this device* for your own |
+| leave | *Leave* |
+| withdraw an invite | *Withdraw invite* |
+| role | *admin* / *member*; *Make admin* / *Make member* |
+| conflict, abandoned replay | *Your changes could not be applied, because the ward changed first* |
+| to-redo list | *These need doing again* |
+| journal, unpushed changes | *Your changes are saved here and will go up when the connection returns* |
+| no longer this device's | *You no longer have access to this ward* / *You left this ward* |
+
+Terms with no place in the interface at all: push, fetch, replay, version, head, base,
+journal, landed mark, key, data key, rotation, seal, fingerprint, header, payload, document
+id, link (as a verb), unlink. New interface text follows the same rule: a word a casual
+user would use, or none.
 
 ## Threat model
 
@@ -170,10 +202,10 @@ and invites users again; the old ward is abandoned to whoever took it. Content v
 already possible for any key holder, is recovered the same way.
 
 **Accepted: a stolen, unlocked device acts as its owner.** It can read everything, write
-content, unlink its owner's other devices, add devices of the thief's own, and on an
-admin's device anything an admin can do. Its owner unlinks it from another device, or any
+content, remove its owner's other devices, add devices of the thief's own, and on an
+admin's device anything an admin can do. Its owner removes it from another device, or any
 admin removes the owner, who is then invited again. Planted devices are shown for what
-they are: each appears under its owner's name, and the owner unlinks any they do not
+they are: each appears under its owner's name, and the owner removes any they do not
 recognise.
 
 **Accepted: an intercepted invite link gets in.** Whoever opens the link first gets in,
@@ -208,8 +240,8 @@ disruption only.
 refuses - written by a client bug, or corrupted in storage - or a server restored to
 versions older than members hold leaves every device unable to push until the server
 again serves a version each can take. Every device keeps its local copy and keeps working
-on it, and nothing in those copies is lost. The repair is the operator's: remove the bad
-version or restore from a current export. Failing that, recovery is a new ward.
+on it, and nothing in those copies is lost. Repairing the server is the server's own
+design, outside this one.
 
 **Cleaned up when the user asks.** A removed member's local copy: their app offers to
 delete it once it learns the ward is no longer theirs.
@@ -251,6 +283,12 @@ publisher fingerprint and publish time alongside it.
 - recipient entries, one per device and one per open invite: `{fingerprint, data key
   sealed to that X25519 public key}`
 
+The header is a JSON object with the keys `format` (an integer), `document`, `nonce`, and
+`recipients`, an array of objects with the keys `fingerprint` and `sealedKey`. Every binary
+value is base64url without padding: the document id is 16 bytes (22 characters), the nonce
+24 bytes (32 characters), a fingerprint 16 bytes (22 characters), and a sealed key 80 bytes
+(107 characters), a 32-byte data key plus `crypto_box_SEALBYTES`, which is 48.
+
 The whole header is the associated data of the payload's AEAD, so anyone holding the data
 key detects any change to it on decrypt. **The associated data is the header's exact
 stored bytes, never a re-encoding.** A writer builds the header bytes once, nonce and
@@ -266,6 +304,23 @@ skips what it does not recognise, mostly produces data read wrongly, so anything
 refused whole. Any change to the header, the sealing, or the payload, such as a hybrid
 post-quantum entry, is a new format version, and a reader refuses it before decrypting
 anything.
+
+**The reader for a format version reads exactly what that version's `toJson` wrote.** A
+field `toJson` leaves out when empty reads as empty, and that is the only optional kind;
+every other field is required, and nothing is defaulted, coerced, or accepted in a second
+shape. Since a reader only ever meets its own writer's output, a strict parse costs nothing
+in practice, and it never guesses.
+
+A new release that changes the payload raises the format version, and reads the previous
+version's files in one of two ways. A release that only adds fields `toJson` leaves out
+when empty needs nothing more: a previous-version payload lacks them, and they read as
+empty. A release that renames, removes or reshapes a field carries a small upgrade from the
+previous version to its own, run once when it first reads an older payload and tested like
+any other code, before its strict reader. Each reader accepts one shape, and an older shape
+reaches it only through a named upgrade. This concerns versions of the `.wardplanning`
+format, not the 1.0 `.emergencyplan` files, which are not read at all. The model `fromJson` functions have no way to fail today, so they gain one:
+a missing or malformed required field refuses the whole payload rather than reading part of
+it.
 
 **When a newer app wrote the version on the server**, this app keeps the local copy it
 has and **pushes nothing**, with a persistent notice: *This ward was saved by a newer
@@ -296,7 +351,9 @@ reaches it.
 The document's JSON, compressed, encrypted with XChaCha20-Poly1305 under the data key, as
 **one payload**: replay happens on the model, in a client that holds the data key, so one
 payload serves it fully. One payload means one nonce, one version, and
-one write.
+one write. The compression is Qt's `qCompress`: a 4-byte big-endian uncompressed length
+followed by a standard zlib stream, so a reader outside Qt drops the four bytes and
+inflates the rest.
 
 **Nonce.** 192 bits from `randombytes_buf`, drawn fresh on **every write** and derived
 from nothing in the file. XChaCha20-Poly1305's extended nonce is wide enough that random
@@ -351,7 +408,12 @@ the key of the last version this device took from, or gave to, the server.** So 
 this device trusts are that one key, an incoming version under it is accepted directly, and
 a later one is accepted because its former keys name it. Without this, an admin who removed
 someone would hold a key of their own invention and could never again accept a version from
-anyone else.
+anyone else. The one exception is the save after Leave or Remove this device, which keeps
+the key of the version pushed from (see *Saving*), since that is the last key this device
+can open.
+
+A push that succeeds is followed by a local save of the version it pushed: under the new
+key if it rotated, with the new base, and with the journal trimmed by this device's mark.
 
 Several access changes made while disconnected therefore rotate once, at the push that
 carries them, rather than once each.
@@ -415,6 +477,7 @@ starting point; no call asks for an earlier version, and none is kept.
 | the live channel | a key holder | Open while the ward is open. Carries presence and version notices. |
 | `GET /releases/latest` | anyone | The current app version per platform, with each installer's download address. |
 | `GET /download` | anyone | A web page offering the installers, for people who do not have the app yet. |
+| `GET /join` | anyone | The page an invite link opens: *Download*, and *Copy invitation*, which copies the invitation built from the fragment. The server never sees the fragment. |
 
 **Signed requests.** A write carries the signer's two public keys and an Ed25519 signature
 over one UTF-8 line:
@@ -434,7 +497,8 @@ channel carries the same signature, so only key holders appear as present.
 
 **Reads are open** to anyone who knows a document id, because the design never relied on
 the server to protect content and the id is 128 random bits. A read limit by address stops
-scraping.
+scraping. It is set so that every responder of a ward behind one shared address - a
+church's or a home's network - can fetch each version as it lands during an emergency.
 
 Removing a user is one write without their devices: the new header lacks them, so the
 server refuses their next upload, closes their live channel, and their next head shows a
@@ -462,6 +526,11 @@ may then be looking at a family somebody else just changed, and the command they
 conflicts and is handed back as a single line to redo. Holding the version back until the
 dialog closes would widen the window instead, for as long as the dialog stays open.
 
+Because a version can replace the document under any nested event loop - a dialog's
+`exec()`, a message box - code holds ids and captured values across one, never pointers or
+references into the document. A command is built from what was captured when its target
+was chosen, and a target that no longer exists when it runs makes it conflict.
+
 **So a connected ward's base is always current**, and that is what makes replay the
 exception rather than the path. For a conflict, two users have to change the same thing
 while one of them has it open in a dialog, or commit inside the gap between one version
@@ -486,15 +555,18 @@ untouched: the local file is the one copy that has to survive a version nobody c
 The device keeps working on that copy and pushes nothing while the head fails; see the
 accepted stall under *Threat model*. A head that leaves this
 device out is not a fault: it is the ward no longer being this device's, handled under
-*Everything else, from the document*.
+*Everything else, from the document*, and a head that names no recipient at all is a
+deleted ward (see *Who has access, changed by two users*); both are recognised from the
+header, before anything is unsealed.
 
 ## The journal
 
-Every command a user runs is appended to a journal, and leaves the journal when the
-version carrying it is on the server. Content and access changes go into the same journal in the order they were
-made, because they are the same kind of thing: an edit to one encrypted document. The
-journal is therefore the work this device has done that nobody else has seen yet, and
-**"there are unpushed changes" is "the journal is not empty."**
+Every command run in a ward this device holds is appended to its journal, and leaves the
+journal when this device sees a version on the server that carries it. Content and access
+changes go into the same journal in the order they were made, because they are the same
+kind of thing: an edit to one encrypted document. **The journal holds this device's
+commands that it has not yet seen land on the server**, and the interface shows that
+changes are waiting while it holds any.
 
 **The journal lives inside the local file.** The local file's encrypted payload holds the
 ward and its access list, plus the state that belongs to this device alone:
@@ -506,6 +578,7 @@ ward and its access list, plus the state that belongs to this device alone:
 - the access list as of the last dismissed access notice, which the next notice is a diff
   against
 - dismissals of the single-holder and single-admin notices
+- the failed list of addresses and unit numbers that did not resolve
 - whether the ward is no longer this device's, so a device reopened offline still knows
 
 A pushed version's payload holds the ward, its access list and the landed marks. In memory these are separate, so a push serialises the ward and
@@ -542,11 +615,13 @@ directory over the other user's work without noticing. The two imports -
 construction for this reason, rather than reading it inside `execute` as they do now.
 `SetFamiliesCommand` has no callers and is deleted.
 
-**The start condition is what the user saw.** An edit that opens a panel or dialog
-captures the values it shows when it opens, and the command is built from those, rather
-than from the document re-read when the user confirms. An incoming version may have
-changed the same thing while the dialog stood open, and only a start condition taken at
-open can notice.
+**The start condition is what the user saw.** An edit captures the values it will change
+when its target is chosen: when the panel or dialog opens, or when the user picks a
+different target inside it, which is also when it shows that target's current values. The
+command is built from those, rather than from the document re-read when the user confirms.
+An incoming version may change the same thing while the dialog stands open; the confirm
+then conflicts and is handed back, and the other change stands. Every write that follows a
+dialog's `exec()` is such an edit.
 
 **A start condition covers exactly what the command changes.** An update command is built
 from the difference between what the edit opened with and what it saved, and holds the
@@ -555,9 +630,11 @@ before and after of the changed fields only. The fields are typed per command:
 a change per member keyed by `PersonId`. Each field it holds is judged on its own: one
 still at its before value is set, one already at its after value is left, and one at
 anything else makes the whole command a conflict that touches nothing. A command whose
-fields are all already at their after values is the result-already-holds case.
+fields are all already at their after values is the result-already-holds case. A geocode
+therefore collides only with an edit that changed the coordinates, and two users editing
+different members of one family both apply.
 
-The same holds one level down. A member change is per field - name, phones, email,
+The same holds one level down. A member change is per field - name, gender, phones, email,
 birthday, callings, parent flag, units, special-need note - each judged on its own. A
 member added carries the whole new `Person`, and its result holds if that `PersonId` is
 already there; a member removed carries the person as last seen, and its result holds if
@@ -569,8 +646,26 @@ leader, a response area - are per field. Sets - a team's members, an asset's peo
 tag's people and families - are held as the ids added and the ids removed: an addition is
 done if the id is present, a removal if it is absent. `UpdateTeamCommand`,
 `UpdateEmergencyAssetCommand` and `UpdateTagCommand` hold whole objects today, and convert
-to this, so two users adding different members to one team both apply. A geocode therefore collides only with an edit that changed
-the coordinates, and two users editing different members of one family both apply.
+to this, so two users adding different members to one team both apply.
+
+**References stay whole.** Teams, tags, assets, ministering groups and districts, and tasks
+refer to people, families and teams by id, and replay keeps every such id pointing at
+something that exists:
+
+- **An addition's start condition includes that the id it adds exists.** Adding Bob to a
+  team, replayed after Bob was removed, conflicts.
+- **A removal carries its cleanup and where it saw the removed thing.** Removing a member,
+  deleting a family, and an import's removals all use one cleanup routine, which takes the
+  removed people out of every team, tag, asset, and ministering group and district that
+  holds them, clearing any leader or presidency role they held. The command holds that list
+  of places as the user saw it, and its start condition includes it: if the person has been
+  added somewhere since, the removal conflicts rather than leave that reference behind.
+  `Document::cleanupPersonReferences`, which has no callers today, becomes this routine.
+- **A leader is a member.** A leader change's start condition includes that the new leader
+  is on the team.
+
+A removal therefore conflicts with a concurrent membership change for the same person,
+which is two users disagreeing about that person and is handed back as such.
 
 Online the journal is almost always empty: a command enters it and leaves it as the push
 succeeds. Offline it grows, and it survives closing the app, which is what makes a week of
@@ -586,13 +681,27 @@ someone else's push before this device hears of it, and the app closed in betwee
 push is in flight at a time, so a command made while it is in flight sits above the mark
 and goes out with the next.
 
+On taking any version, the device sets its counter to the larger of the counter and its
+own mark in that version, so new entries always number above anything that landed, even
+after an older local file comes back from a restore of app data. A device that cannot read
+its local file, but whose fingerprint the head still names, downloads the current version
+as itself and starts with an empty journal; whatever the unreadable journal held is lost.
+
 **Making every write a command is the core of this work.** What runs through
 `CommandHistory` today is family update; team add, update, delete and member removal;
 emergency-asset add, update, delete and unassign; and the two imports. Ministering changes
 only by import. The tag commands exist and convert with the rest, though nothing in the
-interface calls them yet. `AddFamilyCommand`, `AddTeamMemberCommand` and
+interface calls them yet: `AddTagCommand`, `UpdateTagCommand` and `DeleteTagCommand` stay,
+while `AssignTagToPersonCommand`, `AssignTagToFamilyCommand`,
+`UnassignTagFromPersonCommand` and `UnassignTagFromFamilyCommand` are deleted, since each is
+an `UpdateTagCommand` holding one id added or removed. `AddFamilyCommand`, `AddTeamMemberCommand` and
 `AssignEmergencyAssetToPersonCommand` have no callers - families arrive by import, and the
 team and asset dialogs change members through their update commands - so they are deleted.
+`RemoveTeamMemberCommand` and `UnassignEmergencyAssetFromPersonCommand` are deleted too:
+under the update shape above, removing one member is an `UpdateTeamCommand` or
+`UpdateEmergencyAssetCommand` holding that one id removed, and, for a team leader, the
+leader change as well, both fixed at construction. `RemoveTeamMemberCommand` today clears
+the leader inside `execute` and does not restore it on undo.
 The Delete Family action, whose confirmation ends in "Delete not yet implemented" today, is
 wired to `DeleteFamilyCommand`, which carries the same cleanup of the family's people from
 teams, tags, emergency assets and ministering as an import's removal, worked out at
@@ -632,6 +741,16 @@ replay:
   progress bar and the report - count the response's records plus, while it is in progress,
   every directory family without a record as Not Contacted; an ended response counts its
   records only, so its report does not drift as the directory changes.
+- **Everything that lets the user choose where a ward is stored is deleted**; the PDF import
+  and report export dialogs stay. Known sites:
+  - `DocumentManager`: the `filePath` property and `filePathChanged`, `setFilePath`,
+    `openDocument(path)`, `saveDocument`, `saveDocumentAs`, `saveDocumentOnly`,
+    `ensureFilePath`, `maybeRenameForWard`, and `setEmergencyResponse`, whose work the
+    emergency commands take over
+  - `JsonService`'s plaintext `loadDocument` and `saveDocument`; the payload's JSON reuses
+    the models' `toJson` and `fromJson`
+  - `MainWindow`'s File > Open and Save with their file dialogs, and the "use Save As to
+    save manually" hint on a failed save
 - **All archive code is deleted** with the archives themselves; ended responses, shown
   read-only among the emergencies, are how a past emergency is looked back on:
   - `EmergencyManager`: `m_savedResponse`, `loadArchive`, `closeArchive`, `reopenArchive`,
@@ -676,6 +795,8 @@ replay:
   change replay like any other. Join is a command too, run once by the joining device under
   the invite's key, and refused with *This invite has been used or withdrawn* when the
   current header no longer names the invite.
+- **Every model `fromJson` gains a way to fail**, so a missing or malformed required field
+  refuses the whole payload; today each reads a missing field as empty or false.
 - **`Command` itself** gains `toJson` and `fromJson` with a type registry, so a journal
   entry reaches disk and comes back as the command it was. `undo` becomes `inverse` on
   every command, and `CommandHistory`'s `markSaved` and `isDirty`, with
@@ -685,22 +806,33 @@ replay:
   and, when it is newer than the running version, shows a dismissible notice offering the
   download. Installers are published to the server, which serves them and the download
   page.
-- **Links and launches** are new: the single-instance handoff on Windows and Linux and the
-  `QFileOpenEvent` path on macOS, and registration of the `wardplanning:` scheme in
-  `installer.iss` and in the macOS and Linux packaging. `installer.iss` registers
-  `.emergencyplan` today, and that association is removed.
-- **`ARCHITECTURE.md` and `IMPORT_DESIGN.md` change with the code they describe.**
+- **Receiving an invitation** is new: *Join a ward*, which reads the clipboard when clicked
+  and otherwise offers a paste box, and the Windows instance lock. `installer.iss` registers
+  `.emergencyplan` today, and that association is removed; nothing is registered in its
+  place.
+- **`ARCHITECTURE.md`, `IMPORT_DESIGN.md` and `USER_GUIDE.md` change with the code they
+  describe.**
   `ARCHITECTURE.md` gives commands `execute` and `undo`, `CommandHistory`'s stacks and an
   `AddFamilyCommand` example; it moves to `execute`, `inverse` and `refusal`, the journal
   and `WardSession`. `IMPORT_DESIGN.md` says a re-import replaces family and person data;
   it states that the special-need note and the coordinates are the app's own and stay.
-- **Edits that re-read on confirm** take their start condition from what they opened with:
-  the family edit panel (`MainWindow.cpp` builds `UpdateFamilyCommand` from the live
-  document, while the panel already holds the copy it opened with), the team dialog in
-  `TeamsView.cpp`, the asset dialog in `EmergencyAssetView.cpp`, and the person dialogs in
-  `NeedsSubView.cpp`. The special-needs dialog
-  lets the user pick a different person than it opened on, so it takes its start condition
-  when a person is selected, which is when it shows that person's current note.
+  `USER_GUIDE.md` describes `.emergencyplan` files, File > Open, Save As and archives; it is
+  rewritten for wards, *Who has access* and invites, in the words under *Words the user
+  sees*, and carries the statements this design promises it makes: what the server knows,
+  and that roles are a convention among honest clients, not a security measure.
+- **Edits that re-read on confirm** take their start condition when their target is chosen,
+  as above. The sites known today are a starting list, not a complete one: the family edit
+  panel (`MainWindow.cpp` builds `UpdateFamilyCommand` from the live document, while the
+  panel already holds the copy it opened with); the team dialog in `TeamsView.cpp`; the
+  asset dialog in `EmergencyAssetView.cpp`; the special-needs dialogs in `NeedsSubView.cpp`,
+  which can switch person; and the notify, resolve and assign-to-team actions in
+  `WardListView.cpp`, `TaskListView.cpp` and `TeamsView.cpp`.
+- **The special-needs dialog becomes one "Special Need" dialog.** Opened on an existing
+  need, its person is locked; opened from empty space, picking a person fills in that
+  person's current note, and that is when its start condition is taken. Today it reuses
+  `WardListDialog::selectPersonWithName`, which sets the note once at open and never on a
+  change of selection (`WardListDialog.cpp:292-317`), so it either gains a
+  selection-changed signal from the picker or stops reusing it.
 
 **Automatic updates are the one exception, and stay out of the journal.** Geocoding and
 ward and stake lookup produce derived data: an address in, coordinates out. A result is
@@ -764,7 +896,10 @@ same change, so take it", which discards nothing: both users wanted the same end
 one got there first, so no intent is lost.
 
 **Replay also runs the app's own refusals.** A command is not offered when the app would
-not allow it - the only admin cannot step down, the last user cannot leave, a member
+not allow it - the only admin cannot step down, a leave made while others remained cannot
+land where its user is now the only one (*You are now the only member, so leaving would
+delete Tanglewood Ward*), a user cannot
+remove their last device (*To stop using this ward, use Leave*, so Leave's rules apply), a member
 cannot add users, remove users, set roles or withdraw someone else's invite - and replay
 asks those same questions of the document in front of it, because a command made when a
 rule allowed it can arrive where the rule does not. The last admin's own role is untouched
@@ -870,7 +1005,13 @@ will make, each with its before and after:
   groups and districts; the directory PDF date; and the ward record, created if missing,
   whose result holds if one is already there.
 - **A ministering import**: its organisation's districts and groups, the families it adds
-  or updates, and the ministering PDF date.
+  or updates, and the ministering PDF date. The districts and groups are held as one value,
+  the organisation's whole collection before and after, because the parser gives every
+  group and district a new id on each import, so a comparison by id would find every one
+  removed and added anyway. Only this import creates or rearranges them; the cleanup of a
+  removed member also changes them, and a cleanup or another ministering import landing
+  in the meantime makes the import conflict. The people and families its groups refer to
+  follow *References stay whole*.
 
 A family an import updates is held at the same typed level as `UpdateFamilyCommand` -
 address, coordinates, and a change per member keyed by `PersonId` - and only for families
@@ -916,7 +1057,8 @@ accessList:
 ```
 
 The header names one recipient per key: every device, and every open invite. Header and
-access list must agree exactly. The server sees fingerprints only.
+access list must agree exactly, except in a deleted ward's final version, whose header
+names no recipient and which carries no payload. The server sees fingerprints only.
 
 **User ids** are 128 random bits, made when someone creates a ward or joins it through
 *Add a user*, so they are per ward and distinct from the directory's `PersonId`, which
@@ -935,7 +1077,9 @@ well-meaning users from over-sharing.
 
 An access change is a command like any other and replays like one. Two admins removing
 different users both apply. Two admins removing the same user: the second finds its
-intent already satisfied and there is nothing to do. Two admins setting one user's role
+intent already satisfied and there is nothing to do. A removal names the user by id and
+takes their whole entry, whatever devices it holds by then, since the intent is that this
+person is out; a device the user added in the meantime goes with them. Two admins setting one user's role
 differently is a conflict, so the second admin's replay is abandoned and they do it again
 knowing what the first one did.
 
@@ -944,9 +1088,20 @@ whoever pushes first stands, and the other's write is refused because the curren
 longer names them. They learn the ward is no longer theirs, and their own pending removal
 stops mattering. A ward cannot be emptied by two users leaving at once.
 
-The last user still cannot leave, because a ward with nobody to read it is not a state,
-and leaving needs the server, since the version without you must be held there before your
+Leaving needs the server, since the version without you must be held there before your
 copy goes: Leave pushes first and saves after (see *Saving*).
+
+**The last user's Leave deletes the ward.** It is how a throwaway ward is removed. The
+confirmation says so: *You are the only member of Tanglewood Ward. Leaving deletes it: it
+stops being shared and is removed from this device, and any other device of yours will
+offer to remove it too.* **Delete ward** / Cancel. The push is a final version whose
+header names no recipient, which also withdraws any open invites, and which carries no
+payload to read. A head with no recipients is a deleted ward to every device: this device
+removes its copy, and any other device of the same user shows *Tanglewood Ward has been
+deleted*, and offers to remove its copy, keeping the copy and its journal until the user
+agrees, as with any head that leaves a device out. If the answer to that final push is lost, the next head, naming no one, tells the
+device the push landed. The server keeps the empty version until the pruning rule under
+*Open points* clears it, so no delete call is needed.
 
 An invite made on one device and a join landing on another are different commands and cross
 without troubling anyone.
@@ -959,20 +1114,25 @@ An invite is a one-time bearer key. Its 32-byte seed yields both of its keypairs
 
 1. **Add a device** or **Add a user** (admins only for the latter) generates an invite
    keypair from a random 32-byte seed, writes a new version whose header seals the data key
-   to it, with an `invites` entry saying what it is for, and shows the link:
-   `wardplanning:join/<document id>/<seed, base64url>`. What the user copies is a short
-   message, not the bare link, because the recipient may not have the app yet:
+   to it, with an `invites` entry saying what it is for, and pushes it. Both are offered
+   only while connected, and the link is shown only once that version is on the server,
+   so every link a user can copy is one that works. Then it shows the link:
+   `https://<server>/join#<document id>/<seed, base64url>`. It is an ordinary web link, so
+   mail and text apps make it clickable, and the ward id and seed ride in the `#` fragment,
+   which browsers do not send to the server. What the user copies is a short message:
 
-   > Alice Smith has invited you to Tanglewood Ward in Ward Planning. Install it from
-   > https://<server>/download, then open this link:
-   > wardplanning:join/...
+   > Alice Smith has invited you to Tanglewood Ward in Ward Planning. Open this link to
+   > join: https://<server>/join#...
 
-   The download address is the server's download page; the app checks the same server's
-   `GET /releases/latest` for its own updates. The user sends the message by email, text, or any channel they trust
-   with it.
-2. **Opening the link** on a device: derive the invite keypair from the seed, fetch the
-   current version, unseal the data key with the invite's private key, validate as any
-   download is validated, then write the next version: the invite entry becomes a device
+   The page the link opens has two steps: **Download**, for someone who does not have the
+   app yet, and **Copy invitation**, which puts `Ward Planning invite: <document id>/<seed>`
+   on the clipboard, followed by *then choose Join a ward in Ward Planning* (see
+   *Receiving an invitation*). The user sends the message by email, text, or any channel
+   they trust with it.
+2. **Joining** on a device, once the app has the invitation (see *Receiving an
+   invitation*): derive the invite keypair from the seed, fetch the current version, unseal
+   the data key with the invite's private key, validate as any download is validated, ask
+   the user to confirm by the ward's name, then write the next version: the invite entry becomes a device
    entry, under the inviter's user for a device invite, under a new user for a user
    invite, named by the joiner, signed by the invite's signing key, whose verify key the
    current header names. The device then downloads the current version as itself and writes
@@ -982,7 +1142,7 @@ An invite is a one-time bearer key. Its 32-byte seed yields both of its keypairs
    version fetches it and joins again on top of it.
    From then on the device signs as itself. The ward opens.
 3. **Withdrawing** an unused invite is a write without its entry, by whoever made it or by
-   an admin. Removing a user withdraws the invites they made.
+   an admin. Removing a user, and a user leaving, withdraws the invites they made.
 
 A join and a withdrawal each drop the invite's key from the recipients, so each rotates
 the data key; for a join, the joining device generates the new key, as the member it now
@@ -992,25 +1152,24 @@ after it.
 
 The link is the gate. Whoever opens it first gets in, visibly, and can be removed.
 
-An invite link is about 90 characters: fine to paste, long to type. A QR code can show it
-for a camera later if a phone client ever wants one. If a web page is ever hosted for the
-app, the link can become `https://.../join#<id>/<seed>`, one address that offers the
-download when the app is missing and opens the app when it is there; the seed stays in the
-fragment, which browsers do not send to the server.
+An invite link is about 100 characters: fine to click or paste, long to type. A QR code
+can show it for a camera later if a phone client ever wants one.
 
 ## Everything else, from the document
 
 - **Who has access**: the access list, read from the open ward. Add a device, Add a user,
-  Remove, Make admin / Make member, Withdraw invite, Leave, Unlink (own devices), Details.
+  Remove, Make admin / Make member, Withdraw invite, Leave, Remove device (own devices), Details.
 - **Access notices**: the client diffs the access list between the version it last dismissed and
   the current one, one line per entry that differs: joined as member or admin, no longer
-  has access, now an admin or a member, a device added or unlinked, an invite made or used.
+  has access, now an admin or a member, a device added or removed, an invite made or used.
   The lines name whose entry changed, never who changed it; this device's own edits are news
   like any other.
-- **The ward is no longer yours**: a head whose header lacks this device. The reason is read
-  off the previous access list and the publisher: removed by *name*, or left, or this device
-  unlinked. The ward stops pushing until a head names this device again, the user is told, and the app offers to delete the
-  copy. Anything in the journal is no longer theirs to push.
+- **The ward is no longer yours**: a head whose header lacks this device. The user is told
+  *You left this ward* when this device pushed the leave itself, and *You no longer have
+  access to this ward* otherwise; a removed device cannot read the versions that followed,
+  so it names no one. The ward stops pushing until a head names this device again, and the
+  app offers to delete the copy. The journal is kept with the copy and replays if a later
+  head names this device.
 - **Last admin**: a client rule: the only admin cannot step down, and cannot leave while
   others remain.
 - **A second device of your own**: *Add a device*, send yourself the link, open it there.
@@ -1030,8 +1189,10 @@ would buy nothing and would hold a change back from everyone else for as long as
 
 **Automatic updates run on any device that holds the ward.** Geocoding and ward and stake
 lookup change families and ward details on their own. They run after an import, when a
-ward opens, and whenever this device takes a version from the server, by fast-forward or
-replay: `startBatchGeocoding` and `checkForIncompleteWards` each skip what is already done,
+ward opens, whenever this device takes a version from the server by fast-forward or
+replay, and after a committed command that clears coordinates, which the command knows at
+construction: `startBatchGeocoding` and `checkForIncompleteWards` each skip what is already
+done and what is on the failed list,
 so a result lost with a push is simply computed again. Several online devices may compute
 the same result at once; the results are identical, and the duplicate work is accepted.
 Their results are not journalled, for the reason given above, so while the server holds a
@@ -1049,8 +1210,11 @@ still has that address and no coordinates; otherwise it is dropped.
 **An automatic batch pushes once.** Results apply in memory as they arrive, and the save
 and push happen once, when the batch finishes (`onGeocodingFinished`, which already saves
 once today) or when a lookup completes, so an import costs one more version rather than
-one per family. Addresses and unit numbers that fail to resolve go on a list kept for the
-session, which later batches skip; restarting the app clears it.
+one per family. Addresses and unit numbers that fail to resolve go on a failed list, kept
+by their text in the device-local state, and are not tried again until the text changes. A
+family whose address is on it stays unmapped until someone corrects the address or types
+its latitude and longitude in the family edit panel. The `documentChanged` hook in
+`BackgroundGeocodingService` is replaced by these explicit triggers.
 
 **All writes go through `QSaveFile`**, so a crash mid-write leaves the previous file intact.
 
@@ -1058,11 +1222,14 @@ session, which later batches skip; restarting the app clears it.
 the change, nothing is pushed, and the user is told the reason. The next save that
 succeeds, once the problem is fixed, writes the document and journal together with the
 change in them, and pushes as usual; one write still carries both, so the local file never
-disagrees with itself. The local file and the server never disagree, and memory runs ahead
-of the file only while saves are failing. If the app closes before a save succeeds, the
-unsaved change is lost, as the message said.
+disagrees with itself. Every push carries only what this device has already saved, except
+Leave and Remove this device, which push first (below), and memory runs ahead of the file
+only while saves are failing. While they are, the app tries again on every command, when
+its window regains focus, and when it is closed; if that last attempt fails too, closing
+asks first: *Your latest changes could not be saved and will be lost. Close anyway?* A
+crash or power loss while saves are failing loses the unsaved changes.
 
-**Leave and Unlink this device push first and save after.** They are the two commands that
+**Leave and Remove this device push first and save after.** They are the two commands that
 take this device out of the access list, and a local save seals to exactly that list, so
 saving first would write a file this device cannot open. They are offered only while
 connected, run through the ordinary replay, and push before anything is saved. A push that
@@ -1128,25 +1295,27 @@ away. Backup is the local file on every member's device and the server's copy. T
 writes no other copies: anything it exported would be sealed to the ward's devices, each of
 which already holds the ward.
 
-## Links and launches
+## Receiving an invitation
 
-**The running app receives a link.** That is the one entry point: opening a
-`wardplanning:join/...` link arrives as a URL handed to the app that is already running,
-which opens it. How it gets there is per
-platform:
+**Join a ward reads the clipboard when the user clicks it.** The button is prominent on
+the first-run screen, where a new user with no wards lands, and is in the ward list too.
+If the clipboard holds text beginning `Ward Planning invite:`, or a full join link, the
+app fetches the ward, unseals it with the invite's key, and asks *Join Tanglewood Ward?*
+with the ward's own name; confirming runs the join. Otherwise the same dialog shows a
+paste box: *Copy the invitation from the page your invite link opened, then paste it
+here*, which accepts either form. The app reads the clipboard only on that click. This
+works right after a fresh install, and needs no link scheme, no registration with the
+system, and nothing handed from one process to another.
 
-- **Windows and Linux**: one instance per user. The app listens on a `QLocalServer` named
-  for the user; a second launch connects, sends its argument, and exits. This also keeps two
-  processes from writing the same local file and journal.
-- **macOS**: the system delivers links to the running app as `QFileOpenEvent`.
-- **iOS and Android**, if a phone client is ever built: the system runs one instance and
-  delivers links through `QDesktopServices::setUrlHandler`.
+**One instance per user.** macOS, iOS and Android run one instance of an app themselves.
+On Windows the app holds a per-user `QLockFile` in app data while it runs, with
+`setStaleLockTime(0)` so that only a dead process, not age, makes the lock stale; a second
+launch that cannot take the lock says *Ward Planning is already running* and exits. This
+keeps two processes from writing the same local file and journal.
 
-**Registration** is the installer's or bundle's job, and covers the link scheme only, since
-ward files live in app data and are never opened from outside it: the Windows installer
-registers the `wardplanning:` URL scheme; the macOS bundle declares it in `Info.plist`
-(`CFBundleURLSchemes`); the Linux `.desktop` file declares `x-scheme-handler/wardplanning`;
-a phone build would add an Android intent filter or an iOS `CFBundleURLSchemes` entry.
+**For the phone ports**, verified `https` links - Android App Links and iOS Universal
+Links, with their verification files served by the server - would let tapping the invite
+link open the app directly. This is an option for then, not part of this design.
 
 ## Single key holder notice
 
@@ -1213,17 +1382,21 @@ returns.
 | A command could not replay | Your changes could not be applied, because the ward changed first. These need doing again: *the to-redo list*. The one that clashed: *its description*, and what that now reads. |
 | A removal among them | ... and *name* still has access until you remove them again. |
 | A rule refused a replayed command | The wording the app gives for that operation, as it would if the user tried it now: *You are the only admin...* |
-| The local save failed | Your change could not be saved: *reason*. It is kept while the app stays open and saved as soon as saving works again. |
+| The local save failed | Your change could not be saved: *reason*. It is kept while the app stays open and saved as soon as saving works again; closing asks first. |
 | The server is unreachable | Working offline. Your changes are saved here and will go up when the connection returns. |
 | Head is older than this copy | The server returned an older version of this ward. Nothing was changed. Your copy is safe and you can keep working; sharing resumes when the server has the latest version. |
 | Head fails validation | The ward's latest version on the server could not be read. Your copy is safe and you can keep working; sharing resumes when the server has a readable version. |
 | Header format is newer | This ward was saved by a newer version of Ward Planning. Update to see the latest changes and share your work. |
-| Invite link already used or withdrawn, or not yet pushed | This invite has been used or withdrawn, or has not reached the server yet. Ask the sender. |
+| Invite link already used or withdrawn | This invite has been used or withdrawn. Ask the sender. |
 | Invite link for a ward the server does not have | The server has no such ward. Check the link. |
-| Opening a link while offline | Connect to the internet to join a ward, then open the link again. |
-| Leave or Unlink this device while offline | Connect to the internet to leave this ward. / Connect to the internet to unlink this device. |
+| An invitation found while offline | Connect to the internet to join a ward, then copy the invitation again. |
+| Leave or Remove this device while offline | Connect to the internet to leave this ward. / Connect to the internet to remove this device. |
+| Add a user or Add a device while offline | Connect to the internet to invite someone. |
+| The invite's push loses to a conflict | Your invite could not be created, because the ward changed first. Try again. |
 | Not an admin | In *Who has access*, a member sees *To add or remove users, ask an admin: names* in place of the Add a User button. |
-| Head lacks this device | Removed by *name* / You left / This device was unlinked by *name*, with an offer to delete this copy |
+| Head lacks this device | You left this ward. / You no longer have access to this ward. Either with an offer to delete this copy. |
+| Head names no recipient | Tanglewood Ward has been deleted, with an offer to remove this copy. |
+| A leave lands where its user is now the only one | You are now the only member, so leaving would delete Tanglewood Ward. |
 
 ## Debugging
 
@@ -1271,9 +1444,11 @@ conformance suite.
   to `DocumentManager::instance()`, so the document, journal, sync and replay move into a
   `WardSession` class with no global state, which a test creates as many of as it needs;
   the singletons become thin wrappers that hold the app's one session for the interface.
-- **Every command type is covered by the registry.** Each type registered for `fromJson`
-  also registers a sample instance, and the round-trip test iterates the registry, so a new
-  command type cannot be added without a sample and a passing round-trip.
+- **Each registered command type has a sample.** Each type registered for `fromJson` also
+  registers a sample instance, and the round-trip test iterates the registry.
+- **Every outside dependency has a fake in `WardSession`**: the server, the geocoder, the
+  ward and stake lookup, and the clock that stamps attempts and resolutions. A test sets
+  each, so nothing reaches the network and timestamp ordering is decided by the test.
 
 Format and crypto, in `tests/services`:
 
@@ -1282,11 +1457,15 @@ Format and crypto, in `tests/services`:
 - mutating any header byte causes decryption to fail, including the document id
 - the known-answer vectors for the fingerprint, the invite keypairs derived from a fixed
   seed, and the signed line
+- a fixed document written by the app is read back by a reader written only from this
+  section - plain JSON, base64url, zlib and libsodium, without Qt - so the specification
+  is shown complete
 - a header with an unknown format version is refused whole; nothing pushes while every
   edit journals and saves locally; the state clears as soon as the server again serves a
   version the app understands, and the journal then replays
 - a header or payload with a missing or malformed required field is refused, never read in
-  part
+  part; a payload written by the previous format version reads correctly, through its
+  upgrade where the release has one
 - a version whose header lists a key the access list lacks, or whose access list has a key with no
   header entry, is refused
 - a head whose version is below this copy's is refused and changes nothing
@@ -1294,11 +1473,18 @@ Format and crypto, in `tests/services`:
   that removes nobody keeps the key; the written header has exactly the expected entries,
   each matching an access-list key
 - a device the server mentions but this client did not admit is never sealed to
+- a version under a key this device never held for the ward, naming none of its keys
+  among its former keys, is refused and changes nothing
+- a version of another ward this device holds, served under this ward's id, is refused and
+  changes nothing
+- after a join, and after a withdrawal, the invite's seed can no longer unseal the current
+  version
 
 The journal and replay, in `tests/services`:
 
-- every registered command type's sample round-trips through the journal, and the journal
-  survives closing the app
+- every registered command type's sample round-trips through the journal, judged by
+  behaviour: the original and the rebuilt command, executed on the same document, leave
+  equal documents and give equal descriptions; and the journal survives closing the app
 - an emergency response mutation and an access-list change each enter the journal, replay,
   and reach the server by the same path a directory edit does
 - an automatic geocode result applies and pushes, and when that push loses it is absent
@@ -1309,10 +1495,12 @@ The journal and replay, in `tests/services`:
 - a geocode lands between an offline edit to a family's phone and its replay: the edit
   applies, and the family holds both the new phone and the new coordinates
 - an address edit clears the family's coordinates on every device that takes it, and the
-  geocode for the new address then fills them; a geocode computed for the old address that
-  arrives afterwards is dropped
+  geocode for the new address then fills them, on the editing device as well; a geocode
+  computed for the old address that arrives afterwards is dropped
 - geocoding the families of an import pushes one version for the whole batch, and an
-  address that fails to resolve is not retried on the versions that follow
+  address that fails to resolve is not tried again - on later versions, after closing and
+  reopening the app, or by a command that clears other coordinates - until its text changes
+- a command that changes no address starts no geocoding
 - two offline edits to different members of one family both apply
 - a special-need note edit and a phone edit to the same person, offline on two devices,
   both apply
@@ -1332,10 +1520,17 @@ The journal and replay, in `tests/services`:
 - after an abandoned replay, a new command pushes successfully
 - every item of the device-local state round-trips through the local file, and a pushed
   version's payload carries none of it
-- Leave and Unlink this device are not offered offline; on a push that loses, the local
+- the only user's Leave asks before deleting, pushes a version naming no recipient that
+  withdraws any open invites, and removes this device's copy; the user's second device
+  shows the ward as deleted and keeps its copy and journal until the user agrees; an
+  invitee's later join is refused as withdrawn
+- Add a user and Add a device are not offered offline, and an invite's link is shown only
+  after the version naming it is on the server; an invite whose push loses shows no link
+- Leave and Remove this device are not offered offline; on a push that loses, the local
   file is unchanged and still opens on this device
 - a save that fails leaves the local file as it was and nothing pushed, with the change
-  still in memory; the next save that succeeds writes it and pushes it
+  still in memory; once saving works again, regaining focus saves and pushes it with no
+  further command; closing while saves still fail asks before discarding it
 - two responders working offline: every attempt from both sides lands, asserted by exact
   attempt counts per family and each attempt's notes
 - two responders offline each record an attempt on a family that had no record: both land,
@@ -1357,8 +1552,14 @@ The journal and replay, in `tests/services`:
   and ministering memberships
 - re-importing the same directory keeps every special-need note and every family's
   coordinates, and holds no change for families the PDF leaves as they were
+- a ministering import replayed after a member removal's cleanup changed a group conflicts,
+  and the group keeps the cleanup's result
 - deleting a family removes its people from teams, tags, assets and ministering, and
-  undoing the delete restores them
+  undoing the delete restores them; removing one member through the edit panel does the
+  same for that person
+- an offline addition of a person to a team, replayed after that person was removed,
+  conflicts; an offline removal of a person, replayed after someone added them to another
+  team, conflicts; in both, no team is left holding a missing id
 - a local save that removed someone still accepts the pre-removal version from the
   server, and the journal replays onto it: the save did not rotate, so the one key this
   device trusts is the one the server's version is under
@@ -1368,10 +1569,15 @@ The journal and replay, in `tests/services`:
   moved version and then onto an unmoved one conflicts and then applies, which fails if
   anything captured its start condition while running
 - an access-list command replays: two admins removing different users both apply; removing the
-  same user twice applies in full; two different roles for one user is a conflict
-- the last-admin and last-user rules refuse the command that would break them, both when
+  same user twice applies in full; two different roles for one user is a conflict; a
+  removal replayed after that user added a device applies and takes the new device too; a
+  user who leaves has their open invites withdrawn
+- the last-admin rule, and the rule that a leave made while others remained cannot land
+  where its user is now the only one, refuse the command that would break them, both when
   the user tries it and when it replays onto a version where the rule has come to apply:
-  the ward is left with an admin, and the message is the rule's rather than a conflict's
+  the ward is left with an admin, two users leaving at once leave one of them in it, and
+  the message is the rule's rather than a conflict's;
+  removing a user's last device is refused with *To stop using this ward, use Leave*
 - a removal made offline by an admin who is demoted before it replays is refused with the
   member's wording, and the user it named is still there
 
@@ -1387,6 +1593,10 @@ Against the fake server, in `tests/server`:
   fetches, and its landed mark empties the journal
 - a downloaded version that fails validation replaces nothing
 - edits made while unreachable are kept in the journal and replay on reconnect
+- a device given back an older local file, its counter behind the ward's mark for it, makes
+  a new edit after its next fetch, and that edit reaches the server
+- a device whose local file cannot be read, still named by the head, opens the ward with
+  the current version and an empty journal
 - a push the server stores but whose reply never arrives: on the next fetch the entries it
   carried leave the journal by the device's mark, without a replay or a conflict, and
   nothing is applied twice, asserted by exact counts of the added elements (contact
@@ -1397,11 +1607,15 @@ Against the fake server, in `tests/server`:
 - a command made while a push is in flight stays in the journal when that push succeeds,
   and goes out with the next push
 - a server ahead with an empty journal fast-forwards without a prompt
-- a device whose head lacks it stops pushing, keeps its file until the user agrees, and
-  says who removed it, both mid-session and on next open; when a later head names it
-  again, it resumes syncing
+- a device whose head lacks it stops pushing, keeps its file and journal until the user
+  agrees, and says it no longer has access, both mid-session and on next open; when a later
+  head names it again, it resumes syncing and its journal replays
 - a user joins only through an invite the current header names, and a used or withdrawn
-  invite is refused
+  invite is refused; *Join a ward* with a copied invitation on the clipboard, and the
+  copied invitation or the full link pasted into its paste box, reach the same join; with
+  other text on the clipboard it shows the paste box
+- a second launch on Windows while the app runs exits without opening the ward files, and
+  a launch after a crash takes over the stale lock
 - a join whose answer is lost, with the link opened again, opens the ward as a member and
   never reports the invite as used or withdrawn
 - two admins removing each other: the first stands and the second's write is refused
@@ -1431,7 +1645,7 @@ disagreement is resolved in whichever implementation is wrong, never by loosenin
 - **One admin can remove anyone** from the ward's future. Every removal is announced, and
   everyone keeps the copy they hold; recovery is a new ward built from the directory PDFs.
 - **A stolen, unlocked device acts as its owner**, with its owner's role. Its owner
-  unlinks it and any device it added; otherwise any admin removes its owner.
+  removes it and any device it added; otherwise any admin removes its owner.
 - **A device's first download is taken as it stands.** A newly joined device, or one whose
   app data was cleared, has no earlier version to check the first against.
 - **An intercepted invite link gets in**, visibly, and is removed.

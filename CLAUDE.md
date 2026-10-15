@@ -67,14 +67,17 @@ Using `QHash<QString, Model>` instead of `QList<Model>` because:
 
 | Task | Status | Plan Doc |
 |------|--------|----------|
-| NeedsSubView dialog UX | blocked:discussion | - |
+| NeedsSubView dialog UX | ready | docs/SHARED_WARD_DESIGN.md (work list: the "Special Need" dialog) |
 
 **Status:** `ready`, `in-progress`, `blocked:<reason>`, `done` (then remove row + archive plan)
 
 ---
 
 
-## Pending Discussion: NeedsSubView Dialog UX
+## NeedsSubView Dialog UX (adopted)
+
+Adopted by the shared ward design, which takes the start condition when a person is picked
+and writes the note as a per-member field of `UpdateFamilyCommand`.
 
 The current `showAddNeedDialog()` and `showEditNeedDialog()` have a UX issue worth revisiting:
 
