@@ -85,6 +85,10 @@ design's answer, not a gap:
 
 - **Replay, never reconciliation** of two finished versions.
 - **Emergency responses are a keyed collection**; two offline starts are two events.
+- **Ending an emergency saves its report and removes the response.** A change replayed onto
+  a response that has ended conflicts, which abandons that responder's journal to the
+  to-redo list. It takes a responder whose work in that response has not landed when the
+  end does; one working only in a response they started offline is unaffected.
 - **No base copy, no save counter, no debounce.**
 - **No exported copies.** A copy would be sealed to the ward's devices, each of which already
   holds the ward; *Show in folder* reveals the ward's own file.
@@ -102,6 +106,10 @@ design's answer, not a gap:
   by a server bug or a renumbered restore, is not detected.
 - **Server error recovery is out of scope**: repairing a bad version, restoring from backup,
   and what an export must carry for a successor belong to the server's own design.
+- **Two directory imports can add one new family or member twice** when both list it and
+  neither has landed when the other is built. An import gives each family and member it
+  cannot match a fresh id, so the one that lands second finds none of its additions already
+  there and adds them. The duplicate stays until a user removes it.
 
 ### Words the user sees
 
@@ -648,24 +656,34 @@ done if the id is present, a removal if it is absent. `UpdateTeamCommand`,
 `UpdateEmergencyAssetCommand` and `UpdateTagCommand` hold whole objects today, and convert
 to this, so two users adding different members to one team both apply.
 
-**References stay whole.** Teams, tags, assets, ministering groups and districts, and tasks
-refer to people, families and teams by id, and replay keeps every such id pointing at
-something that exists:
+**References stay whole.** Teams, tags, assets, ministering groups and districts, and task
+assignments refer to people, families and teams by id, and replay keeps every such id
+pointing at something that exists:
 
 - **An addition's start condition includes that the id it adds exists.** Adding Bob to a
   team, replayed after Bob was removed, conflicts.
 - **A removal carries its cleanup and where it saw the removed thing.** Removing a member,
-  deleting a family, and an import's removals all use one cleanup routine, which takes the
-  removed people out of every team, tag, asset, and ministering group and district that
-  holds them, clearing any leader or presidency role they held. The command holds that list
-  of places as the user saw it, and its start condition includes it: if the person has been
-  added somewhere since, the removal conflicts rather than leave that reference behind.
-  `Document::cleanupPersonReferences`, which has no callers today, becomes this routine.
+  deleting a family, and an import's removals all use one cleanup routine. It takes each
+  removed person out of every team, person-level tag, asset and ministering group that
+  holds them, clears any leader or presidency role they held, and unassigns every task
+  assigned to them; a removed family it also takes out of every family-level tag and
+  ministering group that holds it. Deleting a team unassigns every task assigned to that
+  team the same way. The command holds that list of places as the user saw it, and its
+  start condition includes it: if what it removes has been added or assigned somewhere
+  since, the removal conflicts rather than leave that reference behind. `Document::cleanupPersonReferences`,
+  which has no callers today, becomes the person half of this routine.
 - **A leader is a member.** A leader change's start condition includes that the new leader
   is on the team.
 
-A removal therefore conflicts with a concurrent membership change for the same person,
-which is two users disagreeing about that person and is handed back as such.
+A removal therefore conflicts with a concurrent membership change or task assignment for
+the same person, which is two users disagreeing about that person and is handed back as
+such.
+
+A response's family records and contact attempts are the log of what happened during it,
+and keep the ids they were made with. A record holds its family's name and address as they
+stood when the record was made, so it reads the same after the family is removed; an
+attempt whose `who` has been removed since shows no name there. The log leaves the document
+when the emergency ends, as its summary report (see *Emergency archives are removed*).
 
 Online the journal is almost always empty: a command enters it and leaves it as the push
 succeeds. Offline it grows, and it survives closing the app, which is what makes a week of
@@ -703,9 +721,8 @@ under the update shape above, removing one member is an `UpdateTeamCommand` or
 leader change as well, both fixed at construction. `RemoveTeamMemberCommand` today clears
 the leader inside `execute` and does not restore it on undo.
 The Delete Family action, whose confirmation ends in "Delete not yet implemented" today, is
-wired to `DeleteFamilyCommand`, which carries the same cleanup of the family's people from
-teams, tags, emergency assets and ministering as an import's removal, worked out at
-construction. The rest has to join them, because a write that is not a command cannot
+wired to `DeleteFamilyCommand`, which carries the same cleanup as an import's removal,
+worked out at construction. The rest has to join them, because a write that is not a command cannot
 replay:
 
 - **Emergency responses become a keyed collection.** `Document` holds one
@@ -713,8 +730,8 @@ replay:
   `startEmergency` returns early when one is active, and `isActive()` gates the response
   views throughout the interface. Each response gains an id, the document holds them by it,
   and the interface lists the emergencies in progress and switches between them. Ending
-  sets `endedAt` rather than clearing the response (`endEmergency` clears it today), and
-  deleting an ended response is its own action.
+  saves the summary report and then removes the response, as `endEmergency` clears it
+  today (see *Emergency archives are removed*).
 - **Contact status becomes the outcome of an attempt.** `FamilyResponseRecord` stores one
   `m_contactStatus` today, overwritten by the OK and Unable to Reach buttons. Instead,
   `ContactAttempt` gains a `std::optional<ContactOutcome>` (`OK` or `UnableToReach`), the two
@@ -738,9 +755,8 @@ replay:
   command that writes to a family's record creates it when missing, from the name and address snapshot the command took at
   construction, so it depends on nothing but the response id. Two responders
   touching a new family both land, since each change is an addition. Statistics - the
-  progress bar and the report - count the response's records plus, while it is in progress,
-  every directory family without a record as Not Contacted; an ended response counts its
-  records only, so its report does not drift as the directory changes.
+  progress bar and the report - count the response's records plus every directory family
+  without a record as Not Contacted.
 - **Everything that lets the user choose where a ward is stored is deleted**; the PDF import
   and report export dialogs stay. Known sites:
   - `DocumentManager`: the `filePath` property and `filePathChanged`, `setFilePath`,
@@ -751,8 +767,8 @@ replay:
     the models' `toJson` and `fromJson`
   - `MainWindow`'s File > Open and Save with their file dialogs, and the "use Save As to
     save manually" hint on a failed save
-- **All archive code is deleted** with the archives themselves; ended responses, shown
-  read-only among the emergencies, are how a past emergency is looked back on:
+- **All archive code is deleted** with the archives themselves; the summary report saved
+  when an emergency ends is how it is looked back on:
   - `EmergencyManager`: `m_savedResponse`, `loadArchive`, `closeArchive`, `reopenArchive`,
     `saveArchive`, `isViewingArchive`, the `archiveViewOpened` and `archiveViewClosed`
     signals, and `endEmergency`'s `archive` parameter
@@ -762,21 +778,22 @@ replay:
   - `MainWindow`'s `onOpenArchive`, `onArchiveViewOpened`, `onArchiveViewClosed`,
     `m_openArchiveAction`, `m_closeArchiveAction`, the Open and Close Archive menu items,
     and the reopen-from-archive path
-  - the end dialog's Archive && End and Discard && End buttons, replaced by one End
-    confirmation; deleting is the separate action on an ended response
+  - the end dialog's Archive && End and Discard && End buttons and its *Generate summary
+    report* checkbox, replaced by one End confirmation that always saves the report first;
+    cancelling the report's save dialog ends nothing, in place of today's *Skip Report*
+    question
   - the `archiveViewOpened`/`archiveViewClosed` connections in `FamilyTreeModel`,
     `MinisteringModel`, `TeamsTreeModel` and `WardListView`, and the `isViewingArchive`
     checks in `ActionButtonsWidget`, `TeamsView` and `WardListView`
-  - the "set when archived" comment on `EmergencyResponse::m_endedAt`
+  - `EmergencyResponse::m_endedAt` and its accessors, since no response in the document
+    has ended; `ReportGenerator` takes the end time as an argument
 - **The emergency response** is written by `EmergencyManager` mutating it in place, outside
   the command path. Its mutations become these commands:
 
   | Command | Covers | On replay |
   |---|---|---|
   | `StartEmergency` | start, with a record per family | an addition; never conflicts |
-  | `EndEmergency` | end, setting `endedAt` | result holds if already ended |
-  | `ReopenEmergency` | reopening an ended response, clearing `endedAt`; the inverse of `EndEmergency` | result holds if not ended |
-  | `DeleteEmergency` | deleting an ended response | result holds if already gone |
+  | `EndEmergency` | end, removing the response once its report is saved | conflicts if the response differs from what the report holds; result holds if already gone |
   | `RecordContactAttempt` | logging a contact, and the OK and Unable to Reach buttons | an addition |
   | `DeleteContactAttempt` | removing an attempt | result holds if already gone |
   | `AddTask` | adding a task | an addition |
@@ -974,13 +991,13 @@ responder made, because the app has no way to know they were the same emergency 
 pretend otherwise. The app lists the emergencies in progress, and the user switches to any
 of them. Whoever is coordinating ends the one they do not want.
 
-**Ending an emergency keeps it.** Ending is a command that sets the response's `endedAt`;
-the response stays in the document, shown read-only among the ended emergencies, and an
-offline responder's attempts still land in it when they replay. Ending a duplicate
-therefore loses nothing, and each keeps its own records and report. Deleting an ended
-response is a separate, explicit action, the one place an emergency's records are given
-up, and the coordinator's deliberate choice; an attempt replayed onto a deleted response
-conflicts.
+**Ending an emergency turns it into its report.** Ending saves the summary report where the
+user chooses, then runs `EndEmergency`, which removes the response and holds it as the
+report was written from. A version that changed the response in the meantime makes the end
+conflict, and the coordinator ends it again with a report that includes the change, so the
+report of the end that removes a response holds everything in it. Ending a duplicate leaves
+its records in its own report. A change replayed onto a response that has ended conflicts,
+which is accepted under *Settled*.
 
 **While the network is down, responders cannot see each other's work.** The server relays
 nothing it cannot reach, and each device holds its own partial picture until connectivity
@@ -1001,8 +1018,7 @@ condition covers exactly what it changes.** At construction it works out every c
 will make, each with its before and after:
 
 - **A ward directory import**: the families it adds, updates and removes; for each removed
-  family, the cleanup of its people from teams, tags, emergency assets, and ministering
-  groups and districts; the directory PDF date; and the ward record, created if missing,
+  family, its cleanup (see *References stay whole*); the directory PDF date; and the ward record, created if missing,
   whose result holds if one is already there.
 - **A ministering import**: its organisation's districts and groups, the families it adds
   or updates, and the ministering PDF date. The districts and groups are held as one value,
@@ -1267,10 +1283,10 @@ most 100 entries with the oldest dropped, which is new: `CommandHistory` has no 
 - **Access-list commands are not undoable**, and never enter the undo stack: undoing a
   removal would re-seal to someone just removed, and a leave or a join cannot be undone
   from inside the ward. Undo is for content.
-- **`StartEmergency`, `DeleteEmergency` and `AddTaskCategory` are not undoable either**:
-  undoing a start would delete a response other responders may already be writing to, a
-  deletion others have pulled cannot be taken back, and an unused category does no harm.
-  `EndEmergency` is undone by `ReopenEmergency`.
+- **`StartEmergency` and `AddTaskCategory` are not undoable either**: undoing a start would
+  delete a response other responders may already be writing to, and an unused category does
+  no harm. Undoing `EndEmergency` adds the response back as it was removed; the report
+  already saved stays where it is.
 - **An abandoned replay clears the undo stack**, whose entries then describe work that did
   not land; the to-redo list covers it.
 
@@ -1338,10 +1354,10 @@ would be a complete copy of the ward directory, sealed to the devices as they st
 was written, so removing someone would mean re-keying every archive. The feature's value, a
 record of a past emergency, does not carry that weight.
 
-**An ended response is the record of an emergency.** It stays in the document, sealed with
-it, until someone deletes it. The summary report can be generated from it at any time, so a
-report made after late attempts arrive includes them. The report is a plaintext PDF written
-wherever the user chooses, which is worth saying in the same breath.
+**The summary report is the record of an emergency.** Ending saves it and then removes the
+response from the document, so the document holds only emergencies in progress, and
+nothing in it describes a past one through ids that may since name nothing. The report is a
+plaintext PDF written wherever the user chooses, which is worth saying in the same breath.
 
 ## If the server goes away
 
@@ -1431,7 +1447,9 @@ is possible. There is no exported recovery key file.
 **The harness is part of the work.** `tests/CMakeLists.txt` lists no sources, so the suite
 starts here: one Qt Test executable linked against `EmergencyPlanLib`, with `tests/services`
 for format, crypto, journal and replay, and `tests/server` for the fake server and the
-conformance suite.
+conformance suite. The instance lock needs two processes, so `tests/lock` is a second,
+small executable that starts copies of itself, each taking the lock through the app's own
+lock function.
 
 - **The server interface** is one abstract class in the client with the calls the app
   makes: create, head, fetch, push, open channel, and latest release. `HttpServer` implements it for the
@@ -1445,7 +1463,9 @@ conformance suite.
   `WardSession` class with no global state, which a test creates as many of as it needs;
   the singletons become thin wrappers that hold the app's one session for the interface.
 - **Each registered command type has a sample.** Each type registered for `fromJson` also
-  registers a sample instance, and the round-trip test iterates the registry.
+  registers a sample instance with a document for each outcome the type can give: one where
+  its start condition holds, and, where the type has them, one where its result already
+  holds and one where it conflicts. The round-trip test iterates the registry.
 - **Every outside dependency has a fake in `WardSession`**: the server, the geocoder, the
   ward and stake lookup, and the clock that stamps attempts and resolutions. A test sets
   each, so nothing reaches the network and timestamp ordering is decided by the test.
@@ -1479,12 +1499,17 @@ Format and crypto, in `tests/services`:
   changes nothing
 - after a join, and after a withdrawal, the invite's seed can no longer unseal the current
   version
+- the invitation reader, which *Join a ward* gives the clipboard's text or the paste box's,
+  reads a copied invitation and a full join link to the same document id and seed, and
+  finds no invitation in other text
 
 The journal and replay, in `tests/services`:
 
 - every registered command type's sample round-trips through the journal, judged by
-  behaviour: the original and the rebuilt command, executed on the same document, leave
-  equal documents and give equal descriptions; and the journal survives closing the app
+  behaviour: on each of the sample's documents, the original and the rebuilt command give
+  the outcome that document was registered for and leave equal documents, the document
+  unchanged where the result already holds or the command conflicts; both give equal
+  descriptions; and the journal survives closing the app
 - an emergency response mutation and an access-list change each enter the journal, replay,
   and reach the server by the same path a directory edit does
 - an automatic geocode result applies and pushes, and when that push loses it is absent
@@ -1523,11 +1548,14 @@ The journal and replay, in `tests/services`:
 - the only user's Leave asks before deleting, pushes a version naming no recipient that
   withdraws any open invites, and removes this device's copy; the user's second device
   shows the ward as deleted and keeps its copy and journal until the user agrees; an
-  invitee's later join is refused as withdrawn
+  invitee's later join is refused as withdrawn; with the answer to that final push dropped,
+  the next head, naming no one, removes this device's copy without asking again
 - Add a user and Add a device are not offered offline, and an invite's link is shown only
   after the version naming it is on the server; an invite whose push loses shows no link
 - Leave and Remove this device are not offered offline; on a push that loses, the local
-  file is unchanged and still opens on this device
+  file is unchanged and still opens on this device; on a push that succeeds, the local file
+  still opens on this device, holding the version pushed from, marked no longer this
+  device's, and with every journal entry the push carried gone from the journal
 - a save that fails leaves the local file as it was and nothing pushed, with the change
   still in memory; once saving works again, regaining focus saves and pushes it with no
   further command; closing while saves still fail asks before discarding it
@@ -1540,9 +1568,15 @@ The journal and replay, in `tests/services`:
   timestamp, whichever responder reconnects first
 - two responders who each start a response offline produce two events, each holding its own
   responder's attempts, and neither journal is abandoned
-- a responder offline records attempts in a response that is ended before they reconnect:
-  the attempts land in the ended response and the journal is not abandoned; onto a
-  response that was deleted instead, they conflict
+- ending a response saves a report holding every one of its attempts and tasks, then removes
+  the response; a responder offline records attempts in it and reconnects after the end:
+  their journal is abandoned to the to-redo list, which holds each of those attempts
+- an end replayed onto a version where another responder added an attempt to that response
+  conflicts, and the response is still there with that attempt
+- undoing an end puts the response back equal to what was removed, and the report file is
+  left in place
+- an end whose report cannot be written leaves the response in progress and adds nothing
+  to the journal
 - an attempt on a family with no record replays onto a version where an import removed that
   family, and lands with the snapshot it took at construction
 - an import replayed onto a version where someone else added a family applies, and that
@@ -1554,12 +1588,16 @@ The journal and replay, in `tests/services`:
   coordinates, and holds no change for families the PDF leaves as they were
 - a ministering import replayed after a member removal's cleanup changed a group conflicts,
   and the group keeps the cleanup's result
-- deleting a family removes its people from teams, tags, assets and ministering, and
-  undoing the delete restores them; removing one member through the edit panel does the
-  same for that person
+- deleting a family in a family-level tag and a ministering group's families, whose people
+  are in teams, person-level tags, assets, ministering and task assignments, removes the
+  family and its people from every one of them, and undoing the delete restores each;
+  removing one member through the edit panel does the same for that person
+- deleting a team unassigns the tasks assigned to it, and undoing the delete assigns them
+  again
 - an offline addition of a person to a team, replayed after that person was removed,
   conflicts; an offline removal of a person, replayed after someone added them to another
-  team, conflicts; in both, no team is left holding a missing id
+  team, conflicts, and so does one replayed after someone assigned them a task; in each, no
+  team or task is left holding a missing id
 - a local save that removed someone still accepts the pre-removal version from the
   server, and the journal replays onto it: the save did not rotate, so the one key this
   device trusts is the one the server's version is under
@@ -1611,11 +1649,7 @@ Against the fake server, in `tests/server`:
   agrees, and says it no longer has access, both mid-session and on next open; when a later
   head names it again, it resumes syncing and its journal replays
 - a user joins only through an invite the current header names, and a used or withdrawn
-  invite is refused; *Join a ward* with a copied invitation on the clipboard, and the
-  copied invitation or the full link pasted into its paste box, reach the same join; with
-  other text on the clipboard it shows the paste box
-- a second launch on Windows while the app runs exits without opening the ward files, and
-  a launch after a crash takes over the stale lock
+  invite is refused
 - a join whose answer is lost, with the link opened again, opens the ward as a member and
   never reports the invite as used or withdrawn
 - two admins removing each other: the first stands and the second's write is refused
@@ -1624,6 +1658,11 @@ Against the fake server, in `tests/server`:
 - the channel reports who is present, reports a newcomer to those already there, and reports
   a departure on close
 - a version notice on the channel causes the other clients to fetch and validate
+
+The instance lock, in `tests/lock`:
+
+- while one process holds the lock, a second is refused it; once the holder is killed, a
+  new process takes it
 
 The fake and the real server are checked against each other. One conformance suite, written
 against the client's server interface, runs against both: against the fake in the ordinary
@@ -1654,8 +1693,8 @@ disagreement is resolved in whichever implementation is wrong, never by loosenin
   one.
 - **Reports stay plaintext.** `ReportGenerator` writes member-data PDFs to a user-chosen
   path.
-- **Emergency archives are replaced by ended responses** kept in the document until someone
-  deletes them.
+- **Emergency archives are replaced by the summary report** saved when an emergency ends;
+  the response itself leaves the document.
 - **Sharing and live editing depend on the server being up.** Editing does not.
 - **A hostile server operator could keep members on separate or stale copies** without them
   noticing; nothing is exposed, and each member keeps their own work.
