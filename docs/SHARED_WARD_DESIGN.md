@@ -280,7 +280,7 @@ entry, and check versions without decrypting anything.
 `\n` is always the boundary, and the header stays readable in a text viewer. On the wire, a
 version travels in this same framing, as the raw request or response body, and
 `GET /documents/{id}/head` returns the header line as its body, with the version,
-publisher fingerprint and publish time alongside it.
+publisher fingerprint and publish time in response headers (see *What the server is*).
 
 **Header**
 
@@ -481,7 +481,7 @@ starting point; no call asks for an earlier version, and none is kept.
 | `POST /documents` | anyone | Stores version 1 of a new document under its client-made id. Rate-limited by address. An id that already exists gets its own answer, so a client retrying after a lost reply fetches instead, and its landed mark empties the journal. |
 | `GET /documents/{id}/head` | anyone with the id | Version, publisher fingerprint and time, and the header. |
 | `GET /documents/{id}` | anyone with the id | The current version: header and blob. Ciphertext; unreadable without a key. |
-| `PUT /documents/{id}` | a key holder | Conditional on `baseVersion`. Signed. |
+| `PUT /documents/{id}` | a key holder | Conditional on `Ward-Base-Version`. Signed. |
 | the live channel | a key holder | Open while the ward is open. Carries presence and version notices. |
 | `GET /releases/latest` | anyone | The current app version per platform, with each installer's download address. |
 | `GET /download` | anyone | A web page offering the installers, for people who do not have the app yet. |
@@ -491,17 +491,51 @@ starting point; no call asks for an earlier version, and none is kept.
 over one UTF-8 line:
 
 ```
-wardplanning-v1 <call> <document id, hex> <base version> <header hash, hex> <payload hash, hex>
+wardplanning-v1 <call> <document id> <base version> <header hash> <payload hash>
 ```
 
-The hashes are BLAKE2b-256 of the exact bytes on either side of the body's first `\n`. A
-`POST` has no base version and signs `0`; opening the live channel signs the same line
-with `-` for the fields it lacks. No field contains a space, so the line is
-unambiguous, simple to build on any server, and readable in a log. The server computes the signer's fingerprint from the keys exactly as clients
-do, and accepts the write only if the *current* header names that fingerprint. There are
-no sessions, no challenge, no registration, no token. The first version of a document is
-the exception: anyone may create one, and its header names its creator. Opening the live
-channel carries the same signature, so only key holders appear as present.
+`<call>` is `create` for a `POST`, `push` for a `PUT`, and `channel` for opening the live
+channel. The base version is a decimal integer. The hashes are BLAKE2b-256 of the exact
+bytes on either side of the body's first `\n`. **Every binary value on the wire is
+base64url without padding, as in the header**: the document id in this line, in URLs and
+in the invite link (22 characters), the hashes (43), the keys, the signature, and the
+invite seed. A `create` has no base version and signs `0`; `channel` signs `-` for the
+fields it lacks, which no version or base64url value can be. No field contains a space, so
+the line is unambiguous, simple to build on any server, and readable in a log.
+
+The server computes the signer's fingerprint from the keys exactly as clients do, and
+accepts a `PUT` only if the *current* header names that fingerprint. There are no
+sessions, no challenge, no registration, no token. The first version of a document is the
+exception: anyone may create one, and the `POST` is accepted when the header it carries
+names its signer. Opening the live channel carries the same signature, so only key holders
+appear as present.
+
+**Requests and answers.** Everything but the body rides in HTTP headers:
+
+| Header | On | Holds |
+|---|---|---|
+| `Ward-Base-Version` | `PUT` requests | the version the push builds on |
+| `Ward-Signer` | `POST` and `PUT` requests | the signer's X25519 public key and Ed25519 verify key, joined by `.` |
+| `Ward-Signature` | `POST` and `PUT` requests | the Ed25519 signature of the signed line |
+| `Ward-Version` | answers to `head`, `GET`, `POST` and `PUT`, and a `412` | the current version, which after a stored write is that write's |
+| `Ward-Publisher` | answers to `head` and `GET` | the fingerprint that published the current version |
+| `Ward-Published` | answers to `head` and `GET` | when the current version was published, ISO 8601 in UTC |
+
+| Status | When |
+|---|---|
+| `201` | a `POST` stored version 1 |
+| `200` | a read, or a `PUT` that stored the next version |
+| `400` | the body, its framing, its header or a `Ward-` field is malformed, or a `PUT`'s header names a different document |
+| `403` | the signature does not verify, or the header the signer must be in does not name them: the posted header for a `POST`, the current one for a `PUT` |
+| `404` | no document has the id in the URL |
+| `409` | a `POST` for an id that already exists |
+| `412` | a `PUT` whose base version is not the current one |
+| `429` | the address is over its rate limit |
+
+When more than one applies, the first of `429`, `400`, `404`, `409`, `403`, `412` is
+given. A client answered `412` fetches the current version and replays onto it. One
+answered `403` fetches the head: a header that no longer names this device is the ward no
+longer being this device's, and otherwise the push has failed and goes again with the next.
 
 **Reads are open** to anyone who knows a document id, because the design never relied on
 the server to protect content and the id is 128 random bits. A read limit by address stops
@@ -1481,7 +1515,7 @@ Format and crypto, in `tests/services`:
 - two consecutive saves of an unchanged document produce different nonces
 - mutating any header byte causes decryption to fail, including the document id
 - the known-answer vectors for the fingerprint, the invite keypairs derived from a fixed
-  seed, and the signed line
+  seed, and the signed line for each of `create`, `push` and `channel`
 - a fixed document written by the app is read back by a reader written only from this
   section - plain JSON, base64url, zlib and libsodium, without Qt - so the specification
   is shown complete
@@ -1633,6 +1667,12 @@ Against the fake server, in `tests/server`:
 - pushing from a stale base version is refused, and the journal replays on the fetched
   version and pushes again
 - a write whose signature is not from a device the current header names is refused
+- each status in the status table is given for a request built to meet only its condition,
+  with the `Ward-` headers the header table lists; a stale `PUT` from a signer the current
+  header no longer names gets `403`, and a malformed `PUT` to an unknown id gets `400`
+- a `403` whose head no longer names the device puts it in the no-longer-yours state; a
+  `403` whose head still names it leaves the journal as it was, and the next push carries
+  it
 - a `PUT` to a document id the server does not hold is refused, and every other document
   keeps its version and contents
 - a `POST` whose answer is lost, retried, is told the id already exists; the client then
