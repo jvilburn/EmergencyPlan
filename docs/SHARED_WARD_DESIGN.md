@@ -884,7 +884,7 @@ replay:
   | `StartEmergency` | start, with a record per family | an addition; never conflicts |
   | `EndEmergency` | end, removing the response once its report is saved | conflicts if the response differs from what the report holds; result holds if already gone |
   | `RecordContactAttempt` | logging a contact, and the OK and Unable to Reach buttons | an addition |
-  | `DeleteContactAttempt` | removing an attempt | result holds if already gone |
+  | `DeleteContactAttempt` | the inverse of `RecordContactAttempt`, which is how an attempt is undone; no button removes one today | result holds if already gone |
   | `AddTask` | adding a task | an addition |
   | `UpdateTask` | the task dialog, resolve, reopen, assign, unassign, notify | per value, as `UpdateFamilyCommand` |
   | `DeleteTask` | removing a task | result holds if already gone |
@@ -938,7 +938,9 @@ replay:
   `ARCHITECTURE.md` gives commands `execute` and `undo`, `CommandHistory`'s stacks and an
   `AddFamilyCommand` example; it moves to `execute`, `inverse` and `refusal`, the journal
   and `WardSession`. `IMPORT_DESIGN.md` says a re-import replaces family and person data;
-  it states that the special-need note and the coordinates are the app's own and stay.
+  it states that the special-need note and the coordinates are the app's own and stay, and
+  that a ministering import makes a placeholder for someone it cannot match only when it is
+  the newer source (see *Imports*).
   `USER_GUIDE.md` describes `.emergencyplan` files, File > Open, Save As and archives; it is
   rewritten for wards, *Who has access* and invites, in the words under *Words the user
   sees*, and carries the statements this design promises it makes: what the server knows,
@@ -1142,8 +1144,14 @@ will make, each with its before and after:
 
 A family an import updates is held at the same typed level as `UpdateFamilyCommand` -
 address, coordinates, and a change per member keyed by `PersonId` - and only for families
-that actually differ. The import service builds merged families as it does now, and the
-command compares them with the existing ones field by field, holding only what differs.
+that actually differ. The import service builds merged families, and the command compares
+them with the existing ones field by field, holding only what differs. **The directory
+import matches through `PersonMatching`**, as `IMPORT_DESIGN.md` describes:
+`findFamilyByMembers`, then `findReplacedFamily` for a family whose surname changed, and
+`findBestPersonMatch` for members. Today it matches on surname and display name, then
+first name alone (`WardDirectoryImportService.cpp:89-123`), so a surname change gives the
+family a new id and removes the old one with its notes and memberships; with the shared
+matching, that family keeps its id and its members theirs.
 **An import never changes a person's special-need note, and keeps a family's coordinates
 unless its address changed.** `WardDirectoryImportService::preserveIds` copies the existing
 person's note onto the rebuilt person and passes the existing coordinates when the address

@@ -74,27 +74,6 @@ Using `QHash<QString, Model>` instead of `QList<Model>` because:
 ---
 
 
-## NeedsSubView Dialog UX (adopted)
-
-Adopted by the shared ward design, which takes the start condition when a person is picked
-and writes the note as a per-member field of `UpdateFamilyCommand`.
-
-The current `showAddNeedDialog()` and `showEditNeedDialog()` have a UX issue worth revisiting:
-
-**Problem:** "Add Special Need" dialog allows selecting someone who already has a need, silently overwriting their existing note. The dialog title implies adding something new.
-
-**Proposed solution:** Merge into a single "Special Need" dialog:
-- Dialog title: "Special Need" (not "Add" or "Edit")
-- When opened from empty space: user selects person/family, note pre-fills if they already have one
-- When opened on existing item: person/family is locked (read-only), note pre-fills
-- Both flows use `SetSpecialNeedCommand` (idempotent)
-- Each special need is for ONE person OR ONE family - no "transferring"
-
-This reframes the operation as "set special need" rather than "add/edit/delete", which better matches the underlying command semantics.
-
----
-
-
 ## CRITICAL REMINDER
 
 **DO NOT MAKE DECISIONS FOR THE USER.**
