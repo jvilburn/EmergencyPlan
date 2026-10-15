@@ -1259,6 +1259,9 @@ An invite is a one-time bearer key. Its 32-byte seed yields both of its keypairs
    entry, under the inviter's user for a device invite, under a new user for a user
    invite, named by the joiner, signed by the invite's signing key, whose verify key the
    current header names. The device then downloads the current version as itself and writes
+   it. A device that still holds a copy of the ward from before it lost access treats that
+   version as any head naming it again: its kept journal replays onto it. The removal's
+   rotation put the key of that copy among the former keys, so the version descends from
    it. Before using an invite, the device reads the head: if it already names this device's
    own fingerprint, an earlier join landed and only its answer was lost, so the device
    opens the ward as itself and leaves the invite alone. A join that loses to a newer
@@ -1292,8 +1295,11 @@ can show it for a camera later if a phone client ever wants one.
   *You left this ward* when this device pushed the leave itself, and *You no longer have
   access to this ward* otherwise; a removed device cannot read the versions that followed,
   so it names no one. The ward stops pushing until a head names this device again, and the
-  app offers to delete the copy. The journal is kept with the copy and replays if a later
-  head names this device.
+  app offers to delete the copy, in a notice that stays while the state lasts. Until the
+  user accepts, the copy stays open for editing as before: every edit is journalled and
+  saved locally, and the journal replays if a later head names this device, whether the
+  ward was taken away by a server fault or the user is invited again (see *Invites*).
+  Accepting deletes the copy and its journal.
 - **Last admin**: a client rule: the only admin cannot step down, and cannot leave while
   others remain.
 - **A second device of your own**: *Add a device*, send yourself the link, open it there.
@@ -1783,8 +1789,10 @@ Against the fake server, in `tests/server`:
   and goes out with the next push
 - a server ahead with an empty journal fast-forwards without a prompt
 - a device whose head lacks it stops pushing, keeps its file and journal until the user
-  agrees, and says it no longer has access, both mid-session and on next open; when a later
-  head names it again, it resumes syncing and its journal replays
+  agrees, and says it no longer has access, both mid-session and on next open; an edit made
+  in that state is journalled and saved; when a later head names it again, it resumes
+  syncing and its journal, that edit included, replays; a removed user invited again joins
+  from the device holding the old copy, and its journal replays onto the joined version
 - a user joins only through an invite the current header names, and a used or withdrawn
   invite is refused
 - a join whose answer is lost, with the link opened again, opens the ward as a member and
