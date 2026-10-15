@@ -297,6 +297,13 @@ value is base64url without padding: the document id is 16 bytes (22 characters),
 24 bytes (32 characters), a fingerprint 16 bytes (22 characters), and a sealed key 80 bytes
 (107 characters), a 32-byte data key plus `crypto_box_SEALBYTES`, which is 48.
 
+**A deleted ward's final version** is an ordinary header with an empty `recipients` array
+and a fresh `nonce`, as on any write, and its body ends at the header's `\n` with nothing
+after it; the signed line's payload hash is BLAKE2b-256 of zero bytes. A reader recognises
+it by the empty `recipients`, before any payload rule applies (see *Who has access, changed
+by two users*). No local file takes this form: the deleting device removes its copy, and
+every other device keeps the copy it had.
+
 The whole header is the associated data of the payload's AEAD, so anyone holding the data
 key detects any change to it on decrypt. **The associated data is the header's exact
 stored bytes, never a re-encoding.** A writer builds the header bytes once, nonce and
@@ -378,9 +385,9 @@ inflates the rest.
 emergencies in progress, the PDF dates, and the ward and stake records. `access` is the
 access list (see *What the document carries*). `landed` maps each device's fingerprint to
 its landed mark (see *The journal*). `device` is this device's own state. A local file and a
-version on the server are the payload's two shapes, each read strictly: a local file must
-carry `device`, and a version must not, so a version that does is refused like any other
-invalid version. Every field of each part - its JSON key, type and encoding - is specified in
+version on the server differ in that one part, each read strictly: a local file must carry
+`device`, and a version must not, so a version that does is refused like any other invalid
+version. Every field of each part - its JSON key, type and encoding - is specified in
 `docs/FORMAT.md`, under the same format version as the header, and binary values are
 base64url without padding, as everywhere else.
 
@@ -612,7 +619,8 @@ several responders are logging attempts at once, and the design carries no bandw
 estimate because none would change it.
 
 **A download replaces nothing until it validates.** The key unseals, the payload decrypts
-and reads strictly in a version's shape, the header matches the access list, the version is not below the base this device holds,
+and reads strictly as a version, without `device`, the header matches the access list, the
+version is not below the base this device holds,
 and the version descends from one this device holds. Any failure keeps the local file
 untouched: the local file is the one copy that has to survive a version nobody can read.
 The device keeps working on that copy and pushes nothing while the head fails; see the
@@ -1615,7 +1623,9 @@ The journal and replay, in `tests/services`:
   version's payload carries none of it; a version from the server carrying `device` is
   refused and changes nothing
 - the only user's Leave asks before deleting, pushes a version naming no recipient that
-  withdraws any open invites, and removes this device's copy; the user's second device
+  withdraws any open invites, and removes this device's copy; the pushed body is exactly a
+  header with `recipients` empty and its `\n`, and afterwards a `PUT` from any former
+  device gets `403` and a `POST` of that id `409`; the user's second device
   shows the ward as deleted and keeps its copy and journal until the user agrees; an
   invitee's later join is refused as withdrawn; with the answer to that final push dropped,
   the next head, naming no one, removes this device's copy without asking again
