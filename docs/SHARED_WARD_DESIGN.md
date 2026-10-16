@@ -971,10 +971,11 @@ is the whole answer to two users working at once, and there is no second mechani
 importing a directory, inviting someone, removing a user, changing a role: all of them are
 commands, all of them enter the journal, and all of them replay by the one rule. Who may
 read the ward lives in the same encrypted payload as the ward itself, so a change to it is
-a change to the document and needs no path of its own. Two writes take a path of their
+a change to the document and needs no path of its own. Three writes take a path of their
 own, each described where it lives: automatic updates, which are derived data and stay out
-of the journal (see *The journal*), and the join, which a device makes under the invite's
-key before it has a journal (see *Invites*).
+of the journal (see *The journal*); the join, which a device makes under the invite's key
+before it has a journal (see *Invites*); and Leave with *Remove this device*, which never
+touch the open document (see *Saving*).
 
 The model is `git rebase`: the journal is a run of commits, the server's version is the new
 base, and each command is replayed onto it rather than two finished states being compared.
@@ -1398,7 +1399,9 @@ only while the ward is syncing (see *Every edit is a version*). Confirming one m
 ward read-only on this device at once,
 since nothing should be made after it. The command's version is built beside the open
 document, through the ordinary replay, and pushed; a push that meets a newer base replays
-and pushes again, as any push does.
+and pushes again, as any push does. A conflict in the journal under it drops the journal,
+since leaving gives up unsent changes anyway, and the command goes ahead on the server's
+version.
 
 - **When it lands** - a confirmed push, or a head without this device after a lost answer
   - the device saves its document as it stood, still sealed to itself, flagged as left,
