@@ -101,6 +101,7 @@ design's answer, not a gap:
 - **No exported copies.** A copy would be sealed to the ward's devices, each of which already
   holds the ward; *Show in folder* reveals the ward's own file. The developer-only export
   under *Debugging*, off by default, is the one exception.
+- **Installing an older Ward Planning over a newer one is not supported.**
 - **1.0 `.emergencyplan` files are not migrated**, and their teams, tags, assets, special
   needs and notes are not carried over.
 - **An unreadable or restored head stalls sharing** until the operator repairs it (see
@@ -1282,10 +1283,9 @@ An invite is a one-time bearer key. Its 32-byte seed yields both of its keypairs
    the user to confirm by the ward's name, then write the next version: the invite entry becomes a device
    entry, under the inviter's user for a device invite, under a new user for a user
    invite, named by the joiner, signed by the invite's signing key, whose verify key the
-   current header names. The device then downloads the current version as itself and writes
-   it. A device that still holds a copy of the ward from before it lost access joins as any
-   new device does: the old copy is replaced by the version it joined, and nothing from it
-   carries over. Before using an invite, the device reads the head: if it already names this device's
+   current header names. Once the join lands, the device saves the version it joined, as
+   after any push; a copy it still holds from before it lost access is replaced, and
+   nothing from that copy carries over. Before using an invite, the device reads the head: if it already names this device's
    own fingerprint, an earlier join landed and only its answer was lost, so the device
    opens the ward as itself and leaves the invite alone. A join that loses to a newer
    version fetches it and joins again on top of it.
@@ -1380,7 +1380,8 @@ the change, nothing is pushed, and the user is told the reason. The next save th
 succeeds, once the problem is fixed, writes the document and journal together with the
 change in them, and pushes as usual; one write still carries both, so the local file never
 disagrees with itself. Every push carries only what this device has already saved, except
-Leave and *Remove this device* (below), and memory runs ahead of the file only while saves
+a join (see *Invites*) and Leave and *Remove this device* (below), and memory runs ahead of
+the file only while saves
 are failing. **Whatever is pending - a failed save first, then a push - is retried on the
 next command, when the window regains focus, on reconnecting, and on closing.** If a save
 still fails at closing, closing asks first: *Your latest changes could not be saved and will be lost. Close anyway?* A
