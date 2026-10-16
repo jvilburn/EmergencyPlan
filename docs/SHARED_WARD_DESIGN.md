@@ -1555,7 +1555,7 @@ returns.
 
 | Condition | Message |
 |---|---|
-| A command could not replay | Your changes could not be applied, because the ward changed first. These need doing again: *the to-redo list*. The one that clashed: *its description*, and what that now reads. |
+| A command could not replay | Your changes could not be applied, because the ward changed first. These need doing again: *the to-redo list*. The one that clashed: *its description*. |
 | A removal among them | ... and *name* still has access until you remove them again. |
 | A rule refused a replayed command | The wording the app gives for that operation, as it would if the user tried it now: *You are the only admin...* |
 | The local save failed | Your change could not be saved: *reason*. It is kept while the app stays open and saved as soon as saving works again; closing asks first. |
