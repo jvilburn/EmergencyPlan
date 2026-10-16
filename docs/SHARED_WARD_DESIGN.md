@@ -692,6 +692,10 @@ estimate because none would change it.
 7. The header matches the access list.
 8. The version descends from one this device holds.
 
+For a join, step 4 asks that the header name the invite. For a first download - a join,
+cleared app data, or an unreadable local file - steps 3 and 8 do not apply, since there is
+nothing to compare against; that is the accepted first download under *Threat model*.
+
 Any other failure keeps the local file untouched: the local file is the one copy that has
 to survive a version nobody can read. The device keeps working on that copy and pushes
 nothing while the head fails; see the accepted stall under *Threat model*.
