@@ -281,6 +281,12 @@ has one identity, which wards share a device. The server learns
 no names, no roles, and no history of who was added or removed. The user guide says so
 plainly.
 
+**Known to anyone holding a document id, and accepted.** Reads are open, so a removed
+member, or anyone who has seen an invite link, can read what a head and a version show
+without a key: the fingerprints, the current version's publisher and time, and the
+ciphertext's size. That is a count of devices and a few timestamps, naming no one, and it
+is accepted at this threat level.
+
 **Availability.** The server going down denies *sharing and live editing*, not *use*.
 Every member continues to open, edit and save their local file, and their commands replay
 when the server returns. This is the property that decides the whole shape of the design.
