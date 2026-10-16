@@ -1623,10 +1623,10 @@ Format and crypto, in `tests/services`:
   both changed to another ward's id fails the same way
 - the known-answer vectors for the fingerprint, the invite keypairs derived from a fixed
   seed, and the signed line for each of `create`, `push` and `channel`
-- a fixed local file holding a value in every field of every part, written by the app, is
-  read back by the reader in `tests/spec`, written only from this section and
-  `docs/FORMAT.md`, which parses every field strictly and
-  recovers each of those values, so a `toJson` change that `docs/FORMAT.md` lacks fails it
+- a local file holding a value in every field of every part, written by the app when the
+  test runs, is read back by the reader in `tests/spec`, written only from this section and
+  `docs/FORMAT.md`, which parses every field strictly and recovers each of those values, so
+  a `toJson` change that writes a field `docs/FORMAT.md` lacks fails it
 - a header whose `format` is above every known version is refused whole and reported as
   newer, while one below every known version, or not an integer, fails validation as
   unreadable; for the newer case, nothing pushes while every
@@ -1779,9 +1779,10 @@ The journal and replay, in `tests/services`:
   device trusts is the one the server's version is under
 - a push that carries an access change rotates, and the version after it names the old
   key among its former keys
-- replaying a command does not change the command: the same journal entry replayed onto a
-  moved version and then onto an unmoved one conflicts and then applies, which fails if
-  anything captured its start condition while running
+- running a command does not change the command: one command object, executed where it
+  applies, serialises to the same entry it gave before it ran, and the same object executed
+  next on a moved version conflicts and leaves that version untouched, which fails if
+  `execute` captured anything
 - an access-list command replays: two admins removing different users both apply; removing the
   same user twice applies in full; two different roles for one user is a conflict; a
   removal replayed after that user added a device applies and takes the new device too; one
