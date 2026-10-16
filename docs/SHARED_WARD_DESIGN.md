@@ -91,6 +91,8 @@ design's answer, not a gap:
   implementation plan.
 - **Replay, never reconciliation** of two finished versions.
 - **Emergency responses are a keyed collection**; two offline starts are two events.
+- **A family with no address cannot be placed on the map**: coordinates belong to addresses
+  (see *Saving*), so the coordinate fields are disabled for it.
 - **Ending an emergency saves its report and removes the response.** A change replayed onto
   a response that has ended conflicts, which abandons that responder's journal to the
   to-redo list. It takes a responder whose work in that response has not landed when the
@@ -1335,7 +1337,8 @@ The geocoder queues each address some family has and the table lacks. A geocode 
 the entry for its address and never replaces one already there. Coordinates a user types in
 the family edit panel are their work, so they are a journalled command that sets the entry
 for that family's address, replacing what is there, and its undo restores the entry it
-replaced. Each automatic batch also drops the entries no family's address uses, so the
+replaced. A family with no address has no entry to set, so the panel's coordinate fields
+are disabled for it, and such a family stays off the map; this is accepted. Each automatic batch also drops the entries no family's address uses, so the
 table holds only what is used; an address that comes back later is geocoded, or typed,
 again.
 
