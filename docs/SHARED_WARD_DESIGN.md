@@ -628,7 +628,9 @@ dialog closes would widen the window instead, for as long as the dialog stays op
 Because a version can replace the document under any nested event loop - a dialog's
 `exec()`, a message box - code holds ids and captured values across one, never pointers or
 references into the document. A command is built from what was captured when its target
-was chosen, and a target that no longer exists when it runs makes it conflict.
+was chosen, and a target that no longer exists when it runs makes it conflict. The session
+replaces a document's contents by assignment, so a reference to the document itself stays
+valid across a version and a reference into it does not.
 
 **So a connected ward's base is always current**, and that is what makes replay the
 exception rather than the path. For a conflict, two users have to change the same thing
@@ -1126,9 +1128,14 @@ responder made, because the app has no way to know they were the same emergency 
 pretend otherwise. The app lists the emergencies in progress, and the user switches to any
 of them. Whoever is coordinating ends the one they do not want.
 
-**Ending an emergency turns it into its report.** Ending saves the summary report where the
-user chooses, then runs `EndEmergency`, which removes the response and holds it as the
-report was written from. A version that changed the response in the meantime makes the end
+**Ending an emergency turns it into its report.** Ending asks where to save the summary
+report first. Then, with no event loop between, it reads the response by id, writes the
+report from it, and runs `EndEmergency`, which removes the response and holds it as the
+report was written from. If the response is gone by then, ended by someone else while the
+dialog stood open, there is nothing to end and the user is told so; today
+`generateEmergencyReportWithConfirm` holds a reference to the response across its save
+dialog (`MainWindow.cpp:1012`), which the response living in the document would leave
+dangling. A version that changed the response in the meantime makes the end
 conflict, and the coordinator ends it again with a report that includes the change, so the
 report of the end that removes a response holds everything in it. Ending a duplicate leaves
 its records in its own report. A change replayed onto a response that has ended conflicts,
