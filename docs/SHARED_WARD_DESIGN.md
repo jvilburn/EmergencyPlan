@@ -1508,7 +1508,8 @@ ease-of-setup simplifications.
 App data, wherever this design says it, is `QStandardPaths::AppLocalDataLocation`, which
 on Windows is under the user's local, non-roaming AppData. The ward files, the device keys
 and the instance lock all live there, so a roaming profile never carries ward files to
-another machine without the keys that open them.
+another machine without the keys that open them. The ward files and the keys sit in
+sibling folders, `wards` and `keys`, so the folder *Show in folder* opens holds no key.
 
 **The list is local**, built from the wards this device holds. The server keeps no index of
 who holds what, so the list is this device's own record and nothing restores it from the
@@ -1525,9 +1526,11 @@ confirmation all use it, and a joiner sees it once the invite's key has unsealed
 Its first push is `POST /documents`, made as soon as the network allows, and its journal
 empties then like any other.
 
-**Show in folder** reveals the app data directory, where each ward is a `.wardplanning` file
-in the documented format, for support and for getting the data out if the server goes
-away. Backup is the local file on every member's device and the server's copy. The app
+**Show in folder** reveals the `wards` folder in app data, where each ward is a
+`.wardplanning` file in the documented format, and nothing that opens one: a user who
+copies that folder to a stick for backup or support carries only files that need a key
+the stick does not hold. It is there for support, and for getting the data out if the
+server goes away. Backup is the local file on every member's device and the server's copy. The app
 writes no other copies, apart from the developer-only export under *Debugging*, off by
 default: anything it exported would be sealed to the ward's devices, each of which already
 holds the ward.
