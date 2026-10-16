@@ -321,8 +321,8 @@ by two users*). No local file takes this form: the deleting device removes its c
 every other device keeps the copy it had.
 
 The whole header is the associated data of the payload's AEAD, so anyone holding the data
-key detects any change to it on decrypt. **The associated data is the header's exact
-stored bytes, never a re-encoding.** A writer builds the header bytes once, nonce and
+key detects any change to it on decrypt. **The associated data is the header line's exact
+stored bytes, without its `\n`, never a re-encoding.** A writer builds the header bytes once, nonce and
 recipients included, and encrypts against them; a reader decrypts against the bytes it
 read. No canonical JSON form is needed, because nothing is ever rebuilt from a parsed
 header.
@@ -335,6 +335,13 @@ skips what it does not recognise, mostly produces data read wrongly, so anything
 refused whole. Any change to the header, the sealing, or the payload, such as a hybrid
 post-quantum entry, is a new format version, and a reader refuses it before decrypting
 anything.
+
+**One thing no format version changes: the header's `format` key, an integer.** A reader
+reads it first. A value above every version it knows is a newer format, which it reports as
+such (see *When a newer app wrote the version on the server* below); a version it knows is
+read by that version's reader, through its upgrade where it has one; anything else it
+cannot read fails validation. Keeping that one key fixed is what lets a reader tell a newer
+app's file from a broken one.
 
 **The reader for a format version reads exactly what that version's `toJson` wrote.** A
 field `toJson` leaves out when empty reads as empty, and that is the only optional kind;
@@ -1705,7 +1712,9 @@ Format and crypto, in `tests/services`:
   read back by the reader in `tests/spec`, written only from this section and
   `docs/FORMAT.md`, which parses every field strictly and
   recovers each of those values, so a `toJson` change that `docs/FORMAT.md` lacks fails it
-- a header with an unknown format version is refused whole; nothing pushes while every
+- a header whose `format` is above every known version is refused whole and reported as
+  newer, while one below every known version, or not an integer, fails validation as
+  unreadable; for the newer case, nothing pushes while every
   edit journals and saves locally; the state clears as soon as the server again serves a
   version the app understands, and the journal then replays
 - a header or payload with a missing or malformed required field is refused, never read in
