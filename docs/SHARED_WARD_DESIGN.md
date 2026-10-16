@@ -113,6 +113,8 @@ design's answer, not a gap:
   and what an export must carry for a successor belong to the server's own design.
 - **Directory-import matching is settled during implementation**, against real
   directories (see *Imports*).
+- **A directory's date is its PDF file's modification time**, the only date a directory
+  PDF carries.
 - **Two directory imports can add one new family or member twice** when both list it and
   neither has landed when the other is built. An import gives each family and member it
   cannot match a fresh id, so the one that lands second finds none of its additions already
