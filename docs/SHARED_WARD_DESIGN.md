@@ -248,10 +248,12 @@ way the real recipient finds their link already used and says so. In both cases 
 is visible and removable, which is the accepted answer at this threat level.
 
 **Accepted: a device's first download is taken as it stands.** A device holding no
-version of a ward, newly joined or after its app data was cleared, has nothing for the
-first version to descend from, so a hostile operator could hand it a ward of its own
+readable version of a ward - newly joined, after its app data was cleared, or with a local
+file it cannot read - has nothing for the first version to descend from, so a hostile operator could hand it a ward of its own
 making at that moment. What the device then writes into it would be readable by the
-operator. Every later version must descend from the one it took.
+operator. Every later version must descend from the one it took. A device with an
+unreadable file downloads rather than waiting to be invited again, so a corrupted file
+does not lock its user out of their own ward.
 
 **Accepted: a departing device knows the next key.** Leave and *Remove this device* are
 the departing device's own push, and that push rotates, so that device generates the new
@@ -1855,8 +1857,9 @@ disagreement is resolved in whichever implementation is wrong, never by loosenin
   everyone keeps the copy they hold; recovery is a new ward built from the directory PDFs.
 - **A stolen, unlocked device acts as its owner**, with its owner's role. Its owner
   removes it and any device it added; otherwise any admin removes its owner.
-- **A device's first download is taken as it stands.** A newly joined device, or one whose
-  app data was cleared, has no earlier version to check the first against.
+- **A device's first download is taken as it stands.** A newly joined device, one whose
+  app data was cleared, or one whose local file cannot be read has no earlier version to
+  check the first against.
 - **An intercepted invite link gets in**, visibly, and is removed.
 - **A channel-open signature replays**, so presence can be lied about.
 - **Joining needs the server**, so users are added before an emergency rather than during
