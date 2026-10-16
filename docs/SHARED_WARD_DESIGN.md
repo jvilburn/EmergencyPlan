@@ -196,7 +196,8 @@ leaves this device out stops this copy pushing until a head names this device ag
 tells the user they no longer have access; the device keeps reading the head while the ward
 is open, and resumes syncing if a later one includes it. The copy itself stays until they
 remove it. Deleting a local copy is tidiness, not enforcement, so it is the user's action
-rather than the server's. The one copy a server answer removes is the one whose user chose
+rather than the server's; files copied out of app data, and devices that never reconnect,
+keep what they had either way. The one copy a server answer removes is the one whose user chose
 *Delete ward*: a head naming no one confirms that push landed when its reply was lost, and
 a hostile server confirming it falsely leaves on the server only a ward the user chose to
 give up. A hostile operator, or a bug, can therefore cut a member off from sharing, which
@@ -671,18 +672,25 @@ protocol built for traffic that does not exist. This holds during an emergency t
 several responders are logging attempts at once, and the design carries no bandwidth
 estimate because none would change it.
 
-**A download replaces nothing until it validates.** The header names the document id this
-device asked for, which the client checks whatever the server accepted, the key unseals, the payload decrypts
-and reads strictly as a version, without `device`, the header matches the access list, the
-version is not below the base this device holds,
-and the version descends from one this device holds. Any failure keeps the local file
-untouched: the local file is the one copy that has to survive a version nobody can read.
-The device keeps working on that copy and pushes nothing while the head fails; see the
-accepted stall under *Threat model*. A head that leaves this
-device out is not a fault: it is the ward no longer being this device's, handled under
-*Everything else, from the document*, and a head that names no recipient at all is a
-deleted ward (see *Who has access, changed by two users*); both are recognised from the
-header, before anything is unsealed.
+**A download replaces nothing until it validates**, by these checks in this order:
+
+1. The header's `format` is one this app reads; a newer one is the notice under *File
+   format*.
+2. The header names the document id this device asked for, which the client checks
+   whatever the server accepted.
+3. The header names this device. One that names no recipient is a deleted ward (see *Who
+   has access, changed by two users*), and one that names others but not this device is the
+   ward no longer being this device's (see *Everything else, from the document*); neither is
+   a fault, and both are recognised before anything is unsealed.
+4. The data key unseals.
+5. The payload decrypts and reads strictly as a version, without `device`.
+6. The header matches the access list.
+7. The version is not below the base this device holds.
+8. The version descends from one this device holds.
+
+Any other failure keeps the local file untouched: the local file is the one copy that has
+to survive a version nobody can read. The device keeps working on that copy and pushes
+nothing while the head fails; see the accepted stall under *Threat model*.
 
 ## The journal
 
@@ -979,15 +987,20 @@ same change, so take it", which discards nothing: both users wanted the same end
 one got there first, so no intent is lost.
 
 **Replay also runs the app's own refusals.** A command is not offered when the app would
-not allow it - the only admin cannot step down, a leave made while others remained cannot
-land where its user is now the only one (*You are now the only member, so leaving would
-delete Tanglewood Ward*), a user cannot
-remove their last device (*To stop using this ward, use Leave*, so Leave's rules apply), a member
-cannot add users, remove users, set roles or withdraw someone else's invite - and replay
-asks those same questions of the document in front of it, because a command made when a
-rule allowed it can arrive where the rule does not. The last admin's own role is untouched
-in that case, so the start condition matches; what changed is somebody else's entry, which
-a start condition should not be reaching into.
+not allow it, and replay asks the same questions of the document in front of it, because
+a command made when a rule allowed it can arrive where the rule does not. The rules:
+
+- The only admin cannot step down, and cannot leave while others remain.
+- A leave made while others remained cannot land where its user is now the only one: *You
+  are now the only member, so leaving would delete Tanglewood Ward.*
+- A user cannot remove their last device: *To stop using this ward, use Leave*, so Leave's
+  rules apply.
+- A member cannot add users, remove users, set roles or withdraw someone else's invite.
+
+These are refusals rather than start conditions because what changed is somebody else's
+entry. When a step-down replays onto a ward whose other admin has left, the stepping-down
+admin's own role is untouched, so its start condition matches; a start condition should
+not be reaching into another user's entry to notice.
 
 A refusal is its own question, asked before `execute`:
 
@@ -1217,7 +1230,9 @@ An invite is a one-time bearer key. Its 32-byte seed yields both of its keypairs
    to it, with an `invites` entry saying what it is for, and pushes it. *Add a user* first
    asks who the invite is for, and makes nothing until that is answered; the answer is the
    invite's `label`. Both are offered only while connected, and the link is shown only once
-   that version is on the server, so every link a user can copy is one that works.
+   that version is on the server, so every link a user can copy is one that works. Since
+   inviting and joining both need the server, a ward's users are added before an emergency
+   rather than during one.
 
    The device that made the invite keeps its seed in its device-local state, saved with the
    invite before the push, for as long as the access list it holds names that invite. So
@@ -1840,47 +1855,6 @@ The fake and the real server are checked against each other. One conformance sui
 against the client's server interface, runs against both: against the fake in the ordinary
 test run, and against the real server over HTTP when `WARD_PLANNING_SERVER_URL` is set. A
 disagreement is resolved in whichever implementation is wrong, never by loosening a test.
-
-## Deliberate limits
-
-- **One conflict abandons a whole replay.** The user redoes everything in that journal
-  from the to-redo list, rather than part of it being applied for them or a rule
-  choosing a winner.
-- **Responders cannot see each other's work while the network is down.** Their commands
-  replay when it returns. Local-network peer sync would close this and is possible future
-  work.
-- **Losing access stops sharing; deleting the copy is the user's choice.** Files taken out
-  of app data, and devices that never reconnect, keep what they had either way.
-- **Roles are a convention.** A modified client could act as an admin, and already holds the
-  data.
-- **One admin can remove anyone** from the ward's future. Every removal is announced, and
-  everyone keeps the copy they hold; recovery is a new ward built from the directory PDFs.
-- **A stolen, unlocked device acts as its owner**, with its owner's role. Its owner
-  removes it and any device it added; otherwise any admin removes its owner.
-- **A device's first download is taken as it stands.** A newly joined device, one whose
-  app data was cleared, or one whose local file cannot be read has no earlier version to
-  check the first against.
-- **An intercepted invite link gets in**, visibly, and is removed.
-- **A channel-open signature replays**, so presence can be lied about.
-- **Joining needs the server**, so users are added before an emergency rather than during
-  one.
-- **Reports stay plaintext.** Summary reports are member-data PDFs written to a user-chosen
-  path.
-- **Emergency archives are replaced by the summary report** saved when an emergency ends;
-  the response itself leaves the document.
-- **Sharing and live editing depend on the server being up.** Editing does not.
-- **A hostile server operator could keep members on separate or stale copies** without them
-  noticing; nothing is exposed, and each member keeps their own work.
-- **An unreadable or restored head stalls sharing** until the operator repairs it. A version
-  every client refuses, from a client bug or storage corruption, and a restore older than
-  what members hold both stop pushes; every member keeps working on their own copy. A ward
-  the server no longer has stalls the same way.
-- **There is no folder-based sharing mode.** Continuity if the server stops rests on the
-  project being open source, the format being documented, and every member holding a
-  complete file.
-- **Operating the server is ongoing work** (uptime, backups with a tested restore,
-  certificate renewal, and abuse handling) carried by whoever runs it rather than by the
-  ward.
 
 ## Hosting notes
 
