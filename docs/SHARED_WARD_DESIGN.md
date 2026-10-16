@@ -190,8 +190,9 @@ application's author, and the design keeps that from being a matter of trust. An
 obtains a file without ever having held a key. A removed user writing anything, which
 the server refuses because the current header no longer names them. A user removed by
 an admin reading a later version obtained some other way, which is under a key they never
-held.
-Silent corruption or truncation.
+held. A server, or a stranger holding a lapsed domain, offering members an installer of its
+own: the app offers only a release signed with the project's release key (see *What the
+server is*). Silent corruption or truncation.
 
 **No server answer destroys anything the user has not chosen to give up.** A head that
 leaves this device out stops this copy pushing until a head names this device again, and
@@ -386,7 +387,9 @@ version of Ward Planning. Update to see the latest changes and share your work.*
 edit stays available** and is journalled and saved locally as usual, so users keep working
 through an update; once updated, the app takes the server's version and replays the
 journal like any other. The update notice offers the download from the server's latest
-release, without the option to dismiss it while this state lasts. The state is checked
+signed release, without the option to dismiss it while this state lasts; with no signed
+release newer than this app, it offers none, and the user updates from the project's own
+release page. The state is checked
 again on every head, so it lasts only while the server keeps presenting a version this app
 cannot read. The server supports a format before any app writes it.
 
@@ -563,7 +566,7 @@ starting point; no call asks for an earlier version, and none is kept.
 | `GET /documents/{id}` | anyone with the id | The current version: header and blob. Ciphertext; unreadable without a key. |
 | `PUT /documents/{id}` | a key holder | Conditional on `Ward-Base-Version`. Signed. |
 | the live channel | a key holder | Open while the ward is open. Carries presence and version notices. |
-| `GET /releases/latest` | anyone | The current app version per platform, with each installer's download address. |
+| `GET /releases/latest` | anyone | The current app version per platform, with each installer's download address and hash, signed with the project's release key. |
 | `GET /download` | anyone | A web page offering the installers, for people who do not have the app yet. |
 
 **Signed requests.** A write carries the signer's two public keys and an Ed25519 signature
@@ -902,7 +905,13 @@ ministering, tags, the emergency response and the access list. In particular:
 - **The update check**: on start, the app reads the server's `GET /releases/latest` and,
   when it is newer than the running version, shows a dismissible notice offering the
   download. Installers are published to the server, which serves them and the download
-  page. The app's version is stated once, in the build, and reaches the running app and the
+  page. **Releases are signed.** The listing carries an Ed25519 signature over its versions,
+  download addresses and installer hashes (BLAKE2b-256), checked against the project's
+  release key, which is built into the app. The app offers a release only when the
+  signature checks and the downloaded installer matches its hash, so whoever holds the
+  server cannot hand members an installer of its own. A replayed older listing offers
+  nothing, since a release is offered only when newer than the running app. Losing the
+  release key means a new key, which reaches members in a release they install by hand. The app's version is stated once, in the build, and reaches the running app and the
   installer from there. Versions compare numerically, part by part, so 1.10.0 is newer than
   1.9.0.
 - **The app is named Ward Planning** in every name a user or the system sees. The installer
@@ -1859,6 +1868,11 @@ Against the fake server, in `tests/server`:
 - the channel reports who is present, reports a newcomer to those already there, and reports
   a departure on close
 - a version notice on the channel causes the other clients to fetch and validate
+- a release listing signed with the release key and newer than the app is offered; one with
+  a signature that does not verify, one whose installer does not match its hash, and a
+  correctly signed listing older than the app are each offered nowhere; a head with a
+  newer `format` and no signed newer release shows the newer-version notice with no
+  download in it
 
 The instance lock, in `tests/lock`:
 
@@ -1933,11 +1947,12 @@ that need hand rotation.
 exactly what lets a successor take over at the same address. Clients decrypt every blob
 themselves and seal only to keys an earlier version already admitted, so a lapsed domain
 re-registered by a stranger yields ciphertext and fingerprints, and stops sharing until a
-successor acts. Such a stranger cannot remove anyone, learn who has access, or cause a copy
-to be deleted.
+successor acts. Such a stranger cannot remove anyone, learn who has access, cause a copy
+to be deleted, or offer members an installer, which must be signed with the release key.
 
 **Handing over** needs a second Super Administrator on the Cloudflare account, credentials
-(registrar, Cloudflare, GitHub) in a password manager with emergency access, a second owner
+(registrar, Cloudflare, GitHub) and the release signing key in a password manager with
+emergency access, a second owner
 on the GitHub repository, a runbook in the repository covering deploy, data location,
 restore and migrating to another host or domain, and a scheduled export of all ciphertext
 blobs to a second provider the successor controls. The export is ciphertext and fingerprints
