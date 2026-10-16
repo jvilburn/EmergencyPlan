@@ -709,7 +709,8 @@ a pushed version holds - the ward, its access list and the landed marks - plus, 
   against
 - dismissals of the single-holder and single-admin notices
 - the failed list of addresses and unit numbers that did not resolve
-- whether the ward is no longer this device's, so a device reopened offline still knows
+- whether the ward is no longer this device's, and whether it left by its own choice, so a
+  device reopened offline still knows, and knows whether its copy is read-only
 - the seed of each open invite this device made (see *Invites*)
 
 A pushed version's payload holds the ward, its access list and the landed marks. In memory these are separate, so a push serialises the ward and
