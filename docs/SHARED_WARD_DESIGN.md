@@ -148,7 +148,7 @@ This document uses its terms for precision; the interface uses these:
 | conflict, abandoned replay | *Your changes could not be applied, because the ward changed first* |
 | to-redo list | *These need doing again* |
 | journal, unpushed changes | *Your changes are saved here and will go up when the connection returns* |
-| no longer this device's | *You no longer have access to this ward* / *You left this ward* |
+| no longer this device's | *You no longer have access to this ward* / *You left this ward* / *You removed this device from this ward* |
 
 Terms with no place in the interface at all: push, fetch, replay, version (of a ward; the
 app's own version is an everyday word), head, base,
@@ -491,9 +491,8 @@ the key of the last version this device took from, or gave to, the server.** So 
 this device trusts are that one key, an incoming version under it is accepted directly, and
 a later one is accepted because its former keys name it. Without this, an admin who removed
 someone would hold a key of their own invention and could never again accept a version from
-anyone else. The one exception is the save after Leave or Remove this device, which keeps
-the key of the version pushed from (see *Saving*), since that is the last key this device
-can open.
+anyone else. The one exception is a device that has left: it keeps the key of the version
+it left from (see *Saving*), since that is the last key it can open.
 
 A local save always writes the current document, with this device's state beside it. A
 push that succeeds changes that state - the new base, the new key if it rotated, and the
@@ -501,8 +500,7 @@ journal trimmed by this device's mark - and is saved as any change is, so a comm
 while the push was in flight stays in the file and the journal. A crash before that save
 leaves the file under the key the push replaced, which is the lost-reply case and needs
 nothing more: the next push meets a newer base, the fetch's landed mark trims the journal,
-and the newer version names that key among its former keys. The save after Leave or
-*Remove this device* writes the version pushed from instead (see *Saving*).
+and the newer version names that key among its former keys.
 
 Several access changes made while disconnected therefore rotate once, at the push that
 carries them, rather than once each.
@@ -1189,7 +1187,7 @@ longer names them. They learn the ward is no longer theirs, and their own pendin
 stops mattering. A ward cannot be emptied by two users leaving at once.
 
 Leaving needs the server, since the version without you must be held there before your
-copy goes: Leave pushes first and saves after (see *Saving*).
+copy changes (see *Saving*).
 
 **The last user's Leave deletes the ward.** Leave is one command: it takes its user out of
 the access list, with their devices and every invite they made. When no one remains, the
@@ -1288,12 +1286,14 @@ The invitation is the gate. Whoever opens it first gets in, visibly, and can be 
   has access, now an admin or a member, a device added or removed, an invite made or used.
   The lines name whose entry changed, never who changed it; this device's own edits are news
   like any other.
-- **The ward is no longer yours**: a head whose header lacks this device. The user is told
-  *You left this ward* when this device pushed the leave itself, and *You no longer have
-  access to this ward* otherwise; a removed device cannot read the versions that followed,
-  so it names no one. The ward stops pushing until a head names this device again, and the
-  app offers to delete the copy, in a notice that stays while the state lasts. Until the
-  user accepts, the copy stays open for editing as before: every edit is journalled and
+- **The ward is no longer yours**: a head whose header lacks this device. A device that
+  left by its own Leave or *Remove this device* is told *You left this ward* or *You
+  removed this device from this ward*, and its copy is read-only (see *Saving*). Any other
+  device is told *You no longer have access to this ward*; a removed device cannot read the
+  versions that followed, so it names no one. The ward stops pushing until a head names
+  this device again, and the app offers to delete the copy, in a notice that stays while
+  the state lasts. Until the user accepts, a removed device's copy stays open for editing
+  as before: every edit is journalled and
   saved locally, and the journal replays if a later head names this device, whether the
   ward was taken away by a server fault or the user is invited again (see *Invites*).
   Accepting deletes the copy and its journal. Editing stays open because the device cannot
@@ -1355,28 +1355,33 @@ the change, nothing is pushed, and the user is told the reason. The next save th
 succeeds, once the problem is fixed, writes the document and journal together with the
 change in them, and pushes as usual; one write still carries both, so the local file never
 disagrees with itself. Every push carries only what this device has already saved, except
-Leave and Remove this device, which push first (below), and memory runs ahead of the file
-only while saves are failing. While they are, the app tries again on every command, when
+Leave and *Remove this device* (below), and memory runs ahead of the file only while saves
+are failing. While they are, the app tries again on every command, when
 its window regains focus, and when it is closed; if that last attempt fails too, closing
 asks first: *Your latest changes could not be saved and will be lost. Close anyway?* A
 crash or power loss while saves are failing loses the unsaved changes.
 
-**Leave and Remove this device push first and save after.** They are the two commands that
-take this device out of the access list, and a local save seals to exactly that list, so
-saving first would write a file this device cannot open. They are offered only while
-connected, run through the ordinary replay, and push before anything is saved. A push that
-fails changes nothing on this device; one that succeeds puts the device in the
-no-longer-yours state, with its copy kept until the user deletes it. The save after that
-push writes the version the device pushed from, not the one it pushed: the document as it
-stood before the leave, under the access list and key it already carries and so still
-sealed to this device, with the no-longer-yours flag set and the journal emptied of every
-entry up to and including the Leave, all of which that push carried. The Leave version
-holds no landed mark for this device, since its access list no longer names it, so the
-trim goes by what the push carried. A Leave whose reply is lost is settled the same way by
-the next head that lacks this device. That head cannot say whether the Leave landed or
-someone removed the device first; in the second case the entries the Leave carried are
-dropped without landing, which its user gave up by choosing to go. Entries made after the
-Leave stay, like any edit in the no-longer-yours state.
+**Leave and *Remove this device* never touch the open document.** They are the two
+commands that take this device out of the access list, and a local save seals to exactly
+that list, so a file holding them would be one this device cannot open. They are offered
+only while connected. Confirming one makes the ward read-only on this device at once,
+since nothing should be made after it. The command's version is built beside the open
+document, through the ordinary replay, and pushed; a push that meets a newer base replays
+and pushes again, as any push does.
+
+- **When it lands** - a confirmed push, or a head without this device after a lost answer
+  - the device saves its document as it stood, still sealed to itself, flagged as left,
+  read-only, with the offer to delete it, and with the journal emptied: everything in it
+  came before the command and went out with its push.
+- **When a rule refuses it**, the user sees that rule's wording and the ward is editable
+  again.
+- **When the app closes before an answer**, nothing was saved, so the next start lets the
+  head decide: without this device it has left, and still naming it, the user is still a
+  member and can leave again.
+
+A device that has left is read-only because its user chose to go. A device that was removed
+stays editable (see *Everything else, from the document*), because it cannot tell a real
+removal from a server fault.
 
 **An undo is the command's inverse, run like any other command.** `Command` has
 `CommandPtr inverse() const` in place of `undo`: for an update, the same command with
@@ -1549,7 +1554,7 @@ returns.
 | Add a user or Add a device while offline | Connect to the internet to invite someone. |
 | The invite's push loses to a conflict | Your invite could not be created, because the ward changed first. Try again. |
 | Not an admin | In *Who has access*, a member sees *To add or remove users, ask an admin: names* in place of the *Add a user* button. |
-| Head lacks this device | You left this ward. / You no longer have access to this ward. Either with an offer to delete this copy. |
+| Head lacks this device | You left this ward. / You removed this device from this ward. / You no longer have access to this ward. Each with an offer to delete this copy. |
 | Head names no recipient | Tanglewood Ward has been deleted, with an offer to remove this copy. |
 | A leave lands where its user is now the only one | You are now the only member, so leaving would delete Tanglewood Ward. |
 
@@ -1718,12 +1723,12 @@ The journal and replay, in `tests/services`:
   next fetch, offers *Save invitation* after that fetch, and the invitation joins; once the invite is
   used, withdrawn, or abandoned in a replay, the seed is gone from the local file and no
   invitation is offered; *Add a user* with no answer to who it is for makes no invite
-- Leave and Remove this device are not offered offline; on a push that loses, the local
-  file is unchanged and still opens on this device; on a push that succeeds, the local file
-  still opens on this device, holding the version pushed from, marked no longer this
-  device's, and with every journal entry the push carried gone from the journal; with the
-  Leave's reply dropped and a command made after it, the next head ends in the same state,
-  with only that later command left in the journal
+- Leave and Remove this device are not offered offline; once confirmed, the ward accepts
+  no edit; on a push refused by a rule, the ward is editable again and the local file is
+  unchanged; on a push that succeeds, the local file still opens on this device, read-only,
+  marked as left, with an empty journal; with the answer dropped, the next head ends in
+  that same state; with the app closed before an answer and the push stored, the next
+  start finds the device left, and with the push not stored, finds it still a member
 - a save that fails leaves the local file as it was and nothing pushed, with the change
   still in memory; once saving works again, regaining focus saves and pushes it with no
   further command; closing while saves still fail asks before discarding it
