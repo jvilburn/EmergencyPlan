@@ -1359,9 +1359,11 @@ family whose address changes is at the new address's entry, or unmapped until it
 Families at one address share an entry, and an address changed back finds its entry again.
 The geocoder queues each address some family has and the table lacks. A geocode result adds
 the entry for its address and never replaces one already there. Coordinates a user types in
-the family edit panel are their work, so they are a journalled command that sets the entry
-for that family's address, replacing what is there, and its undo restores the entry it
-replaced. A family with no address has no entry to set, so the panel's coordinate fields
+the family edit panel, against the address it shows, are their work, so they are a
+journalled command on that address's entry, which involves no family. It sets the entry
+whatever it holds, and its result already holds if the entry equals the typed value; its
+undo puts back what the entry held when the command was built, provided the entry still
+holds the typed value. A geocode landing meanwhile never conflicts with it. A family with no address has no entry to set, so the panel's coordinate fields
 are disabled for it, and such a family stays off the map; this is accepted. Each automatic batch also drops the entries no family's address uses, so the
 table holds only what is used; an address that comes back later is geocoded, or typed,
 again.
@@ -1707,8 +1709,9 @@ The journal and replay, in `tests/services`:
   it, unmapped until the geocode for it lands, on the editing device as well; a geocode
   for the old address that lands before the edit, or after it, leaves the family at the new
   address's entry and none other
-- typed coordinates set the entry for the family's address, are not replaced by a later
-  geocode of that address, and are restored to the previous entry by their undo
+- typed coordinates set the entry for the address, are not replaced by a later geocode of
+  that address, and are restored to the previous entry by their undo; typed offline and
+  replayed after a geocode of the same address, they apply and the journal is not abandoned
 - an automatic batch drops the entry of an address no family has any more, and keeps every
   entry in use
 - geocoding the families of an import pushes one version for the whole batch, and an
