@@ -709,7 +709,8 @@ while the ward is syncing; otherwise each shows the notice of what stops it, whi
 
 ## The journal
 
-Every command run in a ward this device holds is appended to its journal, and leaves the
+Every command run in a ward this device holds, apart from Leave and *Remove this device*
+(see *Saving*), is appended to its journal, and leaves the
 journal when this device sees a version on the server that carries it. Content and access
 changes go into the same journal in the order they were made, because they are the same
 kind of thing: an edit to one encrypted document. **The journal holds this device's
@@ -1771,7 +1772,9 @@ The journal and replay, in `tests/services`:
   unchanged; on a push that succeeds, the local file still opens on this device, read-only,
   marked as left, with an empty journal; with the answer dropped, the next head ends in
   that same state; with the app closed before an answer and the push stored, the next
-  start finds the device left, and with the push not stored, finds it still a member
+  start finds the device left, and with the push not stored, finds it still a member; a
+  Leave whose push meets a newer version on which an earlier journal entry conflicts drops
+  the journal and lands
 - a save that fails leaves the local file as it was and nothing pushed, with the change
   still in memory; once saving works again, regaining focus saves and pushes it with no
   further command; closing while saves still fail asks before discarding it
