@@ -810,8 +810,9 @@ members to one team both apply.
 assignments refer to people, families and teams by id, and replay keeps every such id
 pointing at something that exists:
 
-- **An addition's start condition includes that the id it adds exists.** Adding Bob to a
-  team, replayed after Bob was removed, conflicts.
+- **Any value a command writes that names a person, family or team includes in its start
+  condition that the id exists**, whether a set addition, a leader or an assignee. Adding
+  Bob to a team, or assigning him a task, replayed after Bob was removed, conflicts.
 - **A removal carries its cleanup and where it saw the removed thing.** Removing a member,
   deleting a family, and an import's removals all use one cleanup routine. It takes each
   removed person out of every team, person-level tag, asset and ministering group that
@@ -1820,8 +1821,8 @@ The journal and replay, in `tests/services`:
   removing one member through the edit panel does the same for that person
 - deleting a team unassigns the tasks assigned to it, and undoing the delete assigns them
   again
-- an offline addition of a person to a team, replayed after that person was removed,
-  conflicts; an offline removal of a person, replayed after someone added them to another
+- an offline addition of a person to a team, and an offline task assignment to a person,
+  each replayed after that person was removed, conflict; an offline removal of a person, replayed after someone added them to another
   team, conflicts, and so does one replayed after someone assigned them a task; in each, no
   team or task is left holding a missing id
 - a local save that removed someone still accepts the pre-removal version from the
