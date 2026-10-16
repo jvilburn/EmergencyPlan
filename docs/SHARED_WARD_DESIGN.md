@@ -939,19 +939,21 @@ replay:
 - **The update check** is new: on start, the app reads the server's `GET /releases/latest`
   and, when it is newer than the running version, shows a dismissible notice offering the
   download. Installers are published to the server, which serves them and the download
-  page. The app states no version today: `main.cpp` sets no `setApplicationVersion`,
-  `CMakeLists.txt`'s `project` declares none, `installer.iss` says `1.0.1`, and
-  `vcpkg.json` says `1.0.0`. The version moves to `project(... VERSION x.y.z)`, which
-  reaches the app as its application version and is written at configure time into a file
-  `installer.iss` includes in place of its own `MyAppVersion`; `vcpkg.json` drops its
-  `version`, which a top-level manifest does not need, so it is stated once. Versions compare numerically, part by part,
-  so 1.10.0 is newer than 1.9.0.
+  page. The running app knows no version today: `main.cpp` sets no
+  `setApplicationVersion`; `CMakeLists.txt`'s `project` declares `1.0.0`, which reaches
+  only the macOS bundle (`CMakeLists.txt:526-527`); `installer.iss` says `1.0.1`; and
+  `vcpkg.json` says `1.0.0`. `project`'s version becomes the one source: it reaches the app
+  as its application version and is written at configure time into a file `installer.iss`
+  includes in place of its own `MyAppVersion`, and `vcpkg.json` drops its `version`, which
+  a top-level manifest does not need. Versions compare numerically, part by part, so 1.10.0
+  is newer than 1.9.0.
 - **The app is renamed Ward Planning throughout.** The application name (`main.cpp:12`),
   the window title (`MainWindow.cpp:530`), the installer's name and publisher
   (`installer.iss`), the executable, and the CMake project and its targets (`EmergencyPlan`,
   `EmergencyPlanLib`) take the new name, with everything that names them, such as
-  `build.bat`'s deploy step and the `name` in `vcpkg.json`. The installer keeps its `AppId`, so the release upgrades the
-  old install in place. App data and the tile cache are named by Qt after the application,
+  `build.bat`'s deploy step, the `name` in `vcpkg.json`, and the macOS bundle's name and
+  identifier (`CMakeLists.txt:525,528`). The installer keeps its `AppId`, so the release
+  upgrades the old install in place. App data and the tile cache are named by Qt after the application,
   so both move; nothing is carried over from the old directories (see *Earlier versions*),
   and the tile cache refills as maps are viewed.
 - **Receiving an invitation** is new: *Join a ward*, which reads the clipboard when clicked
