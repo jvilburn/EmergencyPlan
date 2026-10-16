@@ -612,9 +612,8 @@ given. A client answered `412` fetches the current version and replays onto it. 
 answered `403` fetches the head: a header that no longer names this device is the ward no
 longer being this device's. Any other push that neither succeeds nor settles - a `403`
 whose head still names this device, a `429`, a `400`, or no answer - leaves the journal as
-it is and goes again on the next command, when the window regains focus, and on
-reconnecting; after a `429` it also waits out the server's
-`Retry-After`. Only a `400`, which is always this app's own fault, is shown, once: *Your
+it is and is retried as anything pending is (see *Saving*), after a `429` no sooner than
+the server's `Retry-After`. Only a `400`, which is always this app's own fault, is shown, once: *Your
 changes could not be shared because of a problem in Ward Planning. They are saved here.*
 
 **Reads are open** to anyone who knows a document id, because the design never relied on
@@ -1382,9 +1381,9 @@ succeeds, once the problem is fixed, writes the document and journal together wi
 change in them, and pushes as usual; one write still carries both, so the local file never
 disagrees with itself. Every push carries only what this device has already saved, except
 Leave and *Remove this device* (below), and memory runs ahead of the file only while saves
-are failing. While they are, the app tries again on every command, when
-its window regains focus, and when it is closed; if that last attempt fails too, closing
-asks first: *Your latest changes could not be saved and will be lost. Close anyway?* A
+are failing. **Whatever is pending - a failed save first, then a push - is retried on the
+next command, when the window regains focus, on reconnecting, and on closing.** If a save
+still fails at closing, closing asks first: *Your latest changes could not be saved and will be lost. Close anyway?* A
 crash or power loss while saves are failing loses the unsaved changes.
 
 **Leave and *Remove this device* never touch the open document.** They are the two
