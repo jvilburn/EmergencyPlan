@@ -95,7 +95,9 @@ design's answer, not a gap:
 - **1.0 `.emergencyplan` files are not migrated**, and their teams, tags, assets, special
   needs and notes are not carried over.
 - **An unreadable or restored head stalls sharing** until the operator repairs it (see
-  *Threat model*); there is no client-side republish.
+  *Threat model*); there is no client-side republish. A ward this device holds that the
+  server answers `404` for - deleted and since pruned, pruned while in use, or lost - stalls
+  the same way, with an offer to delete the copy; the device cannot tell which it was.
 - **Tags stay**: add, update and delete are converted with the rest, though nothing calls
   them yet.
 - **No bandwidth estimate**; whole-blob-per-edit holds during an emergency too.
@@ -1578,6 +1580,7 @@ returns.
 | The server is unreachable | Working offline. Your changes are saved here and will go up when the connection returns. |
 | Head is older than this copy | The server has an older copy of this ward than yours. Nothing was changed. Your copy is safe and you can keep working; sharing resumes when the server catches up. |
 | Head fails validation | The ward on the server could not be read. Your copy is safe and you can keep working; sharing resumes when the server has a readable copy. |
+| A held ward is not on the server | This ward is no longer on the server. Your copy is safe and you can keep working; it is no longer shared. With an offer to delete this copy. |
 | Header format is newer | This ward was saved by a newer version of Ward Planning. Update to see the latest changes and share your work. |
 | Invite link already used or withdrawn | This invite has been used or withdrawn. Ask the sender. |
 | Invite link for a ward the server does not have | The server has no such ward. Check the link. |
@@ -1847,6 +1850,8 @@ Against the fake server, in `tests/server`:
 - a `POST` whose answer is lost, retried, is told the id already exists; the client then
   fetches, and its landed mark empties the journal
 - a downloaded version that fails validation replaces nothing
+- a held ward the server answers `404` for keeps its copy and journal, pushes nothing,
+  never sends a `POST` for it, accepts and saves new edits, and offers to delete the copy
 - edits made while unreachable are kept in the journal and replay on reconnect
 - a device given back an older local file, its counter behind the ward's mark for it, makes
   a new edit after its next fetch, and that edit reaches the server
@@ -2019,7 +2024,9 @@ and keeps working; sharing is what pauses.
 - **Pruning unused documents.** Every document reaches the server, so throwaways
   accumulate. The head already carries the current version's publish time; adding a
   last-read time per document, touched when a head is read, would let an operator rule
-  prune a document nobody has opened or written in a year.
+  prune a document nobody has opened or written in a year. Pruning a ward still in use
+  leaves its members on the missing-ward stall (see *Settled*), which such a rule has to
+  weigh against the storage it frees.
 - **Recovery from a member's local file.** Recovery is a new ward rebuilt from the PDFs. A
   member's own local file could be published as the new ward instead, keeping notes,
   ministering and emergency data the PDFs lack: one "Publish as a new ward" action, which
