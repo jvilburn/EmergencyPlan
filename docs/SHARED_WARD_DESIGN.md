@@ -743,9 +743,14 @@ member added carries the whole new `Person`, and its result holds if that `Perso
 already there; a member removed carries the person as last seen, and every field of that
 is its start condition, so an edit to that member since makes the removal conflict, and
 its undo re-adds exactly what it removed. Even a phone change blocks it: the remover was
-looking at the old phone, and being told someone changed that person first costs a redo. Its result holds if they are already gone.
-Deleting a family, and an import's removal of one, hold the whole family as last seen the
-same way. Members are matched by `PersonId`, and their order is not part of
+looking at the old phone, and being told someone changed that person first costs a redo.
+Its result holds if they are already gone. **Every removal of content takes this shape**
+(an access-list removal takes a user whatever they hold by then; see *Who has access,
+changed by two users*): a member, a
+family (by a delete or an import), a team, a tag, an asset, a task and a contact attempt
+are each held as last seen, which is the removal's start condition, so a change to the
+thing since makes the removal conflict, it being gone already means the result holds, and
+the undo re-adds exactly what was removed. Members are matched by `PersonId`, and their order is not part of
 any start condition.
 
 Every update command takes this shape, not only the family's. Single values - a name, a
@@ -898,10 +903,10 @@ replay:
   | `StartEmergency` | start, with a record per family | an addition; never conflicts |
   | `EndEmergency` | end, removing the response once its report is saved | conflicts if the response differs from what the report holds; result holds if already gone |
   | `RecordContactAttempt` | logging a contact, and the OK and Unable to Reach buttons | an addition |
-  | `DeleteContactAttempt` | the inverse of `RecordContactAttempt`, which is how an attempt is undone; no button removes one today | result holds if already gone |
+  | `DeleteContactAttempt` | the inverse of `RecordContactAttempt`, which is how an attempt is undone; no button removes one today | as last seen; result holds if already gone |
   | `AddTask` | adding a task | an addition |
   | `UpdateTask` | the task dialog, resolve, reopen, assign, unassign, notify | per value, as `UpdateFamilyCommand` |
-  | `DeleteTask` | removing a task | result holds if already gone |
+  | `DeleteTask` | removing a task | as last seen; result holds if already gone |
   | `AddTaskCategory` | adding a category | result holds if present |
 
   `UpdateTask` holds typed optional changes, each with its before and after, to four
@@ -1726,6 +1731,9 @@ The journal and replay, in `tests/services`:
 - an offline removal of a member, replayed after someone changed that member's phone,
   conflicts and leaves the member with the new phone; the same removal replayed onto an
   unchanged member applies, and its undo restores a member equal to the one removed
+- an offline task deletion, replayed after another responder resolved that task, conflicts
+  and leaves the task resolved with its notes; an offline team deletion, replayed after
+  someone added a member to that team, conflicts and leaves the team
 - a special-need note edit and a phone edit to the same person, offline on two devices,
   both apply
 - two users offline each add a different member to the same team, and both members are
