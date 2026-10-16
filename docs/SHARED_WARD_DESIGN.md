@@ -952,7 +952,8 @@ replay:
   (`installer.iss`), the executable, and the CMake project and its targets (`EmergencyPlan`,
   `EmergencyPlanLib`) take the new name, with everything that names them, such as
   `build.bat`'s deploy step, the `name` in `vcpkg.json`, and the macOS bundle's name and
-  identifier (`CMakeLists.txt:525,528`). The installer keeps its `AppId`, so the release
+  identifier (`CMakeLists.txt:525,528`, and `packaging/macos/Info.plist`, whose
+  `.emergencyplan` document type goes as the Windows association does). The installer keeps its `AppId`, so the release
   upgrades the old install in place. App data and the tile cache are named by Qt after the application,
   so both move; nothing is carried over from the old directories (see *Earlier versions*),
   and the tile cache refills as maps are viewed.
