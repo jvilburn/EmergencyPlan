@@ -95,9 +95,11 @@ design's answer, not a gap:
 - **1.0 `.emergencyplan` files are not migrated**, and their teams, tags, assets, special
   needs and notes are not carried over.
 - **An unreadable or restored head stalls sharing** until the operator repairs it (see
-  *Threat model*); there is no client-side republish. A ward this device holds that the
-  server answers `404` for - deleted and since pruned, pruned while in use, or lost - stalls
-  the same way, with an offer to delete the copy; the device cannot tell which it was.
+  *Threat model*); there is no client-side republish. A ward this device has already had
+  from or given to the server, which the server now answers `404` for - deleted and since
+  pruned, pruned while in use, or lost - stalls the same way, with an offer to delete the
+  copy; the device cannot tell which it was. A ward not yet on the server makes its first
+  push as usual.
 - **Tags stay**: add, update and delete are converted with the rest, though nothing calls
   them yet.
 - **No bandwidth estimate**; whole-blob-per-edit holds during an emergency too.
@@ -1850,7 +1852,7 @@ Against the fake server, in `tests/server`:
 - a `POST` whose answer is lost, retried, is told the id already exists; the client then
   fetches, and its landed mark empties the journal
 - a downloaded version that fails validation replaces nothing
-- a held ward the server answers `404` for keeps its copy and journal, pushes nothing,
+- a ward this device has had on the server, now answered `404`, keeps its copy and journal, pushes nothing,
   never sends a `POST` for it, accepts and saves new edits, and offers to delete the copy
 - edits made while unreachable are kept in the journal and replay on reconnect
 - a device given back an older local file, its counter behind the ward's mark for it, makes
