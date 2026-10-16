@@ -158,7 +158,7 @@ This document uses its terms for precision; the interface uses these:
 | conflict, abandoned replay | *Your changes could not be applied, because the ward changed first* |
 | to-redo list | *These need doing again* |
 | journal, unpushed changes | *Your changes are saved here and will go up when the connection returns* |
-| no longer this device's | *You no longer have access to this ward* / *You left this ward* / *You removed this device from this ward* |
+| no longer this device's | *You no longer have access to this ward* |
 
 Terms with no place in the interface at all: push, fetch, replay, version (of a ward; the
 app's own version is an everyday word), head, base,
@@ -733,8 +733,7 @@ a pushed version holds - the ward, its access list and the landed marks - plus, 
   against
 - dismissals of the single-holder and single-admin notices
 - the failed list of addresses and unit numbers that did not resolve
-- whether the ward is no longer this device's, and whether it left or was removed, so a
-  device reopened offline still knows, and shows the right message
+- whether the ward is no longer this device's, so a device reopened offline still knows
 - the seed of each open invite this device made (see *Invites*)
 
 A pushed version's payload holds the ward, its access list and the landed marks. In memory these are separate, so a push serialises the ward and
@@ -1320,11 +1319,10 @@ The invitation is the gate. Whoever opens it first gets in, visibly, and can be 
   The lines name whose entry changed, never who changed it; this device's own edits are news
   like any other.
 - **The ward is no longer yours**: a head whose header lacks this device, or a server that
-  no longer has a ward this device had from or gave to it. A device that
-  left by its own Leave or *Remove this device* is told *You left this ward* or *You
-  removed this device from this ward*, and its copy is read-only (see *Saving*). Any other
-  device is told *You no longer have access to this ward*; a removed device cannot read the
-  versions that followed, so it names no one. Either way the ward stops pushing for good on
+  no longer has a ward this device had from or gave to it, whether by this device's own
+  Leave or *Remove this device* or by a removal. The state is the same either way, and so
+  is its message, *You no longer have access to this ward*; a removed device cannot read the
+  versions that followed, so it names no one. The ward stops pushing for good on
   this device, its unsent changes are dropped, its copy is read-only, and the app offers to
   delete the copy, in a notice that stays until the user does. Coming back is by a new
   invitation, which joins as a first join does (see *Invites*).
@@ -1408,14 +1406,15 @@ since leaving gives up unsent changes anyway, and the command goes ahead on the 
 version.
 
 - **When it lands** - a confirmed push, or a head without this device after a lost answer
-  - the device saves its document as it stood, still sealed to itself, flagged as left,
-  read-only, with the offer to delete it, and with the journal emptied: everything in it
-  came before the command and went out with its push.
+  - the user is told *You left Tanglewood Ward* or *You removed this device*, and the
+  device saves its document as it stood, still sealed to itself, in the no-longer-yours
+  state (see *Everything else, from the document*), with the journal emptied: everything
+  in it came before the command and went out with its push.
 - **When a rule refuses it**, the user sees that rule's wording and the ward is editable
   again.
 - **When the app closes before an answer**, nothing was saved, so the next start lets the
-  head decide: without this device it has left, and still naming it, the user is still a
-  member and can leave again.
+  head decide: without this device the ward is no longer this device's, and still naming
+  it, the user is still a member and can leave again.
 
 **An undo is the command's inverse, run like any other command.** `Command` has
 `CommandPtr inverse() const` in place of `undo`: for an update, the same command with
@@ -1585,7 +1584,7 @@ returns.
 | Any of those four while connected but not syncing | The notice of the state that stops pushing, such as *This ward was saved by a newer version of Ward Planning...* |
 | The invite's push loses to a conflict | Your invite could not be created, because the ward changed first. Try again. |
 | Not an admin | In *Who has access*, a member sees *To add or remove users, ask an admin: names* in place of the *Add a user* button. |
-| Head lacks this device, or the server no longer has the ward | You left this ward. / You removed this device from this ward. / You no longer have access to this ward. Each with an offer to delete this copy. |
+| Head lacks this device, or the server no longer has the ward | You no longer have access to this ward. With an offer to delete this copy. |
 | Head names no recipient | Tanglewood Ward has been deleted, with an offer to remove this copy. |
 | A leave lands where its user is now the only one | You are now the only member, so leaving would delete Tanglewood Ward. |
 
@@ -1773,10 +1772,10 @@ The journal and replay, in `tests/services`:
   invitation is offered; *Add a user* with no answer to who it is for makes no invite
 - Leave and Remove this device are offered only while the ward is syncing; once confirmed, the ward accepts
   no edit; on a push refused by a rule, the ward is editable again and the local file is
-  unchanged; on a push that succeeds, the local file still opens on this device, read-only,
-  marked as left, with an empty journal; with the answer dropped, the next head ends in
+  unchanged; on a push that succeeds, the user is told they left, and the local file still
+  opens on this device, read-only, no longer this device's, with an empty journal; with the answer dropped, the next head ends in
   that same state; with the app closed before an answer and the push stored, the next
-  start finds the device left, and with the push not stored, finds it still a member; a
+  start finds the ward no longer this device's, and with the push not stored, finds it still a member; a
   Leave whose push meets a newer version on which an earlier journal entry conflicts drops
   the journal and lands
 - a save that fails leaves the local file as it was and nothing pushed, with the change
