@@ -617,12 +617,12 @@ appear as present.
 
 When more than one applies, the first of `429`, `400`, `404`, `409`, `403`, `412` is
 given. A client answered `412` fetches the current version and replays onto it. One
-answered `403` fetches the head: a header that no longer names this device is the ward no
-longer being this device's. Any other push that neither succeeds nor settles - a `403`
-whose head still names this device, a `429`, a `400`, or no answer - leaves the journal as
-it is and is retried as anything pending is (see *Saving*), after a `429` no sooner than
-the server's `Retry-After`. Only a `400`, which is always this app's own fault, is shown, once: *Your
-changes could not be shared because of a problem in Ward Planning. They are saved here.*
+answered `403` or `404` fetches the head: a header that no longer names this device, or a
+ward the server no longer has, is a removal (see *Everything else, from the document*). A
+join's `403` means the invite was used or withdrawn. **Any other answer, or none, is a
+fault**, the app's or the server's: the journal stays, the push is retried as anything
+pending is (see *Saving*), and the user is told once: *Your changes could not be shared
+right now. They are saved here.*
 
 **Reads are open** to anyone who knows a document id, because the design never relied on
 the server to protect content and the id is 128 random bits. A read limit by address stops
@@ -705,8 +705,8 @@ to survive a version nobody can read. The device keeps working on that copy and 
 nothing while the head fails; see the accepted stall under *Threat model*.
 
 **A ward is syncing** when this device is connected and in none of the states that stop its
-pushes: a newer format on the server, a head that fails a check above, or a ward no longer
-this device's. The actions whose change must reach the
+pushes: a newer format on the server, a head that fails a check above, saves failing, a
+push that faults, or a ward no longer this device's. The actions whose change must reach the
 server - *Add a user*, *Add a device*, Leave and *Remove this device* - are offered only
 while the ward is syncing; otherwise each shows the notice of what stops it, which is
 *Connect to the internet* only when that is the cause.
@@ -1858,8 +1858,9 @@ Against the fake server, in `tests/server`:
   with the `Ward-` headers the header table lists; a stale `PUT` from a signer the current
   header no longer names gets `403`, and a malformed `PUT` to an unknown id gets `400`
 - a `403` whose head no longer names the device puts it in the no-longer-yours state; a
-  `403` whose head still names it leaves the journal as it was, and the next push carries
-  it
+  `403` whose head still names it, a `429` and a `400` each leave the journal as it was,
+  tell the user once that changes could not be shared, and are retried; a join answered
+  `403` reports the invite as used or withdrawn
 - a `PUT` to a document id the server does not hold is refused, and every other document
   keeps its version and contents
 - a `POST` whose answer is lost, retried, is told the id already exists; the client then
