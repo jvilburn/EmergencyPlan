@@ -1021,6 +1021,8 @@ a command made when a rule allowed it can arrive where the rule does not. The ru
 - A user cannot remove their last device: *To stop using this ward, use Leave*, so Leave's
   rules apply.
 - A member cannot add users, remove users, set roles or withdraw someone else's invite.
+- Anyone, admins included, removes only their own devices.
+- A user cannot Remove themselves; Leave is how they go.
 
 These are refusals rather than start conditions because what changed is somebody else's
 entry. When a step-down replays onto a ward whose other admin has left, the stepping-down
