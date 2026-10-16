@@ -1196,10 +1196,8 @@ is not carried onto the user. A device invite has no label and shows as *a devic
 maker's name: every open device invite a user made joins as one of that user's devices, so
 any of them serves any of their devices.
 
-**Roles are a convention among honest clients.** The server cannot read the access list, so it
-cannot tell an admin from a member. The rule (admins add users and remove users; everyone
-adds and removes their own devices) is what the app offers, and it exists to keep
-well-meaning users from over-sharing.
+**Roles are a convention among honest clients** (see *Threat model*): admins add and remove
+users, and everyone adds and removes their own devices.
 
 ## Who has access, changed by two users
 
@@ -1325,8 +1323,6 @@ The invitation is the gate. Whoever opens it first gets in, visibly, and can be 
   this device, its unsent changes are dropped, its copy is read-only, and the app offers to
   delete the copy, in a notice that stays until the user does. Coming back is by a new
   invitation, which joins as a first join does (see *Invites*).
-- **Last admin**: a client rule: the only admin cannot step down, and cannot leave while
-  others remain.
 - **A second device of your own**: *Add a device*, send yourself the invitation, open it there.
   The first-run screen asks for a name and a device name, nothing else.
 - **Cleared app data, a reimaged profile or a replaced device** gives a fresh identity; wards come back by invite from
@@ -1348,7 +1344,7 @@ ward opens, whenever this device takes a version from the server by fast-forward
 replay, and after a committed command that gives a family an address the table of address
 coordinates lacks, which the command knows at construction. Each run skips what is already done and what is on the failed list, so a
 result lost with a push is simply computed again. Several online devices may compute
-the same result at once; the results are identical, and the duplicate work is accepted.
+the same result at once, and the duplicate work is accepted.
 Their results are not journalled, for the reason given above, so while the server holds a
 version this app is too old to read they apply locally, drop at the replay that follows the
 update, and are computed again.
