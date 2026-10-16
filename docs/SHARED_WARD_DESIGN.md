@@ -1484,9 +1484,8 @@ file, fetches the ward, unseals it with the invite's key, and asks *Join Tanglew
 with the ward's own name, read from the ward rather than from the file's name; confirming
 runs the join. Nothing is typed, pasted or copied.
 
-**One instance per user.** macOS, iOS and Android run one instance of an app themselves.
-On Windows the app holds a per-user `QLockFile` in app data while it runs, with
-`setStaleLockTime(0)` so that only a dead process, not age, makes the lock stale; a second
+**One instance per user.** On every desktop platform the app holds a per-user `QLockFile` in
+app data while it runs, with `setStaleLockTime(0)` so that only a dead process, not age, makes the lock stale; a second
 launch that cannot take the lock hands what it was opened with to the running app over a
 per-user local socket, and exits. The running app opens an invitation it is handed, so
 double-clicking an invitation while Ward Planning is open joins in the open window; a second
