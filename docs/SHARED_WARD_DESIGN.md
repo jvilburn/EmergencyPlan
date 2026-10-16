@@ -194,17 +194,13 @@ held. A server, or a stranger holding a lapsed domain, offering members an insta
 own: the app offers only a release signed with the project's release key (see *What the
 server is*). Silent corruption or truncation.
 
-**No server answer destroys anything the user has not chosen to give up.** A head that
-leaves this device out stops this copy pushing until a head names this device again, and
-tells the user they no longer have access; the device keeps reading the head while the ward
-is open, and resumes syncing if a later one includes it. The copy itself stays until they
-remove it. Deleting a local copy is tidiness, not enforcement, so it is the user's action
-rather than the server's; files copied out of app data, and devices that never reconnect,
-keep what they had either way. The one copy a server answer removes is the one whose user chose
-*Delete ward*: a head naming no one confirms that push landed when its reply was lost, and
-a hostile server confirming it falsely leaves on the server only a ward the user chose to
-give up. A hostile operator, or a bug, can therefore cut a member off from sharing, which
-it could do anyway by refusing to serve, and can destroy nothing the user has kept.
+**A misbehaving server can disrupt, and cannot read.** The design defends against the
+server learning anything, not against a buggy or hostile server getting in the way, which
+it could do anyway by refusing to serve. A head that leaves this device out is taken as a
+removal: the device drops its unsent changes and its copy turns read-only, offered for
+deletion (see *Everything else, from the document*), whether the removal was real or the
+server's mistake. Deleting the copy is the user's action rather than the server's; files
+copied out of app data, and devices that never reconnect, keep what they had either way.
 
 **Detected, not prevented.** Tampering with a local file's header, including its document
 id: the header is bound as associated data, so a modified local file fails to decrypt
@@ -728,8 +724,8 @@ a pushed version holds - the ward, its access list and the landed marks - plus, 
   against
 - dismissals of the single-holder and single-admin notices
 - the failed list of addresses and unit numbers that did not resolve
-- whether the ward is no longer this device's, and whether it left by its own choice, so a
-  device reopened offline still knows, and knows whether its copy is read-only
+- whether the ward is no longer this device's, and whether it left or was removed, so a
+  device reopened offline still knows, and shows the right message
 - the seed of each open invite this device made (see *Invites*)
 
 A pushed version's payload holds the ward, its access list and the landed marks. In memory these are separate, so a push serialises the ward and
@@ -1282,10 +1278,9 @@ An invite is a one-time bearer key. Its 32-byte seed yields both of its keypairs
    entry, under the inviter's user for a device invite, under a new user for a user
    invite, named by the joiner, signed by the invite's signing key, whose verify key the
    current header names. The device then downloads the current version as itself and writes
-   it. A device that still holds a copy of the ward from before it lost access treats that
-   version as any head naming it again: its kept journal replays onto it. The removal's
-   rotation put the key of that copy among the former keys, so the version descends from
-   it. Before using an invite, the device reads the head: if it already names this device's
+   it. A device that still holds a copy of the ward from before it lost access joins as any
+   new device does: the old copy is replaced by the version it joined, and nothing from it
+   carries over. Before using an invite, the device reads the head: if it already names this device's
    own fingerprint, an earlier join landed and only its answer was lost, so the device
    opens the ward as itself and leaves the invite alone. A join that loses to a newer
    version fetches it and joins again on top of it.
@@ -1315,15 +1310,10 @@ The invitation is the gate. Whoever opens it first gets in, visibly, and can be 
   left by its own Leave or *Remove this device* is told *You left this ward* or *You
   removed this device from this ward*, and its copy is read-only (see *Saving*). Any other
   device is told *You no longer have access to this ward*; a removed device cannot read the
-  versions that followed, so it names no one. The ward stops pushing until a head names
-  this device again, and the app offers to delete the copy, in a notice that stays while
-  the state lasts. Until the user accepts, a removed device's copy stays open for editing
-  as before: every edit is journalled and
-  saved locally, and the journal replays if a later head names this device, whether the
-  ward was taken away by a server fault or the user is invited again (see *Invites*).
-  Accepting deletes the copy and its journal. Editing stays open because the device cannot
-  tell a real removal from a server fault or a hostile head that leaves it out, and a
-  server answer may deny sharing but not use (see *Availability* under *Threat model*).
+  versions that followed, so it names no one. Either way the ward stops pushing for good on
+  this device, its unsent changes are dropped, its copy is read-only, and the app offers to
+  delete the copy, in a notice that stays until the user does. Coming back is by a new
+  invitation, which joins as a first join does (see *Invites*).
 - **Last admin**: a client rule: the only admin cannot step down, and cannot leave while
   others remain.
 - **A second device of your own**: *Add a device*, send yourself the invitation, open it there.
@@ -1408,10 +1398,6 @@ and pushes again, as any push does.
 - **When the app closes before an answer**, nothing was saved, so the next start lets the
   head decide: without this device it has left, and still naming it, the user is still a
   member and can leave again.
-
-A device that has left is read-only because its user chose to go. A device that was removed
-stays editable (see *Everything else, from the document*), because it cannot tell a real
-removal from a server fault.
 
 **An undo is the command's inverse, run like any other command.** `Command` has
 `CommandPtr inverse() const` in place of `undo`: for an update, the same command with
@@ -1873,11 +1859,11 @@ Against the fake server, in `tests/server`:
 - a command made while a push is in flight stays in the journal when that push succeeds,
   and goes out with the next push
 - a server ahead with an empty journal fast-forwards without a prompt
-- a device whose head lacks it stops pushing, keeps its file and journal until the user
-  agrees, and says it no longer has access, both mid-session and on next open; an edit made
-  in that state is journalled and saved; when a later head names it again, it resumes
-  syncing and its journal, that edit included, replays; a removed user invited again joins
-  from the device holding the old copy, and its journal replays onto the joined version
+- a device whose head lacks it stops pushing, drops its journal, makes its copy read-only
+  and says it no longer has access, both mid-session and on next open, keeping the copy
+  until the user deletes it; a removed user invited again joins from the device holding
+  the old copy, which is replaced by the joined version with nothing from the old copy or
+  journal in it
 - a user joins only through an invite the current header names, and a used or withdrawn
   invite is refused
 - a join whose answer is lost, with the invitation opened again, opens the ward as a member and
