@@ -428,7 +428,8 @@ inflates the rest.
 ```
 
 `ward` is the ward's content: families, teams, tags, emergency assets, ministering,
-emergencies in progress, the PDF dates, and the ward and stake records. `access` is the
+emergencies in progress, the PDF dates, the ward and stake records, and the table of
+address coordinates. `access` is the
 access list (see *What the document carries*). `landed` maps each device's fingerprint to
 its landed mark (see *The journal*). `device` is this device's own state. A local file and a
 version on the server differ in that one part, each read strictly: a local file must carry
@@ -756,13 +757,13 @@ dialog's `exec()` is such an edit.
 **A start condition covers exactly what the command changes.** An update command is built
 from the difference between what the edit opened with and what it saved, and holds the
 before and after of the changed fields only. The fields are typed per command:
-`UpdateFamilyCommand` holds an optional address change, an optional coordinates change, and
-a change per member keyed by `PersonId`. Each field it holds is judged on its own: one
+`UpdateFamilyCommand` holds an optional address change and a change per member keyed by
+`PersonId`. Each field it holds is judged on its own: one
 still at its before value is set, one already at its after value is left, and one at
 anything else makes the whole command a conflict that touches nothing. A command whose
-fields are all already at their after values is the result-already-holds case. A geocode
-therefore collides only with an edit that changed the coordinates, and two users editing
-different members of one family both apply.
+fields are all already at their after values is the result-already-holds case. Two users
+editing different members of one family both apply, and a family edit never meets a
+geocode, which writes the table of address coordinates instead (see *Saving*).
 
 The same holds one level down. A member change is per field - name, gender, phones, email,
 birthday, callings, parent flag, units, special-need note - each judged on its own. A
@@ -925,7 +926,7 @@ ministering, tags, the emergency response and the access list. In particular:
 **Automatic updates are the one exception, and stay out of the journal.** Geocoding and
 ward and stake lookup produce derived data: an address in, coordinates out. A result is
 recomputable by definition and is never a user's work to redo, so putting "set
-coordinates for the Smith family" in the list of what this user did would describe
+coordinates for 12 Elm St" in the list of what this user did would describe
 something they did not do and cannot retype - and under one-conflict-abandons-the-replay, a
 stale result could throw away work they did do. So an automatic result applies to the
 document and pushes like anything else, and if that push loses it is simply not in the
@@ -1112,14 +1113,12 @@ will make, each with its before and after:
   list is out of date about them.
 
 A family an import updates is held at the same typed level as `UpdateFamilyCommand` -
-address, coordinates, and a change per member keyed by `PersonId` - and only for families
+address, and a change per member keyed by `PersonId` - and only for families
 that actually differ. The import service builds merged families, and the command compares
 them with the existing ones field by field, holding only what differs. How the directory
 import matches families and members is settled during implementation (see *Settled*).
-**An import never changes a person's special-need note, and keeps a family's coordinates
-unless its address changed.** The note and the coordinates are the app's own, which no PDF
-carries. A geocode that lands meanwhile collides only with an import that changed that
-family's address or coordinates.
+**An import never changes a person's special-need note**, which is the app's own and which
+no PDF carries.
 
 Both imports work all of this out at construction. An import then conflicts only with an edit to something it also changes. A
 family someone else added in the meantime is not among the ones it removes, so it survives.
@@ -1318,22 +1317,27 @@ compress, an encrypt and a `QSaveFile` of a couple of hundred kilobytes. Saving 
 would buy nothing and would hold a change back from everyone else for as long as it ran.
 
 **Automatic updates run on any device that holds the ward.** Geocoding and ward and stake
-lookup change families and ward details on their own. They run after an import, when a
+lookup change the table of address coordinates and the ward details on their own. They run after an import, when a
 ward opens, whenever this device takes a version from the server by fast-forward or
-replay, and after a committed command that clears coordinates, which the command knows at
-construction. Each run skips what is already done and what is on the failed list, so a
+replay, and after a committed command that gives a family an address the table of address
+coordinates lacks, which the command knows at construction. Each run skips what is already done and what is on the failed list, so a
 result lost with a push is simply computed again. Several online devices may compute
 the same result at once; the results are identical, and the duplicate work is accepted.
 Their results are not journalled, for the reason given above, so while the server holds a
 version this app is too old to read they apply locally, drop at the replay that follows the
 update, and are computed again.
 
-**Coordinates always belong to the current address.** An edit that changes a family's
-address clears its coordinates in the same command, unless that edit also set coordinates
-by hand, so "has coordinates" means "has coordinates for this address" on every device.
-The geocoder therefore queues exactly the families with an address and no coordinates,
-with no memory of addresses it has seen. A geocode result carries the address it was computed for and applies only if the family
-still has that address and no coordinates; otherwise it is dropped.
+**Coordinates belong to addresses, not families.** The ward holds a table from an address's
+text to its coordinates, and a family's place on the map is its address's entry, so a
+family whose address changes is at the new address's entry, or unmapped until it has one.
+Families at one address share an entry, and an address changed back finds its entry again.
+The geocoder queues each address some family has and the table lacks. A geocode result adds
+the entry for its address and never replaces one already there. Coordinates a user types in
+the family edit panel are their work, so they are a journalled command that sets the entry
+for that family's address, replacing what is there, and its undo restores the entry it
+replaced. Each automatic batch also drops the entries no family's address uses, so the
+table holds only what is used; an address that comes back later is geocoded, or typed,
+again.
 
 **An automatic batch pushes once.** Results apply in memory as they arrive, and the save
 and push happen once, when the batch finishes or when a lookup completes, so an import
@@ -1341,13 +1345,11 @@ costs one more version rather than
 one per family. Addresses and unit numbers that fail to resolve go on a failed list, kept
 by their text in the device-local state, and are not tried again until the text changes. A
 family whose address is on it stays unmapped until someone corrects the address or types
-its latitude and longitude in the family edit panel. These triggers are the only ones;
+its coordinates in the family edit panel. These triggers are the only ones;
 nothing geocodes on a document change as such.
 
-A batch geocodes each distinct address once and applies the result to every family in it
-with that address, each still subject to the check above, and it finishes when its last
-request has answered, however many families share an address. A failed address covers every family at it, since the failed
-list is kept by address text.
+A batch requests each address once and finishes when its last request has answered. A
+failed address covers every family at it, since the failed list is kept by address text.
 
 **All writes go through `QSaveFile`**, so a crash mid-write leaves the previous file intact.
 
@@ -1671,15 +1673,21 @@ The journal and replay, in `tests/services`:
 - a family edit opened, then a remote version changing that family applied, then the edit
   confirmed: the edit conflicts, the remote change is still there, and the journal is empty
 - a geocode lands between an offline edit to a family's phone and its replay: the edit
-  applies, and the family holds both the new phone and the new coordinates
-- an address edit clears the family's coordinates on every device that takes it, and the
-  geocode for the new address then fills them, on the editing device as well; a geocode
-  computed for the old address that arrives afterwards is dropped
+  applies, and the family has both the new phone and its address's new entry
+- an address edit places the family at the new address's entry on every device that takes
+  it, unmapped until the geocode for it lands, on the editing device as well; a geocode
+  for the old address that lands before the edit, or after it, leaves the family at the new
+  address's entry and none other
+- typed coordinates set the entry for the family's address, are not replaced by a later
+  geocode of that address, and are restored to the previous entry by their undo
+- an automatic batch drops the entry of an address no family has any more, and keeps every
+  entry in use
 - geocoding the families of an import pushes one version for the whole batch, and an
   address that fails to resolve is not tried again - on later versions, after closing and
-  reopening the app, or by a command that clears other coordinates - until its text changes
-- a batch with two families at one address sends one request for it, maps both families,
-  finishes, and pushes once
+  reopening the app, or by a command that gives another family a new address - until its
+  text changes
+- a batch with two families at one address sends one request for it, maps both families
+  by their shared entry, finishes, and pushes once
 - a command that changes no address starts no geocoding
 - two offline edits to different members of one family both apply
 - an offline removal of a member, replayed after someone changed that member's phone,
@@ -1759,8 +1767,8 @@ The journal and replay, in `tests/services`:
   where someone else edited a family the import changes is a conflict
 - undoing a directory import that removed a family restores its people's team, tag, asset
   and ministering memberships
-- re-importing the same directory keeps every special-need note and every family's
-  coordinates, and holds no change for families the PDF leaves as they were
+- re-importing the same directory keeps every special-need note and every family on the
+  map, and holds no change for families the PDF leaves as they were
 - a ministering import from a PDF older than the directory, naming one family and one member
   of a matched family that the directory does not list, applies on its first run, adds
   neither, and leaves no group or district holding an id the document lacks
