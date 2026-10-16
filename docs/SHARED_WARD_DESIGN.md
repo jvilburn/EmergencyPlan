@@ -1366,8 +1366,9 @@ again.
 
 **An automatic batch pushes once.** Results apply in memory as they arrive, and the save
 and push happen once, when the batch finishes or when a lookup completes, so an import
-costs one more version rather than
-one per family. Addresses and unit numbers that fail to resolve go on a failed list, kept
+costs one more version rather than one per family, and a batch or lookup that changed nothing
+neither saves nor pushes.
+Addresses and unit numbers that fail to resolve go on a failed list, kept
 by their text in the device-local state, and are not tried again until the text changes. A
 family whose address is on it stays unmapped until someone corrects the address or types
 its coordinates in the family edit panel. These triggers are the only ones;
@@ -1711,7 +1712,8 @@ The journal and replay, in `tests/services`:
   reopening the app, or by a command that gives another family a new address - until its
   text changes
 - a batch with two families at one address sends one request for it, maps both families
-  by their shared entry, finishes, and pushes once
+- a command that changes no address starts no geocoding; two connected clients that each
+  take a version with nothing to geocode leave the server's version where it was
 - a command that changes no address starts no geocoding
 - two offline edits to different members of one family both apply
 - an offline removal of a member, replayed after someone changed that member's phone,
