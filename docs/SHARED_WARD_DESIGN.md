@@ -467,8 +467,14 @@ anyone else. The one exception is the save after Leave or Remove this device, wh
 the key of the version pushed from (see *Saving*), since that is the last key this device
 can open.
 
-A push that succeeds is followed by a local save of the version it pushed: under the new
-key if it rotated, with the new base, and with the journal trimmed by this device's mark.
+A local save always writes the current document, with this device's state beside it. A
+push that succeeds changes that state - the new base, the new key if it rotated, and the
+journal trimmed by this device's mark - and is saved as any change is, so a command made
+while the push was in flight stays in the file and the journal. A crash before that save
+leaves the file under the key the push replaced, which is the lost-reply case and needs
+nothing more: the next push meets a newer base, the fetch's landed mark trims the journal,
+and the newer version names that key among its former keys. The save after Leave or
+*Remove this device* writes the version pushed from instead (see *Saving*).
 
 Several access changes made while disconnected therefore rotate once, at the push that
 carries them, rather than once each.
