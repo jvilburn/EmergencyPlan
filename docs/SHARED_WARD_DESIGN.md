@@ -30,7 +30,7 @@ with the same provider, the sync client installed, and the ability to find the
 synchronised folder on disk.
 
 **So the app talks to a Ward Planning server directly, and the ward itself is the access
-list.** Sharing is: send someone a link, they install and open it. No provider account,
+list.** Sharing is: send someone an invitation, they install and open it. No provider account,
 no sync client, no folder path, and no second list anywhere.
 
 **Every member still keeps a complete local file.** It opens, edits and saves with no
@@ -69,7 +69,7 @@ Two related ideas surfaced during design and are deferred to their own work:
 | Key model | Envelope encryption, one data key per document, sealed to each device |
 | Key generation | Silent, on first run. No user-visible key material. |
 | Server authentication | None. Each write and each channel carries an Ed25519 signature the current header admits, or for a new document its own header. |
-| Joining | A one-time invite link |
+| Joining | A one-time invitation file, opened in the app |
 | Roles | Admin or member, held in the access list, a convention among honest clients |
 | Who may add | An admin adds a user; anyone adds their own devices |
 | Who may remove | An admin removes a user; anyone removes their own devices, or leaves |
@@ -139,7 +139,7 @@ This document uses its terms for precision; the interface uses these:
 | access list | *Who has access* |
 | user | user, or the user's name |
 | device | device |
-| invite (user / device) | *Add a user* / *Add a device*, and the link message |
+| invite (user / device) | *Add a user* / *Add a device*, and the invitation and its message |
 | remove a user | *Remove* |
 | remove a device | *Remove device*; *Remove this device* for your own |
 | leave | *Leave* |
@@ -240,12 +240,12 @@ admin removes the owner, who is then invited again. Planted devices are shown fo
 they are: each appears under its owner's name, and the owner removes any they do not
 recognise.
 
-**Accepted: an intercepted invite link gets in.** Whoever opens the link first gets in,
+**Accepted: an intercepted invitation gets in.** Whoever opens the invitation first gets in,
 under the name they give. Interception of a device invite puts the interceptor in as one of
 the inviter's devices, so the inviter sees a device they did not add and removes it, which
 rotates the key. Interception of a user invite shows up in the access list as a user the
 inviter did not expect, or under the expected name if the interceptor guessed it; either
-way the real recipient finds their link already used and says so. In both cases the entry
+way the real recipient finds their invitation already used and says so. In both cases the entry
 is visible and removable, which is the accepted answer at this threat level.
 
 **Accepted: a device's first download is taken as it stands.** A device holding no
@@ -293,7 +293,7 @@ no names, no roles, and no history of who was added or removed. The user guide s
 plainly.
 
 **Known to anyone holding a document id, and accepted.** Reads are open, so a removed
-member, or anyone who has seen an invite link, can read what a head and a version show
+member, or anyone who has held an invitation, can read what a head and a version show
 without a key: the fingerprints, the current version's publisher and time, and the
 ciphertext's size. That is a count of devices and a few timestamps, naming no one, and it
 is accepted at this threat level.
@@ -398,10 +398,9 @@ reaches members only while the old address still answers; continuity keeps the d
 members as a release they install by hand.
 
 The override is app-wide, and an invitation works only between apps using the same server:
-joining looks the document id up on this app's own server, and the host in a pasted join
-link is ignored. A link that chose the server could send a new member to a server of an
-attacker's making at the one moment its first download is taken as it stands (see *Threat
-model*). Testers and self-hosters set the override on every app that shares their wards.
+joining looks the document id up on this app's own server. An invitation carries no server,
+so none can send a new member to a server of an attacker's making at the one moment its
+first download is taken as it stands (see *Threat model*). Testers and self-hosters set the override on every app that shares their wards.
 
 **One id for the document's whole life.** The id names the local file, keys the local
 record, and is bound into the header from the first save. The first push registers that
@@ -565,7 +564,6 @@ starting point; no call asks for an earlier version, and none is kept.
 | the live channel | a key holder | Open while the ward is open. Carries presence and version notices. |
 | `GET /releases/latest` | anyone | The current app version per platform, with each installer's download address. |
 | `GET /download` | anyone | A web page offering the installers, for people who do not have the app yet. |
-| `GET /join` | anyone | The page an invite link opens: *Download*, and *Copy invitation*, which copies the invitation built from the fragment. The server never sees the fragment. |
 
 **Signed requests.** A write carries the signer's two public keys and an Ed25519 signature
 over one UTF-8 line:
@@ -578,7 +576,7 @@ wardplanning-v1 <call> <document id> <base version> <header hash> <payload hash>
 channel. The base version is a decimal integer. The hashes are BLAKE2b-256 of the exact
 bytes on either side of the body's first `\n`. **Every binary value on the wire is
 base64url without padding, as in the header**: the document id in this line, in URLs and
-in the invite link (22 characters), the hashes (43), the keys, the signature, and the
+in an invitation (22 characters), the hashes (43), the keys, the signature, and the
 invite seed. A `create` has no base version and signs `0`; `channel` signs `-` for the
 fields it lacks, which no version or base64url value can be. No field contains a space, so
 the line is unambiguous, simple to build on any server, and readable in a log.
@@ -908,10 +906,10 @@ ministering, tags, the emergency response and the access list. In particular:
 - **The app is named Ward Planning** in every name a user or the system sees. The installer
   upgrades the old install in place. App data and the tile cache follow the name, so both
   move; nothing is carried over from the old directories (see *Earlier versions*), and the
-  tile cache refills as maps are viewed. No file type is registered with the system.
-- **Receiving an invitation**: *Join a ward*, which reads the clipboard when clicked and
-  otherwise offers a paste box, and the Windows instance lock (see *Receiving an
-  invitation*).
+  tile cache refills as maps are viewed. The one file type registered with the system is
+  `.wardinvite` (see *Receiving an invitation*).
+- **Receiving an invitation**: opening a `.wardinvite` file, and the instance lock that
+  hands an invitation to the app already running (see *Receiving an invitation*).
 - **`docs/FORMAT.md` is new**, written with the code since the models change in this work.
   It specifies every field of the payload, `device` included, and changes in the same
   commit as any `toJson` it describes; a release that changes it raises the format version,
@@ -1229,30 +1227,31 @@ An invite is a one-time bearer key. Its 32-byte seed yields both of its keypairs
    keypair from a random 32-byte seed, writes a new version whose header seals the data key
    to it, with an `invites` entry saying what it is for, and pushes it. *Add a user* first
    asks who the invite is for, and makes nothing until that is answered; the answer is the
-   invite's `label`. Both are offered only while connected, and the link is shown only once
-   that version is on the server, so every link a user can copy is one that works. Since
+   invite's `label`. Both are offered only while connected, and the invitation is saved
+   only once that version is on the server, so every invitation a user can send is one that
+   works. Since
    inviting and joining both need the server, a ward's users are added before an emergency
    rather than during one.
 
+   **The invitation is a small file**, such as `Tanglewood Ward - for Bob.wardinvite`: one
+   line of JSON holding the format, the document id and the seed, and nothing else. The app
+   saves it where the user chooses and opens that folder with the file selected, ready to
+   attach to an email, drag onto a stick or send in a text, with a short message to go with
+   it:
+
+   > Alice Smith has invited you to Tanglewood Ward. Install Ward Planning from
+   > https://<server>/download, then open the attached invitation.
+
+   The download link carries no secret, and no page the server serves ever holds the seed.
+   The user sends the file by any channel they trust with it.
+
    The device that made the invite keeps its seed in its device-local state, saved with the
    invite before the push, for as long as the access list it holds names that invite. So
-   *Copy link* on the open invite in *Who has access* shows the link again on that device,
-   and a push whose reply is lost needs nothing more: once the next fetch shows the invite
-   landed, the link is there. The seed regenerates the invite's private keys, and it sits in
-   the same encrypted file as the data key those keys unseal, so keeping it exposes nothing
-   that file does not already hold. The link is:
-   `https://<server>/join#<document id>/<seed, base64url>`. It is an ordinary web link, so
-   mail and text apps make it clickable, and the ward id and seed ride in the `#` fragment,
-   which browsers do not send to the server. What the user copies is a short message:
-
-   > Alice Smith has invited you to Tanglewood Ward in Ward Planning. Open this link to
-   > join: https://<server>/join#...
-
-   The page the link opens has two steps: **Download**, for someone who does not have the
-   app yet, and **Copy invitation**, which puts `Ward Planning invite: <document id>/<seed>`
-   on the clipboard, followed by *then choose Join a ward in Ward Planning* (see
-   *Receiving an invitation*). The user sends the message by email, text, or any channel
-   they trust with it.
+   *Save invitation* on the open invite in *Who has access* writes the file again on that
+   device, and a push whose reply is lost needs nothing more: once the next fetch shows the
+   invite landed, the invitation can be saved. The seed regenerates the invite's private
+   keys, and it sits in the same encrypted file as the data key those keys unseal, so keeping
+   it exposes nothing that file does not already hold.
 2. **Joining** on a device, once the app has the invitation (see *Receiving an
    invitation*): derive the invite keypair from the seed, fetch the current version, unseal
    the data key with the invite's private key, validate as any download is validated, ask
@@ -1273,20 +1272,17 @@ An invite is a one-time bearer key. Its 32-byte seed yields both of its keypairs
 
 A join and a withdrawal each drop the invite's key from the recipients, so each rotates
 the data key; for a join, the joining device generates the new key, as the member it now
-is. The seed lives on in whatever message carried the link, and reads are open to anyone
-with the document id, so without rotation a link found later would read every version
-after it.
+is. The seed lives on in the invitation wherever it was sent, and reads are open to anyone
+with the document id, so without rotation an invitation found later would read every
+version after it. With it, a used or withdrawn invitation opens nothing.
 
-The link is the gate. Whoever opens it first gets in, visibly, and can be removed.
-
-An invite link is about 100 characters: fine to click or paste, long to type. A QR code
-can show it for a camera later if a phone client ever wants one.
+The invitation is the gate. Whoever opens it first gets in, visibly, and can be removed.
 
 ## Everything else, from the document
 
 - **Who has access**: the access list, read from the open ward. Add a device, Add a user,
-  Remove, Make admin / Make member, Withdraw invite, Copy link (open invites this device
-  made), Leave, Remove device (own devices), Details.
+  Remove, Make admin / Make member, Withdraw invite, Save invitation (open invites this
+  device made), Leave, Remove device (own devices), Details.
 - **Access notices**: the client diffs the access list between the version it last dismissed and
   the current one, one line per entry that differs: joined as member or admin, no longer
   has access, now an admin or a member, a device added or removed, an invite made or used.
@@ -1305,7 +1301,7 @@ can show it for a camera later if a phone client ever wants one.
   server answer may deny sharing but not use (see *Availability* under *Threat model*).
 - **Last admin**: a client rule: the only admin cannot step down, and cannot leave while
   others remain.
-- **A second device of your own**: *Add a device*, send yourself the link, open it there.
+- **A second device of your own**: *Add a device*, send yourself the invitation, open it there.
   The first-run screen asks for a name and a device name, nothing else.
 - **Cleared app data, a reimaged profile or a replaced device** gives a fresh identity; wards come back by invite from
   another holder, or from your other device. The server keeps no index of who holds what, so
@@ -1453,25 +1449,25 @@ holds the ward.
 
 ## Receiving an invitation
 
-**Join a ward reads the clipboard when the user clicks it.** The button is prominent on
-the first-run screen, where a new user with no wards lands, and is in the ward list too.
-If the clipboard holds text beginning `Ward Planning invite:`, or a full join link, the
-app fetches the ward, unseals it with the invite's key, and asks *Join Tanglewood Ward?*
-with the ward's own name; confirming runs the join. Otherwise the same dialog shows a
-paste box: *Copy the invitation from the page your invite link opened, then paste it
-here*, which accepts either form. The app reads the clipboard only on that click. This
-works right after a fresh install, and needs no link scheme, no registration with the
-system, and nothing handed from one process to another.
+**Opening an invitation joins.** The installer registers the `.wardinvite` type, so
+double-clicking an invitation opens Ward Planning on it. Dropping one onto the app's window
+does the same, and *Join a ward*, prominent on the first-run screen where a new user with no
+wards lands and in the ward list too, offers a file picker. The app reads the seed from the
+file, fetches the ward, unseals it with the invite's key, and asks *Join Tanglewood Ward?*
+with the ward's own name, read from the ward rather than from the file's name; confirming
+runs the join. Nothing is typed, pasted or copied.
 
 **One instance per user.** macOS, iOS and Android run one instance of an app themselves.
 On Windows the app holds a per-user `QLockFile` in app data while it runs, with
 `setStaleLockTime(0)` so that only a dead process, not age, makes the lock stale; a second
-launch that cannot take the lock says *Ward Planning is already running* and exits. This
-keeps two processes from writing the same local file and journal.
+launch that cannot take the lock hands what it was opened with to the running app over a
+per-user local socket, and exits. The running app opens an invitation it is handed, so
+double-clicking an invitation while Ward Planning is open joins in the open window; a second
+launch with nothing to hand over brings that window forward. This keeps two processes from
+writing the same local file and journal.
 
-**For the phone ports**, verified `https` links - Android App Links and iOS Universal
-Links, with their verification files served by the server - would let tapping the invite
-link open the app directly. This is an option for then, not part of this design.
+**On phones**, an attachment opens in Ward Planning through the platform's own open-in
+flow, which the phone ports use.
 
 ## Single key holder notice
 
@@ -1545,9 +1541,10 @@ returns.
 | Head fails validation | The ward on the server could not be read. Your copy is safe and you can keep working; sharing resumes when the server has a readable copy. |
 | A held ward is not on the server | This ward is no longer on the server. Your copy is safe and you can keep working; it is no longer shared. With an offer to delete this copy. |
 | Header format is newer | This ward was saved by a newer version of Ward Planning. Update to see the latest changes and share your work. |
-| Invite link already used or withdrawn | This invite has been used or withdrawn. Ask the sender. |
-| Invite link for a ward the server does not have | The server has no such ward. Check the link. |
-| An invitation found while offline | Connect to the internet to join a ward, then copy the invitation again. |
+| An invitation already used or withdrawn | This invite has been used or withdrawn. Ask the sender. |
+| An invitation for a ward the server does not have | The server has no such ward. Ask the sender for a new invitation. |
+| A file opened that is not an invitation | This file is not a Ward Planning invitation. |
+| An invitation opened while offline | Connect to the internet, then open the invitation again. |
 | Leave or Remove this device while offline | Connect to the internet to leave this ward. / Connect to the internet to remove this device. |
 | Add a user or Add a device while offline | Connect to the internet to invite someone. |
 | The invite's push loses to a conflict | Your invite could not be created, because the ward changed first. Try again. |
@@ -1650,9 +1647,8 @@ Format and crypto, in `tests/services`:
   with its header's id rewritten to this ward's fails to decrypt and changes nothing
 - after a join, and after a withdrawal, the invite's seed can no longer unseal the current
   version
-- the invitation reader, which *Join a ward* gives the clipboard's text or the paste box's,
-  reads a copied invitation and a full join link to the same document id and seed, gives
-  the same result for a join link on another host, and finds no invitation in other text
+- an invitation file written by *Add a user* reads back to the same document id and seed,
+  and any other file, a `.wardplanning` among them, is refused as not an invitation
 
 The journal and replay, in `tests/services`:
 
@@ -1716,12 +1712,12 @@ The journal and replay, in `tests/services`:
   landed: with the newcomer a member, it is refused with the last-admin wording and the
   ward keeps both users; with the newcomer an admin, it applies, the ward stays with the
   newcomer, and nothing is deleted
-- Add a user and Add a device are not offered offline, and an invite's link is shown only
-  after the version naming it is on the server; an invite whose push loses shows no link
+- Add a user and Add a device are not offered offline, and an invitation is saved only
+  after the version naming it is on the server; an invite whose push loses saves none
 - an invite whose push is stored but whose reply is dropped, with the app closed before the
-  next fetch, offers *Copy link* after that fetch, and the link joins; once the invite is
+  next fetch, offers *Save invitation* after that fetch, and the invitation joins; once the invite is
   used, withdrawn, or abandoned in a replay, the seed is gone from the local file and no
-  link is offered; *Add a user* with no answer to who it is for makes no invite
+  invitation is offered; *Add a user* with no answer to who it is for makes no invite
 - Leave and Remove this device are not offered offline; on a push that loses, the local
   file is unchanged and still opens on this device; on a push that succeeds, the local file
   still opens on this device, holding the version pushed from, marked no longer this
@@ -1838,7 +1834,7 @@ Against the fake server, in `tests/server`:
   from the device holding the old copy, and its journal replays onto the joined version
 - a user joins only through an invite the current header names, and a used or withdrawn
   invite is refused
-- a join whose answer is lost, with the link opened again, opens the ward as a member and
+- a join whose answer is lost, with the invitation opened again, opens the ward as a member and
   never reports the invite as used or withdrawn
 - two admins removing each other: the first stands and the second's write is refused
 - the channel refuses an open not signed by a device the current header names, and accepts a
@@ -1850,7 +1846,8 @@ Against the fake server, in `tests/server`:
 The instance lock, in `tests/lock`:
 
 - while one process holds the lock, a second is refused it; once the holder is killed, a
-  new process takes it
+  new process takes it; a second process started with an invitation's path hands that path
+  to the holder, which receives it, and exits
 
 The fake and the real server are checked against each other. One conformance suite, written
 against the client's server interface, runs against both: against the fake in the ordinary
