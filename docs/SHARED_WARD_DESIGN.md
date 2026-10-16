@@ -1307,7 +1307,7 @@ The invitation is the gate. Whoever opens it first gets in, visibly, and can be 
 
 - **Who has access**: the access list, read from the open ward. Add a device, Add a user,
   Remove, Make admin / Make member, Withdraw invite, Save invitation (open invites this
-  device made), Leave, Remove device (own devices), Details.
+  device made), Leave, Remove device (own devices).
 - **Access notices**: the client diffs the access list between the version it last dismissed and
   the current one, one line per entry that differs: joined as member or admin, no longer
   has access, now an admin or a member, a device added or removed, an invite made or used.
@@ -1460,10 +1460,9 @@ who holds what, so the list is this device's own record and nothing restores it 
 server.
 
 A new document is created in app data under a fresh id, and naming it is a display concern.
-**A ward's name comes from what it has imported**: *name* Ward for one ward and *name*
-Stake for wards of one known stake, among its cases. A ward the rule gives no name, such as one that has imported nothing, shows as
-*Untitled ward*. The name is read
-from the payload, so the ward list, the window title, the invite message and the join
+**A ward's name comes from the wards it has imported**, in alphabetical order: *Tanglewood
+Ward* for one, *Oak and Tanglewood Wards* for two, *Elm, Oak and Tanglewood Wards* for
+three. A ward that has imported none is *Untitled ward*. The name is read from the payload, so the ward list, the window title, the invite message and the join
 confirmation all use it, and a joiner sees it once the invite's key has unsealed the ward.
 Its first push is `POST /documents`, made as soon as the network allows, and its journal
 empties then like any other.
