@@ -1988,8 +1988,6 @@ and keeps working; sharing is what pauses.
 - **Whether head polling stays** as the channel's fallback, and at what interval.
 - **Where the server runs** is not chosen, and free-plan capacity under a held-open channel
   is not estimated.
-- **Reads are open.** Anyone with a document id can download ciphertext. If that ever
-  matters, the same signature can gate reads; it costs nothing in the format.
 - **Creating documents is open.** A per-address limit on `POST /documents` is the first
   answer; a shared secret in the app is the second.
 - **Access-list size in the payload** is a few hundred bytes per user and does not matter.
