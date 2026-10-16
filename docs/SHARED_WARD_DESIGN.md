@@ -106,9 +106,8 @@ design's answer, not a gap:
 - **An unreadable or restored head stalls sharing** until the operator repairs it (see
   *Threat model*); there is no client-side republish. A ward this device has already had
   from or given to the server, which the server now answers `404` for - deleted and since
-  pruned, pruned while in use, or lost - stalls the same way, with an offer to delete the
-  copy; the device cannot tell which it was. A ward not yet on the server makes its first
-  push as usual.
+  pruned, pruned while in use, or lost - is a removal (see *Everything else, from the
+  document*). A ward not yet on the server makes its first push as usual.
 - **Tags stay**: add, update and delete are converted with the rest, though nothing calls
   them yet.
 - **No bandwidth estimate**; whole-blob-per-edit holds during an emergency too.
@@ -273,9 +272,7 @@ disruption only.
 refuses - written by a client bug, or corrupted in storage - or a server restored to
 versions older than members hold leaves every device unable to push until the server
 again serves a version each can take. Every device keeps its local copy and keeps working
-on it, and nothing in those copies is lost. A ward the server no longer has - deleted and
-pruned, pruned while in use, or lost - stalls the same way, with an offer to delete the
-copy. Repairing the server is the server's own design, outside this one.
+on it, and nothing in those copies is lost. Repairing the server is the server's own design, outside this one.
 
 **Cleaned up when the user asks.** A removed member's local copy: their app offers to
 delete it once it learns the ward is no longer theirs.
@@ -674,22 +671,21 @@ estimate because none would change it.
 
 1. The header's `format` is one this app reads; a newer one is the notice under *File
    format*.
-2. The header names the document id this device asked for, which the client checks
-   whatever the server accepted.
-3. The version, read from the head in plain text, is not below the base this device holds.
+2. The version, read from the head in plain text, is not below the base this device holds.
    It comes before the next check so that a server restored to a version from before this
    device joined reads as rolled back, not as the ward leaving this device.
-4. The header names this device. One that names no recipient is a deleted ward (see *Who
+3. The header names this device. One that names no recipient is a deleted ward (see *Who
    has access, changed by two users*), and one that names others but not this device is the
    ward no longer being this device's (see *Everything else, from the document*); neither is
    a fault, and both are recognised before anything is unsealed.
-5. The data key unseals.
-6. The payload decrypts and reads strictly as a version, without `device`.
-7. The header matches the access list.
-8. The version descends from one this device holds.
+4. The data key unseals.
+5. The payload decrypts and reads strictly as a version, without `device`.
+6. The header matches the access list.
+7. The version descends from one this device holds, which also refuses another ward's
+   version served under this ward's id, since keys are held per ward.
 
-For a join, step 4 asks that the header name the invite. For a first download - a join,
-cleared app data, or an unreadable local file - steps 3 and 8 do not apply, since there is
+For a join, step 3 asks that the header name the invite. For a first download - a join,
+cleared app data, or an unreadable local file - steps 2 and 7 do not apply, since there is
 nothing to compare against; that is the accepted first download under *Threat model*.
 
 Any other failure keeps the local file untouched: the local file is the one copy that has
@@ -697,8 +693,8 @@ to survive a version nobody can read. The device keeps working on that copy and 
 nothing while the head fails; see the accepted stall under *Threat model*.
 
 **A ward is syncing** when this device is connected and in none of the states that stop its
-pushes: a newer format on the server, a head that fails a check above, a ward the server
-no longer has, or a ward no longer this device's. The actions whose change must reach the
+pushes: a newer format on the server, a head that fails a check above, or a ward no longer
+this device's. The actions whose change must reach the
 server - *Add a user*, *Add a device*, Leave and *Remove this device* - are offered only
 while the ward is syncing; otherwise each shows the notice of what stops it, which is
 *Connect to the internet* only when that is the cause.
@@ -1306,7 +1302,8 @@ The invitation is the gate. Whoever opens it first gets in, visibly, and can be 
   has access, now an admin or a member, a device added or removed, an invite made or used.
   The lines name whose entry changed, never who changed it; this device's own edits are news
   like any other.
-- **The ward is no longer yours**: a head whose header lacks this device. A device that
+- **The ward is no longer yours**: a head whose header lacks this device, or a server that
+  no longer has a ward this device had from or gave to it. A device that
   left by its own Leave or *Remove this device* is told *You left this ward* or *You
   removed this device from this ward*, and its copy is read-only (see *Saving*). Any other
   device is told *You no longer have access to this ward*; a removed device cannot read the
@@ -1560,7 +1557,6 @@ returns.
 | The server is unreachable | Working offline. Your changes are saved here and will go up when the connection returns. |
 | Head is older than this copy | The server has an older copy of this ward than yours. Nothing was changed. Your copy is safe and you can keep working; sharing resumes when the server catches up. |
 | Head fails validation | The ward on the server could not be read. Your copy is safe and you can keep working; sharing resumes when the server has a readable copy. |
-| A held ward is not on the server | This ward is no longer on the server. Your copy is safe and you can keep working; it is no longer shared. With an offer to delete this copy. |
 | Header format is newer | This ward was saved by a newer version of Ward Planning. Update to see the latest changes and share your work. |
 | An invitation already used or withdrawn | This invite has been used or withdrawn. Ask the sender. |
 | An invitation for a ward the server does not have | The server has no such ward. Ask the sender for a new invitation. |
@@ -1571,7 +1567,7 @@ returns.
 | Any of those four while connected but not syncing | The notice of the state that stops pushing, such as *This ward was saved by a newer version of Ward Planning...* |
 | The invite's push loses to a conflict | Your invite could not be created, because the ward changed first. Try again. |
 | Not an admin | In *Who has access*, a member sees *To add or remove users, ask an admin: names* in place of the *Add a user* button. |
-| Head lacks this device | You left this ward. / You removed this device from this ward. / You no longer have access to this ward. Each with an offer to delete this copy. |
+| Head lacks this device, or the server no longer has the ward | You left this ward. / You removed this device from this ward. / You no longer have access to this ward. Each with an offer to delete this copy. |
 | Head names no recipient | Tanglewood Ward has been deleted, with an offer to remove this copy. |
 | A leave lands where its user is now the only one | You are now the only member, so leaving would delete Tanglewood Ward. |
 
@@ -1636,8 +1632,7 @@ Format and crypto, in `tests/services`:
 - `DocumentCrypto` round-trip
 - two consecutive saves of an unchanged document produce different nonces
 - the header is bound as associated data: with the unmutated file opening as the positive
-  control, a header changed only where parsing, unsealing and the document id check all
-  accept it - another recipient's `sealedKey`, re-encoded validly - fails the payload's
+  control, a header changed only where parsing and unsealing both accept it - another recipient's `sealedKey`, re-encoded validly - fails the payload's
   AEAD check, asserted as that failure; and a local file whose header id and file name are
   both changed to another ward's id fails the same way
 - the known-answer vectors for the fingerprint, the invite keypairs derived from a fixed
@@ -1666,9 +1661,9 @@ Format and crypto, in `tests/services`:
 - a device the server mentions but this client did not admit is never sealed to
 - a version under a key this device never held for the ward, naming none of its keys
   among its former keys, is refused and changes nothing
-- a version of another ward this device holds, served under this ward's id, is refused by
-  the document id check before anything is unsealed, and changes nothing; the same version
-  with its header's id rewritten to this ward's fails to decrypt and changes nothing
+- a version of another ward this device holds, served under this ward's id, is refused as
+  not descending and changes nothing; the same version with its header's id rewritten to
+  this ward's fails to decrypt and changes nothing
 - after a join, and after a withdrawal, the invite's seed can no longer unseal the current
   version
 - an invitation file written by *Add a user* reads back to the same document id and seed,
@@ -1842,8 +1837,9 @@ Against the fake server, in `tests/server`:
 - a `POST` whose answer is lost, retried, is told the id already exists; the client then
   fetches, and its landed mark empties the journal
 - a downloaded version that fails validation replaces nothing
-- a ward this device has had on the server, now answered `404`, keeps its copy and journal, pushes nothing,
-  never sends a `POST` for it, accepts and saves new edits, and offers to delete the copy
+- a ward this device has had on the server, now answered `404`, is treated as a removal:
+  its journal is dropped, its copy is read-only and offered for deletion, and no `POST` is
+  ever sent for it
 - edits made while unreachable are kept in the journal and replay on reconnect
 - a device given back an older local file, its counter behind the ward's mark for it, makes
   a new edit after its next fetch, and that edit reaches the server
@@ -1985,8 +1981,8 @@ and keeps working; sharing is what pauses.
   accumulate. The head already carries the current version's publish time; adding a
   last-read time per document, touched when a head is read, would let an operator rule
   prune a document nobody has opened or written in a year. Pruning a ward still in use
-  leaves its members on the missing-ward stall (see *Settled*), which such a rule has to
-  weigh against the storage it frees.
+  removes its members from it (see *Settled*), which such a rule has to weigh against the
+  storage it frees.
 - **Recovery from a member's local file.** Recovery is a new ward rebuilt from the PDFs. A
   member's own local file could be published as the new ward instead, keeping notes,
   ministering and emergency data the PDFs lack: one "Publish as a new ward" action, which
