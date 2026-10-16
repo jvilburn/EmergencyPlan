@@ -1405,6 +1405,15 @@ family whose address is on it stays unmapped until someone corrects the address 
 its latitude and longitude in the family edit panel. The `documentChanged` hook in
 `BackgroundGeocodingService` is replaced by these explicit triggers.
 
+A batch geocodes each distinct address once and applies the result to every family in it
+with that address, each still subject to the check above, and it finishes when its last
+request has answered. Today `m_addressToFamilyId` holds one family per address
+(`BackgroundGeocodingService.h:74`), so a second family at the same address replaces the
+first, and the second reply returns before the batch's finish check
+(`BackgroundGeocodingService.cpp:67-71`): the batch never finishes, nothing is pushed, and
+one family stays unmapped. A failed address covers every family at it, since the failed
+list is kept by address text.
+
 **All writes go through `QSaveFile`**, so a crash mid-write leaves the previous file intact.
 
 **The push follows the save.** If the save fails, memory and the in-memory journal keep
@@ -1733,6 +1742,8 @@ The journal and replay, in `tests/services`:
 - geocoding the families of an import pushes one version for the whole batch, and an
   address that fails to resolve is not tried again - on later versions, after closing and
   reopening the app, or by a command that clears other coordinates - until its text changes
+- a batch with two families at one address sends one request for it, maps both families,
+  finishes, and pushes once
 - a command that changes no address starts no geocoding
 - two offline edits to different members of one family both apply
 - an offline removal of a member, replayed after someone changed that member's phone,
