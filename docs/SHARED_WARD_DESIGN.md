@@ -75,7 +75,7 @@ Two related ideas surfaced during design and are deferred to their own work:
 | Who may remove | An admin removes a user; anyone removes their own devices, or leaves |
 | Removal | One push without their devices, which rotates the data key |
 | Concurrent use | Presence while connected, every edit a version, and offline commands replayed onto the current version. Content and access changes take the same path. |
-| A replay that changes nothing | Runs to completion and pushes, though the pushed version matches the server's. It is rare, so it follows the ordinary path. |
+| A replay that changes nothing | Runs to completion and pushes, though the pushed version matches the server's content. It is rare, so it follows the ordinary path. |
 | Private key storage | A file in local app data, readable only by its user, holding the secret halves, as SSH keys are kept. Local app data does not roam. |
 | Crypto library | libsodium 1.0.22 or later from vcpkg, to be pinned in the manifest |
 | Document storage | One encrypted payload. Replay happens on the model, so storage stays simple. |
