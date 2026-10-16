@@ -1712,9 +1712,9 @@ The journal and replay, in `tests/services`:
   reopening the app, or by a command that gives another family a new address - until its
   text changes
 - a batch with two families at one address sends one request for it, maps both families
+  by their shared entry, finishes, and pushes once
 - a command that changes no address starts no geocoding; two connected clients that each
   take a version with nothing to geocode leave the server's version where it was
-- a command that changes no address starts no geocoding
 - two offline edits to different members of one family both apply
 - an offline removal of a member, replayed after someone changed that member's phone,
   conflicts and leaves the member with the new phone; the same removal replayed onto an
