@@ -1980,7 +1980,7 @@ that need hand rotation.
 exactly what lets a successor take over at the same address. Clients decrypt every blob
 themselves and seal only to keys an earlier version already admitted, so a lapsed domain
 re-registered by a stranger yields ciphertext and fingerprints, and stops sharing until a
-successor acts. Such a stranger cannot learn who has access, or offer members an
+successor acts. Such a stranger cannot learn who has access, or offer an installed app an
 installer, which must be signed with the release key.
 
 **Handing over** needs a second Super Administrator on the Cloudflare account, credentials
