@@ -700,6 +700,13 @@ Any other failure keeps the local file untouched: the local file is the one copy
 to survive a version nobody can read. The device keeps working on that copy and pushes
 nothing while the head fails; see the accepted stall under *Threat model*.
 
+**A ward is syncing** when this device is connected and in none of the states that stop its
+pushes: a newer format on the server, a head that fails a check above, a ward the server
+no longer has, or a ward no longer this device's. The actions whose change must reach the
+server - *Add a user*, *Add a device*, Leave and *Remove this device* - are offered only
+while the ward is syncing; otherwise each shows the notice of what stops it, which is
+*Connect to the internet* only when that is the cause.
+
 ## The journal
 
 Every command run in a ward this device holds is appended to its journal, and leaves the
@@ -1242,7 +1249,8 @@ An invite is a one-time bearer key. Its 32-byte seed yields both of its keypairs
    keypair from a random 32-byte seed, writes a new version whose header seals the data key
    to it, with an `invites` entry saying what it is for, and pushes it. *Add a user* first
    asks who the invite is for, and makes nothing until that is answered; the answer is the
-   invite's `label`. Both are offered only while connected, and the invitation is saved
+   invite's `label`. Both are offered only while the ward is syncing (see *Every edit is a
+   version*), and the invitation is saved
    only once that version is on the server, so every invitation a user can send is one that
    works. Since
    inviting and joining both need the server, a ward's users are added before an emergency
@@ -1385,7 +1393,8 @@ crash or power loss while saves are failing loses the unsaved changes.
 **Leave and *Remove this device* never touch the open document.** They are the two
 commands that take this device out of the access list, and a local save seals to exactly
 that list, so a file holding them would be one this device cannot open. They are offered
-only while connected. Confirming one makes the ward read-only on this device at once,
+only while the ward is syncing (see *Every edit is a version*). Confirming one makes the
+ward read-only on this device at once,
 since nothing should be made after it. The command's version is built beside the open
 document, through the ordinary replay, and pushed; a push that meets a newer base replays
 and pushes again, as any push does.
@@ -1573,6 +1582,7 @@ returns.
 | An invitation opened while offline | Connect to the internet, then open the invitation again. |
 | Leave or Remove this device while offline | Connect to the internet to leave this ward. / Connect to the internet to remove this device. |
 | Add a user or Add a device while offline | Connect to the internet to invite someone. |
+| Any of those four while connected but not syncing | The notice of the state that stops pushing, such as *This ward was saved by a newer version of Ward Planning...* |
 | The invite's push loses to a conflict | Your invite could not be created, because the ward changed first. Try again. |
 | Not an admin | In *Who has access*, a member sees *To add or remove users, ask an admin: names* in place of the *Add a user* button. |
 | Head lacks this device | You left this ward. / You removed this device from this ward. / You no longer have access to this ward. Each with an offer to delete this copy. |
@@ -1746,13 +1756,15 @@ The journal and replay, in `tests/services`:
   landed: with the newcomer a member, it is refused with the last-admin wording and the
   ward keeps both users; with the newcomer an admin, it applies, the ward stays with the
   newcomer, and nothing is deleted
-- Add a user and Add a device are not offered offline, and an invitation is saved only
+- Add a user and Add a device are offered only while the ward is syncing - not offline, and
+  not while connected with a newer format on the server, where the newer-version notice is
+  shown instead - and an invitation is saved only
   after the version naming it is on the server; an invite whose push loses saves none
 - an invite whose push is stored but whose reply is dropped, with the app closed before the
   next fetch, offers *Save invitation* after that fetch, and the invitation joins; once the invite is
   used, withdrawn, or abandoned in a replay, the seed is gone from the local file and no
   invitation is offered; *Add a user* with no answer to who it is for makes no invite
-- Leave and Remove this device are not offered offline; once confirmed, the ward accepts
+- Leave and Remove this device are offered only while the ward is syncing; once confirmed, the ward accepts
   no edit; on a push refused by a rule, the ward is editable again and the local file is
   unchanged; on a push that succeeds, the local file still opens on this device, read-only,
   marked as left, with an empty journal; with the answer dropped, the next head ends in
