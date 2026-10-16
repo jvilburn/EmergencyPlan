@@ -612,8 +612,8 @@ given. A client answered `412` fetches the current version and replays onto it. 
 answered `403` fetches the head: a header that no longer names this device is the ward no
 longer being this device's. Any other push that neither succeeds nor settles - a `403`
 whose head still names this device, a `429`, a `400`, or no answer - leaves the journal as
-it is and goes again on the triggers that retry a failed save: the next command, the window
-regaining focus, and reconnecting; after a `429` it also waits out the server's
+it is and goes again on the next command, when the window regains focus, and on
+reconnecting; after a `429` it also waits out the server's
 `Retry-After`. Only a `400`, which is always this app's own fault, is shown, once: *Your
 changes could not be shared because of a problem in Ward Planning. They are saved here.*
 
