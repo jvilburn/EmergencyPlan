@@ -458,7 +458,7 @@ access list inside the ciphertext is the only place they are - which is exactly 
 the server cannot read or change.
 
 **Former keys.** The access list also carries a hash of every data key the ward used before
-its current one (BLAKE2b, 32 bytes, unkeyed, zero salt, personalised `wp-former-key`),
+its current one (32-byte BLAKE2b, personalised `wp-former-key`; see *Primitives*),
 appended at each rotation.
 A client takes a version only when its key is one the client already holds for that ward,
 or when the version names one of those among its former keys. Keys are held per ward, so
@@ -511,9 +511,8 @@ tampered app, stops locking its owner out of every later version. Sealing a 32-b
 a handful of devices costs nothing worth saving.
 
 **Fingerprints are at least 128 bits:** 16-byte BLAKE2b over the device's X25519 public
-key followed by its Ed25519 verify key, personalised `wp-fingerprint` (the string,
-zero-padded to 16 bytes, in BLAKE2b's parameter block, with a zero salt). The server
-reproduces it, and the known-answer vectors pin it. A fingerprint is an identity handle,
+key followed by its Ed25519 verify key, personalised `wp-fingerprint` (see *Primitives*).
+The server reproduces it, and the known-answer vectors pin it. A fingerprint is an identity handle,
 not a shortened secret. Because it covers both keys, a device cannot keep its identity
 while either key is swapped: a changed key is a different device.
 
@@ -531,7 +530,9 @@ server, which is accepted.
 sealed boxes mean adding someone needs nothing from the inviter's own key. Sealed boxes
 use XSalsa20-Poly1305 internally, not the XChaCha20-Poly1305 of the payload; for a 32-byte
 data key this is immaterial, but it is worth not mis-stating. `crypto_sign` (Ed25519)
-signs each write and each channel open.
+signs each write and each channel open. Every BLAKE2b in this design is unkeyed, with a
+zero salt; a named personalisation is that string zero-padded to 16 bytes in BLAKE2b's
+parameter block, and where none is named it is all zeros.
 
 **Library pin.** The facts in this paragraph were looked up on 2026-10-15. CVE-2025-69277
 (`crypto_core_ed25519_is_valid_point` accepting points outside the main subgroup; fixed by
