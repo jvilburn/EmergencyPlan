@@ -45,9 +45,9 @@ is deleted once the plan is written.
 - A failed ward lookup stops the one-at-a-time chain: `onLookupFailed` does not continue to
   the next ward (`DocumentManager.cpp:211-225`, `292-298`).
 - The undo stack holds `CommandPtr`s; `CommandHistory` has no cap.
-- A ward's name is `DocumentMetadata::suggestedFilename`, renamed `displayName`. Its strings
-  (`name + " Ward"`, `"%1 And %2 Wards"`) are not passed through `tr()`, and the two-ward
-  case takes its order from QHash iteration.
+- A ward's name today is `DocumentMetadata::suggestedFilename`, which also names stakes and
+  multi-ward sets; the design names wards only, in alphabetical order. Its strings are not
+  passed through `tr()`, and the two-ward case takes its order from QHash iteration.
 - `installer.iss` has no `[UninstallDelete]`.
 - `tests/CMakeLists.txt` lists no sources.
 - `DocumentManager` and `EmergencyManager` assert a single instance
