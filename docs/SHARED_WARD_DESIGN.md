@@ -336,8 +336,8 @@ refused whole. Any change to the header, the sealing, or the payload, such as a 
 post-quantum entry, is a new format version, and a reader refuses it before decrypting
 anything.
 
-**One thing no format version changes: the header's `format` key, an integer.** A reader
-reads it first. A value above every version it knows is a newer format, which it reports as
+**One thing no format version changes: a file opens with a one-line JSON header whose
+`format` key is an integer.** A reader reads it first. A value above every version it knows is a newer format, which it reports as
 such (see *When a newer app wrote the version on the server* below); a version it knows is
 read by that version's reader, through its upgrade where it has one; anything else it
 cannot read fails validation. Keeping that one key fixed is what lets a reader tell a newer
