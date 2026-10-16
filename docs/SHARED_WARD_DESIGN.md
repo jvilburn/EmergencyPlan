@@ -680,14 +680,16 @@ estimate because none would change it.
    format*.
 2. The header names the document id this device asked for, which the client checks
    whatever the server accepted.
-3. The header names this device. One that names no recipient is a deleted ward (see *Who
+3. The version, read from the head in plain text, is not below the base this device holds.
+   It comes before the next check so that a server restored to a version from before this
+   device joined reads as rolled back, not as the ward leaving this device.
+4. The header names this device. One that names no recipient is a deleted ward (see *Who
    has access, changed by two users*), and one that names others but not this device is the
    ward no longer being this device's (see *Everything else, from the document*); neither is
    a fault, and both are recognised before anything is unsealed.
-4. The data key unseals.
-5. The payload decrypts and reads strictly as a version, without `device`.
-6. The header matches the access list.
-7. The version is not below the base this device holds.
+5. The data key unseals.
+6. The payload decrypts and reads strictly as a version, without `device`.
+7. The header matches the access list.
 8. The version descends from one this device holds.
 
 Any other failure keeps the local file untouched: the local file is the one copy that has
@@ -1655,7 +1657,9 @@ Format and crypto, in `tests/services`:
 - a version whose header has a fingerprint matching no device's or invite's key pair, one
   built from one device's X25519 key and another's verify key included, or whose access
   list has a device or invite with no header entry, is refused
-- a head whose version is below this copy's is refused and changes nothing
+- a head whose version is below this copy's is refused and changes nothing, and one that
+  is also from before this device joined, so lacks it, reports the server as rolled back,
+  not this ward as no longer this device's
 - a removal rotates the key, after which the removed user's devices cannot unseal; a write
   that removes nobody keeps the key; the written header has exactly the expected entries,
   each matching an access-list key
