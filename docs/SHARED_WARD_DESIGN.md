@@ -263,8 +263,9 @@ disruption only.
 refuses - written by a client bug, or corrupted in storage - or a server restored to
 versions older than members hold leaves every device unable to push until the server
 again serves a version each can take. Every device keeps its local copy and keeps working
-on it, and nothing in those copies is lost. Repairing the server is the server's own
-design, outside this one.
+on it, and nothing in those copies is lost. A ward the server no longer has - deleted and
+pruned, pruned while in use, or lost - stalls the same way, with an offer to delete the
+copy. Repairing the server is the server's own design, outside this one.
 
 **Cleaned up when the user asks.** A removed member's local copy: their app offers to
 delete it once it learns the ward is no longer theirs.
@@ -1973,7 +1974,8 @@ disagreement is resolved in whichever implementation is wrong, never by loosenin
   noticing; nothing is exposed, and each member keeps their own work.
 - **An unreadable or restored head stalls sharing** until the operator repairs it. A version
   every client refuses, from a client bug or storage corruption, and a restore older than
-  what members hold both stop pushes; every member keeps working on their own copy.
+  what members hold both stop pushes; every member keeps working on their own copy. A ward
+  the server no longer has stalls the same way.
 - **There is no folder-based sharing mode.** Continuity if the server stops rests on the
   project being open source, the format being documented, and every member holding a
   complete file.
