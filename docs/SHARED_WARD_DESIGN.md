@@ -864,7 +864,14 @@ replay:
   construction, so it depends on nothing but the response id. Two responders
   touching a new family both land, since each change is an addition. Statistics - the
   progress bar and the report - count the response's records plus every directory family
-  without a record as Not Contacted.
+  without a record as Not Contacted. Both count through the same two functions,
+  `EmergencyResponse::totalFamilies` and `countByStatus`, which today see only the records
+  and take the directory's families instead. `ReportGenerator::generateReport` takes only
+  the response today (`ReportGenerator.cpp:149`); it also takes the directory's families,
+  and draws its overview from those functions, so the report and the progress bar agree
+  when the emergency ends. Its attempt tally indexes by `method` (line 259), which becomes
+  optional: an attempt with no method is a status mark, tallied on its own line as
+  *Marked OK* or *Marked Unable to Reach*.
 - **Everything that lets the user choose where a ward is stored is deleted**; the PDF import
   and report export dialogs stay. Known sites:
   - `DocumentManager`: the `filePath` property and `filePathChanged`, `setFilePath`,
