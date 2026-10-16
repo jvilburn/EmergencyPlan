@@ -1247,8 +1247,8 @@ without troubling anyone.
 ## Invites
 
 An invite is a one-time bearer key. Its 32-byte seed yields both of its keypairs through
-`crypto_kdf_derive_from_key` with context `wpinvite`: subkey 1 is the seed for
-`crypto_box_seed_keypair`, and subkey 2 the seed for `crypto_sign_seed_keypair`.
+`crypto_kdf_derive_from_key` with context `wpinvite` and 32-byte subkeys: subkey 1 is the
+seed for `crypto_box_seed_keypair`, and subkey 2 the seed for `crypto_sign_seed_keypair`.
 
 1. **Add a device** or **Add a user** (admins only for the latter) generates an invite
    keypair from a random 32-byte seed, writes a new version whose header seals the data key
@@ -1620,7 +1620,9 @@ with itself.
 - **The server interface** is one abstract class in the client with the calls the app
   makes: create, head, fetch, push, open channel, and latest release. `HttpServer` implements it for the
   app; `FakeServer` implements it in process for tests, holding versions in memory and able
-  to drop a reply after storing a write, delay a notice, or refuse to answer.
+  to drop a reply after storing a write, delay a notice, refuse to answer, serve a chosen
+  version (an older one, or another ward's under this ward's id), and answer `404` for a
+  ward it held.
 - **A test client** is a full client - its own identity, app data directory, document,
   journal and undo stack - so a multi-user test is two or three of them against one
   `FakeServer`, driven step by step with no timers. The document, journal, sync and replay
@@ -1631,7 +1633,8 @@ with itself.
   its start condition holds, and, where the type has them, one where its result already
   holds and one where it conflicts. The round-trip test iterates the registry.
 - **Every outside dependency has a fake in `WardSession`**: the server, the geocoder, the
-  ward and stake lookup, and the clock that stamps attempts and resolutions. A test sets
+  ward and stake lookup, the clock that stamps attempts and resolutions, and the local file
+  store, which a test can make fail to save. A test sets
   each, so nothing reaches the network and timestamp ordering is decided by the test. Every
   timestamp the app writes comes from that clock: a command reads it at construction, and
   the report's end time comes from it too.
@@ -1644,8 +1647,8 @@ Format and crypto, in `tests/services`:
   control, a header changed only where parsing and unsealing both accept it - another recipient's `sealedKey`, re-encoded validly - fails the payload's
   AEAD check, asserted as that failure; and a local file whose header id and file name are
   both changed to another ward's id fails the same way
-- the known-answer vectors for the fingerprint, the invite keypairs derived from a fixed
-  seed, and the signed line for each of `create`, `push` and `channel`
+- the known-answer vectors for the fingerprint, the former-key hash, the invite keypairs
+  derived from a fixed seed, and the signed line for each of `create`, `push` and `channel`
 - a local file holding a value in every field of every part, written by the app when the
   test runs, is read back by the reader in `tests/spec`, written only from this section and
   `docs/FORMAT.md`, which parses every field strictly and recovers each of those values, so
@@ -1880,7 +1883,7 @@ Against the fake server, in `tests/server`:
 - the channel refuses an open not signed by a device the current header names, and accepts a
   key holder's
 - the channel reports who is present, reports a newcomer to those already there, and reports
-  a departure on close
+  a departure on close; removing a user closes their devices' channels
 - a version notice on the channel causes the other clients to fetch and validate
 - a release listing signed with the release key and newer than the app is offered; one with
   a signature that does not verify, one whose installer does not match its hash, and a
