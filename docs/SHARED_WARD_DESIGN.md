@@ -813,7 +813,12 @@ pointing at something that exists:
   start condition includes it: if what it removes has been added or assigned somewhere
   since, the removal conflicts rather than leave that reference behind.
 - **A leader is a member.** A leader change's start condition includes that the new leader
-  is on the team.
+  is on the team. Removing an id from a team's members also clears the leader when the
+  leader is that id, holding the leader's before value, worked out at construction; and a
+  removal of someone who was not the leader when the command was built includes in its
+  start condition that they still are not. So a removal replayed after someone made that
+  person leader conflicts and is handed back, as two users disagreeing about their place
+  on the team.
 
 A removal therefore conflicts with a concurrent membership change or task assignment for
 the same person, which is two users disagreeing about that person and is handed back as
@@ -1711,6 +1716,9 @@ The journal and replay, in `tests/services`:
   both apply
 - two users offline each add a different member to the same team, and both members are
   on the team afterwards
+- an offline removal of a team member, replayed after someone made that member leader,
+  conflicts and leaves them member and leader; removing the leader clears the leader with
+  them, and its undo restores both
 - an undo after a remote edit to a different family applies and reaches the server as its
   own version; an undo after a remote edit to the same field conflicts and leaves the
   remote value
