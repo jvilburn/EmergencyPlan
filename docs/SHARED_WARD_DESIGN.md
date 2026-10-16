@@ -60,11 +60,11 @@ Two related ideas surfaced during design and are deferred to their own work:
 | Running instances | One per user (see *Receiving an invitation*) |
 | Where the local file lives | Local application data (`QStandardPaths::AppLocalDataLocation`), keyed by document id; the user never chooses a path |
 | Third-party sync folders | Not built. Continuity rests on the project being open source. |
-| The split of responsibility | **The ward says who may read it; the server stores versions and relays changes.** Besides the version condition, the server checks only that a write is signed by a device the current header names. |
+| The split of responsibility | **The ward says who may read it; the server stores versions and relays changes.** Besides the version condition, the server checks only that a write's header is well formed and names its document, and that its signer is named by the current header, or for a new document by its own. |
 | Who has access | The access list inside the encrypted payload: users, their devices, and open invites |
 | Key model | Envelope encryption, one data key per document, sealed to each device |
 | Key generation | Silent, on first run. No user-visible key material. |
-| Server authentication | None. Each write and each channel carries an Ed25519 signature the current header admits. |
+| Server authentication | None. Each write and each channel carries an Ed25519 signature the current header admits, or for a new document its own header. |
 | Joining | A one-time invite link |
 | Roles | Admin or member, held in the access list, a convention among honest clients |
 | Who may add | An admin adds a user; anyone adds their own devices |
@@ -91,7 +91,8 @@ design's answer, not a gap:
   end does; one working only in a response they started offline is unaffected.
 - **No base copy, no save counter, no debounce.**
 - **No exported copies.** A copy would be sealed to the ward's devices, each of which already
-  holds the ward; *Show in folder* reveals the ward's own file.
+  holds the ward; *Show in folder* reveals the ward's own file. The developer-only export
+  under *Debugging*, off by default, is the one exception.
 - **1.0 `.emergencyplan` files are not migrated**, and their teams, tags, assets, special
   needs and notes are not carried over.
 - **An unreadable or restored head stalls sharing** until the operator repairs it (see
@@ -1525,8 +1526,9 @@ empties then like any other.
 **Show in folder** reveals the app data directory, where each ward is a `.wardplanning` file
 in the documented format, for support and for getting the data out if the server goes
 away. Backup is the local file on every member's device and the server's copy. The app
-writes no other copies: anything it exported would be sealed to the ward's devices, each of
-which already holds the ward.
+writes no other copies, apart from the developer-only export under *Debugging*, off by
+default: anything it exported would be sealed to the ward's devices, each of which already
+holds the ward.
 
 ## Receiving an invitation
 
