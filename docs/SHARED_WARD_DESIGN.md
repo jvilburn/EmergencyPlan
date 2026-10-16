@@ -1257,8 +1257,9 @@ well-meaning users from over-sharing.
 An access change is a command like any other and replays like one. Two admins removing
 different users both apply. Two admins removing the same user: the second finds its
 intent already satisfied and there is nothing to do. A removal names the user by id and
-takes their whole entry, whatever devices it holds by then, since the intent is that this
-person is out; a device the user added in the meantime goes with them. Two admins setting one user's role
+takes their whole entry, whatever devices it holds by then, and every invite they have
+made by then, since the intent is that this person is out; a device the user added or an
+invite they made in the meantime goes with them, and the removal conflicts with neither. Two admins setting one user's role
 differently is a conflict, so the second admin's replay is abandoned and they do it again
 knowing what the first one did.
 
@@ -1872,8 +1873,9 @@ The journal and replay, in `tests/services`:
   anything captured its start condition while running
 - an access-list command replays: two admins removing different users both apply; removing the
   same user twice applies in full; two different roles for one user is a conflict; a
-  removal replayed after that user added a device applies and takes the new device too; a
-  user who leaves has their open invites withdrawn
+  removal replayed after that user added a device applies and takes the new device too; one
+  replayed after that user made an invite withdraws it, and that invite's seed cannot
+  unseal the version the removal wrote; a user who leaves has their open invites withdrawn
 - the last-admin rule, and the rule that a leave made while others remained cannot land
   where its user is now the only one, refuse the command that would break them, both when
   the user tries it and when it replays onto a version where the rule has come to apply:
