@@ -119,8 +119,8 @@ design's answer, not a gap:
   by a server bug or a renumbered restore, is not detected.
 - **Server error recovery is out of scope**: repairing a bad version, restoring from backup,
   and what an export must carry for a successor belong to the server's own design.
-- **Directory-import matching is settled during implementation**, against real
-  directories (see *Imports*).
+- **How the imports match families and members, and which family fields a ministering
+  import fills, are settled during implementation**, against real PDFs (see *Imports*).
 - **A directory's date is its PDF file's modification time**, the only date a directory
   PDF carries.
 - **Two directory imports can add one new family or member twice** when both list it and
@@ -1142,8 +1142,9 @@ will make, each with its before and after:
 A family an import updates is held at the same typed level as `UpdateFamilyCommand` -
 address, and a change per member keyed by `PersonId` - and only for families
 that actually differ. The import service builds merged families, and the command compares
-them with the existing ones field by field, holding only what differs. How the directory
-import matches families and members is settled during implementation (see *Settled*).
+them with the existing ones field by field, holding only what differs. How the imports
+match families and members, and which fields a ministering import fills, is settled during
+implementation (see *Settled*).
 **An import never changes a person's special-need note**, which is the app's own and which
 no PDF carries.
 
