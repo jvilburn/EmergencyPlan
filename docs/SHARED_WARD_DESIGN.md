@@ -115,6 +115,9 @@ design's answer, not a gap:
 - **No guards against a future developer's mistake**, such as a command type left out of
   the registry.
 - **Items under *Open points* are known**, the live channel's wire detail among them.
+- **A misbehaving server, or whoever holds the domain, may disrupt in any way that leaks
+  nothing**: stall sharing, lose versions, or make devices treat a ward as removed. The
+  design defends against the server learning anything, not against it getting in the way.
 - **The server is trusted to number versions.** Older content served under a higher number,
   by a server bug or a renumbered restore, is not detected.
 - **Server error recovery is out of scope**: repairing a bad version, restoring from backup,
@@ -271,9 +274,8 @@ disruption only.
 
 **Accepted: an unreadable or restored head stalls sharing.** A version every client
 refuses - written by a client bug, or corrupted in storage - or a server restored to
-versions older than members hold leaves every device unable to push until the server
-again serves a version each can take. Every device keeps its local copy and keeps working
-on it, and nothing in those copies is lost. Repairing the server is the server's own design, outside this one.
+versions older than members hold stops the devices that hold a newer version from
+pushing. Repairing the server is the server's own design, outside this one.
 
 **Cleaned up when the user asks.** A removed member's local copy: their app offers to
 delete it once it learns the ward is no longer theirs.
@@ -1545,8 +1547,7 @@ which costs nothing to hold on to:
 **A successor restores the service rather than members detaching from it.** Because
 documents carry only their id and the app supplies the server address, continuity is an
 operator task that members never see: at the same domain, the successor deploys the
-open-source server from a current export of blobs and apps reconnect unchanged (an export
-older than what members hold is the accepted stall under *Threat model*); at a new domain,
+open-source server from a current export of blobs and apps reconnect; at a new domain,
 the successor also ships an app release pointing at the new address, and every existing
 document follows it. Releases and the update check live on the server, so that release
 reaches members automatically only if it is published while the old address still
@@ -1564,7 +1565,7 @@ returns.
 | A rule refused a replayed command | The wording the app gives for that operation, as it would if the user tried it now: *You are the only admin...* |
 | The local save failed | Your change could not be saved: *reason*. It is kept while the app stays open and saved as soon as saving works again; closing asks first. |
 | The server is unreachable | Working offline. Your changes are saved here and will go up when the connection returns. |
-| Head is older than this copy | The server has an older copy of this ward than yours. Nothing was changed. Your copy is safe and you can keep working; sharing resumes when the server catches up. |
+| Head is older than this copy | The server has an older copy of this ward than yours. Nothing was changed on this device. |
 | Head fails validation | The ward on the server could not be read. Your copy is safe and you can keep working; sharing resumes when the server has a readable copy. |
 | Header format is newer | This ward was saved by a newer version of Ward Planning. Update to see the latest changes and share your work. |
 | An invitation already used or withdrawn | This invite has been used or withdrawn. Ask the sender. |
@@ -1964,8 +1965,8 @@ that need hand rotation.
 exactly what lets a successor take over at the same address. Clients decrypt every blob
 themselves and seal only to keys an earlier version already admitted, so a lapsed domain
 re-registered by a stranger yields ciphertext and fingerprints, and stops sharing until a
-successor acts. Such a stranger cannot remove anyone, learn who has access, cause a copy
-to be deleted, or offer members an installer, which must be signed with the release key.
+successor acts. Such a stranger cannot learn who has access, or offer members an
+installer, which must be signed with the release key.
 
 **Handing over** needs a second Super Administrator on the Cloudflare account, credentials
 (registrar, Cloudflare, GitHub) and the release signing key in a password manager with
