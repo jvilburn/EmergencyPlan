@@ -193,9 +193,9 @@ application's author, and the design keeps that from being a matter of trust. An
 obtains a file without ever having held a key. A removed user writing anything, which
 the server refuses because the current header no longer names them. A user removed by
 an admin reading a later version obtained some other way, which is under a key they never
-held. A server, or a stranger holding a lapsed domain, offering members an installer of its
-own: the app offers only a release signed with the project's release key (see *What the
-server is*). Silent corruption or truncation.
+held. A server offering an installed app an installer of its own: the app offers only a
+release signed with the project's release key (see *What the server is*). Silent
+corruption or truncation.
 
 **A misbehaving server can disrupt, and cannot read.** The design defends against the
 server learning anything, not against a buggy or hostile server getting in the way, which
@@ -249,6 +249,9 @@ rotates the key. Interception of a user invite shows up in the access list as a 
 inviter did not expect, or under the expected name if the interceptor guessed it; either
 way the real recipient finds their invitation already used and says so. In both cases the entry
 is visible and removable, which is the accepted answer at this threat level.
+
+**Accepted: a new member's first install trusts the server's download page**, as their
+first download trusts the server.
 
 **Accepted: a device's first download is taken as it stands.** A device holding no
 readable version of a ward - newly joined, after its app data was cleared, or with a local
