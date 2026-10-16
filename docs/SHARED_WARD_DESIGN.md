@@ -115,6 +115,10 @@ design's answer, not a gap:
 - **No guards against a future developer's mistake**, such as a command type left out of
   the registry.
 - **Items under *Open points* are known**, the live channel's wire detail among them.
+- **The defences are proportionate to a ward directory**: names, addresses, phone numbers
+  and birth dates, not money or credentials. A review should weigh a threat by what this
+  data is worth to an attacker, as *Threat model* sets out, and not propose defences sized
+  for a bank.
 - **A lapsed domain, and whoever might register it, is not a threat this design weighs.**
 - **A misbehaving server, or whoever holds the domain, may disrupt in any way that leaks
   nothing**: stall sharing, lose versions, or make devices treat a ward as removed. The
