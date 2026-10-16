@@ -6,6 +6,10 @@ open see each other, and see each other's work as it happens.
 This is the whole design: what the file is, who can read it, how it is shared, and what
 the server does.
 
+**This is a design document, not an implementation plan.** It says what the system does and
+why. Which code changes, where, and what the code does today belong to the implementation
+plan, and a review of this document judges the design.
+
 ## Purpose
 
 Ward leaders need custom views of member data that the official church tools do not
@@ -83,6 +87,8 @@ Two related ideas surfaced during design and are deferred to their own work:
 Each of these was weighed and decided. A review that finds one should treat it as the
 design's answer, not a gap:
 
+- **Code sites and what the code does today are not in this document**; they belong to the
+  implementation plan.
 - **Replay, never reconciliation** of two finished versions.
 - **Emergency responses are a keyed collection**; two offline starts are two events.
 - **Ending an emergency saves its report and removes the response.** A change replayed onto
@@ -272,7 +278,7 @@ copy. Repairing the server is the server's own design, outside this one.
 **Cleaned up when the user asks.** A removed member's local copy: their app offers to
 delete it once it learns the ward is no longer theirs.
 
-**Outside the app's reach.** Reports exported by `ReportGenerator`, which remain
+**Outside the app's reach.** Summary reports, which remain
 plaintext PDFs.
 
 **Known to the server, and accepted.** Per document: the ciphertext and its size, which
@@ -366,9 +372,8 @@ empty. A release that renames, removes or reshapes a field carries a small upgra
 previous version to its own, run once when it first reads an older payload and tested like
 any other code, before its strict reader. Each reader accepts one shape, and an older shape
 reaches it only through a named upgrade. This concerns versions of the `.wardplanning`
-format, not the 1.0 `.emergencyplan` files, which are not read at all. The model `fromJson` functions have no way to fail today, so they gain one:
-a missing or malformed required field refuses the whole payload rather than reading part of
-it.
+format, not the 1.0 `.emergencyplan` files, which are not read at all. A missing or
+malformed required field refuses the whole payload rather than reading part of it.
 
 **When a newer app wrote the version on the server**, this app keeps the local copy it
 has and **pushes nothing**, with a persistent notice: *This ward was saved by a newer
@@ -531,9 +536,7 @@ signs each write and each channel open.
 **Library pin.** The facts in this paragraph were looked up on 2026-10-15. CVE-2025-69277
 (`crypto_core_ed25519_is_valid_point` accepting points outside the main subgroup; fixed by
 `ad3004e`, released in 1.0.20-stable and 1.0.21) does not affect any call this design
-makes. The build requires 1.0.22 or later, the current release at that date, regardless: it adds `libsodium` to `vcpkg.json`, which lists only `libmupdf` today, with
-`"version>=": "1.0.22"` and a `builtin-baseline`, under the `x64-windows-static-md` triplet
-that MuPDF already uses.
+makes. The build requires 1.0.22 or later, the current release at that date, regardless.
 
 ## Identity
 
@@ -732,10 +735,8 @@ command alone, and `inverse` builds a new command rather than changing this one.
 is a constraint on commands rather than machinery around them: a command that read the
 document inside `execute` to remember what it was replacing would have that memory
 overwritten by the very version it is being replayed onto, and would then write a stale
-directory over the other user's work without noticing. The two imports -
-`ImportWardDirectoryCommand` and `ImportMinisteringCommand` - take their previous state at
-construction for this reason, rather than reading it inside `execute` as they do now.
-`SetFamiliesCommand` has no callers and is deleted.
+directory over the other user's work without noticing. The two imports take their previous
+state at construction for this reason.
 
 **The start condition is what the user saw.** An edit captures the values it will change
 when its target is chosen: when the panel or dialog opens, or when the user picks a
@@ -775,9 +776,8 @@ any start condition.
 Every update command takes this shape, not only the family's. Single values - a name, a
 leader, a response area - are per field. Sets - a team's members, an asset's people, a
 tag's people and families - are held as the ids added and the ids removed: an addition is
-done if the id is present, a removal if it is absent. `UpdateTeamCommand`,
-`UpdateEmergencyAssetCommand` and `UpdateTagCommand` hold whole objects today, and convert
-to this, so two users adding different members to one team both apply.
+done if the id is present, a removal if it is absent, so two users adding different
+members to one team both apply.
 
 **References stay whole.** Teams, tags, assets, ministering groups and districts, and task
 assignments refer to people, families and teams by id, and replay keeps every such id
@@ -793,8 +793,7 @@ pointing at something that exists:
   ministering group that holds it. Deleting a team unassigns every task assigned to that
   team the same way. The command holds that list of places as the user saw it, and its
   start condition includes it: if what it removes has been added or assigned somewhere
-  since, the removal conflicts rather than leave that reference behind. `Document::cleanupPersonReferences`,
-  which has no callers today, becomes the person half of this routine.
+  since, the removal conflicts rather than leave that reference behind.
 - **A leader is a member.** A leader change's start condition includes that the new leader
   is on the team.
 
@@ -828,108 +827,49 @@ after an older local file comes back from a restore of app data. A device that c
 its local file, but whose fingerprint the head still names, downloads the current version
 as itself and starts with an empty journal; whatever the unreadable journal held is lost.
 
-**Making every write a command is the core of this work.** What runs through
-`CommandHistory` today is family update; team add, update, delete and member removal;
-emergency-asset add, update, delete and unassign; and the two imports. Ministering changes
-only by import. The tag commands exist and convert with the rest, though nothing in the
-interface calls them yet: `AddTagCommand`, `UpdateTagCommand` and `DeleteTagCommand` stay,
-while `AssignTagToPersonCommand`, `AssignTagToFamilyCommand`,
-`UnassignTagFromPersonCommand` and `UnassignTagFromFamilyCommand` are deleted, since each is
-an `UpdateTagCommand` holding one id added or removed. `AddFamilyCommand`, `AddTeamMemberCommand` and
-`AssignEmergencyAssetToPersonCommand` have no callers - families arrive by import, and the
-team and asset dialogs change members through their update commands - so they are deleted.
-`RemoveTeamMemberCommand` and `UnassignEmergencyAssetFromPersonCommand` are deleted too:
-under the update shape above, removing one member is an `UpdateTeamCommand` or
-`UpdateEmergencyAssetCommand` holding that one id removed, and, for a team leader, the
-leader change as well, both fixed at construction. `RemoveTeamMemberCommand` today clears
-the leader inside `execute` and does not restore it on undo.
-The Delete Family action, whose confirmation ends in "Delete not yet implemented" today, is
-wired to `DeleteFamilyCommand`, which carries the same cleanup as an import's removal,
-worked out at construction. The rest has to join them, because a write that is not a command cannot
-replay:
+**Every write is a command, and making it so is the core of this work**, because a write
+that is not a command cannot replay. That covers the directory's edits and imports,
+ministering, tags, the emergency response and the access list. In particular:
 
-- **Emergency responses become a keyed collection.** `Document` holds one
-  `std::optional<EmergencyResponse>` today, and `EmergencyManager` assumes at most one:
-  `startEmergency` returns early when one is active, and `isActive()` gates the response
-  views throughout the interface. Each response gains an id, the document holds them by it,
-  and the interface lists the emergencies in progress and switches between them. Ending
-  saves the summary report and then removes the response, as `endEmergency` clears it
-  today (see *Emergency archives are removed*).
-- **Contact status becomes the outcome of an attempt.** `FamilyResponseRecord` stores one
-  `m_contactStatus` today, overwritten by the OK and Unable to Reach buttons. Instead,
-  `ContactAttempt` gains a `std::optional<ContactOutcome>` (`OK` or `UnableToReach`), the two
-  buttons each record an attempt carrying their outcome, and a family's status is the outcome
-  of its latest attempt that has one, or Not Contacted when none does. Latest means the
-  greatest `timestamp`, ties broken by `ContactAttemptId`. A command inserts an attempt at
-  its place in that order, most recent first, as `CODING_STYLE.md` asks of embedded child
-  objects, and a task likewise by `createdAt`, ties broken by `TaskId`; `prepend` does this
-  today only because attempts arrive in time order on one device. So the stored order is the
-  displayed order whatever order replay lands them in, the same attempts always make an
-  equal list, and a family's status is its first attempt that has an outcome. Timestamps
-  come from each device's clock, so a wrong clock can show an older outcome as current; every
-  attempt stays in the history, and this is accepted. `method` and `who`
-  become optional: a button press records only its outcome and time, shown as *Marked OK*
-  or *Marked Unable to Reach*, while the contact dialog fills in both. `ContactStatus` and
-  `m_contactStatus` are deleted, and `effectiveStatus()` reads the attempts. Needs Help
-  still comes first while a family has unresolved tasks, whatever its latest outcome.
-- **`EmergencyManager` keeps no copy of its own.** It holds `m_response` and writes it back
-  through `persistResponseData`; instead it reads the response from the document, by the id
-  of the emergency being shown, and every change goes through a command. Starting an
-  emergency is one command that adds the response with a `FamilyResponseRecord` for every
-  family, as `startEmergency` does today, keeping names and addresses as they stood at the
-  start. `syncFamilies`, which adds records for new families on each document change, is
-  deleted: a family added after the start has no record and reads as Not Contacted, and a
-  command that writes to a family's record creates it when missing, from the name and address snapshot the command took at
-  construction, so it depends on nothing but the response id. Two responders
-  touching a new family both land, since each change is an addition. Statistics - the
-  progress bar and the report - count the response's records plus every directory family
-  without a record as Not Contacted. Both count through the same two functions,
-  `EmergencyResponse::totalFamilies` and `countByStatus`, which today see only the records
-  and take the directory's families instead. `ReportGenerator::generateReport` takes only
-  the response today (`ReportGenerator.cpp:149`); it also takes the directory's families,
-  and draws its overview from those functions, so the report and the progress bar agree
-  when the emergency ends. Its attempt tally indexes by `method` (line 259), which becomes
-  optional: an attempt with no method is a status mark, tallied on its own line as
-  *Marked OK* or *Marked Unable to Reach*.
-- **Everything that lets the user choose where a ward is stored is deleted**; the PDF import
-  and report export dialogs stay. Known sites:
-  - `DocumentManager`: the `filePath` property and `filePathChanged`, `setFilePath`,
-    `openDocument(path)`, `saveDocument`, `saveDocumentAs`, `saveDocumentOnly`,
-    `ensureFilePath`, `maybeRenameForWard`, and `setEmergencyResponse`, whose work the
-    emergency commands take over
-  - `JsonService`'s plaintext `loadDocument` and `saveDocument`; the payload's JSON reuses
-    the models' `toJson` and `fromJson`
-  - `MainWindow`'s File > Open and Save with their file dialogs, and the "use Save As to
-    save manually" hint on a failed save
-- **All archive code is deleted** with the archives themselves; the summary report saved
-  when an emergency ends is how it is looked back on:
-  - `EmergencyManager`: `m_savedResponse`, `loadArchive`, `closeArchive`, `reopenArchive`,
-    `saveArchive`, `isViewingArchive`, the `archiveViewOpened` and `archiveViewClosed`
-    signals, and `endEmergency`'s `archive` parameter
-  - `DocumentManager`'s overlay: `m_archiveDocument`, `setArchiveDocument`,
-    `clearArchiveDocument` and `isViewingArchive`
-  - `ArchiveBrowserDialog` and `EmergencyBanner::setArchiveName`
-  - `MainWindow`'s `onOpenArchive`, `onArchiveViewOpened`, `onArchiveViewClosed`,
-    `m_openArchiveAction`, `m_closeArchiveAction`, the Open and Close Archive menu items,
-    and the reopen-from-archive path
-  - the end dialog's Archive && End and Discard && End buttons and its *Generate summary
-    report* checkbox, replaced by one End confirmation that always saves the report first;
-    cancelling the report's save dialog ends nothing, in place of today's *Skip Report*
-    question
-  - the `archiveViewOpened`/`archiveViewClosed` connections in `FamilyTreeModel`,
-    `MinisteringModel`, `TeamsTreeModel` and `WardListView`, and the `isViewingArchive`
-    checks in `ActionButtonsWidget`, `TeamsView` and `WardListView`
-  - `EmergencyResponse::m_endedAt` and its accessors, since no response in the document
-    has ended; `ReportGenerator` takes the end time as an argument
-- **The emergency response** is written by `EmergencyManager` mutating it in place, outside
-  the command path. Its mutations become these commands:
+- **Deleting a family** is a command, carrying the same cleanup as an import's removal,
+  worked out at construction.
+- **Emergency responses are a keyed collection.** Each response has an id, the document
+  holds them by it, and the interface lists the emergencies in progress and switches
+  between them. Ending saves the summary report and then removes the response (see
+  *Emergency archives are removed*).
+- **A family's contact status is the outcome of an attempt.** A contact attempt may carry
+  an outcome, OK or Unable to Reach; the two buttons each record an attempt carrying theirs,
+  and a family's status is the outcome of its latest attempt that has one, or Not Contacted
+  when none does. Latest means the greatest timestamp, ties broken by the attempt's id. A
+  command inserts an attempt at its place in that order, most recent first, as
+  `CODING_STYLE.md` asks of embedded child objects, and a task likewise by when it was
+  created, ties broken by its id. So the stored order is the displayed order whatever order
+  replay lands them in, the same attempts always make an equal list, and a family's status
+  is its first attempt that has an outcome. Timestamps come from each device's clock, so a
+  wrong clock can show an older outcome as current; every attempt stays in the history, and
+  this is accepted. An attempt's method and who are optional: a button press records only
+  its outcome and time, shown as *Marked OK* or *Marked Unable to Reach*, while the contact
+  dialog fills in both. Needs Help still comes first while a family has unresolved tasks,
+  whatever its latest outcome.
+- **The response lives only in the document.** The emergency being shown is read from the
+  document by its id, and every change to it goes through a command. Starting an emergency
+  is one command that adds the response with a record for every family, keeping names and
+  addresses as they stood at the start. A family added after the start has no record and
+  reads as Not Contacted, and a command that writes to a family's record creates it when
+  missing, from the name and address snapshot the command took at construction, so it
+  depends on nothing but the response id. Two responders touching a new family both land,
+  since each change is an addition. Statistics - the progress bar and the report - count
+  the response's records plus every directory family without a record as Not Contacted,
+  by one rule, so the two agree when the emergency ends. The report tallies an attempt with
+  no method as a status mark, on its own line.
+- **The emergency response's changes are these commands:**
 
   | Command | Covers | On replay |
   |---|---|---|
   | `StartEmergency` | start, with a record per family | an addition; never conflicts |
   | `EndEmergency` | end, removing the response once its report is saved | conflicts if the response differs from what the report holds; result holds if already gone |
   | `RecordContactAttempt` | logging a contact, and the OK and Unable to Reach buttons | an addition |
-  | `DeleteContactAttempt` | the inverse of `RecordContactAttempt`, which is how an attempt is undone; no button removes one today | as last seen; result holds if already gone |
+  | `DeleteContactAttempt` | the inverse of `RecordContactAttempt`, which is how an attempt is undone | as last seen; result holds if already gone |
   | `AddTask` | adding a task | an addition |
   | `UpdateTask` | the task dialog, resolve, reopen, assign, unassign, notify | per value, as `UpdateFamilyCommand` |
   | `DeleteTask` | removing a task | as last seen; result holds if already gone |
@@ -939,74 +879,41 @@ replay:
   values: category, description, assignment (assignee, notes and notification as one
   value), and resolution (resolved, notes and time as one value, the time fixed at
   construction). A change of assignee sets the notification to none, since the new
-  assignee has not been told; `assignToTeam` and `assignToPerson` keep the previous
-  assignee's notification today.
+  assignee has not been told.
 - **The access list** is new in its entirety. Invite, remove a user, remove a device,
   withdraw an invite, set a role and leave are each a command, which is what lets an access
   change replay like any other. Join is a command too, run once by the joining device under
   the invite's key, and refused with *This invite has been used or withdrawn* when the
   current header no longer names the invite.
-- **Every model `fromJson` gains a way to fail**, so a missing or malformed required field
-  refuses the whole payload; today each reads a missing field as empty or false.
-- **`Command` itself** gains `toJson` and `fromJson` with a type registry, so a journal
-  entry reaches disk and comes back as the command it was. `undo` becomes `inverse` on
-  every command, and `CommandHistory`'s `markSaved` and `isDirty`, with
-  `DocumentManager::isDirty` and its `dirtyChanged` signal, are deleted: every command is
-  saved as it is made, so nothing is ever unsaved.
-- **The update check** is new: on start, the app reads the server's `GET /releases/latest`
-  and, when it is newer than the running version, shows a dismissible notice offering the
+- **Commands serialise.** Every command has `toJson` and `fromJson` through a type
+  registry, so a journal entry reaches disk and comes back as the command it was; every
+  command has an `inverse` in place of an undo; and every command is saved as it is made,
+  so nothing is ever unsaved and the app has no unsaved state to track.
+- **The update check**: on start, the app reads the server's `GET /releases/latest` and,
+  when it is newer than the running version, shows a dismissible notice offering the
   download. Installers are published to the server, which serves them and the download
-  page. The running app knows no version today: `main.cpp` sets no
-  `setApplicationVersion`; `CMakeLists.txt`'s `project` declares `1.0.0`, which reaches
-  only the macOS bundle (`CMakeLists.txt:526-527`); `installer.iss` says `1.0.1`; and
-  `vcpkg.json` says `1.0.0`. `project`'s version becomes the one source: it reaches the app
-  as its application version and is written at configure time into a file `installer.iss`
-  includes in place of its own `MyAppVersion`, and `vcpkg.json` drops its `version`, which
-  a top-level manifest does not need. Versions compare numerically, part by part, so 1.10.0
-  is newer than 1.9.0.
-- **The app is renamed Ward Planning throughout.** The application name (`main.cpp:12`),
-  the window title (`MainWindow.cpp:530`), the installer's name and publisher
-  (`installer.iss`), the executable, and the CMake project and its targets (`EmergencyPlan`,
-  `EmergencyPlanLib`) take the new name, with everything that names them, such as
-  `build.bat`'s deploy step, the `name` in `vcpkg.json`, and the macOS bundle's name and
-  identifier (`CMakeLists.txt:525,528`, and `packaging/macos/Info.plist`, whose
-  `.emergencyplan` document type goes as the Windows association does). The installer keeps its `AppId`, so the release
-  upgrades the old install in place. App data and the tile cache are named by Qt after the application,
-  so both move; nothing is carried over from the old directories (see *Earlier versions*),
-  and the tile cache refills as maps are viewed.
-- **Receiving an invitation** is new: *Join a ward*, which reads the clipboard when clicked
-  and otherwise offers a paste box, and the Windows instance lock. `installer.iss` registers
-  `.emergencyplan` today, and that association is removed; nothing is registered in its
-  place.
+  page. The app's version is stated once, in the build, and reaches the running app and the
+  installer from there. Versions compare numerically, part by part, so 1.10.0 is newer than
+  1.9.0.
+- **The app is named Ward Planning** in every name a user or the system sees. The installer
+  upgrades the old install in place. App data and the tile cache follow the name, so both
+  move; nothing is carried over from the old directories (see *Earlier versions*), and the
+  tile cache refills as maps are viewed. No file type is registered with the system.
+- **Receiving an invitation**: *Join a ward*, which reads the clipboard when clicked and
+  otherwise offers a paste box, and the Windows instance lock (see *Receiving an
+  invitation*).
 - **`docs/FORMAT.md` is new**, written with the code since the models change in this work.
   It specifies every field of the payload, `device` included, and changes in the same
   commit as any `toJson` it describes; a release that changes it raises the format version,
   as under *File format*.
-- **`ARCHITECTURE.md`, `IMPORT_DESIGN.md` and `USER_GUIDE.md` change with the code they
-  describe.**
-  `ARCHITECTURE.md` gives commands `execute` and `undo`, `CommandHistory`'s stacks and an
-  `AddFamilyCommand` example; it moves to `execute`, `inverse` and `refusal`, the journal
-  and `WardSession`. `IMPORT_DESIGN.md` says a re-import replaces family and person data;
-  it states that the special-need note and the coordinates are the app's own and stay, and
-  that a ministering import makes a placeholder for someone it cannot match only when it is
-  the newer source (see *Imports*).
-  `USER_GUIDE.md` describes `.emergencyplan` files, File > Open, Save As and archives; it is
-  rewritten for wards, *Who has access* and invites, in the words under *Words the user
-  sees*, and carries the statements this design promises it makes: what the server knows,
-  and that roles are a convention among honest clients, not a security measure.
-- **Edits that re-read on confirm** take their start condition when their target is chosen,
-  as above. The sites known today are a starting list, not a complete one: the family edit
-  panel (`MainWindow.cpp` builds `UpdateFamilyCommand` from the live document, while the
-  panel already holds the copy it opened with); the team dialog in `TeamsView.cpp`; the
-  asset dialog in `EmergencyAssetView.cpp`; the special-needs dialogs in `NeedsSubView.cpp`,
-  which can switch person; and the notify, resolve and assign-to-team actions in
-  `WardListView.cpp`, `TaskListView.cpp` and `TeamsView.cpp`.
+- **The user guide is rewritten** for wards, *Who has access* and invites, in the words
+  under *Words the user sees*, and carries the statements this design promises it makes:
+  what the server and anyone holding a document id can see, and that roles are a convention
+  among honest clients, not a security measure. The project's other docs change with the
+  code they describe.
 - **The special-needs dialog becomes one "Special Need" dialog.** Opened on an existing
   need, its person is locked; opened from empty space, picking a person fills in that
-  person's current note, and that is when its start condition is taken. Today it reuses
-  `WardListDialog::selectPersonWithName`, which sets the note once at open and never on a
-  change of selection (`WardListDialog.cpp:292-317`), so it either gains a
-  selection-changed signal from the picker or stops reusing it.
+  person's current note, and that is when its start condition is taken.
 
 **Automatic updates are the one exception, and stay out of the journal.** Geocoding and
 ward and stake lookup produce derived data: an address in, coordinates out. A result is
@@ -1152,10 +1059,7 @@ of them. Whoever is coordinating ends the one they do not want.
 report first. Then, with no event loop between, it reads the response by id, writes the
 report from it, and runs `EndEmergency`, which removes the response and holds it as the
 report was written from. If the response is gone by then, ended by someone else while the
-dialog stood open, there is nothing to end and the user is told so; today
-`generateEmergencyReportWithConfirm` holds a reference to the response across its save
-dialog (`MainWindow.cpp:1012`), which the response living in the document would leave
-dangling. A version that changed the response in the meantime makes the end
+dialog stood open, there is nothing to end and the user is told so. A version that changed the response in the meantime makes the end
 conflict, and the coordinator ends it again with a report that includes the change, so the
 report of the end that removes a response holds everything in it. Ending a duplicate leaves
 its records in its own report. A change replayed onto a response that has ended conflicts,
@@ -1192,9 +1096,8 @@ will make, each with its before and after:
   follow *References stay whole*. When the directory is the newer source - the ministering
   PDF is older than the directory's, or has no date once a directory is imported - a family
   or person the import cannot match is not added, and the import leaves them out of the
-  groups and districts it builds. `mergeFamilies` points the groups at such an unadded id
-  today (`MinisteringImportService.cpp:156-164` and `:330-334`); an older PDF naming someone
-  the newer directory does not list is out of date about them.
+  groups and districts it builds: an older PDF naming someone the newer directory does not
+  list is out of date about them.
 
 A family an import updates is held at the same typed level as `UpdateFamilyCommand` -
 address, coordinates, and a change per member keyed by `PersonId` - and only for families
@@ -1202,15 +1105,11 @@ that actually differ. The import service builds merged families, and the command
 them with the existing ones field by field, holding only what differs. How the directory
 import matches families and members is settled during implementation (see *Settled*).
 **An import never changes a person's special-need note, and keeps a family's coordinates
-unless its address changed.** `WardDirectoryImportService::preserveIds` copies the existing
-person's note onto the rebuilt person and passes the existing coordinates when the address
-is unchanged; today it drops the note and takes the PDF's coordinates, so every re-import
-wipes special needs. A geocode that lands meanwhile collides only with an import that
-changed that family's address or coordinates.
+unless its address changed.** The note and the coordinates are the app's own, which no PDF
+carries. A geocode that lands meanwhile collides only with an import that changed that
+family's address or coordinates.
 
-`ImportWardDirectoryCommand` and `ImportMinisteringCommand` read all of this inside
-`execute` today, and the directory import's `undo` restores none of the cleanup; both move
-to construction. An import then conflicts only with an edit to something it also changes. A
+Both imports work all of this out at construction. An import then conflicts only with an edit to something it also changes. A
 family someone else added in the meantime is not among the ones it removes, so it survives.
 The inverse is the same changes swapped, so undoing an import restores the memberships its
 cleanup removed.
@@ -1408,9 +1307,8 @@ would buy nothing and would hold a change back from everyone else for as long as
 lookup change families and ward details on their own. They run after an import, when a
 ward opens, whenever this device takes a version from the server by fast-forward or
 replay, and after a committed command that clears coordinates, which the command knows at
-construction: `startBatchGeocoding` and `checkForIncompleteWards` each skip what is already
-done and what is on the failed list,
-so a result lost with a push is simply computed again. Several online devices may compute
+construction. Each run skips what is already done and what is on the failed list, so a
+result lost with a push is simply computed again. Several online devices may compute
 the same result at once; the results are identical, and the duplicate work is accepted.
 Their results are not journalled, for the reason given above, so while the server holds a
 version this app is too old to read they apply locally, drop at the replay that follows the
@@ -1419,27 +1317,22 @@ update, and are computed again.
 **Coordinates always belong to the current address.** An edit that changes a family's
 address clears its coordinates in the same command, unless that edit also set coordinates
 by hand, so "has coordinates" means "has coordinates for this address" on every device.
-The geocoder therefore queues exactly the families with an address and no coordinates, and
-`BackgroundGeocodingService`'s `m_familyAddresses` and its change detection are deleted. A
-geocode result carries the address it was computed for and applies only if the family
+The geocoder therefore queues exactly the families with an address and no coordinates,
+with no memory of addresses it has seen. A geocode result carries the address it was computed for and applies only if the family
 still has that address and no coordinates; otherwise it is dropped.
 
 **An automatic batch pushes once.** Results apply in memory as they arrive, and the save
-and push happen once, when the batch finishes (`onGeocodingFinished`, which already saves
-once today) or when a lookup completes, so an import costs one more version rather than
+and push happen once, when the batch finishes or when a lookup completes, so an import
+costs one more version rather than
 one per family. Addresses and unit numbers that fail to resolve go on a failed list, kept
 by their text in the device-local state, and are not tried again until the text changes. A
 family whose address is on it stays unmapped until someone corrects the address or types
-its latitude and longitude in the family edit panel. The `documentChanged` hook in
-`BackgroundGeocodingService` is replaced by these explicit triggers.
+its latitude and longitude in the family edit panel. These triggers are the only ones;
+nothing geocodes on a document change as such.
 
 A batch geocodes each distinct address once and applies the result to every family in it
 with that address, each still subject to the check above, and it finishes when its last
-request has answered. Today `m_addressToFamilyId` holds one family per address
-(`BackgroundGeocodingService.h:74`), so a second family at the same address replaces the
-first, and the second reply returns before the batch's finish check
-(`BackgroundGeocodingService.cpp:67-71`): the batch never finishes, nothing is pushed, and
-one family stays unmapped. A failed address covers every family at it, since the failed
+request has answered, however many families share an address. A failed address covers every family at it, since the failed
 list is kept by address text.
 
 **All writes go through `QSaveFile`**, so a crash mid-write leaves the previous file intact.
@@ -1482,16 +1375,16 @@ any stale edit, so incoming versions leave the undo stack alone.
 
 The journal and the undo stack are separate, for different reasons. The journal is an
 append-only log of serialised entries for what has not reached the server, and an entry
-leaves when its push lands. The undo stack owns command objects, as `CommandPtr` does
-today, for what this user can take back, and an entry stays after it is pushed. An undo
+leaves when its push lands. The undo stack owns command objects, for what this user can
+take back, and an entry stays after it is pushed. An undo
 moves the original from the undo stack to the redo stack and appends the inverse's
 serialised form to the journal; the inverse never enters the undo or redo stack. A redo
 moves the original back to the undo stack and appends its serialised form to the journal
 again.
 
 The undo stack is in memory and belongs to the session. It is cleared when the document is
-closed, opened or switched, and its redo side by any new command, as today. It holds at
-most 100 entries with the oldest dropped, which is new: `CommandHistory` has no cap today.
+closed, opened or switched, and its redo side by any new command. It holds at most 100
+entries, with the oldest dropped.
 
 - **An undo whose inverse conflicts or is refused** changes nothing, so the original stays
   on the undo stack and the user is told why, as with any command that fails.
@@ -1524,10 +1417,8 @@ who holds what, so the list is this device's own record and nothing restores it 
 server.
 
 A new document is created in app data under a fresh id, and naming it is a display concern.
-**A ward's name comes from what it has imported**, by the rule
-`DocumentMetadata::suggestedFilename` applies today, renamed `displayName` since no file is
-named by it: *name* Ward for one ward and *name* Stake for wards of one known stake, among
-its cases. A ward the rule gives no name, such as one that has imported nothing, shows as
+**A ward's name comes from what it has imported**: *name* Ward for one ward and *name*
+Stake for wards of one known stake, among its cases. A ward the rule gives no name, such as one that has imported nothing, shows as
 *Untitled ward*. The name is read
 from the payload, so the ward list, the window title, the invite message and the join
 confirmation all use it, and a joiner sees it once the invite's key has unsealed the ward.
@@ -1650,7 +1541,7 @@ returns.
 
 ## Debugging
 
-The document's plain JSON (`Document::toJson`) serves a developer-only "export decrypted
+The document's plain JSON serves a developer-only "export decrypted
 JSON" action, off by default, which warns that it writes unencrypted member data.
 
 ## Earlier versions
@@ -1667,8 +1558,7 @@ record left alone.
 ## Identity recovery
 
 Device keys live only in each device's local app data. They survive an uninstall and
-reinstall, because the uninstaller leaves local app data in place: `installer.iss` has no
-`[UninstallDelete]` for it, and keeps none. Clearing local app data, a reimaged profile, or
+reinstall, because the uninstaller leaves local app data in place. Clearing local app data, a reimaged profile, or
 a replaced device loses them.
 **A user with another working device** invites the new one from it, and no one else is
 involved. **A user who has lost every device** is removed by an admin and invited again,
@@ -1678,14 +1568,12 @@ is possible. There is no exported recovery key file.
 
 ## Testing
 
-**The harness is part of the work.** `tests/CMakeLists.txt` lists no sources, so the suite
-starts here: one Qt Test executable linked against `WardPlanningLib`, with `tests/services`
+**The harness is part of the work**, since the suite starts here: one Qt Test executable linked against `WardPlanningLib`, with `tests/services`
 for format, crypto, journal and replay, and `tests/server` for the fake server and the
 conformance suite. The instance lock needs two processes, so `tests/lock` is a second,
 small executable that starts copies of itself, each taking the lock through the app's own
 lock function. `tests/spec` is a third, a reader of the format built without Qt or any of
-the app's code, from `nlohmann-json`, `zlib` and `libsodium`, which `vcpkg.json` gains as
-dependencies, so that it shows the specification complete rather than the app agreeing
+the app's code, from `nlohmann-json`, `zlib` and `libsodium`, so that it shows the specification complete rather than the app agreeing
 with itself.
 
 - **The server interface** is one abstract class in the client with the calls the app
@@ -1694,23 +1582,18 @@ with itself.
   to drop a reply after storing a write, delay a notice, or refuse to answer.
 - **A test client** is a full client - its own identity, app data directory, document,
   journal and undo stack - so a multi-user test is two or three of them against one
-  `FakeServer`, driven step by step with no timers. `DocumentManager` and
-  `EmergencyManager` assert a single instance today, and `BackgroundGeocodingService` binds
-  to `DocumentManager::instance()`, so the document, journal, sync and replay move into a
-  `WardSession` class with no global state, which a test creates as many of as it needs;
-  the singletons become thin wrappers that hold the app's one session for the interface.
+  `FakeServer`, driven step by step with no timers. The document, journal, sync and replay
+  live in a `WardSession` class with no global state, which a test creates as many of as it
+  needs; the app holds one session for the interface.
 - **Each registered command type has a sample.** Each type registered for `fromJson` also
   registers a sample instance with a document for each outcome the type can give: one where
   its start condition holds, and, where the type has them, one where its result already
   holds and one where it conflicts. The round-trip test iterates the registry.
 - **Every outside dependency has a fake in `WardSession`**: the server, the geocoder, the
   ward and stake lookup, and the clock that stamps attempts and resolutions. A test sets
-  each, so nothing reaches the network and timestamp ordering is decided by the test. The
-  models read the system clock themselves today, in `TaskNotification::create`,
-  `ContactAttempt::create`, `ResponseTask::create`, `ResponseTask::resolve` and
-  `EmergencyResponse::create`; each takes the time as an argument instead, which a command
-  reads from `WardSession`'s clock at construction, and the report's end time comes from
-  the same clock.
+  each, so nothing reaches the network and timestamp ordering is decided by the test. Every
+  timestamp the app writes comes from that clock: a command reads it at construction, and
+  the report's end time comes from it too.
 
 Format and crypto, in `tests/services`:
 
@@ -1978,7 +1861,7 @@ disagreement is resolved in whichever implementation is wrong, never by loosenin
 - **A channel-open signature replays**, so presence can be lied about.
 - **Joining needs the server**, so users are added before an emergency rather than during
   one.
-- **Reports stay plaintext.** `ReportGenerator` writes member-data PDFs to a user-chosen
+- **Reports stay plaintext.** Summary reports are member-data PDFs written to a user-chosen
   path.
 - **Emergency archives are replaced by the summary report** saved when an emergency ends;
   the response itself leaves the document.
