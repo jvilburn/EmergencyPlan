@@ -233,7 +233,7 @@ and invites users again; the old ward is abandoned to whoever took it. Content v
 already possible for any key holder, is recovered the same way.
 
 **Accepted: a stolen, unlocked device acts as its owner.** It can read everything, write
-content, remove its owner's other devices, add devices of the thief's own, and on an
+content, remove its owner's other devices, add devices of the thief's own, including through an invite it left open, and on an
 admin's device anything an admin can do. Its owner removes it from another device, or any
 admin removes the owner, who is then invited again. Planted devices are shown for what
 they are: each appears under its owner's name, and the owner removes any they do not
