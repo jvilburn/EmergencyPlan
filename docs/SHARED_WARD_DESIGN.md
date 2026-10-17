@@ -667,6 +667,8 @@ closed channel, or a missed heartbeat, says they left.
 Each client turns fingerprints into names through its own access list, so the display reads
 "Alice Smith is also here" above the ward. A fingerprint the access list does not know shows as
 a device that joined since this copy was last current, and resolves on the next version.
+An open invite's fingerprint shows as *someone with Bob's invitation*, by its label, or *a
+device invitation*; whoever holds it can already read the ward.
 
 ## Every edit is a version
 
