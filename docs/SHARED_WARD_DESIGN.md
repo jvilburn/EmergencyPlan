@@ -354,7 +354,7 @@ value is base64url without padding: the document id is 16 bytes (22 characters),
 and a fresh `nonce`, as on any write, so a header has one shape and one parse; its body
 ends at the header's `\n` with nothing after it, and the signed line's payload hash is
 BLAKE2b-256 of zero bytes. Nothing can be written after it: its header names no signer, so
-every `PUT` is refused, and a `POST` of the same id finds it already exists. A reader recognises
+every `PUT` is refused, and so is a `POST` of the same id. A reader recognises
 it by the empty `recipients`, before any payload rule applies (see *Who has access, changed
 by two users*). No local file takes this form: the deleting device removes its copy, and
 every other device keeps the copy it had.
@@ -578,7 +578,7 @@ starting point; no call asks for an earlier version, and none is kept.
 
 | Call | Who may | What |
 |---|---|---|
-| `POST /documents` | anyone | Stores version 1 of a new document under its client-made id. Rate-limited by address. An id that already exists gets its own answer, so a client retrying after a lost reply fetches instead, and its landed mark empties the journal. |
+| `POST /documents` | anyone | Stores version 1 of a new document under its client-made id, and refuses an id that already exists. Rate-limited by address. |
 | `GET /documents/{id}/head` | anyone with the id | Version, publisher fingerprint and time, and the header. |
 | `GET /documents/{id}` | anyone with the id | The current version: header and blob. Ciphertext; unreadable without a key. |
 | `PUT /documents/{id}` | a key holder | Conditional on `Ward-Base-Version`. Signed. |
@@ -616,29 +616,18 @@ appear as present.
 | `Ward-Base-Version` | `PUT` requests | the version the push builds on |
 | `Ward-Signer` | `POST` and `PUT` requests | the signer's X25519 public key and Ed25519 verify key, joined by `.` |
 | `Ward-Signature` | `POST` and `PUT` requests | the Ed25519 signature of the signed line |
-| `Ward-Version` | answers to `head`, `GET`, `POST` and `PUT`, and a `412` | the current version, which after a stored write is that write's |
+| `Ward-Version` | answers to `head`, `GET`, `POST` and `PUT` | the current version, which after a stored write is that write's |
 | `Ward-Publisher` | answers to `head` and `GET` | the fingerprint that published the current version |
 | `Ward-Published` | answers to `head` and `GET` | when the current version was published, ISO 8601 in UTC |
 
-| Status | When |
-|---|---|
-| `201` | a `POST` stored version 1 |
-| `200` | a read, or a `PUT` that stored the next version |
-| `400` | the body, its framing, its header or a `Ward-` field is malformed, or a `PUT`'s header names a different document |
-| `403` | the signature does not verify, or the header the signer must be in does not name them: the posted header for a `POST`, the current one for a `PUT` |
-| `404` | no document has the id in the URL |
-| `409` | a `POST` for an id that already exists |
-| `412` | a `PUT` whose base version is not the current one |
-| `429` | the address is over its rate limit |
-
-When more than one applies, the first of `429`, `400`, `404`, `409`, `403`, `412` is
-given. A client answered `412` fetches the current version and replays onto it. One
-answered `403` or `404` fetches the head: a header that no longer names this device, or a
-ward the server no longer has, is a removal (see *Everything else, from the document*); a
-join's `403` is settled from the head as below. **Any other answer, or none, is a
-fault**, the app's or the server's: the journal stays, the push is retried as anything
-pending is (see *Saving*), and the user is told once: *Your changes could not be shared
-right now. They are saved here.*
+**A write is stored or it is not.** The server answers a success status when it stored the
+write and an error status otherwise, and a read with the ward or `404` when it has none;
+the client branches on nothing finer. Every write that is not answered as stored - an
+error, or no answer - is settled by looking at the head, as below: a newer version is
+replayed onto, a header without this device or a `404` is a removal (see *Everything else,
+from the document*), and a head unchanged since the push is a fault, retried as anything
+pending is (see *Saving*), with the user told once: *Your changes could not be shared right
+now. They are saved here.* The server's own error codes are for its logs.
 
 **An operation's outcome can be unknown.** A reply that never comes, a server that stops
 answering, or an app closed too soon leaves the client not knowing whether an operation
@@ -1806,7 +1795,7 @@ The journal and replay, in `tests/services`:
 - the only user's Leave asks before deleting, pushes a version naming no recipient that
   withdraws any open invites, and removes this device's copy; the pushed body is exactly a
   header with `recipients` empty and its `\n`, and afterwards a `PUT` from any former
-  device gets `403` and a `POST` of that id `409`; the user's second device enters the
+  device and a `POST` of that id are each refused; the user's second device enters the
   no-longer-yours state, its journal dropped and its copy read-only until deleted; an
   invitee's later join is refused as withdrawn; with the answer to that final push dropped,
   the next head, naming no one, removes this device's copy without asking again
@@ -1911,18 +1900,18 @@ Against the fake server, in `tests/server`:
 - pushing from a stale base version is refused, and the journal replays on the fetched
   version and pushes again
 - a write whose signature is not from a device the current header names is refused
-- each status in the status table is given for a request built to meet only its condition,
-  with the `Ward-` headers the header table lists; a stale `PUT` from a signer the current
-  header no longer names gets `403`, and a malformed `PUT` to an unknown id gets `400`
-- a `403` whose head no longer names the device puts it in the no-longer-yours state; a
-  `403` whose head still names it, a `429` and a `400` each leave the journal as it was,
-  tell the user once that changes could not be shared, and are retried; a join answered
-  `403` reports the invite as used or withdrawn only when the head names neither this
-  device nor the invite, and opens the ward when the head names this device
+- the server stores a write only when its base is current, its header is well formed and
+  names its document, and its signer is named as the design requires, and refuses it
+  otherwise, with the `Ward-` headers the header table lists on every answer
+- a refused push followed by a head without this device puts it in the no-longer-yours
+  state; a refused push followed by an unchanged head leaves the journal as it was, tells
+  the user once that changes could not be shared, and is retried; a refused join reports
+  the invite as used or withdrawn only when the head names neither this device nor the
+  invite, and opens the ward when the head names this device
 - a `PUT` to a document id the server does not hold is refused, and every other document
   keeps its version and contents
-- a `POST` whose answer is lost, retried, is told the id already exists; the client then
-  fetches, and its landed mark empties the journal
+- a `POST` whose answer is lost is settled by the next look, which finds the document and
+  empties the journal by its landed mark; no second `POST` is sent
 - a downloaded version that fails validation replaces nothing
 - a ward this device has had on the server, now answered `404`, is treated as a removal:
   its journal is dropped, its copy is read-only and offered for deletion, and no `POST` is
