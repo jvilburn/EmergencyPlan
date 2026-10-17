@@ -1312,7 +1312,10 @@ seed for `crypto_box_seed_keypair`, and subkey 2 the seed for `crypto_sign_seed_
    keys, and it sits in the same encrypted file as the data key those keys unseal, so keeping
    it exposes nothing that file does not already hold.
 2. **Joining** on a device, once the app has the invitation (see *Receiving an
-   invitation*): derive the invite keypair from the seed, fetch the current version, unseal
+   invitation*), looks at the head first. If the header already names this device, there
+   is no join: the ward opens, as a first download if this device holds no readable copy,
+   with *This device already has access to Tanglewood Ward*, and the invite stays open.
+   Otherwise: derive the invite keypair from the seed, fetch the current version, unseal
    the data key with the invite's private key, validate as any download is validated, ask
    the user to confirm by the ward's name, then write the next version: the invite entry becomes a device
    entry, under the inviter's user for a device invite, under a new user for a user
@@ -1602,6 +1605,7 @@ returns.
 | Head fails validation | The ward on the server could not be read. Your copy is safe and you can keep working; sharing resumes when the server has a readable copy. |
 | Header format is newer | This ward was saved by a newer version of Ward Planning. Update to see the latest changes and share your work. |
 | An invitation already used or withdrawn | This invite has been used or withdrawn. Ask the sender. |
+| An invitation opened on a device the ward already names | This device already has access to Tanglewood Ward. |
 | An invitation for a ward the server does not have | The server has no such ward. Ask the sender for a new invitation. |
 | A file opened that is not an invitation | This file is not a Ward Planning invitation. |
 | An invitation opened while offline | Connect to the internet, then open the invitation again. |
@@ -1925,6 +1929,8 @@ Against the fake server, in `tests/server`:
   journal in it
 - a user joins only through an invite the current header names, and a used or withdrawn
   invite is refused
+- an invitation opened by a device the ward already names joins nothing: the ward opens,
+  the header is unchanged, and the invite is still open for its recipient
 - a join whose answer is lost - retried in the same session, or with the invitation opened
   again after a restart - opens the ward as a member and never reports the invite as used
   or withdrawn
