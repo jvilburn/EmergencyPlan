@@ -512,8 +512,8 @@ the key of the last version this device took from, or gave to, the server.** So 
 this device trusts are that one key, an incoming version under it is accepted directly, and
 a later one is accepted because its former keys name it. Without this, an admin who removed
 someone would hold a key of their own invention and could never again accept a version from
-anyone else. The one exception is a device that has left: it keeps the key of the version
-it left from (see *Saving*), since that is the last key it can open.
+anyone else. The one exception is a device that has left, which keeps its file as it was
+(see *Saving*).
 
 A local save always writes the current document, with this device's state beside it. A
 push that succeeds changes that state - the new base, the new key if it rotated, and the
@@ -1116,7 +1116,8 @@ Then the result is pushed. If that push also loses, the journal replays again on
 version, which is the ordinary case of two users working in the same minute.
 
 **The to-redo list is what the user works from.** It holds the abandoned journal's
-descriptions in their own sequence, marks the one that clashed, and survives closing the
+descriptions in their own sequence, marks the one that clashed (a later abandonment adds
+its own group), and survives closing the
 app until the user dismisses it. It holds descriptions, not commands, because nothing
 replays it. Nothing is settled by choosing a side, and nothing is silently dropped - the work
 is still described for as long as they keep it.
@@ -1453,12 +1454,11 @@ since leaving gives up unsent changes anyway, and the command goes ahead on the 
 version.
 
 - **When it lands**, as the head settles it (see *What the server is*), the user is told
-  *You left Tanglewood Ward* or *You removed this device*, and the device saves the
-  document it had before the command (except a Leave that deletes the ward, whose device
-  removes its copy; see *Who has access, changed by two users*), still sealed to itself under the key it already
-  carries, in the no-longer-yours state (see *Everything else, from the document*). The
-  journal is emptied: everything in it either went out with the push or was dropped by a
-  conflict under it.
+  *You left Tanglewood Ward* or *You removed this device*, and the device keeps its file as
+  it was, with the no-longer-yours flag set (see *Everything else, from the document*) and
+  the journal emptied: everything in it either went out with the push or was dropped by a
+  conflict under it. A Leave that deletes the ward removes the copy instead (see *Who has
+  access, changed by two users*).
 - **When a rule refuses it**, the user sees that rule's wording and the ward is editable
   again.
 
@@ -1511,7 +1511,8 @@ sibling folders, `wards` and `keys`, so the folder *Show in folder* opens holds 
 
 **The list is local**, built from the wards this device holds. The server keeps no index of
 who holds what, so the list is this device's own record and nothing restores it from the
-server.
+server. A ward's waiting changes go out when it is next opened, and the list marks the
+wards that have changes waiting.
 
 A new document is created in app data under a fresh id, and naming it is a display concern.
 **A ward's name comes from the wards it has imported**, in alphabetical order: *Tanglewood
