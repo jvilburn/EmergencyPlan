@@ -124,6 +124,8 @@ design's answer, not a gap:
   app closed too soon leaves an operation unknown until the device next looks. An operation
   that saved nothing before pushing - a join, a Leave, a delete - is looked at again only
   when the user repeats it. The gaps this leaves are accepted.
+- **Changing the server override starts afresh**: every ward from the old server is treated
+  as removed. The override is for testers and self-hosters.
 - **A lapsed domain, and whoever might register it, is not a threat this design weighs.**
 - **A misbehaving server, or whoever holds the domain, may disrupt in any way that leaks
   nothing**: stall sharing, lose versions, or make devices treat a ward as removed. The
