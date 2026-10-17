@@ -3059,7 +3059,8 @@ work list).
   `static std::optional<SpecialNeedEdit> editSpecialNeed(const std::optional<PersonId>& lockedPerson, QWidget* parent)`
   with `struct SpecialNeedEdit { Family opened; Family saved; };` in `WardListDialog.h`.
 - Title `tr("Special Need")`. Opened on an existing need (`lockedPerson` set), the person is
-  preselected and the tree is disabled. Opened from empty space, `onSelectionChanged()` in this
+  preselected, the tree is disabled, and the dialog reads that person's family into
+  `m_openedFamily` when it opens. Opened from empty space, `onSelectionChanged()` in this
   mode reads the picked person's family from the document at that moment into `m_openedFamily`
   and fills the note field with that person's current note: that is when the start condition
   is taken.
