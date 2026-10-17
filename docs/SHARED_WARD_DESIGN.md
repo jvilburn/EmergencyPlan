@@ -116,7 +116,7 @@ design's answer, not a gap:
 - **No bandwidth estimate**; whole-blob-per-edit holds during an emergency too.
 - **No guards against a future developer's mistake**, such as a command type left out of
   the registry.
-- **Items under *Open points* are known**, the live channel's wire detail among them.
+- **Items under *Open points* are known.**
 - **The defences are proportionate to a ward directory**: names, addresses, phone numbers
   and birth dates, not money or credentials. A review should weigh a threat by what this
   data is worth to an attacker, as *Threat model* sets out, and not propose defences sized
@@ -662,6 +662,14 @@ header they are not in.
 A client opens the live channel when it opens a ward. The server tells it which
 fingerprints are already there, and tells everyone already there about the newcomer. A
 closed channel, or a missed heartbeat, says they left.
+
+The live channel is a WebSocket at `/documents/{id}/channel`. The upgrade request carries
+`Ward-Signer` and `Ward-Signature`, signed over the `channel` line. The server sends JSON
+text messages: `{"present":[...]}` with the fingerprints already there when the channel
+opens, `{"arrived":fp}` and `{"departed":fp}` as others come and go, and `{"version":n}`
+for each version it stores. A heartbeat every 30 seconds keeps a client present. A client
+whose channel has closed opens it again when whatever is pending is next retried (see
+*Saving*).
 
 Each client turns fingerprints into names through its own access list, so the display reads
 "Alice Smith is also here" above the ward. A fingerprint the access list does not know shows as
@@ -2044,11 +2052,6 @@ and keeps working; sharing is what pauses.
 
 ## Open points
 
-- **The live channel is not specified** to the level the rest of the wire is: the open
-  request and where its signature rides, the presence and version-notice messages, the
-  heartbeat interval and timeout, the reconnect rule, and how errors map. The conformance
-  suite needs that before it can be written.
-- **Whether head polling stays** as the channel's fallback, and at what interval.
 - **Where the server runs** is not chosen, and free-plan capacity under a held-open channel
   is not estimated.
 - **Creating documents is open.** A per-address limit on `POST /documents` is the first

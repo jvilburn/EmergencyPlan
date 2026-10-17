@@ -2951,6 +2951,8 @@ void WardSessionTest::dismissingTheToRedoListEmptiesIt()
 - Entries stay in the journal after a successful replay; plan 3's landed marks remove the
   ones a version carries. The design's test of an undo after a remote edit to the same field
   needs that trimming, so it is plan 3's.
+- The to-redo list's window (*These need doing again*, with Dismiss) is built in plan 3, where
+  fetching first abandons a replay. This plan builds the list it shows.
 
 ### Commit
 
@@ -3082,7 +3084,8 @@ work list).
   `document.coordinatesFor(family.address())`: `Filter.cpp:219,223,506,510`,
   `MapViewModel.cpp:38,55,56,61`, `MapWidget.cpp:202,895,955`.
 - `WardDirectoryImportService::preserveIds` and the parsers stop passing coordinates to
-  `Family`. Where the directory PDF's coordinates go is open question 10.
+  `Family`. The directory PDF's own coordinates seed the address table through the import
+  command (task 7).
 
 **Typed coordinates are a journalled command on the address's entry.**
 - `SetAddressCoordinatesCommand(const QString& address, const std::optional<Coordinates>& before, const Coordinates& typed, const Description& description)`,
@@ -3097,7 +3100,8 @@ work list).
   fields while that address is empty, and exposes `std::optional<Coordinates> typedCoordinates() const`
   when the user typed or looked up a position. `MainWindow::onSaveFamily` commits the family
   edit, then a `SetAddressCoordinatesCommand` against the saved address when typed coordinates
-  differ from its entry (open question 9).
+  differ from its entry, so one save can make two undo entries: the family edit and the map
+  position.
 
 **Automatic updates live in `WardSession`, behind fakeable interfaces.**
 - `class Geocoder : public QObject` with `virtual void geocode(const QString& address) = 0;` and
@@ -3327,7 +3331,8 @@ table, and a missing response making every command but `EndEmergency` conflict:
   ends nothing), then `endEmergency`; `AlreadyEnded` tells the user someone else ended it.
   `generateEmergencyReportWithConfirm` reads the response by id after its dialog rather than
   holding a reference across it.
-- The interface lists the emergencies in progress and switches between them (open question 12).
+- Emergencies in progress are switched with a combo box on `EmergencyBanner`, shown only when
+  more than one is in progress.
 - UI sites build their commands from what was captured when the target was chosen: the OK and
   Unable to Reach buttons (`ActionButtonsWidget::onOkClicked` / `onUnableToReachClicked`) record
   an attempt carrying only the outcome; `ContactAttemptDialog` fills method and who; the task
@@ -3419,7 +3424,7 @@ families. API:
 **Files:**
 - Rewrite: `src/commands/ImportWardDirectoryCommand.h/.cpp`, `src/commands/ImportMinisteringCommand.h/.cpp`
 - Modify: `src/services/WardDirectoryImportService.h/.cpp`, `src/services/MinisteringImportService.h/.cpp`,
-  `src/services/WardDirectoryPdfParser.h/.cpp` (coordinates, per open question 10)
+  `src/services/WardDirectoryPdfParser.h/.cpp` (the PDF's coordinates reach the command)
 - Modify: `src/models/Document.h/.cpp` (`setFamilies` and `addFamilies` lose their last callers
   and are deleted)
 - Modify: `src/widgets/MainWindow.cpp` (`onImportPdf`, `onImportMinisteringPdf`)
@@ -3435,9 +3440,13 @@ families. API:
   families removed as last seen with their `ReferenceCleanup`, the directory PDF date as a
   `Change<std::optional<QDate>>`, and the ward record created if missing (result holds when one is
   there). An import never changes a special-need note.
+- The PDF's own coordinates seed the address table: the command holds them for each address the
+  table lacks at construction, and at execute adds each one only where the table still lacks it,
+  never replacing an entry.
 - Execute: every change's start condition or result must hold, or it conflicts touching nothing;
   a family someone else added meanwhile is not among its removals.
-- Inverse: the same changes swapped (open question 11 for the ward record).
+- Inverse: the same changes swapped. A ward record the import created stays in place, since the
+  lookup fills its details afterwards.
 - `addressesGiven()` returns the addresses of the families it adds or re-addresses.
 - Description: heading `tr("Import the ward directory from %1.").arg(fileName)`, no lines.
 
@@ -3489,20 +3498,9 @@ The design is silent on these; each states the choice this plan makes.
 5. **The undo stack pairs each command with its inverse, built at commit.** `inverse()` reads no
    document, so this equals building it at undo.
 6. **An abandoned replay clears the redo side too**, alongside the undo stack.
-7. **The to-redo list's interface** (*These need doing again*, with Dismiss): nothing in plan 1's
-   app abandons a replay, so this plan builds the list and leaves its window to plan 3, where
-   fetching first abandons one. Or build it now?
-8. **Landed marks are plan 3**, so after a successful replay the entries stay in the journal and
+7. **Landed marks are plan 3**, so after a successful replay the entries stay in the journal and
    a later replay runs them again, where their result already holds.
-9. **Typed coordinates in the family edit panel** commit as a second command after the family
-   edit, so one save can make two undo entries.
-10. **The directory PDF's own coordinates:** seed the table for addresses it lacks through the
-    import command (never replacing an entry), or drop them and let the geocoder fill the table?
-11. **Undoing a directory import that created the ward record:** the lookup fills that record's
-    details afterwards, so an inverse that removes it "as last seen" would conflict after every
-    lookup. Remove it whatever details it holds, or leave it in place?
-12. **Switching between emergencies in progress:** a combo box in `EmergencyBanner`?
-13. **The test target is `WardPlanningTests`**, linked against `EmergencyPlanLib`, which plan 2's
-    rename turns into `WardPlanningLib`.
-14. **`docs/SHARED_WARD_PLAN_NOTES.md` stays** for plans 2 and 3, though it says it is deleted
-    once the plan is written.
+8. **The test target is `WardPlanningTests`**, linked against `EmergencyPlanLib`, which plan 2's
+   rename turns into `WardPlanningLib`.
+9. **`docs/SHARED_WARD_PLAN_NOTES.md` stays** for plans 2 and 3, though it says it is deleted
+   once the plan is written.
