@@ -1616,11 +1616,13 @@ the app's code, from `nlohmann-json`, `zlib` and `libsodium`, so that it shows t
 with itself.
 
 - **The server interface** is one abstract class in the client with the calls the app
-  makes: create, head, fetch, push, open channel, and latest release. `HttpServer` implements it for the
-  app; `FakeServer` implements it in process for tests, holding versions in memory and able
-  to drop a reply after storing a write, delay a notice, refuse to answer, serve a chosen
-  version (an older one, or another ward's under this ward's id), and answer `404` for a
-  ward it held.
+  makes: create, head, fetch, push, open channel, and latest release. `HttpServer`
+  implements it over a transport that carries method, path, headers and body out, and
+  status, headers and body back. The app's transport is HTTP; the tests' is `FakeServer`,
+  in process, so every client test runs `HttpServer`'s wire encoding too. `FakeServer`
+  holds versions in memory and can drop a reply after storing a write, delay a notice,
+  refuse to answer, serve a chosen version (an older one, or another ward's under this
+  ward's id), and answer `404` for a ward it held.
 - **A test client** is a full client - its own identity, app data directory, document,
   journal and undo stack - so a multi-user test is two or three of them against one
   `FakeServer`, driven step by step with no timers. The document, journal, sync and replay
@@ -1818,7 +1820,11 @@ The journal and replay, in `tests/services`:
   server, and the journal replays onto it: the save did not rotate, so the one key this
   device trusts is the one the server's version is under
 - a push that carries an access change rotates, and the version after it names the old
-  key among its former keys
+  key among its former keys; a device offline across two rotating pushes by others
+  accepts the latest version, which names both keys it missed
+- a push that removes someone is stored, its reply is dropped and the app restarts: the
+  next fetch takes the version by its former keys, trims the journal by the mark, and
+  applies nothing twice
 - running a command does not change the command: one command object, executed where it
   applies, serialises to the same entry it gave before it ran, and the same object executed
   next on a moved version conflicts and leaves that version untouched, which fails if
