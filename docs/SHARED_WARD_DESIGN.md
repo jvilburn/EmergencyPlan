@@ -1391,12 +1391,13 @@ compress, an encrypt and a `QSaveFile` of a couple of hundred kilobytes, so each
 reaches everyone else as soon as it is made.
 
 **Automatic updates run on any device that holds the ward.** Geocoding and ward and stake
-lookup change the table of address coordinates and the ward details on their own. They run after an import, when a
-ward opens, whenever this device takes a version from the server by fast-forward or
-replay, and after a committed command that gives a family an address the table of address
-coordinates lacks, which the command knows at construction. Each run skips what is already done and what is on the failed list, so a
-result lost with a push is simply computed again. Several online devices may compute
-the same result at once, and the duplicate work is accepted.
+lookup change the table of address coordinates and the ward details on their own. They
+run on the device whose own action brought in the work - after an import, and after a
+committed command that gives a family an address the table of address coordinates lacks,
+which the command knows at construction - and on any device when a ward opens. A batch
+whose push loses runs again on its device after the replay. Each run skips what is already
+done and what is on the failed list, so a result lost with a push is simply computed
+again.
 Their results are not journalled, for the reason given above, so while the server holds a
 version this app is too old to read they apply locally, drop at the replay that follows the
 update, and are computed again.
@@ -1771,7 +1772,8 @@ The journal and replay, in `tests/services`:
 - a batch with two families at one address sends one request for it, maps both families
   by their shared entry, finishes, and pushes once
 - a command that changes no address starts no geocoding; two connected clients that each
-  take a version with nothing to geocode leave the server's version where it was
+  take a version with nothing to geocode leave the server's version where it was; a device
+  that takes another device's import runs no batch for its addresses
 - two offline edits to different members of one family both apply
 - an offline removal of a member, replayed after someone changed that member's phone,
   conflicts and leaves the member with the new phone; the same removal replayed onto an
