@@ -68,7 +68,7 @@ Two related ideas surfaced during design and are deferred to their own work:
 | The split of responsibility | **The ward says who may read it; the server stores versions and relays changes.** Besides the version condition, the server checks only that a write's header is well formed and names its document, and that its signer is named by the current header, or for a new document by its own. |
 | Who has access | The access list inside the encrypted payload: users, their devices, and open invites |
 | Key model | Envelope encryption, one data key per document, sealed to each device |
-| Key generation | Silent, on first run. No user-visible key material. |
+| Key generation | Silent, only when no key file exists. No user-visible key material. |
 | Server authentication | None. Each write and each channel carries an Ed25519 signature the current header admits, or for a new document its own header. |
 | Joining | A one-time invitation file, opened in the app |
 | Roles | Admin or member, held in the access list, a convention among honest clients |
@@ -903,6 +903,8 @@ own mark in that version, so new entries always number above anything that lande
 for a device starting over from a first download. A device that cannot read
 its local file, but whose fingerprint the head still names, downloads the current version
 as itself and starts with an empty journal; whatever the unreadable journal held is lost.
+Cannot read means the bytes were read and failed to open; a failure to read them at all is
+a fault, retried, and never overwrites the file.
 
 **Every write is a command, and making it so is the core of this work**, because a write
 that is not a command cannot replay. That covers the directory's edits and imports,
@@ -1414,11 +1416,11 @@ are disabled for it, and such a family stays off the map; this is accepted. Each
 table holds only what is used; an address that comes back later is geocoded, or typed,
 again.
 
-**An automatic batch pushes once.** Results apply in memory as they arrive, and the save
+**An automatic batch pushes once.** Results are held by address as they arrive, and the save
 and push happen once, when the batch finishes or when a lookup completes, so an import
 costs one more version rather than one per family, and a batch or lookup that changed nothing
-neither saves nor pushes. A version that arrives while a batch runs restarts it on the new
-document.
+neither saves nor pushes. When the batch saves, its results apply to the document as it
+stands then.
 Addresses and unit numbers that fail to resolve go on a failed list, kept
 by their text in the device-local state, and are not tried again until the text changes. A
 family whose address is on it stays unmapped until someone corrects the address or types
