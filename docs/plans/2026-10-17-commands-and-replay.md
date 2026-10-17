@@ -3472,6 +3472,7 @@ families. API:
 - `MinisteringImportService::mergeFamilies`, when not authoritative, adds no unmatched family or
   person and leaves them out of the groups and districts it builds
   (`MinisteringImportService.cpp:156-164`, `:330-334`).
+- `addressesGiven()` returns the addresses of the families it adds.
 - Description: `tr("Import the ministering assignments from %1.").arg(fileName)`.
 
 **Docs.** `docs/IMPORT_DESIGN.md`: the special-need note and the coordinates are the app's own and
