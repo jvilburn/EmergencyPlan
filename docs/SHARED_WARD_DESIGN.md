@@ -15,7 +15,7 @@ plan, and a review of this document judges the design.
 Ward leaders need custom views of member data that the official church tools do not
 provide, and bishoprics commonly build those views in shared Google Sheets. Church
 policy asks that member data live in official systems. Ward Planning resolves that
-tension by keeping the data in a document only the bishopric can read.
+tension by keeping the data in a document only the people its leaders add can read.
 
 **Sharing has to be something a busy, non-technical counselor can set up in a couple of
 minutes.** That is the primary goal, and it decides the shape of everything below.
@@ -79,7 +79,7 @@ Two related ideas surfaced during design and are deferred to their own work:
 | Private key storage | A file in local app data, readable only by its user, holding the secret halves, as SSH keys are kept. Local app data does not roam. |
 | Crypto library | libsodium 1.0.22 or later from vcpkg, to be pinned in the manifest |
 | Document storage | One encrypted payload. Replay happens on the model, so storage stays simple. |
-| Encryption coverage | Every document; emergency archives are removed |
+| Encryption coverage | Every document; a past emergency is kept as its summary report |
 | File extension | `.wardplanning`, for each ward's file in app data |
 
 ### Settled, and not for review to reopen
@@ -294,7 +294,7 @@ leaks approximate ward size; the fingerprints in each version's header, which co
 devices with access without naming anyone; which fingerprint published when, and from
 what address; which fingerprints hold a ward open at the same time; and, because a device
 has one identity, which wards share a device. The server learns
-no names, no roles, and no history of who was added or removed. The user guide says so
+no names or roles behind the fingerprints it sees come and go. The user guide says so
 plainly.
 
 **Known to anyone holding a document id, and accepted.** Reads are open, so a removed
@@ -536,7 +536,7 @@ server, which is accepted.
 sealed boxes mean adding someone needs nothing from the inviter's own key. Sealed boxes
 use XSalsa20-Poly1305 internally, not the XChaCha20-Poly1305 of the payload; for a 32-byte
 data key this is immaterial, but it is worth not mis-stating. `crypto_sign` (Ed25519)
-signs each write and each channel open. Every BLAKE2b in this design is unkeyed, with a
+signs each write and each channel open. Every BLAKE2b hash in this design is unkeyed, with a
 zero salt; a named personalisation is that string zero-padded to 16 bytes in BLAKE2b's
 parameter block, and where none is named it is all zeros.
 
@@ -652,8 +652,8 @@ client fetches it and validates it completely before anything local changes.
 **An incoming version is applied at once**, the way a shared document in a browser shows
 someone else's typing as they type. A dialog standing open is not waited for: the user
 may then be looking at a family somebody else just changed, and the command they confirm
-conflicts and is handed back as a single line to redo. Holding the version back until the
-dialog closes would widen the window instead, for as long as the dialog stays open.
+conflicts and is handed back as a single line to redo. Applying versions at once keeps
+the window for a conflict as short as the time the dialog stands open, and no longer.
 
 Because a version can replace the document under any nested event loop - a dialog's
 `exec()`, a message box - code holds ids and captured values across one, never pointers or
@@ -841,7 +841,7 @@ A response's family records and contact attempts are the log of what happened du
 and keep the ids they were made with. A record holds its family's name and address as they
 stood when the record was made, so it reads the same after the family is removed; an
 attempt whose `who` has been removed since shows no name there. The log leaves the document
-when the emergency ends, as its summary report (see *Emergency archives are removed*).
+when the emergency ends, as its summary report (see *The record of an emergency*).
 
 Online the journal is almost always empty: a command enters it and leaves it as the push
 succeeds. Offline it grows, and it survives closing the app, which is what makes a week of
@@ -872,7 +872,7 @@ ministering, tags, the emergency response and the access list. In particular:
 - **Emergency responses are a keyed collection.** Each response has an id, the document
   holds them by it, and the interface lists the emergencies in progress and switches
   between them. Ending saves the summary report and then removes the response (see
-  *Emergency archives are removed*).
+  *The record of an emergency*).
 - **A family's contact status is the outcome of an attempt.** A contact attempt may carry
   an outcome, OK or Unable to Reach; the two buttons each record an attempt carrying theirs,
   and a family's status is the outcome of its latest attempt that has one, or Not Contacted
@@ -1021,7 +1021,7 @@ a command made when a rule allowed it can arrive where the rule does not. The ru
 
 - The only admin cannot step down, and cannot leave while others remain.
 - A leave made while others remained cannot land where its user is now the only one: *You
-  are now the only member, so leaving would delete Tanglewood Ward.*
+  are now the only user, so leaving would delete Tanglewood Ward.*
 - A user cannot remove their last device: *To stop using this ward, use Leave*, so Leave's
   rules apply.
 - A member cannot add users, remove users, set roles or withdraw someone else's invite.
@@ -1219,7 +1219,7 @@ the access list, with their devices and every invite they made. When no one rema
 version it writes has an empty access list, and that is a deleted ward (see *File
 format*): its header names no recipient, and it carries no payload, since no one is left
 to read one. It is how a throwaway ward is removed. When the user is the only one, the
-confirmation says so: *You are the only member of Tanglewood Ward. Leaving deletes it: it
+confirmation says so: *You are the only user of Tanglewood Ward. Leaving deletes it: it
 stops being shared and is removed from this device, and any other device of yours will
 offer to remove it too.* **Delete ward** / Cancel.
 
@@ -1230,10 +1230,10 @@ is refused by the last-admin rule when the newcomer is a member, and otherwise l
 ward to them. A Leave made while others remained is refused where its user is now the only
 one, so no ward is deleted by a leave that did not ask to delete it.
 
-A head with no recipients is a deleted ward to every device: this device
+A head with no recipients is a deleted ward to every device: the device that deleted it
 removes its copy, and any other device of the same user shows *Tanglewood Ward has been
-deleted*, and offers to remove its copy, keeping the copy and its journal until the user
-agrees, as with any head that leaves a device out. If the answer to that final push is lost, the next head, naming no one, tells the
+deleted* and offers to remove its copy, which is read-only until it does, as with any head
+that leaves a device out. If the answer to that final push is lost, the next head, naming no one, tells the
 device the push landed. The server keeps the empty version until the pruning rule under
 *Open points* clears it, so no delete call is needed.
 
@@ -1332,8 +1332,8 @@ The invitation is the gate. Whoever opens it first gets in, visibly, and can be 
 action: a note is one command carrying its finished text when the user clicks OK, and so
 is a contact attempt, an OK or Unable to Reach, a task change or an assignment. They arrive at the
 speed a user fills in a dialog, so there is nothing to batch, and a local write is a
-compress, an encrypt and a `QSaveFile` of a couple of hundred kilobytes. Saving on a timer
-would buy nothing and would hold a change back from everyone else for as long as it ran.
+compress, an encrypt and a `QSaveFile` of a couple of hundred kilobytes, so each change
+reaches everyone else as soon as it is made.
 
 **Automatic updates run on any device that holds the ward.** Geocoding and ward and stake
 lookup change the table of address coordinates and the ward details on their own. They run after an import, when a
@@ -1513,12 +1513,7 @@ remove users. Make someone else an admin.*
 Every ward starts in these states and some will stay there, so a warning that fires on
 every save would be trained away precisely where it matters most.
 
-## Emergency archives are removed
-
-Archiving an ended emergency as a snapshot of the whole document is removed. Each archive
-would be a complete copy of the ward directory, sealed to the devices as they stood when it
-was written, so removing someone would mean re-keying every archive. The feature's value, a
-record of a past emergency, does not carry that weight.
+## The record of an emergency
 
 **The summary report is the record of an emergency.** Ending saves it and then removes the
 response from the document, so the document holds only emergencies in progress, and
@@ -1580,7 +1575,7 @@ returns.
 | Not an admin | In *Who has access*, a member sees *To add or remove users, ask an admin: names* in place of the *Add a user* button. |
 | Head lacks this device, or the server no longer has the ward | You no longer have access to this ward. With an offer to delete this copy. |
 | Head names no recipient | Tanglewood Ward has been deleted, with an offer to remove this copy. |
-| A leave lands where its user is now the only one | You are now the only member, so leaving would delete Tanglewood Ward. |
+| A leave lands where its user is now the only one | You are now the only user, so leaving would delete Tanglewood Ward. |
 
 ## Debugging
 
@@ -1607,7 +1602,8 @@ a replaced device loses them.
 involved. **A user who has lost every device** is removed by an admin and invited again,
 which seals the data key to the new device. The single-holder and single-admin notices, and
 the suggestion to add a second device, are what keep a ward out of the state where neither
-is possible. There is no exported recovery key file.
+is possible. Recovery is always by invitation from a device or an admin that still has
+access.
 
 ## Testing
 
