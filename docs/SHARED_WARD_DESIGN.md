@@ -1722,7 +1722,8 @@ Format and crypto, in `tests/services`:
 - a head whose version is below this copy's is refused and changes nothing, and one that
   is also from before this device joined, so lacks it, reports the server as rolled back,
   not this ward as no longer this device's
-- a removal rotates the key, after which the removed user's devices cannot unseal; a write
+- a removal rotates the key: the data key the removed user's devices held fails the AEAD
+  check on the next version's payload, not only their missing recipient entry; a write
   that removes nobody keeps the key; the written header has exactly the expected entries,
   each matching an access-list key
 - a device the server mentions but this client did not admit is never sealed to
@@ -1731,8 +1732,8 @@ Format and crypto, in `tests/services`:
 - a version of another ward this device holds, served under this ward's id, is refused as
   not descending and changes nothing; the same version with its header's id rewritten to
   this ward's fails to decrypt and changes nothing
-- after a join, and after a withdrawal, the invite's seed can no longer unseal the current
-  version
+- after a join, and after a withdrawal, the data key the invite's seed unsealed from the
+  version naming it fails the AEAD check on the next version's payload
 - an invitation file written by *Add a user* reads back to the same document id and seed,
   and any other file, a `.wardplanning` among them, is refused as not an invitation
 
