@@ -1034,20 +1034,12 @@ entry. When a step-down replays onto a ward whose other admin has left, the step
 admin's own role is untouched, so its start condition matches; a start condition should
 not be reaching into another user's entry to notice.
 
-A refusal is its own question, asked before `execute`:
-
-```
-QString refusal(const Document& document) const;
-```
-
-It returns the rule's wording, or an empty string when nothing refuses. It is the same
-function the interface asks when deciding whether to offer the action, so each rule lives
-in one place. Content commands return an empty string; only the access-list commands carry rules. An admin-only command
-records its author's user id at construction, so a removal made offline by an admin who
-is demoted before it replays is refused with the member's wording. The commit step, the
-first time a command runs and on replay alike, asks `refusal` and stops with its message if
-there is one, and otherwise runs `execute`. The first run needs it too, because a dialog
-standing open can become refused, as it can become a conflict.
+A refusal is asked before a command runs: the app offers an action only when its rule
+allows it, and replay asks the same rule of the version in front of it. Only access-list
+commands have rules. An admin-only command carries its author, so a removal made offline by
+an admin who is demoted before it replays is refused with the member's wording. The first
+run asks too, because a dialog standing open can become refused, as it can become a
+conflict.
 
 A refusal stops the replay as a conflict does, and **the user is told what stopped it**:
 either that the ward changed first, or the same wording the app would have given had they
@@ -1422,7 +1414,7 @@ version.
 `CommandPtr inverse() const` in place of `undo`: for an update, the same command with
 before and after swapped; for an add or a delete, the opposite command; in every case with
 the heading "Undo: *original heading*" over the original's lines. Undo builds the inverse and sends it
-through the commit step - `refusal`, `execute`, journal, save, push - and redo runs the
+through the commit step - its rule, `execute`, journal, save, push - and redo runs the
 original again the same way. An inverse onto moved ground conflicts and is handed back like
 any stale edit, so incoming versions leave the undo stack alone.
 
