@@ -238,6 +238,10 @@ someone creates a fresh document, imports the ward directory and ministering PDF
 and invites users again; the old ward is abandoned to whoever took it. Content vandalism,
 already possible for any key holder, is recovered the same way.
 
+**Accepted: a device's own copy is as safe as the device.** Its key file sits beside its
+ward files, so the copy is protected by the device's login and disk encryption; removing a
+lost device protects what is written after.
+
 **Accepted: a stolen, unlocked device acts as its owner.** It can read everything, write
 content, remove its owner's other devices, add devices of the thief's own, including through an invite it left open, and on an
 admin's device anything an admin can do. Its owner removes it from another device, or any
@@ -535,8 +539,9 @@ server, which is accepted.
 **Primitives.** `crypto_box_seal` wraps the data key to an X25519 public key. Anonymous
 sealed boxes mean adding someone needs nothing from the inviter's own key. Sealed boxes
 use XSalsa20-Poly1305 internally, not the XChaCha20-Poly1305 of the payload; for a 32-byte
-data key this is immaterial, but it is worth not mis-stating. `crypto_sign` (Ed25519)
-signs each write and each channel open. Every BLAKE2b hash in this design is unkeyed, with a
+data key this is immaterial, but it is worth not mis-stating. `crypto_sign_detached`
+(Ed25519) signs each write and each channel open, and `crypto_sign_verify_detached` checks
+it; the signature is 64 bytes, 86 characters in base64url. Every BLAKE2b hash in this design is unkeyed, with a
 zero salt; a named personalisation is that string zero-padded to 16 bytes in BLAKE2b's
 parameter block, and where none is named it is all zeros.
 
@@ -943,7 +948,7 @@ ministering, tags, the emergency response and the access list. In particular:
   current header no longer names the invite.
 - **Commands serialise.** Every command has `toJson` and `fromJson` through a type
   registry, so a journal entry reaches disk and comes back as the command it was; every
-  command has an `inverse` in place of an undo; and every command is saved as it is made,
+  undoable command has an `inverse` in place of an undo; and every command is saved as it is made,
   so nothing is ever unsaved and the app has no unsaved state to track.
 - **The update check**: on start, the app reads the server's `GET /releases/latest` and,
   when it is newer than the running version, shows a dismissible notice offering the
@@ -1056,8 +1061,9 @@ not be reaching into another user's entry to notice.
 
 A refusal is asked before a command runs: the app offers an action only when its rule
 allows it, and replay asks the same rule of the version in front of it. Only access-list
-commands have rules. An admin-only command carries its author, so a removal made offline by
-an admin who is demoted before it replays is refused with the member's wording. The first
+commands have rules, and a rule asks about this device's user in the version in front of
+it, so a removal made offline by an admin who is demoted before it replays is refused with
+the member's wording. The first
 run asks too, because a dialog standing open can become refused, as it can become a
 conflict.
 
@@ -1271,7 +1277,8 @@ seed for `crypto_box_seed_keypair`, and subkey 2 the seed for `crypto_sign_seed_
    asks who the invite is for, and makes nothing until that is answered; the answer is the
    invite's `label`. A *Make them an admin* checkbox, off by default, sets the invite's
    role, which the joiner takes. An invite keeps the role it was made with, even if its
-   maker is later demoted; an admin can withdraw any invite. Both are offered only while the ward is syncing (see *Every edit is a
+   maker is later demoted; an admin can withdraw any invite. *Add a device* and *Add a
+   user* are offered only while the ward is syncing (see *Every edit is a
    version*), and the invitation is saved
    only once that version is on the server, so every invitation a user can send is one that
    works. Since
@@ -1579,6 +1586,7 @@ returns.
 | The local save failed | Your change could not be saved: *reason*. It is kept while the app stays open and saved as soon as saving works again; closing asks first. |
 | The server is unreachable | Working offline. Your changes are saved here and will go up when the connection returns. |
 | Head is older than this copy | The server has an older copy of this ward than yours. Nothing was changed on this device. |
+| A push that faults | Your changes could not be shared right now. They are saved here. |
 | Head fails validation | The ward on the server could not be read. Your copy is safe and you can keep working; sharing resumes when the server has a readable copy. |
 | Header format is newer | This ward was saved by a newer version of Ward Planning. Update to see the latest changes and share your work. |
 | An invitation already used or withdrawn | This invite has been used or withdrawn. Ask the sender. |
