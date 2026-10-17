@@ -158,7 +158,7 @@ This document uses its terms for precision; the interface uses these:
 | conflict, abandoned replay | *Your changes could not be applied, because the ward changed first* |
 | to-redo list | *These need doing again* |
 | journal, unpushed changes | *Your changes are saved here and will go up when the connection returns* |
-| no longer this device's | *You no longer have access to this ward* |
+| no longer this device's | *This ward is no longer shared with this device* |
 
 Terms with no place in the interface at all: push, fetch, replay, version (of a ward; the
 app's own version is an everyday word), head, base,
@@ -1250,10 +1250,10 @@ is refused by the last-admin rule when the newcomer is a member, and otherwise l
 ward to them. A Leave made while others remained is refused where its user is now the only
 one, so no ward is deleted by a leave that did not ask to delete it.
 
-A head with no recipients is a deleted ward to every device: the device that deleted it
-removes its copy, and any other device of the same user shows *Tanglewood Ward has been
-deleted* and offers to remove its copy, which is read-only until it does, as with any head
-that leaves a device out. The server keeps the empty version until the pruning rule under
+A head with no recipients is a deleted ward. The device that deleted it removes its copy
+at once, the one exception to a Leave saving the copy it had; every other device holding
+the ward is in the no-longer-yours state, as with any head that leaves a device out. The
+server keeps the empty version until the pruning rule under
 *Open points* clears it, so no delete call is needed.
 
 An invite made on one device and a join landing on another are different commands and cross
@@ -1331,8 +1331,9 @@ The invitation is the gate. Whoever opens it first gets in, visibly, and can be 
   like any other.
 - **The ward is no longer yours**: a head whose header lacks this device, or a server that
   no longer has a ward this device had from or gave to it, whether by this device's own
-  Leave or *Remove this device* or by a removal. The state is the same either way, and so
-  is its message, *You no longer have access to this ward*; a removed device cannot read the
+  Leave or *Remove this device*, by a removal, or by the ward being deleted from another
+  device. The state is the same in every case, and so is its message, *This ward is no
+  longer shared with this device*; a removed device cannot read the
   versions that followed, so it names no one. The ward stops pushing for good on
   this device, its unsent changes are dropped, its copy is read-only, and the app offers to
   delete the copy, in a notice that stays until the user does. Coming back is by a new
@@ -1418,7 +1419,8 @@ version.
 
 - **When it lands**, as the head settles it (see *What the server is*), the user is told
   *You left Tanglewood Ward* or *You removed this device*, and the device saves the
-  document it had before the command, still sealed to itself under the key it already
+  document it had before the command (except a Leave that deletes the ward, whose device
+  removes its copy; see *Who has access, changed by two users*), still sealed to itself under the key it already
   carries, in the no-longer-yours state (see *Everything else, from the document*). The
   journal is emptied: everything in it either went out with the push or was dropped by a
   conflict under it.
@@ -1588,8 +1590,7 @@ returns.
 | Any of those four while connected but not syncing | The notice of the state that stops pushing, such as *This ward was saved by a newer version of Ward Planning...* |
 | The invite's push loses to a conflict | Your invite could not be created, because the ward changed first. Try again. |
 | Not an admin | In *Who has access*, a member sees *To add or remove users, ask an admin: names* in place of the *Add a user* button. |
-| Head lacks this device, or the server no longer has the ward | You no longer have access to this ward. With an offer to delete this copy. |
-| Head names no recipient | Tanglewood Ward has been deleted, with an offer to remove this copy. |
+| Head lacks this device, names no one, or the server no longer has the ward | This ward is no longer shared with this device. With an offer to delete this copy. |
 | A leave lands where its user is now the only one | You are now the only user, so leaving would delete Tanglewood Ward. |
 
 ## Debugging
@@ -1761,8 +1762,8 @@ The journal and replay, in `tests/services`:
 - the only user's Leave asks before deleting, pushes a version naming no recipient that
   withdraws any open invites, and removes this device's copy; the pushed body is exactly a
   header with `recipients` empty and its `\n`, and afterwards a `PUT` from any former
-  device gets `403` and a `POST` of that id `409`; the user's second device
-  shows the ward as deleted and keeps its copy and journal until the user agrees; an
+  device gets `403` and a `POST` of that id `409`; the user's second device enters the
+  no-longer-yours state, its journal dropped and its copy read-only until deleted; an
   invitee's later join is refused as withdrawn; with the answer to that final push dropped,
   the next head, naming no one, removes this device's copy without asking again
 - the only user's Leave, made while an invite is open and replayed after that invite's join
