@@ -120,6 +120,10 @@ design's answer, not a gap:
   and birth dates, not money or credentials. A review should weigh a threat by what this
   data is worth to an attacker, as *Threat model* sets out, and not propose defences sized
   for a bank.
+- **Unknown outcomes settle at the next look.** A lost reply, an unreachable server or an
+  app closed too soon leaves an operation unknown until the device next looks. An operation
+  that saved nothing before pushing - a join, a Leave, a delete - is looked at again only
+  when the user repeats it. The gaps this leaves are accepted.
 - **A lapsed domain, and whoever might register it, is not a threat this design weighs.**
 - **A misbehaving server, or whoever holds the domain, may disrupt in any way that leaks
   nothing**: stall sharing, lose versions, or make devices treat a ward as removed. The
@@ -646,9 +650,8 @@ retry looks before it pushes again. Each operation leaves its outcome in the hea
 | Leave or *Remove this device* | the header lacking this device | the ward is read-only for the session |
 | deleting the ward | the header naming no one | the ward is read-only for the session |
 
-A Leave still unknown when the app closes, with the server still unreachable at the next
-start, reopens editable, since nothing was saved for it; if it did land, the next look
-finds the removal and drops whatever was edited meanwhile. This is accepted.
+A join, a Leave and a delete save nothing before they push, so one still unknown when the
+app closes is looked at again only when the user repeats it (see *Settled*).
 
 **Reads are open** to anyone who knows a document id, because the design never relied on
 the server to protect content and the id is 128 random bits. A read limit by address stops
