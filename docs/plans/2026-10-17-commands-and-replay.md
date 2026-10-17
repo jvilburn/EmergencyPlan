@@ -74,6 +74,36 @@ and the test harness that runs all of it against test-built versions.
 - Create: `tests/services/UpdateFamilyCommandTest.h`, `tests/services/UpdateFamilyCommandTest.cpp`
 - Create: `tests/services/CommandRoundTripTest.h`, `tests/services/CommandRoundTripTest.cpp`
 - Create: `tests/services/WardSessionTest.h`, `tests/services/WardSessionTest.cpp`
+- Modify: `src/models/Birthday.h`, `src/models/Person.cpp` (a person's birthday is written
+  whenever any part of it is set)
+- Create: `tests/services/PersonJsonTest.h`, `tests/services/PersonJsonTest.cpp`
+
+### `src/models/Birthday.h` and `src/models/Person.cpp`
+
+A member removed or added travels through the journal as `Person::toJson`, and a removal's
+start condition is the member as last seen, so a person must come back from JSON equal to the
+one written. `Birthday::toJson` already writes each part only when set; `Person::toJson` writes
+the birthday whenever any part is set.
+
+In `Birthday.h`, beside `hasDate()`:
+
+```cpp
+    bool isEmpty() const { return !m_year.has_value() && !m_month.has_value() && !m_day.has_value(); }
+```
+
+In `Person::toJson`, the birthday guard becomes:
+
+```cpp
+    if (!m_birthday.isEmpty())
+    {
+        json["birthday"] = m_birthday.toJson();
+    }
+```
+
+`tests/services/PersonJsonTest` round-trips a person through `toJson` and `fromJson` and
+compares with `operator==` for each of: a year-only birthday, month and day only, all three,
+and none; the year-only case also asserts the written JSON holds `birthday.year` and no
+`birthday.month`.
 
 ### `src/commands/Command.h`
 
