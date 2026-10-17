@@ -3046,7 +3046,12 @@ work list).
 - `CLAUDE.md`: the *Active Tasks* row and the *NeedsSubView Dialog UX (adopted)* section are
   removed, since the dialog is done.
 
-**Tests:** the session behaviour is covered by task 1; this task is wiring and dialogs.
+**Tests:** the session behaviour is covered by task 1. Add `tests/services/MemberEditorTest`
+(a `QApplication`-free widget test is not needed; construct `MemberEditor` under the test
+executable's `QApplication`): a person with a special-need note, both unit numbers and a
+name that `Name(surname, given)` does not reproduce is set, only the phone widget is changed,
+and `person()` equals the original with only the new phone; a second test changes nothing
+and `person()` equals the original exactly.
 
 **Commit:** `git commit -m "The app runs every edit through WardSession; edits take their start condition when opened"`
 
