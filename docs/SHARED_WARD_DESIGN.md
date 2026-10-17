@@ -1258,7 +1258,9 @@ seed for `crypto_box_seed_keypair`, and subkey 2 the seed for `crypto_sign_seed_
    keypair from a random 32-byte seed, writes a new version whose header seals the data key
    to it, with an `invites` entry saying what it is for, and pushes it. *Add a user* first
    asks who the invite is for, and makes nothing until that is answered; the answer is the
-   invite's `label`. Both are offered only while the ward is syncing (see *Every edit is a
+   invite's `label`. A *Make them an admin* checkbox, off by default, sets the invite's
+   role, which the joiner takes. An invite keeps the role it was made with, even if its
+   maker is later demoted; an admin can withdraw any invite. Both are offered only while the ward is syncing (see *Every edit is a
    version*), and the invitation is saved
    only once that version is on the server, so every invitation a user can send is one that
    works. Since
