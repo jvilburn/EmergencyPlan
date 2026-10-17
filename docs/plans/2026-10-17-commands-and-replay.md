@@ -3081,7 +3081,8 @@ work list).
 which constructs `MemberEditor` under the test executable's `QApplication`: a person with a special-need note, both unit numbers and a
 name that `Name(surname, given)` does not reproduce is set, only the phone widget is changed,
 and `person()` equals the original with only the new phone; a second test changes nothing
-and `person()` equals the original exactly.
+and `person()` equals the original exactly. It is listed in `tests/CMakeLists.txt` and run from
+`tests/main.cpp` with the other test classes.
 
 **Commit:** `git commit -m "The app runs every edit through WardSession; edits take their start condition when opened"`
 
