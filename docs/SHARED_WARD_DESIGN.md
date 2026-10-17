@@ -1327,8 +1327,7 @@ seed for `crypto_box_seed_keypair`, and subkey 2 the seed for `crypto_sign_seed_
    it exposes nothing that file does not already hold.
 2. **Joining** on a device, once the app has the invitation (see *Receiving an
    invitation*), looks at the head first. If the header already names this device, there
-   is no join: the device replaces whatever copy it holds with the current version, and the
-   ward opens with *This device already has access to Tanglewood Ward*; the invite stays
+   is no join: the current version becomes the device's copy, and the ward opens with *This device already has access to Tanglewood Ward*; the invite stays
    open.
    Otherwise: derive the invite keypair from the seed, fetch the current version, unseal
    the data key with the invite's private key, validate as any download is validated, ask
