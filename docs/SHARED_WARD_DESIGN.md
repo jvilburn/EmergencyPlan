@@ -1897,7 +1897,7 @@ Against the fake server, in `tests/server`:
   and goes out with the next push
 - a server ahead with an empty journal fast-forwards without a prompt
 - a device whose head lacks it stops pushing, drops its journal, makes its copy read-only
-  and says it no longer has access, both mid-session and on next open, keeping the copy
+  and says the ward is no longer shared with it, both mid-session and on next open, keeping the copy
   until the user deletes it; a removed user invited again joins from the device holding
   the old copy, which is replaced by the joined version with nothing from the old copy or
   journal in it
