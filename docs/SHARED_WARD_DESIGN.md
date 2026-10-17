@@ -1327,8 +1327,8 @@ seed for `crypto_box_seed_keypair`, and subkey 2 the seed for `crypto_sign_seed_
    it exposes nothing that file does not already hold.
 2. **Joining** on a device, once the app has the invitation (see *Receiving an
    invitation*), looks at the head first. If the header already names this device, there
-   is no join: the ward opens, as a first download if this device holds no readable copy,
-   with *This device already has access to Tanglewood Ward*, and the invite stays open.
+   is no join: the device takes the current version, whatever copy it holds, and the ward
+   opens with *This device already has access to Tanglewood Ward*; the invite stays open.
    Otherwise: derive the invite keypair from the seed, fetch the current version, unseal
    the data key with the invite's private key, validate as any download is validated, ask
    the user to confirm by the ward's name, then write the next version: the invite entry becomes a device
@@ -1947,7 +1947,8 @@ Against the fake server, in `tests/server`:
   the header is unchanged, and the invite is still open for its recipient
 - a join whose answer is lost - retried in the same session, or with the invitation opened
   again after a restart - opens the ward as a member and never reports the invite as used
-  or withdrawn
+  or withdrawn; on a re-invited device still holding its old read-only copy, the ward it
+  opens is the current version, editable
 - an operation whose answer is lost, with the server then unreachable, leaves the device
   in the state its table row gives for as long as the server stays away, and the first
   look once it returns settles it; a Leave unknown at close, with the server unreachable
