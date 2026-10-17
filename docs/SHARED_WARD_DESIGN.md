@@ -99,7 +99,8 @@ design's answer, not a gap:
   end does; one working only in a response they started offline is unaffected.
 - **No base copy, no save counter, no debounce.**
 - **No exported copies.** A copy would be sealed to the ward's devices, each of which already
-  holds the ward; *Show in folder* reveals the ward's own file. The developer-only export
+  holds the ward; *Show in folder* opens the `wards` folder with the ward's own file
+  selected. The developer-only export
   under *Debugging*, off by default, is the one exception.
 - **Installing an older Ward Planning over a newer one is not supported.**
 - **1.0 `.emergencyplan` files are not migrated**, and their teams, tags, assets, special
@@ -944,7 +945,8 @@ ministering, tags, the emergency response and the access list. In particular:
   construction). A change of assignee sets the notification to none, since the new
   assignee has not been told.
 - **The access list** is new in its entirety. Invite, remove a user, remove a device,
-  withdraw an invite, set a role and leave are each a command, which is what lets an access
+  withdraw an invite, set a role, rename yourself, rename one of your devices and leave are
+  each a command, which is what lets an access
   change replay like any other. Join is a command too, run once by the joining device under
   the invite's key, and refused with *This invite has been used or withdrawn* when the
   current header no longer names the invite.
@@ -1055,6 +1057,7 @@ a command made when a rule allowed it can arrive where the rule does not. The ru
 - Anyone, admins included, uses *Remove device* only on their own devices; removing a user
   takes all of that user's.
 - A user cannot Remove themselves; Leave is how they go.
+- A user renames only themselves and their own devices.
 
 These are refusals rather than start conditions because what changed is somebody else's
 entry. When a step-down replays onto a ward whose other admin has left, the stepping-down
@@ -1288,7 +1291,9 @@ seed for `crypto_box_seed_keypair`, and subkey 2 the seed for `crypto_sign_seed_
    rather than during one.
 
    **The invitation is a small file**, such as `Tanglewood Ward - for Bob.wardinvite`: one
-   line of JSON holding the format, the document id and the seed, and nothing else. The app
+   line of JSON holding its own `format` integer, the document id and the seed, and nothing
+   else; an app that meets a higher `format` shows the newer-version notice, as for a ward
+   file (see *File format*). The app
    saves it where the user chooses and opens that folder with the file selected, ready to
    attach to an email, drag onto a stick or send in a text, with a short message to go with
    it:
@@ -1332,7 +1337,8 @@ The invitation is the gate. Whoever opens it first gets in, visibly, and can be 
 
 - **Who has access**: the access list, read from the open ward. Add a device, Add a user,
   Remove, Make admin / Make member, Withdraw invite, Save invitation (open invites this
-  device made), Leave, Remove device (own devices).
+  device made), Rename (yourself and your own devices), Leave, Remove device (own
+  devices).
 - **Access notices**: the client diffs the access list between the version it last dismissed and
   the current one, one line per entry that differs: joined as member or admin, no longer
   has access, now an admin or a member, a device added or removed, an invite made or used.
@@ -1348,7 +1354,9 @@ The invitation is the gate. Whoever opens it first gets in, visibly, and can be 
   delete the copy, in a notice that stays until the user does. Coming back is by a new
   invitation, which joins as a first join does (see *Invites*).
 - **A second device of your own**: *Add a device*, send yourself the invitation, open it there.
-  The first-run screen asks for a name and a device name, nothing else.
+  The first-run screen asks only for a device name. A user's own name is asked where it
+  is used: when they create a ward, and when they join through *Add a user*; a device
+  joining through *Add a device* takes its user's name.
 - **Cleared app data, a reimaged profile or a replaced device** gives a fresh identity; wards come back by invite from
   another holder, or from your other device. The server keeps no index of who holds what, so
   there is no ward list to restore from it.
@@ -1391,7 +1399,8 @@ again.
 **An automatic batch pushes once.** Results apply in memory as they arrive, and the save
 and push happen once, when the batch finishes or when a lookup completes, so an import
 costs one more version rather than one per family, and a batch or lookup that changed nothing
-neither saves nor pushes.
+neither saves nor pushes. A version that arrives while a batch runs restarts it on the new
+document.
 Addresses and unit numbers that fail to resolve go on a failed list, kept
 by their text in the device-local state, and are not tried again until the text changes. A
 family whose address is on it stays unmapped until someone corrects the address or types
@@ -1495,7 +1504,8 @@ confirmation all use it, and a joiner sees it once the invite's key has unsealed
 Its first push is `POST /documents`, made as soon as the network allows, and its journal
 empties then like any other.
 
-**Show in folder** reveals the `wards` folder in app data, where each ward is a
+**Show in folder** opens the `wards` folder in app data with this ward's file selected,
+where each ward is a
 `.wardplanning` file in the documented format, and nothing that opens one: a user who
 copies that folder to a stick for backup or support carries only files that need a key
 the stick does not hold. It is there for support, and for getting the data out if the
@@ -1855,6 +1865,8 @@ The journal and replay, in `tests/services`:
   applies, serialises to the same entry it gave before it ran, and the same object executed
   next on a moved version conflicts and leaves that version untouched, which fails if
   `execute` captured anything
+- renaming yourself and one of your devices each reach every device by the ordinary path,
+  and renaming another user or their device is refused
 - an access-list command replays: two admins removing different users both apply; removing the
   same user twice applies in full; two different roles for one user is a conflict; a
   removal replayed after that user added a device applies and takes the new device too; one
