@@ -125,6 +125,9 @@ design's answer, not a gap:
   app closed too soon leaves an operation unknown until the device next looks. An operation
   that saved nothing before pushing - a join, a Leave, a delete - is looked at again only
   when the user repeats it. The gaps this leaves are accepted.
+- **Restoring app data from a backup is not supported.** A device gets its wards back from
+  the server, except one it created and has not yet sent, which lives only in its own file
+  until its first push.
 - **Changing the server override starts afresh**: every ward from the old server is treated
   as removed. The override is for testers and self-hosters.
 - **A lapsed domain, and whoever might register it, is not a threat this design weighs.**
@@ -897,7 +900,7 @@ and goes out with the next.
 
 On taking any version, the device sets its counter to the larger of the counter and its
 own mark in that version, so new entries always number above anything that landed, even
-after an older local file comes back from a restore of app data. A device that cannot read
+for a device starting over from a first download. A device that cannot read
 its local file, but whose fingerprint the head still names, downloads the current version
 as itself and starts with an empty journal; whatever the unreadable journal held is lost.
 
@@ -1919,8 +1922,8 @@ Against the fake server, in `tests/server`:
   its journal is dropped, its copy is read-only and offered for deletion, and no `POST` is
   ever sent for it
 - edits made while unreachable are kept in the journal and replay on reconnect
-- a device given back an older local file, its counter behind the ward's mark for it, makes
-  a new edit after its next fetch, and that edit reaches the server
+- a device whose local file could not be read takes the current version, makes a new
+  edit, and that edit reaches the server, numbered above its mark in that version
 - a device whose local file cannot be read, still named by the head, opens the ward with
   the current version and an empty journal
 - a push the server stores but whose reply never arrives: on the next fetch the entries it
