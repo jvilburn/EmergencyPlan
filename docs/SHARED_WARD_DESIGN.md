@@ -8,7 +8,8 @@ the server does.
 
 **This is a design document, not an implementation plan.** It says what the system does and
 why. Which code changes, where, and what the code does today belong to the implementation
-plan, and a review of this document judges the design.
+plan, and a review of this document judges the design: it reports what would change the
+design or mislead whoever implements it, and treats the *Settled* list as decided.
 
 ## Purpose
 
@@ -716,7 +717,9 @@ estimate because none would change it.
 
 1. The header's `format` is one this app reads; a newer one is the notice under *File
    format*.
-2. The version, read from the head in plain text, is not below the base this device holds.
+2. The version, read in plain text from the same response that carries the header, is not
+   below the base this device holds; a version taken becomes the base by that same number,
+   never by one from a separate call.
    It comes before the next check so that a server restored to a version from before this
    device joined reads as rolled back, not as the ward leaving this device.
 3. The header names this device. One that names no recipient is a deleted ward (see *Who
@@ -848,7 +851,9 @@ pointing at something that exists:
 
 - **Any value a command writes that names a person, family or team includes in its start
   condition that the id exists**, whether a set addition, a leader or an assignee. Adding
-  Bob to a team, or assigning him a task, replayed after Bob was removed, conflicts.
+  Bob to a team, or assigning him a task, replayed after Bob was removed, conflicts. A
+  response's family records and contact attempts are the exception: they are its log, keep
+  the ids they were made with, and take no such condition (see below).
 - **A removal carries its cleanup and where it saw the removed thing.** Removing a member,
   deleting a family, and an import's removals all use one cleanup routine. It takes each
   removed person out of every team, person-level tag, asset and ministering group that
@@ -937,6 +942,7 @@ ministering, tags, the emergency response and the access list. In particular:
   |---|---|---|
   | `StartEmergency` | start, with a record per family | an addition; never conflicts |
   | `EndEmergency` | end, removing the response once its report is saved | conflicts if the response differs from what the report holds; result holds if already gone |
+  | `RestoreEmergency` | the inverse of `EndEmergency`, adding the response back as it was removed | result holds if a response with that id is present |
   | `RecordContactAttempt` | logging a contact, and the OK and Unable to Reach buttons | an addition |
   | `DeleteContactAttempt` | the inverse of `RecordContactAttempt`, which is how an attempt is undone | as last seen; result holds if already gone |
   | `AddTask` | adding a task | an addition |
@@ -1482,8 +1488,8 @@ entries, with the oldest dropped.
   from inside the ward. Undo is for content.
 - **`StartEmergency` and `AddTaskCategory` are not undoable either**: undoing a start would
   delete a response other responders may already be writing to, and an unused category does
-  no harm. Undoing `EndEmergency` adds the response back as it was removed; the report
-  already saved stays where it is.
+  no harm. Undoing `EndEmergency` runs `RestoreEmergency`; the report already saved stays
+  where it is.
 - **An abandoned replay clears the undo stack**, whose entries then describe work that did
   not land; the to-redo list covers it.
 
