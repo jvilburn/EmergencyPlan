@@ -103,7 +103,8 @@ In `Person::toJson`, the birthday guard becomes:
 `tests/services/PersonJsonTest` round-trips a person through `toJson` and `fromJson` and
 compares with `operator==` for each of: a year-only birthday, month and day only, all three,
 and none; the year-only case also asserts the written JSON holds `birthday.year` and no
-`birthday.month`.
+`birthday.month`. It is listed in `tests/CMakeLists.txt` and run from `tests/main.cpp` with
+the other test classes.
 
 ### `src/commands/Command.h`
 
