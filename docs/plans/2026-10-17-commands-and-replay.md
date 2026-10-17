@@ -2981,7 +2981,16 @@ describes, then continue with task 2 when the user says so.
 - Modify: `src/widgets/FamilyEditPanel.h`
 - Modify: `src/widgets/WardListDialog.h`, `src/widgets/WardListDialog.cpp`
 - Modify: `src/widgets/NeedsSubView.cpp`
+- Modify: `src/widgets/MemberEditor.h`, `src/widgets/MemberEditor.cpp`
 - Modify: `docs/ARCHITECTURE.md`, `CLAUDE.md`
+
+**The member editor edits the person it was given.** `MemberEditor` keeps the `Person` passed
+to `setPerson` in a `Person m_person` member, in place of `PersonId m_personId`
+(`personId()` returns `m_person.id()`). `person()` returns a copy of `m_person` with each field
+the form shows set from its widget only where the widget's value differs from what
+`setPerson` put there, as `TaskDialog` edits a copy of its task. So a save carries the
+special-need note, the unit numbers and the stored name through untouched, and the family
+edit holds only what the user changed.
 
 **DocumentManager becomes a thin wrapper over one `WardSession`.**
 - Members `Document m_document` and `CommandHistory m_commandHistory` become
