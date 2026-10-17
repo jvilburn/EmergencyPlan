@@ -618,11 +618,31 @@ appear as present.
 When more than one applies, the first of `429`, `400`, `404`, `409`, `403`, `412` is
 given. A client answered `412` fetches the current version and replays onto it. One
 answered `403` or `404` fetches the head: a header that no longer names this device, or a
-ward the server no longer has, is a removal (see *Everything else, from the document*). A
-join's `403` means the invite was used or withdrawn. **Any other answer, or none, is a
+ward the server no longer has, is a removal (see *Everything else, from the document*); a
+join's `403` is settled from the head as below. **Any other answer, or none, is a
 fault**, the app's or the server's: the journal stays, the push is retried as anything
 pending is (see *Saving*), and the user is told once: *Your changes could not be shared
 right now. They are saved here.*
+
+**An operation's outcome can be unknown.** A reply that never comes, a server that stops
+answering, or an app closed too soon leaves the client not knowing whether an operation
+landed, and nothing guarantees it will know soon. So while the outcome is unknown, the
+device stays in a state that is correct whichever way it turns out, and any later look - a
+head read, a fetch, a version notice, or the next start - settles it from the head. A
+retry looks before it pushes again. Each operation leaves its outcome in the head:
+
+| Operation | Settled by the head showing | While unknown |
+|---|---|---|
+| an edit | this device's landed mark covering its entries | it stays in the journal |
+| creating a ward | the document | the ward works on this device |
+| making an invite | the header naming the invite | no invitation is saved |
+| a join | the header naming this device; naming neither it nor the invite means the invite was used or withdrawn | the ward is not opened |
+| Leave or *Remove this device* | the header lacking this device | the ward is read-only for the session |
+| deleting the ward | the header naming no one | the ward is read-only for the session |
+
+A Leave still unknown when the app closes, with the server still unreachable at the next
+start, reopens editable, since nothing was saved for it; if it did land, the next look
+finds the removal and drops whatever was edited meanwhile. This is accepted.
 
 **Reads are open** to anyone who knows a document id, because the design never relied on
 the server to protect content and the id is 128 random bits. A read limit by address stops
@@ -1233,8 +1253,7 @@ one, so no ward is deleted by a leave that did not ask to delete it.
 A head with no recipients is a deleted ward to every device: the device that deleted it
 removes its copy, and any other device of the same user shows *Tanglewood Ward has been
 deleted* and offers to remove its copy, which is read-only until it does, as with any head
-that leaves a device out. If the answer to that final push is lost, the next head, naming no one, tells the
-device the push landed. The server keeps the empty version until the pruning rule under
+that leaves a device out. The server keeps the empty version until the pruning rule under
 *Open points* clears it, so no delete call is needed.
 
 An invite made on one device and a join landing on another are different commands and cross
@@ -1274,8 +1293,8 @@ seed for `crypto_box_seed_keypair`, and subkey 2 the seed for `crypto_sign_seed_
    The device that made the invite keeps its seed in its device-local state, saved with the
    invite before the push, for as long as the access list it holds names that invite. So
    *Save invitation* on the open invite in *Who has access* writes the file again on that
-   device, and a push whose reply is lost needs nothing more: once the next fetch shows the
-   invite landed, the invitation can be saved. The seed regenerates the invite's private
+   device, and the invitation can be saved once the head names the invite (see *What the
+   server is*). The seed regenerates the invite's private
    keys, and it sits in the same encrypted file as the data key those keys unseal, so keeping
    it exposes nothing that file does not already hold.
 2. **Joining** on a device, once the app has the invitation (see *Receiving an
@@ -1286,10 +1305,8 @@ seed for `crypto_box_seed_keypair`, and subkey 2 the seed for `crypto_sign_seed_
    invite, named by the joiner, signed by the invite's signing key, whose verify key the
    current header names. Once the join lands, the device saves the version it joined, as
    after any push; a copy it still holds from before it lost access is replaced, and
-   nothing from that copy carries over. Before using an invite, the device reads the head: if it already names this device's
-   own fingerprint, an earlier join landed and only its answer was lost, so the device
-   opens the ward as itself and leaves the invite alone. A join that loses to a newer
-   version fetches it and joins again on top of it.
+   nothing from that copy carries over. A join that loses to a newer version fetches it and
+   joins again on top of it.
    From then on the device signs as itself. The ward opens.
 3. **Withdrawing** an unused invite is a write without its entry, by whoever made it or by
    an admin. Removing a user, and a user leaving, withdraws the invites they made.
@@ -1399,16 +1416,14 @@ and pushes again, as any push does. A conflict in the journal under it drops the
 since leaving gives up unsent changes anyway, and the command goes ahead on the server's
 version.
 
-- **When it lands** - a confirmed push, or a head without this device after a lost answer
-  - the user is told *You left Tanglewood Ward* or *You removed this device*, and the
-  device saves its document as it stood, still sealed to itself, in the no-longer-yours
-  state (see *Everything else, from the document*), with the journal emptied: everything
-  in it came before the command and went out with its push.
+- **When it lands**, as the head settles it (see *What the server is*), the user is told
+  *You left Tanglewood Ward* or *You removed this device*, and the device saves the
+  document it had before the command, still sealed to itself under the key it already
+  carries, in the no-longer-yours state (see *Everything else, from the document*). The
+  journal is emptied: everything in it either went out with the push or was dropped by a
+  conflict under it.
 - **When a rule refuses it**, the user sees that rule's wording and the ward is editable
   again.
-- **When the app closes before an answer**, nothing was saved, so the next start lets the
-  head decide: without this device the ward is no longer this device's, and still naming
-  it, the user is still a member and can leave again.
 
 **An undo is the command's inverse, run like any other command.** `Command` has
 `CommandPtr inverse() const` in place of `undo`: for an update, the same command with
@@ -1855,7 +1870,8 @@ Against the fake server, in `tests/server`:
 - a `403` whose head no longer names the device puts it in the no-longer-yours state; a
   `403` whose head still names it, a `429` and a `400` each leave the journal as it was,
   tell the user once that changes could not be shared, and are retried; a join answered
-  `403` reports the invite as used or withdrawn
+  `403` reports the invite as used or withdrawn only when the head names neither this
+  device nor the invite, and opens the ward when the head names this device
 - a `PUT` to a document id the server does not hold is refused, and every other document
   keeps its version and contents
 - a `POST` whose answer is lost, retried, is told the id already exists; the client then
@@ -1886,8 +1902,14 @@ Against the fake server, in `tests/server`:
   journal in it
 - a user joins only through an invite the current header names, and a used or withdrawn
   invite is refused
-- a join whose answer is lost, with the invitation opened again, opens the ward as a member and
-  never reports the invite as used or withdrawn
+- a join whose answer is lost - retried in the same session, or with the invitation opened
+  again after a restart - opens the ward as a member and never reports the invite as used
+  or withdrawn
+- an operation whose answer is lost, with the server then unreachable, leaves the device
+  in the state its table row gives for as long as the server stays away, and the first
+  look once it returns settles it; a Leave unknown at close, with the server unreachable
+  at the next start, reopens editable, and the next look that finds the removal drops what
+  was edited meanwhile
 - two admins removing each other: the first stands and the second's write is refused
 - the channel refuses an open not signed by a device the current header names, and accepts a
   key holder's
