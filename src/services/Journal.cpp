@@ -12,9 +12,9 @@ void Journal::clear()
     m_entries.clear();
 }
 
-QList<Description> Journal::descriptions() const
+QList<CommandDescription> Journal::descriptions() const
 {
-    QList<Description> descriptions;
+    QList<CommandDescription> descriptions;
     for (const JournalEntry& entry : m_entries)
     {
         descriptions.append(CommandRegistry::descriptionOf(entry.command));

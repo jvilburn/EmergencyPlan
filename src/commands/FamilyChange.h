@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Change.h"
+#include "FieldChange.h"
 #include "Family.h"
 
 #include <QHash>
@@ -34,17 +34,17 @@ public:
 private:
     bool isEmpty() const;
 
-    std::optional<Change<Name>> m_name;
-    std::optional<Change<std::optional<Gender>>> m_gender;
-    std::optional<Change<Phone>> m_phone;
-    std::optional<Change<Phone>> m_altPhone;
-    std::optional<Change<QString>> m_email;
-    std::optional<Change<Birthday>> m_birthday;
-    std::optional<Change<QStringList>> m_callings;
-    std::optional<Change<bool>> m_isParent;
-    std::optional<Change<QString>> m_wardUnitNumber;
-    std::optional<Change<QString>> m_stakeUnitNumber;
-    std::optional<Change<QString>> m_specialNeedNote;
+    std::optional<FieldChange<Name>> m_name;
+    std::optional<FieldChange<std::optional<Gender>>> m_gender;
+    std::optional<FieldChange<Phone>> m_phone;
+    std::optional<FieldChange<Phone>> m_altPhone;
+    std::optional<FieldChange<QString>> m_email;
+    std::optional<FieldChange<Birthday>> m_birthday;
+    std::optional<FieldChange<QStringList>> m_callings;
+    std::optional<FieldChange<bool>> m_isParent;
+    std::optional<FieldChange<QString>> m_wardUnitNumber;
+    std::optional<FieldChange<QString>> m_stakeUnitNumber;
+    std::optional<FieldChange<QString>> m_specialNeedNote;
 };
 
 /// What an edit changes in one family: its address, a change per member keyed by PersonId,
@@ -57,7 +57,7 @@ public:
     /// differs.
     static std::optional<FamilyChange> between(const Family& opened, const Family& saved);
 
-    FamilyChange(const std::optional<Change<Address>>& address,
+    FamilyChange(const std::optional<FieldChange<Address>>& address,
                  const QHash<PersonId, MemberChange>& members,
                  const QList<Person>& added,
                  const QList<Person>& removed);
@@ -77,7 +77,7 @@ public:
     static FamilyChange fromJson(const QJsonObject& json);
 
 private:
-    std::optional<Change<Address>> m_address;
+    std::optional<FieldChange<Address>> m_address;
     QHash<PersonId, MemberChange> m_members;
     QList<Person> m_added;
     QList<Person> m_removed;

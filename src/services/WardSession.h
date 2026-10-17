@@ -33,9 +33,9 @@ enum class ReplayStatus
 };
 
 /// The descriptions of one abandoned journal, kept for the user to work from.
-struct RedoGroup
+struct ToRedoGroup
 {
-    QList<Description> descriptions;
+    QList<CommandDescription> descriptions;
     int clashed;        ///< index in descriptions of the entry that stopped the replay
     CommitResult stop;  ///< Conflicted, or Refused with the rule's wording
 };
@@ -52,7 +52,7 @@ public:
 
     const Document& document() const { return m_document; }
     const Journal& journal() const { return m_journal; }
-    const QList<RedoGroup>& toRedo() const { return m_toRedo; }
+    const QList<ToRedoGroup>& toRedo() const { return m_toRedo; }
 
     /// Opens a ward: its document replaces the open one by assignment, and the journal, the
     /// to-redo list and the undo stack start empty.
@@ -108,7 +108,7 @@ private:
     Journal m_journal;
     std::vector<UndoEntry> m_undoStack;
     std::vector<UndoEntry> m_redoStack;
-    QList<RedoGroup> m_toRedo;
+    QList<ToRedoGroup> m_toRedo;
 
     static constexpr int UndoLimit = 100;
 };

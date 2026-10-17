@@ -82,7 +82,7 @@ void UpdateFamilyCommandTest::appliesWhereItsStartConditionHolds()
 {
     Document document = TestWard::document();
 
-    QVERIFY(bobPhoneEdit("555-2222")->execute(document) == Outcome::Applied);
+    QVERIFY(bobPhoneEdit("555-2222")->execute(document) == CommandOutcome::Applied);
 
     QCOMPARE(QString(TestWard::person(document, TestWard::bobId()).phone()), QString("555-2222"));
     QVERIFY(TestWard::person(document, TestWard::aliceId()) == TestWard::alice());
@@ -95,7 +95,7 @@ void UpdateFamilyCommandTest::appliesAndChangesNothingWhereItsResultHolds()
                                              TestWard::withPhone(TestWard::smith(), TestWard::bobId(), "555-2222"));
     Document before = document;
 
-    QVERIFY(bobPhoneEdit("555-2222")->execute(document) == Outcome::Applied);
+    QVERIFY(bobPhoneEdit("555-2222")->execute(document) == CommandOutcome::Applied);
 
     QVERIFY(document == before);
 }
@@ -110,7 +110,7 @@ void UpdateFamilyCommandTest::conflictsAndTouchesNothingWhereAFieldMoved()
                                              TestWard::withPhone(opened, TestWard::bobId(), "555-9999"));
     Document before = document;
 
-    QVERIFY(command->execute(document) == Outcome::Conflicted);
+    QVERIFY(command->execute(document) == CommandOutcome::Conflicted);
 
     QVERIFY(document == before);
     QCOMPARE(TestWard::family(document, TestWard::smithId()).address().full(), QString("12 Elm St, Provo, UT"));
@@ -122,7 +122,7 @@ void UpdateFamilyCommandTest::conflictsWhereTheFamilyIsGone()
     document.removeFamily(TestWard::smithId());
     Document before = document;
 
-    QVERIFY(bobPhoneEdit("555-2222")->execute(document) == Outcome::Conflicted);
+    QVERIFY(bobPhoneEdit("555-2222")->execute(document) == CommandOutcome::Conflicted);
 
     QVERIFY(document == before);
 }
@@ -132,7 +132,7 @@ void UpdateFamilyCommandTest::conflictsWhereAChangedMemberIsGone()
     Document document = TestWard::withFamily(TestWard::document(), smithWithout(TestWard::bobId()));
     Document before = document;
 
-    QVERIFY(bobPhoneEdit("555-2222")->execute(document) == Outcome::Conflicted);
+    QVERIFY(bobPhoneEdit("555-2222")->execute(document) == CommandOutcome::Conflicted);
 
     QVERIFY(document == before);
 }
@@ -146,11 +146,11 @@ void UpdateFamilyCommandTest::editsToDifferentMembersBothApply()
     std::unique_ptr<UpdateFamilyCommand> aliceEdit = UpdateFamilyCommand::fromEdit(opened, TestWard::withMember(opened, alice));
 
     Document bobFirst = TestWard::document();
-    QVERIFY(bobEdit->execute(bobFirst) == Outcome::Applied);
-    QVERIFY(aliceEdit->execute(bobFirst) == Outcome::Applied);
+    QVERIFY(bobEdit->execute(bobFirst) == CommandOutcome::Applied);
+    QVERIFY(aliceEdit->execute(bobFirst) == CommandOutcome::Applied);
     Document aliceFirst = TestWard::document();
-    QVERIFY(aliceEdit->execute(aliceFirst) == Outcome::Applied);
-    QVERIFY(bobEdit->execute(aliceFirst) == Outcome::Applied);
+    QVERIFY(aliceEdit->execute(aliceFirst) == CommandOutcome::Applied);
+    QVERIFY(bobEdit->execute(aliceFirst) == CommandOutcome::Applied);
 
     QCOMPARE(QString(TestWard::person(bobFirst, TestWard::bobId()).phone()), QString("555-2222"));
     QCOMPARE(TestWard::person(bobFirst, TestWard::aliceId()).email(), QString("alice@new.example.com"));
@@ -163,7 +163,7 @@ void UpdateFamilyCommandTest::memberRemovalConflictsAfterThatMemberChanged()
     Document document = TestWard::withFamily(TestWard::document(),
                                              TestWard::withPhone(TestWard::smith(), TestWard::aliceId(), "555-7777"));
 
-    QVERIFY(removal->execute(document) == Outcome::Conflicted);
+    QVERIFY(removal->execute(document) == CommandOutcome::Conflicted);
 
     QCOMPARE(QString(TestWard::person(document, TestWard::aliceId()).phone()), QString("555-7777"));
 }
@@ -173,11 +173,11 @@ void UpdateFamilyCommandTest::memberRemovalAppliesOntoAnUnchangedMemberAndItsInv
     std::unique_ptr<UpdateFamilyCommand> removal = UpdateFamilyCommand::fromEdit(TestWard::smith(), smithWithout(TestWard::aliceId()));
     Document document = TestWard::document();
 
-    QVERIFY(removal->execute(document) == Outcome::Applied);
+    QVERIFY(removal->execute(document) == CommandOutcome::Applied);
     QVERIFY(!document.findPersonById(TestWard::aliceId()).has_value());
     QCOMPARE(TestWard::family(document, TestWard::smithId()).members().size(), qsizetype(1));
 
-    QVERIFY(removal->inverse()->execute(document) == Outcome::Applied);
+    QVERIFY(removal->inverse()->execute(document) == CommandOutcome::Applied);
     QVERIFY(TestWard::person(document, TestWard::aliceId()) == TestWard::alice());
     QCOMPARE(TestWard::family(document, TestWard::smithId()).members().size(), qsizetype(2));
 }
@@ -190,7 +190,7 @@ void UpdateFamilyCommandTest::memberAdditionHoldsWhenThatPersonIsAlreadyThere()
     Document document = TestWard::withFamily(TestWard::document(), withDan);
     Document before = document;
 
-    QVERIFY(addition->execute(document) == Outcome::Applied);
+    QVERIFY(addition->execute(document) == CommandOutcome::Applied);
 
     QVERIFY(document == before);
     QCOMPARE(TestWard::family(document, TestWard::smithId()).members().size(), qsizetype(3));
@@ -205,13 +205,13 @@ void UpdateFamilyCommandTest::inverseSwapsTheChangeUnderAnUndoHeading()
     QCOMPARE(inverse->description().lines(), edit->description().lines());
 
     Document document = TestWard::document();
-    QVERIFY(edit->execute(document) == Outcome::Applied);
-    QVERIFY(inverse->execute(document) == Outcome::Applied);
+    QVERIFY(edit->execute(document) == CommandOutcome::Applied);
+    QVERIFY(inverse->execute(document) == CommandOutcome::Applied);
     QVERIFY(document == TestWard::document());
 
     Document moved = TestWard::withFamily(TestWard::document(),
                                           TestWard::withPhone(TestWard::smith(), TestWard::bobId(), "555-9999"));
     Document movedBefore = moved;
-    QVERIFY(inverse->execute(moved) == Outcome::Conflicted);
+    QVERIFY(inverse->execute(moved) == CommandOutcome::Conflicted);
     QVERIFY(moved == movedBefore);
 }

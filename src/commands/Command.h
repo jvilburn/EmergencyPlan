@@ -11,7 +11,7 @@ class Document;
 
 /// What running a command did to the version in front of it. A command whose result
 /// already holds answers Applied too: nothing downstream tells the two apart.
-enum class Outcome
+enum class CommandOutcome
 {
     Applied,
     Conflicted
@@ -20,23 +20,23 @@ enum class Outcome
 /// What the user did, in their words: a heading, and a line per value set. Rendered
 /// through tr() when the command is built and stored with it, so it stays right after
 /// the things it names are renamed or deleted.
-class Description
+class CommandDescription
 {
 public:
-    Description() = default;
-    Description(const QString& heading, const QStringList& lines);
+    CommandDescription() = default;
+    CommandDescription(const QString& heading, const QStringList& lines);
 
     const QString& heading() const { return m_heading; }
     const QStringList& lines() const { return m_lines; }
 
     /// "Undo: <heading>" over the same lines, for an inverse.
-    Description undone() const;
+    CommandDescription undone() const;
 
     QJsonObject toJson() const;
-    static Description fromJson(const QJsonObject& json);
+    static CommandDescription fromJson(const QJsonObject& json);
 
-    bool operator==(const Description& other) const;
-    bool operator!=(const Description& other) const { return !(*this == other); }
+    bool operator==(const CommandDescription& other) const;
+    bool operator!=(const CommandDescription& other) const { return !(*this == other); }
 
 private:
     QString m_heading;
@@ -61,7 +61,7 @@ public:
 
     /// Applies when the start condition holds or the result already holds, and answers
     /// Applied. Otherwise answers Conflicted and leaves the document untouched.
-    virtual Outcome execute(Document& document) const = 0;
+    virtual CommandOutcome execute(Document& document) const = 0;
 
     /// The command that takes this one back, described by description().undone().
     /// An empty pointer means this command is not undoable.
@@ -77,11 +77,11 @@ public:
     /// What a run changes, for targeted view updates and cache rebuilds.
     virtual DocumentChange documentChange() const = 0;
 
-    const Description& description() const { return m_description; }
+    const CommandDescription& description() const { return m_description; }
 
 protected:
-    explicit Command(const Description& description);
+    explicit Command(const CommandDescription& description);
 
 private:
-    Description m_description;
+    CommandDescription m_description;
 };

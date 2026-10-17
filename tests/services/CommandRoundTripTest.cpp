@@ -64,10 +64,10 @@ void CommandRoundTripTest::sampleRebuiltFromItsEntryBehavesAsTheOriginal()
 
     Document byOriginal = sample.document;
     Document byRebuilt = sample.document;
-    Outcome original = sample.command->execute(byOriginal);
-    Outcome again = rebuilt->execute(byRebuilt);
+    CommandOutcome original = sample.command->execute(byOriginal);
+    CommandOutcome again = rebuilt->execute(byRebuilt);
 
-    Outcome expected = sample.sampleCase == SampleCase::Conflicts ? Outcome::Conflicted : Outcome::Applied;
+    CommandOutcome expected = sample.sampleCase == SampleCase::Conflicts ? CommandOutcome::Conflicted : CommandOutcome::Applied;
     QVERIFY(original == expected);
     QVERIFY(again == expected);
     QVERIFY(byOriginal == byRebuilt);
@@ -89,13 +89,13 @@ void CommandRoundTripTest::runningACommandDoesNotChangeIt()
     QJsonObject before = CommandRegistry::toJson(*command);
 
     Document applied = TestWard::document();
-    QVERIFY(command->execute(applied) == Outcome::Applied);
+    QVERIFY(command->execute(applied) == CommandOutcome::Applied);
     QCOMPARE(QString(TestWard::person(applied, TestWard::bobId()).phone()), QString("555-2222"));
     QVERIFY(CommandRegistry::toJson(*command) == before);
 
     Document moved = TestWard::withFamily(TestWard::document(),
                                           TestWard::withPhone(opened, TestWard::bobId(), "555-9999"));
     Document movedBefore = moved;
-    QVERIFY(command->execute(moved) == Outcome::Conflicted);
+    QVERIFY(command->execute(moved) == CommandOutcome::Conflicted);
     QVERIFY(moved == movedBefore);
 }

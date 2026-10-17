@@ -2,7 +2,7 @@
 
 #include "Address.h"
 #include "Birthday.h"
-#include "Change.h"
+#include "FieldChange.h"
 #include "Gender.h"
 #include "Name.h"
 #include "Phone.h"
@@ -43,7 +43,7 @@ template<>
 std::optional<Gender> fromJsonValue<std::optional<Gender>>(const QJsonValue& value);
 
 template<typename T>
-QJsonObject changeToJson(const Change<T>& change)
+QJsonObject changeToJson(const FieldChange<T>& change)
 {
     QJsonObject json;
     json["before"] = toJsonValue(change.before());
@@ -52,14 +52,14 @@ QJsonObject changeToJson(const Change<T>& change)
 }
 
 template<typename T>
-Change<T> changeFromJson(const QJsonObject& json)
+FieldChange<T> changeFromJson(const QJsonObject& json)
 {
-    return Change<T>(fromJsonValue<T>(json["before"]), fromJsonValue<T>(json["after"]));
+    return FieldChange<T>(fromJsonValue<T>(json["before"]), fromJsonValue<T>(json["after"]));
 }
 
 /// Writes the change under key, or nothing when there is no change.
 template<typename T>
-void writeChange(QJsonObject& json, const QString& key, const std::optional<Change<T>>& change)
+void writeChange(QJsonObject& json, const QString& key, const std::optional<FieldChange<T>>& change)
 {
     if (change.has_value())
     {
@@ -69,7 +69,7 @@ void writeChange(QJsonObject& json, const QString& key, const std::optional<Chan
 
 /// The change under key, or none when the key is absent.
 template<typename T>
-std::optional<Change<T>> readChange(const QJsonObject& json, const QString& key)
+std::optional<FieldChange<T>> readChange(const QJsonObject& json, const QString& key)
 {
     if (!json.contains(key))
     {

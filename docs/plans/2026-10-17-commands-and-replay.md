@@ -7,9 +7,9 @@ commit step, enters an in-memory journal, replays onto another version of the do
 one rule (apply where the start condition or the result holds, otherwise abandon the whole
 replay to the to-redo list), and is undone by running its inverse through the same step.
 
-**Architecture:** `Command` answers `Outcome::Applied` or `Outcome::Conflicted` from a `const`
+**Architecture:** `Command` answers `CommandOutcome::Applied` or `CommandOutcome::Conflicted` from a `const`
 `execute`, builds its `inverse`, serialises through `CommandRegistry`, and carries a stored
-`Description`. Update commands hold typed `Change<T>` and `SetChange<Id>` values for the
+`CommandDescription`. Update commands hold typed `FieldChange<T>` and `IdSetChange<Id>` values for the
 fields they change only. `WardSession` owns the document, the `Journal`, the undo and redo
 stacks and the to-redo list, with no global state; `DocumentManager` and `EmergencyManager`
 become thin wrappers over the app's one session. The existing plaintext save and load path
@@ -53,8 +53,8 @@ and the test harness that runs all of it against test-built versions.
 **Files:**
 - Rewrite: `src/commands/Command.h`
 - Create: `src/commands/Command.cpp`
-- Create: `src/commands/Change.h`
-- Create: `src/commands/ChangeJson.h`, `src/commands/ChangeJson.cpp`
+- Create: `src/commands/FieldChange.h`
+- Create: `src/commands/FieldChangeJson.h`, `src/commands/FieldChangeJson.cpp`
 - Create: `src/commands/FamilyChange.h`, `src/commands/FamilyChange.cpp`
 - Rewrite: `src/commands/FamilyCommands.h`, `src/commands/FamilyCommands.cpp`
   (`AddFamilyCommand`, `DeleteFamilyCommand` and `SetFamiliesCommand` have no callers and are
@@ -70,7 +70,7 @@ and the test harness that runs all of it against test-built versions.
 - Create: `tests/services/TestWard.h`, `tests/services/TestWard.cpp`
 - Create: `tests/services/TestCommands.h`, `tests/services/TestCommands.cpp`
 - Create: `tests/services/CommandSamples.h`, `tests/services/CommandSamples.cpp`
-- Create: `tests/services/ChangeTest.h`, `tests/services/ChangeTest.cpp`
+- Create: `tests/services/FieldChangeTest.h`, `tests/services/FieldChangeTest.cpp`
 - Create: `tests/services/UpdateFamilyCommandTest.h`, `tests/services/UpdateFamilyCommandTest.cpp`
 - Create: `tests/services/CommandRoundTripTest.h`, `tests/services/CommandRoundTripTest.cpp`
 - Create: `tests/services/WardSessionTest.h`, `tests/services/WardSessionTest.cpp`
@@ -122,7 +122,7 @@ class Document;
 
 /// What running a command did to the version in front of it. A command whose result
 /// already holds answers Applied too: nothing downstream tells the two apart.
-enum class Outcome
+enum class CommandOutcome
 {
     Applied,
     Conflicted
@@ -131,23 +131,23 @@ enum class Outcome
 /// What the user did, in their words: a heading, and a line per value set. Rendered
 /// through tr() when the command is built and stored with it, so it stays right after
 /// the things it names are renamed or deleted.
-class Description
+class CommandDescription
 {
 public:
-    Description() = default;
-    Description(const QString& heading, const QStringList& lines);
+    CommandDescription() = default;
+    CommandDescription(const QString& heading, const QStringList& lines);
 
     const QString& heading() const { return m_heading; }
     const QStringList& lines() const { return m_lines; }
 
     /// "Undo: <heading>" over the same lines, for an inverse.
-    Description undone() const;
+    CommandDescription undone() const;
 
     QJsonObject toJson() const;
-    static Description fromJson(const QJsonObject& json);
+    static CommandDescription fromJson(const QJsonObject& json);
 
-    bool operator==(const Description& other) const;
-    bool operator!=(const Description& other) const { return !(*this == other); }
+    bool operator==(const CommandDescription& other) const;
+    bool operator!=(const CommandDescription& other) const { return !(*this == other); }
 
 private:
     QString m_heading;
@@ -172,7 +172,7 @@ public:
 
     /// Applies when the start condition holds or the result already holds, and answers
     /// Applied. Otherwise answers Conflicted and leaves the document untouched.
-    virtual Outcome execute(Document& document) const = 0;
+    virtual CommandOutcome execute(Document& document) const = 0;
 
     /// The command that takes this one back, described by description().undone().
     /// An empty pointer means this command is not undoable.
@@ -188,13 +188,13 @@ public:
     /// What a run changes, for targeted view updates and cache rebuilds.
     virtual DocumentChange documentChange() const = 0;
 
-    const Description& description() const { return m_description; }
+    const CommandDescription& description() const { return m_description; }
 
 protected:
-    explicit Command(const Description& description);
+    explicit Command(const CommandDescription& description);
 
 private:
-    Description m_description;
+    CommandDescription m_description;
 };
 ```
 
@@ -206,18 +206,18 @@ private:
 #include <QJsonArray>
 #include <QObject>
 
-Description::Description(const QString& heading, const QStringList& lines)
+CommandDescription::CommandDescription(const QString& heading, const QStringList& lines)
     : m_heading(heading)
     , m_lines(lines)
 {
 }
 
-Description Description::undone() const
+CommandDescription CommandDescription::undone() const
 {
-    return Description(QObject::tr("Undo: %1").arg(m_heading), m_lines);
+    return CommandDescription(QObject::tr("Undo: %1").arg(m_heading), m_lines);
 }
 
-QJsonObject Description::toJson() const
+QJsonObject CommandDescription::toJson() const
 {
     QJsonObject json;
     json["heading"] = m_heading;
@@ -228,7 +228,7 @@ QJsonObject Description::toJson() const
     return json;
 }
 
-Description Description::fromJson(const QJsonObject& json)
+CommandDescription CommandDescription::fromJson(const QJsonObject& json)
 {
     QStringList lines;
     QJsonArray linesArray = json["lines"].toArray();
@@ -236,16 +236,16 @@ Description Description::fromJson(const QJsonObject& json)
     {
         lines.append(value.toString());
     }
-    return Description(json["heading"].toString(), lines);
+    return CommandDescription(json["heading"].toString(), lines);
 }
 
-bool Description::operator==(const Description& other) const
+bool CommandDescription::operator==(const CommandDescription& other) const
 {
     return m_heading == other.m_heading
         && m_lines == other.m_lines;
 }
 
-Command::Command(const Description& description)
+Command::Command(const CommandDescription& description)
     : m_description(description)
 {
 }
@@ -257,7 +257,7 @@ QString Command::refusal(const Document& document) const
 }
 ```
 
-### `src/commands/Change.h`
+### `src/commands/FieldChange.h`
 
 ```cpp
 #pragma once
@@ -271,16 +271,16 @@ QString Command::refusal(const Document& document) const
 /// it; at after, the command's result already holds there. Any other value means the
 /// ground moved, and the command conflicts.
 template<typename T>
-class Change
+class FieldChange
 {
 public:
-    Change(const T& before, const T& after) : m_before(before), m_after(after) {}
+    FieldChange(const T& before, const T& after) : m_before(before), m_after(after) {}
 
     const T& before() const { return m_before; }
     const T& after() const { return m_after; }
 
     bool holds(const T& current) const { return current == m_before || current == m_after; }
-    Change swapped() const { return Change(m_after, m_before); }
+    FieldChange swapped() const { return FieldChange(m_after, m_before); }
 
 private:
     T m_before;
@@ -289,36 +289,36 @@ private:
 
 /// The change from before to after, or none when they are equal.
 template<typename T>
-std::optional<Change<T>> changeBetween(const T& before, const T& after) { return before == after ? std::nullopt : std::optional<Change<T>>(Change<T>(before, after)); }
+std::optional<FieldChange<T>> changeBetween(const T& before, const T& after) { return before == after ? std::nullopt : std::optional<FieldChange<T>>(FieldChange<T>(before, after)); }
 
 /// True when there is no change to this value, or the value holds for its change.
 template<typename T>
-bool changeHolds(const std::optional<Change<T>>& change, const T& current) { return !change.has_value() || change->holds(current); }
+bool changeHolds(const std::optional<FieldChange<T>>& change, const T& current) { return !change.has_value() || change->holds(current); }
 
 /// The value the change sets, or current when there is no change to it.
 template<typename T>
-T changedValue(const std::optional<Change<T>>& change, const T& current) { return change.has_value() ? change->after() : current; }
+T changedValue(const std::optional<FieldChange<T>>& change, const T& current) { return change.has_value() ? change->after() : current; }
 
 template<typename T>
-std::optional<Change<T>> changeSwapped(const std::optional<Change<T>>& change) { return change.has_value() ? std::optional<Change<T>>(change->swapped()) : std::nullopt; }
+std::optional<FieldChange<T>> changeSwapped(const std::optional<FieldChange<T>>& change) { return change.has_value() ? std::optional<FieldChange<T>>(change->swapped()) : std::nullopt; }
 
 /// A change to a set of ids, held as the ids added and the ids removed. An addition is done
 /// when the id is present and a removal when it is absent, so a set change holds whatever
 /// the set holds, and two users adding different ids to one set both apply.
 template<typename Id>
-class SetChange
+class IdSetChange
 {
 public:
-    SetChange(const QSet<Id>& added, const QSet<Id>& removed) : m_added(added), m_removed(removed) {}
+    IdSetChange(const QSet<Id>& added, const QSet<Id>& removed) : m_added(added), m_removed(removed) {}
 
-    static SetChange between(const QSet<Id>& before, const QSet<Id>& after) { return SetChange(after - before, before - after); }
+    static IdSetChange between(const QSet<Id>& before, const QSet<Id>& after) { return IdSetChange(after - before, before - after); }
 
     const QSet<Id>& added() const { return m_added; }
     const QSet<Id>& removed() const { return m_removed; }
     bool isEmpty() const { return m_added.isEmpty() && m_removed.isEmpty(); }
 
     QSet<Id> appliedTo(const QSet<Id>& current) const { return (current | m_added) - m_removed; }
-    SetChange swapped() const { return SetChange(m_removed, m_added); }
+    IdSetChange swapped() const { return IdSetChange(m_removed, m_added); }
 
 private:
     QSet<Id> m_added;
@@ -326,17 +326,17 @@ private:
 };
 ```
 
-`SetChange` is the shape every set field uses (team members, asset people, tag people and
-families); its first command is `UpdateTeamCommand` in task 4, and `ChangeTest` covers it here.
+`IdSetChange` is the shape every set field uses (team members, asset people, tag people and
+families); its first command is `UpdateTeamCommand` in task 4, and `FieldChangeTest` covers it here.
 
-### `src/commands/ChangeJson.h`
+### `src/commands/FieldChangeJson.h`
 
 ```cpp
 #pragma once
 
 #include "Address.h"
 #include "Birthday.h"
-#include "Change.h"
+#include "FieldChange.h"
 #include "Gender.h"
 #include "Name.h"
 #include "Phone.h"
@@ -377,7 +377,7 @@ template<>
 std::optional<Gender> fromJsonValue<std::optional<Gender>>(const QJsonValue& value);
 
 template<typename T>
-QJsonObject changeToJson(const Change<T>& change)
+QJsonObject changeToJson(const FieldChange<T>& change)
 {
     QJsonObject json;
     json["before"] = toJsonValue(change.before());
@@ -386,14 +386,14 @@ QJsonObject changeToJson(const Change<T>& change)
 }
 
 template<typename T>
-Change<T> changeFromJson(const QJsonObject& json)
+FieldChange<T> changeFromJson(const QJsonObject& json)
 {
-    return Change<T>(fromJsonValue<T>(json["before"]), fromJsonValue<T>(json["after"]));
+    return FieldChange<T>(fromJsonValue<T>(json["before"]), fromJsonValue<T>(json["after"]));
 }
 
 /// Writes the change under key, or nothing when there is no change.
 template<typename T>
-void writeChange(QJsonObject& json, const QString& key, const std::optional<Change<T>>& change)
+void writeChange(QJsonObject& json, const QString& key, const std::optional<FieldChange<T>>& change)
 {
     if (change.has_value())
     {
@@ -403,7 +403,7 @@ void writeChange(QJsonObject& json, const QString& key, const std::optional<Chan
 
 /// The change under key, or none when the key is absent.
 template<typename T>
-std::optional<Change<T>> readChange(const QJsonObject& json, const QString& key)
+std::optional<FieldChange<T>> readChange(const QJsonObject& json, const QString& key)
 {
     if (!json.contains(key))
     {
@@ -413,10 +413,10 @@ std::optional<Change<T>> readChange(const QJsonObject& json, const QString& key)
 }
 ```
 
-### `src/commands/ChangeJson.cpp`
+### `src/commands/FieldChangeJson.cpp`
 
 ```cpp
-#include "ChangeJson.h"
+#include "FieldChangeJson.h"
 
 #include <QJsonArray>
 
@@ -520,7 +520,7 @@ std::optional<Gender> fromJsonValue<std::optional<Gender>>(const QJsonValue& val
 ```cpp
 #pragma once
 
-#include "Change.h"
+#include "FieldChange.h"
 #include "Family.h"
 
 #include <QHash>
@@ -554,17 +554,17 @@ public:
 private:
     bool isEmpty() const;
 
-    std::optional<Change<Name>> m_name;
-    std::optional<Change<std::optional<Gender>>> m_gender;
-    std::optional<Change<Phone>> m_phone;
-    std::optional<Change<Phone>> m_altPhone;
-    std::optional<Change<QString>> m_email;
-    std::optional<Change<Birthday>> m_birthday;
-    std::optional<Change<QStringList>> m_callings;
-    std::optional<Change<bool>> m_isParent;
-    std::optional<Change<QString>> m_wardUnitNumber;
-    std::optional<Change<QString>> m_stakeUnitNumber;
-    std::optional<Change<QString>> m_specialNeedNote;
+    std::optional<FieldChange<Name>> m_name;
+    std::optional<FieldChange<std::optional<Gender>>> m_gender;
+    std::optional<FieldChange<Phone>> m_phone;
+    std::optional<FieldChange<Phone>> m_altPhone;
+    std::optional<FieldChange<QString>> m_email;
+    std::optional<FieldChange<Birthday>> m_birthday;
+    std::optional<FieldChange<QStringList>> m_callings;
+    std::optional<FieldChange<bool>> m_isParent;
+    std::optional<FieldChange<QString>> m_wardUnitNumber;
+    std::optional<FieldChange<QString>> m_stakeUnitNumber;
+    std::optional<FieldChange<QString>> m_specialNeedNote;
 };
 
 /// What an edit changes in one family: its address, a change per member keyed by PersonId,
@@ -577,7 +577,7 @@ public:
     /// differs.
     static std::optional<FamilyChange> between(const Family& opened, const Family& saved);
 
-    FamilyChange(const std::optional<Change<Address>>& address,
+    FamilyChange(const std::optional<FieldChange<Address>>& address,
                  const QHash<PersonId, MemberChange>& members,
                  const QList<Person>& added,
                  const QList<Person>& removed);
@@ -597,7 +597,7 @@ public:
     static FamilyChange fromJson(const QJsonObject& json);
 
 private:
-    std::optional<Change<Address>> m_address;
+    std::optional<FieldChange<Address>> m_address;
     QHash<PersonId, MemberChange> m_members;
     QList<Person> m_added;
     QList<Person> m_removed;
@@ -608,7 +608,7 @@ private:
 
 ```cpp
 #include "FamilyChange.h"
-#include "ChangeJson.h"
+#include "FieldChangeJson.h"
 
 #include <QJsonArray>
 #include <QObject>
@@ -896,7 +896,7 @@ std::optional<FamilyChange> FamilyChange::between(const Family& opened, const Fa
         }
     }
 
-    std::optional<Change<Address>> address = changeBetween(opened.address(), saved.address());
+    std::optional<FieldChange<Address>> address = changeBetween(opened.address(), saved.address());
     if (!address.has_value() && members.isEmpty() && added.isEmpty() && removed.isEmpty())
     {
         return std::nullopt;
@@ -904,7 +904,7 @@ std::optional<FamilyChange> FamilyChange::between(const Family& opened, const Fa
     return FamilyChange(address, members, added, removed);
 }
 
-FamilyChange::FamilyChange(const std::optional<Change<Address>>& address,
+FamilyChange::FamilyChange(const std::optional<FieldChange<Address>>& address,
                            const QHash<PersonId, MemberChange>& members,
                            const QList<Person>& added,
                            const QList<Person>& removed)
@@ -1069,15 +1069,15 @@ public:
     /// nothing differs.
     static std::unique_ptr<UpdateFamilyCommand> fromEdit(const Family& opened, const Family& saved);
 
-    UpdateFamilyCommand(const FamilyId& familyId, const FamilyChange& change, const Description& description);
+    UpdateFamilyCommand(const FamilyId& familyId, const FamilyChange& change, const CommandDescription& description);
 
     QString type() const override { return TypeName; }
-    Outcome execute(Document& document) const override;
+    CommandOutcome execute(Document& document) const override;
     CommandPtr inverse() const override;
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
-    static CommandPtr fromJson(const QJsonObject& json, const Description& description);
+    static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
 
 private:
     FamilyId m_familyId;
@@ -1100,28 +1100,28 @@ std::unique_ptr<UpdateFamilyCommand> UpdateFamilyCommand::fromEdit(const Family&
     {
         return nullptr;
     }
-    Description description(QObject::tr("%1 family").arg(opened.surname()), change->describe(opened));
+    CommandDescription description(QObject::tr("%1 family").arg(opened.surname()), change->describe(opened));
     return std::make_unique<UpdateFamilyCommand>(opened.id(), *change, description);
 }
 
 UpdateFamilyCommand::UpdateFamilyCommand(const FamilyId& familyId,
                                          const FamilyChange& change,
-                                         const Description& description)
+                                         const CommandDescription& description)
     : Command(description)
     , m_familyId(familyId)
     , m_change(change)
 {
 }
 
-Outcome UpdateFamilyCommand::execute(Document& document) const
+CommandOutcome UpdateFamilyCommand::execute(Document& document) const
 {
     std::optional<Family> family = document.findFamilyById(m_familyId);
     if (!family.has_value() || !m_change.holds(*family))
     {
-        return Outcome::Conflicted;
+        return CommandOutcome::Conflicted;
     }
     document.updateFamily(m_change.appliedTo(*family));
-    return Outcome::Applied;
+    return CommandOutcome::Applied;
 }
 
 CommandPtr UpdateFamilyCommand::inverse() const
@@ -1142,7 +1142,7 @@ DocumentChange UpdateFamilyCommand::documentChange() const
     return DocumentChange::family().updated(m_familyId);
 }
 
-CommandPtr UpdateFamilyCommand::fromJson(const QJsonObject& json, const Description& description)
+CommandPtr UpdateFamilyCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
 {
     return std::make_unique<UpdateFamilyCommand>(FamilyId::fromString(json["familyId"].toString()),
                                                  FamilyChange::fromJson(json["change"].toObject()),
@@ -1165,7 +1165,7 @@ CommandPtr UpdateFamilyCommand::fromJson(const QJsonObject& json, const Descript
 struct CommandType
 {
     QString name;
-    CommandPtr (*fromJson)(const QJsonObject& json, const Description& description);
+    CommandPtr (*fromJson)(const QJsonObject& json, const CommandDescription& description);
 };
 
 /// The command types, and the serialised form a command takes in the journal.
@@ -1182,7 +1182,7 @@ public:
     static CommandPtr fromJson(const QJsonObject& json);
 
     /// The description a journal entry holds, read without rebuilding the command.
-    static Description descriptionOf(const QJsonObject& json);
+    static CommandDescription descriptionOf(const QJsonObject& json);
 };
 ```
 
@@ -1223,9 +1223,9 @@ CommandPtr CommandRegistry::fromJson(const QJsonObject& json)
     return nullptr;
 }
 
-Description CommandRegistry::descriptionOf(const QJsonObject& json)
+CommandDescription CommandRegistry::descriptionOf(const QJsonObject& json)
 {
-    return Description::fromJson(json["description"].toObject());
+    return CommandDescription::fromJson(json["description"].toObject());
 }
 ```
 
@@ -1265,7 +1265,7 @@ public:
     const QList<JournalEntry>& entries() const { return m_entries; }
 
     /// The entries' descriptions, in order.
-    QList<Description> descriptions() const;
+    QList<CommandDescription> descriptions() const;
 
 private:
     QList<JournalEntry> m_entries;
@@ -1290,9 +1290,9 @@ void Journal::clear()
     m_entries.clear();
 }
 
-QList<Description> Journal::descriptions() const
+QList<CommandDescription> Journal::descriptions() const
 {
-    QList<Description> descriptions;
+    QList<CommandDescription> descriptions;
     for (const JournalEntry& entry : m_entries)
     {
         descriptions.append(CommandRegistry::descriptionOf(entry.command));
@@ -1339,9 +1339,9 @@ enum class ReplayStatus
 };
 
 /// The descriptions of one abandoned journal, kept for the user to work from.
-struct RedoGroup
+struct ToRedoGroup
 {
-    QList<Description> descriptions;
+    QList<CommandDescription> descriptions;
     int clashed;        ///< index in descriptions of the entry that stopped the replay
     CommitResult stop;  ///< Conflicted, or Refused with the rule's wording
 };
@@ -1358,7 +1358,7 @@ public:
 
     const Document& document() const { return m_document; }
     const Journal& journal() const { return m_journal; }
-    const QList<RedoGroup>& toRedo() const { return m_toRedo; }
+    const QList<ToRedoGroup>& toRedo() const { return m_toRedo; }
 
     /// Opens a ward: its document replaces the open one by assignment, and the journal, the
     /// to-redo list and the undo stack start empty.
@@ -1414,7 +1414,7 @@ private:
     Journal m_journal;
     std::vector<UndoEntry> m_undoStack;
     std::vector<UndoEntry> m_redoStack;
-    QList<RedoGroup> m_toRedo;
+    QList<ToRedoGroup> m_toRedo;
 
     static constexpr int UndoLimit = 100;
 };
@@ -1438,7 +1438,7 @@ CommitResult attempt(const Command& command, Document& document)
     {
         return CommitResult{CommitStatus::Refused, refusal};
     }
-    if (command.execute(document) == Outcome::Conflicted)
+    if (command.execute(document) == CommandOutcome::Conflicted)
     {
         return CommitResult{CommitStatus::Conflicted, QString()};
     }
@@ -1570,7 +1570,7 @@ CommitResult WardSession::run(const Command& command)
 
 void WardSession::abandon(const Document& version, int clashed, const CommitResult& stop)
 {
-    m_toRedo.append(RedoGroup{m_journal.descriptions(), clashed, stop});
+    m_toRedo.append(ToRedoGroup{m_journal.descriptions(), clashed, stop});
     m_journal.clear();
     clearUndoStack();
     replaceDocument(version);
@@ -1597,7 +1597,7 @@ In `COMMAND_SOURCES` replace `src/commands/CommandHistory.cpp` with:
 
 ```cmake
     src/commands/Command.cpp
-    src/commands/ChangeJson.cpp
+    src/commands/FieldChangeJson.cpp
     src/commands/FamilyChange.cpp
     src/commands/CommandRegistry.cpp
 ```
@@ -1605,8 +1605,8 @@ In `COMMAND_SOURCES` replace `src/commands/CommandHistory.cpp` with:
 In `COMMAND_HEADERS` replace `src/commands/CommandHistory.h` with:
 
 ```cmake
-    src/commands/Change.h
-    src/commands/ChangeJson.h
+    src/commands/FieldChange.h
+    src/commands/FieldChangeJson.h
     src/commands/FamilyChange.h
     src/commands/CommandRegistry.h
 ```
@@ -1629,8 +1629,8 @@ add_executable(WardPlanningTests
     services/TestCommands.cpp
     services/CommandSamples.h
     services/CommandSamples.cpp
-    services/ChangeTest.h
-    services/ChangeTest.cpp
+    services/FieldChangeTest.h
+    services/FieldChangeTest.cpp
     services/UpdateFamilyCommandTest.h
     services/UpdateFamilyCommandTest.cpp
     services/CommandRoundTripTest.h
@@ -1654,7 +1654,7 @@ add_test(NAME WardPlanningTests COMMAND WardPlanningTests)
 ### `tests/main.cpp`
 
 ```cpp
-#include "ChangeTest.h"
+#include "FieldChangeTest.h"
 #include "CommandRoundTripTest.h"
 #include "UpdateFamilyCommandTest.h"
 #include "WardSessionTest.h"
@@ -1666,7 +1666,7 @@ int main(int argc, char* argv[])
 {
     QApplication app(argc, argv);
 
-    ChangeTest changeTest(nullptr);
+    FieldChangeTest changeTest(nullptr);
     UpdateFamilyCommandTest updateFamilyCommandTest(nullptr);
     CommandRoundTripTest commandRoundTripTest(nullptr);
     WardSessionTest wardSessionTest(nullptr);
@@ -1858,7 +1858,7 @@ public:
     ForcePhoneCommand(const PersonId& personId, const QString& phone, const QString& ruleWording);
 
     QString type() const override { return "testForcePhone"; }
-    Outcome execute(Document& document) const override;
+    CommandOutcome execute(Document& document) const override;
     CommandPtr inverse() const override;
     QString refusal(const Document& document) const override;
     QJsonObject toJson() const override;
@@ -1879,19 +1879,19 @@ private:
 #include "TestWard.h"
 
 ForcePhoneCommand::ForcePhoneCommand(const PersonId& personId, const QString& phone, const QString& ruleWording)
-    : Command(Description("Force phone", QStringList()))
+    : Command(CommandDescription("Force phone", QStringList()))
     , m_personId(personId)
     , m_phone(phone)
     , m_ruleWording(ruleWording)
 {
 }
 
-Outcome ForcePhoneCommand::execute(Document& document) const
+CommandOutcome ForcePhoneCommand::execute(Document& document) const
 {
     FamilyId familyId = document.familyIdForPerson(m_personId).value();
     Family family = TestWard::family(document, familyId);
     document.updateFamily(TestWard::withPhone(family, m_personId, m_phone));
-    return Outcome::Applied;
+    return CommandOutcome::Applied;
 }
 
 CommandPtr ForcePhoneCommand::inverse() const
@@ -2022,19 +2022,19 @@ std::vector<CommandSample> CommandSamples::forType(const QString& type)
 }
 ```
 
-### `tests/services/ChangeTest.h`
+### `tests/services/FieldChangeTest.h`
 
 ```cpp
 #pragma once
 
 #include <QObject>
 
-class ChangeTest : public QObject
+class FieldChangeTest : public QObject
 {
     Q_OBJECT
 
 public:
-    explicit ChangeTest(QObject* parent);
+    explicit FieldChangeTest(QObject* parent);
 
 private slots:
     void changeHoldsAtBeforeOrAfterOnly();
@@ -2047,11 +2047,11 @@ private slots:
 };
 ```
 
-### `tests/services/ChangeTest.cpp`
+### `tests/services/FieldChangeTest.cpp`
 
 ```cpp
-#include "ChangeTest.h"
-#include "Change.h"
+#include "FieldChangeTest.h"
+#include "FieldChange.h"
 #include "Id.h"
 
 #include <QTest>
@@ -2065,61 +2065,61 @@ PersonId c() { return PersonId::fromString("c"); }
 
 }  // namespace
 
-ChangeTest::ChangeTest(QObject* parent)
+FieldChangeTest::FieldChangeTest(QObject* parent)
     : QObject(parent)
 {
 }
 
-void ChangeTest::changeHoldsAtBeforeOrAfterOnly()
+void FieldChangeTest::changeHoldsAtBeforeOrAfterOnly()
 {
-    Change<QString> change("555-1111", "555-2222");
+    FieldChange<QString> change("555-1111", "555-2222");
     QVERIFY(change.holds("555-1111"));
     QVERIFY(change.holds("555-2222"));
     QVERIFY(!change.holds("555-9999"));
     QVERIFY(!change.holds(QString()));
 }
 
-void ChangeTest::changeSwappedExchangesItsEnds()
+void FieldChangeTest::changeSwappedExchangesItsEnds()
 {
-    Change<QString> swapped = Change<QString>("555-1111", "555-2222").swapped();
+    FieldChange<QString> swapped = FieldChange<QString>("555-1111", "555-2222").swapped();
     QCOMPARE(swapped.before(), QString("555-2222"));
     QCOMPARE(swapped.after(), QString("555-1111"));
 }
 
-void ChangeTest::changeBetweenEqualValuesIsNone()
+void FieldChangeTest::changeBetweenEqualValuesIsNone()
 {
     QVERIFY(!changeBetween(QString("x"), QString("x")).has_value());
-    std::optional<Change<QString>> change = changeBetween(QString("x"), QString("y"));
+    std::optional<FieldChange<QString>> change = changeBetween(QString("x"), QString("y"));
     QVERIFY(change.has_value());
     QCOMPARE(change->before(), QString("x"));
     QCOMPARE(change->after(), QString("y"));
 }
 
-void ChangeTest::setChangeBetweenHoldsTheIdsAddedAndRemoved()
+void FieldChangeTest::setChangeBetweenHoldsTheIdsAddedAndRemoved()
 {
-    SetChange<PersonId> change = SetChange<PersonId>::between({a(), b()}, {b(), c()});
+    IdSetChange<PersonId> change = IdSetChange<PersonId>::between({a(), b()}, {b(), c()});
     QVERIFY(change.added() == QSet<PersonId>({c()}));
     QVERIFY(change.removed() == QSet<PersonId>({a()}));
 }
 
-void ChangeTest::setChangeAdditionPresentAndRemovalAbsentAreDone()
+void FieldChangeTest::setChangeAdditionPresentAndRemovalAbsentAreDone()
 {
-    SetChange<PersonId> change({c()}, {a()});
+    IdSetChange<PersonId> change({c()}, {a()});
     QVERIFY(change.appliedTo({b(), c()}) == QSet<PersonId>({b(), c()}));
     QVERIFY(change.appliedTo({a(), b()}) == QSet<PersonId>({b(), c()}));
 }
 
-void ChangeTest::setChangesAddingDifferentIdsBothLand()
+void FieldChangeTest::setChangesAddingDifferentIdsBothLand()
 {
-    SetChange<PersonId> mine = SetChange<PersonId>::between({a()}, {a(), b()});
-    SetChange<PersonId> theirs = SetChange<PersonId>::between({a()}, {a(), c()});
+    IdSetChange<PersonId> mine = IdSetChange<PersonId>::between({a()}, {a(), b()});
+    IdSetChange<PersonId> theirs = IdSetChange<PersonId>::between({a()}, {a(), c()});
     QVERIFY(mine.appliedTo(theirs.appliedTo({a()})) == QSet<PersonId>({a(), b(), c()}));
     QVERIFY(theirs.appliedTo(mine.appliedTo({a()})) == QSet<PersonId>({a(), b(), c()}));
 }
 
-void ChangeTest::setChangeSwappedTakesItselfBack()
+void FieldChangeTest::setChangeSwappedTakesItselfBack()
 {
-    SetChange<PersonId> change = SetChange<PersonId>::between({a(), b()}, {b(), c()});
+    IdSetChange<PersonId> change = IdSetChange<PersonId>::between({a(), b()}, {b(), c()});
     QSet<PersonId> changed = change.appliedTo({a(), b()});
     QVERIFY(changed == QSet<PersonId>({b(), c()}));
     QVERIFY(change.swapped().appliedTo(changed) == QSet<PersonId>({a(), b()}));
@@ -2244,7 +2244,7 @@ void UpdateFamilyCommandTest::appliesWhereItsStartConditionHolds()
 {
     Document document = TestWard::document();
 
-    QVERIFY(bobPhoneEdit("555-2222")->execute(document) == Outcome::Applied);
+    QVERIFY(bobPhoneEdit("555-2222")->execute(document) == CommandOutcome::Applied);
 
     QCOMPARE(QString(TestWard::person(document, TestWard::bobId()).phone()), QString("555-2222"));
     QVERIFY(TestWard::person(document, TestWard::aliceId()) == TestWard::alice());
@@ -2257,7 +2257,7 @@ void UpdateFamilyCommandTest::appliesAndChangesNothingWhereItsResultHolds()
                                              TestWard::withPhone(TestWard::smith(), TestWard::bobId(), "555-2222"));
     Document before = document;
 
-    QVERIFY(bobPhoneEdit("555-2222")->execute(document) == Outcome::Applied);
+    QVERIFY(bobPhoneEdit("555-2222")->execute(document) == CommandOutcome::Applied);
 
     QVERIFY(document == before);
 }
@@ -2272,7 +2272,7 @@ void UpdateFamilyCommandTest::conflictsAndTouchesNothingWhereAFieldMoved()
                                              TestWard::withPhone(opened, TestWard::bobId(), "555-9999"));
     Document before = document;
 
-    QVERIFY(command->execute(document) == Outcome::Conflicted);
+    QVERIFY(command->execute(document) == CommandOutcome::Conflicted);
 
     QVERIFY(document == before);
     QCOMPARE(TestWard::family(document, TestWard::smithId()).address().full(), QString("12 Elm St, Provo, UT"));
@@ -2284,7 +2284,7 @@ void UpdateFamilyCommandTest::conflictsWhereTheFamilyIsGone()
     document.removeFamily(TestWard::smithId());
     Document before = document;
 
-    QVERIFY(bobPhoneEdit("555-2222")->execute(document) == Outcome::Conflicted);
+    QVERIFY(bobPhoneEdit("555-2222")->execute(document) == CommandOutcome::Conflicted);
 
     QVERIFY(document == before);
 }
@@ -2294,7 +2294,7 @@ void UpdateFamilyCommandTest::conflictsWhereAChangedMemberIsGone()
     Document document = TestWard::withFamily(TestWard::document(), smithWithout(TestWard::bobId()));
     Document before = document;
 
-    QVERIFY(bobPhoneEdit("555-2222")->execute(document) == Outcome::Conflicted);
+    QVERIFY(bobPhoneEdit("555-2222")->execute(document) == CommandOutcome::Conflicted);
 
     QVERIFY(document == before);
 }
@@ -2308,11 +2308,11 @@ void UpdateFamilyCommandTest::editsToDifferentMembersBothApply()
     std::unique_ptr<UpdateFamilyCommand> aliceEdit = UpdateFamilyCommand::fromEdit(opened, TestWard::withMember(opened, alice));
 
     Document bobFirst = TestWard::document();
-    QVERIFY(bobEdit->execute(bobFirst) == Outcome::Applied);
-    QVERIFY(aliceEdit->execute(bobFirst) == Outcome::Applied);
+    QVERIFY(bobEdit->execute(bobFirst) == CommandOutcome::Applied);
+    QVERIFY(aliceEdit->execute(bobFirst) == CommandOutcome::Applied);
     Document aliceFirst = TestWard::document();
-    QVERIFY(aliceEdit->execute(aliceFirst) == Outcome::Applied);
-    QVERIFY(bobEdit->execute(aliceFirst) == Outcome::Applied);
+    QVERIFY(aliceEdit->execute(aliceFirst) == CommandOutcome::Applied);
+    QVERIFY(bobEdit->execute(aliceFirst) == CommandOutcome::Applied);
 
     QCOMPARE(QString(TestWard::person(bobFirst, TestWard::bobId()).phone()), QString("555-2222"));
     QCOMPARE(TestWard::person(bobFirst, TestWard::aliceId()).email(), QString("alice@new.example.com"));
@@ -2325,7 +2325,7 @@ void UpdateFamilyCommandTest::memberRemovalConflictsAfterThatMemberChanged()
     Document document = TestWard::withFamily(TestWard::document(),
                                              TestWard::withPhone(TestWard::smith(), TestWard::aliceId(), "555-7777"));
 
-    QVERIFY(removal->execute(document) == Outcome::Conflicted);
+    QVERIFY(removal->execute(document) == CommandOutcome::Conflicted);
 
     QCOMPARE(QString(TestWard::person(document, TestWard::aliceId()).phone()), QString("555-7777"));
 }
@@ -2335,11 +2335,11 @@ void UpdateFamilyCommandTest::memberRemovalAppliesOntoAnUnchangedMemberAndItsInv
     std::unique_ptr<UpdateFamilyCommand> removal = UpdateFamilyCommand::fromEdit(TestWard::smith(), smithWithout(TestWard::aliceId()));
     Document document = TestWard::document();
 
-    QVERIFY(removal->execute(document) == Outcome::Applied);
+    QVERIFY(removal->execute(document) == CommandOutcome::Applied);
     QVERIFY(!document.findPersonById(TestWard::aliceId()).has_value());
     QCOMPARE(TestWard::family(document, TestWard::smithId()).members().size(), qsizetype(1));
 
-    QVERIFY(removal->inverse()->execute(document) == Outcome::Applied);
+    QVERIFY(removal->inverse()->execute(document) == CommandOutcome::Applied);
     QVERIFY(TestWard::person(document, TestWard::aliceId()) == TestWard::alice());
     QCOMPARE(TestWard::family(document, TestWard::smithId()).members().size(), qsizetype(2));
 }
@@ -2352,7 +2352,7 @@ void UpdateFamilyCommandTest::memberAdditionHoldsWhenThatPersonIsAlreadyThere()
     Document document = TestWard::withFamily(TestWard::document(), withDan);
     Document before = document;
 
-    QVERIFY(addition->execute(document) == Outcome::Applied);
+    QVERIFY(addition->execute(document) == CommandOutcome::Applied);
 
     QVERIFY(document == before);
     QCOMPARE(TestWard::family(document, TestWard::smithId()).members().size(), qsizetype(3));
@@ -2367,14 +2367,14 @@ void UpdateFamilyCommandTest::inverseSwapsTheChangeUnderAnUndoHeading()
     QCOMPARE(inverse->description().lines(), edit->description().lines());
 
     Document document = TestWard::document();
-    QVERIFY(edit->execute(document) == Outcome::Applied);
-    QVERIFY(inverse->execute(document) == Outcome::Applied);
+    QVERIFY(edit->execute(document) == CommandOutcome::Applied);
+    QVERIFY(inverse->execute(document) == CommandOutcome::Applied);
     QVERIFY(document == TestWard::document());
 
     Document moved = TestWard::withFamily(TestWard::document(),
                                           TestWard::withPhone(TestWard::smith(), TestWard::bobId(), "555-9999"));
     Document movedBefore = moved;
-    QVERIFY(inverse->execute(moved) == Outcome::Conflicted);
+    QVERIFY(inverse->execute(moved) == CommandOutcome::Conflicted);
     QVERIFY(moved == movedBefore);
 }
 ```
@@ -2471,10 +2471,10 @@ void CommandRoundTripTest::sampleRebuiltFromItsEntryBehavesAsTheOriginal()
 
     Document byOriginal = sample.document;
     Document byRebuilt = sample.document;
-    Outcome original = sample.command->execute(byOriginal);
-    Outcome again = rebuilt->execute(byRebuilt);
+    CommandOutcome original = sample.command->execute(byOriginal);
+    CommandOutcome again = rebuilt->execute(byRebuilt);
 
-    Outcome expected = sample.sampleCase == SampleCase::Conflicts ? Outcome::Conflicted : Outcome::Applied;
+    CommandOutcome expected = sample.sampleCase == SampleCase::Conflicts ? CommandOutcome::Conflicted : CommandOutcome::Applied;
     QVERIFY(original == expected);
     QVERIFY(again == expected);
     QVERIFY(byOriginal == byRebuilt);
@@ -2496,14 +2496,14 @@ void CommandRoundTripTest::runningACommandDoesNotChangeIt()
     QJsonObject before = CommandRegistry::toJson(*command);
 
     Document applied = TestWard::document();
-    QVERIFY(command->execute(applied) == Outcome::Applied);
+    QVERIFY(command->execute(applied) == CommandOutcome::Applied);
     QCOMPARE(QString(TestWard::person(applied, TestWard::bobId()).phone()), QString("555-2222"));
     QVERIFY(CommandRegistry::toJson(*command) == before);
 
     Document moved = TestWard::withFamily(TestWard::document(),
                                           TestWard::withPhone(opened, TestWard::bobId(), "555-9999"));
     Document movedBefore = moved;
-    QVERIFY(command->execute(moved) == Outcome::Conflicted);
+    QVERIFY(command->execute(moved) == CommandOutcome::Conflicted);
     QVERIFY(moved == movedBefore);
 }
 ```
@@ -2772,7 +2772,7 @@ void WardSessionTest::oneConflictAbandonsTheWholeReplay()
     QVERIFY(!mine.canUndo());
     QVERIFY(!mine.canRedo());
     QCOMPARE(mine.toRedo().size(), qsizetype(1));
-    const RedoGroup& group = mine.toRedo()[0];
+    const ToRedoGroup& group = mine.toRedo()[0];
     QCOMPARE(group.descriptions.size(), qsizetype(3));
     QCOMPARE(group.descriptions[0].heading(), QString("Jones family"));
     QCOMPARE(group.descriptions[0].lines(), QStringList({"Carol, phone: 555-5555"}));
@@ -2816,7 +2816,7 @@ void WardSessionTest::toRedoDescriptionsStayAsWrittenAfterARename()
     QVERIFY(mine.replayOnto(TestWard::withFamily(TestWard::document(), renamed)) == ReplayStatus::Abandoned);
 
     QCOMPARE(familyIn(mine, TestWard::smithId()).surname(), QString("Smyth"));
-    const Description& description = mine.toRedo()[0].descriptions[0];
+    const CommandDescription& description = mine.toRedo()[0].descriptions[0];
     QCOMPARE(description.heading(), QString("Smith family"));
     QCOMPARE(description.lines(), QStringList({"Bob, phone: 555-2222"}));
 }
@@ -2862,7 +2862,7 @@ void WardSessionTest::undoRunsTheInverseThroughTheCommitStep()
     QVERIFY(undone.status == CommitStatus::Applied);
     QVERIFY(session.document() == TestWard::document());
     QCOMPARE(session.journal().entries().size(), qsizetype(2));
-    Description inverse = CommandRegistry::descriptionOf(session.journal().entries()[1].command);
+    CommandDescription inverse = CommandRegistry::descriptionOf(session.journal().entries()[1].command);
     QCOMPARE(inverse.heading(), QString("Undo: Smith family"));
     QCOMPARE(inverse.lines(), QStringList({"Bob, phone: 555-2222"}));
     QVERIFY(!session.canUndo());
@@ -3029,7 +3029,7 @@ edit holds only what the user changed.
   stays until task 5 deletes it).
 - `CommitResult executeCommand(CommandPtr command)`: captures `command->description()`, calls
   `m_session.commit`, and on `Applied` runs `checkForIncompleteWards()` and `autoSave()` as
-  today; otherwise emits `commandNotApplied(const Description& description, const CommitResult& result)`.
+  today; otherwise emits `commandNotApplied(const CommandDescription& description, const CommitResult& result)`.
 - `undo()` and `redo()` call `m_session.undo()` / `redo()` the same way, emitting
   `commandNotApplied` with the undo stack's heading when the result is not `Applied`.
 - `undoDescription()` / `redoDescription()` become `undoHeading()` / `redoHeading()`.
@@ -3044,7 +3044,7 @@ edit holds only what the user changed.
 **MainWindow.**
 - `updateUndoRedoActions()` reads `undoHeading()` / `redoHeading()` and connects to
   `undoStackChanged`.
-- New slot `onCommandNotApplied(const Description& description, const CommitResult& result)`:
+- New slot `onCommandNotApplied(const CommandDescription& description, const CommitResult& result)`:
   for `Conflicted`, a message box with
   `tr("Your change could not be applied, because the ward changed first. This needs doing again:")`
   followed by the heading and its lines; for `Refused`, the rule's wording.
@@ -3070,7 +3070,7 @@ work list).
   edit that clears the note. The helper `updatePersonInFamily` is deleted.
 
 **Docs.**
-- `docs/ARCHITECTURE.md`: the *Command Interface* section shows `execute` returning `Outcome`,
+- `docs/ARCHITECTURE.md`: the *Command Interface* section shows `execute` returning `CommandOutcome`,
   `inverse`, `refusal`, `toJson` and the registry; *Command History* becomes *WardSession* (the
   commit step, the journal, replay and the to-redo list, undo as inverse); the
   `AddFamilyCommand` example becomes `UpdateFamilyCommand` with `FamilyChange`; *DocumentManager*
@@ -3134,7 +3134,7 @@ and `person()` equals the original exactly. It is listed in `tests/CMakeLists.tx
   command (task 7).
 
 **Typed coordinates are a journalled command on the address's entry.**
-- `SetAddressCoordinatesCommand(const QString& address, const std::optional<Coordinates>& before, const Coordinates& typed, const Description& description)`,
+- `SetAddressCoordinatesCommand(const QString& address, const std::optional<Coordinates>& before, const Coordinates& typed, const CommandDescription& description)`,
   `TypeName = "setAddressCoordinates"`: sets the entry to `typed` whatever it holds, so it never
   conflicts; its result already holds when the entry equals `typed`.
 - Its inverse is `RevertAddressCoordinatesCommand` (`TypeName = "revertAddressCoordinates"`),
@@ -3159,7 +3159,7 @@ and `person()` equals the original exactly. It is listed in `tests/CMakeLists.tx
 - `Command` gains `virtual QStringList addressesGiven() const;` (base returns empty): the
   addresses this command gives a family, known at construction. `UpdateFamilyCommand` returns the
   address after when its change sets a non-empty address (`FamilyChange` gains
-  `const std::optional<Change<Address>>& address() const`).
+  `const std::optional<FieldChange<Address>>& address() const`).
 - `WardSession::run` starts `runAutomaticUpdates()` after an applied command when any of its
   `addressesGiven()` lacks an entry and is not on the failed list. `DocumentManager` calls
   `runAutomaticUpdates()` when a ward opens (`newDocument`, `openDocument`). Replay starts
@@ -3224,22 +3224,22 @@ third bullets).
 **Files:**
 - Rewrite: `src/commands/TeamCommands.h/.cpp`, `src/commands/EmergencyAssetCommands.h/.cpp`,
   `src/commands/TagCommands.h/.cpp`
-- Modify: `src/commands/ChangeJson.h/.cpp`, `src/commands/CommandRegistry.cpp`
+- Modify: `src/commands/FieldChangeJson.h/.cpp`, `src/commands/CommandRegistry.cpp`
 - Modify: `src/widgets/TeamsView.h/.cpp`, `src/widgets/EmergencyAssetView.h/.cpp`
 - Modify: `tests/CMakeLists.txt`, `tests/main.cpp`, `tests/services/TestWard.h/.cpp`,
   `tests/services/CommandSamples.cpp`
 - Create: `tests/services/TeamCommandsTest.h/.cpp`, `tests/services/AssetAndTagCommandsTest.h/.cpp`
 
-**JSON.** `ChangeJson.h` gains `toJsonValue` / `fromJsonValue` for `QColor`
+**JSON.** `FieldChangeJson.h` gains `toJsonValue` / `fromJsonValue` for `QColor`
 (`name(QColor::HexArgb)`), `std::optional<PersonId>`, `ResponseArea` (through
 `responseAreaToString` / `responseAreaFromString`) and `TagLevel`, and
-`template<typename Id> QJsonObject setChangeToJson(const SetChange<Id>&)` /
+`template<typename Id> QJsonObject setChangeToJson(const IdSetChange<Id>&)` /
 `setChangeFromJson<Id>(const QJsonObject&)` writing `added` and `removed` as string arrays.
 
 **Teams.**
 - `AddTeamCommand(team)`: result holds when the id is present; start condition includes that
   every member and the leader exist. Inverse `DeleteTeamCommand`.
-- `UpdateTeamCommand(teamId, std::optional<Change<QString>> name, std::optional<Change<QColor>> color, std::optional<Change<std::optional<PersonId>>> leader, SetChange<PersonId> members, Description)`
+- `UpdateTeamCommand(teamId, std::optional<FieldChange<QString>> name, std::optional<FieldChange<QColor>> color, std::optional<FieldChange<std::optional<PersonId>>> leader, IdSetChange<PersonId> members, CommandDescription)`
   with `static fromEdit(const Team& opened, const Team& saved)`. Execute conflicts when the team
   is gone or a field moved; applies the set change; then requires the leader after, when set, to
   be on the team; requires every added id to exist as a person; and for every removed id that was
@@ -3257,7 +3257,7 @@ third bullets).
   (`m_contextTeam`), so a version landing under the menu's event loop makes the confirm conflict.
 
 **Emergency assets.** `AddEmergencyAssetCommand`, `UpdateEmergencyAssetCommand` (name, response
-area, people as a `SetChange<PersonId>`, added people must exist), `DeleteEmergencyAssetCommand`
+area, people as a `IdSetChange<PersonId>`, added people must exist), `DeleteEmergencyAssetCommand`
 as last seen. `AssignEmergencyAssetToPersonCommand` (no callers) and
 `UnassignEmergencyAssetFromPersonCommand` (its caller `EmergencyAssetView::removePersonFromAsset`
 moves to `UpdateEmergencyAssetCommand::fromEdit`) are deleted. `showAssetDialog` captures the
@@ -3295,7 +3295,7 @@ clock).
 - Modify: `src/models/Id.h` (`EmergencyResponseId`), `src/models/EmergencyResponse.h/.cpp`,
   `src/models/Document.h/.cpp`
 - Create: `src/commands/EmergencyCommands.h`, `src/commands/EmergencyCommands.cpp`
-- Modify: `src/commands/CommandRegistry.cpp`, `src/commands/ChangeJson.h/.cpp`
+- Modify: `src/commands/CommandRegistry.cpp`, `src/commands/FieldChangeJson.h/.cpp`
 - Modify: `src/services/WardSession.h/.cpp`, `src/services/EmergencyManager.h/.cpp`,
   `src/services/DocumentManager.h/.cpp`, `src/services/ReportGenerator.h/.cpp`
 - Delete: `src/widgets/ArchiveBrowserDialog.h/.cpp`
@@ -3346,7 +3346,7 @@ table, and a missing response making every command but `EndEmergency` conflict:
 - `DeleteContactAttemptCommand(responseId, familyId, attempt as last seen)`.
 - `AddTaskCommand(responseId, familyId, displayName, address, task)`, inverse `DeleteTaskCommand`.
 - `UpdateTaskCommand(responseId, familyId, taskId, category, description, assignment, resolution)`,
-  each an `std::optional<Change<...>>`; a new assignee must exist (person or team); a change of
+  each an `std::optional<FieldChange<...>>`; a new assignee must exist (person or team); a change of
   assignee holds the notification as none.
 - `DeleteTaskCommand(responseId, familyId, task as last seen)`.
 - `AddTaskCategoryCommand(responseId, category)`: result holds when present; not undoable.
@@ -3484,7 +3484,7 @@ families. API:
 - `ImportWardDirectoryCommand::fromImport(const Document& document, const WardDirectoryImportResult& result, const QString& fileName)`
   holds the families added, a `FamilyChange` per family that differs (none for the rest), the
   families removed as last seen with their `ReferenceCleanup`, the directory PDF date as a
-  `Change<std::optional<QDate>>`, and the ward record created if missing (result holds when one is
+  `FieldChange<std::optional<QDate>>`, and the ward record created if missing (result holds when one is
   there). An import never changes a special-need note.
 - The PDF's own coordinates seed the address table: the command holds them for each address the
   table lacks at construction, and at execute adds each one only where the table still lacks it,
@@ -3498,7 +3498,7 @@ families. API:
 
 **Ministering import.**
 - `ImportMinisteringCommand::fromImport(document, result, fileName)` holds the organisation, its
-  districts and groups as one `Change<MinisteringCollection>` (the whole collection before and
+  districts and groups as one `FieldChange<MinisteringCollection>` (the whole collection before and
   after, with `operator==` and JSON), the families added, a `FamilyChange` per family that
   differs, and the ministering PDF date. Groups and districts may only name people and families
   that exist after it applies.

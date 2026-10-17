@@ -2,12 +2,12 @@
 
 #include <QObject>
 
-class ChangeTest : public QObject
+class FieldChangeTest : public QObject
 {
     Q_OBJECT
 
 public:
-    explicit ChangeTest(QObject* parent);
+    explicit FieldChangeTest(QObject* parent);
 
 private slots:
     void changeHoldsAtBeforeOrAfterOnly();

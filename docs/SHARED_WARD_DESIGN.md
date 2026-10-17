@@ -1034,8 +1034,8 @@ confirmed it or the journal is replaying it onto a newer version, `execute` answ
 question about the version in front of it:
 
 ```
-enum class Outcome { Applied, Conflicted };
-Outcome execute(Document& document) const;
+enum class CommandOutcome { Applied, Conflicted };
+CommandOutcome execute(Document& document) const;
 ```
 
 A conflict the first time it runs is a dialog that stood open while someone else changed

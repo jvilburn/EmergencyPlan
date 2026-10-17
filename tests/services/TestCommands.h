@@ -13,7 +13,7 @@ public:
     ForcePhoneCommand(const PersonId& personId, const QString& phone, const QString& ruleWording);
 
     QString type() const override { return "testForcePhone"; }
-    Outcome execute(Document& document) const override;
+    CommandOutcome execute(Document& document) const override;
     CommandPtr inverse() const override;
     QString refusal(const Document& document) const override;
     QJsonObject toJson() const override;

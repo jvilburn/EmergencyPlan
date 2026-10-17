@@ -10,8 +10,8 @@ add_executable(WardPlanningTests
     services/TestCommands.cpp
     services/CommandSamples.h
     services/CommandSamples.cpp
-    services/ChangeTest.h
-    services/ChangeTest.cpp
+    services/FieldChangeTest.h
+    services/FieldChangeTest.cpp
     services/UpdateFamilyCommandTest.h
     services/UpdateFamilyCommandTest.cpp
     services/CommandRoundTripTest.h

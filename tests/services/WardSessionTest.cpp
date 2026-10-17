@@ -222,7 +222,7 @@ void WardSessionTest::oneConflictAbandonsTheWholeReplay()
     QVERIFY(!mine.canUndo());
     QVERIFY(!mine.canRedo());
     QCOMPARE(mine.toRedo().size(), qsizetype(1));
-    const RedoGroup& group = mine.toRedo()[0];
+    const ToRedoGroup& group = mine.toRedo()[0];
     QCOMPARE(group.descriptions.size(), qsizetype(3));
     QCOMPARE(group.descriptions[0].heading(), QString("Jones family"));
     QCOMPARE(group.descriptions[0].lines(), QStringList({"Carol, phone: 555-5555"}));
@@ -266,7 +266,7 @@ void WardSessionTest::toRedoDescriptionsStayAsWrittenAfterARename()
     QVERIFY(mine.replayOnto(TestWard::withFamily(TestWard::document(), renamed)) == ReplayStatus::Abandoned);
 
     QCOMPARE(familyIn(mine, TestWard::smithId()).surname(), QString("Smyth"));
-    const Description& description = mine.toRedo()[0].descriptions[0];
+    const CommandDescription& description = mine.toRedo()[0].descriptions[0];
     QCOMPARE(description.heading(), QString("Smith family"));
     QCOMPARE(description.lines(), QStringList({"Bob, phone: 555-2222"}));
 }
@@ -312,7 +312,7 @@ void WardSessionTest::undoRunsTheInverseThroughTheCommitStep()
     QVERIFY(undone.status == CommitStatus::Applied);
     QVERIFY(session.document() == TestWard::document());
     QCOMPARE(session.journal().entries().size(), qsizetype(2));
-    Description inverse = CommandRegistry::descriptionOf(session.journal().entries()[1].command);
+    CommandDescription inverse = CommandRegistry::descriptionOf(session.journal().entries()[1].command);
     QCOMPARE(inverse.heading(), QString("Undo: Smith family"));
     QCOMPARE(inverse.lines(), QStringList({"Bob, phone: 555-2222"}));
     QVERIFY(!session.canUndo());

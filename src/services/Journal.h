@@ -31,7 +31,7 @@ public:
     const QList<JournalEntry>& entries() const { return m_entries; }
 
     /// The entries' descriptions, in order.
-    QList<Description> descriptions() const;
+    QList<CommandDescription> descriptions() const;
 
 private:
     QList<JournalEntry> m_entries;

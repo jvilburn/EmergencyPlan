@@ -1,4 +1,4 @@
-#include "ChangeTest.h"
+#include "FieldChangeTest.h"
 #include "CommandRoundTripTest.h"
 #include "PersonJsonTest.h"
 #include "UpdateFamilyCommandTest.h"
@@ -12,7 +12,7 @@ int main(int argc, char* argv[])
     QApplication app(argc, argv);
 
     PersonJsonTest personJsonTest(nullptr);
-    ChangeTest changeTest(nullptr);
+    FieldChangeTest changeTest(nullptr);
     UpdateFamilyCommandTest updateFamilyCommandTest(nullptr);
     CommandRoundTripTest commandRoundTripTest(nullptr);
     WardSessionTest wardSessionTest(nullptr);

@@ -32,7 +32,7 @@ CommandPtr CommandRegistry::fromJson(const QJsonObject& json)
     return nullptr;
 }
 
-Description CommandRegistry::descriptionOf(const QJsonObject& json)
+CommandDescription CommandRegistry::descriptionOf(const QJsonObject& json)
 {
-    return Description::fromJson(json["description"].toObject());
+    return CommandDescription::fromJson(json["description"].toObject());
 }

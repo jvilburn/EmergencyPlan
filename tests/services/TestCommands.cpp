@@ -3,19 +3,19 @@
 #include "TestWard.h"
 
 ForcePhoneCommand::ForcePhoneCommand(const PersonId& personId, const QString& phone, const QString& ruleWording)
-    : Command(Description("Force phone", QStringList()))
+    : Command(CommandDescription("Force phone", QStringList()))
     , m_personId(personId)
     , m_phone(phone)
     , m_ruleWording(ruleWording)
 {
 }
 
-Outcome ForcePhoneCommand::execute(Document& document) const
+CommandOutcome ForcePhoneCommand::execute(Document& document) const
 {
     FamilyId familyId = document.familyIdForPerson(m_personId).value();
     Family family = TestWard::family(document, familyId);
     document.updateFamily(TestWard::withPhone(family, m_personId, m_phone));
-    return Outcome::Applied;
+    return CommandOutcome::Applied;
 }
 
 CommandPtr ForcePhoneCommand::inverse() const

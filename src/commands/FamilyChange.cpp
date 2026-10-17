@@ -1,5 +1,5 @@
 #include "FamilyChange.h"
-#include "ChangeJson.h"
+#include "FieldChangeJson.h"
 
 #include <QJsonArray>
 #include <QObject>
@@ -287,7 +287,7 @@ std::optional<FamilyChange> FamilyChange::between(const Family& opened, const Fa
         }
     }
 
-    std::optional<Change<Address>> address = changeBetween(opened.address(), saved.address());
+    std::optional<FieldChange<Address>> address = changeBetween(opened.address(), saved.address());
     if (!address.has_value() && members.isEmpty() && added.isEmpty() && removed.isEmpty())
     {
         return std::nullopt;
@@ -295,7 +295,7 @@ std::optional<FamilyChange> FamilyChange::between(const Family& opened, const Fa
     return FamilyChange(address, members, added, removed);
 }
 
-FamilyChange::FamilyChange(const std::optional<Change<Address>>& address,
+FamilyChange::FamilyChange(const std::optional<FieldChange<Address>>& address,
                            const QHash<PersonId, MemberChange>& members,
                            const QList<Person>& added,
                            const QList<Person>& removed)

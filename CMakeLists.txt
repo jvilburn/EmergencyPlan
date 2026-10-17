@@ -129,7 +129,7 @@ set(MODEL_HEADERS
 
 set(COMMAND_SOURCES
     src/commands/Command.cpp
-    src/commands/ChangeJson.cpp
+    src/commands/FieldChangeJson.cpp
     src/commands/FamilyChange.cpp
     src/commands/CommandRegistry.cpp
     src/commands/FamilyCommands.cpp
@@ -143,8 +143,8 @@ set(COMMAND_SOURCES
 
 set(COMMAND_HEADERS
     src/commands/Command.h
-    src/commands/Change.h
-    src/commands/ChangeJson.h
+    src/commands/FieldChange.h
+    src/commands/FieldChangeJson.h
     src/commands/FamilyChange.h
     src/commands/CommandRegistry.h
     src/commands/FamilyCommands.h

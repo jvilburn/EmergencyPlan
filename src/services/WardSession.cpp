@@ -13,7 +13,7 @@ CommitResult attempt(const Command& command, Document& document)
     {
         return CommitResult{CommitStatus::Refused, refusal};
     }
-    if (command.execute(document) == Outcome::Conflicted)
+    if (command.execute(document) == CommandOutcome::Conflicted)
     {
         return CommitResult{CommitStatus::Conflicted, QString()};
     }
@@ -145,7 +145,7 @@ CommitResult WardSession::run(const Command& command)
 
 void WardSession::abandon(const Document& version, int clashed, const CommitResult& stop)
 {
-    m_toRedo.append(RedoGroup{m_journal.descriptions(), clashed, stop});
+    m_toRedo.append(ToRedoGroup{m_journal.descriptions(), clashed, stop});
     m_journal.clear();
     clearUndoStack();
     replaceDocument(version);

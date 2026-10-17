@@ -3,18 +3,18 @@
 #include <QJsonArray>
 #include <QObject>
 
-Description::Description(const QString& heading, const QStringList& lines)
+CommandDescription::CommandDescription(const QString& heading, const QStringList& lines)
     : m_heading(heading)
     , m_lines(lines)
 {
 }
 
-Description Description::undone() const
+CommandDescription CommandDescription::undone() const
 {
-    return Description(QObject::tr("Undo: %1").arg(m_heading), m_lines);
+    return CommandDescription(QObject::tr("Undo: %1").arg(m_heading), m_lines);
 }
 
-QJsonObject Description::toJson() const
+QJsonObject CommandDescription::toJson() const
 {
     QJsonObject json;
     json["heading"] = m_heading;
@@ -25,7 +25,7 @@ QJsonObject Description::toJson() const
     return json;
 }
 
-Description Description::fromJson(const QJsonObject& json)
+CommandDescription CommandDescription::fromJson(const QJsonObject& json)
 {
     QStringList lines;
     QJsonArray linesArray = json["lines"].toArray();
@@ -33,16 +33,16 @@ Description Description::fromJson(const QJsonObject& json)
     {
         lines.append(value.toString());
     }
-    return Description(json["heading"].toString(), lines);
+    return CommandDescription(json["heading"].toString(), lines);
 }
 
-bool Description::operator==(const Description& other) const
+bool CommandDescription::operator==(const CommandDescription& other) const
 {
     return m_heading == other.m_heading
         && m_lines == other.m_lines;
 }
 
-Command::Command(const Description& description)
+Command::Command(const CommandDescription& description)
     : m_description(description)
 {
 }
