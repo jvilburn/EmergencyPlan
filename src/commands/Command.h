@@ -1,28 +1,87 @@
 #pragma once
 
+#include <QJsonObject>
 #include <QString>
+#include <QStringList>
 #include <memory>
 
 #include "DocumentChange.h"
 
 class Document;
 
+/// What running a command did to the version in front of it. A command whose result
+/// already holds answers Applied too: nothing downstream tells the two apart.
+enum class Outcome
+{
+    Applied,
+    Conflicted
+};
+
+/// What the user did, in their words: a heading, and a line per value set. Rendered
+/// through tr() when the command is built and stored with it, so it stays right after
+/// the things it names are renamed or deleted.
+class Description
+{
+public:
+    Description() = default;
+    Description(const QString& heading, const QStringList& lines);
+
+    const QString& heading() const { return m_heading; }
+    const QStringList& lines() const { return m_lines; }
+
+    /// "Undo: <heading>" over the same lines, for an inverse.
+    Description undone() const;
+
+    QJsonObject toJson() const;
+    static Description fromJson(const QJsonObject& json);
+
+    bool operator==(const Description& other) const;
+    bool operator!=(const Description& other) const { return !(*this == other); }
+
+private:
+    QString m_heading;
+    QStringList m_lines;
+};
+
+class Command;
+using CommandPtr = std::unique_ptr<Command>;
+
+/// A write to the document, run the same way the first time and on replay.
+///
+/// A command is immutable once constructed. Its start condition (what the user saw), its
+/// result and its description are fixed by the constructor; execute reads the document in
+/// front of it and leaves the command as it was.
 class Command
 {
 public:
     virtual ~Command() = default;
 
-    // Execute command, modifying document in place
-    virtual void execute(Document& document) = 0;
+    /// The name this type has in the journal and in CommandRegistry.
+    virtual QString type() const = 0;
 
-    // Undo command, modifying document in place
-    virtual void undo(Document& document) = 0;
+    /// Applies when the start condition holds or the result already holds, and answers
+    /// Applied. Otherwise answers Conflicted and leaves the document untouched.
+    virtual Outcome execute(Document& document) const = 0;
 
-    // Human-readable description for undo/redo menu items
-    virtual QString description() const = 0;
+    /// The command that takes this one back, described by description().undone().
+    /// An empty pointer means this command is not undoable.
+    virtual CommandPtr inverse() const = 0;
 
-    // Returns what changed in the document, used to emit targeted documentChanged signals
+    /// The wording of the rule that refuses this command on this document, or an empty
+    /// string when no rule does. Content commands have no rules.
+    virtual QString refusal(const Document& document) const;
+
+    /// This command's own fields. CommandRegistry adds the type and the description.
+    virtual QJsonObject toJson() const = 0;
+
+    /// What a run changes, for targeted view updates and cache rebuilds.
     virtual DocumentChange documentChange() const = 0;
-};
 
-using CommandPtr = std::unique_ptr<Command>;
+    const Description& description() const { return m_description; }
+
+protected:
+    explicit Command(const Description& description);
+
+private:
+    Description m_description;
+};

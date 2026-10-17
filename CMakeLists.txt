@@ -128,7 +128,10 @@ set(MODEL_HEADERS
 )
 
 set(COMMAND_SOURCES
-    src/commands/CommandHistory.cpp
+    src/commands/Command.cpp
+    src/commands/ChangeJson.cpp
+    src/commands/FamilyChange.cpp
+    src/commands/CommandRegistry.cpp
     src/commands/FamilyCommands.cpp
     src/commands/ImportWardDirectoryCommand.cpp
     src/commands/ImportMinisteringCommand.cpp
@@ -140,7 +143,10 @@ set(COMMAND_SOURCES
 
 set(COMMAND_HEADERS
     src/commands/Command.h
-    src/commands/CommandHistory.h
+    src/commands/Change.h
+    src/commands/ChangeJson.h
+    src/commands/FamilyChange.h
+    src/commands/CommandRegistry.h
     src/commands/FamilyCommands.h
     src/commands/ImportWardDirectoryCommand.h
     src/commands/ImportMinisteringCommand.h
@@ -169,6 +175,8 @@ set(SERVICE_SOURCES
     src/services/GeoLocation.cpp
     src/services/EmergencyManager.cpp
     src/services/ReportGenerator.cpp
+    src/services/Journal.cpp
+    src/services/WardSession.cpp
     # src/services/StatisticsService.cpp
     # src/services/ResourceService.cpp
     # src/services/SearchService.cpp
@@ -195,6 +203,8 @@ set(SERVICE_HEADERS
     src/services/GeoLocation.h
     src/services/EmergencyManager.h
     src/services/ReportGenerator.h
+    src/services/Journal.h
+    src/services/WardSession.h
     # src/services/StatisticsService.h
     # src/services/ResourceService.h
     # src/services/SearchService.h

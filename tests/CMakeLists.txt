@@ -2,56 +2,33 @@
 
 find_package(Qt6 REQUIRED COMPONENTS Test)
 
-# Optionally use Google Test if available
-# find_package(GTest)
-
-enable_testing()
-
-# ============================================================================
-# Test Executable
-# ============================================================================
-
-set(TEST_SOURCES
-    # Model tests
-    # models/PersonTest.cpp
-    # models/FamilyTest.cpp
-    # models/DocumentTest.cpp
-    # models/TeamTest.cpp
-    # models/TagTest.cpp
-
-    # Command tests
-    # commands/FamilyCommandsTest.cpp
-    # commands/CommandHistoryTest.cpp
-
-    # Service tests
-    # services/JsonServiceTest.cpp
-    # services/FilterServiceTest.cpp
+add_executable(WardPlanningTests
+    main.cpp
+    services/TestWard.h
+    services/TestWard.cpp
+    services/TestCommands.h
+    services/TestCommands.cpp
+    services/CommandSamples.h
+    services/CommandSamples.cpp
+    services/ChangeTest.h
+    services/ChangeTest.cpp
+    services/UpdateFamilyCommandTest.h
+    services/UpdateFamilyCommandTest.cpp
+    services/CommandRoundTripTest.h
+    services/CommandRoundTripTest.cpp
+    services/WardSessionTest.h
+    services/WardSessionTest.cpp
+    services/PersonJsonTest.h
+    services/PersonJsonTest.cpp
 )
 
-# Only build if we have test sources
-if(TEST_SOURCES)
-    add_executable(EmergencyPlanTests
-        ${TEST_SOURCES}
-    )
+target_include_directories(WardPlanningTests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/services
+)
 
-    target_link_libraries(EmergencyPlanTests PRIVATE
-        EmergencyPlanLib
-        Qt6::Test
-    )
+target_link_libraries(WardPlanningTests PRIVATE
+    EmergencyPlanLib
+    Qt6::Test
+)
 
-    # If using Google Test
-    # if(GTest_FOUND)
-    #     target_link_libraries(EmergencyPlanTests PRIVATE GTest::gtest GTest::gtest_main)
-    # endif()
-
-    # Add tests to CTest
-    add_test(NAME EmergencyPlanTests COMMAND EmergencyPlanTests)
-endif()
-
-# ============================================================================
-# Individual Test Registration (when using Qt Test)
-# ============================================================================
-
-# Example of registering individual tests:
-# add_test(NAME PersonTest COMMAND EmergencyPlanTests PersonTest)
-# add_test(NAME FamilyTest COMMAND EmergencyPlanTests FamilyTest)
+add_test(NAME WardPlanningTests COMMAND WardPlanningTests)

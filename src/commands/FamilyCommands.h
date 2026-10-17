@@ -1,64 +1,32 @@
 #pragma once
 
 #include "Command.h"
-#include "Family.h"
+#include "FamilyChange.h"
 
-class AddFamilyCommand : public Command
-{
-public:
-    explicit AddFamilyCommand(const Family& family);
+#include <memory>
 
-    void execute(Document& document) override;
-    void undo(Document& document) override;
-    QString description() const override;
-    DocumentChange documentChange() const override;
-
-private:
-    Family m_family;
-};
-
+/// An edit to one family, built from the difference between what the edit opened with and
+/// what it saved. Holds the before and after of the changed fields only.
 class UpdateFamilyCommand : public Command
 {
 public:
-    UpdateFamilyCommand(const Family& oldFamily, const Family& newFamily);
+    static constexpr const char* TypeName = "updateFamily";
 
-    void execute(Document& document) override;
-    void undo(Document& document) override;
-    QString description() const override;
+    /// The edit from the family as opened to the family as saved, or an empty pointer when
+    /// nothing differs.
+    static std::unique_ptr<UpdateFamilyCommand> fromEdit(const Family& opened, const Family& saved);
+
+    UpdateFamilyCommand(const FamilyId& familyId, const FamilyChange& change, const Description& description);
+
+    QString type() const override { return TypeName; }
+    Outcome execute(Document& document) const override;
+    CommandPtr inverse() const override;
+    QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
-private:
-    Family m_oldFamily;
-    Family m_newFamily;
-};
-
-class DeleteFamilyCommand : public Command
-{
-public:
-    explicit DeleteFamilyCommand(const Family& family);
-
-    void execute(Document& document) override;
-    void undo(Document& document) override;
-    QString description() const override;
-    DocumentChange documentChange() const override;
+    static CommandPtr fromJson(const QJsonObject& json, const Description& description);
 
 private:
-    Family m_family;
-};
-
-class SetFamiliesCommand : public Command
-{
-public:
-    explicit SetFamiliesCommand(const QHash<FamilyId, Family>& families,
-                                const QString& description);
-
-    void execute(Document& document) override;
-    void undo(Document& document) override;
-    QString description() const override;
-    DocumentChange documentChange() const override;
-
-private:
-    QHash<FamilyId, Family> m_newFamilies;
-    QHash<FamilyId, Family> m_oldFamilies;
-    QString m_description;
+    FamilyId m_familyId;
+    FamilyChange m_change;
 };

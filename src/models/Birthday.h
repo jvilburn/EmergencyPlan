@@ -28,6 +28,7 @@ public:
 
     // Computed properties
     bool hasDate() const { return m_month.has_value() && m_day.has_value(); }
+    bool isEmpty() const { return !m_year.has_value() && !m_month.has_value() && !m_day.has_value(); }
 
     /// Calculate age from current date. Returns nullopt if year unknown.
     std::optional<int> age() const;

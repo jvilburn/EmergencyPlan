@@ -95,7 +95,7 @@ QJsonObject Person::toJson() const
     {
         json["gender"] = m_gender->toJson();
     }
-    if (m_birthday.hasDate())
+    if (!m_birthday.isEmpty())
     {
         json["birthday"] = m_birthday.toJson();
     }

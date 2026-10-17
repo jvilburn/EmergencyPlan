@@ -1,126 +1,60 @@
 #include "FamilyCommands.h"
 #include "Document.h"
 
-// ============================================================================
-// AddFamilyCommand
-// ============================================================================
+#include <QObject>
 
-AddFamilyCommand::AddFamilyCommand(const Family& family)
-    : m_family(family)
+std::unique_ptr<UpdateFamilyCommand> UpdateFamilyCommand::fromEdit(const Family& opened, const Family& saved)
+{
+    std::optional<FamilyChange> change = FamilyChange::between(opened, saved);
+    if (!change.has_value())
+    {
+        return nullptr;
+    }
+    Description description(QObject::tr("%1 family").arg(opened.surname()), change->describe(opened));
+    return std::make_unique<UpdateFamilyCommand>(opened.id(), *change, description);
+}
+
+UpdateFamilyCommand::UpdateFamilyCommand(const FamilyId& familyId,
+                                         const FamilyChange& change,
+                                         const Description& description)
+    : Command(description)
+    , m_familyId(familyId)
+    , m_change(change)
 {
 }
 
-void AddFamilyCommand::execute(Document& document)
+Outcome UpdateFamilyCommand::execute(Document& document) const
 {
-    document.addFamily(m_family);
+    std::optional<Family> family = document.findFamilyById(m_familyId);
+    if (!family.has_value() || !m_change.holds(*family))
+    {
+        return Outcome::Conflicted;
+    }
+    document.updateFamily(m_change.appliedTo(*family));
+    return Outcome::Applied;
 }
 
-void AddFamilyCommand::undo(Document& document)
+CommandPtr UpdateFamilyCommand::inverse() const
 {
-    document.removeFamily(m_family.id());
+    return std::make_unique<UpdateFamilyCommand>(m_familyId, m_change.swapped(), description().undone());
 }
 
-QString AddFamilyCommand::description() const
+QJsonObject UpdateFamilyCommand::toJson() const
 {
-    return QObject::tr("Add Family \"%1\"").arg(m_family.displayName());
-}
-
-DocumentChange AddFamilyCommand::documentChange() const
-{
-    return DocumentChange::family().added(m_family.id());
-}
-
-// ============================================================================
-// UpdateFamilyCommand
-// ============================================================================
-
-UpdateFamilyCommand::UpdateFamilyCommand(const Family& oldFamily, const Family& newFamily)
-    : m_oldFamily(oldFamily)
-    , m_newFamily(newFamily)
-{
-}
-
-void UpdateFamilyCommand::execute(Document& document)
-{
-    document.updateFamily(m_newFamily);
-}
-
-void UpdateFamilyCommand::undo(Document& document)
-{
-    document.updateFamily(m_oldFamily);
-}
-
-QString UpdateFamilyCommand::description() const
-{
-    return QObject::tr("Update Family \"%1\"").arg(m_oldFamily.displayName());
+    QJsonObject json;
+    json["familyId"] = m_familyId.toString();
+    json["change"] = m_change.toJson();
+    return json;
 }
 
 DocumentChange UpdateFamilyCommand::documentChange() const
 {
-    return DocumentChange::family().updated(m_newFamily.id());
+    return DocumentChange::family().updated(m_familyId);
 }
 
-// ============================================================================
-// DeleteFamilyCommand
-// ============================================================================
-
-DeleteFamilyCommand::DeleteFamilyCommand(const Family& family)
-    : m_family(family)
+CommandPtr UpdateFamilyCommand::fromJson(const QJsonObject& json, const Description& description)
 {
-}
-
-void DeleteFamilyCommand::execute(Document& document)
-{
-    document.removeFamily(m_family.id());
-}
-
-void DeleteFamilyCommand::undo(Document& document)
-{
-    document.addFamily(m_family);
-}
-
-QString DeleteFamilyCommand::description() const
-{
-    return QObject::tr("Delete Family \"%1\"").arg(m_family.displayName());
-}
-
-DocumentChange DeleteFamilyCommand::documentChange() const
-{
-    return DocumentChange::family().removed(m_family.id());
-}
-
-// ============================================================================
-// SetFamiliesCommand
-// ============================================================================
-
-SetFamiliesCommand::SetFamiliesCommand(const QHash<FamilyId, Family>& families,
-                                       const QString& description)
-    : m_newFamilies(families)
-    , m_description(description)
-{
-}
-
-void SetFamiliesCommand::execute(Document& document)
-{
-    m_oldFamilies = document.families();
-    document.setFamilies(m_newFamilies);
-}
-
-void SetFamiliesCommand::undo(Document& document)
-{
-    document.setFamilies(m_oldFamilies);
-}
-
-QString SetFamiliesCommand::description() const
-{
-    if (!m_description.isEmpty())
-    {
-        return m_description;
-    }
-    return QObject::tr("Set %1 Families").arg(m_newFamilies.size());
-}
-
-DocumentChange SetFamiliesCommand::documentChange() const
-{
-    return DocumentChange::family().full();
+    return std::make_unique<UpdateFamilyCommand>(FamilyId::fromString(json["familyId"].toString()),
+                                                 FamilyChange::fromJson(json["change"].toObject()),
+                                                 description);
 }
