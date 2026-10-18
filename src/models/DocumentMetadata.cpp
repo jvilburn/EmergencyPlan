@@ -1,6 +1,10 @@
 #include "DocumentMetadata.h"
 
 #include <QJsonArray>
+#include <QObject>
+#include <QStringList>
+
+#include <algorithm>
 
 // ============================================================================
 // Ward operations
@@ -14,11 +18,6 @@ void DocumentMetadata::addWard(const Ward& ward)
 void DocumentMetadata::updateWard(const Ward& ward)
 {
     m_wards.insert(ward.unitNumber(), ward);
-}
-
-void DocumentMetadata::removeWard(const QString& unitNumber)
-{
-    m_wards.remove(unitNumber);
 }
 
 std::optional<Ward> DocumentMetadata::findWardByUnit(const QString& wardUnitNumber) const
@@ -56,18 +55,6 @@ std::optional<Stake> DocumentMetadata::findStakeByUnit(const QString& unitNumber
     if (it != m_stakes.end())
     {
         return *it;
-    }
-    return std::nullopt;
-}
-
-std::optional<Stake> DocumentMetadata::findStake(const QString& wardUnitNumber) const
-{
-    for (const Stake& stake : m_stakes)
-    {
-        if (stake.wardUnitNumbers().contains(wardUnitNumber))
-        {
-            return stake;
-        }
     }
     return std::nullopt;
 }
@@ -123,82 +110,24 @@ void DocumentMetadata::removeWardByUnit(const QString& wardUnitNumber)
     // Stakes are reference data that can be reused
 }
 
-QString DocumentMetadata::suggestedFilename() const
+QString DocumentMetadata::wardName() const
 {
-    int wardCount = m_wards.size();
-    if (wardCount == 0)
-    {
-        return QString();
-    }
-
-    // 1 ward
-    if (wardCount == 1)
-    {
-        QString name = m_wards.begin()->name();
-        return name.isEmpty() ? QString() : name + " Ward";
-    }
-
-    // 2+ wards: check stake membership
-    QSet<QString> stakeUnits;
-    bool allStakesKnown = true;
-
+    QStringList names;
     for (const Ward& ward : m_wards)
     {
-        std::optional<Stake> stake = findStake(ward.unitNumber());
-        if (stake.has_value())
-        {
-            stakeUnits.insert(stake->unitNumber());
-        }
-        else
-        {
-            allStakesKnown = false;
-        }
+        names.append(ward.name());
     }
-
-    // All wards in same known stake
-    if (allStakesKnown && stakeUnits.size() == 1)
+    std::sort(names.begin(), names.end(), [](const QString& a, const QString& b) { return QString::localeAwareCompare(a, b) < 0; });
+    if (names.isEmpty())
     {
-        std::optional<Stake> stake = findStakeByUnit(*stakeUnits.begin());
-        if (stake.has_value() && !stake->name().isEmpty())
-        {
-            return stake->name() + " Stake";
-        }
+        return QObject::tr("Untitled ward");
     }
-
-    // 2 wards, stake unknown for either
-    if (wardCount == 2)
+    if (names.size() == 1)
     {
-        auto it = m_wards.begin();
-        QString first = it->name();
-        ++it;
-        QString second = it->name();
-        if (!first.isEmpty() && !second.isEmpty())
-        {
-            return QString("%1 And %2 Wards").arg(first, second);
-        }
+        return QObject::tr("%1 Ward").arg(names.first());
     }
-
-    // 3+ wards with unknown stake
-    if (!allStakesKnown)
-    {
-        QString first = m_wards.begin()->name();
-        if (!first.isEmpty())
-        {
-            return QString("%1 Multi-Ward").arg(first);
-        }
-    }
-
-    // 3+ wards, different known stakes
-    if (!stakeUnits.isEmpty())
-    {
-        std::optional<Stake> stake = findStakeByUnit(*stakeUnits.begin());
-        if (stake.has_value() && !stake->name().isEmpty())
-        {
-            return QString("%1 Multi-Stake").arg(stake->name());
-        }
-    }
-
-    return QString();
+    QString last = names.takeLast();
+    return QObject::tr("%1 and %2 Wards").arg(names.join(QObject::tr(", ")), last);
 }
 
 // ============================================================================

@@ -74,10 +74,6 @@ public:
     void setLevel(TagLevel level) { m_level = level; }
     void setPersonIds(const QSet<PersonId>& ids) { m_personIds = ids; }
     void setFamilyIds(const QSet<FamilyId>& ids) { m_familyIds = ids; }
-    void addPerson(const PersonId& personId) { m_personIds.insert(personId); }
-    void removePerson(const PersonId& personId) { m_personIds.remove(personId); }
-    void addFamily(const FamilyId& familyId) { m_familyIds.insert(familyId); }
-    void removeFamily(const FamilyId& familyId) { m_familyIds.remove(familyId); }
 
     // Computed properties
     bool hasPerson(const PersonId& personId) const { return m_personIds.contains(personId); }

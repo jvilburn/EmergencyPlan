@@ -68,8 +68,6 @@ private slots:
     void onDocumentChanged(const DocumentChange& change);
 
 private:
-    void persistResponseData();
-    void syncFromDocument();
     void syncFamilies();  // add records for new families, called on document changes
 
     std::optional<EmergencyResponse> m_response;

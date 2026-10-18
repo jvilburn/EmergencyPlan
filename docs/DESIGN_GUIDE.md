@@ -374,7 +374,7 @@ QStatusBar {
 - Consistent lighting (top-left light source)
 
 ### Icon Categories Needed
-1. **File Operations**: New, Open, Save, Save As, Export, Import
+1. **File Operations**: New, Export, Import
 2. **Edit Operations**: Undo, Redo, Cut, Copy, Paste, Delete
 3. **Navigation**: Home, Back, Forward, Refresh
 4. **View Modes**: EQ, RS, Emergency, Tags

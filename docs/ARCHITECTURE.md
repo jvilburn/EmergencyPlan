@@ -35,9 +35,7 @@ Command Layer (State mutations)
     | Change the Document where what the user saw still holds
     v
 Model Layer (Data structures)
-    | Mutable data with setters
-    v
-Persistence Layer (JSON/Files)
+    | Mutable data with setters, held in memory by WardSession
 ```
 
 ### 4. Qt Model/View
@@ -106,8 +104,7 @@ Document
 |-- emergencyAssets: QHash<EmergencyAssetId, EmergencyAsset>
 |-- districts (EQ/RS current/proposed): QHash<MinisteringDistrictId, MinisteringDistrict>
 |-- groups (EQ/RS current/proposed): QHash<MinisteringGroupId, MinisteringGroup>
-|-- metadata: DocumentMetadata (wards, stakes)
-`-- emergencyResponse: EmergencyResponse (response mode state)
+`-- metadata: DocumentMetadata (wards, stakes)
 ```
 
 Collections use `QHash<Id, Model>` for O(1) lookup by ID and automatic uniqueness enforcement. Display order is computed at render time (sorted by name, etc.).
@@ -340,7 +337,7 @@ private:
 
 ### DocumentManager
 
-A thin wrapper over the app's one `WardSession`, with the ward's file:
+A thin wrapper over the app's one `WardSession`, which holds the ward in memory while the app runs:
 
 ```cpp
 class DocumentManager : public QObject
@@ -359,21 +356,17 @@ public:
     QString undoHeading() const;
     QString redoHeading() const;
 
-    // File operations
+    // Opens Document::empty() in the session
     void newDocument();
-    bool openDocument(const QString& filePath, QString* errorMessage);
-    bool saveDocument(QString* errorMessage);
-    bool saveDocumentAs(const QString& filePath, QString* errorMessage);
 
 signals:
     void documentChanged(const DocumentChange& change);  // forwarded from the session
     void undoStackChanged();                             // forwarded from the session
     void commandNotApplied(const CommitResult& result);
-    void filePathChanged();
 };
 ```
 
-`executeCommand` hands the command to `WardSession::commit` and returns its `CommitResult`. When it is `Applied`, the manager looks up any ward missing its details and saves; when it is `Conflicted` or `Refused`, it emits `commandNotApplied`, and `MainWindow` tells the user what needs doing again, from the result's description, or which rule refused it; `NothingToDo`, from an edit that changed nothing, does neither. `undo` and `redo` run the session's `undo` and `redo` the same way; an undo's result carries its inverse's description, *Undo: heading* over the original's lines. `newDocument` and `openDocument` open the ward in the session, which starts its journal and undo stack empty.
+`executeCommand` hands the command to `WardSession::commit` and returns its `CommitResult`. When it is `Applied`, the manager looks up any ward missing its details; when it is `Conflicted` or `Refused`, it emits `commandNotApplied`, and `MainWindow` tells the user what needs doing again, from the result's description, or which rule refused it; `NothingToDo`, from an edit that changed nothing, does neither. `undo` and `redo` run the session's `undo` and `redo` the same way; an undo's result carries its inverse's description, *Undo: heading* over the original's lines. The app starts each launch with `Document::empty()` open in the session, and `newDocument` opens a fresh one; either way the session starts its journal and undo stack empty. The window title is the document's `wardName()`, from the names of its wards.
 
 ### GeocodingService
 
@@ -476,35 +469,6 @@ signals:
 
 ---
 
-## File Formats
-
-### Document JSON Structure
-
-```json
-{
-    "version": 3,
-    "families": {
-        "uuid-1": {
-            "id": "uuid-1",
-            "name": "Smith Family",
-            "latitude": 40.123,
-            "longitude": -111.456,
-            "address": "123 Main St",
-            "members": [...]
-        }
-    },
-    "teams": {},
-    "tags": {},
-    "emergencyAssets": {},
-    "eqDistrictsCurrent": {},
-    "eqGroupsCurrent": {},
-    "rsDistrictsCurrent": {},
-    "rsGroupsCurrent": {}
-}
-```
-
----
-
 ## Error Handling
 
 1. **Validation Errors**: Return error messages, don't throw
@@ -522,6 +486,5 @@ signals:
 - Services: pure function behavior
 
 ### Integration Tests
-- File I/O round-trip
 - The commit step, replay and undo (`WardSession`)
 - PDF import

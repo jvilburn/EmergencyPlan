@@ -26,9 +26,7 @@ public:
     void setResponseArea(ResponseArea area) { m_responseArea = area; }
     void setPersonIds(const QSet<PersonId>& ids) { m_personIds = ids; }
 
-    // Person assignment helpers
-    void addPerson(const PersonId& personId);
-    void removePerson(const PersonId& personId);
+    // Computed properties
     bool hasPerson(const PersonId& personId) const;
 
     // JSON serialization

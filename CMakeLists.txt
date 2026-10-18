@@ -133,11 +133,6 @@ set(COMMAND_SOURCES
     src/commands/FamilyChange.cpp
     src/commands/CommandRegistry.cpp
     src/commands/FamilyCommands.cpp
-    src/commands/ImportWardDirectoryCommand.cpp
-    src/commands/ImportMinisteringCommand.cpp
-    src/commands/TeamCommands.cpp
-    src/commands/TagCommands.cpp
-    src/commands/EmergencyAssetCommands.cpp
     # src/commands/ImportCommands.cpp
 )
 
@@ -148,17 +143,11 @@ set(COMMAND_HEADERS
     src/commands/FamilyChange.h
     src/commands/CommandRegistry.h
     src/commands/FamilyCommands.h
-    src/commands/ImportWardDirectoryCommand.h
-    src/commands/ImportMinisteringCommand.h
-    src/commands/TeamCommands.h
-    src/commands/TagCommands.h
-    src/commands/EmergencyAssetCommands.h
     # src/commands/ImportCommands.h
 )
 
 set(SERVICE_SOURCES
     src/services/DocumentManager.cpp
-    src/services/JsonService.cpp
     src/services/PdfExtractor.cpp
     src/services/PdfFieldUtils.cpp
     src/services/PersonMatching.cpp
@@ -186,7 +175,6 @@ set(SERVICE_SOURCES
 
 set(SERVICE_HEADERS
     src/services/DocumentManager.h
-    src/services/JsonService.h
     src/services/PdfExtractor.h
     src/services/PersonMatching.h
     src/services/WardDirectoryImportService.h

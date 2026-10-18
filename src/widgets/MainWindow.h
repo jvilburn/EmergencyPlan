@@ -29,13 +29,8 @@ public:
     explicit MainWindow(QWidget* parent);
     ~MainWindow();
 
-    bool openFile(const QString& filePath);
-
 private slots:
     void onNewDocument();
-    void onOpenDocument();
-    void onSaveDocument();
-    void onSaveDocumentAs();
     void onImportPdf();
     void onImportMinisteringPdf();
     void onUndo();
@@ -48,10 +43,6 @@ private slots:
     // Geocoding
     void onGeocodingProgress(int completed, int total);
     void onGeocodingFinished();
-
-    // Auto-save
-    void onAutoSaveFailed(const QString& errorMessage);
-    void onFilePathChanged();
 
     // GeoLocation
     void onLocationReady(double latitude, double longitude);
@@ -87,8 +78,6 @@ private:
     static QString settingsFilePath();
     static bool loadDefaultLocation(double& lat, double& lng);
     static void saveDefaultLocation(double lat, double lng);
-    static void saveLastDocumentPath(const QString& filePath);
-    static QString loadLastDocumentPath();
 
     // Widgets
     QSplitter* m_splitter;
@@ -108,9 +97,6 @@ private:
 
     // Actions
     QAction* m_newAction;
-    QAction* m_openAction;
-    QAction* m_saveAction;
-    QAction* m_saveAsAction;
     QAction* m_importPdfAction;
     QAction* m_importMinisteringPdfAction;
     QAction* m_startEmergencyAction;

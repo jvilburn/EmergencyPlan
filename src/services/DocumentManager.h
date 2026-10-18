@@ -3,7 +3,6 @@
 #include <QObject>
 #include <QString>
 #include <QSet>
-#include <optional>
 #include "Document.h"
 #include "DocumentChange.h"
 #include "WardSession.h"
@@ -11,13 +10,12 @@
 class UnitLookupService;
 class BackgroundGeocodingService;
 
-/// The app's one open ward: a thin wrapper over its WardSession, with the ward's file.
+/// The app's one open ward: a thin wrapper over its WardSession.
 class DocumentManager : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(bool canUndo READ canUndo NOTIFY undoStackChanged)
     Q_PROPERTY(bool canRedo READ canRedo NOTIFY undoStackChanged)
-    Q_PROPERTY(QString filePath READ filePath NOTIFY filePathChanged)
 
 public:
     explicit DocumentManager(QObject* parent);
@@ -28,15 +26,12 @@ public:
     // Document access
     const Document& document() const { return m_session.document(); }
 
-    // File path
-    QString filePath() const { return m_filePath; }
-
-    /// Runs the command through the session's commit step and saves when it applied. A
-    /// command that conflicted or was refused emits commandNotApplied.
+    /// Runs the command through the session's commit step. A command that conflicted or was
+    /// refused emits commandNotApplied.
     CommitResult executeCommand(CommandPtr command);
 
-    /// Undo and redo through the session's commit step, saving when they applied. One that
-    /// conflicted or was refused emits commandNotApplied.
+    /// Undo and redo through the session's commit step. One that conflicted or was refused
+    /// emits commandNotApplied.
     void undo();
     void redo();
     bool canUndo() const { return m_session.canUndo(); }
@@ -44,15 +39,8 @@ public:
     QString undoHeading() const { return m_session.undoHeading(); }
     QString redoHeading() const { return m_session.redoHeading(); }
 
-    // File operations
+    /// Opens Document::empty() in the session.
     void newDocument();
-    bool openDocument(const QString& filePath, QString* errorMessage);
-    bool saveDocument(QString* errorMessage);
-    bool saveDocumentAs(const QString& filePath, QString* errorMessage);
-
-    // Emergency response data (saves without going through the session)
-    void setEmergencyResponse(const std::optional<EmergencyResponse>& response);
-    bool saveDocumentOnly();
 
     // Geocoding
     void startBatchGeocoding();
@@ -63,14 +51,10 @@ signals:
     void documentChanged(const DocumentChange& change);
     void undoStackChanged();
     void commandNotApplied(const CommitResult& result);
-    void filePathChanged();
 
     // Geocoding progress
     void geocodingProgressChanged(int completed, int total);
     void geocodingFinished();
-
-    // Auto-save
-    void autoSaveFailed(const QString& errorMessage);
 
 private slots:
     void onWardLookupComplete(const QString& wardUnitNumber, const Ward& ward);
@@ -82,18 +66,13 @@ private slots:
     void onGeocodingFinished();
 
 private:
-    /// After the commit step: an applied change looks up new wards and saves; one that
-    /// conflicted or was refused emits commandNotApplied.
+    /// After the commit step: an applied change looks up new wards; one that conflicted or
+    /// was refused emits commandNotApplied.
     void afterCommit(const CommitResult& result);
 
-    void setFilePath(const QString& filePath);
     void checkForIncompleteWards();
-    void autoSave();
-    void ensureFilePath();
-    void maybeRenameForWard();
 
     WardSession m_session;
-    QString m_filePath;
 
     // Unit lookup
     UnitLookupService* m_unitLookupService;

@@ -14,7 +14,6 @@
 #include "DocumentManager.h"
 #include "EmergencyManager.h"
 #include "ReportGenerator.h"
-#include "Ward.h"
 #include "FamilyCommands.h"
 #include "ImportWardDirectoryCommand.h"
 #include "ImportMinisteringCommand.h"
@@ -50,28 +49,7 @@ MainWindow::MainWindow(QWidget* parent)
     setupMenus();
     setupConnections();
 
-    // Auto-load last document
-    bool documentLoaded = false;
-    QString lastPath = loadLastDocumentPath();
-    if (!lastPath.isEmpty() && QFile::exists(lastPath))
-    {
-        if (DocumentManager::instance()->openDocument(lastPath, nullptr))
-        {
-            // Center on chapel immediately; defer fit until widget has size
-            m_mapWidget->centerOnChapel();
-            m_mapWidget->requestFitAllFamilies();
-            documentLoaded = true;
-        }
-        else
-        {
-            saveLastDocumentPath(QString());
-        }
-    }
-
-    if (!documentLoaded)
-    {
-        initializeDefaultLocation();
-    }
+    initializeDefaultLocation();
     updateWindowTitle();
     updateUndoRedoActions();
 }
@@ -168,17 +146,6 @@ void MainWindow::setupMenus()
     m_newAction = fileMenu->addAction(tr("&New"), this, &MainWindow::onNewDocument);
     m_newAction->setShortcut(QKeySequence::New);
 
-    m_openAction = fileMenu->addAction(tr("&Open..."), this, &MainWindow::onOpenDocument);
-    m_openAction->setShortcut(QKeySequence::Open);
-
-    fileMenu->addSeparator();
-
-    m_saveAction = fileMenu->addAction(tr("&Save"), this, &MainWindow::onSaveDocument);
-    m_saveAction->setShortcut(QKeySequence::Save);
-
-    m_saveAsAction = fileMenu->addAction(tr("Save &As..."), this, &MainWindow::onSaveDocumentAs);
-    m_saveAsAction->setShortcut(QKeySequence::SaveAs);
-
     fileMenu->addSeparator();
 
     QMenu* importMenu = fileMenu->addMenu(tr("&Import"));
@@ -216,10 +183,6 @@ void MainWindow::setupConnections()
 {
     connect(DocumentManager::instance(), &DocumentManager::documentChanged,
             this, &MainWindow::onDocumentChanged);
-    connect(DocumentManager::instance(), &DocumentManager::filePathChanged,
-            this, &MainWindow::updateWindowTitle);
-    connect(DocumentManager::instance(), &DocumentManager::filePathChanged,
-            this, &MainWindow::onFilePathChanged);
     connect(DocumentManager::instance(), &DocumentManager::undoStackChanged,
             this, &MainWindow::updateUndoRedoActions);
     connect(DocumentManager::instance(), &DocumentManager::commandNotApplied,
@@ -258,104 +221,12 @@ void MainWindow::setupConnections()
             this, &MainWindow::onGeocodingProgress);
     connect(DocumentManager::instance(), &DocumentManager::geocodingFinished,
             this, &MainWindow::onGeocodingFinished);
-
-    // Auto-save
-    connect(DocumentManager::instance(), &DocumentManager::autoSaveFailed,
-            this, &MainWindow::onAutoSaveFailed);
 }
 
 void MainWindow::onNewDocument()
 {
     DocumentManager::instance()->newDocument();
     statusBar()->showMessage(tr("New document created"), 3000);
-}
-
-void MainWindow::onOpenDocument()
-{
-    QString filePath = QFileDialog::getOpenFileName(
-        this,
-        tr("Open Document"),
-        QString(),
-        tr("Emergency Plan Files (*.emergencyplan);;All Files (*)"));
-
-    if (filePath.isEmpty())
-    {
-        return;
-    }
-
-    QString errorMessage;
-    if (DocumentManager::instance()->openDocument(filePath, &errorMessage))
-    {
-        statusBar()->showMessage(tr("Document opened"), 3000);
-        m_mapWidget->fitAllFamilies();
-    }
-    else
-    {
-        QMessageBox::warning(this, tr("Error"), errorMessage);
-    }
-}
-
-bool MainWindow::openFile(const QString& filePath)
-{
-    QString errorMessage;
-    if (DocumentManager::instance()->openDocument(filePath, &errorMessage))
-    {
-        statusBar()->showMessage(tr("Document opened"), 3000);
-        m_mapWidget->fitAllFamilies();
-        return true;
-    }
-    else
-    {
-        QMessageBox::warning(this, tr("Error"), errorMessage);
-        return false;
-    }
-}
-
-void MainWindow::onSaveDocument()
-{
-    if (DocumentManager::instance()->filePath().isEmpty())
-    {
-        onSaveDocumentAs();
-    }
-}
-
-void MainWindow::onSaveDocumentAs()
-{
-    // Build suggested path: use existing path, or suggested filename
-    QString suggestedPath;
-    if (!DocumentManager::instance()->filePath().isEmpty())
-    {
-        suggestedPath = DocumentManager::instance()->filePath();
-    }
-    else
-    {
-        QString suggested = DocumentManager::instance()->document().suggestedFilename();
-        if (!suggested.isEmpty())
-        {
-            suggestedPath = suggested + ".emergencyplan";
-        }
-    }
-
-    QString filePath = QFileDialog::getSaveFileName(
-        this,
-        tr("Save Document As"),
-        suggestedPath,
-        tr("Emergency Plan Files (*.emergencyplan);;All Files (*)"));
-
-    if (filePath.isEmpty())
-    {
-        return;
-    }
-
-    QString errorMessage;
-    if (DocumentManager::instance()->saveDocumentAs(filePath, &errorMessage))
-    {
-        statusBar()->showMessage(tr("Document saved"), 3000);
-    }
-    else
-    {
-        QMessageBox::warning(this, tr("Error"), errorMessage);
-    }
 }
 
 void MainWindow::onImportPdf()
@@ -409,11 +280,6 @@ void MainWindow::onImportPdf()
 
     // Update UI
     QString message = tr("Imported %1 families").arg(result.families.size());
-
-    if (!result.wardUnitNumber.isEmpty())
-    {
-        updateWindowTitle();
-    }
 
     statusBar()->showMessage(message, 5000);
     m_mapWidget->fitAllFamilies();
@@ -515,32 +381,12 @@ void MainWindow::onDocumentChanged(const DocumentChange& change)
     Q_UNUSED(change)
     int count = DocumentManager::instance()->document().families().size();
     statusBar()->showMessage(tr("%1 families").arg(count));
+    updateWindowTitle();
 }
 
 void MainWindow::updateWindowTitle()
 {
-    QString title = "Emergency Plan";
-
-    QString filePath = DocumentManager::instance()->filePath();
-    if (!filePath.isEmpty())
-    {
-        QFileInfo fileInfo(filePath);
-        title = fileInfo.completeBaseName() + " - " + title;
-    }
-    else
-    {
-        QString suggested = DocumentManager::instance()->document().suggestedFilename();
-        if (!suggested.isEmpty())
-        {
-            title = suggested + " - " + title;
-        }
-        else
-        {
-            title = "Untitled - " + title;
-        }
-    }
-
-    setWindowTitle(title);
+    setWindowTitle(tr("%1 - Emergency Plan").arg(DocumentManager::instance()->document().wardName()));
 }
 
 void MainWindow::updateUndoRedoActions()
@@ -600,16 +446,6 @@ void MainWindow::onGeocodingFinished()
     m_geocodingProgress->hide();
 }
 
-void MainWindow::onAutoSaveFailed(const QString& errorMessage)
-{
-    statusBar()->showMessage(tr("Auto-save failed: %1 - use Save As to save manually").arg(errorMessage));
-}
-
-void MainWindow::onFilePathChanged()
-{
-    saveLastDocumentPath(DocumentManager::instance()->filePath());
-}
-
 // ============================================================================
 // Default Location / Settings
 // ============================================================================
@@ -662,19 +498,6 @@ void MainWindow::saveDefaultLocation(double lat, double lng)
     json["defaultLat"] = lat;
     json["defaultLng"] = lng;
     saveSettingsJson(settingsFilePath(), json);
-}
-
-void MainWindow::saveLastDocumentPath(const QString& filePath)
-{
-    QJsonObject json = loadSettingsJson(settingsFilePath());
-    json["lastDocumentPath"] = filePath;
-    saveSettingsJson(settingsFilePath(), json);
-}
-
-QString MainWindow::loadLastDocumentPath()
-{
-    QJsonObject json = loadSettingsJson(settingsFilePath());
-    return json["lastDocumentPath"].toString();
 }
 
 void MainWindow::initializeDefaultLocation()
@@ -1005,18 +828,7 @@ bool MainWindow::generateEmergencyReportWithConfirm()
         return answer == QMessageBox::Yes;
     }
 
-    // Get ward name from document metadata
-    QString wardName;
-    const QHash<QString, Ward>& wards = DocumentManager::instance()->document().wards();
-    if (!wards.isEmpty())
-    {
-        wardName = wards.constBegin().value().name();
-        if (!wardName.isEmpty())
-        {
-            wardName += tr(" Ward");
-        }
-    }
-
+    QString wardName = DocumentManager::instance()->document().wardName();
     if (ReportGenerator::generateReport(response, wardName, filePath))
     {
         statusBar()->showMessage(tr("Report saved to %1").arg(filePath), 5000);

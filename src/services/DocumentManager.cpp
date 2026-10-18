@@ -1,28 +1,8 @@
 #include "DocumentManager.h"
-#include "JsonService.h"
 #include "UnitLookupService.h"
 #include "BackgroundGeocodingService.h"
 
 #include <QDebug>
-#include <QStandardPaths>
-#include <QFile>
-#include <QFileInfo>
-
-static QString buildUniquePath(const QString& dir, const QString& basename, const QString& extension)
-{
-    QString filePath = dir + "/" + basename + extension;
-    if (!QFile::exists(filePath))
-    {
-        return filePath;
-    }
-
-    int counter = 2;
-    while (QFile::exists(dir + "/" + basename + " (" + QString::number(counter) + ")" + extension))
-    {
-        counter++;
-    }
-    return dir + "/" + basename + " (" + QString::number(counter) + ")" + extension;
-}
 
 DocumentManager* DocumentManager::s_instance = nullptr;
 
@@ -98,7 +78,6 @@ void DocumentManager::afterCommit(const CommitResult& result)
     {
     case CommitStatus::Applied:
         checkForIncompleteWards();
-        autoSave();
         break;
     case CommitStatus::Conflicted:
     case CommitStatus::Refused:
@@ -115,63 +94,6 @@ void DocumentManager::newDocument()
     m_pendingWardLookups.clear();
     m_pendingStakeLookups.clear();
     m_session.open(Document::empty());
-    setFilePath(QString());
-}
-
-bool DocumentManager::openDocument(const QString& filePath, QString* errorMessage)
-{
-    JsonResult result = JsonService::loadDocument(filePath);
-
-    if (!result.success)
-    {
-        if (errorMessage)
-        {
-            *errorMessage = result.errorMessage;
-        }
-        return false;
-    }
-
-    stopGeocoding();
-    m_pendingWardLookups.clear();
-    m_pendingStakeLookups.clear();
-    m_session.open(result.document);
-    setFilePath(filePath);
-    checkForIncompleteWards();
-    return true;
-}
-
-bool DocumentManager::saveDocument(QString* errorMessage)
-{
-    if (m_filePath.isEmpty())
-    {
-        if (errorMessage)
-        {
-            *errorMessage = tr("No file path set. Use Save As.");
-        }
-        return false;
-    }
-
-    return saveDocumentAs(m_filePath, errorMessage);
-}
-
-bool DocumentManager::saveDocumentAs(const QString& filePath, QString* errorMessage)
-{
-    if (!JsonService::saveDocument(filePath, m_session.document(), errorMessage))
-    {
-        return false;
-    }
-
-    setFilePath(filePath);
-    return true;
-}
-
-void DocumentManager::setFilePath(const QString& filePath)
-{
-    if (m_filePath != filePath)
-    {
-        m_filePath = filePath;
-        emit filePathChanged();
-    }
 }
 
 void DocumentManager::checkForIncompleteWards()
@@ -242,7 +164,6 @@ void DocumentManager::onWardLookupComplete(const QString& wardUnitNumber, const 
 
     // Process next incomplete ward
     checkForIncompleteWards();
-    autoSave();
 }
 
 void DocumentManager::onStakeLookupComplete(const QString& stakeUnitNumber, const Stake& stakeInfo)
@@ -252,7 +173,6 @@ void DocumentManager::onStakeLookupComplete(const QString& stakeUnitNumber, cons
     // Add or update stake
     m_document.metadata().updateStake(stakeInfo);
     emit documentChanged(DocumentChange::metadata().updated(stakeUnitNumber));
-    autoSave();
 }
 
 void DocumentManager::onLookupFailed(const QString& unitNumber, const QString& error)
@@ -260,7 +180,7 @@ void DocumentManager::onLookupFailed(const QString& unitNumber, const QString& e
     qWarning() << "Lookup failed for" << unitNumber << ":" << error;
     m_pendingWardLookups.remove(unitNumber);
     m_pendingStakeLookups.remove(unitNumber);
-    // No retry, no checkForIncompleteWards() - will try again on next file open
+    // No retry here: the next applied change looks up incomplete wards again
 }
 
 // ============================================================================
@@ -304,106 +224,4 @@ void DocumentManager::onFamilyGeocoded(const FamilyId& id, double latitude, doub
 void DocumentManager::onGeocodingFinished()
 {
     emit geocodingFinished();
-    autoSave();
-}
-
-// ============================================================================
-// Emergency Response Data
-// ============================================================================
-
-void DocumentManager::setEmergencyResponse(const std::optional<EmergencyResponse>& response)
-{
-    m_document.setEmergencyResponse(response);
-    saveDocumentOnly();
-}
-
-bool DocumentManager::saveDocumentOnly()
-{
-    if (m_filePath.isEmpty())
-    {
-        return false;
-    }
-    QString errorMessage;
-    if (!JsonService::saveDocument(m_filePath, m_session.document(), &errorMessage))
-    {
-        qWarning() << "Response data save failed:" << errorMessage;
-        emit autoSaveFailed(errorMessage);
-        return false;
-    }
-    return true;
-}
-
-// ============================================================================
-// Auto-Save
-// ============================================================================
-
-void DocumentManager::autoSave()
-{
-    ensureFilePath();
-    maybeRenameForWard();
-
-    if (m_filePath.isEmpty())
-    {
-        return;
-    }
-
-    QString errorMessage;
-    if (!saveDocument(&errorMessage))
-    {
-        qWarning() << "Auto-save failed:" << errorMessage;
-        emit autoSaveFailed(errorMessage);
-    }
-}
-
-void DocumentManager::ensureFilePath()
-{
-    if (!m_filePath.isEmpty())
-    {
-        return;
-    }
-
-    QString filename = m_session.document().suggestedFilename();
-    if (filename.isEmpty())
-    {
-        filename = tr("Untitled");
-    }
-
-    QString documentsDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
-    setFilePath(buildUniquePath(documentsDir, filename, ".emergencyplan"));
-}
-
-void DocumentManager::maybeRenameForWard()
-{
-    if (m_filePath.isEmpty())
-    {
-        return;
-    }
-
-    QString suggestedName = m_session.document().suggestedFilename();
-    if (suggestedName.isEmpty())
-    {
-        return;
-    }
-
-    QFileInfo fileInfo(m_filePath);
-    QString currentBaseName = fileInfo.completeBaseName();
-
-    // Only rename if the file is still "Untitled" (or "Untitled (N)")
-    if (!currentBaseName.startsWith(tr("Untitled")))
-    {
-        return;
-    }
-
-    QString newPath = buildUniquePath(fileInfo.absolutePath(), suggestedName, ".emergencyplan");
-
-    // Rename the file on disk (if it exists yet)
-    if (QFile::exists(m_filePath))
-    {
-        if (!QFile::rename(m_filePath, newPath))
-        {
-            return;  // Rename failed - keep the old path, no harm done
-        }
-    }
-
-    setFilePath(newPath);
 }

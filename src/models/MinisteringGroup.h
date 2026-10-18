@@ -43,11 +43,9 @@ public:
     void setPresidencyMemberId(std::optional<PersonId> id) { m_presidencyMemberId = id; }
     void setIsRSGroup(bool isRS) { m_isRSFormat = isRS; }
     void addMinister(const PersonId& personId) { m_ministerIds.insert(personId); }
-    void removeMinister(const PersonId& personId) { m_ministerIds.remove(personId); }
     void addFamily(const FamilyId& familyId) { m_familyIds.insert(familyId); }
     void removeFamily(const FamilyId& familyId) { m_familyIds.remove(familyId); }
     void addMinisteredPerson(const PersonId& personId) { m_ministeredPersonIds.insert(personId); }
-    void removeMinisteredPerson(const PersonId& personId) { m_ministeredPersonIds.remove(personId); }
 
     // Computed properties
     bool hasMinisters() const { return !m_ministerIds.isEmpty(); }

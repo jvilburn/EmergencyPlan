@@ -8,11 +8,10 @@ Ward Emergency Plan is a desktop application for managing ward family data, mini
 
 ## Getting Started
 
-### Creating or Opening a Document
+### Starting a Document
 
-- **File > New** (Ctrl+N) — Start with an empty document
-- **File > Open** (Ctrl+O) — Open an existing `.emergencyplan` file
-- The app automatically reopens your last document on launch
+- The app starts each launch with an empty document
+- **File > New** (Ctrl+N) - Start again with an empty document
 
 ### Importing Data
 
@@ -186,9 +185,6 @@ A family with unresolved tasks automatically shows as "Needs Help".
 | Action | Shortcut |
 |--------|----------|
 | New | Ctrl+N |
-| Open | Ctrl+O |
-| Save | Ctrl+S |
-| Save As | Ctrl+Shift+S |
 | Undo | Ctrl+Z |
 | Redo | Ctrl+Y |
 | Quit | Ctrl+Q |
@@ -205,7 +201,5 @@ Emergency response actions (contact status, tasks) are **not** part of the undo 
 
 ## Saving
 
-- **Ctrl+S** saves the document
-- The app auto-saves after changes
-- The title bar shows an asterisk (*) when there are unsaved changes
-- On close, the app prompts to save if there are unsaved changes
+- The app holds the document in memory while it runs, and the next launch starts with an empty one
+- The title bar shows the ward's name, from the wards in the document

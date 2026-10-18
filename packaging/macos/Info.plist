@@ -44,26 +44,6 @@
     <key>NSHumanReadableCopyright</key>
     <string>Copyright (c) 2024</string>
 
-    <!-- Document types the app can open -->
-    <key>CFBundleDocumentTypes</key>
-    <array>
-        <dict>
-            <key>CFBundleTypeName</key>
-            <string>Emergency Plan Document</string>
-            <key>CFBundleTypeRole</key>
-            <string>Editor</string>
-            <key>LSHandlerRank</key>
-            <string>Owner</string>
-            <key>CFBundleTypeExtensions</key>
-            <array>
-                <string>emergencyplan</string>
-                <string>json</string>
-            </array>
-            <key>CFBundleTypeIconFile</key>
-            <string>EmergencyPlanDoc.icns</string>
-        </dict>
-    </array>
-
     <!-- Privacy permissions if needed -->
     <key>NSLocationUsageDescription</key>
     <string>Emergency Plan uses your location to center the map on your area.</string>

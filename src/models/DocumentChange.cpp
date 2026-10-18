@@ -27,87 +27,6 @@ DocumentChange FamilyScopeBuilder::full() const
     return DocumentChange::full();
 }
 
-// TeamScopeBuilder
-DocumentChange TeamScopeBuilder::updated(const TeamId& id) const
-{
-    DocumentChange c;
-    c.action = ChangeAction::Updated;
-    c.teamId = id;
-    return c;
-}
-DocumentChange TeamScopeBuilder::added(const TeamId& id) const
-{
-    DocumentChange c;
-    c.action = ChangeAction::Added;
-    c.teamId = id;
-    return c;
-}
-DocumentChange TeamScopeBuilder::removed(const TeamId& id) const
-{
-    DocumentChange c;
-    c.action = ChangeAction::Removed;
-    c.teamId = id;
-    return c;
-}
-DocumentChange TeamScopeBuilder::full() const
-{
-    return DocumentChange::full();
-}
-
-// TagScopeBuilder
-DocumentChange TagScopeBuilder::updated(const TagId& id) const
-{
-    DocumentChange c;
-    c.action = ChangeAction::Updated;
-    c.tagId = id;
-    return c;
-}
-DocumentChange TagScopeBuilder::added(const TagId& id) const
-{
-    DocumentChange c;
-    c.action = ChangeAction::Added;
-    c.tagId = id;
-    return c;
-}
-DocumentChange TagScopeBuilder::removed(const TagId& id) const
-{
-    DocumentChange c;
-    c.action = ChangeAction::Removed;
-    c.tagId = id;
-    return c;
-}
-DocumentChange TagScopeBuilder::full() const
-{
-    return DocumentChange::full();
-}
-
-// AssetScopeBuilder
-DocumentChange AssetScopeBuilder::updated(const EmergencyAssetId& id) const
-{
-    DocumentChange c;
-    c.action = ChangeAction::Updated;
-    c.assetId = id;
-    return c;
-}
-DocumentChange AssetScopeBuilder::added(const EmergencyAssetId& id) const
-{
-    DocumentChange c;
-    c.action = ChangeAction::Added;
-    c.assetId = id;
-    return c;
-}
-DocumentChange AssetScopeBuilder::removed(const EmergencyAssetId& id) const
-{
-    DocumentChange c;
-    c.action = ChangeAction::Removed;
-    c.assetId = id;
-    return c;
-}
-DocumentChange AssetScopeBuilder::full() const
-{
-    return DocumentChange::full();
-}
-
 // EqDistrictScopeBuilder
 DocumentChange EqDistrictScopeBuilder::updated(const MinisteringDistrictId& id) const
 {
@@ -236,9 +155,6 @@ DocumentChange DocumentChange::full()
 }
 
 FamilyScopeBuilder DocumentChange::family() { return FamilyScopeBuilder{}; }
-TeamScopeBuilder DocumentChange::team() { return TeamScopeBuilder{}; }
-TagScopeBuilder DocumentChange::tag() { return TagScopeBuilder{}; }
-AssetScopeBuilder DocumentChange::emergencyAsset() { return AssetScopeBuilder{}; }
 EqDistrictScopeBuilder DocumentChange::eqDistrict() { return EqDistrictScopeBuilder{}; }
 RsDistrictScopeBuilder DocumentChange::rsDistrict() { return RsDistrictScopeBuilder{}; }
 EqGroupScopeBuilder DocumentChange::eqGroup() { return EqGroupScopeBuilder{}; }

@@ -11,16 +11,6 @@ EmergencyAsset EmergencyAsset::create(const QString& name, ResponseArea area)
     return asset;
 }
 
-void EmergencyAsset::addPerson(const PersonId& personId)
-{
-    m_personIds.insert(personId);
-}
-
-void EmergencyAsset::removePerson(const PersonId& personId)
-{
-    m_personIds.remove(personId);
-}
-
 bool EmergencyAsset::hasPerson(const PersonId& personId) const
 {
     return m_personIds.contains(personId);

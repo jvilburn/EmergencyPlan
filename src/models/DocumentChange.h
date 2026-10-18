@@ -25,30 +25,6 @@ struct FamilyScopeBuilder
     DocumentChange full() const;
 };
 
-struct TeamScopeBuilder
-{
-    DocumentChange updated(const TeamId& id) const;
-    DocumentChange added(const TeamId& id) const;
-    DocumentChange removed(const TeamId& id) const;
-    DocumentChange full() const;
-};
-
-struct TagScopeBuilder
-{
-    DocumentChange updated(const TagId& id) const;
-    DocumentChange added(const TagId& id) const;
-    DocumentChange removed(const TagId& id) const;
-    DocumentChange full() const;
-};
-
-struct AssetScopeBuilder
-{
-    DocumentChange updated(const EmergencyAssetId& id) const;
-    DocumentChange added(const EmergencyAssetId& id) const;
-    DocumentChange removed(const EmergencyAssetId& id) const;
-    DocumentChange full() const;
-};
-
 struct EqDistrictScopeBuilder
 {
     DocumentChange updated(const MinisteringDistrictId& id) const;
@@ -109,9 +85,6 @@ struct DocumentChange
 
     // Scope builders
     static FamilyScopeBuilder family();
-    static TeamScopeBuilder team();
-    static TagScopeBuilder tag();
-    static AssetScopeBuilder emergencyAsset();
     static EqDistrictScopeBuilder eqDistrict();
     static RsDistrictScopeBuilder rsDistrict();
     static EqGroupScopeBuilder eqGroup();

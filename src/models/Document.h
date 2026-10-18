@@ -39,7 +39,7 @@ public:
     // Convenience accessors that delegate to metadata
     const QHash<QString, Ward>& wards() const { return m_metadata.wards(); }
     const QHash<QString, Stake>& stakes() const { return m_metadata.stakes(); }
-    QString suggestedFilename() const { return m_metadata.suggestedFilename(); }
+    QString wardName() const { return m_metadata.wardName(); }
 
     // ========================================================================
     // Core collection getters
@@ -59,50 +59,22 @@ public:
     // ========================================================================
     std::optional<QDate> wardDirectoryPdfDate() const { return m_wardDirectoryPdfDate; }
     std::optional<QDate> ministeringPdfDate() const { return m_ministeringPdfDate; }
-    void setWardDirectoryPdfDate(std::optional<QDate> date);
-    void setMinisteringPdfDate(std::optional<QDate> date);
 
     // ========================================================================
     // Mutating operations - families
     // ========================================================================
     void addFamily(const Family& family);
-    void addFamilies(const QList<Family>& families);
     void updateFamily(const Family& family);
     void removeFamily(const FamilyId& id);
-    void setFamilies(const QHash<FamilyId, Family>& families);
 
     QList<Family> familiesInStake(const QString& stakeUnitNumber) const;
     QList<Family> familiesInWard(const QString& wardUnitNumber) const;
-
-    // ========================================================================
-    // Mutating operations - teams
-    // ========================================================================
-    void addTeam(const Team& team);
-    void updateTeam(const Team& team);
-    void removeTeam(const TeamId& id);
-
-    void addMemberToTeam(const TeamId& teamId, const PersonId& memberId);
-    void removeMemberFromTeam(const TeamId& teamId, const PersonId& memberId);
-
-    // ========================================================================
-    // Mutating operations - tags
-    // ========================================================================
-    void addTag(const Tag& tag);
-    void updateTag(const Tag& tag);
-    void removeTag(const TagId& id);
-
-    void addPersonToTag(const TagId& tagId, const PersonId& personId);
-    void removePersonFromTag(const TagId& tagId, const PersonId& personId);
-    void addFamilyToTag(const TagId& tagId, const FamilyId& familyId);
-    void removeFamilyFromTag(const TagId& tagId, const FamilyId& familyId);
 
     // ========================================================================
     // EmergencyAsset operations
     // ========================================================================
     const QHash<EmergencyAssetId, EmergencyAsset>& emergencyAssets() const { return m_emergencyAssets; }
     void addEmergencyAsset(const EmergencyAsset& asset);
-    void updateEmergencyAsset(const EmergencyAsset& asset);
-    void removeEmergencyAsset(const EmergencyAssetId& id);
     std::optional<EmergencyAsset> findEmergencyAssetById(const EmergencyAssetId& id) const;
     QList<EmergencyAsset> emergencyAssetsByArea(ResponseArea area) const;
 
@@ -110,28 +82,10 @@ public:
     // Mutating operations - ministering
     // ========================================================================
     void addDistrict(MinisteringOrg org, const MinisteringDistrict& district);
-    void updateDistrict(MinisteringOrg org, const MinisteringDistrict& district);
     void removeDistrict(MinisteringOrg org, const MinisteringDistrictId& id);
-    void setDistricts(MinisteringOrg org, const QHash<MinisteringDistrictId, MinisteringDistrict>& districts);
 
     void addGroup(MinisteringOrg org, const MinisteringGroup& group);
-    void updateGroup(MinisteringOrg org, const MinisteringGroup& group);
     void removeGroup(MinisteringOrg org, const MinisteringGroupId& id);
-    void setGroups(MinisteringOrg org, const QHash<MinisteringGroupId, MinisteringGroup>& groups);
-
-    // ========================================================================
-    // Cascading cleanup
-    // ========================================================================
-
-    /// Remove a person from all references (teams, tags, assets, ministering).
-    /// Does NOT remove the person from their family - caller must handle that.
-    void cleanupPersonReferences(const PersonId& personId);
-
-    // ========================================================================
-    // Emergency response data (optional - only present during active emergency)
-    // ========================================================================
-    const std::optional<EmergencyResponse>& emergencyResponse() const { return m_emergencyResponse; }
-    void setEmergencyResponse(const std::optional<EmergencyResponse>& response);
 
     // ========================================================================
     // Lookup helpers
@@ -194,9 +148,6 @@ private:
     // Import dates (for conflict resolution)
     std::optional<QDate> m_wardDirectoryPdfDate;
     std::optional<QDate> m_ministeringPdfDate;
-
-    // Emergency response data (only present during active emergency)
-    std::optional<EmergencyResponse> m_emergencyResponse;
 
     // Decoration cache: personId -> set of response areas (rebuilt when emergency assets change)
     QHash<PersonId, QSet<ResponseArea>> m_personResponseAreas;

@@ -33,7 +33,6 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
-Name: "fileassoc"; Description: "Associate .emergencyplan files"; GroupDescription: "File associations:"
 
 [Files]
 ; License
@@ -69,12 +68,6 @@ Source: "build\bin\translations\*"; DestDir: "{app}\translations"; Flags: ignore
 
 ; ICU (if present in release deploy)
 Source: "build\bin\icu*.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
-
-[Registry]
-Root: HKA; Subkey: "Software\Classes\.emergencyplan"; ValueType: string; ValueName: ""; ValueData: "WardEmergencyPlan.Document"; Flags: uninsdeletevalue; Tasks: fileassoc
-Root: HKA; Subkey: "Software\Classes\WardEmergencyPlan.Document"; ValueType: string; ValueName: ""; ValueData: "Ward Emergency Plan Document"; Flags: uninsdeletekey; Tasks: fileassoc
-Root: HKA; Subkey: "Software\Classes\WardEmergencyPlan.Document\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc
-Root: HKA; Subkey: "Software\Classes\WardEmergencyPlan.Document\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

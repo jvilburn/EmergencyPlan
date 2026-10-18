@@ -21,14 +21,8 @@ EmergencyManager* EmergencyManager::instance()
 
 void EmergencyManager::onDocumentChanged(const DocumentChange& change)
 {
-    if (change.action == ChangeAction::Full)
-    {
-        syncFromDocument();
-    }
-    else if (m_response.has_value())
-    {
-        syncFamilies();
-    }
+    Q_UNUSED(change)
+    syncFamilies();
 }
 
 // ============================================================================
@@ -61,7 +55,6 @@ void EmergencyManager::startEmergency(const QString& name)
         m_response->addFamilyRecord(record);
     }
 
-    persistResponseData();
     emit emergencyStarted();
     emit responseDataChanged();
 }
@@ -74,7 +67,6 @@ void EmergencyManager::endEmergency()
     }
 
     m_response.reset();
-    DocumentManager::instance()->setEmergencyResponse(std::nullopt);
     emit emergencyEnded();
     emit responseDataChanged();
 }
@@ -128,7 +120,6 @@ void EmergencyManager::setContactStatus(const FamilyId& familyId, ContactStatus 
         return;
     }
     record->setContactStatus(status);
-    persistResponseData();
     emit familyStatusChanged(familyId);
     emit responseDataChanged();
 }
@@ -149,7 +140,6 @@ void EmergencyManager::addContactAttempt(const FamilyId& familyId, const Contact
         return;
     }
     record->addContactAttempt(attempt);
-    persistResponseData();
     emit familyStatusChanged(familyId);
     emit responseDataChanged();
 }
@@ -166,7 +156,6 @@ void EmergencyManager::removeContactAttempt(const FamilyId& familyId, const Cont
         return;
     }
     record->removeContactAttempt(attemptId);
-    persistResponseData();
     emit familyStatusChanged(familyId);
     emit responseDataChanged();
 }
@@ -187,7 +176,6 @@ void EmergencyManager::addTask(const FamilyId& familyId, const ResponseTask& tas
         return;
     }
     record->addTask(task);
-    persistResponseData();
     emit familyStatusChanged(familyId);
     emit responseDataChanged();
 }
@@ -204,7 +192,6 @@ void EmergencyManager::updateTask(const FamilyId& familyId, const ResponseTask& 
         return;
     }
     record->updateTask(task);
-    persistResponseData();
     emit familyStatusChanged(familyId);
     emit responseDataChanged();
 }
@@ -221,7 +208,6 @@ void EmergencyManager::removeTask(const FamilyId& familyId, const TaskId& taskId
         return;
     }
     record->removeTask(taskId);
-    persistResponseData();
     emit familyStatusChanged(familyId);
     emit responseDataChanged();
 }
@@ -243,7 +229,6 @@ void EmergencyManager::resolveTask(const FamilyId& familyId, const TaskId& taskI
         return;
     }
     task->resolve(notes);
-    persistResponseData();
     emit familyStatusChanged(familyId);
     emit responseDataChanged();
 }
@@ -265,7 +250,6 @@ void EmergencyManager::reopenTask(const FamilyId& familyId, const TaskId& taskId
         return;
     }
     task->reopen();
-    persistResponseData();
     emit familyStatusChanged(familyId);
     emit responseDataChanged();
 }
@@ -291,7 +275,6 @@ void EmergencyManager::assignTaskToTeam(const FamilyId& familyId, const TaskId& 
         return;
     }
     task->assignToTeam(teamId, notes);
-    persistResponseData();
     emit responseDataChanged();
 }
 
@@ -312,7 +295,6 @@ void EmergencyManager::assignTaskToPerson(const FamilyId& familyId, const TaskId
         return;
     }
     task->assignToPerson(personId, notes);
-    persistResponseData();
     emit responseDataChanged();
 }
 
@@ -333,7 +315,6 @@ void EmergencyManager::unassignTask(const FamilyId& familyId, const TaskId& task
         return;
     }
     task->clearAssignment();
-    persistResponseData();
     emit responseDataChanged();
 }
 
@@ -358,7 +339,6 @@ void EmergencyManager::notifyAssignee(const FamilyId& familyId, const TaskId& ta
         return;
     }
     task->setNotification(notification);
-    persistResponseData();
     emit responseDataChanged();
 }
 
@@ -382,7 +362,6 @@ void EmergencyManager::addTaskCategory(const QString& category)
         return;
     }
     m_response->addTaskCategory(category);
-    persistResponseData();
 }
 
 // ============================================================================
@@ -411,33 +390,6 @@ int EmergencyManager::countByStatus(EffectiveContactStatus status) const
 // Private
 // ============================================================================
 
-void EmergencyManager::persistResponseData()
-{
-    DocumentManager::instance()->setEmergencyResponse(m_response);
-}
-
-void EmergencyManager::syncFromDocument()
-{
-    const std::optional<EmergencyResponse>& response = DocumentManager::instance()->document().emergencyResponse();
-    if (response.has_value())
-    {
-        bool wasActive = m_response.has_value();
-        m_response = response;
-        syncFamilies();
-        if (!wasActive)
-        {
-            emit emergencyStarted();
-        }
-        emit responseDataChanged();
-    }
-    else if (m_response.has_value())
-    {
-        m_response.reset();
-        emit emergencyEnded();
-        emit responseDataChanged();
-    }
-}
-
 void EmergencyManager::syncFamilies()
 {
     if (!m_response.has_value())
@@ -449,7 +401,6 @@ void EmergencyManager::syncFamilies()
     const QHash<FamilyId, FamilyResponseRecord>& records = m_response->familyRecords();
 
     // Add records for families that don't have one yet
-    bool added = false;
     for (auto it = families.constBegin(); it != families.constEnd(); ++it)
     {
         if (!records.contains(it.key()))
@@ -460,13 +411,7 @@ void EmergencyManager::syncFamilies()
                 family.displayName(),
                 family.address().full());
             m_response->addFamilyRecord(record);
-            added = true;
         }
     }
     // Removed families: leave their records (snapshot data useful for current emergency)
-
-    if (added)
-    {
-        persistResponseData();
-    }
 }
