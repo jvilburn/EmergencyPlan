@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Id.h"
+#include <QMetaType>
 #include <QString>
 #include <optional>
 
@@ -92,7 +93,7 @@ struct DocumentChange
 {
     ChangeAction action = ChangeAction::Full;
 
-    // At most one is set — which field is set determines the scope
+    // At most one is set - which field is set determines the scope
     std::optional<FamilyId> familyId;
     std::optional<TeamId> teamId;
     std::optional<TagId> tagId;
@@ -117,3 +118,5 @@ struct DocumentChange
     static RsGroupScopeBuilder rsGroup();
     static MetadataScopeBuilder metadata();
 };
+
+Q_DECLARE_METATYPE(DocumentChange)

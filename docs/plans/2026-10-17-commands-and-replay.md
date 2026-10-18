@@ -85,6 +85,8 @@ and the test harness that runs all of it against test-built versions.
 - Modify: `src/models/Birthday.h`, `src/models/Birthday.cpp`, `src/models/Person.cpp` (a
   person's birthday is written whenever any part of it is set, and displays whichever parts
   are set)
+- Modify: `src/models/DocumentChange.h` (`Q_DECLARE_METATYPE(DocumentChange)`, so the signal
+  tests read it back from a `QSignalSpy`)
 - Create: `tests/services/PersonJsonTest.h`, `tests/services/PersonJsonTest.cpp`
 - Create: `tests/services/BirthdayTest.h`, `tests/services/BirthdayTest.cpp`
 - Create: `tests/services/FamilyOrderTest.h`, `tests/services/FamilyOrderTest.cpp`
