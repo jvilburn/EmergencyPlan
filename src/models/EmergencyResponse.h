@@ -210,12 +210,8 @@ public:
 
     const QString& name() const { return m_name; }
     const QDateTime& startedAt() const { return m_startedAt; }
-    const std::optional<QDateTime>& endedAt() const { return m_endedAt; }
     const QHash<FamilyId, FamilyResponseRecord>& familyRecords() const { return m_familyRecords; }
     const QStringList& taskCategories() const { return m_taskCategories; }
-
-    void setEndedAt(const QDateTime& endedAt) { m_endedAt = endedAt; }
-    void clearEndedAt() { m_endedAt.reset(); }
 
     // Family record management (called by EmergencyManager)
     void addFamilyRecord(const FamilyResponseRecord& record);
@@ -237,7 +233,6 @@ public:
 private:
     QString m_name;
     QDateTime m_startedAt;
-    std::optional<QDateTime> m_endedAt;          // set when archived
     QHash<FamilyId, FamilyResponseRecord> m_familyRecords;
     QStringList m_taskCategories;
 };

@@ -564,11 +564,6 @@ QJsonObject EmergencyResponse::toJson() const
     json["name"] = m_name;
     json["startedAt"] = m_startedAt.toString(Qt::ISODate);
 
-    if (m_endedAt.has_value())
-    {
-        json["endedAt"] = m_endedAt->toString(Qt::ISODate);
-    }
-
     QJsonArray recordsArray;
     for (auto it = m_familyRecords.constBegin(); it != m_familyRecords.constEnd(); ++it)
     {
@@ -592,12 +587,6 @@ EmergencyResponse EmergencyResponse::fromJson(const QJsonObject& json)
     response.m_name = json["name"].toString();
     response.m_startedAt = QDateTime::fromString(json["startedAt"].toString(), Qt::ISODate);
 
-    QString endedAtStr = json["endedAt"].toString();
-    if (!endedAtStr.isEmpty())
-    {
-        response.m_endedAt = QDateTime::fromString(endedAtStr, Qt::ISODate);
-    }
-
     QJsonArray recordsArray = json["familyRecords"].toArray();
     for (const QJsonValue& value : recordsArray)
     {
@@ -618,7 +607,6 @@ bool EmergencyResponse::operator==(const EmergencyResponse& other) const
 {
     return m_name == other.m_name
         && m_startedAt == other.m_startedAt
-        && m_endedAt == other.m_endedAt
         && m_familyRecords == other.m_familyRecords
         && m_taskCategories == other.m_taskCategories;
 }

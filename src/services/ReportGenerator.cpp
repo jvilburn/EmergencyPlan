@@ -187,15 +187,7 @@ bool ReportGenerator::generateReport(const EmergencyResponse& response,
         drawText(ctx, wardName, kBodyFontSize, false);
     }
 
-    QString dateRange = response.startedAt().toString("MMM d, yyyy h:mm AP");
-    if (response.endedAt())
-    {
-        dateRange += " - " + response.endedAt()->toString("MMM d, yyyy h:mm AP");
-    }
-    else
-    {
-        dateRange += QObject::tr(" - Ongoing");
-    }
+    QString dateRange = response.startedAt().toString("MMM d, yyyy h:mm AP") + QObject::tr(" - Ongoing");
     drawText(ctx, dateRange, kBodyFontSize, false);
     drawLine(ctx);
 
