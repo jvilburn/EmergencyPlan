@@ -64,14 +64,11 @@ public:
     void setCallings(const QSet<QString>& callings);
     void setGender(std::optional<Gender> gender);
     void setAgeFilter(AgeFilter filter);
-    void setSpecificAge(std::optional<int> age);
     void setMappedFilter(MappedFilter filter);
     void setOnlyWithContact(bool value);
-    void setSpecialNeeds(const QSet<QString>& needs);
     void addSpecialNeed(const QString& need);
     void removeSpecialNeed(const QString& need);
     void setHasAnySpecialNeed(bool value);
-    void setResponseAreas(const QSet<ResponseArea>& areas);
     void addResponseArea(ResponseArea area);
     void removeResponseArea(ResponseArea area);
     void setContactStatusFilter(std::optional<EffectiveContactStatus> status);

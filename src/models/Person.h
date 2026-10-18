@@ -64,8 +64,6 @@ public:
 
     // Setters
     void setName(const Name& name) { m_name = name; }
-    void setGivenNames(const QString& givenNames) { m_name = Name(m_name.surname(), givenNames); }
-    void setSurname(const QString& surname) { m_name = Name(surname, m_name.givenNames()); }
     void setPhone(const Phone& phone) { m_phone = phone; }
     void setAltPhone(const Phone& altPhone) { m_altPhone = altPhone; }
     void setEmail(const QString& email) { m_email = email; }
@@ -81,15 +79,12 @@ public:
     QString displayName() const { return m_name.full(); }
 
     // Computed properties
-    bool hasCallings() const { return !m_callings.isEmpty(); }
     bool hasContact() const { return !m_phone.isEmpty() || !m_altPhone.isEmpty() || !m_email.isEmpty(); }
     Phone displayPhone() const;
-    QList<Phone> allPhoneNumbers() const;
 
     // Birth date helpers (delegated to Birthday)
     std::optional<int> age() const { return m_birthday.age(); }
     bool isChild() const { return m_birthday.isChild(); }
-    bool isAdult() const { return m_birthday.isAdult(); }
     QString birthDateDisplay() const { return m_birthday.dateDisplay(); }
     QString ageDisplay() const { return m_birthday.ageDisplay(); }
 

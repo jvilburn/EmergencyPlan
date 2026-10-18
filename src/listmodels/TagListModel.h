@@ -34,10 +34,6 @@ public:
     void setTagIds(const QList<TagId>& ids);
     const QList<TagId>& tagIds() const { return m_tagIds; }
 
-    // Lookup
-    std::optional<TagId> tagIdAt(int row) const;
-    int rowForId(const TagId& id) const;
-
 private:
     QList<TagId> m_tagIds;
 };

@@ -204,11 +204,6 @@ void DocumentManager::stopGeocoding()
     m_geocodingService->stop();
 }
 
-bool DocumentManager::isGeocoding() const
-{
-    return m_geocodingService->isRunning();
-}
-
 void DocumentManager::onFamilyGeocoded(const FamilyId& id, double latitude, double longitude)
 {
     // Silent update - no undo/redo, no signal (nothing needs to rebuild for coord changes)

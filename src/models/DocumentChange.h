@@ -20,47 +20,11 @@ struct DocumentChange;
 struct FamilyScopeBuilder
 {
     DocumentChange updated(const FamilyId& id) const;
-    DocumentChange added(const FamilyId& id) const;
-    DocumentChange removed(const FamilyId& id) const;
-    DocumentChange full() const;
-};
-
-struct EqDistrictScopeBuilder
-{
-    DocumentChange updated(const MinisteringDistrictId& id) const;
-    DocumentChange added(const MinisteringDistrictId& id) const;
-    DocumentChange removed(const MinisteringDistrictId& id) const;
-    DocumentChange full() const;
-};
-
-struct RsDistrictScopeBuilder
-{
-    DocumentChange updated(const MinisteringDistrictId& id) const;
-    DocumentChange added(const MinisteringDistrictId& id) const;
-    DocumentChange removed(const MinisteringDistrictId& id) const;
-    DocumentChange full() const;
-};
-
-struct EqGroupScopeBuilder
-{
-    DocumentChange updated(const MinisteringGroupId& id) const;
-    DocumentChange added(const MinisteringGroupId& id) const;
-    DocumentChange removed(const MinisteringGroupId& id) const;
-    DocumentChange full() const;
-};
-
-struct RsGroupScopeBuilder
-{
-    DocumentChange updated(const MinisteringGroupId& id) const;
-    DocumentChange added(const MinisteringGroupId& id) const;
-    DocumentChange removed(const MinisteringGroupId& id) const;
-    DocumentChange full() const;
 };
 
 struct MetadataScopeBuilder
 {
     DocumentChange updated(const QString& value) const;
-    DocumentChange full() const;
 };
 
 // === DocumentChange struct ===
@@ -85,10 +49,6 @@ struct DocumentChange
 
     // Scope builders
     static FamilyScopeBuilder family();
-    static EqDistrictScopeBuilder eqDistrict();
-    static RsDistrictScopeBuilder rsDistrict();
-    static EqGroupScopeBuilder eqGroup();
-    static RsGroupScopeBuilder rsGroup();
     static MetadataScopeBuilder metadata();
 };
 

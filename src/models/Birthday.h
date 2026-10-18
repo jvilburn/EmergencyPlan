@@ -21,11 +21,6 @@ public:
     std::optional<int> month() const { return m_month; }
     std::optional<int> day() const { return m_day; }
 
-    // Setters
-    void setYear(std::optional<int> year) { m_year = year; }
-    void setMonth(std::optional<int> month) { m_month = month; }
-    void setDay(std::optional<int> day) { m_day = day; }
-
     // Computed properties
     bool hasDate() const { return m_month.has_value() && m_day.has_value(); }
     bool isEmpty() const { return !m_year.has_value() && !m_month.has_value() && !m_day.has_value(); }
@@ -35,9 +30,6 @@ public:
 
     /// Returns true if age < 18.
     bool isChild() const;
-
-    /// Returns true if not a child.
-    bool isAdult() const { return !isChild(); }
 
     /// Returns "19 Nov" or "19 Nov 2010" if year known.
     QString dateDisplay() const;

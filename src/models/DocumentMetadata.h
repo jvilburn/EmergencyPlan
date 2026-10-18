@@ -24,30 +24,18 @@ public:
     // ========================================================================
     // Ward operations
     // ========================================================================
-    void addWard(const Ward& ward);
     void updateWard(const Ward& ward);
     std::optional<Ward> findWardByUnit(const QString& wardUnitNumber) const;
 
     // ========================================================================
     // Stake operations
     // ========================================================================
-    void addStake(const Stake& stake);
     void updateStake(const Stake& stake);
-    void removeStake(const QString& unitNumber);
     std::optional<Stake> findStakeByUnit(const QString& unitNumber) const;
 
     // ========================================================================
-    // Combined operations
+    // Ward name
     // ========================================================================
-
-    /// Creates/updates Ward and optionally its Stake.
-    /// Returns the stake unit number where ward was placed.
-    QString addOrUpdateWard(const QString& wardUnitNumber, const QString& wardName,
-                            const QString& stakeUnitNumber,
-                            const QString& stakeName);
-
-    /// Removes a ward by unit number (for undo).
-    void removeWardByUnit(const QString& wardUnitNumber);
 
     /// The ward's name as people see it, from the names of its wards.
     QString wardName() const;

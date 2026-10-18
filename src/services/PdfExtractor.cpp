@@ -122,11 +122,6 @@ QList<PdfChar> PdfExtractor::extractChars(int pageNum) {
     return result;
 }
 
-void PdfExtractor::setClassifications(const QList<FieldClassificationRule>& rules)
-{
-    m_rules = rules;
-}
-
 int PdfExtractor::classifyField(const QString& text, double left, double right, float fontSize, bool bold) const
 {
     constexpr double X_TOL = 5.0;  // Allow for X drift across pages (observed up to ~4 points)

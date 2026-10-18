@@ -28,7 +28,6 @@ public:
 
     // Setters
     void setName(const QString& name) { m_name = name; }
-    void setColor(const QColor& color) { m_color = color; }
     void setLeaderId(std::optional<PersonId> leaderId) { m_leaderId = leaderId; }
     void setMemberIds(const QSet<PersonId>& memberIds) { m_memberIds = memberIds; }
 

@@ -76,17 +76,3 @@ void TagListModel::setTagIds(const QList<TagId>& ids)
     m_tagIds = ids;
     endResetModel();
 }
-
-std::optional<TagId> TagListModel::tagIdAt(int row) const
-{
-    if (row >= 0 && row < m_tagIds.size())
-    {
-        return m_tagIds.at(row);
-    }
-    return std::nullopt;
-}
-
-int TagListModel::rowForId(const TagId& id) const
-{
-    return m_tagIds.indexOf(id);
-}

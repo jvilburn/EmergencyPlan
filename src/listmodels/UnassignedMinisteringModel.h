@@ -54,7 +54,6 @@ public:
 
     // Lazy loading for contact details
     void loadContactDetails(const QModelIndex& index);
-    bool hasContactsLoaded(const QModelIndex& index) const;
 
     // Check if there are any unassigned items
     bool hasUnassigned() const;

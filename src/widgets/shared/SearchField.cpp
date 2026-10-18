@@ -22,11 +22,6 @@ SearchField::SearchField(QWidget* parent)
             this, &SearchField::onTextChanged);
 }
 
-void SearchField::setDebounceDelay(int msec)
-{
-    m_debounceTimer->setInterval(msec);
-}
-
 void SearchField::onTextChanged(const QString& /*text*/)
 {
     // Restart debounce timer on each keystroke

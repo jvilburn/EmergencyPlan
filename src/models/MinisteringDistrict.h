@@ -26,16 +26,11 @@ public:
     const QSet<MinisteringGroupId>& groupIds() const { return m_groupIds; }
 
     // Setters
-    void setName(const QString& name) { m_name = name; }
     void setPresidencyMemberId(std::optional<PersonId> presidencyMemberId) { m_presidencyMemberId = presidencyMemberId; }
-    void setGroupIds(const QSet<MinisteringGroupId>& groupIds) { m_groupIds = groupIds; }
     void addGroup(const MinisteringGroupId& groupId) { m_groupIds.insert(groupId); }
-    void removeGroup(const MinisteringGroupId& groupId) { m_groupIds.remove(groupId); }
 
     // Computed properties
     bool hasPresidencyMember() const { return m_presidencyMemberId.has_value(); }
-    bool hasGroups() const { return !m_groupIds.isEmpty(); }
-    int groupCount() const { return m_groupIds.size(); }
 
     // JSON serialization
     QJsonObject toJson() const;

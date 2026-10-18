@@ -60,13 +60,6 @@ public:
     /// - tile is stale per provider's minCacheDays
     bool needsFetch(TileId id, const TileMetadata& meta) const;
 
-    /// Check if network is currently available.
-    bool isNetworkAvailable() const { return m_networkAvailable; }
-
-public slots:
-    /// Set network availability. When transitioning to online, flushes queued requests.
-    void setNetworkAvailable(bool available);
-
 signals:
     /// Emitted when a tile is successfully fetched.
     /// TileService should save this to cache and emit tileReady.
@@ -90,7 +83,6 @@ private:
     void startFetch(TileId id, int providerIndex, const QString& lastError);
     void handleSuccess(const RequestContext& ctx, const QImage& image,
                        const QString& etag, const QString& lastModified);
-    void flushOfflineQueue();
 
     QNetworkAccessManager* m_networkManager;
 
@@ -102,8 +94,4 @@ private:
 
     /// In-flight network requests.
     QMap<QNetworkReply*, RequestContext> m_inFlightRequests;
-
-    /// Offline mode support
-    bool m_networkAvailable = true;
-    QSet<TileId> m_offlineQueue;  ///< Tiles to fetch when back online
 };

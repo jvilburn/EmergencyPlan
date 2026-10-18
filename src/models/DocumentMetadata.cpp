@@ -10,11 +10,6 @@
 // Ward operations
 // ============================================================================
 
-void DocumentMetadata::addWard(const Ward& ward)
-{
-    m_wards.insert(ward.unitNumber(), ward);
-}
-
 void DocumentMetadata::updateWard(const Ward& ward)
 {
     m_wards.insert(ward.unitNumber(), ward);
@@ -34,19 +29,9 @@ std::optional<Ward> DocumentMetadata::findWardByUnit(const QString& wardUnitNumb
 // Stake operations
 // ============================================================================
 
-void DocumentMetadata::addStake(const Stake& stake)
-{
-    m_stakes.insert(stake.unitNumber(), stake);
-}
-
 void DocumentMetadata::updateStake(const Stake& stake)
 {
     m_stakes.insert(stake.unitNumber(), stake);
-}
-
-void DocumentMetadata::removeStake(const QString& unitNumber)
-{
-    m_stakes.remove(unitNumber);
 }
 
 std::optional<Stake> DocumentMetadata::findStakeByUnit(const QString& unitNumber) const
@@ -60,55 +45,8 @@ std::optional<Stake> DocumentMetadata::findStakeByUnit(const QString& unitNumber
 }
 
 // ============================================================================
-// Combined operations
+// Ward name
 // ============================================================================
-
-QString DocumentMetadata::addOrUpdateWard(const QString& wardUnitNumber, const QString& wardName,
-                                          const QString& stakeUnitNumber, const QString& stakeName)
-{
-    // Create or update the ward
-    Ward ward;
-    if (auto existing = findWardByUnit(wardUnitNumber))
-    {
-        ward = *existing;
-    }
-    ward.setUnitNumber(wardUnitNumber);
-    if (!wardName.isEmpty())
-    {
-        ward.setName(wardName);
-    }
-    m_wards.insert(wardUnitNumber, ward);
-
-    // If stake info provided, create or update stake
-    if (!stakeUnitNumber.isEmpty())
-    {
-        Stake stake;
-        if (auto existing = findStakeByUnit(stakeUnitNumber))
-        {
-            stake = *existing;
-        }
-        stake.setUnitNumber(stakeUnitNumber);
-        if (!stakeName.isEmpty())
-        {
-            stake.setName(stakeName);
-        }
-        // Add ward to stake's ward list
-        QSet<QString> wardUnits = stake.wardUnitNumbers();
-        wardUnits.insert(wardUnitNumber);
-        stake.setWardUnitNumbers(wardUnits);
-        m_stakes.insert(stakeUnitNumber, stake);
-        return stakeUnitNumber;
-    }
-
-    return QString();
-}
-
-void DocumentMetadata::removeWardByUnit(const QString& wardUnitNumber)
-{
-    m_wards.remove(wardUnitNumber);
-    // Note: We don't remove the ward from stake's wardUnitNumbers list
-    // Stakes are reference data that can be reused
-}
 
 QString DocumentMetadata::wardName() const
 {

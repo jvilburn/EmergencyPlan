@@ -24,44 +24,6 @@ void Document::initializeDefaultAssets()
 }
 
 // ============================================================================
-// Family queries that need access to m_families
-// ============================================================================
-
-QList<Family> Document::familiesInStake(const QString& stakeUnitNumber) const
-{
-    QList<Family> result;
-    for (const Family& family : m_families)
-    {
-        for (const Person& member : family.members())
-        {
-            if (member.stakeUnitNumber() == stakeUnitNumber)
-            {
-                result.append(family);
-                break;  // Only add family once
-            }
-        }
-    }
-    return result;
-}
-
-QList<Family> Document::familiesInWard(const QString& wardUnitNumber) const
-{
-    QList<Family> result;
-    for (const Family& family : m_families)
-    {
-        for (const Person& member : family.members())
-        {
-            if (member.wardUnitNumber() == wardUnitNumber)
-            {
-                result.append(family);
-                break;  // Only add family once
-            }
-        }
-    }
-    return result;
-}
-
-// ============================================================================
 // Family operations
 // ============================================================================
 
@@ -126,36 +88,6 @@ const QHash<MinisteringGroupId, MinisteringGroup>& Document::groups(MinisteringO
     return (org == MinisteringOrg::EldersQuorum) ? m_eqGroups : m_rsGroups;
 }
 
-QHash<MinisteringDistrictId, MinisteringDistrict>& Document::districtsRef(MinisteringOrg org)
-{
-    return (org == MinisteringOrg::EldersQuorum) ? m_eqDistricts : m_rsDistricts;
-}
-
-QHash<MinisteringGroupId, MinisteringGroup>& Document::groupsRef(MinisteringOrg org)
-{
-    return (org == MinisteringOrg::EldersQuorum) ? m_eqGroups : m_rsGroups;
-}
-
-void Document::addDistrict(MinisteringOrg org, const MinisteringDistrict& district)
-{
-    districtsRef(org).insert(district.id(), district);
-}
-
-void Document::removeDistrict(MinisteringOrg org, const MinisteringDistrictId& id)
-{
-    districtsRef(org).remove(id);
-}
-
-void Document::addGroup(MinisteringOrg org, const MinisteringGroup& group)
-{
-    groupsRef(org).insert(group.id(), group);
-}
-
-void Document::removeGroup(MinisteringOrg org, const MinisteringGroupId& id)
-{
-    groupsRef(org).remove(id);
-}
-
 // ============================================================================
 // Lookup helpers
 // ============================================================================
@@ -208,22 +140,12 @@ std::optional<Tag> Document::findTagById(const TagId& id) const
 void Document::rebuildPersonToFamilyMap()
 {
     m_personToFamily.clear();
-    m_maxKnownAge = std::nullopt;
 
     for (const Family& family : m_families)
     {
         for (const Person& member : family.members())
         {
             m_personToFamily.insert(member.id(), family.id());
-
-            std::optional<int> age = member.age();
-            if (age.has_value())
-            {
-                if (!m_maxKnownAge.has_value() || age.value() > m_maxKnownAge.value())
-                {
-                    m_maxKnownAge = age.value();
-                }
-            }
         }
     }
 }
@@ -236,11 +158,6 @@ std::optional<FamilyId> Document::familyIdForPerson(const PersonId& personId) co
         return it.value();
     }
     return std::nullopt;
-}
-
-std::optional<int> Document::maxKnownAge() const
-{
-    return m_maxKnownAge;
 }
 
 // ============================================================================

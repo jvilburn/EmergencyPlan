@@ -331,18 +331,6 @@ void FamilyResponseRecord::addContactAttempt(const ContactAttempt& attempt)
     m_contactAttempts.prepend(attempt);
 }
 
-void FamilyResponseRecord::removeContactAttempt(const ContactAttemptId& id)
-{
-    for (int i = 0; i < m_contactAttempts.size(); ++i)
-    {
-        if (m_contactAttempts[i].id() == id)
-        {
-            m_contactAttempts.removeAt(i);
-            return;
-        }
-    }
-}
-
 void FamilyResponseRecord::addTask(const ResponseTask& task)
 {
     m_tasks.prepend(task);

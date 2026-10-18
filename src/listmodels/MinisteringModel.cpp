@@ -1022,16 +1022,6 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
     node->contactsLoaded = true;
 }
 
-bool MinisteringModel::hasContactsLoaded(const QModelIndex& index) const
-{
-    TreeNode* node = nodeFromIndex(index);
-    if (node)
-    {
-        return node->contactsLoaded;
-    }
-    return false;
-}
-
 void MinisteringModel::onFamilyStatusChanged(const FamilyId& familyId)
 {
     // Find nodes for this family and emit dataChanged for DecorationRole

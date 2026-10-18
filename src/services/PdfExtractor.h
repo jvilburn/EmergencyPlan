@@ -72,10 +72,6 @@ public:
 
     int pageCount() const;
 
-    /// Set classification rules for field typing.
-    /// Rules are checked in order; first match wins.
-    void setClassifications(const QList<FieldClassificationRule>& rules);
-
     /// Get classified text fields from a page, sorted by Y then X.
     /// If classifications are set, fields are typed.
     QList<PdfTextField> textFields(int page);

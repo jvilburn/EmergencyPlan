@@ -694,16 +694,6 @@ void UnassignedMinisteringModel::loadContactDetails(const QModelIndex& index)
     node->contactsLoaded = true;
 }
 
-bool UnassignedMinisteringModel::hasContactsLoaded(const QModelIndex& index) const
-{
-    TreeNode* node = nodeFromIndex(index);
-    if (node)
-    {
-        return node->contactsLoaded;
-    }
-    return false;
-}
-
 bool UnassignedMinisteringModel::hasUnassigned() const
 {
     return m_headerNode != nullptr;

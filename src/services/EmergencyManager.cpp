@@ -144,22 +144,6 @@ void EmergencyManager::addContactAttempt(const FamilyId& familyId, const Contact
     emit responseDataChanged();
 }
 
-void EmergencyManager::removeContactAttempt(const FamilyId& familyId, const ContactAttemptId& attemptId)
-{
-    if (!m_response.has_value())
-    {
-        return;
-    }
-    FamilyResponseRecord* record = m_response->mutableRecord(familyId);
-    if (!record)
-    {
-        return;
-    }
-    record->removeContactAttempt(attemptId);
-    emit familyStatusChanged(familyId);
-    emit responseDataChanged();
-}
-
 // ============================================================================
 // Tasks
 // ============================================================================
@@ -275,46 +259,6 @@ void EmergencyManager::assignTaskToTeam(const FamilyId& familyId, const TaskId& 
         return;
     }
     task->assignToTeam(teamId, notes);
-    emit responseDataChanged();
-}
-
-void EmergencyManager::assignTaskToPerson(const FamilyId& familyId, const TaskId& taskId, const PersonId& personId, const QString& notes)
-{
-    if (!m_response.has_value())
-    {
-        return;
-    }
-    FamilyResponseRecord* record = m_response->mutableRecord(familyId);
-    if (!record)
-    {
-        return;
-    }
-    ResponseTask* task = record->mutableTask(taskId);
-    if (!task)
-    {
-        return;
-    }
-    task->assignToPerson(personId, notes);
-    emit responseDataChanged();
-}
-
-void EmergencyManager::unassignTask(const FamilyId& familyId, const TaskId& taskId)
-{
-    if (!m_response.has_value())
-    {
-        return;
-    }
-    FamilyResponseRecord* record = m_response->mutableRecord(familyId);
-    if (!record)
-    {
-        return;
-    }
-    ResponseTask* task = record->mutableTask(taskId);
-    if (!task)
-    {
-        return;
-    }
-    task->clearAssignment();
     emit responseDataChanged();
 }
 

@@ -41,7 +41,6 @@ public:
     // Computed properties from members
     QString surname() const;
     QString displayName() const;
-    QList<Person> parents() const;
     QList<Person> children() const;
 
     /// Where the member order rule puts person among the members: the index of the first
@@ -65,10 +64,7 @@ public:
     Phone displayPhone() const;
     QString displayEmail() const;
     bool hasContact() const;
-    QList<Phone> allPhoneNumbers() const;
-    QStringList allEmails() const;
     QStringList allCallings() const;
-    bool hasCallings() const;
 
     // JSON serialization
     QJsonObject toJson() const;

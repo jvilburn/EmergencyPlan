@@ -109,7 +109,6 @@ set(MODEL_HEADERS
     src/models/Email.h
     src/models/Birthday.h
     src/models/Calling.h
-    src/models/ViewMode.h
     src/models/Person.h
     src/models/Family.h
     src/models/Team.h

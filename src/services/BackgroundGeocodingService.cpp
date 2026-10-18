@@ -55,12 +55,6 @@ void BackgroundGeocodingService::stop()
     // but we won't process the result since the maps are cleared
 }
 
-bool BackgroundGeocodingService::isRunning() const
-{
-    return m_geocodingService->hasPendingRequests()
-           || !m_addressToFamilyId.isEmpty();
-}
-
 void BackgroundGeocodingService::onGeocodingComplete(const GeocodingResult& result)
 {
     // Find the family ID for this address

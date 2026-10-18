@@ -57,7 +57,7 @@ Can be imported before or after ward directory (PDF dates determine precedence).
 
 **Behavior**:
 1. Parse PDF → get districts, groups, person/family references
-2. For each person reference, find matching person in existing families (`findPersonInFamilies`)
+2. For each family in the PDF, find the matching existing family by its members (`findFamilyByMembers`, then `findReplacedFamily`)
 3. If found: Add person ID to group
 4. If NOT found: Create placeholder family/person from ministering data, then link
    - Placeholder has: name, address, phone (what ministering PDF provides)
@@ -81,8 +81,6 @@ All functions live in the `PersonMatching` namespace:
 
 - `scorePersonMatch(source, target)` — Multi-factor score: first name, birth date, phone, email, parent status
 - `findBestPersonMatch(source, family)` — Best matching person in a family by score
-- `findBestFamilyMatch(name, address, phone, families)` — Multi-factor family matching: address, phone, members
-- `findPersonInFamilies(name, families)` — Find person by name across families
 - `findFamilyByMembers(sourceFamily, targetFamilies)` — Surname-filtered member-based matching with ID mapping
 - `findReplacedFamily(sourceFamily, targetFamilies)` — Fallback: search all families ignoring surname (handles name changes)
 

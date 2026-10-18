@@ -45,7 +45,6 @@ public:
     // Geocoding
     void startBatchGeocoding();
     void stopGeocoding();
-    bool isGeocoding() const;
 
 signals:
     void documentChanged(const DocumentChange& change);

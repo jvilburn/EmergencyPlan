@@ -74,15 +74,6 @@ void Filter::setAgeFilter(AgeFilter filter)
     }
 }
 
-void Filter::setSpecificAge(std::optional<int> age)
-{
-    if (m_specificAge != age)
-    {
-        m_specificAge = age;
-        emit changed();
-    }
-}
-
 void Filter::setMappedFilter(MappedFilter filter)
 {
     if (m_mappedFilter != filter)
@@ -97,15 +88,6 @@ void Filter::setOnlyWithContact(bool value)
     if (m_onlyWithContact != value)
     {
         m_onlyWithContact = value;
-        emit changed();
-    }
-}
-
-void Filter::setSpecialNeeds(const QSet<QString>& needs)
-{
-    if (m_specialNeeds != needs)
-    {
-        m_specialNeeds = needs;
         emit changed();
     }
 }
@@ -132,15 +114,6 @@ void Filter::setHasAnySpecialNeed(bool value)
     if (m_hasAnySpecialNeed != value)
     {
         m_hasAnySpecialNeed = value;
-        emit changed();
-    }
-}
-
-void Filter::setResponseAreas(const QSet<ResponseArea>& areas)
-{
-    if (m_responseAreas != areas)
-    {
-        m_responseAreas = areas;
         emit changed();
     }
 }

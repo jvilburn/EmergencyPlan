@@ -59,20 +59,6 @@ Phone Person::displayPhone() const
     return m_altPhone;
 }
 
-QList<Phone> Person::allPhoneNumbers() const
-{
-    QList<Phone> phones;
-    if (!m_phone.isEmpty())
-    {
-        phones.append(m_phone);
-    }
-    if (!m_altPhone.isEmpty())
-    {
-        phones.append(m_altPhone);
-    }
-    return phones;
-}
-
 QJsonObject Person::toJson() const
 {
     QJsonObject json;

@@ -76,9 +76,6 @@ public:
     const QDateTime& timestamp() const { return m_timestamp; }
     const QString& notes() const { return m_notes; }
 
-    void setMethod(ContactMethod method) { m_method = method; }
-    void setNotes(const QString& notes) { m_notes = notes; }
-
     QJsonObject toJson() const;
     static ContactAttempt fromJson(const QJsonObject& json);
     bool operator==(const ContactAttempt& other) const;
@@ -172,7 +169,6 @@ public:
 
     void setContactStatus(ContactStatus status) { m_contactStatus = status; }
     void addContactAttempt(const ContactAttempt& attempt);
-    void removeContactAttempt(const ContactAttemptId& id);
     void addTask(const ResponseTask& task);
     void updateTask(const ResponseTask& task);
     void removeTask(const TaskId& id);

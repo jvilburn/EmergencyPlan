@@ -37,7 +37,6 @@ public:
 
     // Lookup
     std::optional<TeamId> teamIdAt(int row) const;
-    int rowForId(const TeamId& id) const;
 
 private:
     QList<TeamId> m_teamIds;

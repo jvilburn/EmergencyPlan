@@ -39,9 +39,6 @@ public:
     /// Cancel any pending lookup request.
     void cancel();
 
-    /// Check if a lookup is currently in progress.
-    bool isLookupInProgress() const { return m_pendingProcess != nullptr; }
-
 signals:
     /// Emitted when ward lookup completes successfully.
     /// Ward will have chapel info and stakeUnitNumber populated.

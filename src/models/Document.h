@@ -67,9 +67,6 @@ public:
     void updateFamily(const Family& family);
     void removeFamily(const FamilyId& id);
 
-    QList<Family> familiesInStake(const QString& stakeUnitNumber) const;
-    QList<Family> familiesInWard(const QString& wardUnitNumber) const;
-
     // ========================================================================
     // EmergencyAsset operations
     // ========================================================================
@@ -79,15 +76,6 @@ public:
     QList<EmergencyAsset> emergencyAssetsByArea(ResponseArea area) const;
 
     // ========================================================================
-    // Mutating operations - ministering
-    // ========================================================================
-    void addDistrict(MinisteringOrg org, const MinisteringDistrict& district);
-    void removeDistrict(MinisteringOrg org, const MinisteringDistrictId& id);
-
-    void addGroup(MinisteringOrg org, const MinisteringGroup& group);
-    void removeGroup(MinisteringOrg org, const MinisteringGroupId& id);
-
-    // ========================================================================
     // Lookup helpers
     // ========================================================================
     std::optional<Family> findFamilyById(const FamilyId& id) const;
@@ -95,10 +83,6 @@ public:
     std::optional<FamilyId> familyIdForPerson(const PersonId& personId) const;
     std::optional<Team> findTeamById(const TeamId& id) const;
     std::optional<Tag> findTagById(const TagId& id) const;
-
-    /// Returns the maximum known age across all persons, or nullopt if no ages are known.
-    /// Used by UI to determine available age filter options.
-    std::optional<int> maxKnownAge() const;
 
     /// Get response areas for a person based on their emergency asset assignments (from cache)
     QSet<ResponseArea> personResponseAreas(const PersonId& personId) const;
@@ -119,9 +103,6 @@ private:
     void rebuildPersonToFamilyMap();
     void rebuildDecorationCaches();
 
-    QHash<MinisteringDistrictId, MinisteringDistrict>& districtsRef(MinisteringOrg org);
-    QHash<MinisteringGroupId, MinisteringGroup>& groupsRef(MinisteringOrg org);
-
     // Ward/Stake hierarchy and document naming
     DocumentMetadata m_metadata;
 
@@ -132,9 +113,6 @@ private:
 
     // Lookup cache: personId -> familyId
     QHash<PersonId, FamilyId> m_personToFamily;
-
-    // Cached max known age (computed in rebuildPersonToFamilyMap)
-    std::optional<int> m_maxKnownAge;
 
     // Emergency assets
     QHash<EmergencyAssetId, EmergencyAsset> m_emergencyAssets;

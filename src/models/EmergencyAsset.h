@@ -23,7 +23,6 @@ public:
 
     // Setters
     void setName(const QString& name) { m_name = name; }
-    void setResponseArea(ResponseArea area) { m_responseArea = area; }
     void setPersonIds(const QSet<PersonId>& ids) { m_personIds = ids; }
 
     // Computed properties

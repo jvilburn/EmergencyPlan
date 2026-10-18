@@ -95,7 +95,6 @@ private:
     void drawTiles(QPainter& painter);
     void drawChurchMarkers(QPainter& painter);
     void drawMarkers(QPainter& painter);
-    void drawControls(QPainter& painter);
     void drawAttribution(QPainter& painter);
 
     // Hit testing

@@ -36,9 +36,6 @@ public:
     /// Stop all pending geocoding.
     void stop();
 
-    /// Check if geocoding is in progress.
-    bool isRunning() const;
-
     /// Get current progress (completed, total).
     int completed() const { return m_completed; }
     int total() const { return m_total; }

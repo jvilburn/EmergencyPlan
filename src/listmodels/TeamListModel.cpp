@@ -88,8 +88,3 @@ std::optional<TeamId> TeamListModel::teamIdAt(int row) const
     }
     return std::nullopt;
 }
-
-int TeamListModel::rowForId(const TeamId& id) const
-{
-    return m_teamIds.indexOf(id);
-}

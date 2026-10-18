@@ -613,11 +613,6 @@ void MapWidget::drawMarkers(QPainter& painter)
     Q_ASSERT_X(false, "MapWidget::drawMarkers", "No highlight provider set");
 }
 
-void MapWidget::drawControls(QPainter& /*painter*/)
-{
-    // Controls are now QPushButton widgets, not painted
-}
-
 void MapWidget::drawAttribution(QPainter& painter)
 {
     TileService* tileService = TileService::instance();

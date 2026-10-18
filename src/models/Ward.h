@@ -47,9 +47,6 @@ public:
     bool operator==(const Ward& other) const;
     bool operator!=(const Ward& other) const { return !(*this == other); }
 
-    // Check if any data is present
-    bool isEmpty() const { return m_name.isEmpty() && m_unitNumber.isEmpty(); }
-
 private:
     // From PDF header (name stored without " Ward" suffix)
     QString m_name;                          // "Example" (not "Example Ward")

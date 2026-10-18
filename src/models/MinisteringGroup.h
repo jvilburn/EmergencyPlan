@@ -39,21 +39,8 @@ public:
     void setMinisterIds(const QSet<PersonId>& ministerIds) { m_ministerIds = ministerIds; }
     void setFamilyIds(const QSet<FamilyId>& familyIds) { m_familyIds = familyIds; }
     void setMinisteredPersonIds(const QSet<PersonId>& ids) { m_ministeredPersonIds = ids; }
-    void setInterviewedDate(std::optional<QDate> date) { m_interviewedDate = date; }
     void setPresidencyMemberId(std::optional<PersonId> id) { m_presidencyMemberId = id; }
     void setIsRSGroup(bool isRS) { m_isRSFormat = isRS; }
-    void addMinister(const PersonId& personId) { m_ministerIds.insert(personId); }
-    void addFamily(const FamilyId& familyId) { m_familyIds.insert(familyId); }
-    void removeFamily(const FamilyId& familyId) { m_familyIds.remove(familyId); }
-    void addMinisteredPerson(const PersonId& personId) { m_ministeredPersonIds.insert(personId); }
-
-    // Computed properties
-    bool hasMinisters() const { return !m_ministerIds.isEmpty(); }
-    int ministerCount() const { return m_ministerIds.size(); }
-    bool hasFamilies() const { return !m_familyIds.isEmpty(); }
-    int familyCount() const { return m_familyIds.size(); }
-    bool hasMinisteredPersons() const { return !m_ministeredPersonIds.isEmpty(); }
-    int ministeredPersonCount() const { return m_ministeredPersonIds.size(); }
 
     /// Returns true if this is an RS group (ministers to persons, not families)
     bool isRSGroup() const { return m_isRSFormat; }

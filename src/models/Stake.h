@@ -39,8 +39,6 @@ public:
     void setUnitNumber(const QString& unitNumber) { m_unitNumber = unitNumber; }
     void setName(const QString& name);
     void setWardUnitNumbers(const QSet<QString>& wardUnits) { m_wardUnitNumbers = wardUnits; }
-    void setPhone(const QString& phone) { m_phone = phone; }
-    void setEmail(const QString& email) { m_email = email; }
     void setStakeCenterAddress(const QString& address) { m_stakeCenterAddress = address; }
     void setStakeCenterLat(std::optional<double> lat) { m_stakeCenterLat = lat; }
     void setStakeCenterLng(std::optional<double> lng) { m_stakeCenterLng = lng; }
@@ -56,9 +54,6 @@ public:
     // ========================================================================
     bool operator==(const Stake& other) const;
     bool operator!=(const Stake& other) const { return !(*this == other); }
-
-    // Check if any data is present
-    bool isEmpty() const { return m_name.isEmpty() && m_unitNumber.isEmpty(); }
 
 private:
     QString m_unitNumber;              // e.g., "510033"

@@ -56,10 +56,6 @@ class Tag
 public:
     Tag() = default;
 
-    // Factory method for creating new tags
-    static Tag create(const QString& name, TagLevel level,
-                      const QString& color);
-
     // Getters
     const TagId& id() const { return m_id; }
     const QString& name() const { return m_name; }
@@ -67,13 +63,6 @@ public:
     TagLevel level() const { return m_level; }
     const QSet<PersonId>& personIds() const { return m_personIds; }
     const QSet<FamilyId>& familyIds() const { return m_familyIds; }
-
-    // Setters
-    void setName(const QString& name) { m_name = name; }
-    void setColor(const QString& color) { m_color = color; }
-    void setLevel(TagLevel level) { m_level = level; }
-    void setPersonIds(const QSet<PersonId>& ids) { m_personIds = ids; }
-    void setFamilyIds(const QSet<FamilyId>& ids) { m_familyIds = ids; }
 
     // Computed properties
     bool hasPerson(const PersonId& personId) const { return m_personIds.contains(personId); }

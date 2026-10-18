@@ -72,13 +72,6 @@ void TileFetchService::fetch(TileId id, const TileMetadata& currentMeta)
 {
     Q_UNUSED(currentMeta);  // TODO: Use for conditional requests (If-None-Match)
 
-    // Queue for later if offline
-    if (!m_networkAvailable)
-    {
-        m_offlineQueue.insert(id);
-        return;
-    }
-
     // Deduplicate - don't fetch if already in flight
     if (m_pendingTiles.contains(id))
     {
@@ -88,33 +81,6 @@ void TileFetchService::fetch(TileId id, const TileMetadata& currentMeta)
 
     // Start with first provider
     startFetch(id, 0, {});
-}
-
-void TileFetchService::setNetworkAvailable(bool available)
-{
-    if (m_networkAvailable == available)
-    {
-        return;
-    }
-
-    m_networkAvailable = available;
-
-    if (available)
-    {
-        flushOfflineQueue();
-    }
-}
-
-void TileFetchService::flushOfflineQueue()
-{
-    // Swap out queue so fetch() can safely add new entries if network drops again
-    QSet<TileId> queue;
-    queue.swap(m_offlineQueue);
-
-    for (TileId id : queue)
-    {
-        fetch(id, TileMetadata{});
-    }
 }
 
 QString TileFetchService::providerAttribution(const QString& providerId) const

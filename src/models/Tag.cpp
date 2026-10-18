@@ -1,15 +1,5 @@
 #include "Tag.h"
 
-Tag Tag::create(const QString& name, TagLevel level, const QString& color)
-{
-    Tag tag;
-    tag.m_id = TagId::generate();
-    tag.m_name = name;
-    tag.m_level = level;
-    tag.m_color = color;
-    return tag;
-}
-
 QJsonObject Tag::toJson() const
 {
     QJsonObject json;

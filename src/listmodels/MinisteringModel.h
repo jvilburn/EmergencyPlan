@@ -64,7 +64,6 @@ public:
 
     // Lazy loading for contact details
     void loadContactDetails(const QModelIndex& index);
-    bool hasContactsLoaded(const QModelIndex& index) const;
 
 private slots:
     void onDocumentChanged(const DocumentChange& change);

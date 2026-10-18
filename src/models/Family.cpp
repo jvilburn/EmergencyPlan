@@ -111,19 +111,6 @@ QString Family::displayName() const
     return result;
 }
 
-QList<Person> Family::parents() const
-{
-    QList<Person> result;
-    for (const Person& member : m_members)
-    {
-        if (member.isParent())
-        {
-            result.append(member);
-        }
-    }
-    return result;
-}
-
 QList<Person> Family::children() const
 {
     QList<Person> result;
@@ -223,38 +210,6 @@ bool Family::hasContact() const
     return false;
 }
 
-QList<Phone> Family::allPhoneNumbers() const
-{
-    QSet<QString> seen;
-    QList<Phone> phones;
-    for (const Person& member : m_members)
-    {
-        for (const Phone& phone : member.allPhoneNumbers())
-        {
-            if (!seen.contains(phone))
-            {
-                seen.insert(phone);
-                phones.append(phone);
-            }
-        }
-    }
-    return phones;
-}
-
-QStringList Family::allEmails() const
-{
-    QStringList emails;
-    for (const Person& member : m_members)
-    {
-        if (!member.email().isEmpty())
-        {
-            emails.append(member.email());
-        }
-    }
-    emails.removeDuplicates();
-    return emails;
-}
-
 QStringList Family::allCallings() const
 {
     QStringList callings;
@@ -264,18 +219,6 @@ QStringList Family::allCallings() const
     }
     callings.removeDuplicates();
     return callings;
-}
-
-bool Family::hasCallings() const
-{
-    for (const Person& member : m_members)
-    {
-        if (member.hasCallings())
-        {
-            return true;
-        }
-    }
-    return false;
 }
 
 QJsonObject Family::toJson() const

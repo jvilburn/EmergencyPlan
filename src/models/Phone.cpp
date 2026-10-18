@@ -13,11 +13,6 @@ QString Phone::digits() const
     return result;
 }
 
-bool Phone::isValid() const
-{
-    return digits().length() >= 7;
-}
-
 bool Phone::matches(const Phone& other) const
 {
     QString d1 = digits();
@@ -52,24 +47,4 @@ bool Phone::isPhone(const QString& text)
         }
     }
     return digitCount >= 7;
-}
-
-bool Phone::match(const QString& phone1, const QString& phone2)
-{
-    QString digits1 = extractDigits(phone1);
-    QString digits2 = extractDigits(phone2);
-    return !digits1.isEmpty() && digits1 == digits2;
-}
-
-QString Phone::extractDigits(const QString& phone)
-{
-    QString result;
-    for (const QChar& ch : phone)
-    {
-        if (ch.isDigit())
-        {
-            result.append(ch);
-        }
-    }
-    return result;
 }

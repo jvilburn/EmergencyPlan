@@ -33,7 +33,6 @@ public:
 
     // Contact attempts
     void addContactAttempt(const FamilyId& familyId, const ContactAttempt& attempt);
-    void removeContactAttempt(const FamilyId& familyId, const ContactAttemptId& attemptId);
 
     // Tasks
     void addTask(const FamilyId& familyId, const ResponseTask& task);
@@ -44,8 +43,6 @@ public:
 
     // Task assignment
     void assignTaskToTeam(const FamilyId& familyId, const TaskId& taskId, const TeamId& teamId, const QString& notes);
-    void assignTaskToPerson(const FamilyId& familyId, const TaskId& taskId, const PersonId& personId, const QString& notes);
-    void unassignTask(const FamilyId& familyId, const TaskId& taskId);
 
     // Task notification
     void notifyAssignee(const FamilyId& familyId, const TaskId& taskId, const TaskNotification& notification);
