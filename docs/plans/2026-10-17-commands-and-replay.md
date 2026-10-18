@@ -3867,6 +3867,12 @@ describes, then continue with task 2 when the user says so.
 - Modify: `src/widgets/NeedsSubView.cpp`
 - Modify: `src/widgets/MemberEditor.h`, `src/widgets/MemberEditor.cpp`
 - Modify: `docs/ARCHITECTURE.md`, `CLAUDE.md`
+- Delete: `src/widgets/ArchiveBrowserDialog.h/.cpp` (and its `CMakeLists.txt` entries)
+- Modify (archives): `src/services/EmergencyManager.h/.cpp`, `src/widgets/EmergencyBanner.h/.cpp`,
+  `src/widgets/ActionButtonsWidget.cpp`, `src/widgets/TeamsView.cpp`, `src/widgets/WardListView.cpp`,
+  `src/listmodels/FamilyTreeModel.cpp`, `src/listmodels/MinisteringModel.cpp`,
+  `src/listmodels/TeamsTreeModel.cpp`, `src/models/EmergencyResponse.h/.cpp`,
+  `src/services/ReportGenerator.cpp`, `docs/USER_GUIDE.md`
 
 **The member editor edits the person it was given.** `MemberEditor` keeps the `Person` passed
 to `setPerson` in a `Person m_person` member, in place of `PersonId m_personId`,
@@ -3878,8 +3884,7 @@ edit holds only what the user changed.
 
 **DocumentManager becomes a thin wrapper over one `WardSession`.**
 - Members `Document m_document` and `CommandHistory m_commandHistory` become
-  `WardSession m_session`. `document()` returns `m_session.document()` (the archive overlay
-  stays until task 5 deletes it).
+  `WardSession m_session`. `document()` returns `m_session.document()`.
 - `CommitResult executeCommand(CommandPtr command)`: calls `m_session.commit`, and on
   `Applied` runs `checkForIncompleteWards()` and `autoSave()` as today; on `Conflicted` or
   `Refused` emits `commandNotApplied(const CommitResult& result)`; on `NothingToDo` (an empty
@@ -3933,6 +3938,21 @@ work list).
 - `NeedsSubView::showNeedDialog` commits `UpdateFamilyCommand::fromEdit(edit.opened, edit.saved)`.
   `NeedsSubView::deleteNeed` captures the family before its confirmation box and commits the
   edit that clears the note. The helper `updatePersonInFamily` is deleted.
+
+**Emergency archives are deleted** (*Emergency archives are removed*), since the summary report
+saved when an emergency ends is how one is looked back on:
+- `EmergencyManager`'s `m_savedResponse`, `loadArchive`, `closeArchive`, `reopenArchive`,
+  `saveArchive`, `isViewingArchive`, `archiveViewOpened`, `archiveViewClosed` and
+  `endEmergency`'s `archive` parameter; `DocumentManager`'s `m_archiveDocument`,
+  `setArchiveDocument`, `clearArchiveDocument`, `isViewingArchive` and its checks;
+  `ArchiveBrowserDialog`; `EmergencyBanner::setArchiveName`; `MainWindow::onOpenArchive`,
+  `onArchiveViewOpened`, `onArchiveViewClosed`, `m_openArchiveAction`, `m_closeArchiveAction`
+  and their menu items; the end dialog's Archive && End choice; the archive connections in
+  `FamilyTreeModel`, `MinisteringModel`, `TeamsTreeModel` and `WardListView`; the
+  `isViewingArchive` checks in `ActionButtonsWidget`, `TeamsView` and `WardListView`.
+- `EmergencyResponse`'s `m_endedAt`, `endedAt`, `setEndedAt` and `clearEndedAt`, which nothing
+  sets once archives are gone; the report's date line reads from the start time.
+- `docs/USER_GUIDE.md`: the Archives section, and Archive && End in *Ending an Emergency*.
 
 **Docs.**
 - `docs/ARCHITECTURE.md`: *DocumentManager* describes the wrapper over the session, with
@@ -4166,7 +4186,6 @@ clock).
 - Modify: `src/commands/CommandRegistry.cpp`, `src/commands/FieldChangeJson.h/.cpp`
 - Modify: `src/services/WardSession.h/.cpp`, `src/services/EmergencyManager.h/.cpp`,
   `src/services/DocumentManager.h/.cpp`, `src/services/ReportGenerator.h/.cpp`
-- Delete: `src/widgets/ArchiveBrowserDialog.h/.cpp`
 - Modify: `src/widgets/MainWindow.h/.cpp`, `src/widgets/EmergencyBanner.h/.cpp`,
   `src/widgets/EmergencyProgressBar.cpp`, `src/widgets/ActionButtonsWidget.cpp`,
   `src/widgets/ContactAttemptDialog.cpp`, `src/widgets/TaskDialog.cpp`,
@@ -4174,7 +4193,7 @@ clock).
   `src/listmodels/TaskListModel.cpp`, `src/listmodels/FamilyTreeModel.cpp`,
   `src/listmodels/MinisteringModel.cpp`, `src/listmodels/TeamsTreeModel.cpp`
 - Modify: `docs/USER_GUIDE.md` (the emergency sections: several emergencies in progress, ending
-  saves the report, no archives)
+  saves the report)
 - Modify: `CMakeLists.txt`, `tests/CMakeLists.txt`, `tests/main.cpp`, `tests/services/CommandSamples.cpp`
 - Create: `tests/services/FakeClock.h/.cpp`, `tests/services/EmergencyCommandsTest.h/.cpp`
 
@@ -4183,8 +4202,7 @@ clock).
   `findEmergencyResponse`, `addEmergencyResponse`, `updateEmergencyResponse`,
   `removeEmergencyResponse`; `emergencyResponse()` and `setEmergencyResponse` are deleted. JSON
   key `emergencyResponses`.
-- `EmergencyResponse` gains `m_id`; `create(const QString& name, const QDateTime& startedAt)`;
-  `m_endedAt`, `endedAt`, `setEndedAt`, `clearEndedAt` are deleted.
+- `EmergencyResponse` gains `m_id`; `create(const QString& name, const QDateTime& startedAt)`.
 - `ContactAttempt`: `std::optional<ContactMethod> method`, `std::optional<PersonId> who`, and
   `std::optional<ContactOutcome> outcome` with `enum class ContactOutcome { OK, UnableToReach }`;
   `create(...)` takes the timestamp. `ContactStatus`, `m_contactStatus` and `setContactStatus`
@@ -4233,16 +4251,7 @@ table, and a missing response making every command but `EndEmergency` conflict:
 - `EmergencyManager` keeps `std::optional<EmergencyResponseId> m_shownId`, reads the response
   from the document, and turns each of today's mutators into building and committing the command;
   `m_response`, `persistResponseData`, `syncFromDocument` and `syncFamilies` are deleted.
-- All archive code is deleted, as listed in the notes: `EmergencyManager`'s `m_savedResponse`,
-  `loadArchive`, `closeArchive`, `reopenArchive`, `saveArchive`, `isViewingArchive`,
-  `archiveViewOpened`, `archiveViewClosed` and `endEmergency`'s `archive` parameter;
-  `DocumentManager`'s `m_archiveDocument`, `setArchiveDocument`, `clearArchiveDocument`,
-  `isViewingArchive` and `setEmergencyResponse` / `saveDocumentOnly`; `ArchiveBrowserDialog`;
-  `EmergencyBanner::setArchiveName`; `MainWindow::onOpenArchive`, `onArchiveViewOpened`,
-  `onArchiveViewClosed`, `m_openArchiveAction`, `m_closeArchiveAction` and their menu items; the
-  archive connections in `FamilyTreeModel`, `MinisteringModel`, `TeamsTreeModel` and
-  `WardListView`; the `isViewingArchive` checks in `ActionButtonsWidget`, `TeamsView` and
-  `WardListView`.
+- `DocumentManager`'s `setEmergencyResponse` and `saveDocumentOnly` are deleted.
 - `MainWindow::onEndEmergency`: one End confirmation, then the report's save dialog (cancelling
   ends nothing), then `endEmergency`; `AlreadyEnded` tells the user someone else ended it.
   `generateEmergencyReportWithConfirm` reads the response by id after its dialog rather than
