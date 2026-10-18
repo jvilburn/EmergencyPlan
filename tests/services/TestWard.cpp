@@ -48,6 +48,29 @@ Family TestWard::jones()
                                 address("4 Oak Ave", "Provo, UT"), {carol()});
 }
 
+Person TestWard::leeMember(const QString& id, const QString& givenName, std::optional<Gender> gender,
+                           std::optional<int> birthYear, bool isParent)
+{
+    return Person::createWithId(PersonId::fromString(id), Name("Lee", givenName), gender,
+                                Birthday::create(birthYear, 1, 1), Phone(), Phone(), QString(),
+                                QStringList(), isParent, QString(), QString());
+}
+
+Family TestWard::lee(std::optional<int> fayBirthYear)
+{
+    return Family::createWithId(FamilyId::fromString("family-lee"), std::nullopt, std::nullopt,
+                                address("8 Pine St", "Provo, UT"),
+                                {leeMember("person-ken", "Ken", Gender::Male, 1975, true),
+                                 leeMember("person-mia", "Mia", Gender::Female, 1977, true),
+                                 leeMember("person-ed", "Ed", Gender::Male, 2005, false),
+                                 leeMember("person-fay", "Fay", Gender::Female, fayBirthYear, false)});
+}
+
+Person TestWard::gus()
+{
+    return leeMember("person-gus", "Gus", Gender::Male, 2008, false);
+}
+
 Family TestWard::smithWithEveryFieldChanged()
 {
     Person bob = TestWard::bob();

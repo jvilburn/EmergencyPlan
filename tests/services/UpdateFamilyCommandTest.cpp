@@ -9,7 +9,7 @@
 namespace
 {
 
-CommandPtr bobPhoneEdit(const QString& phone)
+UndoableCommandPtr bobPhoneEdit(const QString& phone)
 {
     Family opened = TestWard::smith();
     return UpdateFamilyCommand::fromEdit(opened, TestWard::withPhone(opened, TestWard::bobId(), phone));
@@ -85,31 +85,11 @@ Family smithWithThirdValue(const QString& field)
     return TestWard::withMember(family, bob);
 }
 
-Person leeMember(const QString& id, const QString& givenName, std::optional<Gender> gender,
-                 std::optional<int> birthYear, bool isParent)
-{
-    return Person::createWithId(PersonId::fromString(id), Name("Lee", givenName), gender,
-                                Birthday::create(birthYear, 1, 1), Phone(), Phone(), QString(),
-                                QStringList(), isParent, QString(), QString());
-}
-
-/// The Lee family as given: Ken (father, 1975), Mia (mother, 1977), Ed (child, 2005) and
-/// Fay (child, born in fayBirthYear).
-Family lee(std::optional<int> fayBirthYear)
-{
-    return Family::createWithId(FamilyId::fromString("family-lee"), std::nullopt, std::nullopt,
-                                TestWard::address("8 Pine St", "Provo, UT"),
-                                {leeMember("person-ken", "Ken", Gender::Male, 1975, true),
-                                 leeMember("person-mia", "Mia", Gender::Female, 1977, true),
-                                 leeMember("person-ed", "Ed", Gender::Male, 2005, false),
-                                 leeMember("person-fay", "Fay", Gender::Female, fayBirthYear, false)});
-}
-
-/// family with Gus, a child born in 2008, added at the end, as the member editor adds him.
-Family withGus(const Family& family)
+/// family with Gus inserted at index.
+Family withGusAt(const Family& family, qsizetype index)
 {
     QList<Person> members = family.members();
-    members.append(leeMember("person-gus", "Gus", Gender::Male, 2008, false));
+    members.insert(index, TestWard::gus());
     Family saved = family;
     saved.setMembers(members);
     return saved;
@@ -173,7 +153,7 @@ void UpdateFamilyCommandTest::descriptionIsAHeadingAndALinePerValueSet()
     Family saved = TestWard::withMember(TestWard::withPhone(opened, TestWard::bobId(), "555-2222"), alice);
     saved.setAddress(TestWard::address("14 Elm St", "Provo, UT"));
 
-    CommandPtr command = UpdateFamilyCommand::fromEdit(opened, saved);
+    UndoableCommandPtr command = UpdateFamilyCommand::fromEdit(opened, saved);
 
     QCOMPARE(command->description().heading(), QString("Smith family"));
     QCOMPARE(command->description().lines(), QStringList({"Bob, phone: 555-2222",
@@ -183,7 +163,7 @@ void UpdateFamilyCommandTest::descriptionIsAHeadingAndALinePerValueSet()
 
 void UpdateFamilyCommandTest::everyFieldEditDescribesEachField()
 {
-    CommandPtr command = UpdateFamilyCommand::fromEdit(TestWard::smith(), TestWard::smithWithEveryFieldChanged());
+    UndoableCommandPtr command = UpdateFamilyCommand::fromEdit(TestWard::smith(), TestWard::smithWithEveryFieldChanged());
 
     QCOMPARE(command->description().lines(),
              QStringList({"Bob, name: Smith, Robert",
@@ -229,7 +209,7 @@ void UpdateFamilyCommandTest::conflictsAndTouchesNothingWhereAFieldMoved()
     Family opened = TestWard::smith();
     Family saved = TestWard::withPhone(opened, TestWard::bobId(), "555-2222");
     saved.setAddress(TestWard::address("14 Elm St", "Provo, UT"));
-    CommandPtr command = UpdateFamilyCommand::fromEdit(opened, saved);
+    UndoableCommandPtr command = UpdateFamilyCommand::fromEdit(opened, saved);
     Document document = TestWard::withFamily(TestWard::document(),
                                              TestWard::withPhone(opened, TestWard::bobId(), "555-9999"));
     Document before = document;
@@ -255,7 +235,7 @@ void UpdateFamilyCommandTest::everyFieldMovedToAThirdValueConflicts_data()
 void UpdateFamilyCommandTest::everyFieldMovedToAThirdValueConflicts()
 {
     QFETCH(QString, field);
-    CommandPtr command = UpdateFamilyCommand::fromEdit(TestWard::smith(), TestWard::smithWithEveryFieldChanged());
+    UndoableCommandPtr command = UpdateFamilyCommand::fromEdit(TestWard::smith(), TestWard::smithWithEveryFieldChanged());
     Document document = TestWard::withFamily(TestWard::document(), smithWithThirdValue(field));
     QVERIFY(document != TestWard::document());
     Document before = document;
@@ -291,8 +271,8 @@ void UpdateFamilyCommandTest::editsToDifferentMembersBothApply()
     Family opened = TestWard::smith();
     Person alice = TestWard::alice();
     alice.setEmail("alice@new.example.com");
-    CommandPtr bobEdit = bobPhoneEdit("555-2222");
-    CommandPtr aliceEdit = UpdateFamilyCommand::fromEdit(opened, TestWard::withMember(opened, alice));
+    UndoableCommandPtr bobEdit = bobPhoneEdit("555-2222");
+    UndoableCommandPtr aliceEdit = UpdateFamilyCommand::fromEdit(opened, TestWard::withMember(opened, alice));
 
     Document bobFirst = TestWard::document();
     QVERIFY(bobEdit->execute(bobFirst) == CommandOutcome::Applied);
@@ -308,7 +288,7 @@ void UpdateFamilyCommandTest::editsToDifferentMembersBothApply()
 
 void UpdateFamilyCommandTest::memberRemovalConflictsAfterThatMemberChanged()
 {
-    CommandPtr removal = UpdateFamilyCommand::fromEdit(TestWard::smith(), smithWithout(TestWard::aliceId()));
+    UndoableCommandPtr removal = UpdateFamilyCommand::fromEdit(TestWard::smith(), smithWithout(TestWard::aliceId()));
     Document document = TestWard::withFamily(TestWard::document(),
                                              TestWard::withPhone(TestWard::smith(), TestWard::aliceId(), "555-7777"));
 
@@ -319,7 +299,7 @@ void UpdateFamilyCommandTest::memberRemovalConflictsAfterThatMemberChanged()
 
 void UpdateFamilyCommandTest::memberRemovalAppliesOntoAnUnchangedMemberAndItsInverseRestoresThem()
 {
-    CommandPtr removal = UpdateFamilyCommand::fromEdit(TestWard::smith(), smithWithout(TestWard::aliceId()));
+    UndoableCommandPtr removal = UpdateFamilyCommand::fromEdit(TestWard::smith(), smithWithout(TestWard::aliceId()));
     Document document = TestWard::document();
 
     QVERIFY(removal->execute(document) == CommandOutcome::Applied);
@@ -335,7 +315,7 @@ void UpdateFamilyCommandTest::memberAdditionHoldsWhenThatPersonIsAlreadyThere()
 {
     Family withDan = TestWard::smith();
     withDan.setMembers({TestWard::bob(), TestWard::alice(), TestWard::dan()});
-    CommandPtr addition = UpdateFamilyCommand::fromEdit(TestWard::smith(), withDan);
+    UndoableCommandPtr addition = UpdateFamilyCommand::fromEdit(TestWard::smith(), withDan);
     Document document = TestWard::withFamily(TestWard::document(), withDan);
     Document before = document;
 
@@ -345,36 +325,25 @@ void UpdateFamilyCommandTest::memberAdditionHoldsWhenThatPersonIsAlreadyThere()
     QCOMPARE(TestWard::family(document, TestWard::smithId()).members().size(), qsizetype(3));
 }
 
-void UpdateFamilyCommandTest::handAddedChildIsPlacedByTheRuleWhenEveryBirthYearIsKnown()
+void UpdateFamilyCommandTest::addedMemberTakesItsIndexInTheSavedFamily()
 {
-    Family opened = lee(2010);
-    CommandPtr addition = UpdateFamilyCommand::fromEdit(opened, withGus(opened));
+    // Every birth year is known, and the member order rule would put Gus at 3, after Ed.
+    Family opened = TestWard::lee(2010);
+    QCOMPARE(opened.insertionIndexFor(TestWard::gus()), qsizetype(3));
+    UndoableCommandPtr addition = UpdateFamilyCommand::fromEdit(opened, withGusAt(opened, 1));
     Document document = documentWith(opened);
 
-    QCOMPARE(addedIndex(*addition), qsizetype(3));
+    QCOMPARE(addedIndex(*addition), qsizetype(1));
     QVERIFY(addition->execute(document) == CommandOutcome::Applied);
 
     QCOMPARE(memberIds(TestWard::family(document, opened.id())),
-             QStringList({"person-ken", "person-mia", "person-ed", "person-gus", "person-fay"}));
-}
-
-void UpdateFamilyCommandTest::handAddedChildGoesLastWhenABirthYearIsUnknown()
-{
-    Family opened = lee(std::nullopt);
-    CommandPtr addition = UpdateFamilyCommand::fromEdit(opened, withGus(opened));
-    Document document = documentWith(opened);
-
-    QCOMPARE(addedIndex(*addition), qsizetype(4));
-    QVERIFY(addition->execute(document) == CommandOutcome::Applied);
-
-    QCOMPARE(memberIds(TestWard::family(document, opened.id())),
-             QStringList({"person-ken", "person-mia", "person-ed", "person-fay", "person-gus"}));
+             QStringList({"person-ken", "person-gus", "person-mia", "person-ed", "person-fay"}));
 }
 
 void UpdateFamilyCommandTest::inverseSwapsTheChangeUnderAnUndoHeading()
 {
-    CommandPtr edit = bobPhoneEdit("555-2222");
-    CommandPtr inverse = edit->inverse();
+    UndoableCommandPtr edit = bobPhoneEdit("555-2222");
+    UndoableCommandPtr inverse = edit->inverse();
 
     QCOMPARE(inverse->description().heading(), QString("Undo: Smith family"));
     QCOMPARE(inverse->description().lines(), edit->description().lines());
@@ -393,7 +362,7 @@ void UpdateFamilyCommandTest::inverseSwapsTheChangeUnderAnUndoHeading()
 
 void UpdateFamilyCommandTest::inverseOfTheEveryFieldEditRestoresTheDocumentExactly()
 {
-    CommandPtr edit = UpdateFamilyCommand::fromEdit(TestWard::smith(), TestWard::smithWithEveryFieldChanged());
+    UndoableCommandPtr edit = UpdateFamilyCommand::fromEdit(TestWard::smith(), TestWard::smithWithEveryFieldChanged());
     Document document = TestWard::document();
 
     QVERIFY(edit->execute(document) == CommandOutcome::Applied);

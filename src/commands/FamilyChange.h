@@ -97,10 +97,8 @@ class FamilyChange
 {
 public:
     /// The difference between the family as opened and as saved, or none when nothing
-    /// differs. A member the saved family has and the opened one lacks was added by hand,
-    /// and is placed by the member order rule: fathers (parents who are male), then mothers
-    /// (parents who are female), then any other parent, then children oldest to youngest,
-    /// when the new member's birth year and every other member's are known; otherwise last.
+    /// differs. A member the saved family has and the opened one lacks is added at its index
+    /// in the saved family.
     static std::optional<FamilyChange> between(const Family& opened, const Family& saved);
 
     FamilyChange(const std::optional<FieldChange<Address>>& address,

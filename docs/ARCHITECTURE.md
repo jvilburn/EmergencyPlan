@@ -15,7 +15,7 @@ Data models use standard setters for mutation. Every user-facing change to the d
 All state mutations go through Command objects:
 - A command is immutable once constructed: it holds what the user saw (its start condition), what it sets, and its description
 - `execute` applies where the start condition or the result holds and answers `Applied`; anywhere else it answers `Conflicted` and leaves the document untouched
-- `inverse` builds the command that takes it back, and `undoable` says whether undo may
+- An `UndoableCommand` is one undo can take back, and its `inverse` builds the command that does; a command undo cannot take back derives from `Command` and has no inverse
 - `refusal` gives the wording of a rule that refuses the command on a document
 - `WardSession` runs every command through one commit step, keeps the journal of serialised commands, replays the journal onto another version of the document, and holds the undo and redo stacks
 - `description()` is a heading and a line per value set, in the user's words
@@ -86,7 +86,7 @@ For list and tree displays:
 1. A user action has the widget build a Command from what it opened and what the user saved
 2. The widget calls `DocumentManager::executeCommand()`, which hands the command to `WardSession::commit`
 3. The commit step asks the command's rule (`refusal`), then runs `execute`
-4. A command whose start condition or result holds changes the Document in place and answers `Applied`; the session appends it to the journal and, when it is undoable, to the undo stack
+4. A command whose start condition or result holds changes the Document in place and answers `Applied`; the session appends it to the journal and, when it is an `UndoableCommand`, to the undo stack
 5. `WardSession` emits `documentChanged(DocumentChange)` and `undoStackChanged()`
 6. List models and widgets update in response
 
@@ -220,6 +220,7 @@ enum class CommandOutcome
 };
 
 using CommandPtr = std::shared_ptr<const Command>;
+using UndoableCommandPtr = std::shared_ptr<const UndoableCommand>;
 
 class Command
 {
@@ -233,13 +234,6 @@ public:
     // with the document untouched
     virtual CommandOutcome execute(Document& document) const = 0;
 
-    // Whether undo can take this command back; true unless the type overrides it
-    virtual bool undoable() const { return true; }
-
-    // The command that takes this one back, headed "Undo: <heading>"; called only on an
-    // undoable command
-    virtual CommandPtr inverse() const = 0;
-
     // The wording of the rule that refuses this command on this document, or empty
     virtual QString refusal(const Document& document) const;
 
@@ -251,6 +245,14 @@ public:
 
     // A heading and a line per value set, fixed when the command is built
     const CommandDescription& description() const;
+};
+
+// A command undo can take back; the undo and redo stacks hold only these
+class UndoableCommand : public Command
+{
+public:
+    // The command that takes this one back, headed "Undo: <heading>"; never empty
+    virtual UndoableCommandPtr inverse() const = 0;
 };
 ```
 
@@ -293,7 +295,7 @@ signals:
 
 `WardSession` holds one open ward: its document, its journal and its undo and redo stacks. It holds no global state, so tests create as many sessions as they need.
 
-- **The commit step** asks the command's rule, then runs `execute`. It answers `Applied`, `Conflicted`, or `Refused` with the rule's wording, and `NothingToDo` for an empty command, which is what an edit that changed nothing builds. A command that applies is appended to the journal, empties the redo stack, and enters the undo stack when it is undoable; the undo stack holds at most 100 commands, with the oldest dropped. A command that conflicts or is refused changes nothing.
+- **The commit step** asks the command's rule, then runs `execute`. It answers `Applied`, `Conflicted`, or `Refused` with the rule's wording, and `NothingToDo` for an empty command, which is what an edit that changed nothing builds. A command that applies is appended to the journal, empties the redo stack, and enters the undo stack when it is an `UndoableCommand`; the undo stack holds at most 100 commands, with the oldest dropped. A command that conflicts or is refused changes nothing.
 - **The journal** (`Journal`) holds each applied command's serialised form under the next sequence number, in the order the commands were made.
 - **Replay** rebuilds each journal entry with `CommandRegistry` and puts it through the rule and `execute` on a copy of the version, in order. When every entry applies, the copy becomes the document. The first entry that conflicts or is refused abandons the replay: the version becomes the document as it stands, the journal and the undo and redo stacks are emptied, and the result holds the abandoned changes as plain text, which the app writes to a file for the user to redo.
 - **Undo** builds the inverse of the command on top of the undo stack and runs it through the commit step; when it applies, the command moves to the redo stack. **Redo** runs that command again through the commit step and moves it back. An undo whose inverse conflicts or is refused leaves the command where it was.
@@ -302,11 +304,11 @@ signals:
 
 ```cpp
 // An edit to one family, built from the family as the edit opened it and as it was saved
-class UpdateFamilyCommand : public Command
+class UpdateFamilyCommand : public UndoableCommand
 {
 public:
     // Empty when nothing differs
-    static CommandPtr fromEdit(const Family& opened, const Family& saved);
+    static UndoableCommandPtr fromEdit(const Family& opened, const Family& saved);
 
     CommandOutcome execute(Document& document) const override
     {
@@ -319,7 +321,7 @@ public:
         return CommandOutcome::Applied;
     }
 
-    CommandPtr inverse() const override
+    UndoableCommandPtr inverse() const override
     {
         return std::make_shared<UpdateFamilyCommand>(m_familyId, m_change.swapped(), description().undone());
     }
@@ -330,7 +332,7 @@ private:
 };
 ```
 
-`FamilyChange` holds the address change, a `MemberChange` per changed member, the members added with the index each goes in at, and the members removed as last seen with the index each was at. Member order is not part of the start condition: a change inserts each addition at its index and moves no one else, and the inverse of a removal puts the member back where they were.
+`FamilyChange` holds the address change, a `MemberChange` per changed member, the members added with the index each has in the saved family, and the members removed as last seen with the index each was at. Member order is not part of the start condition: a change inserts each addition at its index and moves no one else, and the inverse of a removal puts the member back where they were.
 
 ---
 

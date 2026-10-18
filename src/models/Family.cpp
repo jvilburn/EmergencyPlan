@@ -1,5 +1,50 @@
 #include "Family.h"
 
+namespace
+{
+
+/// The kinds of member, in the order the member order rule places them.
+enum class MemberKind
+{
+    Father,
+    Mother,
+    OtherParent,
+    Child
+};
+
+MemberKind kindOf(const Person& person)
+{
+    if (!person.isParent())
+    {
+        return MemberKind::Child;
+    }
+    if (person.gender() == Gender::Male)
+    {
+        return MemberKind::Father;
+    }
+    if (person.gender() == Gender::Female)
+    {
+        return MemberKind::Mother;
+    }
+    return MemberKind::OtherParent;
+}
+
+/// True when the rule puts person ahead of member: an earlier kind, or an older child.
+/// Both birth years are known.
+bool comesBefore(const Person& person, const Person& member)
+{
+    MemberKind personKind = kindOf(person);
+    MemberKind memberKind = kindOf(member);
+    if (personKind != memberKind)
+    {
+        return personKind < memberKind;
+    }
+    return personKind == MemberKind::Child
+        && *person.birthday().year() < *member.birthday().year();
+}
+
+}  // namespace
+
 Family Family::create(std::optional<double> latitude,
                       std::optional<double> longitude,
                       const Address& address,
@@ -90,6 +135,29 @@ QList<Person> Family::children() const
         }
     }
     return result;
+}
+
+qsizetype Family::insertionIndexFor(const Person& person) const
+{
+    if (!person.birthday().year().has_value())
+    {
+        return m_members.size();
+    }
+    for (const Person& member : m_members)
+    {
+        if (!member.birthday().year().has_value())
+        {
+            return m_members.size();
+        }
+    }
+    for (qsizetype i = 0; i < m_members.size(); ++i)
+    {
+        if (comesBefore(person, m_members[i]))
+        {
+            return i;
+        }
+    }
+    return m_members.size();
 }
 
 void Family::setLatitude(std::optional<double> latitude)

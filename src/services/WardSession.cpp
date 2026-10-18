@@ -50,9 +50,10 @@ CommitResult WardSession::commit(CommandPtr command)
     }
 
     m_redoStack.clear();
-    if (command->undoable())
+    UndoableCommandPtr undoable = std::dynamic_pointer_cast<const UndoableCommand>(command);
+    if (undoable)
     {
-        m_undoStack.append(command);
+        m_undoStack.append(undoable);
         if (m_undoStack.size() > UndoLimit)
         {
             m_undoStack.removeFirst();

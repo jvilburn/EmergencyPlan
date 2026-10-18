@@ -25,8 +25,7 @@ private slots:
     void memberRemovalConflictsAfterThatMemberChanged();
     void memberRemovalAppliesOntoAnUnchangedMemberAndItsInverseRestoresThem();
     void memberAdditionHoldsWhenThatPersonIsAlreadyThere();
-    void handAddedChildIsPlacedByTheRuleWhenEveryBirthYearIsKnown();
-    void handAddedChildGoesLastWhenABirthYearIsUnknown();
+    void addedMemberTakesItsIndexInTheSavedFamily();
     void inverseSwapsTheChangeUnderAnUndoHeading();
     void inverseOfTheEveryFieldEditRestoresTheDocumentExactly();
 };

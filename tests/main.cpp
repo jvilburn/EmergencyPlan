@@ -1,4 +1,5 @@
 #include "BirthdayTest.h"
+#include "FamilyOrderTest.h"
 #include "FieldChangeTest.h"
 #include "CommandRoundTripTest.h"
 #include "PersonJsonTest.h"
@@ -14,6 +15,7 @@ int main(int argc, char* argv[])
 
     PersonJsonTest personJsonTest(nullptr);
     BirthdayTest birthdayTest(nullptr);
+    FamilyOrderTest familyOrderTest(nullptr);
     FieldChangeTest changeTest(nullptr);
     UpdateFamilyCommandTest updateFamilyCommandTest(nullptr);
     CommandRoundTripTest commandRoundTripTest(nullptr);
@@ -22,6 +24,7 @@ int main(int argc, char* argv[])
     int failures = 0;
     failures += QTest::qExec(&personJsonTest, argc, argv);
     failures += QTest::qExec(&birthdayTest, argc, argv);
+    failures += QTest::qExec(&familyOrderTest, argc, argv);
     failures += QTest::qExec(&changeTest, argc, argv);
     failures += QTest::qExec(&updateFamilyCommandTest, argc, argv);
     failures += QTest::qExec(&commandRoundTripTest, argc, argv);

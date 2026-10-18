@@ -3,7 +3,7 @@
 
 #include <QObject>
 
-CommandPtr UpdateFamilyCommand::fromEdit(const Family& opened, const Family& saved)
+UndoableCommandPtr UpdateFamilyCommand::fromEdit(const Family& opened, const Family& saved)
 {
     std::optional<FamilyChange> change = FamilyChange::between(opened, saved);
     if (!change.has_value())
@@ -17,7 +17,7 @@ CommandPtr UpdateFamilyCommand::fromEdit(const Family& opened, const Family& sav
 UpdateFamilyCommand::UpdateFamilyCommand(const FamilyId& familyId,
                                          const FamilyChange& change,
                                          const CommandDescription& description)
-    : Command(description)
+    : UndoableCommand(description)
     , m_familyId(familyId)
     , m_change(change)
 {
@@ -34,7 +34,7 @@ CommandOutcome UpdateFamilyCommand::execute(Document& document) const
     return CommandOutcome::Applied;
 }
 
-CommandPtr UpdateFamilyCommand::inverse() const
+UndoableCommandPtr UpdateFamilyCommand::inverse() const
 {
     return std::make_shared<UpdateFamilyCommand>(m_familyId, m_change.swapped(), description().undone());
 }

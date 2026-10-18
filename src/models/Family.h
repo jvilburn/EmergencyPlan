@@ -44,6 +44,13 @@ public:
     QList<Person> parents() const;
     QList<Person> children() const;
 
+    /// Where the member order rule puts person among the members: the index of the first
+    /// member person comes before, by fathers (parents who are male), then mothers (parents
+    /// who are female), then any other parent, then children oldest to youngest. The end
+    /// when person comes after everyone, or when person's birth year or any member's is
+    /// unknown.
+    qsizetype insertionIndexFor(const Person& person) const;
+
     // Setters
     void setLatitude(std::optional<double> latitude);
     void setLongitude(std::optional<double> longitude);

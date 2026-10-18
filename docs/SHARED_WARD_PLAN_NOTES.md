@@ -198,7 +198,7 @@ replay:
   refuses the whole payload; today each reads a missing field as empty or false.
 - **`Command` itself** gains `toJson` and `fromJson` with a type registry, so a journal
   entry reaches disk and comes back as the command it was. `undo` becomes `inverse` on
-  every command, and `CommandHistory`'s `markSaved` and `isDirty`, with
+  every `UndoableCommand`, and `CommandHistory`'s `markSaved` and `isDirty`, with
   `DocumentManager::isDirty` and its `dirtyChanged` signal, are deleted: every command is
   saved as it is made, so nothing is ever unsaved.
 - **The update check** is new: on start, the app reads the server's `GET /releases/latest`

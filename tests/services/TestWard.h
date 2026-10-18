@@ -28,6 +28,18 @@ public:
 
     static Family smith();
     static Family jones();
+
+    /// A Lee family member born on 1 January of birthYear, with no contact details.
+    static Person leeMember(const QString& id, const QString& givenName, std::optional<Gender> gender,
+                            std::optional<int> birthYear, bool isParent);
+
+    /// The Lee family at 8 Pine St, Provo, UT, which is not in document(): Ken (father, 1975),
+    /// Mia (mother, 1977), Ed (child, 2005) and Fay (child, born in fayBirthYear).
+    static Family lee(std::optional<int> fayBirthYear);
+
+    /// Gus Lee, a boy born in 2008, not a parent.
+    static Person gus();
+
     static Address address(const QString& street, const QString& city);
 
     /// The Smith family with every field of Bob changed, Alice removed, Dan added and the

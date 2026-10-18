@@ -796,7 +796,7 @@ holds the heading and its lines, with long values such as a special-needs note i
 
 **A command is immutable once constructed.** Its start condition, its result and its
 description are all fixed by the constructor; `execute` takes the document and leaves the
-command alone, and `inverse` builds a new command rather than changing this one. This is the property that makes replay safe, and it
+command alone, and an undoable command's `inverse` builds a new command rather than changing this one. This is the property that makes replay safe, and it
 is a constraint on commands rather than machinery around them: a command that read the
 document inside `execute` to remember what it was replacing would have that memory
 overwritten by the very version it is being replayed onto, and would then write a stale
@@ -964,7 +964,7 @@ ministering, tags, the emergency response and the access list. In particular:
   current header no longer names the invite.
 - **Commands serialise.** Every command has `toJson` and `fromJson` through a type
   registry, so a journal entry reaches disk and comes back as the command it was; every
-  undoable command has an `inverse` in place of an undo; and every command is saved as it is made,
+  `UndoableCommand` has an `inverse` in place of an undo; and every command is saved as it is made,
   so nothing is ever unsaved and the app has no unsaved state to track.
 - **The update check**: on start, the app reads the server's `GET /releases/latest` and,
   when it is newer than the running version, shows a dismissible notice offering the
@@ -1466,8 +1466,9 @@ version.
 - **When a rule refuses it**, the user sees that rule's wording and the ward is editable
   again.
 
-**An undo is the command's inverse, run like any other command.** `Command` has
-`CommandPtr inverse() const` in place of `undo`: for an update, the same command with
+**An undo is the command's inverse, run like any other command.** A command undo can take
+back is an `UndoableCommand`, which has `UndoableCommandPtr inverse() const` in place of
+`undo`, never empty: for an update, the same command with
 before and after swapped; for an add or a delete, the opposite command; in every case with
 the heading "Undo: *original heading*" over the original's lines. Undo builds the inverse and sends it
 through the commit step - its rule, `execute`, journal, save, push - and redo runs the
@@ -1490,10 +1491,12 @@ entries, with the oldest dropped.
 - **An undo whose inverse conflicts or is refused** changes nothing, so the original stays
   on the undo stack and the user is told why, as with any command that fails.
 - **A command that conflicts or is refused on its first run** never enters the undo stack.
-- **Access-list commands are not undoable**, and never enter the undo stack: undoing a
+- **Access-list commands are not undoable**: each derives from `Command` and not
+  `UndoableCommand`, so it has no inverse and never enters the undo stack. Undoing a
   removal would re-seal to someone just removed, and a leave or a join cannot be undone
   from inside the ward. Undo is for content.
-- **`StartEmergency` and `AddTaskCategory` are not undoable either**: undoing a start would
+- **`StartEmergency` and `AddTaskCategory` are not undoable either**, and derive from
+  `Command` the same way: undoing a start would
   delete a response other responders may already be writing to, and an unused category does
   no harm. Undoing `EndEmergency` runs `RestoreEmergency`; the report already saved stays
   where it is.

@@ -18,11 +18,6 @@ CommandOutcome ForcePhoneCommand::execute(Document& document) const
     return CommandOutcome::Applied;
 }
 
-CommandPtr ForcePhoneCommand::inverse() const
-{
-    return nullptr;
-}
-
 QString ForcePhoneCommand::refusal(const Document& document) const
 {
     Q_UNUSED(document);

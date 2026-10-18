@@ -56,9 +56,9 @@ public:
     void open(const Document& document);
 
     /// The commit step: the command's rule, then execute, then the journal. A command that
-    /// applies empties the redo stack, and enters the undo stack when it is undoable. One
-    /// that conflicts or is refused changes nothing and enters neither. An empty command
-    /// is nothing to do and changes nothing.
+    /// applies empties the redo stack, and enters the undo stack when it is an
+    /// UndoableCommand. One that conflicts or is refused changes nothing and enters neither.
+    /// An empty command is nothing to do and changes nothing.
     CommitResult commit(CommandPtr command);
 
     /// Builds the inverse of the command on top of the undo stack and runs it through the
@@ -100,8 +100,8 @@ private:
 
     Document m_document;
     Journal m_journal;
-    QList<CommandPtr> m_undoStack;
-    QList<CommandPtr> m_redoStack;
+    QList<UndoableCommandPtr> m_undoStack;
+    QList<UndoableCommandPtr> m_redoStack;
 
     static constexpr int UndoLimit = 100;
 };

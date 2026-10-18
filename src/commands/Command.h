@@ -63,14 +63,6 @@ public:
     /// Applied. Otherwise answers Conflicted and leaves the document untouched.
     virtual CommandOutcome execute(Document& document) const = 0;
 
-    /// Whether undo can take this command back. A type that cannot be taken back answers
-    /// false: it never enters the undo stack, and its inverse() is never called.
-    virtual bool undoable() const { return true; }
-
-    /// The command that takes this one back, described by description().undone(). Called
-    /// only on an undoable command.
-    virtual CommandPtr inverse() const = 0;
-
     /// The wording of the rule that refuses this command on this document, or an empty
     /// string when no rule does. Content commands have no rules.
     virtual QString refusal(const Document& document) const;
@@ -88,4 +80,20 @@ protected:
 
 private:
     CommandDescription m_description;
+};
+
+class UndoableCommand;
+using UndoableCommandPtr = std::shared_ptr<const UndoableCommand>;
+
+/// A command undo can take back. The undo and redo stacks hold only these; a command that
+/// cannot be taken back derives from Command and never enters them.
+class UndoableCommand : public Command
+{
+public:
+    /// The command that takes this one back, described by description().undone(). Never
+    /// empty.
+    virtual UndoableCommandPtr inverse() const = 0;
+
+protected:
+    explicit UndoableCommand(const CommandDescription& description);
 };

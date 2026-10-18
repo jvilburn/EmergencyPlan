@@ -56,76 +56,6 @@ QList<PlacedMember> placedFromJson(const QJsonArray& array)
 }
 
 // ----------------------------------------------------------------------------
-// The member order rule
-// ----------------------------------------------------------------------------
-
-/// The kinds of member, in the order the member order rule places them.
-enum class MemberKind
-{
-    Father,
-    Mother,
-    OtherParent,
-    Child
-};
-
-MemberKind kindOf(const Person& person)
-{
-    if (!person.isParent())
-    {
-        return MemberKind::Child;
-    }
-    if (person.gender() == Gender::Male)
-    {
-        return MemberKind::Father;
-    }
-    if (person.gender() == Gender::Female)
-    {
-        return MemberKind::Mother;
-    }
-    return MemberKind::OtherParent;
-}
-
-/// True when the rule puts newcomer ahead of member: an earlier kind, or an older child.
-/// Both birth years are known.
-bool ranksBefore(const Person& newcomer, const Person& member)
-{
-    MemberKind newcomerKind = kindOf(newcomer);
-    MemberKind memberKind = kindOf(member);
-    if (newcomerKind != memberKind)
-    {
-        return newcomerKind < memberKind;
-    }
-    return newcomerKind == MemberKind::Child
-        && *newcomer.birthday().year() < *member.birthday().year();
-}
-
-/// Where the member order rule inserts newcomer among members: ahead of the first member
-/// it ranks before, so it follows every member of its own kind and age. Last when the
-/// newcomer's birth year or any member's is unknown.
-qsizetype placementIndex(const QList<Person>& members, const Person& newcomer)
-{
-    if (!newcomer.birthday().year().has_value())
-    {
-        return members.size();
-    }
-    for (const Person& member : members)
-    {
-        if (!member.birthday().year().has_value())
-        {
-            return members.size();
-        }
-    }
-    for (qsizetype i = 0; i < members.size(); ++i)
-    {
-        if (ranksBefore(newcomer, members[i]))
-        {
-            return i;
-        }
-    }
-    return members.size();
-}
-
-// ----------------------------------------------------------------------------
 // Description text
 // ----------------------------------------------------------------------------
 
@@ -360,7 +290,6 @@ std::optional<FamilyChange> FamilyChange::between(const Family& opened, const Fa
 {
     QHash<PersonId, MemberChange> members;
     QList<PlacedMember> removed;
-    QList<Person> placed;
     for (qsizetype i = 0; i < opened.members().size(); ++i)
     {
         const Person& before = opened.members()[i];
@@ -370,7 +299,6 @@ std::optional<FamilyChange> FamilyChange::between(const Family& opened, const Fa
             removed.append(PlacedMember{before, i});
             continue;
         }
-        placed.append(*after);
         std::optional<MemberChange> change = MemberChange::between(before, *after);
         if (change.has_value())
         {
@@ -379,13 +307,12 @@ std::optional<FamilyChange> FamilyChange::between(const Family& opened, const Fa
     }
 
     QList<PlacedMember> added;
-    for (const Person& after : saved.members())
+    for (qsizetype i = 0; i < saved.members().size(); ++i)
     {
+        const Person& after = saved.members()[i];
         if (!findMember(opened, after.id()).has_value())
         {
-            qsizetype index = placementIndex(placed, after);
-            placed.insert(index, after);
-            added.append(PlacedMember{after, index});
+            added.append(PlacedMember{after, i});
         }
     }
 

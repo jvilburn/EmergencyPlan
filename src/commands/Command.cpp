@@ -52,3 +52,8 @@ QString Command::refusal(const Document& document) const
     Q_UNUSED(document);
     return QString();
 }
+
+UndoableCommand::UndoableCommand(const CommandDescription& description)
+    : Command(description)
+{
+}

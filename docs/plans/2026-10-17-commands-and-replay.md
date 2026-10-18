@@ -9,9 +9,10 @@ replay and hand back its changes as text to redo), and is undone by running its 
 through the same step.
 
 **Architecture:** `Command` answers `CommandOutcome::Applied` or `CommandOutcome::Conflicted` from a `const`
-`execute`, says whether it is `undoable`, builds its `inverse`, serialises through
-`CommandRegistry`, and carries a stored `CommandDescription`; `CommandPtr` is
-`std::shared_ptr<const Command>`. Update commands hold typed `FieldChange<T>` and
+`execute`, serialises through `CommandRegistry`, and carries a stored `CommandDescription`;
+`CommandPtr` is `std::shared_ptr<const Command>`. A command undo can take back is an
+`UndoableCommand`, which builds its `inverse`; one undo cannot take back derives from `Command`
+and has no inverse. Update commands hold typed `FieldChange<T>` and
 `IdSetChange<Id>` values for the fields they change only. `WardSession` owns the document, the
 `Journal` and the undo and redo stacks, which hold commands, with no global state; an abandoned
 replay hands back its changes as plain text, which the app writes to a file; `DocumentManager` and `EmergencyManager`
@@ -44,6 +45,8 @@ sections. Code sites come from `docs/SHARED_WARD_PLAN_NOTES.md`.
 - **Every new or changed command type** adds its entry to `CommandRegistry::types()` and its
   samples to `tests/services/CommandSamples.cpp` in the same task, so the round-trip test
   covers it.
+- **A command with an inverse** derives from `UndoableCommand`; a command the task calls not
+  undoable derives from `Command` and has no inverse.
 
 ---
 
@@ -59,6 +62,8 @@ and the test harness that runs all of it against test-built versions.
 - Create: `src/commands/FieldChange.h`
 - Create: `src/commands/FieldChangeJson.h`, `src/commands/FieldChangeJson.cpp`
 - Create: `src/commands/FamilyChange.h`, `src/commands/FamilyChange.cpp`
+- Modify: `src/models/Family.h`, `src/models/Family.cpp` (`insertionIndexFor`, the member
+  order rule)
 - Rewrite: `src/commands/FamilyCommands.h`, `src/commands/FamilyCommands.cpp`
   (`AddFamilyCommand`, `DeleteFamilyCommand` and `SetFamiliesCommand` have no callers and are
   deleted; `UpdateFamilyCommand` is rewritten)
@@ -82,6 +87,7 @@ and the test harness that runs all of it against test-built versions.
   are set)
 - Create: `tests/services/PersonJsonTest.h`, `tests/services/PersonJsonTest.cpp`
 - Create: `tests/services/BirthdayTest.h`, `tests/services/BirthdayTest.cpp`
+- Create: `tests/services/FamilyOrderTest.h`, `tests/services/FamilyOrderTest.cpp`
 - Modify: `docs/ARCHITECTURE.md` (the command contract and `WardSession`)
 
 ### `src/models/Birthday.h` and `src/models/Person.cpp`
@@ -159,6 +165,101 @@ QString Birthday::display() const
 `dateDisplay()` keeps its callers in the views; the member editor's three birthday fields stay
 independent. `tests/services/BirthdayTest` (below) covers each of the eight combinations.
 
+### `src/models/Family.h` and `src/models/Family.cpp`
+
+`FamilyChange::between` takes each added member's index from the saved family, so the member
+order a new member gets is decided by whoever builds the saved family. The member order rule
+lives on `Family`, for its one caller, the family edit panel's add-member path (task 2). In
+`Family.h`, after `children()`:
+
+```cpp
+    /// Where the member order rule puts person among the members: the index of the first
+    /// member person comes before, by fathers (parents who are male), then mothers (parents
+    /// who are female), then any other parent, then children oldest to youngest. The end
+    /// when person comes after everyone, or when person's birth year or any member's is
+    /// unknown.
+    qsizetype insertionIndexFor(const Person& person) const;
+```
+
+In `Family.cpp`, after the includes:
+
+```cpp
+namespace
+{
+
+/// The kinds of member, in the order the member order rule places them.
+enum class MemberKind
+{
+    Father,
+    Mother,
+    OtherParent,
+    Child
+};
+
+MemberKind kindOf(const Person& person)
+{
+    if (!person.isParent())
+    {
+        return MemberKind::Child;
+    }
+    if (person.gender() == Gender::Male)
+    {
+        return MemberKind::Father;
+    }
+    if (person.gender() == Gender::Female)
+    {
+        return MemberKind::Mother;
+    }
+    return MemberKind::OtherParent;
+}
+
+/// True when the rule puts person ahead of member: an earlier kind, or an older child.
+/// Both birth years are known.
+bool comesBefore(const Person& person, const Person& member)
+{
+    MemberKind personKind = kindOf(person);
+    MemberKind memberKind = kindOf(member);
+    if (personKind != memberKind)
+    {
+        return personKind < memberKind;
+    }
+    return personKind == MemberKind::Child
+        && *person.birthday().year() < *member.birthday().year();
+}
+
+}  // namespace
+```
+
+and after `children()`:
+
+```cpp
+qsizetype Family::insertionIndexFor(const Person& person) const
+{
+    if (!person.birthday().year().has_value())
+    {
+        return m_members.size();
+    }
+    for (const Person& member : m_members)
+    {
+        if (!member.birthday().year().has_value())
+        {
+            return m_members.size();
+        }
+    }
+    for (qsizetype i = 0; i < m_members.size(); ++i)
+    {
+        if (comesBefore(person, m_members[i]))
+        {
+            return i;
+        }
+    }
+    return m_members.size();
+}
+```
+
+`tests/services/FamilyOrderTest` (below) covers each kind, the child order, and an unknown
+birth year on either side.
+
 ### `src/commands/Command.h`
 
 ```cpp
@@ -227,14 +328,6 @@ public:
     /// Applied. Otherwise answers Conflicted and leaves the document untouched.
     virtual CommandOutcome execute(Document& document) const = 0;
 
-    /// Whether undo can take this command back. A type that cannot be taken back answers
-    /// false: it never enters the undo stack, and its inverse() is never called.
-    virtual bool undoable() const { return true; }
-
-    /// The command that takes this one back, described by description().undone(). Called
-    /// only on an undoable command.
-    virtual CommandPtr inverse() const = 0;
-
     /// The wording of the rule that refuses this command on this document, or an empty
     /// string when no rule does. Content commands have no rules.
     virtual QString refusal(const Document& document) const;
@@ -252,6 +345,22 @@ protected:
 
 private:
     CommandDescription m_description;
+};
+
+class UndoableCommand;
+using UndoableCommandPtr = std::shared_ptr<const UndoableCommand>;
+
+/// A command undo can take back. The undo and redo stacks hold only these; a command that
+/// cannot be taken back derives from Command and never enters them.
+class UndoableCommand : public Command
+{
+public:
+    /// The command that takes this one back, described by description().undone(). Never
+    /// empty.
+    virtual UndoableCommandPtr inverse() const = 0;
+
+protected:
+    explicit UndoableCommand(const CommandDescription& description);
 };
 ```
 
@@ -311,6 +420,11 @@ QString Command::refusal(const Document& document) const
 {
     Q_UNUSED(document);
     return QString();
+}
+
+UndoableCommand::UndoableCommand(const CommandDescription& description)
+    : Command(description)
+{
 }
 ```
 
@@ -700,10 +814,8 @@ class FamilyChange
 {
 public:
     /// The difference between the family as opened and as saved, or none when nothing
-    /// differs. A member the saved family has and the opened one lacks was added by hand,
-    /// and is placed by the member order rule: fathers (parents who are male), then mothers
-    /// (parents who are female), then any other parent, then children oldest to youngest,
-    /// when the new member's birth year and every other member's are known; otherwise last.
+    /// differs. A member the saved family has and the opened one lacks is added at its index
+    /// in the saved family.
     static std::optional<FamilyChange> between(const Family& opened, const Family& saved);
 
     FamilyChange(const std::optional<FieldChange<Address>>& address,
@@ -799,76 +911,6 @@ QList<PlacedMember> placedFromJson(const QJsonArray& array)
         placed.append(PlacedMember{Person::fromJson(json["person"].toObject()), json["index"].toInteger()});
     }
     return placed;
-}
-
-// ----------------------------------------------------------------------------
-// The member order rule
-// ----------------------------------------------------------------------------
-
-/// The kinds of member, in the order the member order rule places them.
-enum class MemberKind
-{
-    Father,
-    Mother,
-    OtherParent,
-    Child
-};
-
-MemberKind kindOf(const Person& person)
-{
-    if (!person.isParent())
-    {
-        return MemberKind::Child;
-    }
-    if (person.gender() == Gender::Male)
-    {
-        return MemberKind::Father;
-    }
-    if (person.gender() == Gender::Female)
-    {
-        return MemberKind::Mother;
-    }
-    return MemberKind::OtherParent;
-}
-
-/// True when the rule puts newcomer ahead of member: an earlier kind, or an older child.
-/// Both birth years are known.
-bool ranksBefore(const Person& newcomer, const Person& member)
-{
-    MemberKind newcomerKind = kindOf(newcomer);
-    MemberKind memberKind = kindOf(member);
-    if (newcomerKind != memberKind)
-    {
-        return newcomerKind < memberKind;
-    }
-    return newcomerKind == MemberKind::Child
-        && *newcomer.birthday().year() < *member.birthday().year();
-}
-
-/// Where the member order rule inserts newcomer among members: ahead of the first member
-/// it ranks before, so it follows every member of its own kind and age. Last when the
-/// newcomer's birth year or any member's is unknown.
-qsizetype placementIndex(const QList<Person>& members, const Person& newcomer)
-{
-    if (!newcomer.birthday().year().has_value())
-    {
-        return members.size();
-    }
-    for (const Person& member : members)
-    {
-        if (!member.birthday().year().has_value())
-        {
-            return members.size();
-        }
-    }
-    for (qsizetype i = 0; i < members.size(); ++i)
-    {
-        if (ranksBefore(newcomer, members[i]))
-        {
-            return i;
-        }
-    }
-    return members.size();
 }
 
 // ----------------------------------------------------------------------------
@@ -1106,7 +1148,6 @@ std::optional<FamilyChange> FamilyChange::between(const Family& opened, const Fa
 {
     QHash<PersonId, MemberChange> members;
     QList<PlacedMember> removed;
-    QList<Person> placed;
     for (qsizetype i = 0; i < opened.members().size(); ++i)
     {
         const Person& before = opened.members()[i];
@@ -1116,7 +1157,6 @@ std::optional<FamilyChange> FamilyChange::between(const Family& opened, const Fa
             removed.append(PlacedMember{before, i});
             continue;
         }
-        placed.append(*after);
         std::optional<MemberChange> change = MemberChange::between(before, *after);
         if (change.has_value())
         {
@@ -1125,13 +1165,12 @@ std::optional<FamilyChange> FamilyChange::between(const Family& opened, const Fa
     }
 
     QList<PlacedMember> added;
-    for (const Person& after : saved.members())
+    for (qsizetype i = 0; i < saved.members().size(); ++i)
     {
+        const Person& after = saved.members()[i];
         if (!findMember(opened, after.id()).has_value())
         {
-            qsizetype index = placementIndex(placed, after);
-            placed.insert(index, after);
-            added.append(PlacedMember{after, index});
+            added.append(PlacedMember{after, i});
         }
     }
 
@@ -1297,20 +1336,20 @@ FamilyChange FamilyChange::fromJson(const QJsonObject& json)
 
 /// An edit to one family, built from the difference between what the edit opened with and
 /// what it saved. Holds the before and after of the changed fields only.
-class UpdateFamilyCommand : public Command
+class UpdateFamilyCommand : public UndoableCommand
 {
 public:
     static constexpr const char* TypeName = "updateFamily";
 
     /// The edit from the family as opened to the family as saved, or an empty pointer when
     /// nothing differs, which WardSession::commit takes as nothing to do.
-    static CommandPtr fromEdit(const Family& opened, const Family& saved);
+    static UndoableCommandPtr fromEdit(const Family& opened, const Family& saved);
 
     UpdateFamilyCommand(const FamilyId& familyId, const FamilyChange& change, const CommandDescription& description);
 
     QString type() const override { return TypeName; }
     CommandOutcome execute(Document& document) const override;
-    CommandPtr inverse() const override;
+    UndoableCommandPtr inverse() const override;
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
@@ -1330,7 +1369,7 @@ private:
 
 #include <QObject>
 
-CommandPtr UpdateFamilyCommand::fromEdit(const Family& opened, const Family& saved)
+UndoableCommandPtr UpdateFamilyCommand::fromEdit(const Family& opened, const Family& saved)
 {
     std::optional<FamilyChange> change = FamilyChange::between(opened, saved);
     if (!change.has_value())
@@ -1344,7 +1383,7 @@ CommandPtr UpdateFamilyCommand::fromEdit(const Family& opened, const Family& sav
 UpdateFamilyCommand::UpdateFamilyCommand(const FamilyId& familyId,
                                          const FamilyChange& change,
                                          const CommandDescription& description)
-    : Command(description)
+    : UndoableCommand(description)
     , m_familyId(familyId)
     , m_change(change)
 {
@@ -1361,7 +1400,7 @@ CommandOutcome UpdateFamilyCommand::execute(Document& document) const
     return CommandOutcome::Applied;
 }
 
-CommandPtr UpdateFamilyCommand::inverse() const
+UndoableCommandPtr UpdateFamilyCommand::inverse() const
 {
     return std::make_shared<UpdateFamilyCommand>(m_familyId, m_change.swapped(), description().undone());
 }
@@ -1599,9 +1638,9 @@ public:
     void open(const Document& document);
 
     /// The commit step: the command's rule, then execute, then the journal. A command that
-    /// applies empties the redo stack, and enters the undo stack when it is undoable. One
-    /// that conflicts or is refused changes nothing and enters neither. An empty command
-    /// is nothing to do and changes nothing.
+    /// applies empties the redo stack, and enters the undo stack when it is an
+    /// UndoableCommand. One that conflicts or is refused changes nothing and enters neither.
+    /// An empty command is nothing to do and changes nothing.
     CommitResult commit(CommandPtr command);
 
     /// Builds the inverse of the command on top of the undo stack and runs it through the
@@ -1643,8 +1682,8 @@ private:
 
     Document m_document;
     Journal m_journal;
-    QList<CommandPtr> m_undoStack;
-    QList<CommandPtr> m_redoStack;
+    QList<UndoableCommandPtr> m_undoStack;
+    QList<UndoableCommandPtr> m_redoStack;
 
     static constexpr int UndoLimit = 100;
 };
@@ -1705,9 +1744,10 @@ CommitResult WardSession::commit(CommandPtr command)
     }
 
     m_redoStack.clear();
-    if (command->undoable())
+    UndoableCommandPtr undoable = std::dynamic_pointer_cast<const UndoableCommand>(command);
+    if (undoable)
     {
-        m_undoStack.append(command);
+        m_undoStack.append(undoable);
         if (m_undoStack.size() > UndoLimit)
         {
             m_undoStack.removeFirst();
@@ -1884,6 +1924,8 @@ add_executable(WardPlanningTests
     services/TestCommands.cpp
     services/CommandSamples.h
     services/CommandSamples.cpp
+    services/FamilyOrderTest.h
+    services/FamilyOrderTest.cpp
     services/FieldChangeTest.h
     services/FieldChangeTest.cpp
     services/UpdateFamilyCommandTest.h
@@ -1914,6 +1956,7 @@ add_test(NAME WardPlanningTests COMMAND WardPlanningTests)
 
 ```cpp
 #include "BirthdayTest.h"
+#include "FamilyOrderTest.h"
 #include "FieldChangeTest.h"
 #include "CommandRoundTripTest.h"
 #include "PersonJsonTest.h"
@@ -1929,6 +1972,7 @@ int main(int argc, char* argv[])
 
     PersonJsonTest personJsonTest(nullptr);
     BirthdayTest birthdayTest(nullptr);
+    FamilyOrderTest familyOrderTest(nullptr);
     FieldChangeTest changeTest(nullptr);
     UpdateFamilyCommandTest updateFamilyCommandTest(nullptr);
     CommandRoundTripTest commandRoundTripTest(nullptr);
@@ -1937,6 +1981,7 @@ int main(int argc, char* argv[])
     int failures = 0;
     failures += QTest::qExec(&personJsonTest, argc, argv);
     failures += QTest::qExec(&birthdayTest, argc, argv);
+    failures += QTest::qExec(&familyOrderTest, argc, argv);
     failures += QTest::qExec(&changeTest, argc, argv);
     failures += QTest::qExec(&updateFamilyCommandTest, argc, argv);
     failures += QTest::qExec(&commandRoundTripTest, argc, argv);
@@ -1982,6 +2027,18 @@ public:
 
     static Family smith();
     static Family jones();
+
+    /// A Lee family member born on 1 January of birthYear, with no contact details.
+    static Person leeMember(const QString& id, const QString& givenName, std::optional<Gender> gender,
+                            std::optional<int> birthYear, bool isParent);
+
+    /// The Lee family at 8 Pine St, Provo, UT, which is not in document(): Ken (father, 1975),
+    /// Mia (mother, 1977), Ed (child, 2005) and Fay (child, born in fayBirthYear).
+    static Family lee(std::optional<int> fayBirthYear);
+
+    /// Gus Lee, a boy born in 2008, not a parent.
+    static Person gus();
+
     static Address address(const QString& street, const QString& city);
 
     /// The Smith family with every field of Bob changed, Alice removed, Dan added and the
@@ -2059,6 +2116,29 @@ Family TestWard::jones()
 {
     return Family::createWithId(jonesId(), std::nullopt, std::nullopt,
                                 address("4 Oak Ave", "Provo, UT"), {carol()});
+}
+
+Person TestWard::leeMember(const QString& id, const QString& givenName, std::optional<Gender> gender,
+                           std::optional<int> birthYear, bool isParent)
+{
+    return Person::createWithId(PersonId::fromString(id), Name("Lee", givenName), gender,
+                                Birthday::create(birthYear, 1, 1), Phone(), Phone(), QString(),
+                                QStringList(), isParent, QString(), QString());
+}
+
+Family TestWard::lee(std::optional<int> fayBirthYear)
+{
+    return Family::createWithId(FamilyId::fromString("family-lee"), std::nullopt, std::nullopt,
+                                address("8 Pine St", "Provo, UT"),
+                                {leeMember("person-ken", "Ken", Gender::Male, 1975, true),
+                                 leeMember("person-mia", "Mia", Gender::Female, 1977, true),
+                                 leeMember("person-ed", "Ed", Gender::Male, 2005, false),
+                                 leeMember("person-fay", "Fay", Gender::Female, fayBirthYear, false)});
+}
+
+Person TestWard::gus()
+{
+    return leeMember("person-gus", "Gus", Gender::Male, 2008, false);
 }
 
 Family TestWard::smithWithEveryFieldChanged()
@@ -2151,8 +2231,9 @@ Task 3 drops the two `std::nullopt` coordinate arguments when `Family` loses its
 #include "Id.h"
 
 /// A test command that sets a member's phone whatever it holds, refused with ruleWording
-/// when that is not empty, and not undoable. It stands in for a command with a rule, which
-/// no content command has, and for a command the undo stack does not hold. It is not in
+/// when that is not empty. It stands in for a command with a rule, which no content command
+/// has, and, as a Command that is not an UndoableCommand, for a command the undo stack does
+/// not hold. It is not in
 /// CommandRegistry, so it never takes part in a replay.
 class ForcePhoneCommand : public Command
 {
@@ -2161,8 +2242,6 @@ public:
 
     QString type() const override { return "testForcePhone"; }
     CommandOutcome execute(Document& document) const override;
-    bool undoable() const override { return false; }
-    CommandPtr inverse() const override;
     QString refusal(const Document& document) const override;
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
@@ -2195,11 +2274,6 @@ CommandOutcome ForcePhoneCommand::execute(Document& document) const
     Family family = TestWard::family(document, familyId);
     document.updateFamily(TestWard::withPhone(family, m_personId, m_phone));
     return CommandOutcome::Applied;
-}
-
-CommandPtr ForcePhoneCommand::inverse() const
-{
-    return nullptr;
 }
 
 QString ForcePhoneCommand::refusal(const Document& document) const
@@ -2432,8 +2506,7 @@ private slots:
     void memberRemovalConflictsAfterThatMemberChanged();
     void memberRemovalAppliesOntoAnUnchangedMemberAndItsInverseRestoresThem();
     void memberAdditionHoldsWhenThatPersonIsAlreadyThere();
-    void handAddedChildIsPlacedByTheRuleWhenEveryBirthYearIsKnown();
-    void handAddedChildGoesLastWhenABirthYearIsUnknown();
+    void addedMemberTakesItsIndexInTheSavedFamily();
     void inverseSwapsTheChangeUnderAnUndoHeading();
     void inverseOfTheEveryFieldEditRestoresTheDocumentExactly();
 };
@@ -2453,7 +2526,7 @@ private slots:
 namespace
 {
 
-CommandPtr bobPhoneEdit(const QString& phone)
+UndoableCommandPtr bobPhoneEdit(const QString& phone)
 {
     Family opened = TestWard::smith();
     return UpdateFamilyCommand::fromEdit(opened, TestWard::withPhone(opened, TestWard::bobId(), phone));
@@ -2529,31 +2602,11 @@ Family smithWithThirdValue(const QString& field)
     return TestWard::withMember(family, bob);
 }
 
-Person leeMember(const QString& id, const QString& givenName, std::optional<Gender> gender,
-                 std::optional<int> birthYear, bool isParent)
-{
-    return Person::createWithId(PersonId::fromString(id), Name("Lee", givenName), gender,
-                                Birthday::create(birthYear, 1, 1), Phone(), Phone(), QString(),
-                                QStringList(), isParent, QString(), QString());
-}
-
-/// The Lee family as given: Ken (father, 1975), Mia (mother, 1977), Ed (child, 2005) and
-/// Fay (child, born in fayBirthYear).
-Family lee(std::optional<int> fayBirthYear)
-{
-    return Family::createWithId(FamilyId::fromString("family-lee"), std::nullopt, std::nullopt,
-                                TestWard::address("8 Pine St", "Provo, UT"),
-                                {leeMember("person-ken", "Ken", Gender::Male, 1975, true),
-                                 leeMember("person-mia", "Mia", Gender::Female, 1977, true),
-                                 leeMember("person-ed", "Ed", Gender::Male, 2005, false),
-                                 leeMember("person-fay", "Fay", Gender::Female, fayBirthYear, false)});
-}
-
-/// family with Gus, a child born in 2008, added at the end, as the member editor adds him.
-Family withGus(const Family& family)
+/// family with Gus inserted at index.
+Family withGusAt(const Family& family, qsizetype index)
 {
     QList<Person> members = family.members();
-    members.append(leeMember("person-gus", "Gus", Gender::Male, 2008, false));
+    members.insert(index, TestWard::gus());
     Family saved = family;
     saved.setMembers(members);
     return saved;
@@ -2617,7 +2670,7 @@ void UpdateFamilyCommandTest::descriptionIsAHeadingAndALinePerValueSet()
     Family saved = TestWard::withMember(TestWard::withPhone(opened, TestWard::bobId(), "555-2222"), alice);
     saved.setAddress(TestWard::address("14 Elm St", "Provo, UT"));
 
-    CommandPtr command = UpdateFamilyCommand::fromEdit(opened, saved);
+    UndoableCommandPtr command = UpdateFamilyCommand::fromEdit(opened, saved);
 
     QCOMPARE(command->description().heading(), QString("Smith family"));
     QCOMPARE(command->description().lines(), QStringList({"Bob, phone: 555-2222",
@@ -2627,7 +2680,7 @@ void UpdateFamilyCommandTest::descriptionIsAHeadingAndALinePerValueSet()
 
 void UpdateFamilyCommandTest::everyFieldEditDescribesEachField()
 {
-    CommandPtr command = UpdateFamilyCommand::fromEdit(TestWard::smith(), TestWard::smithWithEveryFieldChanged());
+    UndoableCommandPtr command = UpdateFamilyCommand::fromEdit(TestWard::smith(), TestWard::smithWithEveryFieldChanged());
 
     QCOMPARE(command->description().lines(),
              QStringList({"Bob, name: Smith, Robert",
@@ -2673,7 +2726,7 @@ void UpdateFamilyCommandTest::conflictsAndTouchesNothingWhereAFieldMoved()
     Family opened = TestWard::smith();
     Family saved = TestWard::withPhone(opened, TestWard::bobId(), "555-2222");
     saved.setAddress(TestWard::address("14 Elm St", "Provo, UT"));
-    CommandPtr command = UpdateFamilyCommand::fromEdit(opened, saved);
+    UndoableCommandPtr command = UpdateFamilyCommand::fromEdit(opened, saved);
     Document document = TestWard::withFamily(TestWard::document(),
                                              TestWard::withPhone(opened, TestWard::bobId(), "555-9999"));
     Document before = document;
@@ -2699,7 +2752,7 @@ void UpdateFamilyCommandTest::everyFieldMovedToAThirdValueConflicts_data()
 void UpdateFamilyCommandTest::everyFieldMovedToAThirdValueConflicts()
 {
     QFETCH(QString, field);
-    CommandPtr command = UpdateFamilyCommand::fromEdit(TestWard::smith(), TestWard::smithWithEveryFieldChanged());
+    UndoableCommandPtr command = UpdateFamilyCommand::fromEdit(TestWard::smith(), TestWard::smithWithEveryFieldChanged());
     Document document = TestWard::withFamily(TestWard::document(), smithWithThirdValue(field));
     QVERIFY(document != TestWard::document());
     Document before = document;
@@ -2735,8 +2788,8 @@ void UpdateFamilyCommandTest::editsToDifferentMembersBothApply()
     Family opened = TestWard::smith();
     Person alice = TestWard::alice();
     alice.setEmail("alice@new.example.com");
-    CommandPtr bobEdit = bobPhoneEdit("555-2222");
-    CommandPtr aliceEdit = UpdateFamilyCommand::fromEdit(opened, TestWard::withMember(opened, alice));
+    UndoableCommandPtr bobEdit = bobPhoneEdit("555-2222");
+    UndoableCommandPtr aliceEdit = UpdateFamilyCommand::fromEdit(opened, TestWard::withMember(opened, alice));
 
     Document bobFirst = TestWard::document();
     QVERIFY(bobEdit->execute(bobFirst) == CommandOutcome::Applied);
@@ -2752,7 +2805,7 @@ void UpdateFamilyCommandTest::editsToDifferentMembersBothApply()
 
 void UpdateFamilyCommandTest::memberRemovalConflictsAfterThatMemberChanged()
 {
-    CommandPtr removal = UpdateFamilyCommand::fromEdit(TestWard::smith(), smithWithout(TestWard::aliceId()));
+    UndoableCommandPtr removal = UpdateFamilyCommand::fromEdit(TestWard::smith(), smithWithout(TestWard::aliceId()));
     Document document = TestWard::withFamily(TestWard::document(),
                                              TestWard::withPhone(TestWard::smith(), TestWard::aliceId(), "555-7777"));
 
@@ -2763,7 +2816,7 @@ void UpdateFamilyCommandTest::memberRemovalConflictsAfterThatMemberChanged()
 
 void UpdateFamilyCommandTest::memberRemovalAppliesOntoAnUnchangedMemberAndItsInverseRestoresThem()
 {
-    CommandPtr removal = UpdateFamilyCommand::fromEdit(TestWard::smith(), smithWithout(TestWard::aliceId()));
+    UndoableCommandPtr removal = UpdateFamilyCommand::fromEdit(TestWard::smith(), smithWithout(TestWard::aliceId()));
     Document document = TestWard::document();
 
     QVERIFY(removal->execute(document) == CommandOutcome::Applied);
@@ -2779,7 +2832,7 @@ void UpdateFamilyCommandTest::memberAdditionHoldsWhenThatPersonIsAlreadyThere()
 {
     Family withDan = TestWard::smith();
     withDan.setMembers({TestWard::bob(), TestWard::alice(), TestWard::dan()});
-    CommandPtr addition = UpdateFamilyCommand::fromEdit(TestWard::smith(), withDan);
+    UndoableCommandPtr addition = UpdateFamilyCommand::fromEdit(TestWard::smith(), withDan);
     Document document = TestWard::withFamily(TestWard::document(), withDan);
     Document before = document;
 
@@ -2789,36 +2842,25 @@ void UpdateFamilyCommandTest::memberAdditionHoldsWhenThatPersonIsAlreadyThere()
     QCOMPARE(TestWard::family(document, TestWard::smithId()).members().size(), qsizetype(3));
 }
 
-void UpdateFamilyCommandTest::handAddedChildIsPlacedByTheRuleWhenEveryBirthYearIsKnown()
+void UpdateFamilyCommandTest::addedMemberTakesItsIndexInTheSavedFamily()
 {
-    Family opened = lee(2010);
-    CommandPtr addition = UpdateFamilyCommand::fromEdit(opened, withGus(opened));
+    // Every birth year is known, and the member order rule would put Gus at 3, after Ed.
+    Family opened = TestWard::lee(2010);
+    QCOMPARE(opened.insertionIndexFor(TestWard::gus()), qsizetype(3));
+    UndoableCommandPtr addition = UpdateFamilyCommand::fromEdit(opened, withGusAt(opened, 1));
     Document document = documentWith(opened);
 
-    QCOMPARE(addedIndex(*addition), qsizetype(3));
+    QCOMPARE(addedIndex(*addition), qsizetype(1));
     QVERIFY(addition->execute(document) == CommandOutcome::Applied);
 
     QCOMPARE(memberIds(TestWard::family(document, opened.id())),
-             QStringList({"person-ken", "person-mia", "person-ed", "person-gus", "person-fay"}));
-}
-
-void UpdateFamilyCommandTest::handAddedChildGoesLastWhenABirthYearIsUnknown()
-{
-    Family opened = lee(std::nullopt);
-    CommandPtr addition = UpdateFamilyCommand::fromEdit(opened, withGus(opened));
-    Document document = documentWith(opened);
-
-    QCOMPARE(addedIndex(*addition), qsizetype(4));
-    QVERIFY(addition->execute(document) == CommandOutcome::Applied);
-
-    QCOMPARE(memberIds(TestWard::family(document, opened.id())),
-             QStringList({"person-ken", "person-mia", "person-ed", "person-fay", "person-gus"}));
+             QStringList({"person-ken", "person-gus", "person-mia", "person-ed", "person-fay"}));
 }
 
 void UpdateFamilyCommandTest::inverseSwapsTheChangeUnderAnUndoHeading()
 {
-    CommandPtr edit = bobPhoneEdit("555-2222");
-    CommandPtr inverse = edit->inverse();
+    UndoableCommandPtr edit = bobPhoneEdit("555-2222");
+    UndoableCommandPtr inverse = edit->inverse();
 
     QCOMPARE(inverse->description().heading(), QString("Undo: Smith family"));
     QCOMPARE(inverse->description().lines(), edit->description().lines());
@@ -2837,7 +2879,7 @@ void UpdateFamilyCommandTest::inverseSwapsTheChangeUnderAnUndoHeading()
 
 void UpdateFamilyCommandTest::inverseOfTheEveryFieldEditRestoresTheDocumentExactly()
 {
-    CommandPtr edit = UpdateFamilyCommand::fromEdit(TestWard::smith(), TestWard::smithWithEveryFieldChanged());
+    UndoableCommandPtr edit = UpdateFamilyCommand::fromEdit(TestWard::smith(), TestWard::smithWithEveryFieldChanged());
     Document document = TestWard::document();
 
     QVERIFY(edit->execute(document) == CommandOutcome::Applied);
@@ -3678,19 +3720,103 @@ void BirthdayTest::displayShowsWhicheverPartsAreSet()
 }
 ```
 
+### `tests/services/FamilyOrderTest.h`
+
+```cpp
+#pragma once
+
+#include <QObject>
+
+class FamilyOrderTest : public QObject
+{
+    Q_OBJECT
+
+public:
+    explicit FamilyOrderTest(QObject* parent);
+
+private slots:
+    void childGoesAmongTheChildrenOldestToYoungest();
+    void childYoungerThanEveryoneGoesAtTheEnd();
+    void fatherGoesAfterTheFathersWhateverHisAge();
+    void motherGoesAfterTheMothers();
+    void otherParentGoesAfterTheMothersAndBeforeTheChildren();
+    void endWhenAMembersBirthYearIsUnknown();
+    void endWhenThePersonsBirthYearIsUnknown();
+};
+```
+
+### `tests/services/FamilyOrderTest.cpp`
+
+```cpp
+#include "FamilyOrderTest.h"
+#include "Family.h"
+#include "TestWard.h"
+
+#include <QTest>
+
+FamilyOrderTest::FamilyOrderTest(QObject* parent)
+    : QObject(parent)
+{
+}
+
+void FamilyOrderTest::childGoesAmongTheChildrenOldestToYoungest()
+{
+    QCOMPARE(TestWard::lee(2010).insertionIndexFor(TestWard::gus()), qsizetype(3));
+}
+
+void FamilyOrderTest::childYoungerThanEveryoneGoesAtTheEnd()
+{
+    QCOMPARE(TestWard::lee(2006).insertionIndexFor(TestWard::gus()), qsizetype(4));
+}
+
+void FamilyOrderTest::fatherGoesAfterTheFathersWhateverHisAge()
+{
+    Person jim = TestWard::leeMember("person-jim", "Jim", Gender::Male, 1970, true);
+
+    QCOMPARE(TestWard::lee(2010).insertionIndexFor(jim), qsizetype(1));
+}
+
+void FamilyOrderTest::motherGoesAfterTheMothers()
+{
+    Person ann = TestWard::leeMember("person-ann", "Ann", Gender::Female, 1970, true);
+
+    QCOMPARE(TestWard::lee(2010).insertionIndexFor(ann), qsizetype(2));
+}
+
+void FamilyOrderTest::otherParentGoesAfterTheMothersAndBeforeTheChildren()
+{
+    Person sam = TestWard::leeMember("person-sam", "Sam", std::nullopt, 1970, true);
+
+    QCOMPARE(TestWard::lee(2010).insertionIndexFor(sam), qsizetype(2));
+}
+
+void FamilyOrderTest::endWhenAMembersBirthYearIsUnknown()
+{
+    QCOMPARE(TestWard::lee(std::nullopt).insertionIndexFor(TestWard::gus()), qsizetype(4));
+}
+
+void FamilyOrderTest::endWhenThePersonsBirthYearIsUnknown()
+{
+    Person jim = TestWard::leeMember("person-jim", "Jim", Gender::Male, std::nullopt, true);
+
+    QCOMPARE(TestWard::lee(2010).insertionIndexFor(jim), qsizetype(4));
+}
+```
+
 ### `docs/ARCHITECTURE.md`
 
 - *Core Principles* (the command pattern) and *Modifying Data* describe the commit step: the
-  rule, `execute` answering an outcome, the journal, and the undo stack for an undoable
-  command. The diagrams are plain ASCII.
+  rule, `execute` answering an outcome, the journal, and the undo stack for an
+  `UndoableCommand`. The diagrams are plain ASCII.
 - *Command Interface* shows the contract: `type`, `execute` answering `CommandOutcome`,
-  `undoable`, `inverse`, `refusal`, `toJson`, `documentChange`, `description`, and
-  `CommandPtr` as `std::shared_ptr<const Command>`; `CommandRegistry` and `FieldChange<T>` in a
-  paragraph each.
+  `refusal`, `toJson`, `documentChange`, `description`, and `CommandPtr` as
+  `std::shared_ptr<const Command>`; `UndoableCommand` with `inverse` and `UndoableCommandPtr`;
+  `CommandRegistry` and `FieldChange<T>` in a paragraph each.
 - *Command History* becomes *WardSession*: the commit step and its four results, the journal,
   replay and the abandoned changes as text, undo as the inverse through the commit step.
 - The `AddFamilyCommand` example becomes `UpdateFamilyCommand` with `FamilyChange`, including
-  where added and removed members go in the member order.
+  where added and removed members go in the member order: an added member at its index in the
+  saved family.
 - *Testing Guidelines* name the round trip, conflicts, inverses, and the commit step, replay
   and undo.
 
@@ -3711,7 +3837,7 @@ void BirthdayTest::displayShowsWhicheverPartsAreSet()
 
 ```bash
 git branch --show-current
-git add src/commands src/services/Journal.h src/services/Journal.cpp src/services/WardSession.h src/services/WardSession.cpp src/models/Birthday.h src/models/Birthday.cpp src/models/Person.cpp CMakeLists.txt tests docs/ARCHITECTURE.md
+git add src/commands src/services/Journal.h src/services/Journal.cpp src/services/WardSession.h src/services/WardSession.cpp src/models/Birthday.h src/models/Birthday.cpp src/models/Person.cpp src/models/Family.h src/models/Family.cpp CMakeLists.txt tests docs/ARCHITECTURE.md
 git commit -m "Commands answer Applied or Conflicted, and WardSession commits, journals, replays and undoes them"
 ```
 
@@ -3731,7 +3857,7 @@ describes, then continue with task 2 when the user says so.
 **Files:**
 - Modify: `src/services/DocumentManager.h`, `src/services/DocumentManager.cpp`
 - Modify: `src/widgets/MainWindow.h`, `src/widgets/MainWindow.cpp`
-- Modify: `src/widgets/FamilyEditPanel.h`
+- Modify: `src/widgets/FamilyEditPanel.h`, `src/widgets/FamilyEditPanel.cpp`
 - Modify: `src/widgets/WardListDialog.h`, `src/widgets/WardListDialog.cpp`
 - Modify: `src/widgets/NeedsSubView.cpp`
 - Modify: `src/widgets/MemberEditor.h`, `src/widgets/MemberEditor.cpp`
@@ -3775,6 +3901,15 @@ edit holds only what the user changed.
   and commits it (an edit that changed nothing builds an empty command, which the commit
   step takes as nothing to do), then closes the panel. `FamilyEditPanel` gains
   `const Family& openedFamily() const { return m_originalFamily; }`, the copy it opened with.
+
+**Adding a member inserts it at `Family::insertionIndexFor`.** `FamilyEditPanel::onMembersChanged`,
+which runs on every add, removal and member edit, builds `m_editedFamily`'s members from
+`m_memberAccordion->members()`: first each member `m_originalFamily` has, in the accordion's
+order, then each member it lacks, in the order they were added, each inserted at
+`insertionIndexFor` of the family built so far. A member is blank when *+ Add* creates it, so its
+place is worked out again as its birth year and role are filled in, and the saved family
+carries it at the index `FamilyChange::between` records. This is the one caller of
+`Family::insertionIndexFor`.
 
 **The special-need dialog becomes one "Special Need" dialog** (*The journal*, last bullet of the
 work list).
@@ -4058,7 +4193,7 @@ clock).
 
 **Commands** (`EmergencyCommands.h`), each with `TypeName`, the outcome rules of the design's
 table, and a missing response making every command but `EndEmergency` conflict:
-- `StartEmergencyCommand(response)`: an addition; `undoable()` answers false.
+- `StartEmergencyCommand(response)`: an addition; not undoable, so it derives from `Command`.
 - `EndEmergencyCommand(response as the report was written from)`: conflicts when the response
   differs; result holds when it is gone; inverse `RestoreEmergencyCommand`.
 - `RestoreEmergencyCommand(response)`: result holds when a response with that id is present.
@@ -4071,8 +4206,9 @@ table, and a missing response making every command but `EndEmergency` conflict:
   each an `std::optional<FieldChange<...>>`; a new assignee must exist (person or team); a change of
   assignee holds the notification as none.
 - `DeleteTaskCommand(responseId, familyId, task as last seen)`.
-- `AddTaskCategoryCommand(responseId, category)`: result holds when present; `undoable()`
-  answers false.
+- `AddTaskCategoryCommand(responseId, category)`: result holds when present; not undoable, so
+  it derives from `Command`.
+- Every other command here has an inverse and derives from `UndoableCommand`.
 
 **Session and managers.**
 - `WardSession(Geocoder*, UnitLookup*, Clock* clock, QObject* parent)`; `const Clock& clock() const`.
@@ -4217,18 +4353,16 @@ families. API:
 - Inverse: the same changes swapped. A ward record the import created stays in place, since the
   lookup fills its details afterwards.
 - `addressesGiven()` returns the addresses of the families it adds or re-addresses.
-- Member order: a member the import adds to a family goes in at its index in the PDF's
-  family, so the family keeps the PDF's order. `FamilyChange::between` places a member by the
-  member order rule, which is for members added by hand, so the import builds each family's
-  change through a second builder beside it, `FamilyChange::betweenInOrder(existing, imported)`,
-  that takes each added member's index from `imported`.
+- Member order: each family's change is `FamilyChange::between(existing, imported)`, which
+  takes each added member's index from `imported`, the family in the PDF's order, so the family
+  keeps the PDF's order.
 - Description: heading `tr("Import the ward directory from %1.").arg(fileName)`, no lines.
 
 **Ministering import.**
 - `ImportMinisteringCommand::fromImport(document, result, fileName)` holds the organisation, its
   districts and groups as one `FieldChange<MinisteringCollection>` (the whole collection before and
   after, with `operator==` and JSON), the families added, a `FamilyChange` per family that
-  differs (built with `FamilyChange::betweenInOrder`, as the directory import's are), and the
+  differs (built with `FamilyChange::between`, as the directory import's are), and the
   ministering PDF date. Groups and districts may only name people and families that exist
   after it applies.
 - `MinisteringImportService::mergeFamilies`, when not authoritative, adds no unmatched family or
@@ -4272,7 +4406,7 @@ The design is silent on these; each states the choice this plan makes.
 4. **Member field granularity:** phone and other phone, and ward and stake unit numbers, are
    each judged on their own (the design lists "phones" and "units").
 5. **The undo and redo stacks hold commands.** Undo builds the inverse when it runs, and a
-   command enters the undo stack only when it is `undoable()`.
+   command enters the undo stack only when it is an `UndoableCommand`.
 6. **An abandoned replay clears the redo side too**, alongside the undo stack.
 7. **The test target is `WardPlanningTests`**, linked against `EmergencyPlanLib`, which plan 2's
    rename turns into `WardPlanningLib`.
