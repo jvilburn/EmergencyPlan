@@ -3,7 +3,7 @@
 
 #include <QObject>
 
-std::unique_ptr<UpdateFamilyCommand> UpdateFamilyCommand::fromEdit(const Family& opened, const Family& saved)
+CommandPtr UpdateFamilyCommand::fromEdit(const Family& opened, const Family& saved)
 {
     std::optional<FamilyChange> change = FamilyChange::between(opened, saved);
     if (!change.has_value())
@@ -11,7 +11,7 @@ std::unique_ptr<UpdateFamilyCommand> UpdateFamilyCommand::fromEdit(const Family&
         return nullptr;
     }
     CommandDescription description(QObject::tr("%1 family").arg(opened.surname()), change->describe(opened));
-    return std::make_unique<UpdateFamilyCommand>(opened.id(), *change, description);
+    return std::make_shared<UpdateFamilyCommand>(opened.id(), *change, description);
 }
 
 UpdateFamilyCommand::UpdateFamilyCommand(const FamilyId& familyId,
@@ -36,7 +36,7 @@ CommandOutcome UpdateFamilyCommand::execute(Document& document) const
 
 CommandPtr UpdateFamilyCommand::inverse() const
 {
-    return std::make_unique<UpdateFamilyCommand>(m_familyId, m_change.swapped(), description().undone());
+    return std::make_shared<UpdateFamilyCommand>(m_familyId, m_change.swapped(), description().undone());
 }
 
 QJsonObject UpdateFamilyCommand::toJson() const
@@ -54,7 +54,7 @@ DocumentChange UpdateFamilyCommand::documentChange() const
 
 CommandPtr UpdateFamilyCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
 {
-    return std::make_unique<UpdateFamilyCommand>(FamilyId::fromString(json["familyId"].toString()),
+    return std::make_shared<UpdateFamilyCommand>(FamilyId::fromString(json["familyId"].toString()),
                                                  FamilyChange::fromJson(json["change"].toObject()),
                                                  description);
 }

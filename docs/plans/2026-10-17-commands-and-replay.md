@@ -5,13 +5,16 @@
 **Goal:** Every write to a ward is an immutable, serialisable command that runs through one
 commit step, enters an in-memory journal, replays onto another version of the document by the
 one rule (apply where the start condition or the result holds, otherwise abandon the whole
-replay to the to-redo list), and is undone by running its inverse through the same step.
+replay and hand back its changes as text to redo), and is undone by running its inverse
+through the same step.
 
 **Architecture:** `Command` answers `CommandOutcome::Applied` or `CommandOutcome::Conflicted` from a `const`
-`execute`, builds its `inverse`, serialises through `CommandRegistry`, and carries a stored
-`CommandDescription`. Update commands hold typed `FieldChange<T>` and `IdSetChange<Id>` values for the
-fields they change only. `WardSession` owns the document, the `Journal`, the undo and redo
-stacks and the to-redo list, with no global state; `DocumentManager` and `EmergencyManager`
+`execute`, says whether it is `undoable`, builds its `inverse`, serialises through
+`CommandRegistry`, and carries a stored `CommandDescription`; `CommandPtr` is
+`std::shared_ptr<const Command>`. Update commands hold typed `FieldChange<T>` and
+`IdSetChange<Id>` values for the fields they change only. `WardSession` owns the document, the
+`Journal` and the undo and redo stacks, which hold commands, with no global state; an abandoned
+replay hands back its changes as plain text, which the app writes to a file; `DocumentManager` and `EmergencyManager`
 become thin wrappers over the app's one session. The existing plaintext save and load path
 stays as it is (plan 2 replaces it); push, fetch, landed marks and access-list commands are
 plan 3, so replay is exercised against a second document version built in the test.
@@ -74,9 +77,12 @@ and the test harness that runs all of it against test-built versions.
 - Create: `tests/services/UpdateFamilyCommandTest.h`, `tests/services/UpdateFamilyCommandTest.cpp`
 - Create: `tests/services/CommandRoundTripTest.h`, `tests/services/CommandRoundTripTest.cpp`
 - Create: `tests/services/WardSessionTest.h`, `tests/services/WardSessionTest.cpp`
-- Modify: `src/models/Birthday.h`, `src/models/Person.cpp` (a person's birthday is written
-  whenever any part of it is set)
+- Modify: `src/models/Birthday.h`, `src/models/Birthday.cpp`, `src/models/Person.cpp` (a
+  person's birthday is written whenever any part of it is set, and displays whichever parts
+  are set)
 - Create: `tests/services/PersonJsonTest.h`, `tests/services/PersonJsonTest.cpp`
+- Create: `tests/services/BirthdayTest.h`, `tests/services/BirthdayTest.cpp`
+- Modify: `docs/ARCHITECTURE.md` (the command contract and `WardSession`)
 
 ### `src/models/Birthday.h` and `src/models/Person.cpp`
 
@@ -105,6 +111,53 @@ compares with `operator==` for each of: a year-only birthday, month and day only
 and none; the year-only case also asserts the written JSON holds `birthday.year` and no
 `birthday.month`. It is listed in `tests/CMakeLists.txt` and run from `tests/main.cpp` with
 the other test classes.
+
+A member change's description shows a birthday by whichever of its parts are set. In
+`Birthday.h`, after `dateDisplay()`:
+
+```cpp
+    /// The parts that are set, whichever they are: "Jan 4, 1980", "Jan 4", "Jan 1980",
+    /// "1980", "Jan", "day 4, 1980", "day 4", or empty when none is set.
+    QString display() const;
+```
+
+In `Birthday.cpp`, which includes `<QObject>`:
+
+```cpp
+QString Birthday::display() const
+{
+    QString monthAndDay;
+    if (m_month.has_value() && m_day.has_value())
+    {
+        monthAndDay = QObject::tr("%1 %2").arg(QLocale::c().monthName(*m_month, QLocale::ShortFormat)).arg(*m_day);
+    }
+    else if (m_month.has_value())
+    {
+        monthAndDay = QLocale::c().monthName(*m_month, QLocale::ShortFormat);
+    }
+    else if (m_day.has_value())
+    {
+        monthAndDay = QObject::tr("day %1").arg(*m_day);
+    }
+
+    if (!m_year.has_value())
+    {
+        return monthAndDay;
+    }
+    if (monthAndDay.isEmpty())
+    {
+        return QString::number(*m_year);
+    }
+    if (m_day.has_value())
+    {
+        return QObject::tr("%1, %2").arg(monthAndDay).arg(*m_year);
+    }
+    return QObject::tr("%1 %2").arg(monthAndDay).arg(*m_year);
+}
+```
+
+`dateDisplay()` keeps its callers in the views; the member editor's three birthday fields stay
+independent. `tests/services/BirthdayTest` (below) covers each of the eight combinations.
 
 ### `src/commands/Command.h`
 
@@ -155,7 +208,7 @@ private:
 };
 
 class Command;
-using CommandPtr = std::unique_ptr<Command>;
+using CommandPtr = std::shared_ptr<const Command>;
 
 /// A write to the document, run the same way the first time and on replay.
 ///
@@ -174,8 +227,12 @@ public:
     /// Applied. Otherwise answers Conflicted and leaves the document untouched.
     virtual CommandOutcome execute(Document& document) const = 0;
 
-    /// The command that takes this one back, described by description().undone().
-    /// An empty pointer means this command is not undoable.
+    /// Whether undo can take this command back. A type that cannot be taken back answers
+    /// false: it never enters the undo stack, and its inverse() is never called.
+    virtual bool undoable() const { return true; }
+
+    /// The command that takes this one back, described by description().undone(). Called
+    /// only on an undoable command.
     virtual CommandPtr inverse() const = 0;
 
     /// The wording of the rule that refuses this command on this document, or an empty
@@ -289,18 +346,44 @@ private:
 
 /// The change from before to after, or none when they are equal.
 template<typename T>
-std::optional<FieldChange<T>> changeBetween(const T& before, const T& after) { return before == after ? std::nullopt : std::optional<FieldChange<T>>(FieldChange<T>(before, after)); }
+std::optional<FieldChange<T>> changeBetween(const T& before, const T& after)
+{
+    if (before == after)
+    {
+        return std::nullopt;
+    }
+    return FieldChange<T>(before, after);
+}
 
 /// True when there is no change to this value, or the value holds for its change.
 template<typename T>
-bool changeHolds(const std::optional<FieldChange<T>>& change, const T& current) { return !change.has_value() || change->holds(current); }
+bool changeHolds(const std::optional<FieldChange<T>>& change, const T& current)
+{
+    return !change.has_value()
+        || change->holds(current);
+}
 
 /// The value the change sets, or current when there is no change to it.
 template<typename T>
-T changedValue(const std::optional<FieldChange<T>>& change, const T& current) { return change.has_value() ? change->after() : current; }
+T changedValue(const std::optional<FieldChange<T>>& change, const T& current)
+{
+    if (!change.has_value())
+    {
+        return current;
+    }
+    return change->after();
+}
 
+/// The change with its before and after exchanged, or none when there is no change.
 template<typename T>
-std::optional<FieldChange<T>> changeSwapped(const std::optional<FieldChange<T>>& change) { return change.has_value() ? std::optional<FieldChange<T>>(change->swapped()) : std::nullopt; }
+std::optional<FieldChange<T>> changeSwapped(const std::optional<FieldChange<T>>& change)
+{
+    if (!change.has_value())
+    {
+        return std::nullopt;
+    }
+    return change->swapped();
+}
 
 /// A change to a set of ids, held as the ids added and the ids removed. An addition is done
 /// when the id is present and a removal when it is absent, so a set change holds whatever
@@ -527,6 +610,7 @@ std::optional<Gender> fromJsonValue<std::optional<Gender>>(const QJsonValue& val
 #include <QJsonObject>
 #include <QList>
 #include <QStringList>
+#include <QtGlobal>
 #include <optional>
 
 /// The fields of one member that an edit changes, each judged on its own: one still at its
@@ -554,6 +638,37 @@ public:
 private:
     bool isEmpty() const;
 
+    /// The one list of a member's fields. Calls visitor once per field, in this order, with
+    /// the field's JSON key, its description line (untranslated, %1 the first name and %2
+    /// the value set), its Person getter and setter, and change's value for it. Change is
+    /// MemberChange or const MemberChange, so a visitor can read or set the values.
+    template<typename Change, typename Visitor>
+    static void forEachField(Change& change, Visitor& visitor)
+    {
+        visitor("name", QT_TRANSLATE_NOOP("QObject", "%1, name: %2"),
+                &Person::name, &Person::setName, change.m_name);
+        visitor("gender", QT_TRANSLATE_NOOP("QObject", "%1, gender: %2"),
+                &Person::gender, &Person::setGender, change.m_gender);
+        visitor("phone", QT_TRANSLATE_NOOP("QObject", "%1, phone: %2"),
+                &Person::phone, &Person::setPhone, change.m_phone);
+        visitor("altPhone", QT_TRANSLATE_NOOP("QObject", "%1, other phone: %2"),
+                &Person::altPhone, &Person::setAltPhone, change.m_altPhone);
+        visitor("email", QT_TRANSLATE_NOOP("QObject", "%1, email: %2"),
+                &Person::email, &Person::setEmail, change.m_email);
+        visitor("birthday", QT_TRANSLATE_NOOP("QObject", "%1, birthday: %2"),
+                &Person::birthday, &Person::setBirthday, change.m_birthday);
+        visitor("callings", QT_TRANSLATE_NOOP("QObject", "%1, callings: %2"),
+                &Person::callings, &Person::setCallings, change.m_callings);
+        visitor("isParent", QT_TRANSLATE_NOOP("QObject", "%1, %2"),
+                &Person::isParent, &Person::setIsParent, change.m_isParent);
+        visitor("wardUnitNumber", QT_TRANSLATE_NOOP("QObject", "%1, ward unit: %2"),
+                &Person::wardUnitNumber, &Person::setWardUnitNumber, change.m_wardUnitNumber);
+        visitor("stakeUnitNumber", QT_TRANSLATE_NOOP("QObject", "%1, stake unit: %2"),
+                &Person::stakeUnitNumber, &Person::setStakeUnitNumber, change.m_stakeUnitNumber);
+        visitor("specialNeedNote", QT_TRANSLATE_NOOP("QObject", "%1, special need: %2"),
+                &Person::specialNeedNote, &Person::setSpecialNeedNote, change.m_specialNeedNote);
+    }
+
     std::optional<FieldChange<Name>> m_name;
     std::optional<FieldChange<std::optional<Gender>>> m_gender;
     std::optional<FieldChange<Phone>> m_phone;
@@ -567,26 +682,48 @@ private:
     std::optional<FieldChange<QString>> m_specialNeedNote;
 };
 
+/// A member a family change adds or removes, with its place in the family's member order:
+/// for an addition, the index it is inserted at; for a removal, the index it was seen at,
+/// where the removal's inverse inserts it again.
+struct PlacedMember
+{
+    Person person;
+    qsizetype index;
+};
+
 /// What an edit changes in one family: its address, a change per member keyed by PersonId,
 /// the members it adds, and the members it removes as last seen. Members are matched by
-/// PersonId, and their order is not part of any start condition.
+/// PersonId. A family's member order is the order it was given, and a change keeps it: it
+/// inserts each addition at its index and moves no one else. Order is not part of any
+/// start condition.
 class FamilyChange
 {
 public:
     /// The difference between the family as opened and as saved, or none when nothing
-    /// differs.
+    /// differs. A member the saved family has and the opened one lacks was added by hand,
+    /// and is placed by the member order rule: fathers (parents who are male), then mothers
+    /// (parents who are female), then any other parent, then children oldest to youngest,
+    /// when the new member's birth year and every other member's are known; otherwise last.
     static std::optional<FamilyChange> between(const Family& opened, const Family& saved);
 
     FamilyChange(const std::optional<FieldChange<Address>>& address,
                  const QHash<PersonId, MemberChange>& members,
-                 const QList<Person>& added,
-                 const QList<Person>& removed);
+                 const QList<PlacedMember>& added,
+                 const QList<PlacedMember>& removed);
 
     /// The start condition or the result holds: the address and every changed member are at
     /// before or after, and every removed member is gone or exactly as last seen. An added
     /// member never conflicts; its result holds when that PersonId is already there.
     bool holds(const Family& current) const;
+
+    /// current with the removed members taken out, the member changes made, and then each
+    /// added member not already there inserted, in order, at its index, clamped to the
+    /// member count at that point.
     Family appliedTo(const Family& current) const;
+
+    /// The change that takes this one back: the address and member changes swapped, the
+    /// removed members added again at the indices they were seen at, and the added ones
+    /// removed.
     FamilyChange swapped() const;
 
     /// The lines of what to do again: member lines in the opened family's member order,
@@ -599,8 +736,8 @@ public:
 private:
     std::optional<FieldChange<Address>> m_address;
     QHash<PersonId, MemberChange> m_members;
-    QList<Person> m_added;
-    QList<Person> m_removed;
+    QList<PlacedMember> m_added;
+    QList<PlacedMember> m_removed;
 };
 ```
 
@@ -628,11 +765,11 @@ std::optional<Person> findMember(const Family& family, const PersonId& id)
     return std::nullopt;
 }
 
-bool containsPerson(const QList<Person>& people, const PersonId& id)
+bool containsPerson(const QList<PlacedMember>& placed, const PersonId& id)
 {
-    for (const Person& person : people)
+    for (const PlacedMember& member : placed)
     {
-        if (person.id() == id)
+        if (member.person.id() == id)
         {
             return true;
         }
@@ -640,25 +777,103 @@ bool containsPerson(const QList<Person>& people, const PersonId& id)
     return false;
 }
 
-QJsonArray personsToJson(const QList<Person>& people)
+QJsonArray placedToJson(const QList<PlacedMember>& placed)
 {
     QJsonArray array;
-    for (const Person& person : people)
+    for (const PlacedMember& member : placed)
     {
-        array.append(person.toJson());
+        QJsonObject json;
+        json["person"] = member.person.toJson();
+        json["index"] = qint64(member.index);
+        array.append(json);
     }
     return array;
 }
 
-QList<Person> personsFromJson(const QJsonArray& array)
+QList<PlacedMember> placedFromJson(const QJsonArray& array)
 {
-    QList<Person> people;
+    QList<PlacedMember> placed;
     for (const QJsonValue& value : array)
     {
-        people.append(Person::fromJson(value.toObject()));
+        QJsonObject json = value.toObject();
+        placed.append(PlacedMember{Person::fromJson(json["person"].toObject()), json["index"].toInteger()});
     }
-    return people;
+    return placed;
 }
+
+// ----------------------------------------------------------------------------
+// The member order rule
+// ----------------------------------------------------------------------------
+
+/// The kinds of member, in the order the member order rule places them.
+enum class MemberKind
+{
+    Father,
+    Mother,
+    OtherParent,
+    Child
+};
+
+MemberKind kindOf(const Person& person)
+{
+    if (!person.isParent())
+    {
+        return MemberKind::Child;
+    }
+    if (person.gender() == Gender::Male)
+    {
+        return MemberKind::Father;
+    }
+    if (person.gender() == Gender::Female)
+    {
+        return MemberKind::Mother;
+    }
+    return MemberKind::OtherParent;
+}
+
+/// True when the rule puts newcomer ahead of member: an earlier kind, or an older child.
+/// Both birth years are known.
+bool ranksBefore(const Person& newcomer, const Person& member)
+{
+    MemberKind newcomerKind = kindOf(newcomer);
+    MemberKind memberKind = kindOf(member);
+    if (newcomerKind != memberKind)
+    {
+        return newcomerKind < memberKind;
+    }
+    return newcomerKind == MemberKind::Child
+        && *newcomer.birthday().year() < *member.birthday().year();
+}
+
+/// Where the member order rule inserts newcomer among members: ahead of the first member
+/// it ranks before, so it follows every member of its own kind and age. Last when the
+/// newcomer's birth year or any member's is unknown.
+qsizetype placementIndex(const QList<Person>& members, const Person& newcomer)
+{
+    if (!newcomer.birthday().year().has_value())
+    {
+        return members.size();
+    }
+    for (const Person& member : members)
+    {
+        if (!member.birthday().year().has_value())
+        {
+            return members.size();
+        }
+    }
+    for (qsizetype i = 0; i < members.size(); ++i)
+    {
+        if (ranksBefore(newcomer, members[i]))
+        {
+            return i;
+        }
+    }
+    return members.size();
+}
+
+// ----------------------------------------------------------------------------
+// Description text
+// ----------------------------------------------------------------------------
 
 QString orNone(const QString& value)
 {
@@ -669,7 +884,12 @@ QString orNone(const QString& value)
     return value;
 }
 
-QString genderText(const std::optional<Gender>& gender)
+QString valueText(const QString& value)
+{
+    return orNone(value);
+}
+
+QString valueText(const std::optional<Gender>& gender)
 {
     if (!gender.has_value())
     {
@@ -682,6 +902,130 @@ QString genderText(const std::optional<Gender>& gender)
     return QObject::tr("female");
 }
 
+QString valueText(const Birthday& birthday)
+{
+    return orNone(birthday.display());
+}
+
+QString valueText(const QStringList& values)
+{
+    return orNone(values.join(", "));
+}
+
+/// isParent is the one yes-or-no member field, so a bool reads as parent or not.
+QString valueText(bool isParent)
+{
+    if (isParent)
+    {
+        return QObject::tr("parent");
+    }
+    return QObject::tr("not a parent");
+}
+
+// ----------------------------------------------------------------------------
+// Visitors over MemberChange::forEachField
+// ----------------------------------------------------------------------------
+
+/// Sets each field to the change from before's value to after's.
+struct ChangeBetween
+{
+    const Person& before;
+    const Person& after;
+
+    template<typename Getter, typename Setter, typename T>
+    void operator()(const char*, const char*, Getter get, Setter, std::optional<FieldChange<T>>& field)
+    {
+        field = changeBetween<T>((before.*get)(), (after.*get)());
+    }
+};
+
+/// Clears holds when a field's value in current holds for neither end of its change.
+struct ChangesHold
+{
+    const Person& current;
+    bool holds;
+
+    template<typename Getter, typename Setter, typename T>
+    void operator()(const char*, const char*, Getter get, Setter, const std::optional<FieldChange<T>>& field)
+    {
+        holds = holds && changeHolds<T>(field, (current.*get)());
+    }
+};
+
+/// Sets each changed field of person to its after value.
+struct ApplyChanges
+{
+    Person& person;
+
+    template<typename Getter, typename Setter, typename T>
+    void operator()(const char*, const char*, Getter get, Setter set, const std::optional<FieldChange<T>>& field)
+    {
+        (person.*set)(changedValue<T>(field, (person.*get)()));
+    }
+};
+
+/// Exchanges each field's before and after.
+struct SwapChanges
+{
+    template<typename Getter, typename Setter, typename T>
+    void operator()(const char*, const char*, Getter, Setter, std::optional<FieldChange<T>>& field)
+    {
+        field = changeSwapped<T>(field);
+    }
+};
+
+/// Clears empty when any field has a change.
+struct NoChanges
+{
+    bool empty;
+
+    template<typename Getter, typename Setter, typename T>
+    void operator()(const char*, const char*, Getter, Setter, const std::optional<FieldChange<T>>& field)
+    {
+        empty = empty && !field.has_value();
+    }
+};
+
+/// Appends a description line per changed field.
+struct DescribeChanges
+{
+    const QString& firstName;
+    QStringList& lines;
+
+    template<typename Getter, typename Setter, typename T>
+    void operator()(const char*, const char* line, Getter, Setter, const std::optional<FieldChange<T>>& field)
+    {
+        if (field.has_value())
+        {
+            lines.append(QObject::tr(line).arg(firstName, valueText(field->after())));
+        }
+    }
+};
+
+/// Writes each changed field under its key.
+struct WriteChanges
+{
+    QJsonObject& json;
+
+    template<typename Getter, typename Setter, typename T>
+    void operator()(const char* key, const char*, Getter, Setter, const std::optional<FieldChange<T>>& field)
+    {
+        writeChange(json, key, field);
+    }
+};
+
+/// Reads each field's change from under its key.
+struct ReadChanges
+{
+    const QJsonObject& json;
+
+    template<typename Getter, typename Setter, typename T>
+    void operator()(const char* key, const char*, Getter, Setter, std::optional<FieldChange<T>>& field)
+    {
+        field = readChange<T>(json, key);
+    }
+};
+
 }  // namespace
 
 // ============================================================================
@@ -691,17 +1035,8 @@ QString genderText(const std::optional<Gender>& gender)
 std::optional<MemberChange> MemberChange::between(const Person& before, const Person& after)
 {
     MemberChange change;
-    change.m_name = changeBetween(before.name(), after.name());
-    change.m_gender = changeBetween(before.gender(), after.gender());
-    change.m_phone = changeBetween(before.phone(), after.phone());
-    change.m_altPhone = changeBetween(before.altPhone(), after.altPhone());
-    change.m_email = changeBetween(before.email(), after.email());
-    change.m_birthday = changeBetween(before.birthday(), after.birthday());
-    change.m_callings = changeBetween(before.callings(), after.callings());
-    change.m_isParent = changeBetween(before.isParent(), after.isParent());
-    change.m_wardUnitNumber = changeBetween(before.wardUnitNumber(), after.wardUnitNumber());
-    change.m_stakeUnitNumber = changeBetween(before.stakeUnitNumber(), after.stakeUnitNumber());
-    change.m_specialNeedNote = changeBetween(before.specialNeedNote(), after.specialNeedNote());
+    ChangeBetween visitor{before, after};
+    forEachField(change, visitor);
     if (change.isEmpty())
     {
         return std::nullopt;
@@ -711,157 +1046,56 @@ std::optional<MemberChange> MemberChange::between(const Person& before, const Pe
 
 bool MemberChange::holds(const Person& current) const
 {
-    return changeHolds(m_name, current.name())
-        && changeHolds(m_gender, current.gender())
-        && changeHolds(m_phone, current.phone())
-        && changeHolds(m_altPhone, current.altPhone())
-        && changeHolds(m_email, current.email())
-        && changeHolds(m_birthday, current.birthday())
-        && changeHolds(m_callings, current.callings())
-        && changeHolds(m_isParent, current.isParent())
-        && changeHolds(m_wardUnitNumber, current.wardUnitNumber())
-        && changeHolds(m_stakeUnitNumber, current.stakeUnitNumber())
-        && changeHolds(m_specialNeedNote, current.specialNeedNote());
+    ChangesHold visitor{current, true};
+    forEachField(*this, visitor);
+    return visitor.holds;
 }
 
 Person MemberChange::appliedTo(const Person& current) const
 {
     Person updated = current;
-    updated.setName(changedValue(m_name, current.name()));
-    updated.setGender(changedValue(m_gender, current.gender()));
-    updated.setPhone(changedValue(m_phone, current.phone()));
-    updated.setAltPhone(changedValue(m_altPhone, current.altPhone()));
-    updated.setEmail(changedValue(m_email, current.email()));
-    updated.setBirthday(changedValue(m_birthday, current.birthday()));
-    updated.setCallings(changedValue(m_callings, current.callings()));
-    updated.setIsParent(changedValue(m_isParent, current.isParent()));
-    updated.setWardUnitNumber(changedValue(m_wardUnitNumber, current.wardUnitNumber()));
-    updated.setStakeUnitNumber(changedValue(m_stakeUnitNumber, current.stakeUnitNumber()));
-    updated.setSpecialNeedNote(changedValue(m_specialNeedNote, current.specialNeedNote()));
+    ApplyChanges visitor{updated};
+    forEachField(*this, visitor);
     return updated;
 }
 
 MemberChange MemberChange::swapped() const
 {
-    MemberChange change;
-    change.m_name = changeSwapped(m_name);
-    change.m_gender = changeSwapped(m_gender);
-    change.m_phone = changeSwapped(m_phone);
-    change.m_altPhone = changeSwapped(m_altPhone);
-    change.m_email = changeSwapped(m_email);
-    change.m_birthday = changeSwapped(m_birthday);
-    change.m_callings = changeSwapped(m_callings);
-    change.m_isParent = changeSwapped(m_isParent);
-    change.m_wardUnitNumber = changeSwapped(m_wardUnitNumber);
-    change.m_stakeUnitNumber = changeSwapped(m_stakeUnitNumber);
-    change.m_specialNeedNote = changeSwapped(m_specialNeedNote);
+    MemberChange change = *this;
+    SwapChanges visitor;
+    forEachField(change, visitor);
     return change;
 }
 
 QStringList MemberChange::describe(const QString& firstName) const
 {
     QStringList lines;
-    if (m_name.has_value())
-    {
-        lines.append(QObject::tr("%1, name: %2").arg(firstName, m_name->after().full()));
-    }
-    if (m_gender.has_value())
-    {
-        lines.append(QObject::tr("%1, gender: %2").arg(firstName, genderText(m_gender->after())));
-    }
-    if (m_phone.has_value())
-    {
-        lines.append(QObject::tr("%1, phone: %2").arg(firstName, orNone(m_phone->after())));
-    }
-    if (m_altPhone.has_value())
-    {
-        lines.append(QObject::tr("%1, other phone: %2").arg(firstName, orNone(m_altPhone->after())));
-    }
-    if (m_email.has_value())
-    {
-        lines.append(QObject::tr("%1, email: %2").arg(firstName, orNone(m_email->after())));
-    }
-    if (m_birthday.has_value())
-    {
-        lines.append(QObject::tr("%1, birthday: %2").arg(firstName, orNone(m_birthday->after().dateDisplay())));
-    }
-    if (m_callings.has_value())
-    {
-        lines.append(QObject::tr("%1, callings: %2").arg(firstName, orNone(m_callings->after().join(", "))));
-    }
-    if (m_isParent.has_value())
-    {
-        if (m_isParent->after())
-        {
-            lines.append(QObject::tr("%1, parent").arg(firstName));
-        }
-        else
-        {
-            lines.append(QObject::tr("%1, not a parent").arg(firstName));
-        }
-    }
-    if (m_wardUnitNumber.has_value())
-    {
-        lines.append(QObject::tr("%1, ward unit: %2").arg(firstName, orNone(m_wardUnitNumber->after())));
-    }
-    if (m_stakeUnitNumber.has_value())
-    {
-        lines.append(QObject::tr("%1, stake unit: %2").arg(firstName, orNone(m_stakeUnitNumber->after())));
-    }
-    if (m_specialNeedNote.has_value())
-    {
-        lines.append(QObject::tr("%1, special need: %2").arg(firstName, orNone(m_specialNeedNote->after())));
-    }
+    DescribeChanges visitor{firstName, lines};
+    forEachField(*this, visitor);
     return lines;
 }
 
 QJsonObject MemberChange::toJson() const
 {
     QJsonObject json;
-    writeChange(json, "name", m_name);
-    writeChange(json, "gender", m_gender);
-    writeChange(json, "phone", m_phone);
-    writeChange(json, "altPhone", m_altPhone);
-    writeChange(json, "email", m_email);
-    writeChange(json, "birthday", m_birthday);
-    writeChange(json, "callings", m_callings);
-    writeChange(json, "isParent", m_isParent);
-    writeChange(json, "wardUnitNumber", m_wardUnitNumber);
-    writeChange(json, "stakeUnitNumber", m_stakeUnitNumber);
-    writeChange(json, "specialNeedNote", m_specialNeedNote);
+    WriteChanges visitor{json};
+    forEachField(*this, visitor);
     return json;
 }
 
 MemberChange MemberChange::fromJson(const QJsonObject& json)
 {
     MemberChange change;
-    change.m_name = readChange<Name>(json, "name");
-    change.m_gender = readChange<std::optional<Gender>>(json, "gender");
-    change.m_phone = readChange<Phone>(json, "phone");
-    change.m_altPhone = readChange<Phone>(json, "altPhone");
-    change.m_email = readChange<QString>(json, "email");
-    change.m_birthday = readChange<Birthday>(json, "birthday");
-    change.m_callings = readChange<QStringList>(json, "callings");
-    change.m_isParent = readChange<bool>(json, "isParent");
-    change.m_wardUnitNumber = readChange<QString>(json, "wardUnitNumber");
-    change.m_stakeUnitNumber = readChange<QString>(json, "stakeUnitNumber");
-    change.m_specialNeedNote = readChange<QString>(json, "specialNeedNote");
+    ReadChanges visitor{json};
+    forEachField(change, visitor);
     return change;
 }
 
 bool MemberChange::isEmpty() const
 {
-    return !m_name.has_value()
-        && !m_gender.has_value()
-        && !m_phone.has_value()
-        && !m_altPhone.has_value()
-        && !m_email.has_value()
-        && !m_birthday.has_value()
-        && !m_callings.has_value()
-        && !m_isParent.has_value()
-        && !m_wardUnitNumber.has_value()
-        && !m_stakeUnitNumber.has_value()
-        && !m_specialNeedNote.has_value();
+    NoChanges visitor{true};
+    forEachField(*this, visitor);
+    return visitor.empty;
 }
 
 // ============================================================================
@@ -871,15 +1105,18 @@ bool MemberChange::isEmpty() const
 std::optional<FamilyChange> FamilyChange::between(const Family& opened, const Family& saved)
 {
     QHash<PersonId, MemberChange> members;
-    QList<Person> removed;
-    for (const Person& before : opened.members())
+    QList<PlacedMember> removed;
+    QList<Person> placed;
+    for (qsizetype i = 0; i < opened.members().size(); ++i)
     {
+        const Person& before = opened.members()[i];
         std::optional<Person> after = findMember(saved, before.id());
         if (!after.has_value())
         {
-            removed.append(before);
+            removed.append(PlacedMember{before, i});
             continue;
         }
+        placed.append(*after);
         std::optional<MemberChange> change = MemberChange::between(before, *after);
         if (change.has_value())
         {
@@ -887,12 +1124,14 @@ std::optional<FamilyChange> FamilyChange::between(const Family& opened, const Fa
         }
     }
 
-    QList<Person> added;
+    QList<PlacedMember> added;
     for (const Person& after : saved.members())
     {
         if (!findMember(opened, after.id()).has_value())
         {
-            added.append(after);
+            qsizetype index = placementIndex(placed, after);
+            placed.insert(index, after);
+            added.append(PlacedMember{after, index});
         }
     }
 
@@ -906,8 +1145,8 @@ std::optional<FamilyChange> FamilyChange::between(const Family& opened, const Fa
 
 FamilyChange::FamilyChange(const std::optional<FieldChange<Address>>& address,
                            const QHash<PersonId, MemberChange>& members,
-                           const QList<Person>& added,
-                           const QList<Person>& removed)
+                           const QList<PlacedMember>& added,
+                           const QList<PlacedMember>& removed)
     : m_address(address)
     , m_members(members)
     , m_added(added)
@@ -929,10 +1168,10 @@ bool FamilyChange::holds(const Family& current) const
             return false;
         }
     }
-    for (const Person& person : m_removed)
+    for (const PlacedMember& removed : m_removed)
     {
-        std::optional<Person> member = findMember(current, person.id());
-        if (member.has_value() && *member != person)
+        std::optional<Person> member = findMember(current, removed.person.id());
+        if (member.has_value() && *member != removed.person)
         {
             return false;
         }
@@ -959,11 +1198,11 @@ Family FamilyChange::appliedTo(const Family& current) const
             members.append(change.value().appliedTo(member));
         }
     }
-    for (const Person& person : m_added)
+    for (const PlacedMember& added : m_added)
     {
-        if (!findMember(current, person.id()).has_value())
+        if (!findMember(current, added.person.id()).has_value())
         {
-            members.append(person);
+            members.insert(qMin(added.index, members.size()), added.person);
         }
     }
 
@@ -994,13 +1233,13 @@ QStringList FamilyChange::describe(const Family& opened) const
             lines.append(change.value().describe(member.name().firstName()));
         }
     }
-    for (const Person& person : m_added)
+    for (const PlacedMember& added : m_added)
     {
-        lines.append(QObject::tr("added: %1").arg(person.displayName()));
+        lines.append(QObject::tr("added: %1").arg(added.person.displayName()));
     }
-    for (const Person& person : m_removed)
+    for (const PlacedMember& removed : m_removed)
     {
-        lines.append(QObject::tr("removed: %1").arg(person.displayName()));
+        lines.append(QObject::tr("removed: %1").arg(removed.person.displayName()));
     }
     if (m_address.has_value())
     {
@@ -1024,11 +1263,11 @@ QJsonObject FamilyChange::toJson() const
     }
     if (!m_added.isEmpty())
     {
-        json["added"] = personsToJson(m_added);
+        json["added"] = placedToJson(m_added);
     }
     if (!m_removed.isEmpty())
     {
-        json["removed"] = personsToJson(m_removed);
+        json["removed"] = placedToJson(m_removed);
     }
     return json;
 }
@@ -1043,8 +1282,8 @@ FamilyChange FamilyChange::fromJson(const QJsonObject& json)
     }
     return FamilyChange(readChange<Address>(json, "address"),
                         members,
-                        personsFromJson(json["added"].toArray()),
-                        personsFromJson(json["removed"].toArray()));
+                        placedFromJson(json["added"].toArray()),
+                        placedFromJson(json["removed"].toArray()));
 }
 ```
 
@@ -1056,8 +1295,6 @@ FamilyChange FamilyChange::fromJson(const QJsonObject& json)
 #include "Command.h"
 #include "FamilyChange.h"
 
-#include <memory>
-
 /// An edit to one family, built from the difference between what the edit opened with and
 /// what it saved. Holds the before and after of the changed fields only.
 class UpdateFamilyCommand : public Command
@@ -1066,8 +1303,8 @@ public:
     static constexpr const char* TypeName = "updateFamily";
 
     /// The edit from the family as opened to the family as saved, or an empty pointer when
-    /// nothing differs.
-    static std::unique_ptr<UpdateFamilyCommand> fromEdit(const Family& opened, const Family& saved);
+    /// nothing differs, which WardSession::commit takes as nothing to do.
+    static CommandPtr fromEdit(const Family& opened, const Family& saved);
 
     UpdateFamilyCommand(const FamilyId& familyId, const FamilyChange& change, const CommandDescription& description);
 
@@ -1093,7 +1330,7 @@ private:
 
 #include <QObject>
 
-std::unique_ptr<UpdateFamilyCommand> UpdateFamilyCommand::fromEdit(const Family& opened, const Family& saved)
+CommandPtr UpdateFamilyCommand::fromEdit(const Family& opened, const Family& saved)
 {
     std::optional<FamilyChange> change = FamilyChange::between(opened, saved);
     if (!change.has_value())
@@ -1101,7 +1338,7 @@ std::unique_ptr<UpdateFamilyCommand> UpdateFamilyCommand::fromEdit(const Family&
         return nullptr;
     }
     CommandDescription description(QObject::tr("%1 family").arg(opened.surname()), change->describe(opened));
-    return std::make_unique<UpdateFamilyCommand>(opened.id(), *change, description);
+    return std::make_shared<UpdateFamilyCommand>(opened.id(), *change, description);
 }
 
 UpdateFamilyCommand::UpdateFamilyCommand(const FamilyId& familyId,
@@ -1126,7 +1363,7 @@ CommandOutcome UpdateFamilyCommand::execute(Document& document) const
 
 CommandPtr UpdateFamilyCommand::inverse() const
 {
-    return std::make_unique<UpdateFamilyCommand>(m_familyId, m_change.swapped(), description().undone());
+    return std::make_shared<UpdateFamilyCommand>(m_familyId, m_change.swapped(), description().undone());
 }
 
 QJsonObject UpdateFamilyCommand::toJson() const
@@ -1144,7 +1381,7 @@ DocumentChange UpdateFamilyCommand::documentChange() const
 
 CommandPtr UpdateFamilyCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
 {
-    return std::make_unique<UpdateFamilyCommand>(FamilyId::fromString(json["familyId"].toString()),
+    return std::make_shared<UpdateFamilyCommand>(FamilyId::fromString(json["familyId"].toString()),
                                                  FamilyChange::fromJson(json["change"].toObject()),
                                                  description);
 }
@@ -1314,14 +1551,14 @@ QList<CommandDescription> Journal::descriptions() const
 #include <QList>
 #include <QObject>
 #include <QString>
-#include <vector>
 
 /// How the commit step ended for one command.
 enum class CommitStatus
 {
     Applied,
     Conflicted,
-    Refused
+    Refused,
+    NothingToDo  ///< there was no command, as from an edit that changed nothing
 };
 
 struct CommitResult
@@ -1338,17 +1575,15 @@ enum class ReplayStatus
     Abandoned       ///< one entry stopped it, and the version was taken as it stands
 };
 
-/// The descriptions of one abandoned journal, kept for the user to work from.
-struct ToRedoGroup
+struct ReplayResult
 {
-    QList<CommandDescription> descriptions;
-    int clashed;        ///< index in descriptions of the entry that stopped the replay
-    CommitResult stop;  ///< Conflicted, or Refused with the rule's wording
+    ReplayStatus status;
+    QString toRedo;  ///< when status is Abandoned, the abandoned changes as plain text
 };
 
-/// One open ward: its document, journal, undo stack and to-redo list, and the commit step
-/// and replay that change them. Holds no global state, so a test creates as many sessions
-/// as it needs; the app holds one.
+/// One open ward: its document, journal and undo stack, and the commit step and replay
+/// that change them. Holds no global state, so a test creates as many sessions as it
+/// needs; the app holds one.
 class WardSession : public QObject
 {
     Q_OBJECT
@@ -1358,63 +1593,58 @@ public:
 
     const Document& document() const { return m_document; }
     const Journal& journal() const { return m_journal; }
-    const QList<ToRedoGroup>& toRedo() const { return m_toRedo; }
 
-    /// Opens a ward: its document replaces the open one by assignment, and the journal, the
-    /// to-redo list and the undo stack start empty.
+    /// Opens a ward: its document replaces the open one by assignment, and the journal and
+    /// the undo and redo stacks start empty.
     void open(const Document& document);
 
     /// The commit step: the command's rule, then execute, then the journal. A command that
-    /// applies clears the redo side, and enters the undo stack when it has an inverse. One
-    /// that conflicts or is refused changes nothing and enters neither.
+    /// applies empties the redo stack, and enters the undo stack when it is undoable. One
+    /// that conflicts or is refused changes nothing and enters neither. An empty command
+    /// is nothing to do and changes nothing.
     CommitResult commit(CommandPtr command);
 
-    /// Runs the inverse of the latest undoable command through the commit step. When it
-    /// applies, the command moves to the redo side; otherwise it stays where it is.
+    /// Builds the inverse of the command on top of the undo stack and runs it through the
+    /// commit step. When the inverse applies, the command moves to the redo stack;
+    /// otherwise it stays on the undo stack.
     CommitResult undo();
 
-    /// Runs the latest undone command again through the commit step. When it applies, the
-    /// command moves back to the undo side.
+    /// Runs the command on top of the redo stack again through the commit step. When it
+    /// applies, it moves back to the undo stack; otherwise it stays on the redo stack.
     CommitResult redo();
 
-    bool canUndo() const { return !m_undoStack.empty(); }
-    bool canRedo() const { return !m_redoStack.empty(); }
+    bool canUndo() const { return !m_undoStack.isEmpty(); }
+    bool canRedo() const { return !m_redoStack.isEmpty(); }
     QString undoHeading() const;
     QString redoHeading() const;
 
-    /// Replays the journal onto version. An empty journal takes the version as it stands.
-    /// Otherwise each entry is rebuilt from its serialised form and put through the rule and
-    /// execute, in order, on a copy of the version; when every entry applies, the copy
-    /// becomes the document. One conflict or refusal abandons the whole replay: the version
-    /// is taken as it stands, the journal's descriptions become a group on the to-redo list,
-    /// and the journal and the undo stack are emptied.
-    ReplayStatus replayOnto(const Document& version);
-
-    /// Empties the to-redo list, once the user has dismissed it.
-    void dismissToRedo();
+    /// Replays the journal onto version. With the journal empty, version becomes the
+    /// document as it stands. Otherwise each entry is rebuilt from its serialised form and
+    /// put through the rule and execute, in order, on a copy of version, and when every
+    /// entry applies the copy becomes the document. The first entry that conflicts or is
+    /// refused abandons the replay: version becomes the document as it stands, the journal
+    /// and the undo and redo stacks are emptied, and the result's toRedo holds the
+    /// abandoned changes as text, which nothing in the session keeps.
+    ReplayResult replayOnto(const Document& version);
 
 signals:
     void documentChanged(const DocumentChange& change);
     void undoStackChanged();
 
 private:
-    /// A command on the undo or redo side, with the inverse built when it was committed.
-    struct UndoEntry
-    {
-        CommandPtr command;
-        CommandPtr inverse;
-    };
-
     CommitResult run(const Command& command);
-    void abandon(const Document& version, int clashed, const CommitResult& stop);
+
+    /// The journal's changes as text for the user to redo: what stopped the replay, then
+    /// each entry's heading and lines in order, with the entry at index stopped marked.
+    QString toRedoText(int stopped, const CommitResult& stop) const;
+
     void replaceDocument(const Document& document);
     void clearUndoStack();
 
     Document m_document;
     Journal m_journal;
-    std::vector<UndoEntry> m_undoStack;
-    std::vector<UndoEntry> m_redoStack;
-    QList<ToRedoGroup> m_toRedo;
+    QList<CommandPtr> m_undoStack;
+    QList<CommandPtr> m_redoStack;
 
     static constexpr int UndoLimit = 100;
 };
@@ -1425,6 +1655,8 @@ private:
 ```cpp
 #include "WardSession.h"
 #include "CommandRegistry.h"
+
+#include <QStringList>
 
 namespace
 {
@@ -1456,13 +1688,16 @@ WardSession::WardSession(QObject* parent)
 void WardSession::open(const Document& document)
 {
     m_journal = Journal();
-    m_toRedo.clear();
     clearUndoStack();
     replaceDocument(document);
 }
 
 CommitResult WardSession::commit(CommandPtr command)
 {
+    if (!command)
+    {
+        return CommitResult{CommitStatus::NothingToDo, QString()};
+    }
     CommitResult result = run(*command);
     if (result.status != CommitStatus::Applied)
     {
@@ -1470,13 +1705,12 @@ CommitResult WardSession::commit(CommandPtr command)
     }
 
     m_redoStack.clear();
-    CommandPtr inverse = command->inverse();
-    if (inverse)
+    if (command->undoable())
     {
-        m_undoStack.push_back(UndoEntry{std::move(command), std::move(inverse)});
-        if (static_cast<int>(m_undoStack.size()) > UndoLimit)
+        m_undoStack.append(command);
+        if (m_undoStack.size() > UndoLimit)
         {
-            m_undoStack.erase(m_undoStack.begin());
+            m_undoStack.removeFirst();
         }
     }
     emit undoStackChanged();
@@ -1486,11 +1720,10 @@ CommitResult WardSession::commit(CommandPtr command)
 CommitResult WardSession::undo()
 {
     Q_ASSERT(canUndo());
-    CommitResult result = run(*m_undoStack.back().inverse);
+    CommitResult result = run(*m_undoStack.last()->inverse());
     if (result.status == CommitStatus::Applied)
     {
-        m_redoStack.push_back(std::move(m_undoStack.back()));
-        m_undoStack.pop_back();
+        m_redoStack.append(m_undoStack.takeLast());
         emit undoStackChanged();
     }
     return result;
@@ -1499,11 +1732,10 @@ CommitResult WardSession::undo()
 CommitResult WardSession::redo()
 {
     Q_ASSERT(canRedo());
-    CommitResult result = run(*m_redoStack.back().command);
+    CommitResult result = run(*m_redoStack.last());
     if (result.status == CommitStatus::Applied)
     {
-        m_undoStack.push_back(std::move(m_redoStack.back()));
-        m_redoStack.pop_back();
+        m_undoStack.append(m_redoStack.takeLast());
         emit undoStackChanged();
     }
     return result;
@@ -1511,28 +1743,28 @@ CommitResult WardSession::redo()
 
 QString WardSession::undoHeading() const
 {
-    if (m_undoStack.empty())
+    if (m_undoStack.isEmpty())
     {
         return QString();
     }
-    return m_undoStack.back().command->description().heading();
+    return m_undoStack.last()->description().heading();
 }
 
 QString WardSession::redoHeading() const
 {
-    if (m_redoStack.empty())
+    if (m_redoStack.isEmpty())
     {
         return QString();
     }
-    return m_redoStack.back().command->description().heading();
+    return m_redoStack.last()->description().heading();
 }
 
-ReplayStatus WardSession::replayOnto(const Document& version)
+ReplayResult WardSession::replayOnto(const Document& version)
 {
     if (m_journal.isEmpty())
     {
         replaceDocument(version);
-        return ReplayStatus::FastForwarded;
+        return ReplayResult{ReplayStatus::FastForwarded, QString()};
     }
 
     Document replayed = version;
@@ -1544,17 +1776,15 @@ ReplayStatus WardSession::replayOnto(const Document& version)
         CommitResult result = attempt(*command, replayed);
         if (result.status != CommitStatus::Applied)
         {
-            abandon(version, i, result);
-            return ReplayStatus::Abandoned;
+            QString toRedo = toRedoText(i, result);
+            m_journal.clear();
+            clearUndoStack();
+            replaceDocument(version);
+            return ReplayResult{ReplayStatus::Abandoned, toRedo};
         }
     }
     replaceDocument(replayed);
-    return ReplayStatus::Replayed;
-}
-
-void WardSession::dismissToRedo()
-{
-    m_toRedo.clear();
+    return ReplayResult{ReplayStatus::Replayed, QString()};
 }
 
 CommitResult WardSession::run(const Command& command)
@@ -1568,12 +1798,37 @@ CommitResult WardSession::run(const Command& command)
     return result;
 }
 
-void WardSession::abandon(const Document& version, int clashed, const CommitResult& stop)
+QString WardSession::toRedoText(int stopped, const CommitResult& stop) const
 {
-    m_toRedo.append(ToRedoGroup{m_journal.descriptions(), clashed, stop});
-    m_journal.clear();
-    clearUndoStack();
-    replaceDocument(version);
+    QStringList text;
+    if (stop.status == CommitStatus::Refused)
+    {
+        text.append(stop.refusal);
+    }
+    else
+    {
+        text.append(tr("Your changes could not be applied, because the ward changed first."));
+    }
+    text.append(tr("These need doing again:"));
+
+    QList<CommandDescription> descriptions = m_journal.descriptions();
+    for (int i = 0; i < descriptions.size(); ++i)
+    {
+        text.append(QString());
+        if (i == stopped)
+        {
+            text.append(tr("%1 (stopped here)").arg(descriptions[i].heading()));
+        }
+        else
+        {
+            text.append(descriptions[i].heading());
+        }
+        for (const QString& line : descriptions[i].lines())
+        {
+            text.append(QString("- %1").arg(line));
+        }
+    }
+    return text.join("\n") + "\n";
 }
 
 void WardSession::replaceDocument(const Document& document)
@@ -1637,6 +1892,10 @@ add_executable(WardPlanningTests
     services/CommandRoundTripTest.cpp
     services/WardSessionTest.h
     services/WardSessionTest.cpp
+    services/PersonJsonTest.h
+    services/PersonJsonTest.cpp
+    services/BirthdayTest.h
+    services/BirthdayTest.cpp
 )
 
 target_include_directories(WardPlanningTests PRIVATE
@@ -1654,8 +1913,10 @@ add_test(NAME WardPlanningTests COMMAND WardPlanningTests)
 ### `tests/main.cpp`
 
 ```cpp
+#include "BirthdayTest.h"
 #include "FieldChangeTest.h"
 #include "CommandRoundTripTest.h"
+#include "PersonJsonTest.h"
 #include "UpdateFamilyCommandTest.h"
 #include "WardSessionTest.h"
 
@@ -1666,12 +1927,16 @@ int main(int argc, char* argv[])
 {
     QApplication app(argc, argv);
 
+    PersonJsonTest personJsonTest(nullptr);
+    BirthdayTest birthdayTest(nullptr);
     FieldChangeTest changeTest(nullptr);
     UpdateFamilyCommandTest updateFamilyCommandTest(nullptr);
     CommandRoundTripTest commandRoundTripTest(nullptr);
     WardSessionTest wardSessionTest(nullptr);
 
     int failures = 0;
+    failures += QTest::qExec(&personJsonTest, argc, argv);
+    failures += QTest::qExec(&birthdayTest, argc, argv);
     failures += QTest::qExec(&changeTest, argc, argv);
     failures += QTest::qExec(&updateFamilyCommandTest, argc, argv);
     failures += QTest::qExec(&commandRoundTripTest, argc, argv);
@@ -1706,13 +1971,22 @@ public:
     static PersonId bobId() { return PersonId::fromString("person-bob"); }
     static PersonId aliceId() { return PersonId::fromString("person-alice"); }
     static PersonId carolId() { return PersonId::fromString("person-carol"); }
+    static PersonId danId() { return PersonId::fromString("person-dan"); }
 
     static Person bob();
     static Person alice();
     static Person carol();
+
+    /// Dan Smith, male, not a parent, with no birthday or contact details.
+    static Person dan();
+
     static Family smith();
     static Family jones();
     static Address address(const QString& street, const QString& city);
+
+    /// The Smith family with every field of Bob changed, Alice removed, Dan added and the
+    /// address changed, so an edit to it holds every value type a family edit holds.
+    static Family smithWithEveryFieldChanged();
 
     /// The ward holding the Smith and Jones families, with its lookup caches built.
     static Document document();
@@ -1760,6 +2034,13 @@ Person TestWard::carol()
                                 true, QString(), QString());
 }
 
+Person TestWard::dan()
+{
+    return Person::createWithId(danId(), Name("Smith", "Dan"), Gender::Male, Birthday(),
+                                Phone(), Phone(), QString(), QStringList(),
+                                false, QString(), QString());
+}
+
 Address TestWard::address(const QString& street, const QString& city)
 {
     Address address;
@@ -1778,6 +2059,27 @@ Family TestWard::jones()
 {
     return Family::createWithId(jonesId(), std::nullopt, std::nullopt,
                                 address("4 Oak Ave", "Provo, UT"), {carol()});
+}
+
+Family TestWard::smithWithEveryFieldChanged()
+{
+    Person bob = TestWard::bob();
+    bob.setName(Name("Smith", "Robert"));
+    bob.setGender(std::nullopt);
+    bob.setPhone(Phone("555-2222"));
+    bob.setAltPhone(Phone("555-2223"));
+    bob.setEmail("robert@example.com");
+    bob.setBirthday(Birthday::create(1980, 7, 4));
+    bob.setCallings({"Clerk"});
+    bob.setIsParent(false);
+    bob.setWardUnitNumber("123456");
+    bob.setStakeUnitNumber("654321");
+    bob.setSpecialNeedNote("Uses a wheelchair; the ramp is at the back door.");
+
+    Family saved = smith();
+    saved.setAddress(address("14 Elm St", "Provo, UT"));
+    saved.setMembers({bob, dan()});
+    return saved;
 }
 
 Document TestWard::document()
@@ -1848,9 +2150,9 @@ Task 3 drops the two `std::nullopt` coordinate arguments when `Family` loses its
 #include "Command.h"
 #include "Id.h"
 
-/// A test command with no inverse that sets a member's phone whatever it holds, refused
-/// with ruleWording when that is not empty. It stands in for a command with a rule, which
-/// no content command has, and for a write the undo stack does not hold. It is not in
+/// A test command that sets a member's phone whatever it holds, refused with ruleWording
+/// when that is not empty, and not undoable. It stands in for a command with a rule, which
+/// no content command has, and for a command the undo stack does not hold. It is not in
 /// CommandRegistry, so it never takes part in a replay.
 class ForcePhoneCommand : public Command
 {
@@ -1859,6 +2161,7 @@ public:
 
     QString type() const override { return "testForcePhone"; }
     CommandOutcome execute(Document& document) const override;
+    bool undoable() const override { return false; }
     CommandPtr inverse() const override;
     QString refusal(const Document& document) const override;
     QJsonObject toJson() const override;
@@ -1927,8 +2230,8 @@ DocumentChange ForcePhoneCommand::documentChange() const
 #include "Command.h"
 #include "Document.h"
 
+#include <QList>
 #include <QString>
-#include <vector>
 
 /// Which outcome a sample's document gives its command.
 enum class SampleCase
@@ -1950,7 +2253,7 @@ class CommandSamples
 {
 public:
     /// The samples for the type with that name; empty for a type with none.
-    static std::vector<CommandSample> forType(const QString& type);
+    static QList<CommandSample> forType(const QString& type);
 };
 ```
 
@@ -1964,55 +2267,28 @@ public:
 namespace
 {
 
-/// The Smith family with every field of Bob changed, Alice removed, Dan added and the
-/// address changed, so the sample round-trips every value type a family edit holds.
-Family smithWithEveryFieldChanged()
-{
-    Person bob = TestWard::bob();
-    bob.setName(Name("Smith", "Robert"));
-    bob.setGender(std::nullopt);
-    bob.setPhone(Phone("555-2222"));
-    bob.setAltPhone(Phone("555-2223"));
-    bob.setEmail("robert@example.com");
-    bob.setBirthday(Birthday::create(1980, 7, 4));
-    bob.setCallings({"Clerk"});
-    bob.setIsParent(false);
-    bob.setWardUnitNumber("123456");
-    bob.setStakeUnitNumber("654321");
-    bob.setSpecialNeedNote("Uses a wheelchair; the ramp is at the back door.");
-
-    Person dan = Person::createWithId(PersonId::fromString("person-dan"), Name("Smith", "Dan"),
-                                      Gender::Male, Birthday(), Phone(), Phone(), QString(),
-                                      QStringList(), false, QString(), QString());
-
-    Family saved = TestWard::smith();
-    saved.setAddress(TestWard::address("14 Elm St", "Provo, UT"));
-    saved.setMembers({bob, dan});
-    return saved;
-}
-
-std::vector<CommandSample> updateFamilySamples()
+QList<CommandSample> updateFamilySamples()
 {
     Family opened = TestWard::smith();
-    Family saved = smithWithEveryFieldChanged();
+    Family saved = TestWard::smithWithEveryFieldChanged();
     Family moved = TestWard::withPhone(opened, TestWard::bobId(), "555-9999");
 
-    std::vector<CommandSample> samples;
-    samples.push_back(CommandSample{SampleCase::StartHolds,
-                                    TestWard::document(),
-                                    UpdateFamilyCommand::fromEdit(opened, saved)});
-    samples.push_back(CommandSample{SampleCase::ResultHolds,
-                                    TestWard::withFamily(TestWard::document(), saved),
-                                    UpdateFamilyCommand::fromEdit(opened, saved)});
-    samples.push_back(CommandSample{SampleCase::Conflicts,
-                                    TestWard::withFamily(TestWard::document(), moved),
-                                    UpdateFamilyCommand::fromEdit(opened, saved)});
+    QList<CommandSample> samples;
+    samples.append(CommandSample{SampleCase::StartHolds,
+                                 TestWard::document(),
+                                 UpdateFamilyCommand::fromEdit(opened, saved)});
+    samples.append(CommandSample{SampleCase::ResultHolds,
+                                 TestWard::withFamily(TestWard::document(), saved),
+                                 UpdateFamilyCommand::fromEdit(opened, saved)});
+    samples.append(CommandSample{SampleCase::Conflicts,
+                                 TestWard::withFamily(TestWard::document(), moved),
+                                 UpdateFamilyCommand::fromEdit(opened, saved)});
     return samples;
 }
 
 }  // namespace
 
-std::vector<CommandSample> CommandSamples::forType(const QString& type)
+QList<CommandSample> CommandSamples::forType(const QString& type)
 {
     if (type == UpdateFamilyCommand::TypeName)
     {
@@ -2144,16 +2420,22 @@ private slots:
     void editHoldsOnlyTheFieldsThatDiffer();
     void editThatChangesNothingIsNoCommand();
     void descriptionIsAHeadingAndALinePerValueSet();
+    void everyFieldEditDescribesEachField();
     void appliesWhereItsStartConditionHolds();
     void appliesAndChangesNothingWhereItsResultHolds();
     void conflictsAndTouchesNothingWhereAFieldMoved();
+    void everyFieldMovedToAThirdValueConflicts_data();
+    void everyFieldMovedToAThirdValueConflicts();
     void conflictsWhereTheFamilyIsGone();
     void conflictsWhereAChangedMemberIsGone();
     void editsToDifferentMembersBothApply();
     void memberRemovalConflictsAfterThatMemberChanged();
     void memberRemovalAppliesOntoAnUnchangedMemberAndItsInverseRestoresThem();
     void memberAdditionHoldsWhenThatPersonIsAlreadyThere();
+    void handAddedChildIsPlacedByTheRuleWhenEveryBirthYearIsKnown();
+    void handAddedChildGoesLastWhenABirthYearIsUnknown();
     void inverseSwapsTheChangeUnderAnUndoHeading();
+    void inverseOfTheEveryFieldEditRestoresTheDocumentExactly();
 };
 ```
 
@@ -2165,12 +2447,13 @@ private slots:
 #include "Document.h"
 #include "TestWard.h"
 
+#include <QJsonArray>
 #include <QTest>
 
 namespace
 {
 
-std::unique_ptr<UpdateFamilyCommand> bobPhoneEdit(const QString& phone)
+CommandPtr bobPhoneEdit(const QString& phone)
 {
     Family opened = TestWard::smith();
     return UpdateFamilyCommand::fromEdit(opened, TestWard::withPhone(opened, TestWard::bobId(), phone));
@@ -2191,11 +2474,113 @@ Family smithWithout(const PersonId& id)
     return family;
 }
 
-Person dan()
+/// The Smith family with one of Bob's fields, or the address, at a value that is neither
+/// its value in TestWard::smith() nor in TestWard::smithWithEveryFieldChanged().
+Family smithWithThirdValue(const QString& field)
 {
-    return Person::createWithId(PersonId::fromString("person-dan"), Name("Smith", "Dan"),
-                                Gender::Male, Birthday(), Phone(), Phone(), QString(),
-                                QStringList(), false, QString(), QString());
+    Family family = TestWard::smith();
+    if (field == "address")
+    {
+        family.setAddress(TestWard::address("16 Elm St", "Provo, UT"));
+        return family;
+    }
+
+    Person bob = TestWard::bob();
+    if (field == "name")
+    {
+        bob.setName(Name("Smith", "Bobby"));
+    }
+    else if (field == "gender")
+    {
+        bob.setGender(Gender::Female);
+    }
+    else if (field == "phone")
+    {
+        bob.setPhone(Phone("555-9999"));
+    }
+    else if (field == "altPhone")
+    {
+        bob.setAltPhone(Phone("555-9998"));
+    }
+    else if (field == "email")
+    {
+        bob.setEmail("bobby@example.com");
+    }
+    else if (field == "birthday")
+    {
+        bob.setBirthday(Birthday::create(1990, 1, 1));
+    }
+    else if (field == "callings")
+    {
+        bob.setCallings({"Ward Clerk"});
+    }
+    else if (field == "wardUnitNumber")
+    {
+        bob.setWardUnitNumber("999999");
+    }
+    else if (field == "stakeUnitNumber")
+    {
+        bob.setStakeUnitNumber("888888");
+    }
+    else if (field == "specialNeedNote")
+    {
+        bob.setSpecialNeedNote("Hard of hearing");
+    }
+    return TestWard::withMember(family, bob);
+}
+
+Person leeMember(const QString& id, const QString& givenName, std::optional<Gender> gender,
+                 std::optional<int> birthYear, bool isParent)
+{
+    return Person::createWithId(PersonId::fromString(id), Name("Lee", givenName), gender,
+                                Birthday::create(birthYear, 1, 1), Phone(), Phone(), QString(),
+                                QStringList(), isParent, QString(), QString());
+}
+
+/// The Lee family as given: Ken (father, 1975), Mia (mother, 1977), Ed (child, 2005) and
+/// Fay (child, born in fayBirthYear).
+Family lee(std::optional<int> fayBirthYear)
+{
+    return Family::createWithId(FamilyId::fromString("family-lee"), std::nullopt, std::nullopt,
+                                TestWard::address("8 Pine St", "Provo, UT"),
+                                {leeMember("person-ken", "Ken", Gender::Male, 1975, true),
+                                 leeMember("person-mia", "Mia", Gender::Female, 1977, true),
+                                 leeMember("person-ed", "Ed", Gender::Male, 2005, false),
+                                 leeMember("person-fay", "Fay", Gender::Female, fayBirthYear, false)});
+}
+
+/// family with Gus, a child born in 2008, added at the end, as the member editor adds him.
+Family withGus(const Family& family)
+{
+    QList<Person> members = family.members();
+    members.append(leeMember("person-gus", "Gus", Gender::Male, 2008, false));
+    Family saved = family;
+    saved.setMembers(members);
+    return saved;
+}
+
+Document documentWith(const Family& family)
+{
+    Document document;
+    document.addFamily(family);
+    document.onDocumentChanged(DocumentChange::full());
+    return document;
+}
+
+QStringList memberIds(const Family& family)
+{
+    QStringList ids;
+    for (const Person& member : family.members())
+    {
+        ids.append(member.id().toString());
+    }
+    return ids;
+}
+
+qsizetype addedIndex(const Command& command)
+{
+    QJsonArray added = command.toJson()["change"].toObject()["added"].toArray();
+    return added[0].toObject()["index"].toInteger();
 }
 
 }  // namespace
@@ -2232,12 +2617,33 @@ void UpdateFamilyCommandTest::descriptionIsAHeadingAndALinePerValueSet()
     Family saved = TestWard::withMember(TestWard::withPhone(opened, TestWard::bobId(), "555-2222"), alice);
     saved.setAddress(TestWard::address("14 Elm St", "Provo, UT"));
 
-    std::unique_ptr<UpdateFamilyCommand> command = UpdateFamilyCommand::fromEdit(opened, saved);
+    CommandPtr command = UpdateFamilyCommand::fromEdit(opened, saved);
 
     QCOMPARE(command->description().heading(), QString("Smith family"));
     QCOMPARE(command->description().lines(), QStringList({"Bob, phone: 555-2222",
                                                           "Alice, email: (none)",
                                                           "address: 14 Elm St, Provo, UT"}));
+}
+
+void UpdateFamilyCommandTest::everyFieldEditDescribesEachField()
+{
+    CommandPtr command = UpdateFamilyCommand::fromEdit(TestWard::smith(), TestWard::smithWithEveryFieldChanged());
+
+    QCOMPARE(command->description().lines(),
+             QStringList({"Bob, name: Smith, Robert",
+                          "Bob, gender: (none)",
+                          "Bob, phone: 555-2222",
+                          "Bob, other phone: 555-2223",
+                          "Bob, email: robert@example.com",
+                          "Bob, birthday: Jul 4, 1980",
+                          "Bob, callings: Clerk",
+                          "Bob, not a parent",
+                          "Bob, ward unit: 123456",
+                          "Bob, stake unit: 654321",
+                          "Bob, special need: Uses a wheelchair; the ramp is at the back door.",
+                          "added: Smith, Dan",
+                          "removed: Smith, Alice",
+                          "address: 14 Elm St, Provo, UT"}));
 }
 
 void UpdateFamilyCommandTest::appliesWhereItsStartConditionHolds()
@@ -2267,7 +2673,7 @@ void UpdateFamilyCommandTest::conflictsAndTouchesNothingWhereAFieldMoved()
     Family opened = TestWard::smith();
     Family saved = TestWard::withPhone(opened, TestWard::bobId(), "555-2222");
     saved.setAddress(TestWard::address("14 Elm St", "Provo, UT"));
-    std::unique_ptr<UpdateFamilyCommand> command = UpdateFamilyCommand::fromEdit(opened, saved);
+    CommandPtr command = UpdateFamilyCommand::fromEdit(opened, saved);
     Document document = TestWard::withFamily(TestWard::document(),
                                              TestWard::withPhone(opened, TestWard::bobId(), "555-9999"));
     Document before = document;
@@ -2276,6 +2682,31 @@ void UpdateFamilyCommandTest::conflictsAndTouchesNothingWhereAFieldMoved()
 
     QVERIFY(document == before);
     QCOMPARE(TestWard::family(document, TestWard::smithId()).address().full(), QString("12 Elm St, Provo, UT"));
+}
+
+void UpdateFamilyCommandTest::everyFieldMovedToAThirdValueConflicts_data()
+{
+    QTest::addColumn<QString>("field");
+    // isParent has two values, so it has no third value to move to.
+    const QStringList fields = {"name", "gender", "phone", "altPhone", "email", "birthday", "callings",
+                                "wardUnitNumber", "stakeUnitNumber", "specialNeedNote", "address"};
+    for (const QString& field : fields)
+    {
+        QTest::newRow(qPrintable(field)) << field;
+    }
+}
+
+void UpdateFamilyCommandTest::everyFieldMovedToAThirdValueConflicts()
+{
+    QFETCH(QString, field);
+    CommandPtr command = UpdateFamilyCommand::fromEdit(TestWard::smith(), TestWard::smithWithEveryFieldChanged());
+    Document document = TestWard::withFamily(TestWard::document(), smithWithThirdValue(field));
+    QVERIFY(document != TestWard::document());
+    Document before = document;
+
+    QVERIFY(command->execute(document) == CommandOutcome::Conflicted);
+
+    QVERIFY(document == before);
 }
 
 void UpdateFamilyCommandTest::conflictsWhereTheFamilyIsGone()
@@ -2304,8 +2735,8 @@ void UpdateFamilyCommandTest::editsToDifferentMembersBothApply()
     Family opened = TestWard::smith();
     Person alice = TestWard::alice();
     alice.setEmail("alice@new.example.com");
-    std::unique_ptr<UpdateFamilyCommand> bobEdit = bobPhoneEdit("555-2222");
-    std::unique_ptr<UpdateFamilyCommand> aliceEdit = UpdateFamilyCommand::fromEdit(opened, TestWard::withMember(opened, alice));
+    CommandPtr bobEdit = bobPhoneEdit("555-2222");
+    CommandPtr aliceEdit = UpdateFamilyCommand::fromEdit(opened, TestWard::withMember(opened, alice));
 
     Document bobFirst = TestWard::document();
     QVERIFY(bobEdit->execute(bobFirst) == CommandOutcome::Applied);
@@ -2321,7 +2752,7 @@ void UpdateFamilyCommandTest::editsToDifferentMembersBothApply()
 
 void UpdateFamilyCommandTest::memberRemovalConflictsAfterThatMemberChanged()
 {
-    std::unique_ptr<UpdateFamilyCommand> removal = UpdateFamilyCommand::fromEdit(TestWard::smith(), smithWithout(TestWard::aliceId()));
+    CommandPtr removal = UpdateFamilyCommand::fromEdit(TestWard::smith(), smithWithout(TestWard::aliceId()));
     Document document = TestWard::withFamily(TestWard::document(),
                                              TestWard::withPhone(TestWard::smith(), TestWard::aliceId(), "555-7777"));
 
@@ -2332,7 +2763,7 @@ void UpdateFamilyCommandTest::memberRemovalConflictsAfterThatMemberChanged()
 
 void UpdateFamilyCommandTest::memberRemovalAppliesOntoAnUnchangedMemberAndItsInverseRestoresThem()
 {
-    std::unique_ptr<UpdateFamilyCommand> removal = UpdateFamilyCommand::fromEdit(TestWard::smith(), smithWithout(TestWard::aliceId()));
+    CommandPtr removal = UpdateFamilyCommand::fromEdit(TestWard::smith(), smithWithout(TestWard::aliceId()));
     Document document = TestWard::document();
 
     QVERIFY(removal->execute(document) == CommandOutcome::Applied);
@@ -2341,14 +2772,14 @@ void UpdateFamilyCommandTest::memberRemovalAppliesOntoAnUnchangedMemberAndItsInv
 
     QVERIFY(removal->inverse()->execute(document) == CommandOutcome::Applied);
     QVERIFY(TestWard::person(document, TestWard::aliceId()) == TestWard::alice());
-    QCOMPARE(TestWard::family(document, TestWard::smithId()).members().size(), qsizetype(2));
+    QVERIFY(TestWard::family(document, TestWard::smithId()) == TestWard::smith());
 }
 
 void UpdateFamilyCommandTest::memberAdditionHoldsWhenThatPersonIsAlreadyThere()
 {
     Family withDan = TestWard::smith();
-    withDan.setMembers({TestWard::bob(), TestWard::alice(), dan()});
-    std::unique_ptr<UpdateFamilyCommand> addition = UpdateFamilyCommand::fromEdit(TestWard::smith(), withDan);
+    withDan.setMembers({TestWard::bob(), TestWard::alice(), TestWard::dan()});
+    CommandPtr addition = UpdateFamilyCommand::fromEdit(TestWard::smith(), withDan);
     Document document = TestWard::withFamily(TestWard::document(), withDan);
     Document before = document;
 
@@ -2358,9 +2789,35 @@ void UpdateFamilyCommandTest::memberAdditionHoldsWhenThatPersonIsAlreadyThere()
     QCOMPARE(TestWard::family(document, TestWard::smithId()).members().size(), qsizetype(3));
 }
 
+void UpdateFamilyCommandTest::handAddedChildIsPlacedByTheRuleWhenEveryBirthYearIsKnown()
+{
+    Family opened = lee(2010);
+    CommandPtr addition = UpdateFamilyCommand::fromEdit(opened, withGus(opened));
+    Document document = documentWith(opened);
+
+    QCOMPARE(addedIndex(*addition), qsizetype(3));
+    QVERIFY(addition->execute(document) == CommandOutcome::Applied);
+
+    QCOMPARE(memberIds(TestWard::family(document, opened.id())),
+             QStringList({"person-ken", "person-mia", "person-ed", "person-gus", "person-fay"}));
+}
+
+void UpdateFamilyCommandTest::handAddedChildGoesLastWhenABirthYearIsUnknown()
+{
+    Family opened = lee(std::nullopt);
+    CommandPtr addition = UpdateFamilyCommand::fromEdit(opened, withGus(opened));
+    Document document = documentWith(opened);
+
+    QCOMPARE(addedIndex(*addition), qsizetype(4));
+    QVERIFY(addition->execute(document) == CommandOutcome::Applied);
+
+    QCOMPARE(memberIds(TestWard::family(document, opened.id())),
+             QStringList({"person-ken", "person-mia", "person-ed", "person-fay", "person-gus"}));
+}
+
 void UpdateFamilyCommandTest::inverseSwapsTheChangeUnderAnUndoHeading()
 {
-    std::unique_ptr<UpdateFamilyCommand> edit = bobPhoneEdit("555-2222");
+    CommandPtr edit = bobPhoneEdit("555-2222");
     CommandPtr inverse = edit->inverse();
 
     QCOMPARE(inverse->description().heading(), QString("Undo: Smith family"));
@@ -2376,6 +2833,19 @@ void UpdateFamilyCommandTest::inverseSwapsTheChangeUnderAnUndoHeading()
     Document movedBefore = moved;
     QVERIFY(inverse->execute(moved) == CommandOutcome::Conflicted);
     QVERIFY(moved == movedBefore);
+}
+
+void UpdateFamilyCommandTest::inverseOfTheEveryFieldEditRestoresTheDocumentExactly()
+{
+    CommandPtr edit = UpdateFamilyCommand::fromEdit(TestWard::smith(), TestWard::smithWithEveryFieldChanged());
+    Document document = TestWard::document();
+
+    QVERIFY(edit->execute(document) == CommandOutcome::Applied);
+    QVERIFY(TestWard::family(document, TestWard::smithId()) == TestWard::smithWithEveryFieldChanged());
+
+    QVERIFY(edit->inverse()->execute(document) == CommandOutcome::Applied);
+    QVERIFY(TestWard::family(document, TestWard::smithId()) == TestWard::smith());
+    QVERIFY(document == TestWard::document());
 }
 ```
 
@@ -2428,8 +2898,8 @@ void CommandRoundTripTest::everyRegisteredTypeHasSamples()
         QVERIFY2(!names.contains(type.name), qPrintable(type.name));
         names.insert(type.name);
 
-        std::vector<CommandSample> samples = CommandSamples::forType(type.name);
-        QVERIFY2(!samples.empty(), qPrintable(type.name));
+        QList<CommandSample> samples = CommandSamples::forType(type.name);
+        QVERIFY2(!samples.isEmpty(), qPrintable(type.name));
         bool hasStartHolds = false;
         for (const CommandSample& sample : samples)
         {
@@ -2447,8 +2917,8 @@ void CommandRoundTripTest::sampleRebuiltFromItsEntryBehavesAsTheOriginal_data()
     QTest::addColumn<int>("index");
     for (const CommandType& type : CommandRegistry::types())
     {
-        std::vector<CommandSample> samples = CommandSamples::forType(type.name);
-        for (int i = 0; i < static_cast<int>(samples.size()); ++i)
+        QList<CommandSample> samples = CommandSamples::forType(type.name);
+        for (int i = 0; i < samples.size(); ++i)
         {
             QTest::newRow(qPrintable(QString("%1 #%2").arg(type.name).arg(i))) << type.name << i;
         }
@@ -2459,7 +2929,7 @@ void CommandRoundTripTest::sampleRebuiltFromItsEntryBehavesAsTheOriginal()
 {
     QFETCH(QString, type);
     QFETCH(int, index);
-    std::vector<CommandSample> samples = CommandSamples::forType(type);
+    QList<CommandSample> samples = CommandSamples::forType(type);
     const CommandSample& sample = samples[index];
 
     QJsonObject entry = CommandRegistry::toJson(*sample.command);
@@ -2491,8 +2961,7 @@ void CommandRoundTripTest::sampleRebuiltFromItsEntryBehavesAsTheOriginal()
 void CommandRoundTripTest::runningACommandDoesNotChangeIt()
 {
     Family opened = TestWard::smith();
-    std::unique_ptr<UpdateFamilyCommand> command =
-        UpdateFamilyCommand::fromEdit(opened, TestWard::withPhone(opened, TestWard::bobId(), "555-2222"));
+    CommandPtr command = UpdateFamilyCommand::fromEdit(opened, TestWard::withPhone(opened, TestWard::bobId(), "555-2222"));
     QJsonObject before = CommandRegistry::toJson(*command);
 
     Document applied = TestWard::document();
@@ -2524,24 +2993,31 @@ public:
 
 private slots:
     void commitAppliesAndJournalsTheSerialisedCommand();
+    void editThatChangesNothingIsNothingToDo();
     void editConfirmedAfterARemoteChangeToItsFamilyConflicts();
     void refusedCommandChangesNothingAndJournalsNothing();
+    void appliedCommitSignalsOneFamilyChangeAndOneUndoStackChange();
+    void conflictedOrRefusedCommitSignalsNothing();
     void emptyJournalFastForwards();
     void offlineEditsToDifferentMembersBothApply();
     void noteAndPhoneEditsToOnePersonBothApply();
     void journalThatFitsReplaysInFull();
     void oneConflictAbandonsTheWholeReplay();
+    void abandonedReplaySignalsOneFullDocumentChange();
     void commandWhoseTargetWasDeletedConflicts();
-    void toRedoDescriptionsStayAsWrittenAfterARename();
-    void laterAbandonmentAddsItsOwnGroup();
+    void toRedoTextStaysAsWrittenAfterARename();
+    void eachAbandonmentGivesItsOwnText();
     void newCommandAfterAnAbandonedReplayJournalsAfresh();
+    void openEmptiesTheJournalAndTheUndoStack();
     void undoRunsTheInverseThroughTheCommitStep();
+    void appliedUndoSignalsADocumentChangeAndAnUndoStackChange();
+    void removingTheFirstMemberAndUndoingRestoresTheFamilyExactly();
     void undoAfterARemoteEditToAnotherFamilyApplies();
     void undoWhoseInverseConflictsLeavesTheCommandOnTheUndoStack();
-    void commandWithoutAnInverseNeverEntersTheUndoStack();
+    void commandThatIsNotUndoableNeverEntersTheUndoStack();
     void newCommandClearsTheRedoSide();
+    void undoBeforeAnAbandonedReplayLeavesNothingToRedo();
     void undoStackHoldsAtMostOneHundred();
-    void dismissingTheToRedoListEmptiesIt();
 };
 ```
 
@@ -2555,6 +3031,7 @@ private slots:
 #include "TestWard.h"
 #include "WardSession.h"
 
+#include <QSignalSpy>
 #include <QTest>
 
 namespace
@@ -2600,18 +3077,42 @@ CommitResult commitAliceEmail(WardSession& session, const QString& email)
     return commitEdit(session, opened, TestWard::withMember(opened, alice));
 }
 
-/// A session with three entries in its journal - Carol's phone, Bob's phone, the Smith
-/// address - abandoned onto a version where Bob's phone moved to 555-9999.
-void abandonThreeEdits(WardSession& mine)
+/// Opens both sessions on the test ward, then commits three edits to mine - Carol's phone,
+/// Bob's phone, the Smith address - and moves Bob's phone to 555-9999 in theirs.
+void makeThreeEditsAgainstAMovedPhone(WardSession& mine, WardSession& theirs)
 {
-    WardSession theirs(nullptr);
     mine.open(TestWard::document());
     theirs.open(TestWard::document());
     commitPhone(mine, TestWard::jonesId(), TestWard::carolId(), "555-5555");
     commitPhone(mine, TestWard::smithId(), TestWard::bobId(), "555-2222");
     commitAddress(mine, TestWard::smithId(), TestWard::address("14 Elm St", "Provo, UT"));
     commitPhone(theirs, TestWard::smithId(), TestWard::bobId(), "555-9999");
-    QVERIFY(mine.replayOnto(theirs.document()) == ReplayStatus::Abandoned);
+}
+
+/// A session with three entries in its journal abandoned onto a version where Bob's phone
+/// moved; true when the replay was abandoned.
+bool abandonThreeEdits(WardSession& mine)
+{
+    WardSession theirs(nullptr);
+    makeThreeEditsAgainstAMovedPhone(mine, theirs);
+    return mine.replayOnto(theirs.document()).status == ReplayStatus::Abandoned;
+}
+
+DocumentChange changeAt(const QSignalSpy& spy, int index)
+{
+    return spy.at(index).at(0).value<DocumentChange>();
+}
+
+bool isSmithUpdate(const DocumentChange& change)
+{
+    return change.action == ChangeAction::Updated
+        && change.familyId == TestWard::smithId();
+}
+
+bool isFullChange(const DocumentChange& change)
+{
+    return change.action == ChangeAction::Full
+        && !change.familyId.has_value();
 }
 
 }  // namespace
@@ -2626,11 +3127,10 @@ void WardSessionTest::commitAppliesAndJournalsTheSerialisedCommand()
     WardSession session(nullptr);
     session.open(TestWard::document());
     Family opened = familyIn(session, TestWard::smithId());
-    std::unique_ptr<UpdateFamilyCommand> command =
-        UpdateFamilyCommand::fromEdit(opened, TestWard::withPhone(opened, TestWard::bobId(), "555-2222"));
+    CommandPtr command = UpdateFamilyCommand::fromEdit(opened, TestWard::withPhone(opened, TestWard::bobId(), "555-2222"));
     QJsonObject expected = CommandRegistry::toJson(*command);
 
-    CommitResult result = session.commit(std::move(command));
+    CommitResult result = session.commit(command);
 
     QVERIFY(result.status == CommitStatus::Applied);
     QCOMPARE(phoneOf(session.document(), TestWard::bobId()), QString("555-2222"));
@@ -2639,6 +3139,23 @@ void WardSessionTest::commitAppliesAndJournalsTheSerialisedCommand()
     QVERIFY(session.journal().entries()[0].command == expected);
     QVERIFY(session.canUndo());
     QCOMPARE(session.undoHeading(), QString("Smith family"));
+}
+
+void WardSessionTest::editThatChangesNothingIsNothingToDo()
+{
+    WardSession session(nullptr);
+    session.open(TestWard::document());
+    QSignalSpy documentSpy(&session, &WardSession::documentChanged);
+    QSignalSpy undoSpy(&session, &WardSession::undoStackChanged);
+
+    CommitResult result = commitEdit(session, TestWard::smith(), TestWard::smith());
+
+    QVERIFY(result.status == CommitStatus::NothingToDo);
+    QVERIFY(session.document() == TestWard::document());
+    QVERIFY(session.journal().isEmpty());
+    QVERIFY(!session.canUndo());
+    QCOMPARE(documentSpy.count(), 0);
+    QCOMPARE(undoSpy.count(), 0);
 }
 
 void WardSessionTest::editConfirmedAfterARemoteChangeToItsFamilyConflicts()
@@ -2650,7 +3167,7 @@ void WardSessionTest::editConfirmedAfterARemoteChangeToItsFamilyConflicts()
 
     Family opened = familyIn(mine, TestWard::smithId());
     QVERIFY(commitPhone(theirs, TestWard::smithId(), TestWard::bobId(), "555-9999").status == CommitStatus::Applied);
-    QVERIFY(mine.replayOnto(theirs.document()) == ReplayStatus::FastForwarded);
+    QVERIFY(mine.replayOnto(theirs.document()).status == ReplayStatus::FastForwarded);
 
     CommitResult result = commitEdit(mine, opened, TestWard::withPhone(opened, TestWard::bobId(), "555-2222"));
 
@@ -2665,18 +3182,51 @@ void WardSessionTest::refusedCommandChangesNothingAndJournalsNothing()
     WardSession session(nullptr);
     session.open(TestWard::document());
 
-    CommitResult refused = session.commit(std::make_unique<ForcePhoneCommand>(TestWard::bobId(), "555-2222", "You are the only admin."));
+    CommitResult refused = session.commit(std::make_shared<ForcePhoneCommand>(TestWard::bobId(), "555-2222", "You are the only admin."));
 
     QVERIFY(refused.status == CommitStatus::Refused);
     QCOMPARE(refused.refusal, QString("You are the only admin."));
     QVERIFY(session.document() == TestWard::document());
     QVERIFY(session.journal().isEmpty());
 
-    CommitResult allowed = session.commit(std::make_unique<ForcePhoneCommand>(TestWard::bobId(), "555-2222", QString()));
+    CommitResult allowed = session.commit(std::make_shared<ForcePhoneCommand>(TestWard::bobId(), "555-2222", QString()));
 
     QVERIFY(allowed.status == CommitStatus::Applied);
     QCOMPARE(phoneOf(session.document(), TestWard::bobId()), QString("555-2222"));
     QCOMPARE(session.journal().entries().size(), qsizetype(1));
+}
+
+void WardSessionTest::appliedCommitSignalsOneFamilyChangeAndOneUndoStackChange()
+{
+    WardSession session(nullptr);
+    session.open(TestWard::document());
+    QSignalSpy documentSpy(&session, &WardSession::documentChanged);
+    QSignalSpy undoSpy(&session, &WardSession::undoStackChanged);
+    QVERIFY(documentSpy.isValid());
+
+    QVERIFY(commitPhone(session, TestWard::smithId(), TestWard::bobId(), "555-2222").status == CommitStatus::Applied);
+
+    QCOMPARE(documentSpy.count(), 1);
+    QVERIFY(isSmithUpdate(changeAt(documentSpy, 0)));
+    QCOMPARE(undoSpy.count(), 1);
+}
+
+void WardSessionTest::conflictedOrRefusedCommitSignalsNothing()
+{
+    WardSession session(nullptr);
+    session.open(TestWard::document());
+    Family opened = familyIn(session, TestWard::smithId());
+    QVERIFY(commitPhone(session, TestWard::smithId(), TestWard::bobId(), "555-9999").status == CommitStatus::Applied);
+    QSignalSpy documentSpy(&session, &WardSession::documentChanged);
+    QSignalSpy undoSpy(&session, &WardSession::undoStackChanged);
+
+    CommitResult conflicted = commitEdit(session, opened, TestWard::withPhone(opened, TestWard::bobId(), "555-2222"));
+    CommitResult refused = session.commit(std::make_shared<ForcePhoneCommand>(TestWard::bobId(), "555-2222", "You are the only admin."));
+
+    QVERIFY(conflicted.status == CommitStatus::Conflicted);
+    QVERIFY(refused.status == CommitStatus::Refused);
+    QCOMPARE(documentSpy.count(), 0);
+    QCOMPARE(undoSpy.count(), 0);
 }
 
 void WardSessionTest::emptyJournalFastForwards()
@@ -2687,12 +3237,13 @@ void WardSessionTest::emptyJournalFastForwards()
     theirs.open(TestWard::document());
     commitPhone(theirs, TestWard::jonesId(), TestWard::carolId(), "555-5555");
 
-    QVERIFY(mine.replayOnto(theirs.document()) == ReplayStatus::FastForwarded);
+    ReplayResult result = mine.replayOnto(theirs.document());
 
+    QVERIFY(result.status == ReplayStatus::FastForwarded);
+    QVERIFY(result.toRedo.isEmpty());
     QVERIFY(mine.document() == theirs.document());
     QCOMPARE(phoneOf(mine.document(), TestWard::carolId()), QString("555-5555"));
     QVERIFY(mine.journal().isEmpty());
-    QVERIFY(mine.toRedo().isEmpty());
 }
 
 void WardSessionTest::offlineEditsToDifferentMembersBothApply()
@@ -2704,11 +3255,12 @@ void WardSessionTest::offlineEditsToDifferentMembersBothApply()
     commitPhone(mine, TestWard::smithId(), TestWard::bobId(), "555-2222");
     commitAliceEmail(theirs, "alice@new.example.com");
 
-    QVERIFY(mine.replayOnto(theirs.document()) == ReplayStatus::Replayed);
+    ReplayResult result = mine.replayOnto(theirs.document());
 
+    QVERIFY(result.status == ReplayStatus::Replayed);
+    QVERIFY(result.toRedo.isEmpty());
     QCOMPARE(phoneOf(mine.document(), TestWard::bobId()), QString("555-2222"));
     QCOMPARE(TestWard::person(mine.document(), TestWard::aliceId()).email(), QString("alice@new.example.com"));
-    QVERIFY(mine.toRedo().isEmpty());
     QCOMPARE(mine.journal().entries().size(), qsizetype(1));
 }
 
@@ -2724,7 +3276,7 @@ void WardSessionTest::noteAndPhoneEditsToOnePersonBothApply()
     bob.setSpecialNeedNote("Oxygen at night");
     commitEdit(theirs, opened, TestWard::withMember(opened, bob));
 
-    QVERIFY(mine.replayOnto(theirs.document()) == ReplayStatus::Replayed);
+    QVERIFY(mine.replayOnto(theirs.document()).status == ReplayStatus::Replayed);
 
     Person replayed = TestWard::person(mine.document(), TestWard::bobId());
     QCOMPARE(QString(replayed.phone()), QString("555-2222"));
@@ -2742,7 +3294,7 @@ void WardSessionTest::journalThatFitsReplaysInFull()
     commitAddress(mine, TestWard::smithId(), TestWard::address("14 Elm St", "Provo, UT"));
     commitAliceEmail(theirs, "alice@new.example.com");
 
-    QVERIFY(mine.replayOnto(theirs.document()) == ReplayStatus::Replayed);
+    QVERIFY(mine.replayOnto(theirs.document()).status == ReplayStatus::Replayed);
 
     QCOMPARE(phoneOf(mine.document(), TestWard::bobId()), QString("555-2222"));
     QCOMPARE(phoneOf(mine.document(), TestWard::carolId()), QString("555-5555"));
@@ -2755,33 +3307,43 @@ void WardSessionTest::oneConflictAbandonsTheWholeReplay()
 {
     WardSession mine(nullptr);
     WardSession theirs(nullptr);
-    mine.open(TestWard::document());
-    theirs.open(TestWard::document());
-    commitPhone(mine, TestWard::jonesId(), TestWard::carolId(), "555-5555");
-    commitPhone(mine, TestWard::smithId(), TestWard::bobId(), "555-2222");
-    commitAddress(mine, TestWard::smithId(), TestWard::address("14 Elm St", "Provo, UT"));
-    commitPhone(theirs, TestWard::smithId(), TestWard::bobId(), "555-9999");
+    makeThreeEditsAgainstAMovedPhone(mine, theirs);
     QVERIFY(mine.canUndo());
 
-    QVERIFY(mine.replayOnto(theirs.document()) == ReplayStatus::Abandoned);
+    ReplayResult result = mine.replayOnto(theirs.document());
 
+    QVERIFY(result.status == ReplayStatus::Abandoned);
     QVERIFY(mine.document() == theirs.document());
     QCOMPARE(phoneOf(mine.document(), TestWard::carolId()), QString("555-4444"));
     QCOMPARE(familyIn(mine, TestWard::smithId()).address().full(), QString("12 Elm St, Provo, UT"));
     QVERIFY(mine.journal().isEmpty());
     QVERIFY(!mine.canUndo());
     QVERIFY(!mine.canRedo());
-    QCOMPARE(mine.toRedo().size(), qsizetype(1));
-    const ToRedoGroup& group = mine.toRedo()[0];
-    QCOMPARE(group.descriptions.size(), qsizetype(3));
-    QCOMPARE(group.descriptions[0].heading(), QString("Jones family"));
-    QCOMPARE(group.descriptions[0].lines(), QStringList({"Carol, phone: 555-5555"}));
-    QCOMPARE(group.descriptions[1].heading(), QString("Smith family"));
-    QCOMPARE(group.descriptions[1].lines(), QStringList({"Bob, phone: 555-2222"}));
-    QCOMPARE(group.descriptions[2].heading(), QString("Smith family"));
-    QCOMPARE(group.descriptions[2].lines(), QStringList({"address: 14 Elm St, Provo, UT"}));
-    QCOMPARE(group.clashed, 1);
-    QVERIFY(group.stop.status == CommitStatus::Conflicted);
+    QCOMPARE(result.toRedo,
+             QString("Your changes could not be applied, because the ward changed first.\n"
+                     "These need doing again:\n"
+                     "\n"
+                     "Jones family\n"
+                     "- Carol, phone: 555-5555\n"
+                     "\n"
+                     "Smith family (stopped here)\n"
+                     "- Bob, phone: 555-2222\n"
+                     "\n"
+                     "Smith family\n"
+                     "- address: 14 Elm St, Provo, UT\n"));
+}
+
+void WardSessionTest::abandonedReplaySignalsOneFullDocumentChange()
+{
+    WardSession mine(nullptr);
+    WardSession theirs(nullptr);
+    makeThreeEditsAgainstAMovedPhone(mine, theirs);
+    QSignalSpy documentSpy(&mine, &WardSession::documentChanged);
+
+    QVERIFY(mine.replayOnto(theirs.document()).status == ReplayStatus::Abandoned);
+
+    QCOMPARE(documentSpy.count(), 1);
+    QVERIFY(isFullChange(changeAt(documentSpy, 0)));
 }
 
 void WardSessionTest::commandWhoseTargetWasDeletedConflicts()
@@ -2792,15 +3354,19 @@ void WardSessionTest::commandWhoseTargetWasDeletedConflicts()
     Document version = TestWard::document();
     version.removeFamily(TestWard::jonesId());
 
-    QVERIFY(mine.replayOnto(version) == ReplayStatus::Abandoned);
+    ReplayResult result = mine.replayOnto(version);
 
+    QVERIFY(result.status == ReplayStatus::Abandoned);
     QVERIFY(!mine.document().findFamilyById(TestWard::jonesId()).has_value());
-    QCOMPARE(mine.toRedo().size(), qsizetype(1));
-    QCOMPARE(mine.toRedo()[0].clashed, 0);
-    QCOMPARE(mine.toRedo()[0].descriptions[0].heading(), QString("Jones family"));
+    QCOMPARE(result.toRedo,
+             QString("Your changes could not be applied, because the ward changed first.\n"
+                     "These need doing again:\n"
+                     "\n"
+                     "Jones family (stopped here)\n"
+                     "- Carol, phone: 555-5555\n"));
 }
 
-void WardSessionTest::toRedoDescriptionsStayAsWrittenAfterARename()
+void WardSessionTest::toRedoTextStaysAsWrittenAfterARename()
 {
     WardSession mine(nullptr);
     mine.open(TestWard::document());
@@ -2813,35 +3379,41 @@ void WardSessionTest::toRedoDescriptionsStayAsWrittenAfterARename()
     Family renamed = TestWard::smith();
     renamed.setMembers({bob, alice});
 
-    QVERIFY(mine.replayOnto(TestWard::withFamily(TestWard::document(), renamed)) == ReplayStatus::Abandoned);
+    ReplayResult result = mine.replayOnto(TestWard::withFamily(TestWard::document(), renamed));
 
+    QVERIFY(result.status == ReplayStatus::Abandoned);
     QCOMPARE(familyIn(mine, TestWard::smithId()).surname(), QString("Smyth"));
-    const CommandDescription& description = mine.toRedo()[0].descriptions[0];
-    QCOMPARE(description.heading(), QString("Smith family"));
-    QCOMPARE(description.lines(), QStringList({"Bob, phone: 555-2222"}));
+    QCOMPARE(result.toRedo,
+             QString("Your changes could not be applied, because the ward changed first.\n"
+                     "These need doing again:\n"
+                     "\n"
+                     "Smith family (stopped here)\n"
+                     "- Bob, phone: 555-2222\n"));
 }
 
-void WardSessionTest::laterAbandonmentAddsItsOwnGroup()
+void WardSessionTest::eachAbandonmentGivesItsOwnText()
 {
     WardSession mine(nullptr);
-    abandonThreeEdits(mine);
+    QVERIFY(abandonThreeEdits(mine));
     commitPhone(mine, TestWard::jonesId(), TestWard::carolId(), "555-6666");
     Document version = mine.document();
     version.removeFamily(TestWard::jonesId());
 
-    QVERIFY(mine.replayOnto(version) == ReplayStatus::Abandoned);
+    ReplayResult result = mine.replayOnto(version);
 
-    QCOMPARE(mine.toRedo().size(), qsizetype(2));
-    QCOMPARE(mine.toRedo()[0].descriptions.size(), qsizetype(3));
-    QCOMPARE(mine.toRedo()[1].descriptions.size(), qsizetype(1));
-    QCOMPARE(mine.toRedo()[1].descriptions[0].lines(), QStringList({"Carol, phone: 555-6666"}));
-    QCOMPARE(mine.toRedo()[1].clashed, 0);
+    QVERIFY(result.status == ReplayStatus::Abandoned);
+    QCOMPARE(result.toRedo,
+             QString("Your changes could not be applied, because the ward changed first.\n"
+                     "These need doing again:\n"
+                     "\n"
+                     "Jones family (stopped here)\n"
+                     "- Carol, phone: 555-6666\n"));
 }
 
 void WardSessionTest::newCommandAfterAnAbandonedReplayJournalsAfresh()
 {
     WardSession mine(nullptr);
-    abandonThreeEdits(mine);
+    QVERIFY(abandonThreeEdits(mine));
     QVERIFY(mine.journal().isEmpty());
 
     QVERIFY(commitAliceEmail(mine, "alice@new.example.com").status == CommitStatus::Applied);
@@ -2849,6 +3421,25 @@ void WardSessionTest::newCommandAfterAnAbandonedReplayJournalsAfresh()
     QCOMPARE(mine.journal().entries().size(), qsizetype(1));
     QCOMPARE(mine.journal().entries()[0].sequence, qint64(4));
     QVERIFY(mine.canUndo());
+}
+
+void WardSessionTest::openEmptiesTheJournalAndTheUndoStack()
+{
+    WardSession session(nullptr);
+    session.open(TestWard::document());
+    commitPhone(session, TestWard::smithId(), TestWard::bobId(), "555-2222");
+    commitPhone(session, TestWard::jonesId(), TestWard::carolId(), "555-5555");
+    QVERIFY(session.undo().status == CommitStatus::Applied);
+    QVERIFY(!session.journal().isEmpty());
+    QVERIFY(session.canUndo());
+    QVERIFY(session.canRedo());
+
+    session.open(TestWard::document());
+
+    QVERIFY(session.journal().isEmpty());
+    QVERIFY(!session.canUndo());
+    QVERIFY(!session.canRedo());
+    QVERIFY(session.document() == TestWard::document());
 }
 
 void WardSessionTest::undoRunsTheInverseThroughTheCommitStep()
@@ -2880,6 +3471,36 @@ void WardSessionTest::undoRunsTheInverseThroughTheCommitStep()
     QVERIFY(!session.canRedo());
 }
 
+void WardSessionTest::appliedUndoSignalsADocumentChangeAndAnUndoStackChange()
+{
+    WardSession session(nullptr);
+    session.open(TestWard::document());
+    commitPhone(session, TestWard::smithId(), TestWard::bobId(), "555-2222");
+    QSignalSpy documentSpy(&session, &WardSession::documentChanged);
+    QSignalSpy undoSpy(&session, &WardSession::undoStackChanged);
+
+    QVERIFY(session.undo().status == CommitStatus::Applied);
+
+    QCOMPARE(documentSpy.count(), 1);
+    QVERIFY(isSmithUpdate(changeAt(documentSpy, 0)));
+    QCOMPARE(undoSpy.count(), 1);
+}
+
+void WardSessionTest::removingTheFirstMemberAndUndoingRestoresTheFamilyExactly()
+{
+    WardSession session(nullptr);
+    session.open(TestWard::document());
+    Family opened = familyIn(session, TestWard::smithId());
+    Family saved = opened;
+    saved.setMembers({TestWard::alice()});
+    QVERIFY(commitEdit(session, opened, saved).status == CommitStatus::Applied);
+    QVERIFY(familyIn(session, TestWard::smithId()) == saved);
+
+    QVERIFY(session.undo().status == CommitStatus::Applied);
+
+    QVERIFY(familyIn(session, TestWard::smithId()) == TestWard::smith());
+}
+
 void WardSessionTest::undoAfterARemoteEditToAnotherFamilyApplies()
 {
     WardSession mine(nullptr);
@@ -2888,7 +3509,7 @@ void WardSessionTest::undoAfterARemoteEditToAnotherFamilyApplies()
     theirs.open(TestWard::document());
     commitPhone(mine, TestWard::smithId(), TestWard::bobId(), "555-2222");
     commitAddress(theirs, TestWard::jonesId(), TestWard::address("6 Oak Ave", "Provo, UT"));
-    QVERIFY(mine.replayOnto(theirs.document()) == ReplayStatus::Replayed);
+    QVERIFY(mine.replayOnto(theirs.document()).status == ReplayStatus::Replayed);
 
     QVERIFY(mine.undo().status == CommitStatus::Applied);
 
@@ -2901,7 +3522,7 @@ void WardSessionTest::undoWhoseInverseConflictsLeavesTheCommandOnTheUndoStack()
     WardSession session(nullptr);
     session.open(TestWard::document());
     commitPhone(session, TestWard::smithId(), TestWard::bobId(), "555-2222");
-    QVERIFY(session.commit(std::make_unique<ForcePhoneCommand>(TestWard::bobId(), "555-9999", QString())).status
+    QVERIFY(session.commit(std::make_shared<ForcePhoneCommand>(TestWard::bobId(), "555-9999", QString())).status
             == CommitStatus::Applied);
     QCOMPARE(session.journal().entries().size(), qsizetype(2));
 
@@ -2915,12 +3536,12 @@ void WardSessionTest::undoWhoseInverseConflictsLeavesTheCommandOnTheUndoStack()
     QCOMPARE(session.journal().entries().size(), qsizetype(2));
 }
 
-void WardSessionTest::commandWithoutAnInverseNeverEntersTheUndoStack()
+void WardSessionTest::commandThatIsNotUndoableNeverEntersTheUndoStack()
 {
     WardSession session(nullptr);
     session.open(TestWard::document());
 
-    QVERIFY(session.commit(std::make_unique<ForcePhoneCommand>(TestWard::bobId(), "555-9999", QString())).status
+    QVERIFY(session.commit(std::make_shared<ForcePhoneCommand>(TestWard::bobId(), "555-9999", QString())).status
             == CommitStatus::Applied);
 
     QCOMPARE(phoneOf(session.document(), TestWard::bobId()), QString("555-9999"));
@@ -2942,6 +3563,24 @@ void WardSessionTest::newCommandClearsTheRedoSide()
     QCOMPARE(session.undoHeading(), QString("Jones family"));
 }
 
+void WardSessionTest::undoBeforeAnAbandonedReplayLeavesNothingToRedo()
+{
+    WardSession mine(nullptr);
+    WardSession theirs(nullptr);
+    mine.open(TestWard::document());
+    theirs.open(TestWard::document());
+    commitPhone(mine, TestWard::smithId(), TestWard::bobId(), "555-2222");
+    QVERIFY(mine.undo().status == CommitStatus::Applied);
+    QVERIFY(mine.canRedo());
+    commitPhone(theirs, TestWard::smithId(), TestWard::bobId(), "555-9999");
+
+    QVERIFY(mine.replayOnto(theirs.document()).status == ReplayStatus::Abandoned);
+
+    QVERIFY(!mine.canRedo());
+    QVERIFY(!mine.canUndo());
+    QCOMPARE(phoneOf(mine.document(), TestWard::bobId()), QString("555-9999"));
+}
+
 void WardSessionTest::undoStackHoldsAtMostOneHundred()
 {
     WardSession session(nullptr);
@@ -2961,18 +3600,99 @@ void WardSessionTest::undoStackHoldsAtMostOneHundred()
     QVERIFY(!session.canUndo());
     QCOMPARE(phoneOf(session.document(), TestWard::bobId()), QString("555-1001"));
 }
+```
 
-void WardSessionTest::dismissingTheToRedoListEmptiesIt()
+### `tests/services/BirthdayTest.h`
+
+```cpp
+#pragma once
+
+#include <QObject>
+
+class BirthdayTest : public QObject
 {
-    WardSession mine(nullptr);
-    abandonThreeEdits(mine);
-    QCOMPARE(mine.toRedo().size(), qsizetype(1));
+    Q_OBJECT
 
-    mine.dismissToRedo();
+public:
+    explicit BirthdayTest(QObject* parent);
 
-    QVERIFY(mine.toRedo().isEmpty());
+private slots:
+    void displayShowsWhicheverPartsAreSet_data();
+    void displayShowsWhicheverPartsAreSet();
+};
+```
+
+### `tests/services/BirthdayTest.cpp`
+
+```cpp
+#include "BirthdayTest.h"
+#include "Birthday.h"
+
+#include <QTest>
+
+namespace
+{
+
+/// The part, or none when the test row gives 0.
+std::optional<int> part(int value)
+{
+    if (value == 0)
+    {
+        return std::nullopt;
+    }
+    return value;
+}
+
+}  // namespace
+
+BirthdayTest::BirthdayTest(QObject* parent)
+    : QObject(parent)
+{
+}
+
+void BirthdayTest::displayShowsWhicheverPartsAreSet_data()
+{
+    QTest::addColumn<int>("year");
+    QTest::addColumn<int>("month");
+    QTest::addColumn<int>("day");
+    QTest::addColumn<QString>("expected");
+
+    QTest::newRow("month day year") << 1980 << 1 << 4 << QString("Jan 4, 1980");
+    QTest::newRow("month day") << 0 << 1 << 4 << QString("Jan 4");
+    QTest::newRow("month year") << 1980 << 1 << 0 << QString("Jan 1980");
+    QTest::newRow("year") << 1980 << 0 << 0 << QString("1980");
+    QTest::newRow("month") << 0 << 1 << 0 << QString("Jan");
+    QTest::newRow("day year") << 1980 << 0 << 4 << QString("day 4, 1980");
+    QTest::newRow("day") << 0 << 0 << 4 << QString("day 4");
+    QTest::newRow("none") << 0 << 0 << 0 << QString();
+}
+
+void BirthdayTest::displayShowsWhicheverPartsAreSet()
+{
+    QFETCH(int, year);
+    QFETCH(int, month);
+    QFETCH(int, day);
+    QFETCH(QString, expected);
+
+    QCOMPARE(Birthday::create(part(year), part(month), part(day)).display(), expected);
 }
 ```
+
+### `docs/ARCHITECTURE.md`
+
+- *Core Principles* (the command pattern) and *Modifying Data* describe the commit step: the
+  rule, `execute` answering an outcome, the journal, and the undo stack for an undoable
+  command. The diagrams are plain ASCII.
+- *Command Interface* shows the contract: `type`, `execute` answering `CommandOutcome`,
+  `undoable`, `inverse`, `refusal`, `toJson`, `documentChange`, `description`, and
+  `CommandPtr` as `std::shared_ptr<const Command>`; `CommandRegistry` and `FieldChange<T>` in a
+  paragraph each.
+- *Command History* becomes *WardSession*: the commit step and its four results, the journal,
+  replay and the abandoned changes as text, undo as the inverse through the commit step.
+- The `AddFamilyCommand` example becomes `UpdateFamilyCommand` with `FamilyChange`, including
+  where added and removed members go in the member order.
+- *Testing Guidelines* name the round trip, conflicts, inverses, and the commit step, replay
+  and undo.
 
 ### What task 1 leaves for later plans and tasks
 
@@ -2982,14 +3702,16 @@ void WardSessionTest::dismissingTheToRedoListEmptiesIt()
 - Entries stay in the journal after a successful replay; plan 3's landed marks remove the
   ones a version carries. The design's test of an undo after a remote edit to the same field
   needs that trimming, so it is plan 3's.
-- The to-redo list's window (*These need doing again*, with Dismiss) is built in plan 3, where
-  fetching first abandons a replay. This plan builds the list it shows.
+- Writing the abandoned changes to `Documents/Ward Planning/To redo - <ward name> -
+  <yyyy-MM-dd HH.mm>.txt` and the message that names the file, with *Open*, are plan 3's,
+  where fetching first abandons a replay. This plan produces the text, in
+  `ReplayResult::toRedo`.
 
 ### Commit
 
 ```bash
 git branch --show-current
-git add src/commands src/services/Journal.h src/services/Journal.cpp src/services/WardSession.h src/services/WardSession.cpp CMakeLists.txt tests
+git add src/commands src/services/Journal.h src/services/Journal.cpp src/services/WardSession.h src/services/WardSession.cpp src/models/Birthday.h src/models/Birthday.cpp src/models/Person.cpp CMakeLists.txt tests docs/ARCHITECTURE.md
 git commit -m "Commands answer Applied or Conflicted, and WardSession commits, journals, replays and undoes them"
 ```
 
@@ -3027,9 +3749,10 @@ edit holds only what the user changed.
 - Members `Document m_document` and `CommandHistory m_commandHistory` become
   `WardSession m_session`. `document()` returns `m_session.document()` (the archive overlay
   stays until task 5 deletes it).
-- `CommitResult executeCommand(CommandPtr command)`: captures `command->description()`, calls
-  `m_session.commit`, and on `Applied` runs `checkForIncompleteWards()` and `autoSave()` as
-  today; otherwise emits `commandNotApplied(const CommandDescription& description, const CommitResult& result)`.
+- `CommitResult executeCommand(CommandPtr command)`: calls `m_session.commit`, and on
+  `Applied` runs `checkForIncompleteWards()` and `autoSave()` as today; on `Conflicted` or
+  `Refused` emits `commandNotApplied(const CommandDescription& description, const CommitResult& result)`
+  with `command->description()`; on `NothingToDo` (an empty command) it does nothing more.
 - `undo()` and `redo()` call `m_session.undo()` / `redo()` the same way, emitting
   `commandNotApplied` with the undo stack's heading when the result is not `Applied`.
 - `undoDescription()` / `redoDescription()` become `undoHeading()` / `redoHeading()`.
@@ -3049,7 +3772,8 @@ edit holds only what the user changed.
   `tr("Your change could not be applied, because the ward changed first. This needs doing again:")`
   followed by the heading and its lines; for `Refused`, the rule's wording.
 - `onSaveFamily()` builds `UpdateFamilyCommand::fromEdit(m_editPanel->openedFamily(), m_editPanel->family())`
-  and commits it when it is not empty, then closes the panel. `FamilyEditPanel` gains
+  and commits it (an edit that changed nothing builds an empty command, which the commit
+  step takes as nothing to do), then closes the panel. `FamilyEditPanel` gains
   `const Family& openedFamily() const { return m_originalFamily; }`, the copy it opened with.
 
 **The special-need dialog becomes one "Special Need" dialog** (*The journal*, last bullet of the
@@ -3070,11 +3794,9 @@ work list).
   edit that clears the note. The helper `updatePersonInFamily` is deleted.
 
 **Docs.**
-- `docs/ARCHITECTURE.md`: the *Command Interface* section shows `execute` returning `CommandOutcome`,
-  `inverse`, `refusal`, `toJson` and the registry; *Command History* becomes *WardSession* (the
-  commit step, the journal, replay and the to-redo list, undo as inverse); the
-  `AddFamilyCommand` example becomes `UpdateFamilyCommand` with `FamilyChange`; *DocumentManager*
-  describes the wrapper; *Modifying Data* steps follow the commit step.
+- `docs/ARCHITECTURE.md`: *DocumentManager* describes the wrapper over the session, with
+  `executeCommand` returning `CommitResult`, `undoHeading` / `redoHeading`, and the signals it
+  forwards. Task 1 brought the command contract and *WardSession* up to date.
 - `CLAUDE.md`: the *Active Tasks* row and the *NeedsSubView Dialog UX (adopted)* section are
   removed, since the dialog is done.
 
@@ -3336,7 +4058,7 @@ clock).
 
 **Commands** (`EmergencyCommands.h`), each with `TypeName`, the outcome rules of the design's
 table, and a missing response making every command but `EndEmergency` conflict:
-- `StartEmergencyCommand(response)`: an addition; not undoable.
+- `StartEmergencyCommand(response)`: an addition; `undoable()` answers false.
 - `EndEmergencyCommand(response as the report was written from)`: conflicts when the response
   differs; result holds when it is gone; inverse `RestoreEmergencyCommand`.
 - `RestoreEmergencyCommand(response)`: result holds when a response with that id is present.
@@ -3349,7 +4071,8 @@ table, and a missing response making every command but `EndEmergency` conflict:
   each an `std::optional<FieldChange<...>>`; a new assignee must exist (person or team); a change of
   assignee holds the notification as none.
 - `DeleteTaskCommand(responseId, familyId, task as last seen)`.
-- `AddTaskCategoryCommand(responseId, category)`: result holds when present; not undoable.
+- `AddTaskCategoryCommand(responseId, category)`: result holds when present; `undoable()`
+  answers false.
 
 **Session and managers.**
 - `WardSession(Geocoder*, UnitLookup*, Clock* clock, QObject* parent)`; `const Clock& clock() const`.
@@ -3396,8 +4119,8 @@ table, and a missing response making every command but `EndEmergency` conflict:
 - `twoOfflineStartsMakeTwoEvents`, each holding its own responder's attempts.
 - `endingWritesAReportHoldingEveryAttemptAndTaskThenRemovesTheResponse`: the report's text, read
   back through `PdfExtractor`, contains each attempt's notes and each task's description.
-- `attemptsReplayedOntoAnEndedResponseAbandonToTheToRedoList`: the group holds each attempt's
-  description.
+- `attemptsReplayedOntoAnEndedResponseAreInTheToRedoText`: the abandoned replay's `toRedo`
+  holds each attempt's heading and lines.
 - `endReplayedAfterAnotherAttemptConflictsAndLeavesTheResponse`
 - `undoingAnEndRestoresAnEqualResponseAndLeavesTheReportFile`
 - `endWhoseReportCannotBeWrittenEndsNothing`: `ReportFailed`, response present, journal unchanged.
@@ -3494,14 +4217,20 @@ families. API:
 - Inverse: the same changes swapped. A ward record the import created stays in place, since the
   lookup fills its details afterwards.
 - `addressesGiven()` returns the addresses of the families it adds or re-addresses.
+- Member order: a member the import adds to a family goes in at its index in the PDF's
+  family, so the family keeps the PDF's order. `FamilyChange::between` places a member by the
+  member order rule, which is for members added by hand, so the import builds each family's
+  change through a second builder beside it, `FamilyChange::betweenInOrder(existing, imported)`,
+  that takes each added member's index from `imported`.
 - Description: heading `tr("Import the ward directory from %1.").arg(fileName)`, no lines.
 
 **Ministering import.**
 - `ImportMinisteringCommand::fromImport(document, result, fileName)` holds the organisation, its
   districts and groups as one `FieldChange<MinisteringCollection>` (the whole collection before and
   after, with `operator==` and JSON), the families added, a `FamilyChange` per family that
-  differs, and the ministering PDF date. Groups and districts may only name people and families
-  that exist after it applies.
+  differs (built with `FamilyChange::betweenInOrder`, as the directory import's are), and the
+  ministering PDF date. Groups and districts may only name people and families that exist
+  after it applies.
 - `MinisteringImportService::mergeFamilies`, when not authoritative, adds no unmatched family or
   person and leaves them out of the groups and districts it builds
   (`MinisteringImportService.cpp:156-164`, `:330-334`).
@@ -3535,19 +4264,17 @@ The design is silent on these; each states the choice this plan makes.
 1. **Command samples live in the test tree** (`tests/services/CommandSamples.cpp`), keyed by type
    name, and the round-trip test fails for a registered type with no sample. The design says each
    type "registers a sample"; this keeps test documents out of the app's library.
-2. **A first-run conflict** is shown once as a message with its description and does not go on
-   the to-redo list, which holds abandoned replays.
+2. **A first-run conflict** is shown once as a message with its description and does not go to
+   a to-redo file, which is written for abandoned replays.
 3. **Description wording:** an emptied value reads `(none)`; member additions and removals read
    `added: Smith, Dan` / `removed: Smith, Alice`; the parent flag reads `Bob, parent` /
    `Bob, not a parent`.
 4. **Member field granularity:** phone and other phone, and ward and stake unit numbers, are
    each judged on their own (the design lists "phones" and "units").
-5. **The undo stack pairs each command with its inverse, built at commit.** `inverse()` reads no
-   document, so this equals building it at undo.
+5. **The undo and redo stacks hold commands.** Undo builds the inverse when it runs, and a
+   command enters the undo stack only when it is `undoable()`.
 6. **An abandoned replay clears the redo side too**, alongside the undo stack.
-7. **Landed marks are plan 3**, so after a successful replay the entries stay in the journal and
-   a later replay runs them again, where their result already holds.
-8. **The test target is `WardPlanningTests`**, linked against `EmergencyPlanLib`, which plan 2's
+7. **The test target is `WardPlanningTests`**, linked against `EmergencyPlanLib`, which plan 2's
    rename turns into `WardPlanningLib`.
-9. **`docs/SHARED_WARD_PLAN_NOTES.md` stays** for plans 2 and 3, though it says it is deleted
+8. **`docs/SHARED_WARD_PLAN_NOTES.md` stays** for plans 2 and 3, though it says it is deleted
    once the plan is written.

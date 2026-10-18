@@ -21,6 +21,13 @@ Person TestWard::carol()
                                 true, QString(), QString());
 }
 
+Person TestWard::dan()
+{
+    return Person::createWithId(danId(), Name("Smith", "Dan"), Gender::Male, Birthday(),
+                                Phone(), Phone(), QString(), QStringList(),
+                                false, QString(), QString());
+}
+
 Address TestWard::address(const QString& street, const QString& city)
 {
     Address address;
@@ -39,6 +46,27 @@ Family TestWard::jones()
 {
     return Family::createWithId(jonesId(), std::nullopt, std::nullopt,
                                 address("4 Oak Ave", "Provo, UT"), {carol()});
+}
+
+Family TestWard::smithWithEveryFieldChanged()
+{
+    Person bob = TestWard::bob();
+    bob.setName(Name("Smith", "Robert"));
+    bob.setGender(std::nullopt);
+    bob.setPhone(Phone("555-2222"));
+    bob.setAltPhone(Phone("555-2223"));
+    bob.setEmail("robert@example.com");
+    bob.setBirthday(Birthday::create(1980, 7, 4));
+    bob.setCallings({"Clerk"});
+    bob.setIsParent(false);
+    bob.setWardUnitNumber("123456");
+    bob.setStakeUnitNumber("654321");
+    bob.setSpecialNeedNote("Uses a wheelchair; the ramp is at the back door.");
+
+    Family saved = smith();
+    saved.setAddress(address("14 Elm St", "Provo, UT"));
+    saved.setMembers({bob, dan()});
+    return saved;
 }
 
 Document TestWard::document()

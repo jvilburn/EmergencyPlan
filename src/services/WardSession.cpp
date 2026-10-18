@@ -1,6 +1,8 @@
 #include "WardSession.h"
 #include "CommandRegistry.h"
 
+#include <QStringList>
+
 namespace
 {
 
@@ -31,13 +33,16 @@ WardSession::WardSession(QObject* parent)
 void WardSession::open(const Document& document)
 {
     m_journal = Journal();
-    m_toRedo.clear();
     clearUndoStack();
     replaceDocument(document);
 }
 
 CommitResult WardSession::commit(CommandPtr command)
 {
+    if (!command)
+    {
+        return CommitResult{CommitStatus::NothingToDo, QString()};
+    }
     CommitResult result = run(*command);
     if (result.status != CommitStatus::Applied)
     {
@@ -45,13 +50,12 @@ CommitResult WardSession::commit(CommandPtr command)
     }
 
     m_redoStack.clear();
-    CommandPtr inverse = command->inverse();
-    if (inverse)
+    if (command->undoable())
     {
-        m_undoStack.push_back(UndoEntry{std::move(command), std::move(inverse)});
-        if (static_cast<int>(m_undoStack.size()) > UndoLimit)
+        m_undoStack.append(command);
+        if (m_undoStack.size() > UndoLimit)
         {
-            m_undoStack.erase(m_undoStack.begin());
+            m_undoStack.removeFirst();
         }
     }
     emit undoStackChanged();
@@ -61,11 +65,10 @@ CommitResult WardSession::commit(CommandPtr command)
 CommitResult WardSession::undo()
 {
     Q_ASSERT(canUndo());
-    CommitResult result = run(*m_undoStack.back().inverse);
+    CommitResult result = run(*m_undoStack.last()->inverse());
     if (result.status == CommitStatus::Applied)
     {
-        m_redoStack.push_back(std::move(m_undoStack.back()));
-        m_undoStack.pop_back();
+        m_redoStack.append(m_undoStack.takeLast());
         emit undoStackChanged();
     }
     return result;
@@ -74,11 +77,10 @@ CommitResult WardSession::undo()
 CommitResult WardSession::redo()
 {
     Q_ASSERT(canRedo());
-    CommitResult result = run(*m_redoStack.back().command);
+    CommitResult result = run(*m_redoStack.last());
     if (result.status == CommitStatus::Applied)
     {
-        m_undoStack.push_back(std::move(m_redoStack.back()));
-        m_redoStack.pop_back();
+        m_undoStack.append(m_redoStack.takeLast());
         emit undoStackChanged();
     }
     return result;
@@ -86,28 +88,28 @@ CommitResult WardSession::redo()
 
 QString WardSession::undoHeading() const
 {
-    if (m_undoStack.empty())
+    if (m_undoStack.isEmpty())
     {
         return QString();
     }
-    return m_undoStack.back().command->description().heading();
+    return m_undoStack.last()->description().heading();
 }
 
 QString WardSession::redoHeading() const
 {
-    if (m_redoStack.empty())
+    if (m_redoStack.isEmpty())
     {
         return QString();
     }
-    return m_redoStack.back().command->description().heading();
+    return m_redoStack.last()->description().heading();
 }
 
-ReplayStatus WardSession::replayOnto(const Document& version)
+ReplayResult WardSession::replayOnto(const Document& version)
 {
     if (m_journal.isEmpty())
     {
         replaceDocument(version);
-        return ReplayStatus::FastForwarded;
+        return ReplayResult{ReplayStatus::FastForwarded, QString()};
     }
 
     Document replayed = version;
@@ -119,17 +121,15 @@ ReplayStatus WardSession::replayOnto(const Document& version)
         CommitResult result = attempt(*command, replayed);
         if (result.status != CommitStatus::Applied)
         {
-            abandon(version, i, result);
-            return ReplayStatus::Abandoned;
+            QString toRedo = toRedoText(i, result);
+            m_journal.clear();
+            clearUndoStack();
+            replaceDocument(version);
+            return ReplayResult{ReplayStatus::Abandoned, toRedo};
         }
     }
     replaceDocument(replayed);
-    return ReplayStatus::Replayed;
-}
-
-void WardSession::dismissToRedo()
-{
-    m_toRedo.clear();
+    return ReplayResult{ReplayStatus::Replayed, QString()};
 }
 
 CommitResult WardSession::run(const Command& command)
@@ -143,12 +143,37 @@ CommitResult WardSession::run(const Command& command)
     return result;
 }
 
-void WardSession::abandon(const Document& version, int clashed, const CommitResult& stop)
+QString WardSession::toRedoText(int stopped, const CommitResult& stop) const
 {
-    m_toRedo.append(ToRedoGroup{m_journal.descriptions(), clashed, stop});
-    m_journal.clear();
-    clearUndoStack();
-    replaceDocument(version);
+    QStringList text;
+    if (stop.status == CommitStatus::Refused)
+    {
+        text.append(stop.refusal);
+    }
+    else
+    {
+        text.append(tr("Your changes could not be applied, because the ward changed first."));
+    }
+    text.append(tr("These need doing again:"));
+
+    QList<CommandDescription> descriptions = m_journal.descriptions();
+    for (int i = 0; i < descriptions.size(); ++i)
+    {
+        text.append(QString());
+        if (i == stopped)
+        {
+            text.append(tr("%1 (stopped here)").arg(descriptions[i].heading()));
+        }
+        else
+        {
+            text.append(descriptions[i].heading());
+        }
+        for (const QString& line : descriptions[i].lines())
+        {
+            text.append(QString("- %1").arg(line));
+        }
+    }
+    return text.join("\n") + "\n";
 }
 
 void WardSession::replaceDocument(const Document& document)

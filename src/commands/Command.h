@@ -44,7 +44,7 @@ private:
 };
 
 class Command;
-using CommandPtr = std::unique_ptr<Command>;
+using CommandPtr = std::shared_ptr<const Command>;
 
 /// A write to the document, run the same way the first time and on replay.
 ///
@@ -63,8 +63,12 @@ public:
     /// Applied. Otherwise answers Conflicted and leaves the document untouched.
     virtual CommandOutcome execute(Document& document) const = 0;
 
-    /// The command that takes this one back, described by description().undone().
-    /// An empty pointer means this command is not undoable.
+    /// Whether undo can take this command back. A type that cannot be taken back answers
+    /// false: it never enters the undo stack, and its inverse() is never called.
+    virtual bool undoable() const { return true; }
+
+    /// The command that takes this one back, described by description().undone(). Called
+    /// only on an undoable command.
     virtual CommandPtr inverse() const = 0;
 
     /// The wording of the rule that refuses this command on this document, or an empty

@@ -3,8 +3,8 @@
 #include "Command.h"
 #include "Document.h"
 
+#include <QList>
 #include <QString>
-#include <vector>
 
 /// Which outcome a sample's document gives its command.
 enum class SampleCase
@@ -26,5 +26,5 @@ class CommandSamples
 {
 public:
     /// The samples for the type with that name; empty for a type with none.
-    static std::vector<CommandSample> forType(const QString& type);
+    static QList<CommandSample> forType(const QString& type);
 };

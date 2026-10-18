@@ -19,11 +19,11 @@ std::optional<Person> findMember(const Family& family, const PersonId& id)
     return std::nullopt;
 }
 
-bool containsPerson(const QList<Person>& people, const PersonId& id)
+bool containsPerson(const QList<PlacedMember>& placed, const PersonId& id)
 {
-    for (const Person& person : people)
+    for (const PlacedMember& member : placed)
     {
-        if (person.id() == id)
+        if (member.person.id() == id)
         {
             return true;
         }
@@ -31,25 +31,103 @@ bool containsPerson(const QList<Person>& people, const PersonId& id)
     return false;
 }
 
-QJsonArray personsToJson(const QList<Person>& people)
+QJsonArray placedToJson(const QList<PlacedMember>& placed)
 {
     QJsonArray array;
-    for (const Person& person : people)
+    for (const PlacedMember& member : placed)
     {
-        array.append(person.toJson());
+        QJsonObject json;
+        json["person"] = member.person.toJson();
+        json["index"] = qint64(member.index);
+        array.append(json);
     }
     return array;
 }
 
-QList<Person> personsFromJson(const QJsonArray& array)
+QList<PlacedMember> placedFromJson(const QJsonArray& array)
 {
-    QList<Person> people;
+    QList<PlacedMember> placed;
     for (const QJsonValue& value : array)
     {
-        people.append(Person::fromJson(value.toObject()));
+        QJsonObject json = value.toObject();
+        placed.append(PlacedMember{Person::fromJson(json["person"].toObject()), json["index"].toInteger()});
     }
-    return people;
+    return placed;
 }
+
+// ----------------------------------------------------------------------------
+// The member order rule
+// ----------------------------------------------------------------------------
+
+/// The kinds of member, in the order the member order rule places them.
+enum class MemberKind
+{
+    Father,
+    Mother,
+    OtherParent,
+    Child
+};
+
+MemberKind kindOf(const Person& person)
+{
+    if (!person.isParent())
+    {
+        return MemberKind::Child;
+    }
+    if (person.gender() == Gender::Male)
+    {
+        return MemberKind::Father;
+    }
+    if (person.gender() == Gender::Female)
+    {
+        return MemberKind::Mother;
+    }
+    return MemberKind::OtherParent;
+}
+
+/// True when the rule puts newcomer ahead of member: an earlier kind, or an older child.
+/// Both birth years are known.
+bool ranksBefore(const Person& newcomer, const Person& member)
+{
+    MemberKind newcomerKind = kindOf(newcomer);
+    MemberKind memberKind = kindOf(member);
+    if (newcomerKind != memberKind)
+    {
+        return newcomerKind < memberKind;
+    }
+    return newcomerKind == MemberKind::Child
+        && *newcomer.birthday().year() < *member.birthday().year();
+}
+
+/// Where the member order rule inserts newcomer among members: ahead of the first member
+/// it ranks before, so it follows every member of its own kind and age. Last when the
+/// newcomer's birth year or any member's is unknown.
+qsizetype placementIndex(const QList<Person>& members, const Person& newcomer)
+{
+    if (!newcomer.birthday().year().has_value())
+    {
+        return members.size();
+    }
+    for (const Person& member : members)
+    {
+        if (!member.birthday().year().has_value())
+        {
+            return members.size();
+        }
+    }
+    for (qsizetype i = 0; i < members.size(); ++i)
+    {
+        if (ranksBefore(newcomer, members[i]))
+        {
+            return i;
+        }
+    }
+    return members.size();
+}
+
+// ----------------------------------------------------------------------------
+// Description text
+// ----------------------------------------------------------------------------
 
 QString orNone(const QString& value)
 {
@@ -60,7 +138,12 @@ QString orNone(const QString& value)
     return value;
 }
 
-QString genderText(const std::optional<Gender>& gender)
+QString valueText(const QString& value)
+{
+    return orNone(value);
+}
+
+QString valueText(const std::optional<Gender>& gender)
 {
     if (!gender.has_value())
     {
@@ -73,6 +156,130 @@ QString genderText(const std::optional<Gender>& gender)
     return QObject::tr("female");
 }
 
+QString valueText(const Birthday& birthday)
+{
+    return orNone(birthday.display());
+}
+
+QString valueText(const QStringList& values)
+{
+    return orNone(values.join(", "));
+}
+
+/// isParent is the one yes-or-no member field, so a bool reads as parent or not.
+QString valueText(bool isParent)
+{
+    if (isParent)
+    {
+        return QObject::tr("parent");
+    }
+    return QObject::tr("not a parent");
+}
+
+// ----------------------------------------------------------------------------
+// Visitors over MemberChange::forEachField
+// ----------------------------------------------------------------------------
+
+/// Sets each field to the change from before's value to after's.
+struct ChangeBetween
+{
+    const Person& before;
+    const Person& after;
+
+    template<typename Getter, typename Setter, typename T>
+    void operator()(const char*, const char*, Getter get, Setter, std::optional<FieldChange<T>>& field)
+    {
+        field = changeBetween<T>((before.*get)(), (after.*get)());
+    }
+};
+
+/// Clears holds when a field's value in current holds for neither end of its change.
+struct ChangesHold
+{
+    const Person& current;
+    bool holds;
+
+    template<typename Getter, typename Setter, typename T>
+    void operator()(const char*, const char*, Getter get, Setter, const std::optional<FieldChange<T>>& field)
+    {
+        holds = holds && changeHolds<T>(field, (current.*get)());
+    }
+};
+
+/// Sets each changed field of person to its after value.
+struct ApplyChanges
+{
+    Person& person;
+
+    template<typename Getter, typename Setter, typename T>
+    void operator()(const char*, const char*, Getter get, Setter set, const std::optional<FieldChange<T>>& field)
+    {
+        (person.*set)(changedValue<T>(field, (person.*get)()));
+    }
+};
+
+/// Exchanges each field's before and after.
+struct SwapChanges
+{
+    template<typename Getter, typename Setter, typename T>
+    void operator()(const char*, const char*, Getter, Setter, std::optional<FieldChange<T>>& field)
+    {
+        field = changeSwapped<T>(field);
+    }
+};
+
+/// Clears empty when any field has a change.
+struct NoChanges
+{
+    bool empty;
+
+    template<typename Getter, typename Setter, typename T>
+    void operator()(const char*, const char*, Getter, Setter, const std::optional<FieldChange<T>>& field)
+    {
+        empty = empty && !field.has_value();
+    }
+};
+
+/// Appends a description line per changed field.
+struct DescribeChanges
+{
+    const QString& firstName;
+    QStringList& lines;
+
+    template<typename Getter, typename Setter, typename T>
+    void operator()(const char*, const char* line, Getter, Setter, const std::optional<FieldChange<T>>& field)
+    {
+        if (field.has_value())
+        {
+            lines.append(QObject::tr(line).arg(firstName, valueText(field->after())));
+        }
+    }
+};
+
+/// Writes each changed field under its key.
+struct WriteChanges
+{
+    QJsonObject& json;
+
+    template<typename Getter, typename Setter, typename T>
+    void operator()(const char* key, const char*, Getter, Setter, const std::optional<FieldChange<T>>& field)
+    {
+        writeChange(json, key, field);
+    }
+};
+
+/// Reads each field's change from under its key.
+struct ReadChanges
+{
+    const QJsonObject& json;
+
+    template<typename Getter, typename Setter, typename T>
+    void operator()(const char* key, const char*, Getter, Setter, std::optional<FieldChange<T>>& field)
+    {
+        field = readChange<T>(json, key);
+    }
+};
+
 }  // namespace
 
 // ============================================================================
@@ -82,17 +289,8 @@ QString genderText(const std::optional<Gender>& gender)
 std::optional<MemberChange> MemberChange::between(const Person& before, const Person& after)
 {
     MemberChange change;
-    change.m_name = changeBetween(before.name(), after.name());
-    change.m_gender = changeBetween(before.gender(), after.gender());
-    change.m_phone = changeBetween(before.phone(), after.phone());
-    change.m_altPhone = changeBetween(before.altPhone(), after.altPhone());
-    change.m_email = changeBetween(before.email(), after.email());
-    change.m_birthday = changeBetween(before.birthday(), after.birthday());
-    change.m_callings = changeBetween(before.callings(), after.callings());
-    change.m_isParent = changeBetween(before.isParent(), after.isParent());
-    change.m_wardUnitNumber = changeBetween(before.wardUnitNumber(), after.wardUnitNumber());
-    change.m_stakeUnitNumber = changeBetween(before.stakeUnitNumber(), after.stakeUnitNumber());
-    change.m_specialNeedNote = changeBetween(before.specialNeedNote(), after.specialNeedNote());
+    ChangeBetween visitor{before, after};
+    forEachField(change, visitor);
     if (change.isEmpty())
     {
         return std::nullopt;
@@ -102,157 +300,56 @@ std::optional<MemberChange> MemberChange::between(const Person& before, const Pe
 
 bool MemberChange::holds(const Person& current) const
 {
-    return changeHolds(m_name, current.name())
-        && changeHolds(m_gender, current.gender())
-        && changeHolds(m_phone, current.phone())
-        && changeHolds(m_altPhone, current.altPhone())
-        && changeHolds(m_email, current.email())
-        && changeHolds(m_birthday, current.birthday())
-        && changeHolds(m_callings, current.callings())
-        && changeHolds(m_isParent, current.isParent())
-        && changeHolds(m_wardUnitNumber, current.wardUnitNumber())
-        && changeHolds(m_stakeUnitNumber, current.stakeUnitNumber())
-        && changeHolds(m_specialNeedNote, current.specialNeedNote());
+    ChangesHold visitor{current, true};
+    forEachField(*this, visitor);
+    return visitor.holds;
 }
 
 Person MemberChange::appliedTo(const Person& current) const
 {
     Person updated = current;
-    updated.setName(changedValue(m_name, current.name()));
-    updated.setGender(changedValue(m_gender, current.gender()));
-    updated.setPhone(changedValue(m_phone, current.phone()));
-    updated.setAltPhone(changedValue(m_altPhone, current.altPhone()));
-    updated.setEmail(changedValue(m_email, current.email()));
-    updated.setBirthday(changedValue(m_birthday, current.birthday()));
-    updated.setCallings(changedValue(m_callings, current.callings()));
-    updated.setIsParent(changedValue(m_isParent, current.isParent()));
-    updated.setWardUnitNumber(changedValue(m_wardUnitNumber, current.wardUnitNumber()));
-    updated.setStakeUnitNumber(changedValue(m_stakeUnitNumber, current.stakeUnitNumber()));
-    updated.setSpecialNeedNote(changedValue(m_specialNeedNote, current.specialNeedNote()));
+    ApplyChanges visitor{updated};
+    forEachField(*this, visitor);
     return updated;
 }
 
 MemberChange MemberChange::swapped() const
 {
-    MemberChange change;
-    change.m_name = changeSwapped(m_name);
-    change.m_gender = changeSwapped(m_gender);
-    change.m_phone = changeSwapped(m_phone);
-    change.m_altPhone = changeSwapped(m_altPhone);
-    change.m_email = changeSwapped(m_email);
-    change.m_birthday = changeSwapped(m_birthday);
-    change.m_callings = changeSwapped(m_callings);
-    change.m_isParent = changeSwapped(m_isParent);
-    change.m_wardUnitNumber = changeSwapped(m_wardUnitNumber);
-    change.m_stakeUnitNumber = changeSwapped(m_stakeUnitNumber);
-    change.m_specialNeedNote = changeSwapped(m_specialNeedNote);
+    MemberChange change = *this;
+    SwapChanges visitor;
+    forEachField(change, visitor);
     return change;
 }
 
 QStringList MemberChange::describe(const QString& firstName) const
 {
     QStringList lines;
-    if (m_name.has_value())
-    {
-        lines.append(QObject::tr("%1, name: %2").arg(firstName, m_name->after().full()));
-    }
-    if (m_gender.has_value())
-    {
-        lines.append(QObject::tr("%1, gender: %2").arg(firstName, genderText(m_gender->after())));
-    }
-    if (m_phone.has_value())
-    {
-        lines.append(QObject::tr("%1, phone: %2").arg(firstName, orNone(m_phone->after())));
-    }
-    if (m_altPhone.has_value())
-    {
-        lines.append(QObject::tr("%1, other phone: %2").arg(firstName, orNone(m_altPhone->after())));
-    }
-    if (m_email.has_value())
-    {
-        lines.append(QObject::tr("%1, email: %2").arg(firstName, orNone(m_email->after())));
-    }
-    if (m_birthday.has_value())
-    {
-        lines.append(QObject::tr("%1, birthday: %2").arg(firstName, orNone(m_birthday->after().dateDisplay())));
-    }
-    if (m_callings.has_value())
-    {
-        lines.append(QObject::tr("%1, callings: %2").arg(firstName, orNone(m_callings->after().join(", "))));
-    }
-    if (m_isParent.has_value())
-    {
-        if (m_isParent->after())
-        {
-            lines.append(QObject::tr("%1, parent").arg(firstName));
-        }
-        else
-        {
-            lines.append(QObject::tr("%1, not a parent").arg(firstName));
-        }
-    }
-    if (m_wardUnitNumber.has_value())
-    {
-        lines.append(QObject::tr("%1, ward unit: %2").arg(firstName, orNone(m_wardUnitNumber->after())));
-    }
-    if (m_stakeUnitNumber.has_value())
-    {
-        lines.append(QObject::tr("%1, stake unit: %2").arg(firstName, orNone(m_stakeUnitNumber->after())));
-    }
-    if (m_specialNeedNote.has_value())
-    {
-        lines.append(QObject::tr("%1, special need: %2").arg(firstName, orNone(m_specialNeedNote->after())));
-    }
+    DescribeChanges visitor{firstName, lines};
+    forEachField(*this, visitor);
     return lines;
 }
 
 QJsonObject MemberChange::toJson() const
 {
     QJsonObject json;
-    writeChange(json, "name", m_name);
-    writeChange(json, "gender", m_gender);
-    writeChange(json, "phone", m_phone);
-    writeChange(json, "altPhone", m_altPhone);
-    writeChange(json, "email", m_email);
-    writeChange(json, "birthday", m_birthday);
-    writeChange(json, "callings", m_callings);
-    writeChange(json, "isParent", m_isParent);
-    writeChange(json, "wardUnitNumber", m_wardUnitNumber);
-    writeChange(json, "stakeUnitNumber", m_stakeUnitNumber);
-    writeChange(json, "specialNeedNote", m_specialNeedNote);
+    WriteChanges visitor{json};
+    forEachField(*this, visitor);
     return json;
 }
 
 MemberChange MemberChange::fromJson(const QJsonObject& json)
 {
     MemberChange change;
-    change.m_name = readChange<Name>(json, "name");
-    change.m_gender = readChange<std::optional<Gender>>(json, "gender");
-    change.m_phone = readChange<Phone>(json, "phone");
-    change.m_altPhone = readChange<Phone>(json, "altPhone");
-    change.m_email = readChange<QString>(json, "email");
-    change.m_birthday = readChange<Birthday>(json, "birthday");
-    change.m_callings = readChange<QStringList>(json, "callings");
-    change.m_isParent = readChange<bool>(json, "isParent");
-    change.m_wardUnitNumber = readChange<QString>(json, "wardUnitNumber");
-    change.m_stakeUnitNumber = readChange<QString>(json, "stakeUnitNumber");
-    change.m_specialNeedNote = readChange<QString>(json, "specialNeedNote");
+    ReadChanges visitor{json};
+    forEachField(change, visitor);
     return change;
 }
 
 bool MemberChange::isEmpty() const
 {
-    return !m_name.has_value()
-        && !m_gender.has_value()
-        && !m_phone.has_value()
-        && !m_altPhone.has_value()
-        && !m_email.has_value()
-        && !m_birthday.has_value()
-        && !m_callings.has_value()
-        && !m_isParent.has_value()
-        && !m_wardUnitNumber.has_value()
-        && !m_stakeUnitNumber.has_value()
-        && !m_specialNeedNote.has_value();
+    NoChanges visitor{true};
+    forEachField(*this, visitor);
+    return visitor.empty;
 }
 
 // ============================================================================
@@ -262,15 +359,18 @@ bool MemberChange::isEmpty() const
 std::optional<FamilyChange> FamilyChange::between(const Family& opened, const Family& saved)
 {
     QHash<PersonId, MemberChange> members;
-    QList<Person> removed;
-    for (const Person& before : opened.members())
+    QList<PlacedMember> removed;
+    QList<Person> placed;
+    for (qsizetype i = 0; i < opened.members().size(); ++i)
     {
+        const Person& before = opened.members()[i];
         std::optional<Person> after = findMember(saved, before.id());
         if (!after.has_value())
         {
-            removed.append(before);
+            removed.append(PlacedMember{before, i});
             continue;
         }
+        placed.append(*after);
         std::optional<MemberChange> change = MemberChange::between(before, *after);
         if (change.has_value())
         {
@@ -278,12 +378,14 @@ std::optional<FamilyChange> FamilyChange::between(const Family& opened, const Fa
         }
     }
 
-    QList<Person> added;
+    QList<PlacedMember> added;
     for (const Person& after : saved.members())
     {
         if (!findMember(opened, after.id()).has_value())
         {
-            added.append(after);
+            qsizetype index = placementIndex(placed, after);
+            placed.insert(index, after);
+            added.append(PlacedMember{after, index});
         }
     }
 
@@ -297,8 +399,8 @@ std::optional<FamilyChange> FamilyChange::between(const Family& opened, const Fa
 
 FamilyChange::FamilyChange(const std::optional<FieldChange<Address>>& address,
                            const QHash<PersonId, MemberChange>& members,
-                           const QList<Person>& added,
-                           const QList<Person>& removed)
+                           const QList<PlacedMember>& added,
+                           const QList<PlacedMember>& removed)
     : m_address(address)
     , m_members(members)
     , m_added(added)
@@ -320,10 +422,10 @@ bool FamilyChange::holds(const Family& current) const
             return false;
         }
     }
-    for (const Person& person : m_removed)
+    for (const PlacedMember& removed : m_removed)
     {
-        std::optional<Person> member = findMember(current, person.id());
-        if (member.has_value() && *member != person)
+        std::optional<Person> member = findMember(current, removed.person.id());
+        if (member.has_value() && *member != removed.person)
         {
             return false;
         }
@@ -350,11 +452,11 @@ Family FamilyChange::appliedTo(const Family& current) const
             members.append(change.value().appliedTo(member));
         }
     }
-    for (const Person& person : m_added)
+    for (const PlacedMember& added : m_added)
     {
-        if (!findMember(current, person.id()).has_value())
+        if (!findMember(current, added.person.id()).has_value())
         {
-            members.append(person);
+            members.insert(qMin(added.index, members.size()), added.person);
         }
     }
 
@@ -385,13 +487,13 @@ QStringList FamilyChange::describe(const Family& opened) const
             lines.append(change.value().describe(member.name().firstName()));
         }
     }
-    for (const Person& person : m_added)
+    for (const PlacedMember& added : m_added)
     {
-        lines.append(QObject::tr("added: %1").arg(person.displayName()));
+        lines.append(QObject::tr("added: %1").arg(added.person.displayName()));
     }
-    for (const Person& person : m_removed)
+    for (const PlacedMember& removed : m_removed)
     {
-        lines.append(QObject::tr("removed: %1").arg(person.displayName()));
+        lines.append(QObject::tr("removed: %1").arg(removed.person.displayName()));
     }
     if (m_address.has_value())
     {
@@ -415,11 +517,11 @@ QJsonObject FamilyChange::toJson() const
     }
     if (!m_added.isEmpty())
     {
-        json["added"] = personsToJson(m_added);
+        json["added"] = placedToJson(m_added);
     }
     if (!m_removed.isEmpty())
     {
-        json["removed"] = personsToJson(m_removed);
+        json["removed"] = placedToJson(m_removed);
     }
     return json;
 }
@@ -434,6 +536,6 @@ FamilyChange FamilyChange::fromJson(const QJsonObject& json)
     }
     return FamilyChange(readChange<Address>(json, "address"),
                         members,
-                        personsFromJson(json["added"].toArray()),
-                        personsFromJson(json["removed"].toArray()));
+                        placedFromJson(json["added"].toArray()),
+                        placedFromJson(json["removed"].toArray()));
 }

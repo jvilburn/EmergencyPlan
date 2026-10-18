@@ -21,8 +21,8 @@ void CommandRoundTripTest::everyRegisteredTypeHasSamples()
         QVERIFY2(!names.contains(type.name), qPrintable(type.name));
         names.insert(type.name);
 
-        std::vector<CommandSample> samples = CommandSamples::forType(type.name);
-        QVERIFY2(!samples.empty(), qPrintable(type.name));
+        QList<CommandSample> samples = CommandSamples::forType(type.name);
+        QVERIFY2(!samples.isEmpty(), qPrintable(type.name));
         bool hasStartHolds = false;
         for (const CommandSample& sample : samples)
         {
@@ -40,8 +40,8 @@ void CommandRoundTripTest::sampleRebuiltFromItsEntryBehavesAsTheOriginal_data()
     QTest::addColumn<int>("index");
     for (const CommandType& type : CommandRegistry::types())
     {
-        std::vector<CommandSample> samples = CommandSamples::forType(type.name);
-        for (int i = 0; i < static_cast<int>(samples.size()); ++i)
+        QList<CommandSample> samples = CommandSamples::forType(type.name);
+        for (int i = 0; i < samples.size(); ++i)
         {
             QTest::newRow(qPrintable(QString("%1 #%2").arg(type.name).arg(i))) << type.name << i;
         }
@@ -52,7 +52,7 @@ void CommandRoundTripTest::sampleRebuiltFromItsEntryBehavesAsTheOriginal()
 {
     QFETCH(QString, type);
     QFETCH(int, index);
-    std::vector<CommandSample> samples = CommandSamples::forType(type);
+    QList<CommandSample> samples = CommandSamples::forType(type);
     const CommandSample& sample = samples[index];
 
     QJsonObject entry = CommandRegistry::toJson(*sample.command);
@@ -84,8 +84,7 @@ void CommandRoundTripTest::sampleRebuiltFromItsEntryBehavesAsTheOriginal()
 void CommandRoundTripTest::runningACommandDoesNotChangeIt()
 {
     Family opened = TestWard::smith();
-    std::unique_ptr<UpdateFamilyCommand> command =
-        UpdateFamilyCommand::fromEdit(opened, TestWard::withPhone(opened, TestWard::bobId(), "555-2222"));
+    CommandPtr command = UpdateFamilyCommand::fromEdit(opened, TestWard::withPhone(opened, TestWard::bobId(), "555-2222"));
     QJsonObject before = CommandRegistry::toJson(*command);
 
     Document applied = TestWard::document();

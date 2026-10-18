@@ -95,8 +95,8 @@ design's answer, not a gap:
 - **A family with no address cannot be placed on the map**: coordinates belong to addresses
   (see *Saving*), so the coordinate fields are disabled for it.
 - **Ending an emergency saves its report and removes the response.** A change replayed onto
-  a response that has ended conflicts, which abandons that responder's journal to the
-  to-redo list. It takes a responder whose work in that response has not landed when the
+  a response that has ended conflicts, which abandons that responder's journal to a
+  to-redo file. It takes a responder whose work in that response has not landed when the
   end does; one working only in a response they started offline is unaffected.
 - **No base copy, no save counter, no debounce.**
 - **No exported copies.** A copy would be sealed to the ward's devices, each of which already
@@ -167,7 +167,7 @@ This document uses its terms for precision; the interface uses these:
 | withdraw an invite | *Withdraw invite* |
 | role | *admin* / *member*; *Make admin* / *Make member* |
 | conflict, abandoned replay | *Your changes could not be applied, because the ward changed first* |
-| to-redo list | *These need doing again* |
+| to-redo file | *To redo*, in the file's name; *These need doing again*, inside it |
 | journal, unpushed changes | *Your changes are saved here and will go up when the connection returns* |
 | no longer this device's | *This ward is no longer shared with this device* |
 
@@ -302,7 +302,7 @@ pushing. Repairing the server is the server's own design, outside this one.
 delete it once it learns the ward is no longer theirs.
 
 **Outside the app's reach.** Summary reports, which remain
-plaintext PDFs.
+plaintext PDFs, and to-redo files, which are plain text.
 
 **Known to the server, and accepted.** Per document: the ciphertext and its size, which
 leaks approximate ward size; the fingerprints in each version's header, which count the
@@ -762,7 +762,6 @@ a pushed version holds - the ward, its access list and the landed marks - plus, 
 `device`, the state that belongs to this device alone:
 
 - the journal and its sequence counter
-- the to-redo list
 - the base version this device holds, which the push condition and the rolled-back check
   use
 - the access list as of the last dismissed access notice, which the next notice is a diff
@@ -780,7 +779,7 @@ other, and the journal is encrypted exactly as the ward is.
 A journal entry is the command in its serialised form, the output of its `toJson`: what it
 changes, the values it expects to find, the values it sets, and its description. So the
 journal **reads as a list of what this user did**, and those descriptions become the
-to-redo list when replay cannot finish. The journal holds what it saves: a command is
+to-redo file when replay cannot finish. The journal holds what it saves: a command is
 serialised once, when it enters the journal, and every later save writes the stored entry
 as it is. Replay rebuilds each command with `fromJson`.
 
@@ -792,8 +791,8 @@ as it is. Replay rebuilds each command with `fromJson`.
 
 Names are resolved at construction and stored with the entry, so a description stays right
 after the family is renamed or deleted. Each kind of field renders its own line, and each
-line passes through `tr()` as a unit. The undo menu shows the heading; the to-redo list
-shows the heading and its lines, with long values such as a special-needs note in full.
+line passes through `tr()` as a unit. The undo menu shows the heading; the to-redo file
+holds the heading and its lines, with long values such as a special-needs note in full.
 
 **A command is immutable once constructed.** Its start condition, its result and its
 description are all fixed by the constructor; `execute` takes the document and leaves the
@@ -1093,9 +1092,10 @@ only admin" sends them to promote somebody first, which is the thing that actual
 them.
 
 **One conflict abandons the whole replay.** The client takes the server's version as it
-stands, writes the journal's descriptions to a to-redo list, empties the journal, and tells
-the user their changes need doing again. It does not apply the commands that would have
-fitted. The next command starts a fresh journal and pushes as usual.
+stands, writes the journal's descriptions to a to-redo file, empties the journal, and tells
+the user their changes need doing again and where the file is. It does not apply the
+commands that would have fitted. The next command starts a fresh journal and pushes as
+usual.
 
 This is the one place the design chooses the simpler behaviour over the more capable one,
 and it is worth saying why. Most of the time one user is editing and nobody else is
@@ -1114,12 +1114,16 @@ replay of one user's whole intent, or untouched by it.**
 Then the result is pushed. If that push also loses, the journal replays again on the newer
 version, which is the ordinary case of two users working in the same minute.
 
-**The to-redo list is what the user works from.** It holds the abandoned journal's
-descriptions in their own sequence, marks the one that clashed (a later abandonment adds
-its own group), and survives closing the
-app until the user dismisses it. It holds descriptions, not commands, because nothing
-replays it. Nothing is settled by choosing a side, and nothing is silently dropped - the work
-is still described for as long as they keep it.
+**The to-redo file is what the user works from.** It is plain text: what stopped the
+replay at the top (that the ward changed first, or the rule's wording), then the abandoned
+journal's descriptions in their own sequence, each a heading and its lines, with the one
+that clashed marked. The app writes it to a `Ward Planning` folder in the user's Documents
+as `To redo - <ward name> - <yyyy-MM-dd HH.mm>.txt`, and the message that tells the user
+names the file and offers *Open*. Each abandonment writes its own file, and a name already
+taken gets ` (2)`, ` (3)` and so on before `.txt`. Once written, the file is the user's to
+keep or delete. It holds descriptions, not commands, because nothing replays it. Nothing
+is settled by choosing a side, and nothing is silently dropped - the work is still
+described for as long as they keep the file.
 
 **Why replay rather than reconciling two versions.** A command says what someone meant to
 do, so replaying it produces the current ward plus work a user recognises. Comparing two
@@ -1494,7 +1498,7 @@ entries, with the oldest dropped.
   no harm. Undoing `EndEmergency` runs `RestoreEmergency`; the report already saved stays
   where it is.
 - **An abandoned replay clears the undo stack**, whose entries then describe work that did
-  not land; the to-redo list covers it.
+  not land; the to-redo file covers it.
 
 ## Where documents live
 
@@ -1610,9 +1614,9 @@ returns.
 
 | Condition | Message |
 |---|---|
-| A command could not replay | Your changes could not be applied, because the ward changed first. These need doing again: *the to-redo list*. The one that clashed: *its description*. |
+| A command could not replay | Your changes could not be applied, because the ward changed first. What needs doing again is in *To redo - Tanglewood Ward - 2026-10-17 14.05.txt*, in the Ward Planning folder in Documents. With *Open*. |
 | A removal among them | ... and *name* still has access until you remove them again. |
-| A rule refused a replayed command | The wording the app gives for that operation, as it would if the user tried it now: *You are the only admin...* |
+| A rule refused a replayed command | The wording the app gives for that operation, as it would if the user tried it now: *You are the only admin...*, then where the to-redo file is, as above. |
 | The local save failed | Your change could not be saved: *reason*. It is kept while the app stays open and saved as soon as saving works again; closing asks first. |
 | The server is unreachable | Working offline. Your changes are saved here and will go up when the connection returns. |
 | Head is older than this copy | The server has an older copy of this ward than yours. Nothing was changed on this device. |
@@ -1791,11 +1795,12 @@ The journal and replay, in `tests/services`:
 - a journal whose commands all find what they expect applies in full and pushes, and the
   pushed document holds every one of their effects
 - one conflict in a journal of several leaves the server's version exactly as it stood,
-  including the changes that would have fitted, and the journal's descriptions are in the
-  to-redo list with the journal empty
+  including the changes that would have fitted, and the to-redo text holds the journal's
+  descriptions with the journal empty
 - a command whose target someone else deleted is a conflict
-- the to-redo list survives closing the app, and each description equals its exact
-  expected heading and lines, values included, after the family it names is renamed
+- the to-redo text equals its exact expected text - what stopped the replay, each heading
+  and its lines, values included, and the mark on the one that clashed - after the family
+  it names is renamed, and a later abandonment's text holds only its own journal
 - after an abandoned replay, a new command pushes successfully
 - every item of the device-local state round-trips through the local file, and a pushed
   version's payload carries none of it; a version from the server carrying `device` is
@@ -1842,7 +1847,7 @@ The journal and replay, in `tests/services`:
   responder's attempts, and neither journal is abandoned
 - ending a response saves a report holding every one of its attempts and tasks, then removes
   the response; a responder offline records attempts in it and reconnects after the end:
-  their journal is abandoned to the to-redo list, which holds each of those attempts
+  their journal is abandoned, and the to-redo text holds each of those attempts
 - an end replayed onto a version where another responder added an attempt to that response
   conflicts, and the response is still there with that attempt
 - undoing an end puts the response back equal to what was removed, and the report file is

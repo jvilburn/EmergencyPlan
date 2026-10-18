@@ -2,6 +2,7 @@
 
 #include <QDate>
 #include <QLocale>
+#include <QObject>
 #include <QRegularExpression>
 
 namespace
@@ -82,6 +83,37 @@ QString Birthday::dateDisplay() const
     }
 
     return QString("%1 %2").arg(m_day.value()).arg(monthName);
+}
+
+QString Birthday::display() const
+{
+    QString monthAndDay;
+    if (m_month.has_value() && m_day.has_value())
+    {
+        monthAndDay = QObject::tr("%1 %2").arg(QLocale::c().monthName(*m_month, QLocale::ShortFormat)).arg(*m_day);
+    }
+    else if (m_month.has_value())
+    {
+        monthAndDay = QLocale::c().monthName(*m_month, QLocale::ShortFormat);
+    }
+    else if (m_day.has_value())
+    {
+        monthAndDay = QObject::tr("day %1").arg(*m_day);
+    }
+
+    if (!m_year.has_value())
+    {
+        return monthAndDay;
+    }
+    if (monthAndDay.isEmpty())
+    {
+        return QString::number(*m_year);
+    }
+    if (m_day.has_value())
+    {
+        return QObject::tr("%1, %2").arg(monthAndDay).arg(*m_year);
+    }
+    return QObject::tr("%1 %2").arg(monthAndDay).arg(*m_year);
 }
 
 QString Birthday::ageDisplay() const

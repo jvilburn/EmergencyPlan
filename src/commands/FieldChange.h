@@ -27,18 +27,44 @@ private:
 
 /// The change from before to after, or none when they are equal.
 template<typename T>
-std::optional<FieldChange<T>> changeBetween(const T& before, const T& after) { return before == after ? std::nullopt : std::optional<FieldChange<T>>(FieldChange<T>(before, after)); }
+std::optional<FieldChange<T>> changeBetween(const T& before, const T& after)
+{
+    if (before == after)
+    {
+        return std::nullopt;
+    }
+    return FieldChange<T>(before, after);
+}
 
 /// True when there is no change to this value, or the value holds for its change.
 template<typename T>
-bool changeHolds(const std::optional<FieldChange<T>>& change, const T& current) { return !change.has_value() || change->holds(current); }
+bool changeHolds(const std::optional<FieldChange<T>>& change, const T& current)
+{
+    return !change.has_value()
+        || change->holds(current);
+}
 
 /// The value the change sets, or current when there is no change to it.
 template<typename T>
-T changedValue(const std::optional<FieldChange<T>>& change, const T& current) { return change.has_value() ? change->after() : current; }
+T changedValue(const std::optional<FieldChange<T>>& change, const T& current)
+{
+    if (!change.has_value())
+    {
+        return current;
+    }
+    return change->after();
+}
 
+/// The change with its before and after exchanged, or none when there is no change.
 template<typename T>
-std::optional<FieldChange<T>> changeSwapped(const std::optional<FieldChange<T>>& change) { return change.has_value() ? std::optional<FieldChange<T>>(change->swapped()) : std::nullopt; }
+std::optional<FieldChange<T>> changeSwapped(const std::optional<FieldChange<T>>& change)
+{
+    if (!change.has_value())
+    {
+        return std::nullopt;
+    }
+    return change->swapped();
+}
 
 /// A change to a set of ids, held as the ids added and the ids removed. An addition is done
 /// when the id is present and a removal when it is absent, so a set change holds whatever

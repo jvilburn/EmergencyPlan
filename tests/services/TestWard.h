@@ -17,13 +17,22 @@ public:
     static PersonId bobId() { return PersonId::fromString("person-bob"); }
     static PersonId aliceId() { return PersonId::fromString("person-alice"); }
     static PersonId carolId() { return PersonId::fromString("person-carol"); }
+    static PersonId danId() { return PersonId::fromString("person-dan"); }
 
     static Person bob();
     static Person alice();
     static Person carol();
+
+    /// Dan Smith, male, not a parent, with no birthday or contact details.
+    static Person dan();
+
     static Family smith();
     static Family jones();
     static Address address(const QString& street, const QString& city);
+
+    /// The Smith family with every field of Bob changed, Alice removed, Dan added and the
+    /// address changed, so an edit to it holds every value type a family edit holds.
+    static Family smithWithEveryFieldChanged();
 
     /// The ward holding the Smith and Jones families, with its lookup caches built.
     static Document document();

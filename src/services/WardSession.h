@@ -8,14 +8,14 @@
 #include <QList>
 #include <QObject>
 #include <QString>
-#include <vector>
 
 /// How the commit step ended for one command.
 enum class CommitStatus
 {
     Applied,
     Conflicted,
-    Refused
+    Refused,
+    NothingToDo  ///< there was no command, as from an edit that changed nothing
 };
 
 struct CommitResult
@@ -32,17 +32,15 @@ enum class ReplayStatus
     Abandoned       ///< one entry stopped it, and the version was taken as it stands
 };
 
-/// The descriptions of one abandoned journal, kept for the user to work from.
-struct ToRedoGroup
+struct ReplayResult
 {
-    QList<CommandDescription> descriptions;
-    int clashed;        ///< index in descriptions of the entry that stopped the replay
-    CommitResult stop;  ///< Conflicted, or Refused with the rule's wording
+    ReplayStatus status;
+    QString toRedo;  ///< when status is Abandoned, the abandoned changes as plain text
 };
 
-/// One open ward: its document, journal, undo stack and to-redo list, and the commit step
-/// and replay that change them. Holds no global state, so a test creates as many sessions
-/// as it needs; the app holds one.
+/// One open ward: its document, journal and undo stack, and the commit step and replay
+/// that change them. Holds no global state, so a test creates as many sessions as it
+/// needs; the app holds one.
 class WardSession : public QObject
 {
     Q_OBJECT
@@ -52,63 +50,58 @@ public:
 
     const Document& document() const { return m_document; }
     const Journal& journal() const { return m_journal; }
-    const QList<ToRedoGroup>& toRedo() const { return m_toRedo; }
 
-    /// Opens a ward: its document replaces the open one by assignment, and the journal, the
-    /// to-redo list and the undo stack start empty.
+    /// Opens a ward: its document replaces the open one by assignment, and the journal and
+    /// the undo and redo stacks start empty.
     void open(const Document& document);
 
     /// The commit step: the command's rule, then execute, then the journal. A command that
-    /// applies clears the redo side, and enters the undo stack when it has an inverse. One
-    /// that conflicts or is refused changes nothing and enters neither.
+    /// applies empties the redo stack, and enters the undo stack when it is undoable. One
+    /// that conflicts or is refused changes nothing and enters neither. An empty command
+    /// is nothing to do and changes nothing.
     CommitResult commit(CommandPtr command);
 
-    /// Runs the inverse of the latest undoable command through the commit step. When it
-    /// applies, the command moves to the redo side; otherwise it stays where it is.
+    /// Builds the inverse of the command on top of the undo stack and runs it through the
+    /// commit step. When the inverse applies, the command moves to the redo stack;
+    /// otherwise it stays on the undo stack.
     CommitResult undo();
 
-    /// Runs the latest undone command again through the commit step. When it applies, the
-    /// command moves back to the undo side.
+    /// Runs the command on top of the redo stack again through the commit step. When it
+    /// applies, it moves back to the undo stack; otherwise it stays on the redo stack.
     CommitResult redo();
 
-    bool canUndo() const { return !m_undoStack.empty(); }
-    bool canRedo() const { return !m_redoStack.empty(); }
+    bool canUndo() const { return !m_undoStack.isEmpty(); }
+    bool canRedo() const { return !m_redoStack.isEmpty(); }
     QString undoHeading() const;
     QString redoHeading() const;
 
-    /// Replays the journal onto version. An empty journal takes the version as it stands.
-    /// Otherwise each entry is rebuilt from its serialised form and put through the rule and
-    /// execute, in order, on a copy of the version; when every entry applies, the copy
-    /// becomes the document. One conflict or refusal abandons the whole replay: the version
-    /// is taken as it stands, the journal's descriptions become a group on the to-redo list,
-    /// and the journal and the undo stack are emptied.
-    ReplayStatus replayOnto(const Document& version);
-
-    /// Empties the to-redo list, once the user has dismissed it.
-    void dismissToRedo();
+    /// Replays the journal onto version. With the journal empty, version becomes the
+    /// document as it stands. Otherwise each entry is rebuilt from its serialised form and
+    /// put through the rule and execute, in order, on a copy of version, and when every
+    /// entry applies the copy becomes the document. The first entry that conflicts or is
+    /// refused abandons the replay: version becomes the document as it stands, the journal
+    /// and the undo and redo stacks are emptied, and the result's toRedo holds the
+    /// abandoned changes as text, which nothing in the session keeps.
+    ReplayResult replayOnto(const Document& version);
 
 signals:
     void documentChanged(const DocumentChange& change);
     void undoStackChanged();
 
 private:
-    /// A command on the undo or redo side, with the inverse built when it was committed.
-    struct UndoEntry
-    {
-        CommandPtr command;
-        CommandPtr inverse;
-    };
-
     CommitResult run(const Command& command);
-    void abandon(const Document& version, int clashed, const CommitResult& stop);
+
+    /// The journal's changes as text for the user to redo: what stopped the replay, then
+    /// each entry's heading and lines in order, with the entry at index stopped marked.
+    QString toRedoText(int stopped, const CommitResult& stop) const;
+
     void replaceDocument(const Document& document);
     void clearUndoStack();
 
     Document m_document;
     Journal m_journal;
-    std::vector<UndoEntry> m_undoStack;
-    std::vector<UndoEntry> m_redoStack;
-    QList<ToRedoGroup> m_toRedo;
+    QList<CommandPtr> m_undoStack;
+    QList<CommandPtr> m_redoStack;
 
     static constexpr int UndoLimit = 100;
 };

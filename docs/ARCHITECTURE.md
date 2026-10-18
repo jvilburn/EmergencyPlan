@@ -9,32 +9,34 @@ This document describes the architecture of the Emergency Plan Qt application, a
 ## Core Principles
 
 ### 1. Mutable Data Models with Command Pattern
-Data models use standard setters for mutation. All user-facing state changes go through Command objects, which enables undo/redo by storing before/after state.
+Data models use standard setters for mutation. Every user-facing change to the document is a Command run through `WardSession`'s commit step, and undo runs the command's inverse through the same step.
 
 ### 2. Command Pattern
 All state mutations go through Command objects:
-- Each command modifies the Document in place
-- Commands store state needed for undo
-- CommandHistory manages the undo/redo stacks
-- Provides audit trail via `description()`
+- A command is immutable once constructed: it holds what the user saw (its start condition), what it sets, and its description
+- `execute` applies where the start condition or the result holds and answers `Applied`; anywhere else it answers `Conflicted` and leaves the document untouched
+- `inverse` builds the command that takes it back, and `undoable` says whether undo may
+- `refusal` gives the wording of a rule that refuses the command on a document
+- `WardSession` runs every command through one commit step, keeps the journal of serialised commands, replays the journal onto another version of the document, and holds the undo and redo stacks
+- `description()` is a heading and a line per value set, in the user's words
 
 ### 3. Separation of Concerns
 ```
 UI Layer (Widgets)
-    │ Knows about DocumentManager and list models
-    ▼
+    | Knows about DocumentManager and list models
+    v
 List Model Layer (QAbstractItemModel subclasses)
-    │ Bridges Document data to Qt views
-    ▼
+    | Bridges Document data to Qt views
+    v
 Service Layer (Business logic)
-    │ Import, geocoding, PDF parsing
-    ▼
+    | Import, geocoding, PDF parsing; WardSession's commit step, journal, replay and undo
+    v
 Command Layer (State mutations)
-    │ Modify Document, support undo/redo
-    ▼
+    | Change the Document where what the user saw still holds
+    v
 Model Layer (Data structures)
-    │ Mutable data with setters
-    ▼
+    | Mutable data with setters
+    v
 Persistence Layer (JSON/Files)
 ```
 
@@ -51,10 +53,10 @@ For list and tree displays:
 ### Reading Data
 
 ```
-┌─────────────┐    signals     ┌──────────────────┐    model/view  ┌──────────┐
-│ Document    │◄──────────────│ DocumentManager  │◄──────────────│ Widget   │
-│ (data)      │                │ (owns Document)  │               │          │
-└─────────────┘                └──────────────────┘               └──────────┘
++-------------+    signals    +------------------+   model/view   +----------+
+| Document    |<--------------| DocumentManager  |<---------------| Widget   |
+| (data)      |               | (owns Document)  |                |          |
++-------------+               +------------------+                +----------+
 ```
 
 1. Widget reads data through DocumentManager or list models
@@ -64,27 +66,31 @@ For list and tree displays:
 ### Modifying Data
 
 ```
-┌──────────┐  action   ┌──────────────────┐  execute   ┌─────────────────┐
-│ Widget   │──────────►│ DocumentManager  │───────────►│ Command         │
-└──────────┘           └──────────────────┘            └─────────────────┘
-                              │                               │
-                              │                      ┌────────▼────────┐
-                              │                      │ Modify Document │
-                              │                      │ in place        │
-                              │                      └────────┬────────┘
-                              │                               │
-                       ┌──────▼──────┐                        │
-                       │ Emit signals│◄───────────────────────┘
-                       │ (changed)   │
-                       └─────────────┘
++----------+  command  +------------------+  commit  +-------------+
+| Widget   |---------->| DocumentManager  |--------->| WardSession |
++----------+           +------------------+          +------+------+
+                                                            |
+                                                rule, execute, journal
+                                                            |
+                                                   +--------v---------+
+                                                   | Document changed |
+                                                   | in place         |
+                                                   +--------+---------+
+                                                            |
+                       +--------------+                     |
+                       | Emit signals |<--------------------+
+                       | (changed)    |
+                       +--------------+
 ```
 
-1. User action triggers widget to create a Command
-2. Widget calls `DocumentManager::executeCommand()`
-3. CommandHistory stores command, calls `command->execute(document)`
-4. Command modifies Document in place
-5. DocumentManager emits `documentChanged(DocumentChange)`
+1. A user action has the widget build a Command from what it opened and what the user saved
+2. The widget calls `DocumentManager::executeCommand()`, which hands the command to `WardSession::commit`
+3. The commit step asks the command's rule (`refusal`), then runs `execute`
+4. A command whose start condition or result holds changes the Document in place and answers `Applied`; the session appends it to the journal and, when it is undoable, to the undo stack
+5. `WardSession` emits `documentChanged(DocumentChange)` and `undoStackChanged()`
 6. List models and widgets update in response
+
+A command that conflicts or is refused changes nothing, and the result says which, so the app can tell the user.
 
 ---
 
@@ -94,14 +100,14 @@ For list and tree displays:
 
 ```cpp
 Document
-├── families: QHash<FamilyId, Family>
-├── teams: QHash<TeamId, Team>
-├── tags: QHash<TagId, Tag>
-├── emergencyAssets: QHash<EmergencyAssetId, EmergencyAsset>
-├── districts (EQ/RS current/proposed): QHash<MinisteringDistrictId, MinisteringDistrict>
-├── groups (EQ/RS current/proposed): QHash<MinisteringGroupId, MinisteringGroup>
-├── metadata: DocumentMetadata (wards, stakes)
-└── emergencyResponse: EmergencyResponse (response mode state)
+|-- families: QHash<FamilyId, Family>
+|-- teams: QHash<TeamId, Team>
+|-- tags: QHash<TagId, Tag>
+|-- emergencyAssets: QHash<EmergencyAssetId, EmergencyAsset>
+|-- districts (EQ/RS current/proposed): QHash<MinisteringDistrictId, MinisteringDistrict>
+|-- groups (EQ/RS current/proposed): QHash<MinisteringGroupId, MinisteringGroup>
+|-- metadata: DocumentMetadata (wards, stakes)
+`-- emergencyResponse: EmergencyResponse (response mode state)
 ```
 
 Collections use `QHash<Id, Model>` for O(1) lookup by ID and automatic uniqueness enforcement. Display order is computed at render time (sorted by name, etc.).
@@ -110,8 +116,8 @@ Collections use `QHash<Id, Model>` for O(1) lookup by ID and automatic uniquenes
 
 Several models that were originally separate have been unified:
 
-- **MinisteringGroup** — Single class with `createEQ()`/`createRS()` factories. Tracks both `familyIds` (EQ) and `ministeredPersonIds` (RS) with an `m_isRSFormat` flag.
-- **EmergencyAsset** — Single class replacing separate Skill/Equipment. Uses a `ResponseArea` enum to categorize.
+- **MinisteringGroup** - Single class with `createEQ()`/`createRS()` factories. Tracks both `familyIds` (EQ) and `ministeredPersonIds` (RS) with an `m_isRSFormat` flag.
+- **EmergencyAsset** - Single class replacing separate Skill/Equipment. Uses a `ResponseArea` enum to categorize.
 
 ### Model Pattern
 
@@ -207,72 +213,124 @@ signals:
 ### Command Interface
 
 ```cpp
+enum class CommandOutcome
+{
+    Applied,
+    Conflicted
+};
+
+using CommandPtr = std::shared_ptr<const Command>;
+
 class Command
 {
 public:
     virtual ~Command() = default;
 
-    // Modify document in place
-    virtual void execute(Document& doc) = 0;
-    virtual void undo(Document& doc) = 0;
+    // The name this type has in the journal and in CommandRegistry
+    virtual QString type() const = 0;
 
-    // For display in Edit menu
-    virtual QString description() const = 0;
+    // Applied where the start condition or the result holds; otherwise Conflicted,
+    // with the document untouched
+    virtual CommandOutcome execute(Document& document) const = 0;
 
-    // What kind of change this makes (for targeted rebuilds)
+    // Whether undo can take this command back; true unless the type overrides it
+    virtual bool undoable() const { return true; }
+
+    // The command that takes this one back, headed "Undo: <heading>"; called only on an
+    // undoable command
+    virtual CommandPtr inverse() const = 0;
+
+    // The wording of the rule that refuses this command on this document, or empty
+    virtual QString refusal(const Document& document) const;
+
+    // This command's own fields, for the journal
+    virtual QJsonObject toJson() const = 0;
+
+    // What a run changes (for targeted rebuilds)
     virtual DocumentChange documentChange() const = 0;
+
+    // A heading and a line per value set, fixed when the command is built
+    const CommandDescription& description() const;
 };
 ```
 
-### Command History
+`CommandRegistry` lists every command type once by its type name. It writes a command as its type, its description and its fields, and rebuilds it from that form with the type's `fromJson`.
+
+An update command holds a `FieldChange<T>` (before and after) for each field it changes, and nothing for the fields it leaves alone. A field holds for the command at either end: at before, the command sets it; at after, its result is already there. Any other value is a conflict.
+
+### WardSession
 
 ```cpp
-class CommandHistory : public QObject
+class WardSession : public QObject
 {
     Q_OBJECT
 
 public:
-    void execute(CommandPtr command, Document& document);
-    DocumentChange undo(Document& document);
-    DocumentChange redo(Document& document);
+    const Document& document() const;
+    const Journal& journal() const;
 
+    void open(const Document& document);
+
+    // The commit step: the rule, execute, the journal
+    CommitResult commit(CommandPtr command);
+
+    // The top undo entry's inverse through the commit step; the top redo entry again
+    CommitResult undo();
+    CommitResult redo();
     bool canUndo() const;
     bool canRedo() const;
-    bool isDirty() const;
-    void markSaved();
+    QString undoHeading() const;
+    QString redoHeading() const;
+
+    // The journal replayed onto another version of the document
+    ReplayResult replayOnto(const Document& version);
 
 signals:
-    void canUndoChanged();
-    void canRedoChanged();
-    void dirtyChanged();
+    void documentChanged(const DocumentChange& change);
+    void undoStackChanged();
 };
 ```
+
+`WardSession` holds one open ward: its document, its journal and its undo and redo stacks. It holds no global state, so tests create as many sessions as they need.
+
+- **The commit step** asks the command's rule, then runs `execute`. It answers `Applied`, `Conflicted`, or `Refused` with the rule's wording, and `NothingToDo` for an empty command, which is what an edit that changed nothing builds. A command that applies is appended to the journal, empties the redo stack, and enters the undo stack when it is undoable; the undo stack holds at most 100 commands, with the oldest dropped. A command that conflicts or is refused changes nothing.
+- **The journal** (`Journal`) holds each applied command's serialised form under the next sequence number, in the order the commands were made.
+- **Replay** rebuilds each journal entry with `CommandRegistry` and puts it through the rule and `execute` on a copy of the version, in order. When every entry applies, the copy becomes the document. The first entry that conflicts or is refused abandons the replay: the version becomes the document as it stands, the journal and the undo and redo stacks are emptied, and the result holds the abandoned changes as plain text, which the app writes to a file for the user to redo.
+- **Undo** builds the inverse of the command on top of the undo stack and runs it through the commit step; when it applies, the command moves to the redo stack. **Redo** runs that command again through the commit step and moves it back. An undo whose inverse conflicts or is refused leaves the command where it was.
 
 ### Example Command
 
 ```cpp
-class AddFamilyCommand : public Command
+// An edit to one family, built from the family as the edit opened it and as it was saved
+class UpdateFamilyCommand : public Command
 {
 public:
-    explicit AddFamilyCommand(Family family)
-        : m_family(std::move(family)) {}
+    // Empty when nothing differs
+    static CommandPtr fromEdit(const Family& opened, const Family& saved);
 
-    void execute(Document& doc) override
+    CommandOutcome execute(Document& document) const override
     {
-        doc.addFamily(m_family);
+        std::optional<Family> family = document.findFamilyById(m_familyId);
+        if (!family.has_value() || !m_change.holds(*family))
+        {
+            return CommandOutcome::Conflicted;
+        }
+        document.updateFamily(m_change.appliedTo(*family));
+        return CommandOutcome::Applied;
     }
 
-    void undo(Document& doc) override
+    CommandPtr inverse() const override
     {
-        doc.removeFamily(m_family.id());
+        return std::make_shared<UpdateFamilyCommand>(m_familyId, m_change.swapped(), description().undone());
     }
 
-    QString description() const override
-    {
-        return tr("Add Family: %1").arg(m_family.name());
-    }
+private:
+    FamilyId m_familyId;
+    FamilyChange m_change;
 };
 ```
+
+`FamilyChange` holds the address change, a `MemberChange` per changed member, the members added with the index each goes in at, and the members removed as last seen with the index each was at. Member order is not part of the start condition: a change inserts each addition at its index and moves no one else, and the inverse of a removal puts the member back where they were.
 
 ---
 
@@ -280,7 +338,7 @@ public:
 
 ### DocumentManager
 
-Central coordinator that owns the Document and CommandHistory:
+Central coordinator for the open ward and its file:
 
 ```cpp
 class DocumentManager : public QObject
@@ -402,9 +460,9 @@ signals:
 
 ### Tile Services
 
-- **TileService** — Main orchestration: provider fallback, scaled tile generation, layer switching
-- **TileFetchService** — Network fetching with multi-provider fallback and deduplication
-- **TileDiskCacheService** — Directory-based disk cache with in-memory QSet index
+- **TileService** - Main orchestration: provider fallback, scaled tile generation, layer switching
+- **TileFetchService** - Network fetching with multi-provider fallback and deduplication
+- **TileDiskCacheService** - Directory-based disk cache with in-memory QSet index
 
 ---
 
@@ -450,10 +508,10 @@ signals:
 
 ### Unit Tests
 - Models: JSON round-trip, equality
-- Commands: execute/undo symmetry
+- Commands: the round trip through the journal, a conflict where a field moved, an inverse that restores the document
 - Services: pure function behavior
 
 ### Integration Tests
 - File I/O round-trip
-- Command execution flow
+- The commit step, replay and undo (`WardSession`)
 - PDF import

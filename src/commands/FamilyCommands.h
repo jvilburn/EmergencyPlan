@@ -3,8 +3,6 @@
 #include "Command.h"
 #include "FamilyChange.h"
 
-#include <memory>
-
 /// An edit to one family, built from the difference between what the edit opened with and
 /// what it saved. Holds the before and after of the changed fields only.
 class UpdateFamilyCommand : public Command
@@ -13,8 +11,8 @@ public:
     static constexpr const char* TypeName = "updateFamily";
 
     /// The edit from the family as opened to the family as saved, or an empty pointer when
-    /// nothing differs.
-    static std::unique_ptr<UpdateFamilyCommand> fromEdit(const Family& opened, const Family& saved);
+    /// nothing differs, which WardSession::commit takes as nothing to do.
+    static CommandPtr fromEdit(const Family& opened, const Family& saved);
 
     UpdateFamilyCommand(const FamilyId& familyId, const FamilyChange& change, const CommandDescription& description);
 
