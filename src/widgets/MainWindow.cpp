@@ -1,5 +1,4 @@
 #include "MainWindow.h"
-#include "ArchiveBrowserDialog.h"
 #include "EmergencyBanner.h"
 #include "WardListView.h"
 #include "MinisteringView.h"
@@ -211,9 +210,6 @@ void MainWindow::setupMenus()
 
     m_generateReportAction = emergencyMenu->addAction(tr("&Generate Report..."), this, &MainWindow::generateEmergencyReport);
     m_generateReportAction->setEnabled(false);
-    m_openArchiveAction = emergencyMenu->addAction(tr("&Open Archive..."), this, &MainWindow::onOpenArchive);
-    m_closeArchiveAction = emergencyMenu->addAction(tr("&Close Archive"), EmergencyManager::instance(), &EmergencyManager::closeArchive);
-    m_closeArchiveAction->setEnabled(false);
 }
 
 void MainWindow::setupConnections()
@@ -234,10 +230,6 @@ void MainWindow::setupConnections()
             this, &MainWindow::onEmergencyStarted);
     connect(EmergencyManager::instance(), &EmergencyManager::emergencyEnded,
             this, &MainWindow::onEmergencyEnded);
-    connect(EmergencyManager::instance(), &EmergencyManager::archiveViewOpened,
-            this, &MainWindow::onArchiveViewOpened);
-    connect(EmergencyManager::instance(), &EmergencyManager::archiveViewClosed,
-            this, &MainWindow::onArchiveViewClosed);
     connect(EmergencyManager::instance(), &EmergencyManager::responseDataChanged,
             m_mapWidget, &MapWidget::updateHighlights);
     // Sidebar tab changes
@@ -616,7 +608,6 @@ void MainWindow::onAutoSaveFailed(const QString& errorMessage)
 void MainWindow::onFilePathChanged()
 {
     saveLastDocumentPath(DocumentManager::instance()->filePath());
-    updateEmergencyActions();
 }
 
 // ============================================================================
@@ -935,7 +926,6 @@ void MainWindow::onEndEmergency()
 {
     QString emergencyName = EmergencyManager::instance()->response().name();
 
-    // Custom dialog with Archive & End, Discard & End, Cancel
     QMessageBox dialog(this);
     dialog.setWindowTitle(tr("End Emergency"));
     dialog.setText(tr("End \"%1\"?").arg(emergencyName));
@@ -945,38 +935,24 @@ void MainWindow::onEndEmergency()
     pdfCheckBox->setChecked(true);
     dialog.setCheckBox(pdfCheckBox);
 
-    QPushButton* archiveButton = dialog.addButton(tr("Archive && End"), QMessageBox::AcceptRole);
     QPushButton* discardButton = dialog.addButton(tr("Discard && End"), QMessageBox::DestructiveRole);
     dialog.addButton(QMessageBox::Cancel);
 
     dialog.exec();
 
-    QAbstractButton* clicked = dialog.clickedButton();
-    bool shouldEnd = false;
-    bool archive = false;
-
-    if (clicked == archiveButton)
+    if (dialog.clickedButton() != discardButton)
     {
-        shouldEnd = true;
-        archive = true;
-    }
-    else if (clicked == discardButton)
-    {
-        QMessageBox::StandardButton confirm = QMessageBox::warning(
-            this,
-            tr("Discard Response Data"),
-            tr("This will permanently delete all response data for this emergency. Continue?"),
-            QMessageBox::Yes | QMessageBox::No,
-            QMessageBox::No);
-
-        if (confirm == QMessageBox::Yes)
-        {
-            shouldEnd = true;
-            archive = false;
-        }
+        return;
     }
 
-    if (!shouldEnd)
+    QMessageBox::StandardButton confirm = QMessageBox::warning(
+        this,
+        tr("Discard Response Data"),
+        tr("This will permanently delete all response data for this emergency. Continue?"),
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::No);
+
+    if (confirm != QMessageBox::Yes)
     {
         return;
     }
@@ -990,15 +966,8 @@ void MainWindow::onEndEmergency()
         }
     }
 
-    EmergencyManager::instance()->endEmergency(archive);
-    if (archive)
-    {
-        statusBar()->showMessage(tr("Emergency \"%1\" archived").arg(emergencyName), 5000);
-    }
-    else
-    {
-        statusBar()->showMessage(tr("Emergency \"%1\" ended").arg(emergencyName), 5000);
-    }
+    EmergencyManager::instance()->endEmergency();
+    statusBar()->showMessage(tr("Emergency \"%1\" ended").arg(emergencyName), 5000);
 }
 
 void MainWindow::generateEmergencyReport()
@@ -1076,129 +1045,10 @@ void MainWindow::onEmergencyEnded()
     updateEmergencyActions();
 }
 
-void MainWindow::onArchiveViewOpened()
-{
-    m_emergencyBanner->setArchiveName(EmergencyManager::instance()->response().name());
-    m_taskListView->rebuild();
-    m_sidebarTabs->setPageVisible(m_taskListTabIndex, true);
-    m_splitter->setSizes({600, 0, 1100});
-    updateEmergencyActions();
-}
-
-void MainWindow::onArchiveViewClosed()
-{
-    if (EmergencyManager::instance()->isActive())
-    {
-        m_emergencyBanner->setEmergencyName(EmergencyManager::instance()->response().name());
-    }
-    else
-    {
-        m_emergencyBanner->clearBanner();
-    }
-    bool active = EmergencyManager::instance()->isActive();
-    m_sidebarTabs->setPageVisible(m_taskListTabIndex, active);
-    if (active)
-    {
-        m_taskListView->rebuild();
-    }
-    m_splitter->setSizes({active ? 500 : 300, 0, 1100});
-    updateEmergencyActions();
-}
-
-void MainWindow::onOpenArchive()
-{
-    QString docPath = DocumentManager::instance()->filePath();
-    if (docPath.isEmpty())
-    {
-        QMessageBox::information(
-            this,
-            tr("No Document"),
-            tr("Please save your document first to view archives."));
-        return;
-    }
-
-    QFileInfo docInfo(docPath);
-    QString archiveDir = docInfo.absolutePath() + "/" + docInfo.completeBaseName() + "_archives";
-
-    ArchiveBrowserDialog dialog(archiveDir, this);
-    if (dialog.exec() != QDialog::Accepted)
-    {
-        return;
-    }
-
-    QString selectedPath = dialog.selectedFilePath();
-    if (selectedPath.isEmpty())
-    {
-        return;
-    }
-
-    switch (dialog.selectedAction())
-    {
-    case ArchiveBrowserDialog::Action::View:
-    {
-        QString errorMessage;
-        if (!EmergencyManager::instance()->loadArchive(selectedPath, &errorMessage))
-        {
-            QMessageBox::critical(this, tr("Open Archive Failed"), errorMessage);
-        }
-        break;
-    }
-
-    case ArchiveBrowserDialog::Action::Reopen:
-    {
-        QMessageBox::StandardButton confirm = QMessageBox::question(
-            this,
-            tr("Reopen Emergency"),
-            tr("This will restore this emergency as active.\n\n"
-               "Any current emergency will be ended and archived first.\n\n"
-               "Continue?"),
-            QMessageBox::Yes | QMessageBox::No,
-            QMessageBox::No);
-
-        if (confirm != QMessageBox::Yes)
-        {
-            break;
-        }
-
-        // End current emergency first (always archive to preserve data)
-        if (EmergencyManager::instance()->isActive())
-        {
-            EmergencyManager::instance()->endEmergency(true);
-
-            // If still active, archive save failed - abort reopen
-            if (EmergencyManager::instance()->isActive())
-            {
-                break;
-            }
-        }
-
-        QString errorMessage;
-        if (!EmergencyManager::instance()->reopenArchive(selectedPath, &errorMessage))
-        {
-            QMessageBox::critical(this, tr("Reopen Failed"), errorMessage);
-        }
-        else
-        {
-            statusBar()->showMessage(
-                tr("Emergency \"%1\" reopened").arg(EmergencyManager::instance()->response().name()),
-                5000);
-        }
-        break;
-    }
-
-    case ArchiveBrowserDialog::Action::None:
-        break;
-    }
-}
-
 void MainWindow::updateEmergencyActions()
 {
     bool active = EmergencyManager::instance()->isActive();
-    bool viewing = EmergencyManager::instance()->isViewingArchive();
-    bool hasDocument = !DocumentManager::instance()->filePath().isEmpty();
-    m_startEmergencyAction->setEnabled(!active && !viewing);
-    m_endEmergencyAction->setEnabled(active && !viewing);
-    m_generateReportAction->setEnabled(active && !viewing);
-    m_openArchiveAction->setEnabled(hasDocument && !viewing);
-    m_closeArchiveAction->setEnabled(viewing);
+    m_startEmergencyAction->setEnabled(!active);
+    m_endEmergencyAction->setEnabled(active);
+    m_generateReportAction->setEnabled(active);
 }

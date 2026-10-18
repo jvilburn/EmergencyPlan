@@ -16,10 +16,8 @@ ActionButtonsWidget::ActionButtonsWidget(const FamilyId& familyId,
 
     int row = 0;
 
-    // Emergency action buttons (only during active emergency, not archive viewing).
-    // Note: isActive() returns true during archive view because m_response holds the archive's
-    // response data, so the isViewingArchive() check is needed to distinguish live vs. archive.
-    if (EmergencyManager::instance() && EmergencyManager::instance()->isActive() && !EmergencyManager::instance()->isViewingArchive())
+    // Emergency action buttons (only during an active emergency)
+    if (EmergencyManager::instance() && EmergencyManager::instance()->isActive())
     {
         QPushButton* okButton = new QPushButton(tr("OK"), this);
         okButton->setStyleSheet("color: #4CAF50; font-weight: bold;");

@@ -26,12 +26,7 @@ public:
     static DocumentManager* instance();
 
     // Document access
-    const Document& document() const;
-
-    // Archive document overlay (read-only viewing)
-    void setArchiveDocument(Document archiveDoc);
-    void clearArchiveDocument();
-    bool isViewingArchive() const { return m_archiveDocument.has_value(); }
+    const Document& document() const { return m_session.document(); }
 
     // File path
     QString filePath() const { return m_filePath; }
@@ -98,7 +93,6 @@ private:
     void maybeRenameForWard();
 
     WardSession m_session;
-    std::optional<Document> m_archiveDocument;  // overlay for read-only archive viewing
     QString m_filePath;
 
     // Unit lookup

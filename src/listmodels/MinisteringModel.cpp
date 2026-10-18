@@ -32,10 +32,6 @@ MinisteringModel::MinisteringModel(Filter* filter,
             this, &MinisteringModel::onEmergencyStateChanged);
     connect(EmergencyManager::instance(), &EmergencyManager::emergencyEnded,
             this, &MinisteringModel::onEmergencyStateChanged);
-    connect(EmergencyManager::instance(), &EmergencyManager::archiveViewOpened,
-            this, &MinisteringModel::onEmergencyStateChanged);
-    connect(EmergencyManager::instance(), &EmergencyManager::archiveViewClosed,
-            this, &MinisteringModel::onEmergencyStateChanged);
     rebuild();
 }
 

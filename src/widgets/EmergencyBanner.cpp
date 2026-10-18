@@ -30,24 +30,6 @@ EmergencyBanner::EmergencyBanner(QWidget* parent)
 void EmergencyBanner::setEmergencyName(const QString& name)
 {
     m_label->setText(tr("EMERGENCY: %1").arg(name));
-    setStyleSheet(
-        "QFrame {"
-        "  background-color: #FFA726;"
-        "  color: #333;"
-        "  font-weight: bold;"
-        "}");
-    show();
-}
-
-void EmergencyBanner::setArchiveName(const QString& name)
-{
-    m_label->setText(tr("ARCHIVED - READ ONLY: %1").arg(name));
-    setStyleSheet(
-        "QFrame {"
-        "  background-color: #78909C;"
-        "  color: #fff;"
-        "  font-weight: bold;"
-        "}");
     show();
 }
 

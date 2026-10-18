@@ -51,10 +51,6 @@ FamilyTreeModel::FamilyTreeModel(Filter* filter,
             this, &FamilyTreeModel::onEmergencyStateChanged);
     connect(EmergencyManager::instance(), &EmergencyManager::emergencyEnded,
             this, &FamilyTreeModel::onEmergencyStateChanged);
-    connect(EmergencyManager::instance(), &EmergencyManager::archiveViewOpened,
-            this, &FamilyTreeModel::onEmergencyStateChanged);
-    connect(EmergencyManager::instance(), &EmergencyManager::archiveViewClosed,
-            this, &FamilyTreeModel::onEmergencyStateChanged);
 
     rebuild();
 }

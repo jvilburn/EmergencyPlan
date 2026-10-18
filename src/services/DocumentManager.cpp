@@ -63,34 +63,8 @@ DocumentManager* DocumentManager::instance()
     return s_instance;
 }
 
-const Document& DocumentManager::document() const
-{
-    if (m_archiveDocument.has_value())
-    {
-        return *m_archiveDocument;
-    }
-    return m_session.document();
-}
-
-void DocumentManager::setArchiveDocument(Document archiveDoc)
-{
-    m_archiveDocument = std::move(archiveDoc);
-    emit documentChanged(DocumentChange::full());
-}
-
-void DocumentManager::clearArchiveDocument()
-{
-    m_archiveDocument.reset();
-    emit documentChanged(DocumentChange::full());
-}
-
 CommitResult DocumentManager::executeCommand(CommandPtr command)
 {
-    if (isViewingArchive())
-    {
-        qWarning() << "Command execution blocked while viewing archive";
-        return CommitResult{CommitStatus::NothingToDo, QString(), CommandDescription()};
-    }
     CommitResult result = m_session.commit(command);
     if (result.status == CommitStatus::NothingToDo)
     {
@@ -102,7 +76,7 @@ CommitResult DocumentManager::executeCommand(CommandPtr command)
 
 void DocumentManager::undo()
 {
-    if (isViewingArchive() || !canUndo())
+    if (!canUndo())
     {
         return;
     }
@@ -111,7 +85,7 @@ void DocumentManager::undo()
 
 void DocumentManager::redo()
 {
-    if (isViewingArchive() || !canRedo())
+    if (!canRedo())
     {
         return;
     }

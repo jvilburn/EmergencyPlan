@@ -11,7 +11,6 @@ class EmergencyBanner : public QFrame
 public:
     explicit EmergencyBanner(QWidget* parent);
     void setEmergencyName(const QString& name);
-    void setArchiveName(const QString& name);
     void clearBanner();
 
 private:
