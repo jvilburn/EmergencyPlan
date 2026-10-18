@@ -571,7 +571,7 @@ void MainWindow::updateUndoRedoActions()
     m_redoAction->setText(redoText);
 }
 
-void MainWindow::onCommandNotApplied(const CommandDescription& description, const CommitResult& result)
+void MainWindow::onCommandNotApplied(const CommitResult& result)
 {
     if (result.status == CommitStatus::Refused)
     {
@@ -582,8 +582,8 @@ void MainWindow::onCommandNotApplied(const CommandDescription& description, cons
     QStringList text;
     text.append(tr("Your change could not be applied, because the ward changed first. This needs doing again:"));
     text.append(QString());
-    text.append(description.heading());
-    for (const QString& line : description.lines())
+    text.append(result.description.heading());
+    for (const QString& line : result.description.lines())
     {
         text.append(QString("- %1").arg(line));
     }
@@ -610,7 +610,7 @@ void MainWindow::onGeocodingFinished()
 
 void MainWindow::onAutoSaveFailed(const QString& errorMessage)
 {
-    statusBar()->showMessage(tr("Auto-save failed: %1 — use Save As to save manually").arg(errorMessage));
+    statusBar()->showMessage(tr("Auto-save failed: %1 - use Save As to save manually").arg(errorMessage));
 }
 
 void MainWindow::onFilePathChanged()
@@ -1027,7 +1027,7 @@ bool MainWindow::generateEmergencyReportWithConfirm()
 
     if (filePath.isEmpty())
     {
-        // User cancelled — ask if they want to skip the report
+        // User cancelled - ask if they want to skip the report
         QMessageBox::StandardButton answer = QMessageBox::question(
             this, tr("Skip Report"),
             tr("No report will be generated. Continue?"),
@@ -1165,7 +1165,7 @@ void MainWindow::onOpenArchive()
         {
             EmergencyManager::instance()->endEmergency(true);
 
-            // If still active, archive save failed — abort reopen
+            // If still active, archive save failed - abort reopen
             if (EmergencyManager::instance()->isActive())
             {
                 break;

@@ -22,6 +22,7 @@ struct CommitResult
 {
     CommitStatus status;
     QString refusal;  ///< the rule's wording, when status is Refused
+    CommandDescription description;  ///< the description of the command that ran
 };
 
 /// How a replay onto a version ended.

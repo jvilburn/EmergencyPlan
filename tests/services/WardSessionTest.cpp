@@ -146,6 +146,7 @@ void WardSessionTest::editConfirmedAfterARemoteChangeToItsFamilyConflicts()
     CommitResult result = commitEdit(mine, opened, TestWard::withPhone(opened, TestWard::bobId(), "555-2222"));
 
     QVERIFY(result.status == CommitStatus::Conflicted);
+    QCOMPARE(result.description, CommandDescription("Smith family", QStringList{"Bob, phone: 555-2222"}));
     QCOMPARE(phoneOf(mine.document(), TestWard::bobId()), QString("555-9999"));
     QVERIFY(mine.journal().isEmpty());
     QVERIFY(!mine.canUndo());
@@ -503,6 +504,7 @@ void WardSessionTest::undoWhoseInverseConflictsLeavesTheCommandOnTheUndoStack()
     CommitResult result = session.undo();
 
     QVERIFY(result.status == CommitStatus::Conflicted);
+    QCOMPARE(result.description, CommandDescription("Undo: Smith family", QStringList{"Bob, phone: 555-2222"}));
     QCOMPARE(phoneOf(session.document(), TestWard::bobId()), QString("555-9999"));
     QVERIFY(session.canUndo());
     QCOMPARE(session.undoHeading(), QString("Smith family"));

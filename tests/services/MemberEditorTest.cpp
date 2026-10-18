@@ -8,12 +8,16 @@
 namespace
 {
 
-/// Bob with a special-need note and both unit numbers, which the form does not show, and
-/// a stored name that Name(surname, given) does not reproduce.
+/// Bob with a special-need note and both unit numbers, which the form does not show, a
+/// stored name that Name(surname, given) does not reproduce, and every field the form
+/// shows filled in.
 Person bobWithFieldsTheFormDoesNotShow()
 {
     Person bob = TestWard::bob();
     bob.setName(Name(QString("Smith,Bob")));
+    bob.setBirthday(Birthday::create(1980, 3, 14));
+    bob.setAltPhone(Phone("555-3333"));
+    bob.setCallings(QStringList{"Ward Clerk", "Sunday School Teacher"});
     bob.setSpecialNeedNote("Uses a wheelchair");
     bob.setWardUnitNumber("123456");
     bob.setStakeUnitNumber("654321");
@@ -70,4 +74,22 @@ void MemberEditorTest::untouchedFormReturnsThePersonAsGiven()
     editor.setPerson(original);
 
     QVERIFY(editor.person() == original);
+}
+
+void MemberEditorTest::untouchedFormKeepsEachPartialBirthday()
+{
+    QList<Birthday> birthdays{Birthday::create(std::nullopt, 3, 14),
+                              Birthday::create(1980, std::nullopt, std::nullopt),
+                              Birthday::create(1980, 3, std::nullopt),
+                              Birthday()};
+    for (const Birthday& birthday : birthdays)
+    {
+        Person original = bobWithFieldsTheFormDoesNotShow();
+        original.setBirthday(birthday);
+        MemberEditor editor(nullptr);
+        editor.setPerson(original);
+
+        QVERIFY2(editor.person().birthday() == birthday, qPrintable(birthday.display()));
+        QVERIFY(editor.person() == original);
+    }
 }

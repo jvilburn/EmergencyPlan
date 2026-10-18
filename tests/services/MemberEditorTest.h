@@ -14,4 +14,5 @@ public:
 private slots:
     void phoneEditKeepsEveryOtherField();
     void untouchedFormReturnsThePersonAsGiven();
+    void untouchedFormKeepsEachPartialBirthday();
 };

@@ -41,7 +41,7 @@ public:
     CommitResult executeCommand(CommandPtr command);
 
     /// Undo and redo through the session's commit step, saving when they applied. One that
-    /// conflicted or was refused emits commandNotApplied with the undo or redo heading.
+    /// conflicted or was refused emits commandNotApplied.
     void undo();
     void redo();
     bool canUndo() const { return m_session.canUndo(); }
@@ -67,7 +67,7 @@ public:
 signals:
     void documentChanged(const DocumentChange& change);
     void undoStackChanged();
-    void commandNotApplied(const CommandDescription& description, const CommitResult& result);
+    void commandNotApplied(const CommitResult& result);
     void filePathChanged();
 
     // Geocoding progress
@@ -88,8 +88,8 @@ private slots:
 
 private:
     /// After the commit step: an applied change looks up new wards and saves; one that
-    /// conflicted or was refused emits commandNotApplied with description.
-    void afterCommit(const CommitResult& result, const CommandDescription& description);
+    /// conflicted or was refused emits commandNotApplied.
+    void afterCommit(const CommitResult& result);
 
     void setFilePath(const QString& filePath);
     void checkForIncompleteWards();

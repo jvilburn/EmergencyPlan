@@ -361,19 +361,19 @@ public:
 
     // File operations
     void newDocument();
-    bool openDocument(const QString& path);
-    bool saveDocument();
-    bool saveDocumentAs(const QString& path);
+    bool openDocument(const QString& filePath, QString* errorMessage);
+    bool saveDocument(QString* errorMessage);
+    bool saveDocumentAs(const QString& filePath, QString* errorMessage);
 
 signals:
     void documentChanged(const DocumentChange& change);  // forwarded from the session
     void undoStackChanged();                             // forwarded from the session
-    void commandNotApplied(const CommandDescription& description, const CommitResult& result);
+    void commandNotApplied(const CommitResult& result);
     void filePathChanged();
 };
 ```
 
-`executeCommand` hands the command to `WardSession::commit` and returns its `CommitResult`. When it is `Applied`, the manager looks up any ward missing its details and saves; when it is `Conflicted` or `Refused`, it emits `commandNotApplied` with the command's description, and `MainWindow` tells the user what needs doing again or which rule refused it; `NothingToDo`, from an edit that changed nothing, does neither. `undo` and `redo` run the session's `undo` and `redo` the same way, emitting `commandNotApplied` with the undo or redo heading. `newDocument` and `openDocument` open the ward in the session, which starts its journal and undo stack empty.
+`executeCommand` hands the command to `WardSession::commit` and returns its `CommitResult`. When it is `Applied`, the manager looks up any ward missing its details and saves; when it is `Conflicted` or `Refused`, it emits `commandNotApplied`, and `MainWindow` tells the user what needs doing again, from the result's description, or which rule refused it; `NothingToDo`, from an edit that changed nothing, does neither. `undo` and `redo` run the session's `undo` and `redo` the same way; an undo's result carries its inverse's description, *Undo: heading* over the original's lines. `newDocument` and `openDocument` open the ward in the session, which starts its journal and undo stack empty.
 
 ### GeocodingService
 

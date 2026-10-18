@@ -24,8 +24,6 @@ public:
     /// show, and fields the user left alone, are the given person's.
     Person person() const;
 
-    const PersonId& personId() const { return m_person.id(); }
-
 signals:
     void dataChanged();
     void removeRequested();

@@ -43,7 +43,7 @@ private slots:
     void onDocumentChanged(const DocumentChange& change);
     void updateWindowTitle();
     void updateUndoRedoActions();
-    void onCommandNotApplied(const CommandDescription& description, const CommitResult& result);
+    void onCommandNotApplied(const CommitResult& result);
 
     // Geocoding
     void onGeocodingProgress(int completed, int total);

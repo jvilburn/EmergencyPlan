@@ -1606,6 +1606,7 @@ struct CommitResult
 {
     CommitStatus status;
     QString refusal;  ///< the rule's wording, when status is Refused
+    CommandDescription description;  ///< the description of the command that ran
 };
 
 /// How a replay onto a version ended.
@@ -1709,14 +1710,14 @@ CommitResult attempt(const Command& command, Document& document)
     QString refusal = command.refusal(document);
     if (!refusal.isEmpty())
     {
-        return CommitResult{CommitStatus::Refused, refusal};
+        return CommitResult{CommitStatus::Refused, refusal, command.description()};
     }
     if (command.execute(document) == CommandOutcome::Conflicted)
     {
-        return CommitResult{CommitStatus::Conflicted, QString()};
+        return CommitResult{CommitStatus::Conflicted, QString(), command.description()};
     }
     document.onDocumentChanged(command.documentChange());
-    return CommitResult{CommitStatus::Applied, QString()};
+    return CommitResult{CommitStatus::Applied, QString(), command.description()};
 }
 
 }  // namespace
@@ -1737,7 +1738,7 @@ CommitResult WardSession::commit(CommandPtr command)
 {
     if (!command)
     {
-        return CommitResult{CommitStatus::NothingToDo, QString()};
+        return CommitResult{CommitStatus::NothingToDo, QString(), CommandDescription()};
     }
     CommitResult result = run(*command);
     if (result.status != CommitStatus::Applied)
@@ -3216,6 +3217,7 @@ void WardSessionTest::editConfirmedAfterARemoteChangeToItsFamilyConflicts()
     CommitResult result = commitEdit(mine, opened, TestWard::withPhone(opened, TestWard::bobId(), "555-2222"));
 
     QVERIFY(result.status == CommitStatus::Conflicted);
+    QCOMPARE(result.description, CommandDescription("Smith family", QStringList{"Bob, phone: 555-2222"}));
     QCOMPARE(phoneOf(mine.document(), TestWard::bobId()), QString("555-9999"));
     QVERIFY(mine.journal().isEmpty());
     QVERIFY(!mine.canUndo());
@@ -3573,6 +3575,7 @@ void WardSessionTest::undoWhoseInverseConflictsLeavesTheCommandOnTheUndoStack()
     CommitResult result = session.undo();
 
     QVERIFY(result.status == CommitStatus::Conflicted);
+    QCOMPARE(result.description, CommandDescription("Undo: Smith family", QStringList{"Bob, phone: 555-2222"}));
     QCOMPARE(phoneOf(session.document(), TestWard::bobId()), QString("555-9999"));
     QVERIFY(session.canUndo());
     QCOMPARE(session.undoHeading(), QString("Smith family"));
@@ -3866,8 +3869,8 @@ describes, then continue with task 2 when the user says so.
 - Modify: `docs/ARCHITECTURE.md`, `CLAUDE.md`
 
 **The member editor edits the person it was given.** `MemberEditor` keeps the `Person` passed
-to `setPerson` in a `Person m_person` member, in place of `PersonId m_personId`
-(`personId()` returns `m_person.id()`). `person()` returns a copy of `m_person` with each field
+to `setPerson` in a `Person m_person` member, in place of `PersonId m_personId`,
+and `personId()` is deleted. `person()` returns a copy of `m_person` with each field
 the form shows set from its widget only where the widget's value differs from what
 `setPerson` put there, as `TaskDialog` edits a copy of its task. So a save carries the
 special-need note, the unit numbers and the stored name through untouched, and the family
@@ -3879,10 +3882,10 @@ edit holds only what the user changed.
   stays until task 5 deletes it).
 - `CommitResult executeCommand(CommandPtr command)`: calls `m_session.commit`, and on
   `Applied` runs `checkForIncompleteWards()` and `autoSave()` as today; on `Conflicted` or
-  `Refused` emits `commandNotApplied(const CommandDescription& description, const CommitResult& result)`
-  with `command->description()`; on `NothingToDo` (an empty command) it does nothing more.
-- `undo()` and `redo()` call `m_session.undo()` / `redo()` the same way, emitting
-  `commandNotApplied` with the undo stack's heading when the result is not `Applied`.
+  `Refused` emits `commandNotApplied(const CommitResult& result)`; on `NothingToDo` (an empty
+  command) it does nothing more. The result carries the description of the command that ran.
+- `undo()` and `redo()` call `m_session.undo()` / `redo()` the same way. An undo's result
+  carries its inverse's description, *Undo: heading* over the original's lines.
 - `undoDescription()` / `redoDescription()` become `undoHeading()` / `redoHeading()`.
 - Signals: `canUndoChanged` and `canRedoChanged` become one `undoStackChanged`, forwarded from
   the session; `documentChanged` is forwarded from the session's.
@@ -3895,10 +3898,10 @@ edit holds only what the user changed.
 **MainWindow.**
 - `updateUndoRedoActions()` reads `undoHeading()` / `redoHeading()` and connects to
   `undoStackChanged`.
-- New slot `onCommandNotApplied(const CommandDescription& description, const CommitResult& result)`:
+- New slot `onCommandNotApplied(const CommitResult& result)`:
   for `Conflicted`, a message box with
   `tr("Your change could not be applied, because the ward changed first. This needs doing again:")`
-  followed by the heading and its lines; for `Refused`, the rule's wording.
+  followed by `result.description`'s heading and its lines; for `Refused`, the rule's wording.
 - `onSaveFamily()` builds `UpdateFamilyCommand::fromEdit(m_editPanel->openedFamily(), m_editPanel->family())`
   and commits it (an edit that changed nothing builds an empty command, which the commit
   step takes as nothing to do), then closes the panel. `FamilyEditPanel` gains
@@ -3920,12 +3923,13 @@ work list).
   `static std::optional<SpecialNeedEdit> editSpecialNeed(const std::optional<PersonId>& lockedPerson, QWidget* parent)`
   with `struct SpecialNeedEdit { Family opened; Family saved; };` in `WardListDialog.h`.
 - Title `tr("Special Need")`. Opened on an existing need (`lockedPerson` set), the person is
-  preselected, the tree is disabled, and the dialog reads that person's family into
-  `m_openedFamily` when it opens. Opened from empty space, `onSelectionChanged()` in this
-  mode reads the picked person's family from the document at that moment into `m_openedFamily`
+  made the tree's current row, which runs `onSelectionChanged()` and reads that person and
+  their family into `m_openedNeed`, and then the tree is disabled. Opened from empty space, `onSelectionChanged()` in this
+  mode reads the picked person's family from the document at that moment into `m_openedNeed`
   and fills the note field with that person's current note: that is when the start condition
   is taken.
-- On accept, `saved` is `m_openedFamily` with that member's note set to the field's text.
+- On accept, `saved` is `m_openedNeed`'s family with that member's note set to the field's text.
+  OK is enabled only while a person is picked.
 - `NeedsSubView::showNeedDialog` commits `UpdateFamilyCommand::fromEdit(edit.opened, edit.saved)`.
   `NeedsSubView::deleteNeed` captures the family before its confirmation box and commits the
   edit that clears the note. The helper `updatePersonInFamily` is deleted.
@@ -3938,11 +3942,16 @@ work list).
   removed, since the dialog is done.
 
 **Tests:** the session behaviour is covered by task 1. Add `tests/services/MemberEditorTest`,
-which constructs `MemberEditor` under the test executable's `QApplication`: a person with a special-need note, both unit numbers and a
-name that `Name(surname, given)` does not reproduce is set, only the phone widget is changed,
-and `person()` equals the original with only the new phone; a second test changes nothing
-and `person()` equals the original exactly. It is listed in `tests/CMakeLists.txt` and run from
-`tests/main.cpp` with the other test classes.
+which constructs `MemberEditor` under the test executable's `QApplication`: a person with a special-need note, both unit numbers, a
+name that `Name(surname, given)` does not reproduce, a full birthday, an alt phone and two
+callings is set, only the phone widget is changed, and `person()` equals the original with
+only the new phone; a second test changes nothing and `person()` equals the original
+exactly; a third does the same for each partial birthday (month and day, year only, year
+and month, none). Add `tests/services/FamilyEditPanelTest`: on the Lee family with every
+birth year known, *+ Add* puts the blank member last, typing its birth year 2008 moves it
+between Ed (2005) and Fay (2010), and `FamilyChange::between` applied to the opened family
+gives the same order; with Fay's year unknown, the member stays last. Both are listed in
+`tests/CMakeLists.txt` and run from `tests/main.cpp` with the other test classes.
 
 **Commit:** `git commit -m "The app runs every edit through WardSession; edits take their start condition when opened"`
 

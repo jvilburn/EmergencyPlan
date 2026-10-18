@@ -89,14 +89,14 @@ CommitResult DocumentManager::executeCommand(CommandPtr command)
     if (isViewingArchive())
     {
         qWarning() << "Command execution blocked while viewing archive";
-        return CommitResult{CommitStatus::NothingToDo, QString()};
+        return CommitResult{CommitStatus::NothingToDo, QString(), CommandDescription()};
     }
     CommitResult result = m_session.commit(command);
     if (result.status == CommitStatus::NothingToDo)
     {
         return result;
     }
-    afterCommit(result, command->description());
+    afterCommit(result);
     return result;
 }
 
@@ -106,8 +106,7 @@ void DocumentManager::undo()
     {
         return;
     }
-    CommandDescription description(m_session.undoHeading(), QStringList());
-    afterCommit(m_session.undo(), description);
+    afterCommit(m_session.undo());
 }
 
 void DocumentManager::redo()
@@ -116,11 +115,10 @@ void DocumentManager::redo()
     {
         return;
     }
-    CommandDescription description(m_session.redoHeading(), QStringList());
-    afterCommit(m_session.redo(), description);
+    afterCommit(m_session.redo());
 }
 
-void DocumentManager::afterCommit(const CommitResult& result, const CommandDescription& description)
+void DocumentManager::afterCommit(const CommitResult& result)
 {
     switch (result.status)
     {
@@ -130,7 +128,7 @@ void DocumentManager::afterCommit(const CommitResult& result, const CommandDescr
         break;
     case CommitStatus::Conflicted:
     case CommitStatus::Refused:
-        emit commandNotApplied(description, result);
+        emit commandNotApplied(result);
         break;
     case CommitStatus::NothingToDo:
         break;
@@ -429,7 +427,7 @@ void DocumentManager::maybeRenameForWard()
     {
         if (!QFile::rename(m_filePath, newPath))
         {
-            return;  // Rename failed — keep the old path, no harm done
+            return;  // Rename failed - keep the old path, no harm done
         }
     }
 

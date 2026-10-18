@@ -13,14 +13,14 @@ CommitResult attempt(const Command& command, Document& document)
     QString refusal = command.refusal(document);
     if (!refusal.isEmpty())
     {
-        return CommitResult{CommitStatus::Refused, refusal};
+        return CommitResult{CommitStatus::Refused, refusal, command.description()};
     }
     if (command.execute(document) == CommandOutcome::Conflicted)
     {
-        return CommitResult{CommitStatus::Conflicted, QString()};
+        return CommitResult{CommitStatus::Conflicted, QString(), command.description()};
     }
     document.onDocumentChanged(command.documentChange());
-    return CommitResult{CommitStatus::Applied, QString()};
+    return CommitResult{CommitStatus::Applied, QString(), command.description()};
 }
 
 }  // namespace
@@ -41,7 +41,7 @@ CommitResult WardSession::commit(CommandPtr command)
 {
     if (!command)
     {
-        return CommitResult{CommitStatus::NothingToDo, QString()};
+        return CommitResult{CommitStatus::NothingToDo, QString(), CommandDescription()};
     }
     CommitResult result = run(*command);
     if (result.status != CommitStatus::Applied)

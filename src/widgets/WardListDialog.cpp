@@ -15,6 +15,7 @@
 #include <QSplitter>
 #include <QDialogButtonBox>
 #include <QItemSelectionModel>
+#include <QPushButton>
 #include <QSet>
 
 WardListDialog::WardListDialog(Mode mode,
@@ -102,49 +103,6 @@ void WardListDialog::setupUi()
     m_mapWidget->requestFitAllFamilies();
 }
 
-void WardListDialog::setPreselectedPersonIds(const QList<PersonId>& ids)
-{
-    QItemSelectionModel* selModel = m_treeView->selectionModel();
-    selModel->clearSelection();
-
-    bool scrolledToFirst = false;
-    for (const PersonId& id : ids)
-    {
-        QModelIndex index = m_personModel->indexForPersonId(id);
-        if (index.isValid())
-        {
-            selModel->select(index, QItemSelectionModel::Select);
-            if (!scrolledToFirst)
-            {
-                m_treeView->scrollTo(index);
-                scrolledToFirst = true;
-            }
-        }
-    }
-}
-
-QList<PersonId> WardListDialog::selectedPersonIds() const
-{
-    QList<PersonId> ids;
-    QSet<PersonId> seen;
-    QModelIndexList selected = m_treeView->selectionModel()->selectedIndexes();
-
-    for (const QModelIndex& index : selected)
-    {
-        if (m_personModel && m_personModel->itemTypeAt(index) == ItemType::Person)
-        {
-            auto id = m_personModel->personIdAt(index);
-            if (id && !seen.contains(*id))
-            {
-                seen.insert(*id);
-                ids.append(*id);
-            }
-        }
-    }
-
-    return ids;
-}
-
 void WardListDialog::selectFamily(const FamilyId& familyId)
 {
     if (m_mode == FamilyMode && m_familyModel)
@@ -196,12 +154,13 @@ void WardListDialog::onSelectionChanged()
     }
     if (!picked.has_value())
     {
-        m_openedFamily.reset();
+        m_openedNeed.reset();
     }
-    else if (!m_openedFamily.has_value() || *picked != m_needPersonId)
+    else if (!m_openedNeed.has_value() || *picked != m_openedNeed->person)
     {
         openSpecialNeed(*picked);
     }
+    m_buttonBox->button(QDialogButtonBox::Ok)->setEnabled(m_openedNeed.has_value());
 }
 
 void WardListDialog::openSpecialNeed(const PersonId& personId)
@@ -209,13 +168,17 @@ void WardListDialog::openSpecialNeed(const PersonId& personId)
     const Document& document = DocumentManager::instance()->document();
     std::optional<FamilyId> familyId = document.familyIdForPerson(personId);
     std::optional<Person> person = document.findPersonById(personId);
-    if (!familyId.has_value() || !person.has_value())
+    std::optional<Family> family;
+    if (familyId.has_value())
     {
-        m_openedFamily.reset();
+        family = document.findFamilyById(*familyId);
+    }
+    if (!family.has_value() || !person.has_value())
+    {
+        m_openedNeed.reset();
         return;
     }
-    m_needPersonId = personId;
-    m_openedFamily = document.findFamilyById(*familyId);
+    m_openedNeed = OpenedNeed{personId, *family};
     m_nameEdit->setText(person->specialNeedNote());
 }
 
@@ -336,28 +299,33 @@ std::optional<SpecialNeedEdit> WardListDialog::editSpecialNeed(
     dialog.m_editsSpecialNeed = true;
     if (lockedPerson)
     {
-        dialog.setPreselectedPersonIds({*lockedPerson});
+        // Making the person current runs onSelectionChanged, which takes the start
+        // condition as a pick does.
+        QModelIndex index = dialog.m_personModel->indexForPersonId(*lockedPerson);
+        dialog.m_treeView->setCurrentIndex(index);
+        dialog.m_treeView->scrollTo(index);
         dialog.m_treeView->setEnabled(false);
-        dialog.openSpecialNeed(*lockedPerson);
     }
+    dialog.m_buttonBox->button(QDialogButtonBox::Ok)->setEnabled(dialog.m_openedNeed.has_value());
 
-    if (dialog.exec() != QDialog::Accepted || !dialog.m_openedFamily.has_value())
+    if (dialog.exec() != QDialog::Accepted || !dialog.m_openedNeed.has_value())
     {
         return std::nullopt;
     }
 
     // An empty note clears the special need.
-    QList<Person> members = dialog.m_openedFamily->members();
+    const OpenedNeed& opened = *dialog.m_openedNeed;
+    QList<Person> members = opened.family.members();
     for (Person& member : members)
     {
-        if (member.id() == dialog.m_needPersonId)
+        if (member.id() == opened.person)
         {
             member.setSpecialNeedNote(dialog.name());
         }
     }
-    Family saved = *dialog.m_openedFamily;
+    Family saved = opened.family;
     saved.setMembers(members);
-    return SpecialNeedEdit{*dialog.m_openedFamily, saved};
+    return SpecialNeedEdit{opened.family, saved};
 }
 
 std::optional<PersonSelectionResult> WardListDialog::selectPersons(

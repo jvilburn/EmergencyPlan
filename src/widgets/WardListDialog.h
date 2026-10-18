@@ -61,12 +61,6 @@ public:
     /// Get the name field text (trimmed).
     QString name() const;
 
-    /// Pre-select a person by ID (for single-select mode).
-    void setPreselectedPersonIds(const QList<PersonId>& ids);
-
-    /// Get selected person IDs after dialog is accepted (for single-select mode).
-    QList<PersonId> selectedPersonIds() const;
-
     // FamilyMarkerProvider interface
     HighlightInfo highlightInfo() const override;
     QSet<FamilyId> visibleFamilyIds() const override;
@@ -103,8 +97,16 @@ private:
     void setupUi();
     QSet<FamilyId> highlightedFamilyIds() const;
 
+    /// The person whose need the "Special Need" dialog edits, and their family as read when
+    /// that person was chosen: the edit's start condition.
+    struct OpenedNeed
+    {
+        PersonId person;
+        Family family;
+    };
+
     /// Takes the special-need edit's start condition: reads person's family from the
-    /// document into m_openedFamily and fills the note field with the person's current note.
+    /// document into m_openedNeed and fills the note field with the person's current note.
     void openSpecialNeed(const PersonId& personId);
 
     Mode m_mode;
@@ -121,9 +123,8 @@ private:
     FamilyTreeModel* m_familyModel = nullptr;
     PersonTreeModel* m_personModel = nullptr;
 
-    // Set when this is the "Special Need" dialog; then the person whose need it edits, and
-    // their family as read when that person was chosen, empty while no person is chosen.
+    // Set when this is the "Special Need" dialog; then its opened need, empty while no
+    // person is chosen.
     bool m_editsSpecialNeed = false;
-    PersonId m_needPersonId;
-    std::optional<Family> m_openedFamily;
+    std::optional<OpenedNeed> m_openedNeed;
 };
