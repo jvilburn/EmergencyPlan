@@ -18,39 +18,6 @@
 #include <QMessageBox>
 #include <QPushButton>
 
-namespace
-{
-
-/// Helper to update a person within their family
-void updatePersonInFamily(DocumentManager* docMgr, const FamilyId& familyId, const Person& updatedPerson)
-{
-    const Document& doc = docMgr->document();
-    std::optional<Family> familyOpt = doc.findFamilyById(familyId);
-    if (!familyOpt)
-    {
-        return;
-    }
-
-    Family oldFamily = *familyOpt;
-    Family newFamily = oldFamily;
-
-    QList<Person> members = newFamily.members();
-    for (int i = 0; i < members.size(); ++i)
-    {
-        if (members[i].id() == updatedPerson.id())
-        {
-            members[i] = updatedPerson;
-            break;
-        }
-    }
-    newFamily.setMembers(members);
-
-    docMgr->executeCommand(
-        std::make_unique<UpdateFamilyCommand>(oldFamily, newFamily));
-}
-
-}  // namespace
-
 NeedsSubView::NeedsSubView(QWidget* parent)
     : QWidget(parent)
 {
@@ -273,55 +240,44 @@ void NeedsSubView::deleteNeedFromContextMenu()
 
 void NeedsSubView::showNeedDialog(const std::optional<PersonId>& personId)
 {
-    QString initialName;
-    std::optional<PersonId> initialPersonId = personId;
-
-    if (personId)
-    {
-        const Document& doc = DocumentManager::instance()->document();
-        std::optional<Person> personOpt = doc.findPersonById(*personId);
-        if (personOpt)
-        {
-            initialName = personOpt->specialNeedNote();
-        }
-    }
-
-    std::optional<PersonSelectionResult> result = WardListDialog::selectPersonWithName(
-        tr("Need"), initialName, initialPersonId, this);
-
-    // Note: empty name is intentional for needs — it clears the special need note
-    if (!result || result->personIds.isEmpty())
+    std::optional<SpecialNeedEdit> edit = WardListDialog::editSpecialNeed(personId, this);
+    if (!edit)
     {
         return;
     }
-
-    PersonId selectedPersonId = result->personIds.first();
-    const Document& doc = DocumentManager::instance()->document();
-    std::optional<FamilyId> familyId = doc.familyIdForPerson(selectedPersonId);
-    std::optional<Person> personOpt = doc.findPersonById(selectedPersonId);
-    if (personOpt && familyId)
-    {
-        Person updatedPerson = *personOpt;
-        updatedPerson.setSpecialNeedNote(result->name);
-        updatePersonInFamily(DocumentManager::instance(), *familyId, updatedPerson);
-    }
+    DocumentManager::instance()->executeCommand(UpdateFamilyCommand::fromEdit(edit->opened, edit->saved));
 }
 
 void NeedsSubView::deleteNeed(const PersonId& personId, const FamilyId& familyId)
 {
-    const Document& doc = DocumentManager::instance()->document();
-
-    std::optional<Person> personOpt = doc.findPersonById(personId);
-    if (!personOpt)
+    std::optional<Family> opened = DocumentManager::instance()->document().findFamilyById(familyId);
+    if (!opened)
     {
         return;
     }
 
-    QString message = tr("Delete special need for \"%1\"?").arg(personOpt->displayName());
-    if (QMessageBox::question(this, tr("Delete Special Need"), message) == QMessageBox::Yes)
+    QList<Person> members = opened->members();
+    qsizetype index = -1;
+    for (qsizetype i = 0; i < members.size(); ++i)
     {
-        Person updatedPerson = *personOpt;
-        updatedPerson.setSpecialNeedNote(QString());  // Clear the note
-        updatePersonInFamily(DocumentManager::instance(), familyId, updatedPerson);
+        if (members[i].id() == personId)
+        {
+            index = i;
+        }
     }
+    if (index < 0)
+    {
+        return;
+    }
+
+    QString message = tr("Delete special need for \"%1\"?").arg(members[index].displayName());
+    if (QMessageBox::question(this, tr("Delete Special Need"), message) != QMessageBox::Yes)
+    {
+        return;
+    }
+
+    members[index].setSpecialNeedNote(QString());
+    Family saved = *opened;
+    saved.setMembers(members);
+    DocumentManager::instance()->executeCommand(UpdateFamilyCommand::fromEdit(*opened, saved));
 }

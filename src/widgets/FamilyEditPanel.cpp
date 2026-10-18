@@ -14,6 +14,7 @@
 #include <QScrollArea>
 #include <QIcon>
 #include <QMessageBox>
+#include <QSet>
 
 FamilyEditPanel::FamilyEditPanel(QWidget* parent)
     : QFrame(parent)
@@ -270,6 +271,33 @@ void FamilyEditPanel::onLonChanged()
 
 void FamilyEditPanel::onMembersChanged()
 {
-    m_editedFamily.setMembers(m_memberAccordion->members());
+    QSet<PersonId> openedIds;
+    for (const Person& member : m_originalFamily.members())
+    {
+        openedIds.insert(member.id());
+    }
+
+    QList<Person> accordionMembers = m_memberAccordion->members();
+    QList<Person> kept;
+    for (const Person& member : accordionMembers)
+    {
+        if (openedIds.contains(member.id()))
+        {
+            kept.append(member);
+        }
+    }
+    m_editedFamily.setMembers(kept);
+
+    // Each added member goes where the member order rule puts it among the members placed
+    // so far, worked out again on every change as its birth year and role are filled in.
+    for (const Person& member : accordionMembers)
+    {
+        if (!openedIds.contains(member.id()))
+        {
+            QList<Person> members = m_editedFamily.members();
+            members.insert(m_editedFamily.insertionIndexFor(member), member);
+            m_editedFamily.setMembers(members);
+        }
+    }
     emit dataChanged();
 }

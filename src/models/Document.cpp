@@ -629,7 +629,7 @@ Document Document::fromJson(const QJsonObject& json)
         document.m_emergencyResponse = EmergencyResponse::fromJson(json["responseData"].toObject());
     }
 
-    // Note: lookup caches are built by DocumentManager::setDocument() via onDocumentChanged()
+    // Lookup caches are built by WardSession, through onDocumentChanged(), when it takes the document
 
     return document;
 }

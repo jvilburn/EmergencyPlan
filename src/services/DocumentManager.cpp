@@ -28,20 +28,20 @@ DocumentManager* DocumentManager::s_instance = nullptr;
 
 DocumentManager::DocumentManager(QObject* parent)
     : QObject(parent)
-    , m_document(Document::empty())
-    , m_commandHistory(this)
+    , m_session(this)
     , m_unitLookupService(new UnitLookupService(this))
     , m_geocodingService(nullptr)
 {
     Q_ASSERT(!s_instance);
     s_instance = this;
 
+    m_session.open(Document::empty());
+
     // Create after s_instance is set so BackgroundGeocodingService can use instance()
     m_geocodingService = new BackgroundGeocodingService(this);
 
-    connect(&m_commandHistory, &CommandHistory::canUndoChanged, this, &DocumentManager::canUndoChanged);
-    connect(&m_commandHistory, &CommandHistory::canRedoChanged, this, &DocumentManager::canRedoChanged);
-    connect(&m_commandHistory, &CommandHistory::dirtyChanged, this, &DocumentManager::dirtyChanged);
+    connect(&m_session, &WardSession::documentChanged, this, &DocumentManager::documentChanged);
+    connect(&m_session, &WardSession::undoStackChanged, this, &DocumentManager::undoStackChanged);
 
     connect(m_unitLookupService, &UnitLookupService::wardLookupComplete,
             this, &DocumentManager::onWardLookupComplete);
@@ -69,7 +69,7 @@ const Document& DocumentManager::document() const
     {
         return *m_archiveDocument;
     }
-    return m_document;
+    return m_session.document();
 }
 
 void DocumentManager::setArchiveDocument(Document archiveDoc)
@@ -84,62 +84,65 @@ void DocumentManager::clearArchiveDocument()
     emit documentChanged(DocumentChange::full());
 }
 
-void DocumentManager::executeCommand(CommandPtr command)
+CommitResult DocumentManager::executeCommand(CommandPtr command)
 {
     if (isViewingArchive())
     {
         qWarning() << "Command execution blocked while viewing archive";
-        return;
+        return CommitResult{CommitStatus::NothingToDo, QString()};
     }
-
-    DocumentChange change = command->documentChange();
-
-    m_commandHistory.execute(std::move(command), m_document);
-    m_document.onDocumentChanged(change);
-    emit documentChanged(change);
-    checkForIncompleteWards();
-    autoSave();
+    CommitResult result = m_session.commit(command);
+    if (result.status == CommitStatus::NothingToDo)
+    {
+        return result;
+    }
+    afterCommit(result, command->description());
+    return result;
 }
 
 void DocumentManager::undo()
 {
-    if (isViewingArchive())
+    if (isViewingArchive() || !canUndo())
     {
         return;
     }
-    if (!canUndo())
-    {
-        return;
-    }
-    DocumentChange change = m_commandHistory.undo(m_document);
-    m_document.onDocumentChanged(change);
-    emit documentChanged(change);
-    autoSave();
+    CommandDescription description(m_session.undoHeading(), QStringList());
+    afterCommit(m_session.undo(), description);
 }
 
 void DocumentManager::redo()
 {
-    if (isViewingArchive())
+    if (isViewingArchive() || !canRedo())
     {
         return;
     }
-    if (!canRedo())
+    CommandDescription description(m_session.redoHeading(), QStringList());
+    afterCommit(m_session.redo(), description);
+}
+
+void DocumentManager::afterCommit(const CommitResult& result, const CommandDescription& description)
+{
+    switch (result.status)
     {
-        return;
+    case CommitStatus::Applied:
+        checkForIncompleteWards();
+        autoSave();
+        break;
+    case CommitStatus::Conflicted:
+    case CommitStatus::Refused:
+        emit commandNotApplied(description, result);
+        break;
+    case CommitStatus::NothingToDo:
+        break;
     }
-    DocumentChange change = m_commandHistory.redo(m_document);
-    m_document.onDocumentChanged(change);
-    emit documentChanged(change);
-    autoSave();
 }
 
 void DocumentManager::newDocument()
 {
     stopGeocoding();
-    m_commandHistory.clear();
     m_pendingWardLookups.clear();
     m_pendingStakeLookups.clear();
-    setDocument(Document::empty());
+    m_session.open(Document::empty());
     setFilePath(QString());
 }
 
@@ -157,10 +160,9 @@ bool DocumentManager::openDocument(const QString& filePath, QString* errorMessag
     }
 
     stopGeocoding();
-    m_commandHistory.clear();
     m_pendingWardLookups.clear();
     m_pendingStakeLookups.clear();
-    setDocument(result.document);
+    m_session.open(result.document);
     setFilePath(filePath);
     checkForIncompleteWards();
     return true;
@@ -182,21 +184,13 @@ bool DocumentManager::saveDocument(QString* errorMessage)
 
 bool DocumentManager::saveDocumentAs(const QString& filePath, QString* errorMessage)
 {
-    if (!JsonService::saveDocument(filePath, m_document, errorMessage))
+    if (!JsonService::saveDocument(filePath, m_session.document(), errorMessage))
     {
         return false;
     }
 
     setFilePath(filePath);
-    m_commandHistory.markSaved();
     return true;
-}
-
-void DocumentManager::setDocument(const Document& document)
-{
-    m_document = document;
-    m_document.onDocumentChanged(DocumentChange::full());
-    emit documentChanged(DocumentChange::full());
 }
 
 void DocumentManager::setFilePath(const QString& filePath)
@@ -211,7 +205,7 @@ void DocumentManager::setFilePath(const QString& filePath)
 void DocumentManager::checkForIncompleteWards()
 {
     // Find wards that need lookup (no chapel address means incomplete)
-    for (const Ward& ward : m_document.wards())
+    for (const Ward& ward : m_session.document().wards())
     {
         QString unitNumber = ward.unitNumber();
         if (!ward.chapelAddress().has_value()
@@ -304,7 +298,7 @@ void DocumentManager::onLookupFailed(const QString& unitNumber, const QString& e
 void DocumentManager::startBatchGeocoding()
 {
     // Queue all families that need geocoding
-    for (const auto& family : m_document.families())
+    for (const auto& family : m_session.document().families())
     {
         if (!family.address().isEmpty() && !family.isMapped())
         {
@@ -358,7 +352,7 @@ bool DocumentManager::saveDocumentOnly()
         return false;
     }
     QString errorMessage;
-    if (!JsonService::saveDocument(m_filePath, m_document, &errorMessage))
+    if (!JsonService::saveDocument(m_filePath, m_session.document(), &errorMessage))
     {
         qWarning() << "Response data save failed:" << errorMessage;
         emit autoSaveFailed(errorMessage);
@@ -396,7 +390,7 @@ void DocumentManager::ensureFilePath()
         return;
     }
 
-    QString filename = m_document.suggestedFilename();
+    QString filename = m_session.document().suggestedFilename();
     if (filename.isEmpty())
     {
         filename = tr("Untitled");
@@ -413,7 +407,7 @@ void DocumentManager::maybeRenameForWard()
         return;
     }
 
-    QString suggestedName = m_document.suggestedFilename();
+    QString suggestedName = m_session.document().suggestedFilename();
     if (suggestedName.isEmpty())
     {
         return;

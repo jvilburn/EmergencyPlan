@@ -6,17 +6,17 @@
 #include <optional>
 #include "Document.h"
 #include "DocumentChange.h"
-#include "CommandHistory.h"
+#include "WardSession.h"
 
 class UnitLookupService;
 class BackgroundGeocodingService;
 
+/// The app's one open ward: a thin wrapper over its WardSession, with the ward's file.
 class DocumentManager : public QObject
 {
     Q_OBJECT
-    Q_PROPERTY(bool isDirty READ isDirty NOTIFY dirtyChanged)
-    Q_PROPERTY(bool canUndo READ canUndo NOTIFY canUndoChanged)
-    Q_PROPERTY(bool canRedo READ canRedo NOTIFY canRedoChanged)
+    Q_PROPERTY(bool canUndo READ canUndo NOTIFY undoStackChanged)
+    Q_PROPERTY(bool canRedo READ canRedo NOTIFY undoStackChanged)
     Q_PROPERTY(QString filePath READ filePath NOTIFY filePathChanged)
 
 public:
@@ -36,19 +36,18 @@ public:
     // File path
     QString filePath() const { return m_filePath; }
 
-    // Command execution
-    void executeCommand(CommandPtr command);
+    /// Runs the command through the session's commit step and saves when it applied. A
+    /// command that conflicted or was refused emits commandNotApplied.
+    CommitResult executeCommand(CommandPtr command);
 
-    // Undo/Redo
+    /// Undo and redo through the session's commit step, saving when they applied. One that
+    /// conflicted or was refused emits commandNotApplied with the undo or redo heading.
     void undo();
     void redo();
-    bool canUndo() const { return m_commandHistory.canUndo(); }
-    bool canRedo() const { return m_commandHistory.canRedo(); }
-    QString undoDescription() const { return m_commandHistory.undoDescription(); }
-    QString redoDescription() const { return m_commandHistory.redoDescription(); }
-
-    // Dirty state
-    bool isDirty() const { return m_commandHistory.isDirty(); }
+    bool canUndo() const { return m_session.canUndo(); }
+    bool canRedo() const { return m_session.canRedo(); }
+    QString undoHeading() const { return m_session.undoHeading(); }
+    QString redoHeading() const { return m_session.redoHeading(); }
 
     // File operations
     void newDocument();
@@ -56,7 +55,7 @@ public:
     bool saveDocument(QString* errorMessage);
     bool saveDocumentAs(const QString& filePath, QString* errorMessage);
 
-    // Emergency response data (saves without affecting command history dirty state)
+    // Emergency response data (saves without going through the session)
     void setEmergencyResponse(const std::optional<EmergencyResponse>& response);
     bool saveDocumentOnly();
 
@@ -67,9 +66,8 @@ public:
 
 signals:
     void documentChanged(const DocumentChange& change);
-    void dirtyChanged();
-    void canUndoChanged();
-    void canRedoChanged();
+    void undoStackChanged();
+    void commandNotApplied(const CommandDescription& description, const CommitResult& result);
     void filePathChanged();
 
     // Geocoding progress
@@ -89,16 +87,18 @@ private slots:
     void onGeocodingFinished();
 
 private:
-    void setDocument(const Document& document);
+    /// After the commit step: an applied change looks up new wards and saves; one that
+    /// conflicted or was refused emits commandNotApplied with description.
+    void afterCommit(const CommitResult& result, const CommandDescription& description);
+
     void setFilePath(const QString& filePath);
     void checkForIncompleteWards();
     void autoSave();
     void ensureFilePath();
     void maybeRenameForWard();
 
-    Document m_document;
+    WardSession m_session;
     std::optional<Document> m_archiveDocument;  // overlay for read-only archive viewing
-    CommandHistory m_commandHistory;
     QString m_filePath;
 
     // Unit lookup

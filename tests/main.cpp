@@ -2,6 +2,7 @@
 #include "FamilyOrderTest.h"
 #include "FieldChangeTest.h"
 #include "CommandRoundTripTest.h"
+#include "MemberEditorTest.h"
 #include "PersonJsonTest.h"
 #include "UpdateFamilyCommandTest.h"
 #include "WardSessionTest.h"
@@ -20,6 +21,7 @@ int main(int argc, char* argv[])
     UpdateFamilyCommandTest updateFamilyCommandTest(nullptr);
     CommandRoundTripTest commandRoundTripTest(nullptr);
     WardSessionTest wardSessionTest(nullptr);
+    MemberEditorTest memberEditorTest(nullptr);
 
     int failures = 0;
     failures += QTest::qExec(&personJsonTest, argc, argv);
@@ -29,5 +31,6 @@ int main(int argc, char* argv[])
     failures += QTest::qExec(&updateFamilyCommandTest, argc, argv);
     failures += QTest::qExec(&commandRoundTripTest, argc, argv);
     failures += QTest::qExec(&wardSessionTest, argc, argv);
+    failures += QTest::qExec(&memberEditorTest, argc, argv);
     return failures;
 }

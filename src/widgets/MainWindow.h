@@ -5,6 +5,7 @@
 
 #include "DocumentChange.h"
 #include "Id.h"
+#include "WardSession.h"
 
 class QLabel;
 class QProgressBar;
@@ -42,6 +43,7 @@ private slots:
     void onDocumentChanged(const DocumentChange& change);
     void updateWindowTitle();
     void updateUndoRedoActions();
+    void onCommandNotApplied(const CommandDescription& description, const CommitResult& result);
 
     // Geocoding
     void onGeocodingProgress(int completed, int total);

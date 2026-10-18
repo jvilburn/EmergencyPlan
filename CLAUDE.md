@@ -67,7 +67,6 @@ Using `QHash<QString, Model>` instead of `QList<Model>` because:
 
 | Task | Status | Plan Doc |
 |------|--------|----------|
-| NeedsSubView dialog UX | ready | docs/SHARED_WARD_DESIGN.md (work list: the "Special Need" dialog) |
 
 **Status:** `ready`, `in-progress`, `blocked:<reason>`, `done` (then remove row + archive plan)
 

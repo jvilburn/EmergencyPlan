@@ -340,7 +340,7 @@ private:
 
 ### DocumentManager
 
-Central coordinator for the open ward and its file:
+A thin wrapper over the app's one `WardSession`, with the ward's file:
 
 ```cpp
 class DocumentManager : public QObject
@@ -348,12 +348,16 @@ class DocumentManager : public QObject
     Q_OBJECT
 
 public:
-    const Document& document() const;
+    const Document& document() const;  // the session's document
 
-    // Command execution
-    void executeCommand(CommandPtr command);
+    // The session's commit step, undo and redo
+    CommitResult executeCommand(CommandPtr command);
     void undo();
     void redo();
+    bool canUndo() const;
+    bool canRedo() const;
+    QString undoHeading() const;
+    QString redoHeading() const;
 
     // File operations
     void newDocument();
@@ -362,11 +366,14 @@ public:
     bool saveDocumentAs(const QString& path);
 
 signals:
-    void documentChanged(const DocumentChange& change);
-    void dirtyChanged();
+    void documentChanged(const DocumentChange& change);  // forwarded from the session
+    void undoStackChanged();                             // forwarded from the session
+    void commandNotApplied(const CommandDescription& description, const CommitResult& result);
     void filePathChanged();
 };
 ```
+
+`executeCommand` hands the command to `WardSession::commit` and returns its `CommitResult`. When it is `Applied`, the manager looks up any ward missing its details and saves; when it is `Conflicted` or `Refused`, it emits `commandNotApplied` with the command's description, and `MainWindow` tells the user what needs doing again or which rule refused it; `NothingToDo`, from an edit that changed nothing, does neither. `undo` and `redo` run the session's `undo` and `redo` the same way, emitting `commandNotApplied` with the undo or redo heading. `newDocument` and `openDocument` open the ward in the session, which starts its journal and undo stack empty.
 
 ### GeocodingService
 
@@ -434,15 +441,16 @@ Modal dialog for selecting families or persons with split list + map view:
 class WardListDialog : public QDialog
 {
     enum Mode { FamilyMode, PersonMode };
-    enum SelectionMode { SingleSelect, MultiSelect };
 
     // Static convenience methods
-    static QString selectFamily(DocumentManager* dm, ...);
-    static QStringList selectFamilies(DocumentManager* dm, ...);
-    static QString selectPerson(DocumentManager* dm, ...);
-    static QStringList selectPersons(DocumentManager* dm, ...);
+    static std::optional<FamilySelectionResult> selectFamilies(...);
+    static std::optional<PersonSelectionResult> selectPersons(...);
+    static std::optional<SpecialNeedEdit> editSpecialNeed(const std::optional<PersonId>& lockedPerson,
+                                                          QWidget* parent);
 };
 ```
+
+`editSpecialNeed` is the "Special Need" dialog. Opened on an existing need, its person is locked; opened from empty space, picking a person reads that person's family and fills in their current note, which is when the edit takes its start condition. It returns the family as read then and the family with the note set, from which `NeedsSubView` builds `UpdateFamilyCommand::fromEdit`.
 
 ### MapWidget (Pure C++)
 

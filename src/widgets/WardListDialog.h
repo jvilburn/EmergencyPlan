@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Family.h"
 #include "FamilyMarkerProvider.h"
 #include "Id.h"
 
@@ -28,6 +29,14 @@ struct FamilySelectionResult
 {
     QString name;
     QList<FamilyId> familyIds;
+};
+
+/// What the "Special Need" dialog saved: the person's family as the dialog read it when the
+/// person was chosen, and that family with the person's note set to what the user entered.
+struct SpecialNeedEdit
+{
+    Family opened;
+    Family saved;
 };
 
 /// Modal dialog for selecting families or persons from the ward list.
@@ -72,12 +81,12 @@ public:
         const QList<FamilyId>& initialIds,
         QWidget* parent);
 
-    /// Show dialog to select a single person with a name field.
-    /// Returns nullopt if cancelled.
-    static std::optional<PersonSelectionResult> selectPersonWithName(
-        const QString& nameLabel,
-        const QString& initialName,
-        const std::optional<PersonId>& initialId,
+    /// Show the "Special Need" dialog. With lockedPerson set, it edits that person's need and
+    /// the person cannot be changed; otherwise the user picks the person, and each pick reads
+    /// that person's family and fills in their current note. Returns nullopt if cancelled or
+    /// no person was picked.
+    static std::optional<SpecialNeedEdit> editSpecialNeed(
+        const std::optional<PersonId>& lockedPerson,
         QWidget* parent);
 
     /// Show dialog to select multiple persons. Returns nullopt if cancelled.
@@ -94,6 +103,10 @@ private:
     void setupUi();
     QSet<FamilyId> highlightedFamilyIds() const;
 
+    /// Takes the special-need edit's start condition: reads person's family from the
+    /// document into m_openedFamily and fills the note field with the person's current note.
+    void openSpecialNeed(const PersonId& personId);
+
     Mode m_mode;
     FilterBar* m_filterBar = nullptr;
     SelectionPreservingTreeView* m_treeView = nullptr;
@@ -107,4 +120,10 @@ private:
     // Model - only one is non-null depending on mode
     FamilyTreeModel* m_familyModel = nullptr;
     PersonTreeModel* m_personModel = nullptr;
+
+    // Set when this is the "Special Need" dialog; then the person whose need it edits, and
+    // their family as read when that person was chosen, empty while no person is chosen.
+    bool m_editsSpecialNeed = false;
+    PersonId m_needPersonId;
+    std::optional<Family> m_openedFamily;
 };

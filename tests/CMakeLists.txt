@@ -24,6 +24,8 @@ add_executable(WardPlanningTests
     services/PersonJsonTest.cpp
     services/BirthdayTest.h
     services/BirthdayTest.cpp
+    services/MemberEditorTest.h
+    services/MemberEditorTest.cpp
 )
 
 target_include_directories(WardPlanningTests PRIVATE

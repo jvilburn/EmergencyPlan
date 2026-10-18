@@ -21,6 +21,9 @@ public:
     void setFamily(const Family& family);
     Family family() const;
 
+    /// The family as setFamily gave it: the start condition of the edit.
+    const Family& openedFamily() const { return m_originalFamily; }
+
     const FamilyId& familyId() const { return m_familyId; }
     bool isDirty() const;
 

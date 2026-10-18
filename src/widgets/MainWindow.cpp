@@ -224,10 +224,10 @@ void MainWindow::setupConnections()
             this, &MainWindow::updateWindowTitle);
     connect(DocumentManager::instance(), &DocumentManager::filePathChanged,
             this, &MainWindow::onFilePathChanged);
-    connect(DocumentManager::instance(), &DocumentManager::canUndoChanged,
+    connect(DocumentManager::instance(), &DocumentManager::undoStackChanged,
             this, &MainWindow::updateUndoRedoActions);
-    connect(DocumentManager::instance(), &DocumentManager::canRedoChanged,
-            this, &MainWindow::updateUndoRedoActions);
+    connect(DocumentManager::instance(), &DocumentManager::commandNotApplied,
+            this, &MainWindow::onCommandNotApplied);
 
     // Emergency lifecycle
     connect(EmergencyManager::instance(), &EmergencyManager::emergencyStarted,
@@ -559,16 +559,35 @@ void MainWindow::updateUndoRedoActions()
     QString undoText = tr("&Undo");
     if (DocumentManager::instance()->canUndo())
     {
-        undoText += " " + DocumentManager::instance()->undoDescription();
+        undoText += " " + DocumentManager::instance()->undoHeading();
     }
     m_undoAction->setText(undoText);
 
     QString redoText = tr("&Redo");
     if (DocumentManager::instance()->canRedo())
     {
-        redoText += " " + DocumentManager::instance()->redoDescription();
+        redoText += " " + DocumentManager::instance()->redoHeading();
     }
     m_redoAction->setText(redoText);
+}
+
+void MainWindow::onCommandNotApplied(const CommandDescription& description, const CommitResult& result)
+{
+    if (result.status == CommitStatus::Refused)
+    {
+        QMessageBox::warning(this, tr("Change Not Applied"), result.refusal);
+        return;
+    }
+
+    QStringList text;
+    text.append(tr("Your change could not be applied, because the ward changed first. This needs doing again:"));
+    text.append(QString());
+    text.append(description.heading());
+    for (const QString& line : description.lines())
+    {
+        text.append(QString("- %1").arg(line));
+    }
+    QMessageBox::warning(this, tr("Change Not Applied"), text.join("\n"));
 }
 
 void MainWindow::onGeocodingProgress(int completed, int total)
@@ -777,23 +796,8 @@ void MainWindow::onSaveFamily()
         return;
     }
 
-    Family editedFamily = m_editPanel->family();
-    FamilyId familyId = m_editPanel->familyId();
-
-    // Get original family for command
-    const auto& families = DocumentManager::instance()->document().families();
-    auto it = families.find(familyId);
-    if (it == families.end())
-    {
-        return;
-    }
-
-    Family originalFamily = it.value();
-
-    // Execute update command
-    DocumentManager::instance()->executeCommand(std::make_unique<UpdateFamilyCommand>(
-        originalFamily,
-        editedFamily));
+    DocumentManager::instance()->executeCommand(
+        UpdateFamilyCommand::fromEdit(m_editPanel->openedFamily(), m_editPanel->family()));
 
     closeEditPanelInternal();
 }

@@ -137,7 +137,7 @@ void MemberEditor::setupUi()
 
 void MemberEditor::setPerson(const Person& person)
 {
-    m_personId = person.id();
+    m_person = person;
 
     // Block signals during population
     const QSignalBlocker blocker(this);
@@ -185,7 +185,46 @@ void MemberEditor::setPerson(const Person& person)
 
 Person MemberEditor::person() const
 {
-    // Build birthday
+    Person edited = m_person;
+
+    if (m_surnameEdit->text() != m_person.surname()
+        || m_givenNamesEdit->text() != m_person.givenNames())
+    {
+        edited.setName(Name(m_surnameEdit->text().trimmed(), m_givenNamesEdit->text().trimmed()));
+    }
+    if (m_parentCheck->isChecked() != m_person.isParent())
+    {
+        edited.setIsParent(m_parentCheck->isChecked());
+    }
+    if (genderFromForm() != m_person.gender())
+    {
+        edited.setGender(genderFromForm());
+    }
+    if (birthdayFromForm() != m_person.birthday())
+    {
+        edited.setBirthday(birthdayFromForm());
+    }
+    if (m_phoneEdit->text() != m_person.phone())
+    {
+        edited.setPhone(Phone(m_phoneEdit->text().trimmed()));
+    }
+    if (m_altPhoneEdit->text() != m_person.altPhone())
+    {
+        edited.setAltPhone(Phone(m_altPhoneEdit->text().trimmed()));
+    }
+    if (m_emailEdit->text() != m_person.email())
+    {
+        edited.setEmail(m_emailEdit->text().trimmed());
+    }
+    if (m_callingsEditor->callings() != m_person.callings())
+    {
+        edited.setCallings(m_callingsEditor->callings());
+    }
+    return edited;
+}
+
+Birthday MemberEditor::birthdayFromForm() const
+{
     std::optional<int> year;
     bool ok = false;
     int y = m_yearEdit->text().trimmed().toInt(&ok);
@@ -197,35 +236,19 @@ Person MemberEditor::person() const
     int month = m_monthCombo->currentData().toInt();
     int day = m_daySpinner->value();
 
-    Birthday birthday = Birthday::create(
+    return Birthday::create(
         year,
         month > 0 ? std::optional<int>(month) : std::nullopt,
         day > 0 ? std::optional<int>(day) : std::nullopt
     );
+}
 
-    // Build gender from stored Gender object
-    std::optional<Gender> gender;
+std::optional<Gender> MemberEditor::genderFromForm() const
+{
     Gender g = m_genderCombo->currentData().value<Gender>();
-    if (g.isValid())
+    if (!g.isValid())
     {
-        gender = g;
+        return std::nullopt;
     }
-
-    // Use createWithId with correct parameter order:
-    // id, name, gender, birthday, phone, altPhone, email, callings, isParent
-    Person p = Person::createWithId(
-        m_personId,
-        Name(m_surnameEdit->text().trimmed(), m_givenNamesEdit->text().trimmed()),
-        gender,
-        birthday,
-        Phone(m_phoneEdit->text().trimmed()),
-        Phone(m_altPhoneEdit->text().trimmed()),
-        m_emailEdit->text().trimmed(),
-        m_callingsEditor->callings(),
-        m_parentCheck->isChecked(),
-        QString(), // wardUnitNumber
-        QString()  // stakeUnitNumber
-    );
-
-    return p;
+    return g;
 }

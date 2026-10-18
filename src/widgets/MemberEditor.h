@@ -9,7 +9,7 @@ class QComboBox;
 class QSpinBox;
 class CallingsEditor;
 
-/// Widget for editing all fields of a Person.
+/// Widget for editing the fields of a Person that the form shows.
 class MemberEditor : public QWidget
 {
     Q_OBJECT
@@ -18,10 +18,13 @@ public:
     explicit MemberEditor(QWidget* parent);
 
     void setPerson(const Person& person);
+
+    /// The person given to setPerson, with each field the form shows taken from its widget
+    /// where the widget no longer holds what setPerson put there. Fields the form does not
+    /// show, and fields the user left alone, are the given person's.
     Person person() const;
 
-    /// Returns the original person ID (preserved across edits).
-    const PersonId& personId() const { return m_personId; }
+    const PersonId& personId() const { return m_person.id(); }
 
 signals:
     void dataChanged();
@@ -29,8 +32,10 @@ signals:
 
 private:
     void setupUi();
+    Birthday birthdayFromForm() const;
+    std::optional<Gender> genderFromForm() const;
 
-    PersonId m_personId;
+    Person m_person;
 
     // Name
     QLineEdit* m_surnameEdit;
