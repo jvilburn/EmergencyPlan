@@ -15,7 +15,6 @@
 #include "MinisteringGroup.h"
 #include "ItemType.h"
 #include "EmergencyAsset.h"
-#include "EmergencyResponse.h"
 #include "ResponseArea.h"
 #include <QSet>
 

@@ -186,7 +186,6 @@ namespace
                 QString mergedText = prev.text().trimmed() + " " + curr.text().trimmed();
                 fields[prevIdx] = PdfTextField(
                     mergedText,
-                    prev.type(),
                     prev.left(),
                     std::max(prev.right(), curr.right()),
                     prev.y(),

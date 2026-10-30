@@ -752,30 +752,19 @@ void MainWindow::onEndEmergency()
     QMessageBox dialog(this);
     dialog.setWindowTitle(tr("End Emergency"));
     dialog.setText(tr("End \"%1\"?").arg(emergencyName));
+    dialog.setInformativeText(tr("Ending removes the response data. The summary report is the record of the emergency."));
     dialog.setIcon(QMessageBox::Question);
 
     QCheckBox* pdfCheckBox = new QCheckBox(tr("Generate summary report (PDF)"));
     pdfCheckBox->setChecked(true);
     dialog.setCheckBox(pdfCheckBox);
 
-    QPushButton* discardButton = dialog.addButton(tr("Discard && End"), QMessageBox::DestructiveRole);
+    QPushButton* endButton = dialog.addButton(tr("End"), QMessageBox::DestructiveRole);
     dialog.addButton(QMessageBox::Cancel);
 
     dialog.exec();
 
-    if (dialog.clickedButton() != discardButton)
-    {
-        return;
-    }
-
-    QMessageBox::StandardButton confirm = QMessageBox::warning(
-        this,
-        tr("Discard Response Data"),
-        tr("This will permanently delete all response data for this emergency. Continue?"),
-        QMessageBox::Yes | QMessageBox::No,
-        QMessageBox::No);
-
-    if (confirm != QMessageBox::Yes)
+    if (dialog.clickedButton() != endButton)
     {
         return;
     }
@@ -829,7 +818,7 @@ bool MainWindow::generateEmergencyReportWithConfirm()
     }
 
     QString wardName = DocumentManager::instance()->document().wardName();
-    if (ReportGenerator::generateReport(response, wardName, filePath))
+    if (ReportGenerator::generateReport(response, wardName, QDateTime::currentDateTime(), filePath))
     {
         statusBar()->showMessage(tr("Report saved to %1").arg(filePath), 5000);
         return true;

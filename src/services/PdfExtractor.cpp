@@ -15,9 +15,8 @@
 // PdfTextField
 // ============================================================================
 
-PdfTextField::PdfTextField(const QString& text, int type, double left, double right, double y, float fontSize, bool bold)
+PdfTextField::PdfTextField(const QString& text, double left, double right, double y, float fontSize, bool bold)
     : m_text(text)
-    , m_type(type)
     , m_left(left)
     , m_right(right)
     , m_y(y)
@@ -122,51 +121,6 @@ QList<PdfChar> PdfExtractor::extractChars(int pageNum) {
     return result;
 }
 
-int PdfExtractor::classifyField(const QString& text, double left, double right, float fontSize, bool bold) const
-{
-    constexpr double X_TOL = 5.0;  // Allow for X drift across pages (observed up to ~4 points)
-    constexpr double SIZE_TOL = 0.5;
-
-    for (const FieldClassificationRule& rule : m_rules)
-    {
-        // Check position based on alignment
-        double fieldX;
-        switch (rule.alignment)
-        {
-            case FieldAlignment::Left:
-                fieldX = left;
-                break;
-            case FieldAlignment::Right:
-                fieldX = right;
-                break;
-            case FieldAlignment::Center:
-                fieldX = (left + right) / 2.0;
-                break;
-        }
-
-        if (qAbs(fieldX - rule.x) > X_TOL)
-        {
-            continue;
-        }
-        if (qAbs(fontSize - rule.fontSize) > SIZE_TOL)
-        {
-            continue;
-        }
-        if (rule.bold && !bold)
-        {
-            continue;
-        }
-
-        // Position/font/bold matched - determine field type
-        if (rule.textClassify)
-        {
-            return rule.textClassify(text);
-        }
-        return rule.fieldType;
-    }
-    return -1;  // Unknown
-}
-
 QList<PdfTextField> PdfExtractor::textFields(int pageNum)
 {
     QList<PdfChar> chars = extractChars(pageNum);
@@ -206,8 +160,7 @@ QList<PdfTextField> PdfExtractor::textFields(int pageNum)
         else
         {
             // Finalize current field
-            int type = m_rules.isEmpty() ? -1 : classifyField(currentText, currentBbox.x(), currentBbox.right(), currentFontSize, currentBold);
-            fields.append(PdfTextField(currentText, type, currentBbox.x(), currentBbox.right(), currentBbox.y(), currentFontSize, currentBold));
+            fields.append(PdfTextField(currentText, currentBbox.x(), currentBbox.right(), currentBbox.y(), currentFontSize, currentBold));
 
             // Start new field
             currentText = QString(curr.ch);
@@ -218,8 +171,7 @@ QList<PdfTextField> PdfExtractor::textFields(int pageNum)
     }
 
     // Finalize last field
-    int type = m_rules.isEmpty() ? -1 : classifyField(currentText, currentBbox.x(), currentBbox.right(), currentFontSize, currentBold);
-    fields.append(PdfTextField(currentText, type, currentBbox.x(), currentBbox.right(), currentBbox.y(), currentFontSize, currentBold));
+    fields.append(PdfTextField(currentText, currentBbox.x(), currentBbox.right(), currentBbox.y(), currentFontSize, currentBold));
 
     // Sort by Y (top to bottom), then X (left to right)
     std::sort(fields.begin(), fields.end());

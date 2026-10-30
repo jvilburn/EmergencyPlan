@@ -5,7 +5,6 @@
 #include <QDateTime>
 #include <QHash>
 #include <QList>
-#include <QJsonObject>
 #include <optional>
 
 #include "Id.h"
@@ -50,11 +49,6 @@ public:
     const QDateTime& timestamp() const { return m_timestamp; }
     const QString& notes() const { return m_notes; }
 
-    QJsonObject toJson() const;
-    static TaskNotification fromJson(const QJsonObject& json);
-    bool operator==(const TaskNotification& other) const;
-    bool operator!=(const TaskNotification& other) const { return !(*this == other); }
-
 private:
     ContactMethod m_method = ContactMethod::Phone;
     QDateTime m_timestamp;
@@ -75,11 +69,6 @@ public:
     const PersonId& who() const { return m_who; }
     const QDateTime& timestamp() const { return m_timestamp; }
     const QString& notes() const { return m_notes; }
-
-    QJsonObject toJson() const;
-    static ContactAttempt fromJson(const QJsonObject& json);
-    bool operator==(const ContactAttempt& other) const;
-    bool operator!=(const ContactAttempt& other) const { return !(*this == other); }
 
 private:
     ContactAttemptId m_id;
@@ -127,11 +116,6 @@ public:
 
     bool isAssigned() const;
     bool isNotified() const;
-
-    QJsonObject toJson() const;
-    static ResponseTask fromJson(const QJsonObject& json);
-    bool operator==(const ResponseTask& other) const;
-    bool operator!=(const ResponseTask& other) const { return !(*this == other); }
 
 private:
     TaskId m_id;
@@ -181,11 +165,6 @@ public:
     // Effective status for display (combines stored + derived)
     EffectiveContactStatus effectiveStatus() const;
 
-    QJsonObject toJson() const;
-    static FamilyResponseRecord fromJson(const QJsonObject& json);
-    bool operator==(const FamilyResponseRecord& other) const;
-    bool operator!=(const FamilyResponseRecord& other) const { return !(*this == other); }
-
 private:
     FamilyId m_familyId;
     QString m_displayName;       // snapshot at emergency start, not updated
@@ -220,11 +199,6 @@ public:
     // Statistics
     int totalFamilies() const;
     int countByStatus(EffectiveContactStatus status) const;
-
-    QJsonObject toJson() const;
-    static EmergencyResponse fromJson(const QJsonObject& json);
-    bool operator==(const EmergencyResponse& other) const;
-    bool operator!=(const EmergencyResponse& other) const { return !(*this == other); }
 
 private:
     QString m_name;

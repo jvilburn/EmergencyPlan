@@ -148,6 +148,7 @@ const QList<ContactMethod> kMethodOrder =
 
 bool ReportGenerator::generateReport(const EmergencyResponse& response,
                                      const QString& wardName,
+                                     const QDateTime& writtenAt,
                                      const QString& filePath)
 {
     QPrinter printer(QPrinter::HighResolution);
@@ -181,13 +182,12 @@ bool ReportGenerator::generateReport(const EmergencyResponse& response,
     drawText(ctx, QObject::tr("Emergency Response Report"), kHeaderFontSize, true);
     drawSpacer(ctx, 4);
     drawText(ctx, response.name(), kSubheaderFontSize, false);
+    drawText(ctx, wardName, kBodyFontSize, false);
 
-    if (!wardName.isEmpty())
-    {
-        drawText(ctx, wardName, kBodyFontSize, false);
-    }
-
-    QString dateRange = response.startedAt().toString("MMM d, yyyy h:mm AP") + QObject::tr(" - Ongoing");
+    const QString dateFormat = "MMM d, yyyy h:mm AP";
+    QString dateRange = QObject::tr("%1 - %2")
+        .arg(response.startedAt().toLocalTime().toString(dateFormat),
+             writtenAt.toLocalTime().toString(dateFormat));
     drawText(ctx, dateRange, kBodyFontSize, false);
     drawLine(ctx);
 

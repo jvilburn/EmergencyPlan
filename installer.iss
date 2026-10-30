@@ -76,3 +76,15 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+// An upgrade removes the .emergencyplan association an older release registered;
+// ChangesAssociations tells the shell it is gone.
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssInstall then
+  begin
+    RegDeleteKeyIncludingSubkeys(HKA, 'Software\Classes\.emergencyplan');
+    RegDeleteKeyIncludingSubkeys(HKA, 'Software\Classes\WardEmergencyPlan.Document');
+  end;
+end;

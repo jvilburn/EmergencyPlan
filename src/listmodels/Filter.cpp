@@ -155,7 +155,6 @@ void Filter::clear()
     m_callings.clear();
     m_gender = std::nullopt;
     m_ageFilter = AgeFilter::All;
-    m_specificAge = std::nullopt;
     m_mappedFilter = MappedFilter::All;
     m_onlyWithContact = false;
     m_specialNeeds.clear();
@@ -178,7 +177,6 @@ bool Filter::isEmpty() const
         && m_callings.isEmpty()
         && !m_gender.has_value()
         && m_ageFilter == AgeFilter::All
-        && !m_specificAge.has_value()
         && m_mappedFilter == MappedFilter::All
         && !m_onlyWithContact
         && m_specialNeeds.isEmpty()
@@ -233,16 +231,8 @@ bool Filter::passesPersonCriteria(const Person& person) const
         }
     }
 
-    // Age: specific age takes precedence
-    if (m_specificAge.has_value())
-    {
-        std::optional<int> personAge = person.age();
-        if (!personAge.has_value() || personAge.value() != m_specificAge.value())
-        {
-            return false;
-        }
-    }
-    else if (m_ageFilter == AgeFilter::Adults)
+    // Age
+    if (m_ageFilter == AgeFilter::Adults)
     {
         if (person.isChild())
         {
@@ -408,7 +398,6 @@ bool Filter::passes(const Document& document, const Family& family) const
     bool personCriteriaOk = m_callings.isEmpty()
         && !m_gender.has_value()
         && m_ageFilter == AgeFilter::All
-        && !m_specificAge.has_value()
         && m_specialNeeds.isEmpty()
         && !m_hasAnySpecialNeed;
 

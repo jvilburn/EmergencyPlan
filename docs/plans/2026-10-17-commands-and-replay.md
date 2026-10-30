@@ -16,8 +16,8 @@ and has no inverse. Update commands hold typed `FieldChange<T>` and
 `IdSetChange<Id>` values for the fields they change only. `WardSession` owns the document, the
 `Journal` and the undo and redo stacks, which hold commands, with no global state; an abandoned
 replay hands back its changes as plain text, which the app writes to a file; `DocumentManager` and `EmergencyManager`
-become thin wrappers over the app's one session. The existing plaintext save and load path
-stays as it is (plan 2 replaces it); push, fetch, landed marks and access-list commands are
+become thin wrappers over the app's one session. The app holds the open ward in memory, and
+plan 2 adds the ward file; push, fetch, landed marks and access-list commands are
 plan 3, so replay is exercised against a second document version built in the test.
 
 **Tech Stack:** Qt 6.11 (Core, Gui, Widgets, Test), C++17, MSVC 2022, CMake + Ninja via
@@ -3872,7 +3872,15 @@ describes, then continue with task 2 when the user says so.
   `src/widgets/ActionButtonsWidget.cpp`, `src/widgets/TeamsView.cpp`, `src/widgets/WardListView.cpp`,
   `src/listmodels/FamilyTreeModel.cpp`, `src/listmodels/MinisteringModel.cpp`,
   `src/listmodels/TeamsTreeModel.cpp`, `src/models/EmergencyResponse.h/.cpp`,
-  `src/services/ReportGenerator.cpp`, `docs/USER_GUIDE.md`
+  `src/services/ReportGenerator.h/.cpp`, `docs/USER_GUIDE.md`
+- Delete (the plaintext file path): `src/services/JsonService.h/.cpp`; modify `src/main.cpp`,
+  `installer.iss`, `packaging/macos/Info.plist`, `src/models/Document.h/.cpp`,
+  `src/models/DocumentMetadata.h/.cpp`
+- Delete (old-contract commands): `src/commands/TeamCommands.h/.cpp`,
+  `src/commands/EmergencyAssetCommands.h/.cpp`, `src/commands/TagCommands.h/.cpp`,
+  `src/commands/ImportWardDirectoryCommand.h/.cpp`, `src/commands/ImportMinisteringCommand.h/.cpp`
+- Modify (helpers with no callers): `src/models`, `src/listmodels`, `src/services`, `src/widgets`,
+  `src/ui/AppStyles.h`
 
 **The member editor edits the person it was given.** `MemberEditor` keeps the `Person` passed
 to `setPerson` in a `Person m_person` member, in place of `PersonId m_personId`,
@@ -3886,7 +3894,7 @@ edit holds only what the user changed.
 - Members `Document m_document` and `CommandHistory m_commandHistory` become
   `WardSession m_session`. `document()` returns `m_session.document()`.
 - `CommitResult executeCommand(CommandPtr command)`: calls `m_session.commit`, and on
-  `Applied` runs `checkForIncompleteWards()` and `autoSave()` as today; on `Conflicted` or
+  `Applied` runs `checkForIncompleteWards()`; on `Conflicted` or
   `Refused` emits `commandNotApplied(const CommitResult& result)`; on `NothingToDo` (an empty
   command) it does nothing more. The result carries the description of the command that ran.
 - `undo()` and `redo()` call `m_session.undo()` / `redo()` the same way. An undo's result
@@ -3894,10 +3902,8 @@ edit holds only what the user changed.
 - `undoDescription()` / `redoDescription()` become `undoHeading()` / `redoHeading()`.
 - Signals: `canUndoChanged` and `canRedoChanged` become one `undoStackChanged`, forwarded from
   the session; `documentChanged` is forwarded from the session's.
-- `newDocument()` calls `m_session.open(Document::empty())`; `openDocument()` calls
-  `m_session.open(result.document)`. `setDocument` is deleted.
-- Deleted: `isDirty()`, the `isDirty` `Q_PROPERTY`, `dirtyChanged`, and the `markSaved` call in
-  `saveDocumentAs` (every command is saved as it is made).
+- `newDocument()` calls `m_session.open(Document::empty())`. `setDocument` is deleted.
+- Deleted: `isDirty()`, the `isDirty` `Q_PROPERTY` and `dirtyChanged`.
 - The ward lookup and geocoding slots are rewritten in task 3.
 
 **MainWindow.**
@@ -3939,7 +3945,7 @@ work list).
   `NeedsSubView::deleteNeed` captures the family before its confirmation box and commits the
   edit that clears the note. The helper `updatePersonInFamily` is deleted.
 
-**Emergency archives are deleted** (*Emergency archives are removed*), since the summary report
+**Emergency archives are deleted** (*The record of an emergency*), since the summary report
 saved when an emergency ends is how one is looked back on:
 - `EmergencyManager`'s `m_savedResponse`, `loadArchive`, `closeArchive`, `reopenArchive`,
   `saveArchive`, `isViewingArchive`, `archiveViewOpened`, `archiveViewClosed` and
@@ -3951,8 +3957,35 @@ saved when an emergency ends is how one is looked back on:
   `FamilyTreeModel`, `MinisteringModel`, `TeamsTreeModel` and `WardListView`; the
   `isViewingArchive` checks in `ActionButtonsWidget`, `TeamsView` and `WardListView`.
 - `EmergencyResponse`'s `m_endedAt`, `endedAt`, `setEndedAt` and `clearEndedAt`, which nothing
-  sets once archives are gone; the report's date line reads from the start time.
-- `docs/USER_GUIDE.md`: the Archives section, and Archive && End in *Ending an Emergency*.
+  sets once archives are gone. `ReportGenerator::generateReport` takes the time the report is
+  written, and its date line runs from the start time to that time.
+- `MainWindow::onEndEmergency` asks once, with an *End* button, then saves the report if it is
+  checked, then ends the emergency.
+- `docs/USER_GUIDE.md`: the Archives section, and *Ending an Emergency* describes the one End
+  confirmation.
+
+**The plaintext file path is deleted**, since the app holds the open ward in memory until plan 2
+adds the ward file:
+- `DocumentManager`'s `filePath` property, `openDocument`, `saveDocument`, `saveDocumentAs`,
+  `autoSave`, `autoSaveFailed`, `ensureFilePath`, `maybeRenameForWard` and `m_filePath`;
+  `MainWindow`'s `openFile`, `onOpenDocument`, `onSaveDocument`, `onSaveDocumentAs`,
+  `onAutoSaveFailed`, `onFilePathChanged`, `saveLastDocumentPath`, `loadLastDocumentPath` and the
+  Open, Save and Save As actions; `JsonService`; the command-line open in `main.cpp`; the
+  `.emergencyplan` association in `installer.iss` (whose `[Code]` removes the one an older release
+  registered) and in `Info.plist`.
+- `Document` no longer holds the emergency response: `EmergencyManager` holds it alone, so
+  `DocumentManager::setEmergencyResponse`, `saveDocumentOnly` and `EmergencyManager`'s
+  `persistResponseData` and `syncFromDocument` are deleted with the document's copy.
+- `DocumentMetadata::suggestedFilename` becomes `wardName()`, which the window title and the
+  report read.
+
+**Old-contract commands and helpers with no callers are deleted.** `TeamCommands`,
+`EmergencyAssetCommands`, `TagCommands` and the two import commands are deleted, with the
+`Document`, model and `DocumentChange` mutators and scopes that only they called; tasks 4, 6 and 7
+create their replacements and add back the mutators those use. Every other helper with no caller
+goes too, including `PdfExtractor`'s field classification, `Filter`'s specific age and the
+`EmergencyResponse` JSON and equality (task 5 adds the latter back when the document holds
+responses again).
 
 **Docs.**
 - `docs/ARCHITECTURE.md`: *DocumentManager* describes the wrapper over the session, with
@@ -4015,8 +4048,8 @@ gives the same order; with Fay's year unknown, the member stays last. Both are l
 - `Family` loses `m_latitude`, `m_longitude`, `latitude()`, `longitude()`, `setLatitude`,
   `setLongitude`, `setLocation` and `isMapped()`; `create` and `createWithId` lose their two
   coordinate parameters, and `toJson` / `fromJson` lose the keys. Every reader asks
-  `document.coordinatesFor(family.address())`: `Filter.cpp:219,223,506,510`,
-  `MapViewModel.cpp:38,55,56,61`, `MapWidget.cpp:202,895,955`.
+  `document.coordinatesFor(family.address())`: `Filter.cpp:190,194,468,472`,
+  `MapViewModel.cpp:38,55,56,61`, `MapWidget.cpp:202,890,950`.
 - `WardDirectoryImportService::preserveIds` and the parsers stop passing coordinates to
   `Family`. The directory PDF's own coordinates seed the address table through the import
   command (task 7).
@@ -4050,7 +4083,7 @@ gives the same order; with Fay's year unknown, the member stays last. Both are l
   `const std::optional<FieldChange<Address>>& address() const`).
 - `WardSession::run` starts `runAutomaticUpdates()` after an applied command when any of its
   `addressesGiven()` lacks an entry and is not on the failed list. `DocumentManager` calls
-  `runAutomaticUpdates()` when a ward opens (`newDocument`, `openDocument`). Replay starts
+  `runAutomaticUpdates()` when a ward opens (`newDocument`). Replay starts
   nothing, so a device that takes another device's work runs no batch for it. Nothing else
   starts one.
 - `runAutomaticUpdates()`: requests, once each, every address some family has that the table
@@ -4061,16 +4094,17 @@ gives the same order; with Fay's year unknown, the member stays last. Both are l
 - When the last request answers, the batch applies: each result adds the entry for its address
   and never replaces one already there, then every entry no family's address uses is dropped.
   A batch with nothing to request finishes at once. Only when something changed does the
-  session emit `documentChanged(DocumentChange::full())` and `automaticUpdateApplied()`;
-  `DocumentManager` saves on `automaticUpdateApplied`. Nothing enters the journal.
+  session emit `documentChanged(DocumentChange::full())` and `automaticUpdateApplied()`. This
+  plan's tests count `automaticUpdateApplied`; plan 2 saves in the session and deletes it.
+  Nothing enters the journal.
 - A completed ward or stake lookup applies its details as `onWardLookupComplete` does today and
   emits `automaticUpdateApplied()` only when they changed something. A failed lookup puts the
-  unit on the failed list and continues to the next ward (today it stops the chain,
-  `DocumentManager.cpp:292-298`).
-- `DocumentManager` loses `startBatchGeocoding`, `stopGeocoding`, `isGeocoding`,
-  `onFamilyGeocoded`, `onGeocodingFinished`, `onWardLookupComplete`, `onStakeLookupComplete`,
-  `onLookupFailed`, `checkForIncompleteWards`, `m_pendingWardLookups`, `m_pendingStakeLookups`
-  and `m_geocodingService`; `geocodingProgressChanged` is forwarded from the session's
+  unit on the failed list and continues to the next ward (today `DocumentManager::onLookupFailed`
+  ends the chain).
+- `DocumentManager` loses `startBatchGeocoding`, `stopGeocoding`, `onFamilyGeocoded`,
+  `onWardLookupComplete`, `onStakeLookupComplete`, `onLookupFailed`, `checkForIncompleteWards`,
+  `m_pendingWardLookups`, `m_pendingStakeLookups` and `m_geocodingService`;
+  `geocodingProgressChanged` is forwarded from the session's
   `geocodingProgress(int completed, int total)`. `MainWindow::onImportPdf` drops its
   `startBatchGeocoding()` call.
 - Rerunning a batch whose push lost is plan 3, since it depends on the push.
@@ -4110,9 +4144,12 @@ answering when the test says, and `FakeUnitLookup` likewise):
 third bullets).
 
 **Files:**
-- Rewrite: `src/commands/TeamCommands.h/.cpp`, `src/commands/EmergencyAssetCommands.h/.cpp`,
+- Create: `src/commands/TeamCommands.h/.cpp`, `src/commands/EmergencyAssetCommands.h/.cpp`,
   `src/commands/TagCommands.h/.cpp`
-- Modify: `src/commands/FieldChangeJson.h/.cpp`, `src/commands/CommandRegistry.cpp`
+- Modify: `src/commands/FieldChangeJson.h/.cpp`, `src/commands/CommandRegistry.cpp`, `CMakeLists.txt`
+- Modify: `src/models/Document.h/.cpp`, `src/models/Team.h/.cpp`, `src/models/Tag.h/.cpp`,
+  `src/models/EmergencyAsset.h/.cpp`, `src/models/DocumentChange.h/.cpp`
+- Modify: `src/listmodels/TeamsTreeModel.cpp`, `src/listmodels/EmergencyAssetModel.cpp`
 - Modify: `src/widgets/TeamsView.h/.cpp`, `src/widgets/EmergencyAssetView.h/.cpp`
 - Modify: `tests/CMakeLists.txt`, `tests/main.cpp`, `tests/services/TestWard.h/.cpp`,
   `tests/services/CommandSamples.cpp`
@@ -4123,6 +4160,18 @@ third bullets).
 `responseAreaToString` / `responseAreaFromString`) and `TagLevel`, and
 `template<typename Id> QJsonObject setChangeToJson(const IdSetChange<Id>&)` /
 `setChangeFromJson<Id>(const QJsonObject&)` writing `added` and `removed` as string arrays.
+
+**Model.** The commands apply their changes through `Document::addTeam`, `updateTeam`,
+`removeTeam`, `addTag`, `updateTag`, `removeTag`, `updateEmergencyAsset` and
+`removeEmergencyAsset` (with the existing `addEmergencyAsset`), and through the setters each
+command's fields need on `Team`, `Tag` and `EmergencyAsset`; `Tag::create(name, level, color)`
+builds a new tag. This task adds each of them.
+
+**Document changes.** Team commands report `DocumentChange::team().updated(id)`, which
+`TeamsTreeModel` rebuilds on; asset commands report `DocumentChange::emergencyAsset().updated(id)`,
+which `EmergencyAssetModel` and `Document::rebuildDecorationCaches` rebuild on. `DocumentChange`
+gains `teamId` and `assetId` with those two builders. Tag commands report `DocumentChange::full()`,
+since no view refreshes by tag.
 
 **Teams.**
 - `AddTeamCommand(team)`: result holds when the id is present; start condition includes that
@@ -4137,24 +4186,20 @@ third bullets).
   holding the leader's before value.
 - `DeleteTeamCommand(team as last seen)`: conflicts when the team differs, result holds when it
   is gone; inverse `AddTeamCommand`.
-- Deleted: `AddTeamMemberCommand` (no callers) and `RemoveTeamMemberCommand` (its one caller,
-  `TeamsView::removeMemberFromTeam`, commits `UpdateTeamCommand::fromEdit` with that member
-  removed).
+- `TeamsView::removeMemberFromTeam` commits `UpdateTeamCommand::fromEdit` with that member
+  removed.
 - `TeamsView::showTeamDialog` captures the team when the dialog opens; `setLeader`, `clearLeader`
   and `removeMemberFromTeam` use the team captured when the context menu or button chose it
   (`m_contextTeam`), so a version landing under the menu's event loop makes the confirm conflict.
 
 **Emergency assets.** `AddEmergencyAssetCommand`, `UpdateEmergencyAssetCommand` (name, response
 area, people as a `IdSetChange<PersonId>`, added people must exist), `DeleteEmergencyAssetCommand`
-as last seen. `AssignEmergencyAssetToPersonCommand` (no callers) and
-`UnassignEmergencyAssetFromPersonCommand` (its caller `EmergencyAssetView::removePersonFromAsset`
-moves to `UpdateEmergencyAssetCommand::fromEdit`) are deleted. `showAssetDialog` captures the
+as last seen. `EmergencyAssetView::removePersonFromAsset` commits
+`UpdateEmergencyAssetCommand::fromEdit` with that person removed. `showAssetDialog` captures the
 asset at open.
 
 **Tags.** `AddTagCommand`, `UpdateTagCommand` (name, color, level, people and families as set
-changes, added ids must exist), `DeleteTagCommand` as last seen. `AssignTagToPersonCommand`,
-`AssignTagToFamilyCommand`, `UnassignTagFromPersonCommand` and `UnassignTagFromFamilyCommand`
-are deleted.
+changes, added ids must exist), `DeleteTagCommand` as last seen.
 
 **Tests:**
 - `twoUsersAddingDifferentMembersToOneTeamBothLand`
@@ -4200,8 +4245,9 @@ clock).
 **Model.**
 - `Document` holds `QHash<EmergencyResponseId, EmergencyResponse>` with `emergencyResponses()`,
   `findEmergencyResponse`, `addEmergencyResponse`, `updateEmergencyResponse`,
-  `removeEmergencyResponse`; `emergencyResponse()` and `setEmergencyResponse` are deleted. JSON
-  key `emergencyResponses`.
+  `removeEmergencyResponse`. JSON key `emergencyResponses`. `EmergencyResponse`,
+  `FamilyResponseRecord`, `ResponseTask`, `ContactAttempt` and `TaskNotification` gain `toJson`,
+  `fromJson` and `operator==`, which the document's JSON and equality use.
 - `EmergencyResponse` gains `m_id`; `create(const QString& name, const QDateTime& startedAt)`.
 - `ContactAttempt`: `std::optional<ContactMethod> method`, `std::optional<PersonId> who`, and
   `std::optional<ContactOutcome> outcome` with `enum class ContactOutcome { OK, UnableToReach }`;
@@ -4250,9 +4296,9 @@ table, and a missing response making every command but `EndEmergency` conflict:
   `EndEmergencyCommand`.
 - `EmergencyManager` keeps `std::optional<EmergencyResponseId> m_shownId`, reads the response
   from the document, and turns each of today's mutators into building and committing the command;
-  `m_response`, `persistResponseData`, `syncFromDocument` and `syncFamilies` are deleted.
-- `DocumentManager`'s `setEmergencyResponse` and `saveDocumentOnly` are deleted.
-- `MainWindow::onEndEmergency`: one End confirmation, then the report's save dialog (cancelling
+  `m_response` and `syncFamilies` are deleted. Opening a ward shows its own responses, so File >
+  New leaves no emergency from the ward before it.
+- `MainWindow::onEndEmergency`: after its End confirmation, the report's save dialog (cancelling
   ends nothing), then `endEmergency`; `AlreadyEnded` tells the user someone else ended it.
   `generateEmergencyReportWithConfirm` reads the response by id after its dialog rather than
   holding a reference across it.
@@ -4299,7 +4345,10 @@ table, and a missing response making every command but `EndEmergency` conflict:
 - Create: `src/commands/ReferenceCleanup.h`, `src/commands/ReferenceCleanup.cpp`
 - Modify: `src/commands/FamilyChange.h/.cpp`, `src/commands/FamilyCommands.h/.cpp`,
   `src/commands/TeamCommands.h/.cpp`, `src/commands/CommandRegistry.cpp`
-- Modify: `src/models/Document.h/.cpp` (`cleanupPersonReferences` has no callers and is deleted)
+- Modify: `src/models/Document.h/.cpp`, `src/models/Team.h`, `src/models/Tag.h`,
+  `src/models/EmergencyAsset.h`, `src/models/MinisteringGroup.h`, `src/models/MinisteringDistrict.h`
+  (the `Document` updates for groups and districts, and the setters on each, that
+  `ReferenceCleanup::apply` and `restore` call)
 - Modify: `src/widgets/MainWindow.cpp` (`onDeleteFamilyRequested`, `onSaveFamily`)
 - Modify: `tests/...` (CMake, main, samples)
 - Create: `tests/services/ReferenceCleanupTest.h/.cpp`
@@ -4316,6 +4365,9 @@ families. API:
 - `void apply(Document& document) const`; `bool restoreHolds(const Document& current) const`;
   `void restore(Document& document) const`
 - `toJson`, `fromJson`, `operator==`
+
+A command that carries a cleanup reports `DocumentChange::full()`, since the cleanup touches
+several collections.
 
 **Users.**
 - `FamilyChange` holds a `ReferenceCleanup` for its removed members; `FamilyChange::between` and
@@ -4347,11 +4399,12 @@ families. API:
 *Imports*.
 
 **Files:**
-- Rewrite: `src/commands/ImportWardDirectoryCommand.h/.cpp`, `src/commands/ImportMinisteringCommand.h/.cpp`
+- Create: `src/commands/ImportWardDirectoryCommand.h/.cpp`, `src/commands/ImportMinisteringCommand.h/.cpp`
+  (and their `CMakeLists.txt` entries)
 - Modify: `src/services/WardDirectoryImportService.h/.cpp`, `src/services/MinisteringImportService.h/.cpp`,
   `src/services/WardDirectoryPdfParser.h/.cpp` (the PDF's coordinates reach the command)
-- Modify: `src/models/Document.h/.cpp` (`setFamilies` and `addFamilies` lose their last callers
-  and are deleted)
+- Modify: `src/models/Document.h/.cpp` (`setWardDirectoryPdfDate`, `setMinisteringPdfDate`, and
+  the district and group setters the ministering import applies its collection through)
 - Modify: `src/widgets/MainWindow.cpp` (`onImportPdf`, `onImportMinisteringPdf`)
 - Modify: `docs/IMPORT_DESIGN.md`
 - Modify: `tests/...`; Create: `tests/services/ImportCommandsTest.h/.cpp`
@@ -4376,6 +4429,8 @@ families. API:
 - Member order: each family's change is `FamilyChange::between(existing, imported)`, which
   takes each added member's index from `imported`, the family in the PDF's order, so the family
   keeps the PDF's order.
+- The ward record is created through `DocumentMetadata::updateWard`. Both imports report
+  `DocumentChange::full()`.
 - Description: heading `tr("Import the ward directory from %1.").arg(fileName)`, no lines.
 
 **Ministering import.**

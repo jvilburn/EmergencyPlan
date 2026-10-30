@@ -46,24 +46,10 @@ void UnassignedMinisteringModel::onDocumentChanged(const DocumentChange& change)
         return;
     }
 
-    // Ministering group changes: full rebuild (affects who is unassigned)
-    if (change.eqGroupId || change.rsGroupId)
-    {
-        rebuild();
-        return;
-    }
-
     // Family updated: refresh display text only
-    if (change.familyId && change.action == ChangeAction::Updated)
-    {
-        refreshFamilyDisplayText(*change.familyId);
-        return;
-    }
-
-    // Family added/removed: rebuild (affects unassigned list)
     if (change.familyId)
     {
-        rebuild();
+        refreshFamilyDisplayText(*change.familyId);
     }
 }
 

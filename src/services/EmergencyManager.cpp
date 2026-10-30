@@ -1,6 +1,5 @@
 #include "EmergencyManager.h"
 #include "DocumentManager.h"
-#include "DocumentChange.h"
 
 EmergencyManager* EmergencyManager::s_instance = nullptr;
 
@@ -11,18 +10,12 @@ EmergencyManager::EmergencyManager(QObject* parent)
     s_instance = this;
 
     connect(DocumentManager::instance(), &DocumentManager::documentChanged,
-            this, &EmergencyManager::onDocumentChanged);
+            this, &EmergencyManager::syncFamilies);
 }
 
 EmergencyManager* EmergencyManager::instance()
 {
     return s_instance;
-}
-
-void EmergencyManager::onDocumentChanged(const DocumentChange& change)
-{
-    Q_UNUSED(change)
-    syncFamilies();
 }
 
 // ============================================================================

@@ -75,27 +75,10 @@ void FamilyTreeModel::onDocumentChanged(const DocumentChange& change)
         return;
     }
 
-    // Only care about family scope
-    if (!change.familyId)
+    // Family updated: surgical update, preserving expanded state
+    if (change.familyId)
     {
-        return;
-    }
-
-    // Surgical updates - preserve expanded state
-    switch (change.action)
-    {
-        case ChangeAction::Updated:
-            updateFamilyRow(*change.familyId);
-            break;
-        case ChangeAction::Added:
-            insertFamilyRow(*change.familyId);
-            break;
-        case ChangeAction::Removed:
-            removeFamilyRow(*change.familyId);
-            break;
-        default:
-            rebuild();
-            break;
+        updateFamilyRow(*change.familyId);
     }
 }
 

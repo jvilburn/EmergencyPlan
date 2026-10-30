@@ -171,12 +171,12 @@ A family with unresolved tasks automatically shows as "Needs Help".
 1. **Emergency > End Emergency**
 2. Leave **Generate summary report (PDF)** checked to save a report of the emergency. The report is the record of the emergency once it ends.
 3. Choose:
-   - **Discard & End** - Delete the response data and end the emergency. You confirm first, then save the report if it is checked
+   - **End** - Save the report if it is checked, then remove the response data and end the emergency
    - **Cancel** - Keep the emergency active
 
 ### Reports
 
-**Emergency > Generate Report** creates a PDF summary including contact status breakdown, task assignments, and resolution statistics.
+**Emergency > Generate Report** creates a PDF summary including contact status breakdown, task assignments, and resolution statistics. Its header shows the time the emergency started and the time the report was written.
 
 ---
 
@@ -199,7 +199,7 @@ Emergency response actions (contact status, tasks) are **not** part of the undo 
 
 ---
 
-## Saving
+## Your Document
 
 - The app holds the document in memory while it runs, and the next launch starts with an empty one
 - The title bar shows the ward's name, from the wards in the document

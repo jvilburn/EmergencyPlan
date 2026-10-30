@@ -39,24 +39,17 @@ void EmergencyAssetModel::clearNodes()
 
 void EmergencyAssetModel::onDocumentChanged(const DocumentChange& change)
 {
-    // Full document reload or asset changes: rebuild
-    if (change.action == ChangeAction::Full || change.assetId)
+    // Full document reload
+    if (change.action == ChangeAction::Full)
     {
         rebuild();
         return;
     }
 
     // Family updated: refresh display text only
-    if (change.familyId && change.action == ChangeAction::Updated)
-    {
-        refreshFamilyDisplayText(*change.familyId);
-        return;
-    }
-
-    // Family added/removed: rebuild
     if (change.familyId)
     {
-        rebuild();
+        refreshFamilyDisplayText(*change.familyId);
     }
 }
 

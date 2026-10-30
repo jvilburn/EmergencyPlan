@@ -6,8 +6,6 @@
 #include "Document.h"
 #include "EmergencyResponse.h"
 
-struct DocumentChange;
-
 class EmergencyManager : public QObject
 {
     Q_OBJECT
@@ -62,11 +60,9 @@ signals:
     void responseDataChanged();  // generic "something changed" for progress bars, counts
 
 private slots:
-    void onDocumentChanged(const DocumentChange& change);
-
-private:
     void syncFamilies();  // add records for new families, called on document changes
 
+private:
     std::optional<EmergencyResponse> m_response;
 
     static EmergencyManager* s_instance;

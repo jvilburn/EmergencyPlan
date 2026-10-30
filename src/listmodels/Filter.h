@@ -48,7 +48,6 @@ public:
     QSet<QString> callings() const { return m_callings; }
     std::optional<Gender> gender() const { return m_gender; }
     AgeFilter ageFilter() const { return m_ageFilter; }
-    std::optional<int> specificAge() const { return m_specificAge; }
     MappedFilter mappedFilter() const { return m_mappedFilter; }
     bool onlyWithContact() const { return m_onlyWithContact; }
     QSet<QString> specialNeeds() const { return m_specialNeeds; }
@@ -108,7 +107,6 @@ private:
     QSet<QString> m_callings;
     std::optional<Gender> m_gender;
     AgeFilter m_ageFilter = AgeFilter::All;
-    std::optional<int> m_specificAge;
     MappedFilter m_mappedFilter = MappedFilter::All;
     bool m_onlyWithContact = false;
     QSet<QString> m_specialNeeds;

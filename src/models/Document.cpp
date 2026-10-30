@@ -194,7 +194,7 @@ void Document::onDocumentChanged(const DocumentChange& change)
     }
 
     // Decoration caches for map markers
-    if (change.action == ChangeAction::Full || change.assetId.has_value())
+    if (change.action == ChangeAction::Full)
     {
         rebuildDecorationCaches();
     }

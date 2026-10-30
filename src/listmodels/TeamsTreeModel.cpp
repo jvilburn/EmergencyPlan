@@ -66,24 +66,17 @@ void TeamsTreeModel::clearNodes()
 
 void TeamsTreeModel::onDocumentChanged(const DocumentChange& change)
 {
-    // Full document reload or team changes: rebuild
-    if (change.action == ChangeAction::Full || change.teamId)
+    // Full document reload
+    if (change.action == ChangeAction::Full)
     {
         rebuild();
         return;
     }
 
     // Family updated: refresh display text only
-    if (change.familyId && change.action == ChangeAction::Updated)
-    {
-        refreshFamilyDisplayText(*change.familyId);
-        return;
-    }
-
-    // Family added/removed: rebuild (member names may have changed)
     if (change.familyId)
     {
-        rebuild();
+        refreshFamilyDisplayText(*change.familyId);
     }
 }
 

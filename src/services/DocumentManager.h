@@ -62,7 +62,6 @@ private slots:
 
     // Geocoding
     void onFamilyGeocoded(const FamilyId& id, double latitude, double longitude);
-    void onGeocodingFinished();
 
 private:
     /// After the commit step: an applied change looks up new wards; one that conflicted or

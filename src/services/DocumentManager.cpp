@@ -35,7 +35,7 @@ DocumentManager::DocumentManager(QObject* parent)
     connect(m_geocodingService, &BackgroundGeocodingService::familyGeocoded,
             this, &DocumentManager::onFamilyGeocoded);
     connect(m_geocodingService, &BackgroundGeocodingService::finished,
-            this, &DocumentManager::onGeocodingFinished);
+            this, &DocumentManager::geocodingFinished);
 }
 
 DocumentManager* DocumentManager::instance()
@@ -214,9 +214,4 @@ void DocumentManager::onFamilyGeocoded(const FamilyId& id, double latitude, doub
         updated.setLocation(latitude, longitude);
         m_document.updateFamily(updated);
     }
-}
-
-void DocumentManager::onGeocodingFinished()
-{
-    emit geocodingFinished();
 }

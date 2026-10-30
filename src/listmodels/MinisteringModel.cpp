@@ -55,25 +55,10 @@ void MinisteringModel::onDocumentChanged(const DocumentChange& change)
         return;
     }
 
-    // Ministering structure changes: full rebuild
-    if (change.eqDistrictId || change.eqGroupId
-        || change.rsDistrictId || change.rsGroupId)
-    {
-        rebuild();
-        return;
-    }
-
     // Family updated: refresh display text only
-    if (change.familyId && change.action == ChangeAction::Updated)
-    {
-        refreshFamilyDisplayText(*change.familyId);
-        return;
-    }
-
-    // Family added/removed: rebuild
     if (change.familyId)
     {
-        rebuild();
+        refreshFamilyDisplayText(*change.familyId);
     }
 }
 
