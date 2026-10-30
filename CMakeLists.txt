@@ -43,7 +43,7 @@ find_path(MUPDF_INCLUDE_DIR mupdf/fitz.h REQUIRED)
 # MuPDF dependencies
 find_library(FREETYPE_LIBRARY NAMES freetype REQUIRED)
 find_library(JPEG_LIBRARY NAMES jpeg REQUIRED)
-find_library(ZLIB_LIBRARY NAMES zlib z REQUIRED)
+find_library(ZLIB_LIBRARY NAMES zlib z zs zsd REQUIRED)
 find_library(OPENJP2_LIBRARY NAMES openjp2 REQUIRED)
 find_library(HARFBUZZ_LIBRARY NAMES harfbuzz)
 find_library(JBIG2DEC_LIBRARY NAMES jbig2dec)
