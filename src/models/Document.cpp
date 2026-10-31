@@ -43,6 +43,32 @@ void Document::removeFamily(const FamilyId& id)
 }
 
 // ============================================================================
+// Address coordinates
+// ============================================================================
+
+std::optional<Coordinates> Document::coordinatesFor(const Address& address) const
+{
+    auto it = m_addressCoordinates.constFind(address.full());
+    if (it != m_addressCoordinates.constEnd())
+    {
+        return *it;
+    }
+    return std::nullopt;
+}
+
+void Document::setAddressCoordinates(const QString& address, const std::optional<Coordinates>& coordinates)
+{
+    if (coordinates.has_value())
+    {
+        m_addressCoordinates.insert(address, *coordinates);
+    }
+    else
+    {
+        m_addressCoordinates.remove(address);
+    }
+}
+
+// ============================================================================
 // EmergencyAsset operations
 // ============================================================================
 
@@ -249,6 +275,19 @@ QJsonObject Document::toJson() const
     serializeHashToJson(json, "teams", m_teams);
     serializeHashToJson(json, "tags", m_tags);
 
+    // Address coordinates
+    if (!m_addressCoordinates.isEmpty())
+    {
+        QJsonArray array;
+        for (auto it = m_addressCoordinates.constBegin(); it != m_addressCoordinates.constEnd(); ++it)
+        {
+            QJsonObject entry = it.value().toJson();
+            entry["address"] = it.key();
+            array.append(entry);
+        }
+        json["addressCoordinates"] = array;
+    }
+
     // Emergency assets
     serializeHashToJson(json, "emergencyResources", m_emergencyAssets);
 
@@ -282,6 +321,14 @@ Document Document::fromJson(const QJsonObject& json)
     deserializeJsonToHash(json, "families", document.m_families);
     deserializeJsonToHash(json, "teams", document.m_teams);
     deserializeJsonToHash(json, "tags", document.m_tags);
+
+    // Address coordinates
+    QJsonArray addressCoordinates = json["addressCoordinates"].toArray();
+    for (const QJsonValue& value : addressCoordinates)
+    {
+        QJsonObject entry = value.toObject();
+        document.m_addressCoordinates.insert(entry["address"].toString(), Coordinates::fromJson(entry));
+    }
 
     // Emergency assets
     deserializeJsonToHash(json, "emergencyResources", document.m_emergencyAssets);
@@ -323,6 +370,7 @@ bool Document::operator==(const Document& other) const
         && m_families == other.m_families
         && m_teams == other.m_teams
         && m_tags == other.m_tags
+        && m_addressCoordinates == other.m_addressCoordinates
         && m_emergencyAssets == other.m_emergencyAssets
         && m_eqDistricts == other.m_eqDistricts
         && m_eqGroups == other.m_eqGroups

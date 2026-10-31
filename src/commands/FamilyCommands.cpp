@@ -52,6 +52,16 @@ DocumentChange UpdateFamilyCommand::documentChange() const
     return DocumentChange::family().updated(m_familyId);
 }
 
+QList<Address> UpdateFamilyCommand::addressesGiven() const
+{
+    const std::optional<FieldChange<Address>>& address = m_change.address();
+    if (!address.has_value() || address->after().isEmpty())
+    {
+        return {};
+    }
+    return {address->after()};
+}
+
 CommandPtr UpdateFamilyCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
 {
     return std::make_shared<UpdateFamilyCommand>(FamilyId::fromString(json["familyId"].toString()),

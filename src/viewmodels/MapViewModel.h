@@ -55,7 +55,7 @@ private slots:
 
 private:
     void updateFamilies();
-    QVariantMap familyToVariant(const class Family& family) const;
+    QVariantMap familyToVariant(const class Family& family, const class Coordinates& coordinates) const;
 
     QVariantList m_families;
     QHash<FamilyId, MarkerRenderer::MarkerIcons> m_familyIcons;  // Pre-computed marker icons

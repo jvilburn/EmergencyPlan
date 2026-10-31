@@ -22,6 +22,9 @@ public:
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
+    /// The address after, when the change sets a non-empty address.
+    QList<Address> addressesGiven() const override;
+
     static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
 
 private:

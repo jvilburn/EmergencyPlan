@@ -2,13 +2,9 @@
 
 #include <QObject>
 #include <QString>
-#include <QSet>
 #include "Document.h"
 #include "DocumentChange.h"
 #include "WardSession.h"
-
-class UnitLookupService;
-class BackgroundGeocodingService;
 
 /// The app's one open ward: a thin wrapper over its WardSession.
 class DocumentManager : public QObject
@@ -39,46 +35,24 @@ public:
     QString undoHeading() const { return m_session.undoHeading(); }
     QString redoHeading() const { return m_session.redoHeading(); }
 
-    /// Opens Document::empty() in the session.
+    /// Opens Document::empty() in the session and starts its automatic updates.
     void newDocument();
-
-    // Geocoding
-    void startBatchGeocoding();
-    void stopGeocoding();
 
 signals:
     void documentChanged(const DocumentChange& change);
     void undoStackChanged();
     void commandNotApplied(const CommitResult& result);
 
-    // Geocoding progress
+    /// The session's geocoding batch: its progress, and its last request answering.
     void geocodingProgressChanged(int completed, int total);
     void geocodingFinished();
 
-private slots:
-    void onWardLookupComplete(const QString& wardUnitNumber, const Ward& ward);
-    void onStakeLookupComplete(const QString& stakeUnitNumber, const Stake& stake);
-    void onLookupFailed(const QString& unitNumber, const QString& error);
-
-    // Geocoding
-    void onFamilyGeocoded(const FamilyId& id, double latitude, double longitude);
-
 private:
-    /// After the commit step: an applied change looks up new wards; one that conflicted or
-    /// was refused emits commandNotApplied.
+    /// After the commit step: a command that conflicted or was refused emits
+    /// commandNotApplied.
     void afterCommit(const CommitResult& result);
 
-    void checkForIncompleteWards();
-
     WardSession m_session;
-
-    // Unit lookup
-    UnitLookupService* m_unitLookupService;
-    QSet<QString> m_pendingWardLookups;
-    QSet<QString> m_pendingStakeLookups;
-
-    // Geocoding
-    BackgroundGeocodingService* m_geocodingService;
 
     static DocumentManager* s_instance;
 };

@@ -14,6 +14,7 @@
 #include "DocumentManager.h"
 #include "EmergencyManager.h"
 #include "ReportGenerator.h"
+#include "AddressCoordinatesCommands.h"
 #include "FamilyCommands.h"
 #include "ImportWardDirectoryCommand.h"
 #include "ImportMinisteringCommand.h"
@@ -288,9 +289,6 @@ void MainWindow::onImportPdf()
         QMessageBox::information(this, tr("Import Warnings"),
             tr("Some items had warnings:\n") + result.errors.join("\n"));
     }
-
-    // Start background geocoding for imported families
-    DocumentManager::instance()->startBatchGeocoding();
 }
 
 void MainWindow::onImportMinisteringPdf()
@@ -360,9 +358,6 @@ void MainWindow::onImportMinisteringPdf()
         QMessageBox::information(this, tr("Import Warnings"),
             tr("Some items had warnings:\n") + result.errors.join("\n"));
     }
-
-    // Start background geocoding for any new families
-    DocumentManager::instance()->startBatchGeocoding();
 }
 
 void MainWindow::onUndo()
@@ -609,8 +604,18 @@ void MainWindow::onSaveFamily()
         return;
     }
 
-    DocumentManager::instance()->executeCommand(
-        UpdateFamilyCommand::fromEdit(m_editPanel->openedFamily(), m_editPanel->family()));
+    // The family edit, then the map position typed for the saved address, each its own
+    // undo entry. When the family edit conflicts or is refused, neither is committed.
+    Family saved = m_editPanel->family();
+    CommitResult result = DocumentManager::instance()->executeCommand(
+        UpdateFamilyCommand::fromEdit(m_editPanel->openedFamily(), saved));
+    std::optional<Coordinates> typed = m_editPanel->typedCoordinates();
+    bool familySaved = result.status == CommitStatus::Applied || result.status == CommitStatus::NothingToDo;
+    if (familySaved && typed.has_value())
+    {
+        DocumentManager::instance()->executeCommand(SetAddressCoordinatesCommand::fromTyped(
+            DocumentManager::instance()->document(), saved.address().full(), *typed));
+    }
 
     closeEditPanelInternal();
 }
@@ -677,7 +682,7 @@ void MainWindow::openEditPanel(const FamilyId& familyId)
         return;
     }
 
-    m_editPanel->setFamily(it.value());
+    m_editPanel->setFamily(it.value(), DocumentManager::instance()->document());
 
     if (!m_editPanel->isVisible())
     {

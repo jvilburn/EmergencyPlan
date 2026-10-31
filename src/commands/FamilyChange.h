@@ -125,6 +125,8 @@ public:
     /// then additions, removals and the address.
     QStringList describe(const Family& opened) const;
 
+    const std::optional<FieldChange<Address>>& address() const { return m_address; }
+
     QJsonObject toJson() const;
     static FamilyChange fromJson(const QJsonObject& json);
 

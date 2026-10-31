@@ -1,4 +1,5 @@
 #include "TestWard.h"
+#include "DocumentChange.h"
 
 Person TestWard::bob()
 {
@@ -38,14 +39,12 @@ Address TestWard::address(const QString& street, const QString& city)
 
 Family TestWard::smith()
 {
-    return Family::createWithId(smithId(), std::nullopt, std::nullopt,
-                                address("12 Elm St", "Provo, UT"), {bob(), alice()});
+    return Family::createWithId(smithId(), address("12 Elm St", "Provo, UT"), {bob(), alice()});
 }
 
 Family TestWard::jones()
 {
-    return Family::createWithId(jonesId(), std::nullopt, std::nullopt,
-                                address("4 Oak Ave", "Provo, UT"), {carol()});
+    return Family::createWithId(jonesId(), address("4 Oak Ave", "Provo, UT"), {carol()});
 }
 
 Person TestWard::leeMember(const QString& id, const QString& givenName, std::optional<Gender> gender,
@@ -58,8 +57,7 @@ Person TestWard::leeMember(const QString& id, const QString& givenName, std::opt
 
 Family TestWard::lee(std::optional<int> fayBirthYear)
 {
-    return Family::createWithId(FamilyId::fromString("family-lee"), std::nullopt, std::nullopt,
-                                address("8 Pine St", "Provo, UT"),
+    return Family::createWithId(FamilyId::fromString("family-lee"), address("8 Pine St", "Provo, UT"),
                                 {leeMember("person-ken", "Ken", Gender::Male, 1975, true),
                                  leeMember("person-mia", "Mia", Gender::Female, 1977, true),
                                  leeMember("person-ed", "Ed", Gender::Male, 2005, false),
@@ -136,6 +134,13 @@ Document TestWard::withFamily(const Document& document, const Family& family)
     Document updated = document;
     updated.updateFamily(family);
     updated.onDocumentChanged(DocumentChange::full());
+    return updated;
+}
+
+Document TestWard::withCoordinates(const Document& document, const Address& address, const Coordinates& coordinates)
+{
+    Document updated = document;
+    updated.setAddressCoordinates(address.full(), coordinates);
     return updated;
 }
 

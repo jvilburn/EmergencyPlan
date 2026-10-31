@@ -9,7 +9,7 @@ static const QString BASE_URL = "https://maps.churchofjesuschrist.org";
 QString UnitLookupService::s_edgePath;
 
 UnitLookupService::UnitLookupService(QObject* parent)
-    : QObject(parent)
+    : UnitLookup(parent)
 {
     if (s_edgePath.isEmpty())
     {
@@ -226,7 +226,7 @@ void UnitLookupService::parseWardResponse(const QString& wardUnitNumber, const Q
         qWarning() << "Ward lookup for" << wardUnitNumber << "- no coordinates found in response";
     }
 
-    emit wardLookupComplete(wardUnitNumber, ward);
+    emit wardFound(wardUnitNumber, ward);
 }
 
 void UnitLookupService::parseStakeResponse(const QString& stakeUnitNumber, const QByteArray& data)
@@ -282,5 +282,5 @@ void UnitLookupService::parseStakeResponse(const QString& stakeUnitNumber, const
     }
     stake.setWardUnitNumbers(wardUnits);
 
-    emit stakeLookupComplete(stakeUnitNumber, stake);
+    emit stakeFound(stakeUnitNumber, stake);
 }

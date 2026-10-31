@@ -34,10 +34,11 @@ void MapViewModel::updateFamilies()
     {
         const Family& family = it.value();
 
-        // Only include mapped families (those with valid coordinates)
-        if (family.isMapped())
+        // Only include mapped families (those whose address has coordinates)
+        std::optional<Coordinates> coordinates = doc.coordinatesFor(family.address());
+        if (coordinates.has_value())
         {
-            m_families.append(familyToVariant(family));
+            m_families.append(familyToVariant(family, *coordinates));
             // Pre-compute marker icons (expensive operation moved out of paint loop)
             m_familyIcons.insert(family.id(),
                                  MarkerRenderer::computeFamilyIcons(family.id(), doc));
@@ -47,18 +48,17 @@ void MapViewModel::updateFamilies()
     emit familiesChanged();
 }
 
-QVariantMap MapViewModel::familyToVariant(const Family& family) const
+QVariantMap MapViewModel::familyToVariant(const Family& family, const Coordinates& coordinates) const
 {
     QVariantMap map;
     map["id"] = family.id().toString();
     map["name"] = family.displayName();
-    map["latitude"] = family.latitude().value_or(0.0);
-    map["longitude"] = family.longitude().value_or(0.0);
+    map["latitude"] = coordinates.latitude();
+    map["longitude"] = coordinates.longitude();
     map["address"] = family.address().multiLine();
     map["phone"] = QString(family.displayPhone());
     map["email"] = family.displayEmail();
     map["memberCount"] = family.members().size();
-    map["isMapped"] = family.isMapped();
 
     // Callings as comma-separated string
     QStringList callings = family.allCallings();

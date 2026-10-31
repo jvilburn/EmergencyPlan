@@ -7,6 +7,7 @@
 #include <QJsonArray>
 #include <QDate>
 
+#include "Coordinates.h"
 #include "DocumentMetadata.h"
 #include "Family.h"
 #include "Team.h"
@@ -64,6 +65,19 @@ public:
     void removeFamily(const FamilyId& id);
 
     // ========================================================================
+    // Address coordinates
+    // ========================================================================
+
+    /// A family's place on the map is its address's entry, keyed by Address::full().
+    const QHash<QString, Coordinates>& addressCoordinates() const { return m_addressCoordinates; }
+
+    /// The entry for address, or none when the table has none. An empty address has none.
+    std::optional<Coordinates> coordinatesFor(const Address& address) const;
+
+    /// Sets the entry for address to coordinates, or removes it when coordinates is none.
+    void setAddressCoordinates(const QString& address, const std::optional<Coordinates>& coordinates);
+
+    // ========================================================================
     // EmergencyAsset operations
     // ========================================================================
     const QHash<EmergencyAssetId, EmergencyAsset>& emergencyAssets() const { return m_emergencyAssets; }
@@ -108,6 +122,9 @@ private:
     QHash<FamilyId, Family> m_families;
     QHash<TeamId, Team> m_teams;
     QHash<TagId, Tag> m_tags;
+
+    // Address text -> its place on the map
+    QHash<QString, Coordinates> m_addressCoordinates;
 
     // Lookup cache: personId -> familyId
     QHash<PersonId, FamilyId> m_personToFamily;

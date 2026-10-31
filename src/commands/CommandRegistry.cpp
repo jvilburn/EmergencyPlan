@@ -1,10 +1,13 @@
 #include "CommandRegistry.h"
+#include "AddressCoordinatesCommands.h"
 #include "FamilyCommands.h"
 
 const QList<CommandType>& CommandRegistry::types()
 {
     static const QList<CommandType> types = {
         {UpdateFamilyCommand::TypeName, &UpdateFamilyCommand::fromJson},
+        {SetAddressCoordinatesCommand::TypeName, &SetAddressCoordinatesCommand::fromJson},
+        {RevertAddressCoordinatesCommand::TypeName, &RevertAddressCoordinatesCommand::fromJson},
     };
     return types;
 }

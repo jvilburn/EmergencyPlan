@@ -1,3 +1,4 @@
+#include "AutomaticUpdatesTest.h"
 #include "BirthdayTest.h"
 #include "FamilyEditPanelTest.h"
 #include "FamilyOrderTest.h"
@@ -22,6 +23,7 @@ int main(int argc, char* argv[])
     UpdateFamilyCommandTest updateFamilyCommandTest(nullptr);
     CommandRoundTripTest commandRoundTripTest(nullptr);
     WardSessionTest wardSessionTest(nullptr);
+    AutomaticUpdatesTest automaticUpdatesTest(nullptr);
     MemberEditorTest memberEditorTest(nullptr);
     FamilyEditPanelTest familyEditPanelTest(nullptr);
 
@@ -33,6 +35,7 @@ int main(int argc, char* argv[])
     failures += QTest::qExec(&updateFamilyCommandTest, argc, argv);
     failures += QTest::qExec(&commandRoundTripTest, argc, argv);
     failures += QTest::qExec(&wardSessionTest, argc, argv);
+    failures += QTest::qExec(&automaticUpdatesTest, argc, argv);
     failures += QTest::qExec(&memberEditorTest, argc, argv);
     failures += QTest::qExec(&familyEditPanelTest, argc, argv);
     return failures;

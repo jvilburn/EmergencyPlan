@@ -8,6 +8,12 @@ add_executable(WardPlanningTests
     services/TestWard.cpp
     services/TestCommands.h
     services/TestCommands.cpp
+    services/FakeGeocoder.h
+    services/FakeGeocoder.cpp
+    services/FakeUnitLookup.h
+    services/FakeUnitLookup.cpp
+    services/TestSession.h
+    services/TestSession.cpp
     services/CommandSamples.h
     services/CommandSamples.cpp
     services/FamilyOrderTest.h
@@ -20,6 +26,8 @@ add_executable(WardPlanningTests
     services/CommandRoundTripTest.cpp
     services/WardSessionTest.h
     services/WardSessionTest.cpp
+    services/AutomaticUpdatesTest.h
+    services/AutomaticUpdatesTest.cpp
     services/PersonJsonTest.h
     services/PersonJsonTest.cpp
     services/BirthdayTest.h

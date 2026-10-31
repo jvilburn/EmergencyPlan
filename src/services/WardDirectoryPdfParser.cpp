@@ -147,22 +147,6 @@ namespace
     }
 
     // ============================================================================
-    // Coordinate Parsing
-    // ============================================================================
-
-    std::pair<std::optional<double>, std::optional<double>> parseCoordinates(const QString& text)
-    {
-        QRegularExpressionMatch match = COORDINATES_PATTERN.match(text.trimmed());
-        if (!match.hasMatch())
-        {
-            return {std::nullopt, std::nullopt};
-        }
-        double lat = match.captured(1).toDouble();
-        double lng = match.captured(2).toDouble();
-        return {lat, lng};
-    }
-
-    // ============================================================================
     // Person Parsing
     // ============================================================================
 
@@ -381,8 +365,6 @@ namespace
         // ====================================================================
         QString familyName;
         Address address;
-        std::optional<double> latitude;
-        std::optional<double> longitude;
 
         // Family name from column 0
         if (!familyHeaderColumns[0].isEmpty())
@@ -390,25 +372,12 @@ namespace
             familyName = familyHeaderColumns[0].first().text().trimmed();
         }
 
-        // Address and coordinates from column 1
+        // Address from column 1, which also holds the family's coordinates
         for (const PdfTextField& field : familyHeaderColumns[1])
         {
             QString text = field.text().trimmed();
-            if (text.isEmpty())
+            if (!text.isEmpty() && !COORDINATES_PATTERN.match(text).hasMatch())
             {
-                continue;
-            }
-
-            // Check if this is coordinates
-            auto [lat, lng] = parseCoordinates(text);
-            if (lat.has_value())
-            {
-                latitude = lat;
-                longitude = lng;
-            }
-            else
-            {
-                // It's an address line
                 address.addLine(text);
             }
         }
@@ -446,7 +415,7 @@ namespace
         // ====================================================================
         // Build and return family
         // ====================================================================
-        return Family::create(latitude, longitude, address, members);
+        return Family::create(address, members);
     }
 
 }  // anonymous namespace

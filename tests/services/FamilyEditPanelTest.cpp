@@ -90,7 +90,7 @@ void FamilyEditPanelTest::addedChildMovesIntoPlaceWhenItsBirthYearIsTyped()
 {
     Family opened = TestWard::lee(2010);
     FamilyEditPanel panel(nullptr);
-    panel.setFamily(opened);
+    panel.setFamily(opened, Document());
 
     PersonId added;
     addMemberBornIn(panel, "2008", added);
@@ -114,7 +114,7 @@ void FamilyEditPanelTest::addedChildStaysLastWhileAMemberHasNoBirthYear()
 {
     Family opened = TestWard::lee(std::nullopt);
     FamilyEditPanel panel(nullptr);
-    panel.setFamily(opened);
+    panel.setFamily(opened, Document());
 
     PersonId added;
     addMemberBornIn(panel, "2008", added);

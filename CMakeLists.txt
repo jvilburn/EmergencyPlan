@@ -88,6 +88,7 @@ set(MODEL_SOURCES
     src/models/Calling.cpp
     src/models/Person.cpp
     src/models/Family.cpp
+    src/models/Coordinates.cpp
     src/models/Team.cpp
     src/models/Tag.cpp
     src/models/Ward.cpp
@@ -111,6 +112,7 @@ set(MODEL_HEADERS
     src/models/Calling.h
     src/models/Person.h
     src/models/Family.h
+    src/models/Coordinates.h
     src/models/Team.h
     src/models/Tag.h
     src/models/Ward.h
@@ -132,6 +134,7 @@ set(COMMAND_SOURCES
     src/commands/FamilyChange.cpp
     src/commands/CommandRegistry.cpp
     src/commands/FamilyCommands.cpp
+    src/commands/AddressCoordinatesCommands.cpp
     # src/commands/ImportCommands.cpp
 )
 
@@ -142,6 +145,7 @@ set(COMMAND_HEADERS
     src/commands/FamilyChange.h
     src/commands/CommandRegistry.h
     src/commands/FamilyCommands.h
+    src/commands/AddressCoordinatesCommands.h
     # src/commands/ImportCommands.h
 )
 
@@ -157,9 +161,11 @@ set(SERVICE_SOURCES
     src/services/TileDiskCacheService.cpp
     src/services/TileFetchService.cpp
     src/services/TileService.cpp
+    src/services/UnitLookup.cpp
     src/services/UnitLookupService.cpp
+    src/services/Geocoder.cpp
+    src/services/NominatimGeocoder.cpp
     src/services/GeocodingService.cpp
-    src/services/BackgroundGeocodingService.cpp
     src/services/GeoLocation.cpp
     src/services/EmergencyManager.cpp
     src/services/ReportGenerator.cpp
@@ -184,9 +190,11 @@ set(SERVICE_HEADERS
     src/services/TileFetchService.h
     src/services/TileTypes.h
     src/services/TileService.h
+    src/services/UnitLookup.h
     src/services/UnitLookupService.h
+    src/services/Geocoder.h
+    src/services/NominatimGeocoder.h
     src/services/GeocodingService.h
-    src/services/BackgroundGeocodingService.h
     src/services/GeoLocation.h
     src/services/EmergencyManager.h
     src/services/ReportGenerator.h

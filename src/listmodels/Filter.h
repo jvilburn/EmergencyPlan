@@ -83,8 +83,9 @@ signals:
     void changed();
 
 private:
-    /// Family-only criteria: mapped, contact (family.hasContact()).
-    bool passesFamilyCriteria(const Family& family) const;
+    /// Family-only criteria: mapped (its address has an entry in the document's table of
+    /// address coordinates), contact (family.hasContact()).
+    bool passesFamilyCriteria(const Document& document, const Family& family) const;
 
     /// Person-only criteria: callings, gender, age.
     bool passesPersonCriteria(const Person& person) const;

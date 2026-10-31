@@ -185,13 +185,14 @@ bool Filter::isEmpty() const
         && !m_contactStatusFilter.has_value();
 }
 
-bool Filter::passesFamilyCriteria(const Family& family) const
+bool Filter::passesFamilyCriteria(const Document& document, const Family& family) const
 {
-    if (m_mappedFilter == MappedFilter::Mapped && !family.isMapped())
+    bool mapped = document.coordinatesFor(family.address()).has_value();
+    if (m_mappedFilter == MappedFilter::Mapped && !mapped)
     {
         return false;
     }
-    if (m_mappedFilter == MappedFilter::Unmapped && family.isMapped())
+    if (m_mappedFilter == MappedFilter::Unmapped && mapped)
     {
         return false;
     }
@@ -371,7 +372,7 @@ bool Filter::hasResponseArea(const Document& document, const PersonId& personId)
 bool Filter::passes(const Document& document, const Family& family) const
 {
     // 1. Family-only criteria (fail fast)
-    if (!passesFamilyCriteria(family))
+    if (!passesFamilyCriteria(document, family))
     {
         return false;
     }
@@ -465,11 +466,12 @@ bool Filter::passes(const Document& document, const Person& person) const
     // Family-level criteria: mapped
     if (family)
     {
-        if (m_mappedFilter == MappedFilter::Mapped && !family->isMapped())
+        bool mapped = document.coordinatesFor(family->address()).has_value();
+        if (m_mappedFilter == MappedFilter::Mapped && !mapped)
         {
             return false;
         }
-        if (m_mappedFilter == MappedFilter::Unmapped && family->isMapped())
+        if (m_mappedFilter == MappedFilter::Unmapped && mapped)
         {
             return false;
         }

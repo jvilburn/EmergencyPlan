@@ -99,6 +99,7 @@ A command that conflicts or is refused changes nothing, and the result says whic
 ```cpp
 Document
 |-- families: QHash<FamilyId, Family>
+|-- addressCoordinates: QHash<QString, Coordinates>  (keyed by Address::full())
 |-- teams: QHash<TeamId, Team>
 |-- tags: QHash<TagId, Tag>
 |-- emergencyAssets: QHash<EmergencyAssetId, EmergencyAsset>
@@ -108,6 +109,8 @@ Document
 ```
 
 Collections use `QHash<Id, Model>` for O(1) lookup by ID and automatic uniqueness enforcement. Display order is computed at render time (sorted by name, etc.).
+
+Coordinates belong to addresses: a family's place on the map is its address's entry in `addressCoordinates`, read through `Document::coordinatesFor(family.address())`. Families at one address share an entry, and a family whose address has none is unmapped.
 
 ### Unified Models
 
@@ -240,6 +243,9 @@ public:
     // What a run changes (for targeted rebuilds)
     virtual DocumentChange documentChange() const = 0;
 
+    // The addresses this command gives a family, known at construction; empty by default
+    virtual QList<Address> addressesGiven() const;
+
     // A heading and a line per value set, fixed when the command is built
     const CommandDescription& description() const;
 };
@@ -265,6 +271,9 @@ class WardSession : public QObject
     Q_OBJECT
 
 public:
+    // The geocoder and unit lookup answer the automatic updates; tests pass fakes
+    WardSession(Geocoder* geocoder, UnitLookup* unitLookup, QObject* parent);
+
     const Document& document() const;
     const Journal& journal() const;
 
@@ -284,18 +293,26 @@ public:
     // The journal replayed onto another version of the document
     ReplayResult replayOnto(const Document& version);
 
+    // Geocoding and ward and stake lookup
+    void runAutomaticUpdates();
+
 signals:
     void documentChanged(const DocumentChange& change);
     void undoStackChanged();
+    void geocodingProgress(int completed, int total);
+    void geocodingFinished();
+    void automaticUpdateApplied();
 };
 ```
 
-`WardSession` holds one open ward: its document, its journal and its undo and redo stacks. It holds no global state, so tests create as many sessions as they need.
+`WardSession` holds one open ward: its document, its journal and its undo and redo stacks, and runs its automatic updates. It holds no global state, so tests create as many sessions as they need.
 
 - **The commit step** asks the command's rule, then runs `execute`. It answers `Applied`, `Conflicted`, or `Refused` with the rule's wording, and `NothingToDo` for an empty command, which is what an edit that changed nothing builds. A command that applies is appended to the journal, empties the redo stack, and enters the undo stack when it is an `UndoableCommand`; the undo stack holds at most 100 commands, with the oldest dropped. A command that conflicts or is refused changes nothing.
 - **The journal** (`Journal`) holds each applied command's serialised form under the next sequence number, in the order the commands were made.
 - **Replay** rebuilds each journal entry with `CommandRegistry` and puts it through the rule and `execute` on a copy of the version, in order. When every entry applies, the copy becomes the document. The first entry that conflicts or is refused abandons the replay: the version becomes the document as it stands, the journal and the undo and redo stacks are emptied, and the result holds the abandoned changes as plain text, which the app writes to a file for the user to redo.
 - **Undo** builds the inverse of the command on top of the undo stack and runs it through the commit step; when it applies, the command moves to the redo stack. **Redo** runs that command again through the commit step and moves it back. An undo whose inverse conflicts or is refused leaves the command where it was.
+- **Automatic updates** (geocoding and ward and stake lookup) change the document outside the journal, since their results are derived data that is computed again whenever it is missing. They start when a ward opens, and after a command (or an undo or redo) applies that gives a family an address the table of address coordinates lacks; a replay starts none. A batch requests each address some family has that the table lacks, once, skipping addresses with no street and those on the failed list, and applies when its last request answers: each result adds the entry for its address and never replaces one already there, then every entry no family's address uses is dropped. Ward and stake lookups run one at a time and apply as each completes. Addresses and unit numbers that fail go on the failed list, and are not tried again until their text changes. A batch or lookup that changes the document emits `documentChanged` and `automaticUpdateApplied` once; one that changes nothing emits neither.
+- **Typed coordinates** are a journalled command on the address's entry, `SetAddressCoordinatesCommand`, which sets the entry whatever it holds; its inverse, `RevertAddressCoordinatesCommand`, puts back what the entry held when the command was built, provided the entry still holds the typed value.
 
 ### Example Command
 
@@ -356,44 +373,45 @@ public:
     QString undoHeading() const;
     QString redoHeading() const;
 
-    // Opens Document::empty() in the session
+    // Opens Document::empty() in the session and starts its automatic updates
     void newDocument();
 
 signals:
-    void documentChanged(const DocumentChange& change);  // forwarded from the session
-    void undoStackChanged();                             // forwarded from the session
+    void documentChanged(const DocumentChange& change);       // forwarded from the session
+    void undoStackChanged();                                  // forwarded from the session
     void commandNotApplied(const CommitResult& result);
+    void geocodingProgressChanged(int completed, int total);  // forwarded from the session
+    void geocodingFinished();                                 // forwarded from the session
 };
 ```
 
-`executeCommand` hands the command to `WardSession::commit` and returns its `CommitResult`. When it is `Applied`, the manager looks up any ward missing its details; when it is `Conflicted` or `Refused`, it emits `commandNotApplied`, and `MainWindow` tells the user what needs doing again, from the result's description, or which rule refused it; `NothingToDo`, from an edit that changed nothing, does neither. `undo` and `redo` run the session's `undo` and `redo` the same way; an undo's result carries its inverse's description, *Undo: heading* over the original's lines. The app starts each launch with `Document::empty()` open in the session, and `newDocument` opens a fresh one; either way the session starts its journal and undo stack empty. The window title is the document's `wardName()`, from the names of its wards.
+`executeCommand` hands the command to `WardSession::commit` and returns its `CommitResult`. When it is `Conflicted` or `Refused`, it emits `commandNotApplied`, and `MainWindow` tells the user what needs doing again, from the result's description, or which rule refused it; `NothingToDo`, from an edit that changed nothing, does neither. `undo` and `redo` run the session's `undo` and `redo` the same way; an undo's result carries its inverse's description, *Undo: heading* over the original's lines. The app starts each launch with `Document::empty()` open in the session, and `newDocument` opens a fresh one; either way the session starts its journal and undo stack empty. The window title is the document's `wardName()`, from the names of its wards.
 
-### GeocodingService
+### Geocoder and UnitLookup
 
-Two-layer architecture for background geocoding:
+`WardSession` runs its automatic updates through two interfaces, which tests replace with fakes:
 
 ```cpp
-// Low-level: Nominatim API with rate limiting (1.1s between requests)
-class GeocodingService : public QObject
+class Geocoder : public QObject
 {
-    void geocodeAddress(const QString& address);
+    virtual void geocode(const QString& address) = 0;
 signals:
-    void geocodingComplete(const GeocodingResult& result);
+    void resolved(const QString& address, const Coordinates& coordinates);
+    void failed(const QString& address);
 };
 
-// High-level: queue-based batch processing
-class BackgroundGeocodingService : public QObject
+class UnitLookup : public QObject
 {
-    void queueFamily(const Family& family);
-    void stop();
+    virtual void lookupWard(const QString& wardUnitNumber) = 0;
+    virtual void lookupStake(const QString& stakeUnitNumber) = 0;
 signals:
-    void progressUpdated(int completed, int total);
-    void familyGeocoded(const QString& id, double lat, double lng);
-    void finished();
+    void wardFound(const QString& wardUnitNumber, const Ward& ward);
+    void stakeFound(const QString& stakeUnitNumber, const Stake& stake);
+    void lookupFailed(const QString& unitNumber, const QString& error);
 };
 ```
 
-DocumentManager triggers batch geocoding after PDF imports and queues individual families when addresses change.
+The app's `NominatimGeocoder` answers through `GeocodingService`, which calls OpenStreetMap's Nominatim with at most one request every 1.1 seconds; `UnitLookupService` reads the meetinghouse locator through headless Edge. `DocumentManager` creates both and hands them to its session.
 
 ---
 

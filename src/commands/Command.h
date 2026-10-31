@@ -1,10 +1,12 @@
 #pragma once
 
 #include <QJsonObject>
+#include <QList>
 #include <QString>
 #include <QStringList>
 #include <memory>
 
+#include "Address.h"
 #include "DocumentChange.h"
 
 class Document;
@@ -72,6 +74,10 @@ public:
 
     /// What a run changes, for targeted view updates and cache rebuilds.
     virtual DocumentChange documentChange() const = 0;
+
+    /// The addresses this command gives a family, known at construction. WardSession
+    /// geocodes the ones the table of address coordinates lacks after the command applies.
+    virtual QList<Address> addressesGiven() const;
 
     const CommandDescription& description() const { return m_description; }
 

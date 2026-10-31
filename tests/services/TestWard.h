@@ -58,6 +58,10 @@ public:
     /// document with the family of the same id replaced by family, caches rebuilt.
     static Document withFamily(const Document& document, const Family& family);
 
+    /// document with the entry for address in its table of address coordinates set to
+    /// coordinates.
+    static Document withCoordinates(const Document& document, const Address& address, const Coordinates& coordinates);
+
     /// The family with that id; throws std::bad_optional_access when it is absent.
     static Family family(const Document& document, const FamilyId& id);
 

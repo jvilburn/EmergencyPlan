@@ -425,8 +425,6 @@ namespace
         );
 
         Family family = Family::create(
-            std::nullopt,   // latitude
-            std::nullopt,   // longitude
             Address(),      // address (filled by parseContactInfo)
             QList<Person>() // members (set after)
         );
@@ -657,8 +655,6 @@ namespace
 
         // Create family (address will be set by parseContactInfo)
         result.family = Family::create(
-            std::nullopt,   // latitude
-            std::nullopt,   // longitude
             Address(),      // address
             QList<Person>() // members
         );
@@ -1117,12 +1113,7 @@ MinisteringPdfParser::ParseResult MinisteringPdfParser::parse(const QString& pdf
                                 QStringList() // callings
                             );
 
-                            Family family = Family::create(
-                                std::nullopt,
-                                std::nullopt,
-                                Address(),
-                                {presidencyMember}
-                            );
+                            Family family = Family::create(Address(), {presidencyMember});
 
                             result.ministerFamilies.insert(family.id(), family);
                             result.districts[*currentDistrictId].setPresidencyMemberId(presidencyMember.id());

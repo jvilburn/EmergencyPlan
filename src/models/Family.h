@@ -18,23 +18,13 @@ public:
     Family() = default;
 
     // Factory method for creating new families
-    static Family create(std::optional<double> latitude,
-                         std::optional<double> longitude,
-                         const Address& address,
-                         const QList<Person>& members);
+    static Family create(const Address& address, const QList<Person>& members);
 
     // Factory method for creating families with a specific ID (used for ID preservation)
-    static Family createWithId(
-        const FamilyId& id,
-        std::optional<double> latitude,
-        std::optional<double> longitude,
-        const Address& address,
-        const QList<Person>& members);
+    static Family createWithId(const FamilyId& id, const Address& address, const QList<Person>& members);
 
     // Getters
     const FamilyId& id() const { return m_id; }
-    std::optional<double> latitude() const { return m_latitude; }
-    std::optional<double> longitude() const { return m_longitude; }
     const Address& address() const { return m_address; }
     const QList<Person>& members() const { return m_members; }
 
@@ -51,14 +41,8 @@ public:
     qsizetype insertionIndexFor(const Person& person) const;
 
     // Setters
-    void setLatitude(std::optional<double> latitude);
-    void setLongitude(std::optional<double> longitude);
-    void setLocation(std::optional<double> latitude, std::optional<double> longitude);
     void setAddress(const Address& address);
     void setMembers(const QList<Person>& members);
-
-    // Computed properties
-    bool isMapped() const { return m_latitude.has_value() && m_longitude.has_value(); }
 
     // Contact helpers - aggregate from all members
     Phone displayPhone() const;
@@ -76,8 +60,6 @@ public:
 
 private:
     FamilyId m_id;
-    std::optional<double> m_latitude;
-    std::optional<double> m_longitude;
     Address m_address;
     QList<Person> m_members;
 };

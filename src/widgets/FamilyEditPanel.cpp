@@ -1,7 +1,7 @@
 #include "FamilyEditPanel.h"
 #include "AppStyles.h"
 #include "MemberAccordion.h"
-#include "DocumentManager.h"
+#include "Document.h"
 #include "GeocodingService.h"
 #include "Address.h"
 
@@ -87,12 +87,12 @@ void FamilyEditPanel::setupUi()
     coordLayout->addWidget(new QLabel(tr("Lat:"), this));
     m_latEdit = new QLineEdit(this);
     m_latEdit->setPlaceholderText(tr("Latitude"));
-    connect(m_latEdit, &QLineEdit::textChanged, this, &FamilyEditPanel::onLatChanged);
+    connect(m_latEdit, &QLineEdit::textChanged, this, &FamilyEditPanel::onCoordinatesTyped);
     coordLayout->addWidget(m_latEdit);
     coordLayout->addWidget(new QLabel(tr("Lon:"), this));
     m_lonEdit = new QLineEdit(this);
     m_lonEdit->setPlaceholderText(tr("Longitude"));
-    connect(m_lonEdit, &QLineEdit::textChanged, this, &FamilyEditPanel::onLonChanged);
+    connect(m_lonEdit, &QLineEdit::textChanged, this, &FamilyEditPanel::onCoordinatesTyped);
     coordLayout->addWidget(m_lonEdit);
     contentLayout->addLayout(coordLayout);
 
@@ -124,38 +124,23 @@ void FamilyEditPanel::setupUi()
     mainLayout->addLayout(buttonLayout);
 }
 
-void FamilyEditPanel::setFamily(const Family& family)
+void FamilyEditPanel::setFamily(const Family& family, const Document& document)
 {
     m_familyId = family.id();
     m_originalFamily = family;
     m_editedFamily = family;
-
-    // Block signals during population
-    const QSignalBlocker addressBlocker(m_addressEdit);
-    const QSignalBlocker latBlocker(m_latEdit);
-    const QSignalBlocker lonBlocker(m_lonEdit);
+    m_addressCoordinates = document.addressCoordinates();
+    m_coordinatesTyped = false;
 
     // Address
-    m_addressEdit->setPlainText(family.address().multiLine());
+    {
+        const QSignalBlocker addressBlocker(m_addressEdit);
+        m_addressEdit->setPlainText(family.address().multiLine());
+    }
 
     // Location
-    if (family.latitude().has_value())
-    {
-        m_latEdit->setText(QString::number(*family.latitude(), 'f', 6));
-    }
-    else
-    {
-        m_latEdit->clear();
-    }
-
-    if (family.longitude().has_value())
-    {
-        m_lonEdit->setText(QString::number(*family.longitude(), 'f', 6));
-    }
-    else
-    {
-        m_lonEdit->clear();
-    }
+    showEntryFor(family.address());
+    updateCoordinatesEnabled();
 
     // Members
     m_memberAccordion->setMembers(family.members());
@@ -168,19 +153,68 @@ Family FamilyEditPanel::family() const
     return m_editedFamily;
 }
 
+std::optional<Coordinates> FamilyEditPanel::typedCoordinates() const
+{
+    if (!m_coordinatesTyped || m_editedFamily.address().isEmpty())
+    {
+        return std::nullopt;
+    }
+    bool latitudeOk = false;
+    bool longitudeOk = false;
+    double latitude = m_latEdit->text().trimmed().toDouble(&latitudeOk);
+    double longitude = m_lonEdit->text().trimmed().toDouble(&longitudeOk);
+    if (!latitudeOk || !longitudeOk)
+    {
+        return std::nullopt;
+    }
+    return Coordinates(latitude, longitude);
+}
+
 bool FamilyEditPanel::isDirty() const
 {
-    return m_editedFamily != m_originalFamily;
+    std::optional<Coordinates> typed = typedCoordinates();
+    return m_editedFamily != m_originalFamily
+        || (typed.has_value() && typed != entryFor(m_editedFamily.address()));
+}
+
+std::optional<Coordinates> FamilyEditPanel::entryFor(const Address& address) const
+{
+    auto it = m_addressCoordinates.constFind(address.full());
+    if (it != m_addressCoordinates.constEnd())
+    {
+        return *it;
+    }
+    return std::nullopt;
+}
+
+void FamilyEditPanel::showEntryFor(const Address& address)
+{
+    const QSignalBlocker latBlocker(m_latEdit);
+    const QSignalBlocker lonBlocker(m_lonEdit);
+    std::optional<Coordinates> entry = entryFor(address);
+    if (entry.has_value())
+    {
+        m_latEdit->setText(QString::number(entry->latitude(), 'f', 6));
+        m_lonEdit->setText(QString::number(entry->longitude(), 'f', 6));
+    }
+    else
+    {
+        m_latEdit->clear();
+        m_lonEdit->clear();
+    }
+}
+
+void FamilyEditPanel::updateCoordinatesEnabled()
+{
+    bool hasAddress = !m_editedFamily.address().isEmpty();
+    m_latEdit->setEnabled(hasAddress);
+    m_lonEdit->setEnabled(hasAddress);
+    m_lookupButton->setEnabled(hasAddress);
 }
 
 void FamilyEditPanel::onLookUpCoordinates()
 {
     QString addressText = m_addressEdit->toPlainText().trimmed();
-    if (addressText.isEmpty())
-    {
-        QMessageBox::warning(this, tr("No Address"), tr("Please enter an address first."));
-        return;
-    }
 
     m_lookupButton->setEnabled(false);
     m_lookupButton->setText(tr("Looking up..."));
@@ -198,8 +232,8 @@ void FamilyEditPanel::onLookUpCoordinates()
 
 void FamilyEditPanel::onGeocodingComplete(const GeocodingResult& result)
 {
-    m_lookupButton->setEnabled(true);
     m_lookupButton->setText(tr("Look Up Coordinates"));
+    updateCoordinatesEnabled();
 
     if (result.success && result.latitude.has_value() && result.longitude.has_value())
     {
@@ -236,36 +270,19 @@ void FamilyEditPanel::onAddressChanged()
         }
     }
     m_editedFamily.setAddress(address);
+
+    // Until the user types coordinates, the fields show where the address shown is mapped.
+    if (!m_coordinatesTyped)
+    {
+        showEntryFor(address);
+    }
+    updateCoordinatesEnabled();
     emit dataChanged();
 }
 
-void FamilyEditPanel::onLatChanged()
+void FamilyEditPanel::onCoordinatesTyped()
 {
-    bool ok = false;
-    double val = m_latEdit->text().trimmed().toDouble(&ok);
-    if (ok)
-    {
-        m_editedFamily.setLatitude(val);
-    }
-    else
-    {
-        m_editedFamily.setLatitude(std::nullopt);
-    }
-    emit dataChanged();
-}
-
-void FamilyEditPanel::onLonChanged()
-{
-    bool ok = false;
-    double val = m_lonEdit->text().trimmed().toDouble(&ok);
-    if (ok)
-    {
-        m_editedFamily.setLongitude(val);
-    }
-    else
-    {
-        m_editedFamily.setLongitude(std::nullopt);
-    }
+    m_coordinatesTyped = true;
     emit dataChanged();
 }
 

@@ -53,6 +53,11 @@ QString Command::refusal(const Document& document) const
     return QString();
 }
 
+QList<Address> Command::addressesGiven() const
+{
+    return {};
+}
+
 UndoableCommand::UndoableCommand(const CommandDescription& description)
     : Command(description)
 {

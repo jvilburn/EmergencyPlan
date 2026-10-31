@@ -153,10 +153,5 @@ Family WardDirectoryImportService::preserveIds(
         }
     }
 
-    return Family::createWithId(
-        existingFamily.id(),
-        parsedFamily.latitude(),
-        parsedFamily.longitude(),
-        parsedFamily.address(),
-        updatedMembers);
+    return Family::createWithId(existingFamily.id(), parsedFamily.address(), updatedMembers);
 }

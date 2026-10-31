@@ -23,6 +23,23 @@
 #include <QIcon>
 #include <QtMath>
 
+namespace
+{
+
+/// Where the family with that id is on the map: its address's entry, or none when the family
+/// is absent or unmapped.
+std::optional<Coordinates> familyCoordinates(const Document& document, const FamilyId& id)
+{
+    std::optional<Family> family = document.findFamilyById(id);
+    if (!family.has_value())
+    {
+        return std::nullopt;
+    }
+    return document.coordinatesFor(family->address());
+}
+
+}  // namespace
+
 MapWidget::MapWidget(QWidget* parent)
     : QWidget(parent)
     , m_viewModel(new MapViewModel(this))
@@ -199,7 +216,7 @@ bool MapWidget::hasUnmappedSelection() const
     for (const FamilyId& id : highlighted)
     {
         std::optional<Family> family = doc.findFamilyById(id);
-        if (family && !family->isMapped())
+        if (family && !doc.coordinatesFor(family->address()).has_value())
         {
             return true;
         }
@@ -886,11 +903,11 @@ void MapWidget::ensureVisible(const QSet<FamilyId>& familyIds)
 
     for (const FamilyId& id : familyIds)
     {
-        std::optional<Family> family = doc.findFamilyById(id);
-        if (family && family->isMapped())
+        std::optional<Coordinates> coordinates = familyCoordinates(doc, id);
+        if (coordinates.has_value())
         {
-            double lat = family->latitude().value();
-            double lng = family->longitude().value();
+            double lat = coordinates->latitude();
+            double lng = coordinates->longitude();
             minLat = qMin(minLat, lat);
             maxLat = qMax(maxLat, lat);
             minLng = qMin(minLng, lng);
@@ -946,12 +963,12 @@ void MapWidget::ensureVisible(const QSet<FamilyId>& familyIds)
         {
             continue;
         }
-        std::optional<Family> family = doc.findFamilyById(id);
-        if (family && family->isMapped())
+        std::optional<Coordinates> coordinates = familyCoordinates(doc, id);
+        if (coordinates.has_value())
         {
             markers.append({
-                family->latitude().value(),
-                family->longitude().value(),
+                coordinates->latitude(),
+                coordinates->longitude(),
                 MarkerRenderer::familyBounds(m_viewModel->familyIcons(id))
             });
         }

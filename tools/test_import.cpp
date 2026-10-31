@@ -83,10 +83,6 @@ void dumpFamily(const Family& f, QTextStream& out, const QString& indent)
     {
         out << indent << "Address: " << f.address().full() << "\n";
     }
-    if (f.isMapped())
-    {
-        out << indent << "Location: " << *f.latitude() << ", " << *f.longitude() << "\n";
-    }
     out << indent << "Members (" << f.members().size() << "):\n";
     for (const Person& p : f.members())
     {
