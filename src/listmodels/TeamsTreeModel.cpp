@@ -174,7 +174,8 @@ void TeamsTreeModel::rebuild()
                         taskNode->taskResolved = task.isResolved();
                         taskNode->parent = teamNode;
 
-                        // Format: "Category - Family - Description ✓ notified [RESOLVED]"
+                        // Format: "Category - Family - Description", then a check mark and "notified" or a bullet and
+                        // "not notified", then "[RESOLVED]" if resolved
                         QString text = task.category()
                             + " - " + record.displayName()
                             + " - \"" + task.description() + "\"";

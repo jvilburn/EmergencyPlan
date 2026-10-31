@@ -3984,7 +3984,7 @@ adds the ward file:
 `Document`, model and `DocumentChange` mutators and scopes that only they called; tasks 4, 6 and 7
 create their replacements and add back the mutators those use. Every other helper with no caller
 goes too, including `PdfExtractor`'s field classification, `Filter`'s specific age and the
-`EmergencyResponse` JSON and equality (task 5 adds the latter back when the document holds
+`EmergencyResponse` JSON and equality (task 5 adds the JSON and equality back when the document holds
 responses again).
 
 **Docs.**
@@ -4288,10 +4288,10 @@ table, and a missing response making every command but `EndEmergency` conflict:
 **Session and managers.**
 - `WardSession(Geocoder*, UnitLookup*, Clock* clock, QObject* parent)`; `const Clock& clock() const`.
   `DocumentManager` passes a `SystemClock`; command builders read `now()` at construction.
-- `WardSession::endEmergency(const EmergencyResponseId& id, const QString& reportPath, const QString& wardName)`
+- `WardSession::endEmergency(const EmergencyResponseId& id, const QString& reportPath)`
   returns `enum class EndResult { Ended, AlreadyEnded, ReportFailed, Conflicted }`: with no event
   loop between, reads the response by id (`AlreadyEnded` when gone), writes the report through
-  `ReportGenerator::generateReport(response, families, wardName, clock().now(), reportPath)`
+  `ReportGenerator::generateReport(response, families, m_document.wardName(), clock().now(), reportPath)`
   (`ReportFailed`, nothing journalled, when it cannot be written), then commits
   `EndEmergencyCommand`.
 - `EmergencyManager` keeps `std::optional<EmergencyResponseId> m_shownId`, reads the response
@@ -4300,7 +4300,7 @@ table, and a missing response making every command but `EndEmergency` conflict:
   New leaves no emergency from the ward before it.
 - `MainWindow::onEndEmergency`: after its End confirmation, the report's save dialog (cancelling
   ends nothing), then `endEmergency`; `AlreadyEnded` tells the user someone else ended it.
-  `generateEmergencyReportWithConfirm` reads the response by id after its dialog rather than
+  `saveEmergencyReport` reads the response by id after its dialog rather than
   holding a reference across it.
 - Emergencies in progress are switched with a combo box on `EmergencyBanner`, shown only when
   more than one is in progress.
@@ -4312,6 +4312,12 @@ table, and a missing response making every command but `EndEmergency` conflict:
   captured at open.
 - `ReportGenerator`: tallies an attempt with no method on its own line, *Marked OK* or *Marked
   Unable to Reach*, and draws its overview from `totalFamilies(families)` / `countByStatus`.
+  Since the report is the record of the emergency, it also gains a section per family record
+  listing, oldest first, each attempt - time, method, who, outcome and notes - and each task -
+  category, description, assignee and assignment notes, notification, and resolution with its
+  notes and time. Those are the readers of `ContactAttempt`'s and `TaskNotification`'s
+  getters and of `ResponseTask::createdAt`, `assignmentNotes`, `notification`,
+  `resolutionNotes` and `resolvedAt`.
 
 **Tests** (`EmergencyCommandsTest`, with `FakeClock` returning times the test sets):
 - `twoRespondersOfflineLandEveryAttempt`: exact attempt counts per family and each attempt's notes.

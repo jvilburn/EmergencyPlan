@@ -252,9 +252,6 @@ QJsonObject Document::toJson() const
     // Emergency assets
     serializeHashToJson(json, "emergencyResources", m_emergencyAssets);
 
-    // Emergency inventory (legacy)
-    // Legacy skill/equipment fields omitted (migrated to emergency assets)
-
     // Ministering
     serializeHashToJson(json, "eqDistricts", m_eqDistricts);
     serializeHashToJson(json, "eqGroups", m_eqGroups);
@@ -288,9 +285,6 @@ Document Document::fromJson(const QJsonObject& json)
 
     // Emergency assets
     deserializeJsonToHash(json, "emergencyResources", document.m_emergencyAssets);
-
-    // Emergency inventory (legacy)
-    // Legacy skill/equipment fields ignored on load (migrated to emergency assets)
 
     // Ministering
     deserializeJsonToHash(json, "eqDistricts", document.m_eqDistricts);

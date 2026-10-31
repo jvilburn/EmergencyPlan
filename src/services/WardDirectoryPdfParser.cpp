@@ -463,14 +463,14 @@ WardDirectoryPdfParser::ParseResult WardDirectoryPdfParser::parse(const QString&
     PdfExtractor extractor;
     if (!extractor.open(pdfPath))
     {
-        result.errors.append(QString("Failed to open PDF: %1").arg(pdfPath));
+        result.errors.append(QObject::tr("Failed to open PDF: %1").arg(pdfPath));
         return result;
     }
 
     int numPages = extractor.pageCount();
     if (numPages == 0)
     {
-        result.errors.append("PDF has no pages");
+        result.errors.append(QObject::tr("PDF has no pages"));
         return result;
     }
 
@@ -539,7 +539,7 @@ WardDirectoryPdfParser::ParseResult WardDirectoryPdfParser::parse(const QString&
         // Validate first page has ward directory header (font size 13 with "Ward - UnitNumber" format)
         if (pageNum == 0 && result.wardName.isEmpty())
         {
-            result.errors.append("Not a Ward Directory");
+            result.errors.append(QObject::tr("Not a Ward Directory"));
             return result;
         }
     }

@@ -25,9 +25,6 @@ public:
     bool hasDate() const { return m_month.has_value() && m_day.has_value(); }
     bool isEmpty() const { return !m_year.has_value() && !m_month.has_value() && !m_day.has_value(); }
 
-    /// Calculate age from current date. Returns nullopt if year unknown.
-    std::optional<int> age() const;
-
     /// Returns true if age < 18.
     bool isChild() const;
 
@@ -57,6 +54,9 @@ public:
     static bool isBirthday(const QString& text);
 
 private:
+    /// Calculate age from current date. Returns nullopt if year unknown.
+    std::optional<int> age() const;
+
     std::optional<int> m_year;   // null for adults
     std::optional<int> m_month;  // 1-12
     std::optional<int> m_day;    // 1-31

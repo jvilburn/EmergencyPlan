@@ -380,11 +380,6 @@ QModelIndex PersonTreeModel::indexForPersonId(const PersonId& personId) const
     return QModelIndex();
 }
 
-void PersonTreeModel::setCheckable(bool checkable)
-{
-    m_checkable = checkable;
-}
-
 void PersonTreeModel::setCheckedPersonIds(const QSet<PersonId>& ids)
 {
     m_checkedIds = ids;

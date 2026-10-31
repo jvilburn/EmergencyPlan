@@ -46,10 +46,6 @@ DocumentManager* DocumentManager::instance()
 CommitResult DocumentManager::executeCommand(CommandPtr command)
 {
     CommitResult result = m_session.commit(command);
-    if (result.status == CommitStatus::NothingToDo)
-    {
-        return result;
-    }
     afterCommit(result);
     return result;
 }
@@ -149,7 +145,7 @@ void DocumentManager::onWardLookupComplete(const QString& wardUnitNumber, const 
         }
 
         m_document.metadata().updateWard(updated);
-        emit documentChanged(DocumentChange::metadata().updated(wardUnitNumber));
+        emit documentChanged(DocumentChange::metadata().updated());
 
         // Trigger stake lookup if we got stake unit number and don't already have it
         QString stakeUnit = wardInfo.stakeUnitNumber();
@@ -172,7 +168,7 @@ void DocumentManager::onStakeLookupComplete(const QString& stakeUnitNumber, cons
 
     // Add or update stake
     m_document.metadata().updateStake(stakeInfo);
-    emit documentChanged(DocumentChange::metadata().updated(stakeUnitNumber));
+    emit documentChanged(DocumentChange::metadata().updated());
 }
 
 void DocumentManager::onLookupFailed(const QString& unitNumber, const QString& error)

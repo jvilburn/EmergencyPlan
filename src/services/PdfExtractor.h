@@ -5,7 +5,8 @@
 #include <QList>
 #include <QRectF>
 
-struct PdfChar {
+struct PdfChar
+{
     QChar ch;
     QRectF bbox;
     float fontSize;
@@ -38,7 +39,8 @@ private:
     bool m_bold;
 };
 
-class PdfExtractor {
+class PdfExtractor
+{
 public:
     PdfExtractor();
     ~PdfExtractor();

@@ -362,8 +362,6 @@ void FamilyTreeModel::insertFamilyRow(const FamilyId& familyId)
 
     // Now build the children for this family
     updateFamilyRow(familyId);
-
-    emit familyListChanged();
 }
 
 void FamilyTreeModel::removeFamilyRow(const FamilyId& familyId)
@@ -396,8 +394,6 @@ void FamilyTreeModel::removeFamilyRow(const FamilyId& familyId)
     }
 
     endRemoveRows();
-
-    emit familyListChanged();
 }
 
 void FamilyTreeModel::rebuild()
@@ -451,8 +447,6 @@ void FamilyTreeModel::rebuild()
     }
 
     endResetModel();
-
-    emit familyListChanged();
 }
 
 void FamilyTreeModel::buildFamilyNode(int familyIndex)
@@ -691,7 +685,7 @@ void FamilyTreeModel::appendTaskNodes(TreeNode* parent, int familyIndex,
     const Document& doc = DocumentManager::instance()->document();
     for (const ResponseTask& task : record->tasks())
     {
-        // Line 1: "• Category - Description" or "✓ Category - Description" if resolved
+        // Line 1: a bullet and "Category - Description", with a check mark in place of the bullet if resolved
         TreeNode* taskNode = new TreeNode();
         taskNode->type = RowType::Task;
         taskNode->familyIndex = familyIndex;
@@ -1099,11 +1093,6 @@ SelectionKey FamilyTreeModel::selectionKeyAt(const QModelIndex& index) const
     default:
         return SelectionKey::literal(QString());
     }
-}
-
-void FamilyTreeModel::setCheckable(bool checkable)
-{
-    m_checkable = checkable;
 }
 
 void FamilyTreeModel::setCheckedFamilyIds(const QSet<FamilyId>& ids)

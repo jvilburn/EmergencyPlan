@@ -8,7 +8,6 @@
 #endif
 
 #include <mupdf/fitz.h>
-#include <QFile>
 #include <algorithm>
 
 // ============================================================================
@@ -38,64 +37,91 @@ bool PdfTextField::operator<(const PdfTextField& other) const
 // PdfExtractor
 // ============================================================================
 
-struct PdfExtractor::Impl {
+struct PdfExtractor::Impl
+{
     fz_context* ctx = nullptr;
     fz_document* doc = nullptr;
 };
 
-PdfExtractor::PdfExtractor() : d(new Impl) {
+PdfExtractor::PdfExtractor()
+    : d(new Impl)
+{
     d->ctx = fz_new_context(nullptr, nullptr, FZ_STORE_DEFAULT);
     fz_register_document_handlers(d->ctx);
 }
 
-PdfExtractor::~PdfExtractor() {
+PdfExtractor::~PdfExtractor()
+{
     close();
-    if (d->ctx) fz_drop_context(d->ctx);
+    if (d->ctx)
+    {
+        fz_drop_context(d->ctx);
+    }
     delete d;
 }
 
-bool PdfExtractor::open(const QString& path) {
+bool PdfExtractor::open(const QString& path)
+{
     close();
     // Convert to C string before fz_try to avoid C++ temporaries in setjmp scope
     QByteArray pathUtf8 = path.toUtf8();
     const char* pathCStr = pathUtf8.constData();
-    fz_try(d->ctx) {
+    fz_try(d->ctx)
+    {
         d->doc = fz_open_document(d->ctx, pathCStr);
     }
-    fz_catch(d->ctx) {
+    fz_catch(d->ctx)
+    {
         return false;
     }
     return true;
 }
 
-void PdfExtractor::close() {
-    if (d->doc) {
+void PdfExtractor::close()
+{
+    if (d->doc)
+    {
         fz_drop_document(d->ctx, d->doc);
         d->doc = nullptr;
     }
 }
 
-int PdfExtractor::pageCount() const {
-    if (!d->doc) return 0;
+int PdfExtractor::pageCount() const
+{
+    if (!d->doc)
+    {
+        return 0;
+    }
     return fz_count_pages(d->ctx, d->doc);
 }
 
-QList<PdfChar> PdfExtractor::extractChars(int pageNum) {
+QList<PdfChar> PdfExtractor::extractChars(int pageNum)
+{
     QList<PdfChar> result;
-    if (!d->doc) return result;
+    if (!d->doc)
+    {
+        return result;
+    }
 
     fz_page* page = nullptr;
     fz_stext_page* textPage = nullptr;
 
-    fz_try(d->ctx) {
+    fz_try(d->ctx)
+    {
         page = fz_load_page(d->ctx, d->doc, pageNum);
         textPage = fz_new_stext_page_from_page(d->ctx, page, nullptr);
 
-        for (fz_stext_block* block = textPage->first_block; block; block = block->next) {
-            if (block->type != FZ_STEXT_BLOCK_TEXT) continue;
+        for (fz_stext_block* block = textPage->first_block; block; block = block->next)
+        {
+            if (block->type != FZ_STEXT_BLOCK_TEXT)
+            {
+                continue;
+            }
 
-            for (fz_stext_line* line = block->u.t.first_line; line; line = line->next) {
-                for (fz_stext_char* ch = line->first_char; ch; ch = ch->next) {
+            for (fz_stext_line* line = block->u.t.first_line; line; line = line->next)
+            {
+                for (fz_stext_char* ch = line->first_char; ch; ch = ch->next)
+                {
                     fz_rect bbox = fz_rect_from_quad(ch->quad);
                     const char* fontName = fz_font_name(d->ctx, ch->font);
 
@@ -110,11 +136,19 @@ QList<PdfChar> PdfExtractor::extractChars(int pageNum) {
             }
         }
     }
-    fz_always(d->ctx) {
-        if (textPage) fz_drop_stext_page(d->ctx, textPage);
-        if (page) fz_drop_page(d->ctx, page);
+    fz_always(d->ctx)
+    {
+        if (textPage)
+        {
+            fz_drop_stext_page(d->ctx, textPage);
+        }
+        if (page)
+        {
+            fz_drop_page(d->ctx, page);
+        }
     }
-    fz_catch(d->ctx) {
+    fz_catch(d->ctx)
+    {
         // error, return what we have
     }
 

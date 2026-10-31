@@ -83,7 +83,6 @@ public:
     Phone displayPhone() const;
 
     // Birth date helpers (delegated to Birthday)
-    std::optional<int> age() const { return m_birthday.age(); }
     bool isChild() const { return m_birthday.isChild(); }
     QString birthDateDisplay() const { return m_birthday.dateDisplay(); }
     QString ageDisplay() const { return m_birthday.ageDisplay(); }

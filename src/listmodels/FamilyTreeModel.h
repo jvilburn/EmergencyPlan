@@ -86,11 +86,6 @@ public:
     // Access to visible family IDs (for map integration)
     QList<FamilyId> familyIds() const;
 
-    DocumentManager* documentManager() const { return DocumentManager::instance(); }
-
-    /// Enable checkbox mode for multi-select dialogs.
-    void setCheckable(bool checkable);
-
     /// Set/get checked family IDs (only meaningful when checkable).
     void setCheckedFamilyIds(const QSet<FamilyId>& ids);
     QSet<FamilyId> checkedFamilyIds() const;
@@ -98,9 +93,6 @@ public:
     // QAbstractItemModel overrides for checkboxes
     Qt::ItemFlags flags(const QModelIndex& index) const override;
     bool setData(const QModelIndex& index, const QVariant& value, int role = Qt::EditRole) override;
-
-signals:
-    void familyListChanged();
 
 private slots:
     void onDocumentChanged(const DocumentChange& change);

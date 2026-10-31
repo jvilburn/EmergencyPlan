@@ -147,7 +147,6 @@ public:
     const FamilyId& familyId() const { return m_familyId; }
     const QString& displayName() const { return m_displayName; }
     const QString& address() const { return m_address; }
-    ContactStatus contactStatus() const { return m_contactStatus; }
     const QList<ContactAttempt>& contactAttempts() const { return m_contactAttempts; }
     const QList<ResponseTask>& tasks() const { return m_tasks; }
 
@@ -158,7 +157,7 @@ public:
     void removeTask(const TaskId& id);
     ResponseTask* mutableTask(const TaskId& id);
 
-    // Derived status: NeedsHelp when contacted but has unresolved tasks
+    // Derived status: NeedsHelp while any task is unresolved
     bool needsHelp() const;
     int unresolvedTaskCount() const;
 

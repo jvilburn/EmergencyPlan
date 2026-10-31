@@ -649,7 +649,7 @@ namespace
             }
             if (!found)
             {
-                result.error = QString("RS ministered person '%1' not found in family members")
+                result.error = QObject::tr("RS ministered person '%1' not found in family members")
                     .arg(*ministeredPersonName);
                 return result;
             }
@@ -767,13 +767,13 @@ namespace
         {
             if (!cols.genderX)
             {
-                return "Companionship parsing failed: family detected but no gender column found. "
-                       "PDF format may have changed.";
+                return QObject::tr("Companionship parsing failed: family detected but no gender column found. "
+                                   "PDF format may have changed.");
             }
             if (!cols.birthdayX)
             {
-                return "Companionship parsing failed: family detected but no birthday column found. "
-                       "PDF format may have changed.";
+                return QObject::tr("Companionship parsing failed: family detected but no birthday column found. "
+                                   "PDF format may have changed.");
             }
         }
 
@@ -910,14 +910,14 @@ MinisteringPdfParser::ParseResult MinisteringPdfParser::parse(const QString& pdf
     PdfExtractor extractor;
     if (!extractor.open(pdfPath))
     {
-        result.errors.append(QString("Failed to open PDF: %1").arg(pdfPath));
+        result.errors.append(QObject::tr("Failed to open PDF: %1").arg(pdfPath));
         return result;
     }
 
     int numPages = extractor.pageCount();
     if (numPages == 0)
     {
-        result.errors.append("PDF has no pages");
+        result.errors.append(QObject::tr("PDF has no pages"));
         return result;
     }
 
@@ -951,7 +951,7 @@ MinisteringPdfParser::ParseResult MinisteringPdfParser::parse(const QString& pdf
         // Check if markers were found (contentStart=0 means no header, contentEnd=size means no footer)
         if (contentStart == 0 || contentEnd == pageFields.size())
         {
-            result.errors.append("Not a Ministering PDF");
+            result.errors.append(QObject::tr("Not a Ministering PDF"));
             return result;
         }
 
@@ -965,7 +965,7 @@ MinisteringPdfParser::ParseResult MinisteringPdfParser::parse(const QString& pdf
                 {
                     if (i + 2 >= pageFields.size())
                     {
-                        result.errors.append("PDF header truncated: missing ward/stake info after 'Ministering Assignments'");
+                        result.errors.append(QObject::tr("PDF header truncated: missing ward/stake info after 'Ministering Assignments'"));
                         return result;
                     }
                     parseHeaderInfo(pageFields[i + 1].text(), result.wardName, result.wardUnitNumber);
@@ -1006,13 +1006,13 @@ MinisteringPdfParser::ParseResult MinisteringPdfParser::parse(const QString& pdf
 
     if (allContentFields.isEmpty())
     {
-        result.errors.append("No content found in PDF");
+        result.errors.append(QObject::tr("No content found in PDF"));
         return result;
     }
 
     if (!result.documentDate.isValid())
     {
-        result.errors.append("Could not parse document date from PDF footer");
+        result.errors.append(QObject::tr("Could not parse document date from PDF footer"));
         return result;
     }
 

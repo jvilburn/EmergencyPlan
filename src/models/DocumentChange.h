@@ -22,7 +22,7 @@ struct FamilyScopeBuilder
 
 struct MetadataScopeBuilder
 {
-    DocumentChange updated(const QString& value) const;
+    DocumentChange updated() const;
 };
 
 // === DocumentChange struct ===
@@ -31,9 +31,8 @@ struct DocumentChange
 {
     ChangeAction action = ChangeAction::Full;
 
-    // At most one is set - which field is set determines the scope
+    // Set for a change to one family; an Updated change without it is to the ward details
     std::optional<FamilyId> familyId;
-    QString metadataValue;  // ward/stake unit numbers (external identifiers)
 
     // Full document change (no ID fields set)
     static DocumentChange full();

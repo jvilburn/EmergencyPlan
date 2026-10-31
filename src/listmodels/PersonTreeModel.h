@@ -51,9 +51,6 @@ public:
     std::optional<FamilyId> familyIdAt(const QModelIndex& index) const;
     QModelIndex indexForPersonId(const PersonId& personId) const;
 
-    /// Enable checkbox mode for multi-select dialogs.
-    void setCheckable(bool checkable);
-
     /// Set/get checked person IDs (only meaningful when checkable).
     void setCheckedPersonIds(const QSet<PersonId>& ids);
     QSet<PersonId> checkedPersonIds() const;

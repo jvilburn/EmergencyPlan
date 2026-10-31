@@ -337,6 +337,5 @@ bool ReportGenerator::generateReport(const EmergencyResponse& response,
         }
     }
 
-    painter.end();
-    return true;
+    return painter.end();
 }

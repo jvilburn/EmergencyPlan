@@ -17,10 +17,9 @@
 #include "FamilyCommands.h"
 #include "ImportWardDirectoryCommand.h"
 #include "ImportMinisteringCommand.h"
-#include "ItemType.h"
 #include "Document.h"
+#include "ItemType.h"
 #include "Family.h"
-#include "Person.h"
 #include "WardDirectoryImportService.h"
 #include "MinisteringImportService.h"
 #include "GeoLocation.h"
@@ -772,7 +771,7 @@ void MainWindow::onEndEmergency()
     // Generate PDF report before ending (data is cleared on end)
     if (pdfCheckBox->isChecked())
     {
-        if (!generateEmergencyReportWithConfirm())
+        if (!saveEmergencyReport())
         {
             return;
         }
@@ -784,10 +783,10 @@ void MainWindow::onEndEmergency()
 
 void MainWindow::generateEmergencyReport()
 {
-    generateEmergencyReportWithConfirm();
+    saveEmergencyReport();
 }
 
-bool MainWindow::generateEmergencyReportWithConfirm()
+bool MainWindow::saveEmergencyReport()
 {
     if (!EmergencyManager::instance()->isActive())
     {
@@ -798,7 +797,7 @@ bool MainWindow::generateEmergencyReportWithConfirm()
 
     // Default filename based on emergency name and date
     QString defaultName = response.name().simplified().replace(' ', '_')
-        + "_" + response.startedAt().toString("yyyy-MM-dd")
+        + "_" + response.startedAt().toLocalTime().toString("yyyy-MM-dd")
         + ".pdf";
 
     QString defaultDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
@@ -808,13 +807,7 @@ bool MainWindow::generateEmergencyReportWithConfirm()
 
     if (filePath.isEmpty())
     {
-        // User cancelled - ask if they want to skip the report
-        QMessageBox::StandardButton answer = QMessageBox::question(
-            this, tr("Skip Report"),
-            tr("No report will be generated. Continue?"),
-            QMessageBox::Yes | QMessageBox::No,
-            QMessageBox::No);
-        return answer == QMessageBox::Yes;
+        return false;
     }
 
     QString wardName = DocumentManager::instance()->document().wardName();

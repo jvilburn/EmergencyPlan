@@ -10,11 +10,10 @@ DocumentChange FamilyScopeBuilder::updated(const FamilyId& id) const
 }
 
 // MetadataScopeBuilder
-DocumentChange MetadataScopeBuilder::updated(const QString& value) const
+DocumentChange MetadataScopeBuilder::updated() const
 {
     DocumentChange c;
     c.action = ChangeAction::Updated;
-    c.metadataValue = value;
     return c;
 }
 

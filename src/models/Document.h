@@ -26,9 +26,6 @@ public:
     // Factory method for creating empty documents
     static Document empty();
 
-    // Initialize default emergency assets for a new document
-    void initializeDefaultAssets();
-
     // ========================================================================
     // Metadata (wards/stakes)
     // ========================================================================
@@ -86,8 +83,7 @@ public:
     /// Get response areas for a person based on their emergency asset assignments (from cache)
     QSet<ResponseArea> personResponseAreas(const PersonId& personId) const;
 
-    /// Called after each command to rebuild caches as needed based on what changed.
-    /// This is more efficient than rebuilding in each command's execute/undo.
+    /// Rebuilds the lookup caches the change touches.
     void onDocumentChanged(const struct DocumentChange& change);
 
     // JSON serialization
@@ -99,6 +95,9 @@ public:
     bool operator!=(const Document& other) const { return !(*this == other); }
 
 private:
+    // Initialize default emergency assets for a new document
+    void initializeDefaultAssets();
+
     void rebuildPersonToFamilyMap();
     void rebuildDecorationCaches();
 

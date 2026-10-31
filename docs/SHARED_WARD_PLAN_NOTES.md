@@ -22,7 +22,7 @@ is deleted once the plan is written.
   cleanup routine. It touches tags only when `isPersonLevel()`, and no family-level cleanup;
   `ImportWardDirectoryCommand::cleanupRemovedFamily` also removes the family id from tags and
   groups.
-- `MainWindow::generateEmergencyReportWithConfirm` holds `const EmergencyResponse&` across its
+- `MainWindow::saveEmergencyReport` holds `const EmergencyResponse&` across its
   save dialog (`MainWindow.cpp:1012`), safe only while `EmergencyManager` keeps its own copy.
 - `MinisteringImportService::mergeFamilies` points groups at the id of an unmatched,
   unadded family or person when not authoritative (`MinisteringImportService.cpp:156-164`,
