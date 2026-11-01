@@ -202,6 +202,18 @@ QString contactOutcomeName(ContactOutcome outcome)
     return QString();
 }
 
+QString contactMarkName(ContactOutcome outcome)
+{
+    switch (outcome)
+    {
+    case ContactOutcome::OK:
+        return QObject::tr("Marked OK");
+    case ContactOutcome::UnableToReach:
+        return QObject::tr("Marked Unable to Reach");
+    }
+    return QString();
+}
+
 // === TaskNotification ===
 
 TaskNotification TaskNotification::create(ContactMethod method, const QString& notes)

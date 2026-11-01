@@ -63,6 +63,11 @@ void DocumentManager::afterCommit(const CommitResult& result)
     }
 }
 
+EndResult DocumentManager::endEmergency(const EmergencyResponseId& id, const QString& reportPath)
+{
+    return m_session.endEmergency(id, reportPath);
+}
+
 void DocumentManager::newDocument()
 {
     m_session.open(Document::empty());

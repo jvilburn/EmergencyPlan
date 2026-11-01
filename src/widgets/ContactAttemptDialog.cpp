@@ -13,8 +13,9 @@
 #include <QRadioButton>
 #include <QVBoxLayout>
 
-ContactAttemptDialog::ContactAttemptDialog(QWidget* parent)
+ContactAttemptDialog::ContactAttemptDialog(const FamilyId& familyId, QWidget* parent)
     : QDialog(parent)
+    , m_familyId(familyId)
 {
     setWindowTitle(tr("Log Contact Attempt"));
     setMinimumWidth(400);
@@ -134,7 +135,7 @@ void ContactAttemptDialog::onAccepted()
     }
 
     PersonId who = PersonId::fromString(m_whoCombo->currentData().toString());
-    m_result = ContactAttempt::create(method, who, notes);
+    m_result = ContactAttempt::create(m_familyId, method, who, std::nullopt, notes);
 
     accept();
 }

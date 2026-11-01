@@ -35,6 +35,10 @@ public:
     QString undoHeading() const { return m_session.undoHeading(); }
     QString redoHeading() const { return m_session.redoHeading(); }
 
+    /// Writes the report of the emergency response with that id and ends it, through the
+    /// session.
+    EndResult endEmergency(const EmergencyResponseId& id, const QString& reportPath);
+
     /// Opens Document::empty() in the session and starts its automatic updates.
     void newDocument();
 

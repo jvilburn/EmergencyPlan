@@ -4279,12 +4279,14 @@ core; the app does not build in between.
 
 **Files, UI and manager:**
 - Modify: `src/services/EmergencyManager.h/.cpp`, `src/services/DocumentManager.h/.cpp`
+- Create: `src/widgets/EmergencyActions.h/.cpp` (and its `CMakeLists.txt` entries)
 - Modify: `src/widgets/MainWindow.h/.cpp`, `src/widgets/EmergencyBanner.h/.cpp`,
-  `src/widgets/EmergencyProgressBar.cpp`, `src/widgets/ActionButtonsWidget.cpp`,
-  `src/widgets/ContactAttemptDialog.cpp`, `src/widgets/NotifyDialog.cpp`, `src/widgets/TaskDialog.cpp`,
-  `src/widgets/TaskListView.cpp`, `src/widgets/WardListView.cpp`, `src/widgets/TeamsView.cpp`,
-  `src/listmodels/TaskListModel.cpp`, `src/listmodels/FamilyTreeModel.cpp`, `src/listmodels/Filter.cpp`,
-  `src/listmodels/MinisteringModel.cpp`, `src/listmodels/TeamsTreeModel.cpp`, `src/listmodels/StatusIcons.cpp`
+  `src/widgets/ActionButtonsWidget.cpp`, `src/widgets/ContactAttemptDialog.h/.cpp`,
+  `src/widgets/TaskDialog.h/.cpp`, `src/widgets/TaskListView.h/.cpp`, `src/widgets/WardListView.h/.cpp`,
+  `src/widgets/TeamsView.h/.cpp`, `src/listmodels/TaskListModel.cpp`, `src/listmodels/FamilyTreeModel.cpp`,
+  `src/listmodels/TeamsTreeModel.cpp`
+- Modify: `src/models/EmergencyResponse.h/.cpp` and `src/services/ReportGenerator.cpp`
+  (`contactMarkName`, the "Marked OK" wording the report and the family tree share)
 - Modify: `docs/USER_GUIDE.md` (the emergency sections: several emergencies in progress, ending
   saves the report)
 
@@ -4421,25 +4423,50 @@ category, description, assignee and assignment notes, notification, and resoluti
 notes and time.
 
 **UI and manager** (after the core):
-- `EmergencyManager` keeps `std::optional<EmergencyResponseId> m_shownId`, reads the response
-  from the document, and turns each of today's mutators into building and committing the command;
-  `m_response` and `syncFamilies` are deleted. Opening a ward shows its own responses, so File >
-  New leaves no emergency from the ward before it.
+- The views build and commit the commands; `EmergencyManager` holds no mutators. It keeps
+  `std::optional<EmergencyResponseId> m_shownId`, which response is shown, gives read access to it
+  (`isActive`, `shownId`, `response()` as the document holds it, `responsesInProgress`, `show(id)`),
+  and listens to `DocumentManager::documentChanged`: a change with `responseFamilyId` for the shown
+  response emits `familyStatusChanged(familyId)` and `responseDataChanged`; one with only
+  `responseId` emits `responsesChanged`, and `responseDataChanged` when it is the shown response;
+  a full change, or the shown response going, re-reads which is shown - the same one when the
+  document still holds it, otherwise the most recently started in progress, or none - and emits
+  `emergencyStarted` or `emergencyEnded` when that changes. `startEmergency`, `endEmergency`,
+  `setContactStatus`, `addContactAttempt`, the task mutators, `addTaskCategory`, `m_response` and
+  `syncFamilies` are deleted. Opening a ward or File > New is a full change, so the ward shows its
+  own responses and no emergency carries over from the ward before.
+- `familyStatus(familyId)` is `Document::emergencyStatus` for the shown response, one table lookup,
+  which the map's markers read on every frame while the map is dragged. `totalFamilies` and
+  `countByStatus` give the progress bar and the filter tabs the shown response's statistics.
+- `EmergencyActions` (`src/widgets/EmergencyActions.h/.cpp`) holds the actions more than one view
+  offers: `findTask`, `addContactAttempt`, `addTask`, `editTask`, `notifyAssignee`,
+  `resolveTask` and `deleteTask`. Each takes the task as it stands and the shown response's id when
+  it starts, before any dialog, builds its command, and commits it through
+  `DocumentManager::executeCommand`; `deleteTask` takes the task as the caller saw it before its
+  confirmation. `WardListView`'s context menu, `TaskListView`'s buttons and `TeamsView`'s context
+  menu call these; `TeamsView::assignTaskToTeam` and `TaskListModel::setData` (resolve and reopen
+  from the check box) build their `UpdateTaskCommand` in place.
+- The OK and Unable to Reach buttons (`ActionButtonsWidget::onOkClicked` /
+  `onUnableToReachClicked`) add an attempt carrying only the outcome. `ContactAttemptDialog` and
+  `TaskDialog` take the family; the contact dialog fills method and who and keeps "Other needs
+  notes". `TaskDialog` reads the categories from the shown response, commits a new category as
+  `AddTaskCategoryCommand` when it is added, and on an edit keeps the task's assignment, its
+  notification included, while the assignee stays the same.
+- Starting an emergency commits `StartEmergencyCommand::fromNew(EmergencyResponse::create(name))`;
+  the manager shows it, since Start is offered only while none is in progress.
 - `MainWindow::onEndEmergency`: after its End confirmation, the report's save dialog (cancelling
-  ends nothing), then `endEmergency`; `AlreadyEnded` tells the user someone else ended it.
-  `saveEmergencyReport` reads the response by id after its dialog rather than
-  holding a reference across it.
+  ends nothing), then `DocumentManager::endEmergency`, which forwards to the session;
+  `AlreadyEnded` tells the user someone else ended it, and `ReportFailed` that the report could not
+  be written and nothing ended. `generateEmergencyReport` reads the response by id after its save
+  dialog rather than holding a reference across it.
 - Emergencies in progress are switched with a combo box on `EmergencyBanner`, shown only when
-  more than one is in progress.
-- UI sites build their commands from what was captured when the target was chosen: the OK and
-  Unable to Reach buttons (`ActionButtonsWidget::onOkClicked` / `onUnableToReachClicked`) add
-  an attempt carrying only the outcome; `ContactAttemptDialog` fills method and who; the task
-  dialog, resolve, reopen, assign, unassign and notify in `WardListView`, `TaskListView`,
-  `TeamsView`, `TaskDialog` and `TaskListModel::setData` build `UpdateTaskCommand` from the task
-  captured at open. A family's status in the views and on the map is
-  `Document::emergencyStatus` for the shown response, and its
-  attempts and tasks are `contactAttemptsFor` and `tasksFor`. Views that redraw one family on
-  an emergency change read `responseFamilyId`.
+  more than one is in progress, each listed by name and start time; choosing one calls
+  `EmergencyManager::show`. `MainWindow` refreshes the banner on `responsesChanged`.
+- A family's attempts and tasks in the views are the shown response's `contactAttemptsFor` and
+  `tasksFor`; the family tree shows an attempt with no method as *Marked OK* or *Marked Unable to
+  Reach*. Each view keeps its existing refresh: the family tree redraws one family on
+  `familyStatusChanged` and the status icons on `emergencyStarted` / `emergencyEnded`; the task
+  table and the teams tree rebuild on `responseDataChanged`.
 
 **Tests** (`EmergencyCommandsTest`, timestamps from `TestWard::attempt`, `TestWard::task` and
 `TestWard::resolution`, `TestWard::notification` and `TestWard::storm`, and responses holding

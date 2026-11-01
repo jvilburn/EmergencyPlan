@@ -247,6 +247,7 @@ set(WIDGET_SOURCES
     src/widgets/SelectionPreservingTreeView.cpp
     src/widgets/SculptedItemDelegate.cpp
     src/widgets/EmergencyAssetView.cpp
+    src/widgets/EmergencyActions.cpp
     src/widgets/EmergencyBanner.cpp
     src/widgets/EmergencyProgressBar.cpp
     src/widgets/SidebarWidget.cpp
@@ -297,6 +298,7 @@ set(WIDGET_HEADERS
     src/widgets/SelectionPreservingTreeView.h
     src/widgets/SculptedItemDelegate.h
     src/widgets/EmergencyAssetView.h
+    src/widgets/EmergencyActions.h
     src/widgets/EmergencyBanner.h
     src/widgets/EmergencyProgressBar.h
     src/widgets/SidebarWidget.h

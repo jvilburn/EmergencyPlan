@@ -1,4 +1,5 @@
 #include "ActionButtonsWidget.h"
+#include "EmergencyActions.h"
 #include "EmergencyManager.h"
 #include "EmergencyResponse.h"
 
@@ -71,12 +72,14 @@ void ActionButtonsWidget::onDeleteClicked()
 
 void ActionButtonsWidget::onOkClicked()
 {
-    EmergencyManager::instance()->setContactStatus(m_familyId, ContactStatus::OK);
+    EmergencyActions::addContactAttempt(
+        ContactAttempt::create(m_familyId, std::nullopt, std::nullopt, ContactOutcome::OK, QString()));
 }
 
 void ActionButtonsWidget::onUnableToReachClicked()
 {
-    EmergencyManager::instance()->setContactStatus(m_familyId, ContactStatus::UnableToReach);
+    EmergencyActions::addContactAttempt(
+        ContactAttempt::create(m_familyId, std::nullopt, std::nullopt, ContactOutcome::UnableToReach, QString()));
 }
 
 void ActionButtonsWidget::onAddTaskClicked()

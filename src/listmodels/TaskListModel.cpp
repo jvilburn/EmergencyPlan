@@ -1,6 +1,7 @@
 #include "TaskListModel.h"
 #include "Document.h"
 #include "DocumentManager.h"
+#include "EmergencyCommands.h"
 #include "EmergencyManager.h"
 #include "EmergencyResponse.h"
 #include "Family.h"
@@ -107,17 +108,30 @@ bool TaskListModel::setData(const QModelIndex& index, const QVariant& value, int
         return false;
     }
 
-    const TaskEntry& entry = m_entries.at(index.row());
-    bool checked = (value.toInt() == Qt::Checked);
-
-    if (checked)
+    EmergencyManager* manager = EmergencyManager::instance();
+    if (!manager->isActive())
     {
-        EmergencyManager::instance()->resolveTask(entry.familyId, entry.taskId, QString());
+        return false;
+    }
+    const ResponseTask* task = manager->response().findTask(m_entries.at(index.row()).taskId);
+    if (!task)
+    {
+        return false;
+    }
+
+    // Resolving from the check box records no notes; clearing it reopens the task
+    ResponseTask opened = *task;
+    ResponseTask saved = opened;
+    if (value.toInt() == Qt::Checked)
+    {
+        saved.setResolution(TaskResolution::create(QString()));
     }
     else
     {
-        EmergencyManager::instance()->reopenTask(entry.familyId, entry.taskId);
+        saved.setResolution(std::nullopt);
     }
+    const Document& document = DocumentManager::instance()->document();
+    DocumentManager::instance()->executeCommand(UpdateTaskCommand::fromEdit(*manager->shownId(), opened, saved, document));
 
     // rebuild() will be triggered by responseDataChanged signal
     return true;
@@ -155,41 +169,23 @@ void TaskListModel::rebuild()
         return;
     }
 
-    const EmergencyResponse& response = EmergencyManager::instance()->response();
-    const QHash<FamilyId, FamilyResponseRecord>& records = response.familyRecords();
     const QHash<FamilyId, Family>& families = DocumentManager::instance()->document().families();
-
-    for (auto it = records.constBegin(); it != records.constEnd(); ++it)
+    for (const ResponseTask& task : EmergencyManager::instance()->response().tasks())
     {
-        const FamilyId& familyId = it.key();
-        const FamilyResponseRecord& record = it.value();
+        auto family = families.constFind(task.familyId());
+        const std::optional<TaskAssignment>& assignment = task.assignment();
 
-        if (record.tasks().isEmpty())
-        {
-            continue;
-        }
-
-        QString familyName;
-        auto famIt = families.constFind(familyId);
-        if (famIt != families.constEnd())
-        {
-            familyName = famIt.value().displayName();
-        }
-
-        for (const ResponseTask& task : record.tasks())
-        {
-            TaskEntry entry;
-            entry.familyId = familyId;
-            entry.familyName = familyName;
-            entry.taskId = task.id();
-            entry.category = task.category();
-            entry.description = task.description();
-            entry.assignedTeamId = task.assignedTeamId();
-            entry.assignedPersonId = task.assignedPersonId();
-            entry.resolved = task.isResolved();
-            entry.notified = task.isNotified();
-            m_entries.append(entry);
-        }
+        TaskEntry entry;
+        entry.familyId = task.familyId();
+        entry.familyName = family != families.constEnd() ? family.value().displayName() : tr("(removed)");
+        entry.taskId = task.id();
+        entry.category = task.category();
+        entry.description = task.description();
+        entry.assignedTeamId = assignment ? assignment->teamId() : std::nullopt;
+        entry.assignedPersonId = assignment ? assignment->personId() : std::nullopt;
+        entry.resolved = task.isResolved();
+        entry.notified = task.isNotified();
+        m_entries.append(entry);
     }
 
     std::sort(m_entries.begin(), m_entries.end(), &TaskListModel::taskEntryLessThan);

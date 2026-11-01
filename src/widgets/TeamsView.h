@@ -63,9 +63,7 @@ private:
     void resolveTaskFromContextMenu();
 
     // Task actions
-    void assignTaskToTeam(const FamilyId& familyId, const TaskId& taskId);
-    void notifyTask(const FamilyId& familyId, const TaskId& taskId);
-    void resolveTask(const FamilyId& familyId, const TaskId& taskId);
+    void assignTaskToTeam(const TaskId& taskId);
 
     std::optional<TeamId> selectedTeamId() const;
 
@@ -82,6 +80,5 @@ private:
     // Context menu state
     std::optional<TeamId> m_contextTeamId;
     std::optional<PersonId> m_contextPersonId;
-    std::optional<FamilyId> m_contextFamilyId;
     std::optional<TaskId> m_contextTaskId;
 };

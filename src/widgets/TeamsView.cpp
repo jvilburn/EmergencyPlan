@@ -5,7 +5,8 @@
 #include "Document.h"
 #include "EmergencyManager.h"
 #include "EmergencyResponse.h"
-#include "NotifyDialog.h"
+#include "EmergencyActions.h"
+#include "EmergencyCommands.h"
 #include "Team.h"
 #include "TeamsTreeModel.h"
 #include "FilterBar.h"
@@ -218,15 +219,12 @@ void TeamsView::onContextMenu(const QPoint& pos)
         case ItemType::TaskRow:
         {
             QString taskIdStr = index.data(TeamsTreeModel::TaskIdRole).toString();
-            QString familyIdStr = index.data(TeamsTreeModel::FamilyIdRole).toString();
-            if (taskIdStr.isEmpty() || familyIdStr.isEmpty())
+            if (taskIdStr.isEmpty())
             {
                 break;
             }
 
             TaskId taskId = TaskId::fromString(taskIdStr);
-            FamilyId familyId = FamilyId::fromString(familyIdStr);
-            m_contextFamilyId = familyId;
             m_contextTaskId = taskId;
 
             // Check if task is assigned to a team
@@ -234,31 +232,24 @@ void TeamsView::onContextMenu(const QPoint& pos)
 
             if (!taskTeamId)
             {
-                // Unassigned task — offer Assign action
+                // Unassigned task: offer the Assign action
                 menu.addAction(tr("Assign to Team..."), this,
                                &TeamsView::assignTaskFromContextMenu);
             }
 
             // Notify action (only if assigned and not yet notified)
-            const FamilyResponseRecord* record = EmergencyManager::instance()->recordForFamily(familyId);
-            if (record)
+            std::optional<ResponseTask> task = EmergencyActions::findTask(taskId);
+            if (task)
             {
-                for (const ResponseTask& task : record->tasks())
+                if (task->isAssigned() && !task->isNotified())
                 {
-                    if (task.id() == taskId)
-                    {
-                        if (task.isAssigned() && !task.isNotified())
-                        {
-                            menu.addAction(tr("Notify..."), this,
-                                           &TeamsView::notifyTaskFromContextMenu);
-                        }
-                        if (!task.isResolved())
-                        {
-                            menu.addAction(tr("Resolve..."), this,
-                                           &TeamsView::resolveTaskFromContextMenu);
-                        }
-                        break;
-                    }
+                    menu.addAction(tr("Notify..."), this,
+                                   &TeamsView::notifyTaskFromContextMenu);
+                }
+                if (!task->isResolved())
+                {
+                    menu.addAction(tr("Resolve..."), this,
+                                   &TeamsView::resolveTaskFromContextMenu);
                 }
             }
             break;
@@ -279,7 +270,6 @@ void TeamsView::onContextMenu(const QPoint& pos)
 
     m_contextTeamId = std::nullopt;
     m_contextPersonId = std::nullopt;
-    m_contextFamilyId = std::nullopt;
     m_contextTaskId = std::nullopt;
 }
 
@@ -597,42 +587,43 @@ void TeamsView::removeMemberFromTeam(const TeamId& teamId, const PersonId& perso
 
 void TeamsView::assignTaskFromContextMenu()
 {
-    std::optional<FamilyId> familyId = m_contextFamilyId;
     std::optional<TaskId> taskId = m_contextTaskId;
-    m_contextFamilyId = std::nullopt;
     m_contextTaskId = std::nullopt;
-    if (familyId && taskId)
+    if (taskId)
     {
-        assignTaskToTeam(*familyId, *taskId);
+        assignTaskToTeam(*taskId);
     }
 }
 
 void TeamsView::notifyTaskFromContextMenu()
 {
-    std::optional<FamilyId> familyId = m_contextFamilyId;
     std::optional<TaskId> taskId = m_contextTaskId;
-    m_contextFamilyId = std::nullopt;
     m_contextTaskId = std::nullopt;
-    if (familyId && taskId)
+    if (taskId)
     {
-        notifyTask(*familyId, *taskId);
+        EmergencyActions::notifyAssignee(*taskId, this);
     }
 }
 
 void TeamsView::resolveTaskFromContextMenu()
 {
-    std::optional<FamilyId> familyId = m_contextFamilyId;
     std::optional<TaskId> taskId = m_contextTaskId;
-    m_contextFamilyId = std::nullopt;
     m_contextTaskId = std::nullopt;
-    if (familyId && taskId)
+    if (taskId)
     {
-        resolveTask(*familyId, *taskId);
+        EmergencyActions::resolveTask(*taskId, this);
     }
 }
 
-void TeamsView::assignTaskToTeam(const FamilyId& familyId, const TaskId& taskId)
+void TeamsView::assignTaskToTeam(const TaskId& taskId)
 {
+    std::optional<ResponseTask> opened = EmergencyActions::findTask(taskId);
+    if (!opened)
+    {
+        return;
+    }
+    EmergencyResponseId responseId = *EmergencyManager::instance()->shownId();
+
     const Document& doc = DocumentManager::instance()->document();
     QList<Team> teams = doc.teams().values();
 
@@ -668,38 +659,11 @@ void TeamsView::assignTaskToTeam(const FamilyId& familyId, const TaskId& taskId)
     {
         if (team.name() == selected)
         {
-            EmergencyManager::instance()->assignTaskToTeam(familyId, taskId, team.id(), QString());
+            ResponseTask saved = *opened;
+            saved.setAssignment(TaskAssignment::toTeam(team.id(), QString()));
+            DocumentManager::instance()->executeCommand(
+                UpdateTaskCommand::fromEdit(responseId, *opened, saved, DocumentManager::instance()->document()));
             return;
         }
     }
-}
-
-void TeamsView::notifyTask(const FamilyId& familyId, const TaskId& taskId)
-{
-    NotifyDialog dialog(this);
-    if (dialog.exec() != QDialog::Accepted)
-    {
-        return;
-    }
-
-    std::optional<TaskNotification> notification = dialog.result();
-    if (notification)
-    {
-        EmergencyManager::instance()->notifyAssignee(familyId, taskId, *notification);
-    }
-}
-
-void TeamsView::resolveTask(const FamilyId& familyId, const TaskId& taskId)
-{
-    bool ok = false;
-    QString notes = QInputDialog::getText(
-        this, tr("Resolve Task"), tr("Resolution notes (optional):"),
-        QLineEdit::Normal, QString(), &ok);
-
-    if (!ok)
-    {
-        return;
-    }
-
-    EmergencyManager::instance()->resolveTask(familyId, taskId, notes.trimmed());
 }

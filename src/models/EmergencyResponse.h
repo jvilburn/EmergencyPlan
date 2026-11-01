@@ -44,6 +44,10 @@ QString contactMethodName(ContactMethod method);
 /// The outcome's name as the user sees it: "OK" or "Unable to Reach".
 QString contactOutcomeName(ContactOutcome outcome);
 
+/// How an attempt with an outcome and no method, made by a button, reads: "Marked OK" or
+/// "Marked Unable to Reach".
+QString contactMarkName(ContactOutcome outcome);
+
 // === TaskNotification ===
 
 /// The assignee was told about a task: how, when, and what was said.

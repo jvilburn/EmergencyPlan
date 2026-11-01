@@ -20,6 +20,7 @@ class TaskListView;
 class TeamsView;
 class EmergencyBanner;
 class GeoLocation;
+class EmergencyResponse;
 
 class MainWindow : public QMainWindow
 {
@@ -53,7 +54,7 @@ private slots:
     void onEmergencyStarted();
     void onEmergencyEnded();
     void generateEmergencyReport();
-    bool saveEmergencyReport();
+    void updateEmergencyBanner();
     void updateEmergencyActions();
 
     // Sidebar tabs
@@ -75,6 +76,8 @@ private:
     void closeEditPanelInternal();
 
     // Settings helpers
+    /// The report's suggested path: the emergency's name and start date in Documents.
+    static QString defaultReportPath(const EmergencyResponse& response);
     static QString settingsFilePath();
     static bool loadDefaultLocation(double& lat, double& lng);
     static void saveDefaultLocation(double lat, double lng);

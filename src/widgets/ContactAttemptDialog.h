@@ -8,13 +8,14 @@
 class QButtonGroup;
 class QComboBox;
 class QLineEdit;
-/// Dialog for logging a contact attempt during an emergency.
+/// Dialog for logging a contact attempt on one family during an emergency: the method, who
+/// made the contact, and notes.
 class ContactAttemptDialog : public QDialog
 {
     Q_OBJECT
 
 public:
-    explicit ContactAttemptDialog(QWidget* parent);
+    ContactAttemptDialog(const FamilyId& familyId, QWidget* parent);
 
     std::optional<ContactAttempt> result() const;
 
@@ -22,6 +23,7 @@ private slots:
     void onAccepted();
 
 private:
+    FamilyId m_familyId;
     QButtonGroup* m_methodGroup = nullptr;
     QComboBox* m_whoCombo = nullptr;
     QLineEdit* m_notesEdit = nullptr;

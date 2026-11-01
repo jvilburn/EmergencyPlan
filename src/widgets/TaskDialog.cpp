@@ -1,6 +1,7 @@
 #include "TaskDialog.h"
 #include "Document.h"
 #include "DocumentManager.h"
+#include "EmergencyCommands.h"
 #include "EmergencyManager.h"
 #include "Family.h"
 #include "Person.h"
@@ -16,8 +17,9 @@
 #include <QRadioButton>
 #include <QVBoxLayout>
 
-TaskDialog::TaskDialog(QWidget* parent)
+TaskDialog::TaskDialog(const FamilyId& familyId, QWidget* parent)
     : QDialog(parent)
+    , m_familyId(familyId)
 {
     setWindowTitle(tr("Add Task"));
     setMinimumWidth(400);
@@ -29,10 +31,12 @@ TaskDialog::TaskDialog(QWidget* parent)
     layout->addWidget(categoryLabel);
 
     m_categoryCombo = new QComboBox(this);
-    QStringList categories = EmergencyManager::instance()->taskCategories();
-    for (const QString& cat : categories)
+    if (EmergencyManager::instance()->isActive())
     {
-        m_categoryCombo->addItem(cat);
+        for (const QString& category : EmergencyManager::instance()->response().taskCategories())
+        {
+            m_categoryCombo->addItem(category);
+        }
     }
     m_categoryCombo->addItem(tr("+ Add new..."));
     layout->addWidget(m_categoryCombo);
@@ -149,20 +153,21 @@ void TaskDialog::setTask(const ResponseTask& task)
     m_descriptionEdit->setText(task.description());
 
     // Set assignment
-    if (task.assignedTeamId())
+    const std::optional<TaskAssignment>& assignment = task.assignment();
+    if (assignment && assignment->teamId())
     {
         m_teamRadio->setChecked(true);
-        int teamIndex = m_teamCombo->findData(task.assignedTeamId()->toString());
+        int teamIndex = m_teamCombo->findData(assignment->teamId()->toString());
         if (teamIndex >= 0)
         {
             m_teamCombo->setCurrentIndex(teamIndex);
         }
         m_teamCombo->setEnabled(true);
     }
-    else if (task.assignedPersonId())
+    else if (assignment && assignment->personId())
     {
         m_personRadio->setChecked(true);
-        int personIndex = m_personCombo->findData(task.assignedPersonId()->toString());
+        int personIndex = m_personCombo->findData(assignment->personId()->toString());
         if (personIndex >= 0)
         {
             m_personCombo->setCurrentIndex(personIndex);
@@ -200,32 +205,32 @@ void TaskDialog::onAccepted()
         return;
     }
 
-    // When editing, mutate the original task to preserve ID, notification, and resolution state
+    // An edit starts from the original task, keeping its id, creation time and resolution
     ResponseTask task = m_originalTask
         ? *m_originalTask
-        : ResponseTask::create(category, description);
+        : ResponseTask::create(m_familyId, category, description);
+    task.setCategory(category);
+    task.setDescription(description);
 
-    if (m_originalTask)
-    {
-        task.setCategory(category);
-        task.setDescription(description);
-    }
-
-    // Apply assignment
+    std::optional<TaskAssignment> assignment;
     if (m_teamRadio->isChecked() && m_teamCombo->currentIndex() >= 0)
     {
-        TeamId teamId = TeamId::fromString(m_teamCombo->currentData().toString());
-        task.assignToTeam(teamId, QString());
+        assignment = TaskAssignment::toTeam(TeamId::fromString(m_teamCombo->currentData().toString()), QString());
     }
     else if (m_personRadio->isChecked() && m_personCombo->currentIndex() >= 0)
     {
-        PersonId personId = PersonId::fromString(m_personCombo->currentData().toString());
-        task.assignToPerson(personId, QString());
+        assignment = TaskAssignment::toPerson(PersonId::fromString(m_personCombo->currentData().toString()), QString());
     }
-    else
+
+    // The same assignee keeps the assignment as it was, notes and notification included
+    const std::optional<TaskAssignment>& original = task.assignment();
+    if (assignment && original
+        && assignment->teamId() == original->teamId()
+        && assignment->personId() == original->personId())
     {
-        task.clearAssignment();
+        assignment = original;
     }
+    task.setAssignment(assignment);
 
     m_result = task;
     accept();
@@ -255,7 +260,11 @@ void TaskDialog::onCategoryActivated(int index)
     }
 
     name = name.trimmed();
-    EmergencyManager::instance()->addTaskCategory(name);
+    if (EmergencyManager::instance()->isActive())
+    {
+        DocumentManager::instance()->executeCommand(
+            AddTaskCategoryCommand::fromNew(*EmergencyManager::instance()->shownId(), name));
+    }
 
     // Insert before the "+ Add new..." item
     int insertIndex = m_categoryCombo->count() - 1;

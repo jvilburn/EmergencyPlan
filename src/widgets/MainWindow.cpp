@@ -12,6 +12,7 @@
 #include "MapWidget.h"
 #include "FamilyMarkerProvider.h"
 #include "DocumentManager.h"
+#include "EmergencyCommands.h"
 #include "EmergencyManager.h"
 #include "ReportGenerator.h"
 #include "AddressCoordinatesCommands.h"
@@ -29,7 +30,6 @@
 #include <QStatusBar>
 #include <QVBoxLayout>
 #include <QFileDialog>
-#include <QCheckBox>
 #include <QInputDialog>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -195,6 +195,10 @@ void MainWindow::setupConnections()
             this, &MainWindow::onEmergencyEnded);
     connect(EmergencyManager::instance(), &EmergencyManager::responseDataChanged,
             m_mapWidget, &MapWidget::updateHighlights);
+    connect(EmergencyManager::instance(), &EmergencyManager::responsesChanged,
+            this, &MainWindow::updateEmergencyBanner);
+    connect(m_emergencyBanner, &EmergencyBanner::responseChosen,
+            EmergencyManager::instance(), &EmergencyManager::show);
     // Sidebar tab changes
     connect(m_sidebarTabs, &SidebarWidget::currentChanged,
             this, &MainWindow::onSidebarTabChanged);
@@ -749,23 +753,26 @@ void MainWindow::onStartEmergency()
         return;
     }
 
-    EmergencyManager::instance()->startEmergency(name.trimmed());
+    DocumentManager::instance()->executeCommand(StartEmergencyCommand::fromNew(EmergencyResponse::create(name.trimmed())));
     statusBar()->showMessage(tr("Emergency \"%1\" started").arg(name.trimmed()), 5000);
 }
 
 void MainWindow::onEndEmergency()
 {
-    QString emergencyName = EmergencyManager::instance()->response().name();
+    if (!EmergencyManager::instance()->isActive())
+    {
+        return;
+    }
+    const EmergencyResponse& shown = EmergencyManager::instance()->response();
+    EmergencyResponseId id = shown.id();
+    QString emergencyName = shown.name();
+    QString defaultPath = defaultReportPath(shown);
 
     QMessageBox dialog(this);
     dialog.setWindowTitle(tr("End Emergency"));
     dialog.setText(tr("End \"%1\"?").arg(emergencyName));
-    dialog.setInformativeText(tr("Ending removes the response data. The summary report is the record of the emergency."));
+    dialog.setInformativeText(tr("Ending saves the summary report, which is the record of the emergency, and then removes the response."));
     dialog.setIcon(QMessageBox::Question);
-
-    QCheckBox* pdfCheckBox = new QCheckBox(tr("Generate summary report (PDF)"));
-    pdfCheckBox->setChecked(true);
-    dialog.setCheckBox(pdfCheckBox);
 
     QPushButton* endButton = dialog.addButton(tr("End"), QMessageBox::DestructiveRole);
     dialog.addButton(QMessageBox::Cancel);
@@ -777,63 +784,75 @@ void MainWindow::onEndEmergency()
         return;
     }
 
-    // Generate PDF report before ending (data is cleared on end)
-    if (pdfCheckBox->isChecked())
+    QString filePath = QFileDialog::getSaveFileName(this, tr("Save Emergency Report"), defaultPath,
+                                                    tr("PDF Files (*.pdf)"));
+    if (filePath.isEmpty())
     {
-        if (!saveEmergencyReport())
-        {
-            return;
-        }
+        return;
     }
 
-    EmergencyManager::instance()->endEmergency();
-    statusBar()->showMessage(tr("Emergency \"%1\" ended").arg(emergencyName), 5000);
+    switch (DocumentManager::instance()->endEmergency(id, filePath))
+    {
+    case EndResult::Ended:
+        statusBar()->showMessage(tr("Emergency \"%1\" ended; report saved to %2").arg(emergencyName, filePath), 5000);
+        break;
+    case EndResult::AlreadyEnded:
+        QMessageBox::information(this, tr("End Emergency"),
+                                 tr("\"%1\" has already been ended by someone else.").arg(emergencyName));
+        break;
+    case EndResult::ReportFailed:
+        QMessageBox::warning(this, tr("End Emergency"),
+                             tr("The report could not be written to %1, so \"%2\" was not ended.").arg(filePath, emergencyName));
+        break;
+    }
 }
 
 void MainWindow::generateEmergencyReport()
 {
-    saveEmergencyReport();
-}
-
-bool MainWindow::saveEmergencyReport()
-{
     if (!EmergencyManager::instance()->isActive())
     {
-        return false;
+        return;
     }
+    EmergencyResponseId id = *EmergencyManager::instance()->shownId();
 
-    const EmergencyResponse& response = EmergencyManager::instance()->response();
-
-    // Default filename based on emergency name and date
-    QString defaultName = response.name().simplified().replace(' ', '_')
-        + "_" + response.startedAt().toLocalTime().toString("yyyy-MM-dd")
-        + ".pdf";
-
-    QString defaultDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
     QString filePath = QFileDialog::getSaveFileName(
-        this, tr("Save Emergency Report"), defaultDir + "/" + defaultName,
+        this, tr("Save Emergency Report"), defaultReportPath(EmergencyManager::instance()->response()),
         tr("PDF Files (*.pdf)"));
-
     if (filePath.isEmpty())
     {
-        return false;
+        return;
     }
 
-    QString wardName = DocumentManager::instance()->document().wardName();
-    if (ReportGenerator::generateReport(response, wardName, QDateTime::currentDateTime(), filePath))
+    // The response as it stands after the dialog, which may have changed or ended meanwhile
+    const Document& document = DocumentManager::instance()->document();
+    std::optional<EmergencyResponse> response = document.findEmergencyResponseById(id);
+    if (!response)
+    {
+        QMessageBox::information(this, tr("Report"), tr("The emergency has been ended by someone else."));
+        return;
+    }
+
+    if (ReportGenerator::generateReport(*response, document, QDateTime::currentDateTimeUtc(), filePath))
     {
         statusBar()->showMessage(tr("Report saved to %1").arg(filePath), 5000);
-        return true;
+        return;
     }
 
     QMessageBox::warning(this, tr("Report Error"),
                          tr("Failed to generate the report."));
-    return false;
+}
+
+QString MainWindow::defaultReportPath(const EmergencyResponse& response)
+{
+    QString name = response.name().simplified().replace(' ', '_')
+        + "_" + response.startedAt().toLocalTime().toString("yyyy-MM-dd")
+        + ".pdf";
+    return QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/" + name;
 }
 
 void MainWindow::onEmergencyStarted()
 {
-    m_emergencyBanner->setEmergencyName(EmergencyManager::instance()->response().name());
+    updateEmergencyBanner();
     m_taskListView->rebuild();
     m_sidebarTabs->setPageVisible(m_taskListTabIndex, true);
     m_splitter->setSizes({600, 0, 1100});
@@ -842,10 +861,21 @@ void MainWindow::onEmergencyStarted()
 
 void MainWindow::onEmergencyEnded()
 {
-    m_emergencyBanner->clearBanner();
+    updateEmergencyBanner();
     m_sidebarTabs->setPageVisible(m_taskListTabIndex, false);
     m_splitter->setSizes({300, 0, 1100});
     updateEmergencyActions();
+}
+
+void MainWindow::updateEmergencyBanner()
+{
+    EmergencyManager* manager = EmergencyManager::instance();
+    if (!manager->isActive())
+    {
+        m_emergencyBanner->clearBanner();
+        return;
+    }
+    m_emergencyBanner->setResponses(manager->responsesInProgress(), *manager->shownId());
 }
 
 void MainWindow::updateEmergencyActions()

@@ -6,6 +6,7 @@
 
 class QTreeView;
 class QPushButton;
+class ResponseTask;
 class TaskListModel;
 
 class TaskListView : public QWidget, public FamilyMarkerProvider
@@ -34,7 +35,8 @@ private slots:
     void onSelectionChanged();
 
 private:
-    void promptNotifyIfNeeded(const FamilyId& familyId, const TaskId& taskId);
+    /// Offers to notify task's assignee when it has one who has not been told.
+    void promptNotifyIfNeeded(const ResponseTask& task);
 
     TaskListModel* m_model;
     QTreeView* m_treeView;

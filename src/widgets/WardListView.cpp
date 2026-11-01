@@ -1,6 +1,7 @@
 #include "WardListView.h"
 #include "ActionButtonsWidget.h"
 #include "ContactAttemptDialog.h"
+#include "EmergencyActions.h"
 #include "Document.h"
 #include "DocumentManager.h"
 #include "EmergencyManager.h"
@@ -10,14 +11,10 @@
 #include "Filter.h"
 #include "FilterBar.h"
 #include "MarkerRenderer.h"
-#include "NotifyDialog.h"
 #include "SelectionPreservingTreeView.h"
-#include "TaskDialog.h"
 
 #include <QHBoxLayout>
 #include <QHeaderView>
-#include <QInputDialog>
-#include <QLineEdit>
 #include <QMenu>
 #include <QPushButton>
 #include <QVBoxLayout>
@@ -158,11 +155,6 @@ QSet<FamilyId> WardListView::visibleFamilyIds() const
 
 QString WardListView::familyStatusIcon(const FamilyId& familyId) const
 {
-    if (!EmergencyManager::instance() || !EmergencyManager::instance()->isActive())
-    {
-        return {};
-    }
-
     EffectiveContactStatus status = EmergencyManager::instance()->familyStatus(familyId);
     switch (status)
     {
@@ -469,99 +461,16 @@ void WardListView::updateFilterTabCounts()
 
 void WardListView::onLogContactRequested(const FamilyId& familyId)
 {
-    ContactAttemptDialog dialog(this);
-    if (dialog.exec() != QDialog::Accepted)
+    ContactAttemptDialog dialog(familyId, this);
+    if (dialog.exec() == QDialog::Accepted && dialog.result())
     {
-        return;
-    }
-
-    std::optional<ContactAttempt> attempt = dialog.result();
-    if (attempt)
-    {
-        EmergencyManager::instance()->addContactAttempt(familyId, *attempt);
+        EmergencyActions::addContactAttempt(*dialog.result());
     }
 }
 
 void WardListView::onAddTaskRequested(const FamilyId& familyId)
 {
-    TaskDialog dialog(this);
-    if (dialog.exec() != QDialog::Accepted)
-    {
-        return;
-    }
-
-    std::optional<ResponseTask> task = dialog.result();
-    if (task)
-    {
-        EmergencyManager::instance()->addTask(familyId, *task);
-    }
-}
-
-void WardListView::onEditTaskRequested(const FamilyId& familyId, const TaskId& taskId)
-{
-    const FamilyResponseRecord* record = EmergencyManager::instance()->recordForFamily(familyId);
-    if (!record)
-    {
-        return;
-    }
-
-    // Find the existing task
-    const ResponseTask* existingTask = nullptr;
-    for (const ResponseTask& t : record->tasks())
-    {
-        if (t.id() == taskId)
-        {
-            existingTask = &t;
-            break;
-        }
-    }
-    if (!existingTask)
-    {
-        return;
-    }
-
-    TaskDialog dialog(this);
-    dialog.setTask(*existingTask);
-    if (dialog.exec() != QDialog::Accepted)
-    {
-        return;
-    }
-
-    std::optional<ResponseTask> updatedTask = dialog.result();
-    if (updatedTask)
-    {
-        EmergencyManager::instance()->updateTask(familyId, *updatedTask);
-    }
-}
-
-void WardListView::onNotifyTaskRequested(const FamilyId& familyId, const TaskId& taskId)
-{
-    NotifyDialog dialog(this);
-    if (dialog.exec() != QDialog::Accepted)
-    {
-        return;
-    }
-
-    std::optional<TaskNotification> notification = dialog.result();
-    if (notification)
-    {
-        EmergencyManager::instance()->notifyAssignee(familyId, taskId, *notification);
-    }
-}
-
-void WardListView::onResolveTaskRequested(const FamilyId& familyId, const TaskId& taskId)
-{
-    bool ok = false;
-    QString notes = QInputDialog::getText(
-        this, tr("Resolve Task"), tr("Resolution notes (optional):"),
-        QLineEdit::Normal, QString(), &ok);
-
-    if (!ok)
-    {
-        return;
-    }
-
-    EmergencyManager::instance()->resolveTask(familyId, taskId, notes.trimmed());
+    EmergencyActions::addTask(familyId, this);
 }
 
 void WardListView::onTreeContextMenu(const QPoint& pos)
@@ -578,32 +487,14 @@ void WardListView::onTreeContextMenu(const QPoint& pos)
         return;
     }
 
-    // Get family and task IDs
-    std::optional<FamilyId> familyId = m_model->familyIdAt(index);
     QString taskIdStr = index.data(FamilyTreeModel::TaskIdRole).toString();
-    if (!familyId || taskIdStr.isEmpty())
+    if (taskIdStr.isEmpty())
     {
         return;
     }
 
-    TaskId taskId = TaskId::fromString(taskIdStr);
-
-    // Find the task to determine available actions
-    const FamilyResponseRecord* record = EmergencyManager::instance()->recordForFamily(*familyId);
-    if (!record)
-    {
-        return;
-    }
-
-    const ResponseTask* task = nullptr;
-    for (const ResponseTask& t : record->tasks())
-    {
-        if (t.id() == taskId)
-        {
-            task = &t;
-            break;
-        }
-    }
+    // The task as the user sees it, which a removal takes as its start condition
+    std::optional<ResponseTask> task = EmergencyActions::findTask(TaskId::fromString(taskIdStr));
     if (!task)
     {
         return;
@@ -636,18 +527,18 @@ void WardListView::onTreeContextMenu(const QPoint& pos)
 
     if (chosen == editAction)
     {
-        onEditTaskRequested(*familyId, taskId);
+        EmergencyActions::editTask(task->id(), this);
     }
     else if (chosen == notifyAction)
     {
-        onNotifyTaskRequested(*familyId, taskId);
+        EmergencyActions::notifyAssignee(task->id(), this);
     }
     else if (chosen == resolveAction)
     {
-        onResolveTaskRequested(*familyId, taskId);
+        EmergencyActions::resolveTask(task->id(), this);
     }
     else if (chosen == deleteAction)
     {
-        EmergencyManager::instance()->removeTask(*familyId, taskId);
+        EmergencyActions::deleteTask(*task);
     }
 }

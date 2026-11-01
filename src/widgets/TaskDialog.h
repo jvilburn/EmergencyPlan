@@ -9,18 +9,19 @@ class QButtonGroup;
 class QComboBox;
 class QLineEdit;
 class QRadioButton;
-/// Dialog for adding or editing a response task during an emergency.
+/// Dialog for adding or editing one family's task in the shown emergency response.
 class TaskDialog : public QDialog
 {
     Q_OBJECT
 
 public:
-    explicit TaskDialog(QWidget* parent);
+    TaskDialog(const FamilyId& familyId, QWidget* parent);
 
     /// Pre-populate for editing an existing task.
     void setTask(const ResponseTask& task);
 
-    /// Returns the constructed task (valid after accept).
+    /// The task as saved (valid after accept). An edit keeps the task's assignment, with its
+    /// notification, while its assignee stays the same.
     std::optional<ResponseTask> result() const;
 
 private slots:
@@ -29,6 +30,7 @@ private slots:
     void onAssignmentChanged();
 
 private:
+    FamilyId m_familyId;
     QComboBox* m_categoryCombo = nullptr;
     QLineEdit* m_descriptionEdit = nullptr;
     QButtonGroup* m_assignGroup = nullptr;

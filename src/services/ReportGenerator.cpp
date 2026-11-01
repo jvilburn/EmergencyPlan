@@ -135,20 +135,6 @@ QString familyNameIn(const FamilyId& id, const Document& document)
     return family.has_value() ? family->displayName() : removed();
 }
 
-/// How an attempt with no method, made by a button, reads: "Marked OK" or "Marked
-/// Unable to Reach".
-QString markedName(ContactOutcome outcome)
-{
-    switch (outcome)
-    {
-    case ContactOutcome::OK:
-        return QObject::tr("Marked OK");
-    case ContactOutcome::UnableToReach:
-        return QObject::tr("Marked Unable to Reach");
-    }
-    return QString();
-}
-
 /// One attempt: its time, method, who, outcome and notes, whichever it has.
 QString attemptLine(const ContactAttempt& attempt, const Document& document)
 {
@@ -162,7 +148,7 @@ QString attemptLine(const ContactAttempt& attempt, const Document& document)
     parts.append(personNameIn(attempt.who(), document));
     if (outcome.has_value())
     {
-        parts.append(method.has_value() ? contactOutcomeName(*outcome) : markedName(*outcome));
+        parts.append(method.has_value() ? contactOutcomeName(*outcome) : contactMarkName(*outcome));
     }
     parts.append(attempt.notes());
     return joined(parts);
@@ -355,7 +341,7 @@ QString reportHtml(const EmergencyResponse& response, const Document& document, 
     {
         if (marksByOutcome.contains(outcome))
         {
-            addKeyValue(html, markedName(outcome), QString::number(marksByOutcome[outcome]));
+            addKeyValue(html, contactMarkName(outcome), QString::number(marksByOutcome[outcome]));
         }
     }
 

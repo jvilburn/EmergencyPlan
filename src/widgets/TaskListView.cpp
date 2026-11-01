@@ -2,11 +2,9 @@
 #include "TaskListModel.h"
 #include "Document.h"
 #include "DocumentManager.h"
-#include "EmergencyManager.h"
+#include "EmergencyActions.h"
 #include "EmergencyResponse.h"
 #include "Family.h"
-#include "TaskDialog.h"
-#include "NotifyDialog.h"
 #include "Team.h"
 
 #include <QHBoxLayout>
@@ -116,17 +114,10 @@ void TaskListView::onAddTask()
 
     FamilyId familyId = familyList.at(selectedIndex).second;
 
-    TaskDialog dialog(this);
-    if (dialog.exec() != QDialog::Accepted)
-    {
-        return;
-    }
-
-    std::optional<ResponseTask> task = dialog.result();
+    std::optional<ResponseTask> task = EmergencyActions::addTask(familyId, this);
     if (task)
     {
-        EmergencyManager::instance()->addTask(familyId, *task);
-        promptNotifyIfNeeded(familyId, task->id());
+        promptNotifyIfNeeded(*task);
     }
 }
 
@@ -138,41 +129,10 @@ void TaskListView::onEditTask()
         return;
     }
 
-    FamilyId familyId = m_model->familyIdForRow(index.row());
-    TaskId taskId = m_model->taskIdForRow(index.row());
-
-    const FamilyResponseRecord* record = EmergencyManager::instance()->recordForFamily(familyId);
-    if (!record)
+    std::optional<ResponseTask> saved = EmergencyActions::editTask(m_model->taskIdForRow(index.row()), this);
+    if (saved)
     {
-        return;
-    }
-
-    const ResponseTask* existingTask = nullptr;
-    for (const ResponseTask& t : record->tasks())
-    {
-        if (t.id() == taskId)
-        {
-            existingTask = &t;
-            break;
-        }
-    }
-    if (!existingTask)
-    {
-        return;
-    }
-
-    TaskDialog dialog(this);
-    dialog.setTask(*existingTask);
-    if (dialog.exec() != QDialog::Accepted)
-    {
-        return;
-    }
-
-    std::optional<ResponseTask> updatedTask = dialog.result();
-    if (updatedTask)
-    {
-        EmergencyManager::instance()->updateTask(familyId, *updatedTask);
-        promptNotifyIfNeeded(familyId, updatedTask->id());
+        promptNotifyIfNeeded(*saved);
     }
 }
 
@@ -184,8 +144,12 @@ void TaskListView::onDeleteTask()
         return;
     }
 
-    FamilyId familyId = m_model->familyIdForRow(index.row());
-    TaskId taskId = m_model->taskIdForRow(index.row());
+    // The task as the user sees it, which the removal takes as its start condition
+    std::optional<ResponseTask> seen = EmergencyActions::findTask(m_model->taskIdForRow(index.row()));
+    if (!seen)
+    {
+        return;
+    }
 
     QMessageBox::StandardButton result = QMessageBox::question(
         this, tr("Delete Task"), tr("Delete this task?"),
@@ -193,7 +157,7 @@ void TaskListView::onDeleteTask()
 
     if (result == QMessageBox::Yes)
     {
-        EmergencyManager::instance()->removeTask(familyId, taskId);
+        EmergencyActions::deleteTask(*seen);
     }
 }
 
@@ -205,48 +169,14 @@ void TaskListView::onNotifyTask()
         return;
     }
 
-    FamilyId familyId = m_model->familyIdForRow(index.row());
-    TaskId taskId = m_model->taskIdForRow(index.row());
-
-    NotifyDialog dialog(this);
-    if (dialog.exec() != QDialog::Accepted)
-    {
-        return;
-    }
-
-    std::optional<TaskNotification> notification = dialog.result();
-    if (notification)
-    {
-        EmergencyManager::instance()->notifyAssignee(familyId, taskId, *notification);
-    }
+    EmergencyActions::notifyAssignee(m_model->taskIdForRow(index.row()), this);
 }
 
-void TaskListView::promptNotifyIfNeeded(const FamilyId& familyId, const TaskId& taskId)
+void TaskListView::promptNotifyIfNeeded(const ResponseTask& task)
 {
-    const FamilyResponseRecord* record = EmergencyManager::instance()->recordForFamily(familyId);
-    if (!record)
+    if (task.isAssigned() && !task.isNotified())
     {
-        return;
-    }
-
-    for (const ResponseTask& task : record->tasks())
-    {
-        if (task.id() == taskId)
-        {
-            if (task.isAssigned() && !task.isNotified())
-            {
-                NotifyDialog dialog(this);
-                if (dialog.exec() == QDialog::Accepted)
-                {
-                    std::optional<TaskNotification> notification = dialog.result();
-                    if (notification)
-                    {
-                        EmergencyManager::instance()->notifyAssignee(familyId, taskId, *notification);
-                    }
-                }
-            }
-            return;
-        }
+        EmergencyActions::notifyAssignee(task.id(), this);
     }
 }
 
@@ -280,40 +210,26 @@ HighlightInfo TaskListView::highlightInfo() const
     FamilyId familyId = m_model->familyIdForRow(row);
     info.highlightedFamilyIds.insert(familyId);
 
-    const FamilyResponseRecord* record = EmergencyManager::instance()->recordForFamily(familyId);
-    if (!record)
-    {
-        return info;
-    }
-
-    TaskId taskId = m_model->taskIdForRow(row);
-    const ResponseTask* task = nullptr;
-    for (const ResponseTask& t : record->tasks())
-    {
-        if (t.id() == taskId)
-        {
-            task = &t;
-            break;
-        }
-    }
-    if (!task)
+    std::optional<ResponseTask> task = EmergencyActions::findTask(m_model->taskIdForRow(row));
+    if (!task || !task->assignment())
     {
         return info;
     }
 
     const Document& doc = DocumentManager::instance()->document();
+    const TaskAssignment& assignment = *task->assignment();
 
-    if (task->assignedPersonId())
+    if (assignment.personId())
     {
-        std::optional<FamilyId> assigneeFamilyId = doc.familyIdForPerson(*task->assignedPersonId());
+        std::optional<FamilyId> assigneeFamilyId = doc.familyIdForPerson(*assignment.personId());
         if (assigneeFamilyId)
         {
             info.contactPointFamilyIds.insert(*assigneeFamilyId);
         }
     }
-    else if (task->assignedTeamId())
+    else if (assignment.teamId())
     {
-        std::optional<Team> team = doc.findTeamById(*task->assignedTeamId());
+        std::optional<Team> team = doc.findTeamById(*assignment.teamId());
         if (team)
         {
             for (const PersonId& personId : team->memberIds())

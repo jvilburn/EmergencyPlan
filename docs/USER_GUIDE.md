@@ -138,6 +138,14 @@ The interactive map shows family locations as markers.
    - Map markers gain status badges
    - A progress bar shows welfare check status
 
+Everyone who has the ward open sees the emergency once their copy is up to date, and their welfare checks and tasks go into the same emergency.
+
+### Several Emergencies in Progress
+
+Two people who each start an emergency while they are offline end up with two emergencies, each holding the checks and tasks its own responder recorded, because the app cannot tell they were meant to be the same one. When more than one emergency is in progress, the banner shows how many and a list to switch between them; each is listed with its name and when it started. Whoever is coordinating ends the one that is not wanted, which saves its report like any other.
+
+Opening a ward, or **File > New**, shows that ward's own emergencies: none, or one of those in progress.
+
 ### Welfare Checks
 
 In the Families tab during an emergency, each family has action buttons:
@@ -147,9 +155,11 @@ In the Families tab during an emergency, each family has action buttons:
 - **Add Task** - Create a task for something the family needs
 - **Log Contact** - Record a contact attempt (method, who contacted, notes)
 
+**OK** and **Unable to Reach** each record a contact attempt marked with that outcome. A family's status is the outcome of its most recent attempt that has one, so two people who mark the same family differently both appear in its history, and the family shows the later one. A family with an unresolved task shows as "Needs Help" whatever its last outcome.
+
 The progress bar at the top updates in real time:
 ```
-47 families: 23 OK · 3 need help · 2 unable to reach · 19 remaining
+47 families: 23 OK - 3 need help - 2 unable to reach - 19 remaining
 ```
 
 Use the filter tabs (**All**, **Remaining**, **OK**, **Needs Help**, **Unable to Reach**) to focus on specific groups.
@@ -164,19 +174,18 @@ The Tasks tab shows all emergency tasks across all families in a single table.
 - **Notify**: Record that you've notified the assignee (method, notes)
 - **Resolved checkbox**: Toggle task completion
 
-A family with unresolved tasks automatically shows as "Needs Help".
+A family with unresolved tasks automatically shows as "Needs Help". Giving a task to someone else clears its notification, since the new assignee has not been told.
 
 ### Ending an Emergency
 
-1. **Emergency > End Emergency**
-2. Leave **Generate summary report (PDF)** checked to save a report of the emergency. The report is the record of the emergency once it ends.
-3. Choose:
-   - **End** - Save the report if it is checked, then remove the response data and end the emergency
-   - **Cancel** - Keep the emergency active
+1. **Emergency > End Emergency**, then **End** to confirm, or **Cancel** to keep the emergency in progress
+2. Choose where to save the summary report. The report is the record of the emergency: ending saves it and then removes the emergency's data from the ward. Cancelling the save ends nothing.
+
+If someone else ended the emergency while you were choosing, the app says so and nothing more happens. If the report cannot be saved where you chose, the emergency is not ended.
 
 ### Reports
 
-**Emergency > Generate Report** creates a PDF summary including contact status breakdown, task assignments, and resolution statistics. Its header shows the time the emergency started and the time the report was written.
+**Emergency > Generate Report** creates a PDF summary of the emergency shown, without ending it: contact status breakdown, task assignments, resolution statistics, and each family's contact attempts and tasks. Its header shows the time the emergency started and the time the report was written. Families, people and teams are named as they stand when the report is written, and as "(removed)" when they are no longer in the ward.
 
 ---
 
@@ -195,7 +204,7 @@ A family with unresolved tasks automatically shows as "Needs Help".
 
 Most actions support undo and redo: family edits, team changes, imports, and more. The Edit menu shows the name of the action that will be undone or redone.
 
-Emergency response actions (contact status, tasks) are **not** part of the undo system; they are event logs. To correct a mistake, edit or delete the entry directly.
+Contact attempts and task changes can be undone too. Starting an emergency and adding a task category cannot. Undoing the end of an emergency brings it back as it was; the report already saved stays where it is.
 
 ---
 

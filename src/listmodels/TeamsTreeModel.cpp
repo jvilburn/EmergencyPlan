@@ -32,6 +32,19 @@ bool leaderFirstThenAlpha(const QPair<PersonId, QString>& a,
     return a.second.toLower() < b.second.toLower();
 }
 
+/// The team the task is assigned to, or none when it is unassigned or assigned to a person.
+std::optional<TeamId> assignedTeam(const ResponseTask& task)
+{
+    return task.assignment() ? task.assignment()->teamId() : std::nullopt;
+}
+
+/// The family's display name as the document holds it, or "(removed)".
+QString familyName(const FamilyId& familyId)
+{
+    std::optional<Family> family = DocumentManager::instance()->document().findFamilyById(familyId);
+    return family ? family->displayName() : QObject::tr("(removed)");
+}
+
 }  // namespace
 
 TeamsTreeModel::TeamsTreeModel(Filter* filter,
@@ -155,49 +168,40 @@ void TeamsTreeModel::rebuild()
         // During emergencies, add task rows assigned to this team
         if (emergencyActive)
         {
-            const EmergencyResponse& response = EmergencyManager::instance()->response();
-            const QHash<FamilyId, FamilyResponseRecord>& records = response.familyRecords();
-
-            for (auto it = records.constBegin(); it != records.constEnd(); ++it)
+            for (const ResponseTask& task : EmergencyManager::instance()->response().tasks())
             {
-                const FamilyId& famId = it.key();
-                const FamilyResponseRecord& record = it.value();
-
-                for (const ResponseTask& task : record.tasks())
+                if (assignedTeam(task) == team.id())
                 {
-                    if (task.assignedTeamId() && *task.assignedTeamId() == team.id())
+                    TreeNode* taskNode = new TreeNode();
+                    taskNode->type = ItemType::TaskRow;
+                    taskNode->teamId = team.id();
+                    taskNode->taskId = task.id();
+                    taskNode->familyId = task.familyId();
+                    taskNode->taskResolved = task.isResolved();
+                    taskNode->parent = teamNode;
+
+                    // Format: "Category - Family - Description", then a check mark and "notified" or a bullet and
+                    // "not notified", then "[RESOLVED]" if resolved
+                    QString text = task.category()
+                        + " - " + familyName(task.familyId())
+                        + " - \"" + task.description() + "\"";
+
+                    if (task.isNotified())
                     {
-                        TreeNode* taskNode = new TreeNode();
-                        taskNode->type = ItemType::TaskRow;
-                        taskNode->teamId = team.id();
-                        taskNode->taskId = task.id();
-                        taskNode->familyId = famId;
-                        taskNode->taskResolved = task.isResolved();
-                        taskNode->parent = teamNode;
-
-                        // Format: "Category - Family - Description", then a check mark and "notified" or a bullet and
-                        // "not notified", then "[RESOLVED]" if resolved
-                        QString text = task.category()
-                            + " - " + record.displayName()
-                            + " - \"" + task.description() + "\"";
-
-                        if (task.isNotified())
-                        {
-                            text += " " + kCheckmark + " " + tr("notified");
-                        }
-                        else
-                        {
-                            text += " " + kBullet + " " + tr("not notified");
-                        }
-
-                        if (task.isResolved())
-                        {
-                            text += " [" + tr("RESOLVED") + "]";
-                        }
-
-                        taskNode->displayText = text;
-                        teamNode->children.append(taskNode);
+                        text += " " + kCheckmark + " " + tr("notified");
                     }
+                    else
+                    {
+                        text += " " + kBullet + " " + tr("not notified");
+                    }
+
+                    if (task.isResolved())
+                    {
+                        text += " [" + tr("RESOLVED") + "]";
+                    }
+
+                    taskNode->displayText = text;
+                    teamNode->children.append(taskNode);
                 }
             }
         }
@@ -208,39 +212,30 @@ void TeamsTreeModel::rebuild()
     // During emergencies, add "Unassigned Tasks" section
     if (emergencyActive)
     {
-        const EmergencyResponse& response = EmergencyManager::instance()->response();
-        const QHash<FamilyId, FamilyResponseRecord>& records = response.familyRecords();
-
         // Collect unassigned tasks (not assigned to any team)
         QList<TreeNode*> unassignedNodes;
 
-        for (auto it = records.constBegin(); it != records.constEnd(); ++it)
+        for (const ResponseTask& task : EmergencyManager::instance()->response().tasks())
         {
-            const FamilyId& famId = it.key();
-            const FamilyResponseRecord& record = it.value();
-
-            for (const ResponseTask& task : record.tasks())
+            if (!assignedTeam(task))
             {
-                if (!task.assignedTeamId())
+                TreeNode* taskNode = new TreeNode();
+                taskNode->type = ItemType::TaskRow;
+                taskNode->taskId = task.id();
+                taskNode->familyId = task.familyId();
+                taskNode->taskResolved = task.isResolved();
+
+                QString text = task.category()
+                    + " - " + familyName(task.familyId())
+                    + " - \"" + task.description() + "\"";
+
+                if (task.isResolved())
                 {
-                    TreeNode* taskNode = new TreeNode();
-                    taskNode->type = ItemType::TaskRow;
-                    taskNode->taskId = task.id();
-                    taskNode->familyId = famId;
-                    taskNode->taskResolved = task.isResolved();
-
-                    QString text = task.category()
-                        + " - " + record.displayName()
-                        + " - \"" + task.description() + "\"";
-
-                    if (task.isResolved())
-                    {
-                        text += " [" + tr("RESOLVED") + "]";
-                    }
-
-                    taskNode->displayText = text;
-                    unassignedNodes.append(taskNode);
+                    text += " [" + tr("RESOLVED") + "]";
                 }
+
+                taskNode->displayText = text;
+                unassignedNodes.append(taskNode);
             }
         }
 

@@ -15,24 +15,6 @@
 
 #include <algorithm>
 
-static QString contactMethodDisplayName(ContactMethod method)
-{
-    switch (method)
-    {
-        case ContactMethod::Phone:
-            return QObject::tr("Phone");
-        case ContactMethod::Text:
-            return QObject::tr("Text");
-        case ContactMethod::Email:
-            return QObject::tr("Email");
-        case ContactMethod::Visit:
-            return QObject::tr("Visit");
-        case ContactMethod::Other:
-            return QObject::tr("Other");
-    }
-    return QObject::tr("Phone");
-}
-
 FamilyTreeModel::FamilyTreeModel(Filter* filter,
                                  bool checkable,
                                  QObject* parent)
@@ -612,8 +594,8 @@ void FamilyTreeModel::appendContactAttemptNodes(TreeNode* parent, int familyInde
         return;
     }
 
-    const FamilyResponseRecord* record = EmergencyManager::instance()->recordForFamily(familyId);
-    if (!record || record->contactAttempts().isEmpty())
+    QList<ContactAttempt> attempts = EmergencyManager::instance()->response().contactAttemptsFor(familyId);
+    if (attempts.isEmpty())
     {
         return;
     }
@@ -627,28 +609,37 @@ void FamilyTreeModel::appendContactAttemptNodes(TreeNode* parent, int familyInde
     children.append(headerNode);
 
     const Document& doc = DocumentManager::instance()->document();
-    for (const ContactAttempt& attempt : record->contactAttempts())
+    for (const ContactAttempt& attempt : attempts)
     {
         TreeNode* attemptNode = new TreeNode();
         attemptNode->type = RowType::ContactAttempt;
         attemptNode->familyIndex = familyIndex;
         attemptNode->parent = parent;
 
-        // Format: "Phone - John Smith - Jan 4, 2:15 PM - notes"
-        QString methodStr = contactMethodDisplayName(attempt.method());
-        QString whoName;
-        std::optional<Person> person = doc.findPersonById(attempt.who());
-        if (person)
+        // Format: "Phone - John Smith - Jan 4, 2:15 PM - OK - notes", or "Marked OK - Jan 4,
+        // 2:15 PM" for a button press, with whichever parts the attempt has
+        QStringList parts;
+        std::optional<ContactMethod> method = attempt.method();
+        std::optional<ContactOutcome> outcome = attempt.outcome();
+        if (method)
         {
-            whoName = person->displayName();
+            parts.append(contactMethodName(*method));
         }
-        else
+        else if (outcome)
         {
-            whoName = tr("Unknown");
+            parts.append(contactMarkName(*outcome));
         }
-
-        QString timeStr = attempt.timestamp().toLocalTime().toString(tr("MMM d, h:mm AP"));
-        QString display = tr("  %1 - %2 - %3").arg(methodStr, whoName, timeStr);
+        if (attempt.who())
+        {
+            std::optional<Person> person = doc.findPersonById(*attempt.who());
+            parts.append(person ? person->displayName() : tr("(removed)"));
+        }
+        parts.append(attempt.timestamp().toLocalTime().toString(tr("MMM d, h:mm AP")));
+        if (method && outcome)
+        {
+            parts.append(contactOutcomeName(*outcome));
+        }
+        QString display = "  " + parts.join(" - ");
         if (!attempt.notes().isEmpty())
         {
             display += tr(" - \"%1\"").arg(attempt.notes());
@@ -668,8 +659,8 @@ void FamilyTreeModel::appendTaskNodes(TreeNode* parent, int familyIndex,
         return;
     }
 
-    const FamilyResponseRecord* record = EmergencyManager::instance()->recordForFamily(familyId);
-    if (!record || record->tasks().isEmpty())
+    QList<ResponseTask> tasks = EmergencyManager::instance()->response().tasksFor(familyId);
+    if (tasks.isEmpty())
     {
         return;
     }
@@ -683,7 +674,7 @@ void FamilyTreeModel::appendTaskNodes(TreeNode* parent, int familyIndex,
     children.append(headerNode);
 
     const Document& doc = DocumentManager::instance()->document();
-    for (const ResponseTask& task : record->tasks())
+    for (const ResponseTask& task : tasks)
     {
         // Line 1: a bullet and "Category - Description", with a check mark in place of the bullet if resolved
         TreeNode* taskNode = new TreeNode();
@@ -700,18 +691,19 @@ void FamilyTreeModel::appendTaskNodes(TreeNode* parent, int familyIndex,
 
         // Line 2: assignment info (as child-like indented row)
         QString assignmentText;
-        if (task.assignedTeamId())
+        const std::optional<TaskAssignment>& assignment = task.assignment();
+        if (assignment && assignment->teamId())
         {
             const QHash<TeamId, Team>& teams = doc.teams();
-            auto it = teams.constFind(*task.assignedTeamId());
+            auto it = teams.constFind(*assignment->teamId());
             if (it != teams.constEnd())
             {
                 assignmentText = tr("    Assigned to %1").arg(it.value().name());
             }
         }
-        else if (task.assignedPersonId())
+        else if (assignment && assignment->personId())
         {
-            std::optional<Person> person = doc.findPersonById(*task.assignedPersonId());
+            std::optional<Person> person = doc.findPersonById(*assignment->personId());
             if (person)
             {
                 assignmentText = tr("    Assigned to %1").arg(person->displayName());
@@ -887,8 +879,7 @@ QVariant FamilyTreeModel::data(const QModelIndex& index, int role) const
             return QVariant::fromValue(node->detailType);
 
         case Qt::DecorationRole:
-            if (node->type == RowType::Family && EmergencyManager::instance()
-                && EmergencyManager::instance()->isActive())
+            if (node->type == RowType::Family)
             {
                 FamilyId familyId = m_familyIds.at(node->familyIndex);
                 EffectiveContactStatus status = EmergencyManager::instance()->familyStatus(familyId);
