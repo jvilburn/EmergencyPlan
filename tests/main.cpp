@@ -6,6 +6,7 @@
 #include "FilterTest.h"
 #include "CommandRoundTripTest.h"
 #include "EmergencyAssetCommandsTest.h"
+#include "EmergencyCommandsTest.h"
 #include "MemberEditorTest.h"
 #include "PersonJsonTest.h"
 #include "TeamCommandsTest.h"
@@ -29,6 +30,7 @@ int main(int argc, char* argv[])
     AutomaticUpdatesTest automaticUpdatesTest(nullptr);
     TeamCommandsTest teamCommandsTest(nullptr);
     EmergencyAssetCommandsTest emergencyAssetCommandsTest(nullptr);
+    EmergencyCommandsTest emergencyCommandsTest(nullptr);
     FilterTest filterTest(nullptr);
     MemberEditorTest memberEditorTest(nullptr);
     FamilyEditPanelTest familyEditPanelTest(nullptr);
@@ -44,6 +46,7 @@ int main(int argc, char* argv[])
     failures += QTest::qExec(&automaticUpdatesTest, argc, argv);
     failures += QTest::qExec(&teamCommandsTest, argc, argv);
     failures += QTest::qExec(&emergencyAssetCommandsTest, argc, argv);
+    failures += QTest::qExec(&emergencyCommandsTest, argc, argv);
     failures += QTest::qExec(&filterTest, argc, argv);
     failures += QTest::qExec(&memberEditorTest, argc, argv);
     failures += QTest::qExec(&familyEditPanelTest, argc, argv);

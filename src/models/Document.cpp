@@ -115,6 +115,30 @@ QList<EmergencyAsset> Document::emergencyAssetsByArea(ResponseArea area) const
 }
 
 // ============================================================================
+// Emergency responses
+// ============================================================================
+
+void Document::setEmergencyResponse(const EmergencyResponse& response)
+{
+    m_emergencyResponses.insert(response.id(), response);
+}
+
+void Document::removeEmergencyResponse(const EmergencyResponseId& id)
+{
+    m_emergencyResponses.remove(id);
+}
+
+std::optional<EmergencyResponse> Document::findEmergencyResponseById(const EmergencyResponseId& id) const
+{
+    auto it = m_emergencyResponses.constFind(id);
+    if (it != m_emergencyResponses.constEnd())
+    {
+        return *it;
+    }
+    return std::nullopt;
+}
+
+// ============================================================================
 // Ministering operations
 // ============================================================================
 
@@ -294,6 +318,9 @@ QJsonObject Document::toJson() const
     // Emergency assets
     serializeHashToJson(json, "emergencyResources", m_emergencyAssets);
 
+    // Emergency responses in progress
+    serializeHashToJson(json, "emergencyResponses", m_emergencyResponses);
+
     // Ministering
     serializeHashToJson(json, "eqDistricts", m_eqDistricts);
     serializeHashToJson(json, "eqGroups", m_eqGroups);
@@ -335,6 +362,9 @@ Document Document::fromJson(const QJsonObject& json)
     // Emergency assets
     deserializeJsonToHash(json, "emergencyResources", document.m_emergencyAssets);
 
+    // Emergency responses in progress
+    deserializeJsonToHash(json, "emergencyResponses", document.m_emergencyResponses);
+
     // Ministering
     deserializeJsonToHash(json, "eqDistricts", document.m_eqDistricts);
     deserializeJsonToHash(json, "eqGroups", document.m_eqGroups);
@@ -373,6 +403,7 @@ bool Document::operator==(const Document& other) const
         && m_teams == other.m_teams
         && m_addressCoordinates == other.m_addressCoordinates
         && m_emergencyAssets == other.m_emergencyAssets
+        && m_emergencyResponses == other.m_emergencyResponses
         && m_eqDistricts == other.m_eqDistricts
         && m_eqGroups == other.m_eqGroups
         && m_rsDistricts == other.m_rsDistricts

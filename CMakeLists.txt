@@ -135,6 +135,7 @@ set(COMMAND_SOURCES
     src/commands/AddressCoordinatesCommands.cpp
     src/commands/TeamCommands.cpp
     src/commands/EmergencyAssetCommands.cpp
+    src/commands/EmergencyCommands.cpp
     # src/commands/ImportCommands.cpp
 )
 
@@ -148,6 +149,7 @@ set(COMMAND_HEADERS
     src/commands/AddressCoordinatesCommands.h
     src/commands/TeamCommands.h
     src/commands/EmergencyAssetCommands.h
+    src/commands/EmergencyCommands.h
     # src/commands/ImportCommands.h
 )
 

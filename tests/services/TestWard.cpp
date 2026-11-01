@@ -1,6 +1,8 @@
 #include "TestWard.h"
 #include "DocumentChange.h"
 
+#include <QTimeZone>
+
 Person TestWard::bob()
 {
     return Person::createWithId(bobId(), Name("Smith", "Bob"), Gender::Male, Birthday(),
@@ -132,6 +134,66 @@ Document TestWard::withAsset(const Document& document, const EmergencyAsset& ass
     Document updated = document;
     updated.setEmergencyAsset(asset);
     updated.onDocumentChanged(DocumentChange::full());
+    return updated;
+}
+
+QDateTime TestWard::octoberFirst(int hour, int minute)
+{
+    return QDateTime(QDate(2026, 10, 1), QTime(hour, minute), QTimeZone(QTimeZone::UTC));
+}
+
+EmergencyResponse TestWard::storm()
+{
+    QJsonObject json = EmergencyResponse::create("Storm").toJson();
+    json["id"] = stormId().toString();
+    json["startedAt"] = octoberFirst(8, 0).toString(Qt::ISODateWithMs);
+    return EmergencyResponse::fromJson(json);
+}
+
+ContactAttempt TestWard::attempt(const QString& id, const QDateTime& timestamp, std::optional<ContactMethod> method,
+                                 const std::optional<PersonId>& who, std::optional<ContactOutcome> outcome,
+                                 const QString& notes)
+{
+    QJsonObject json = ContactAttempt::create(method, who, outcome, notes).toJson();
+    json["id"] = id;
+    json["timestamp"] = timestamp.toString(Qt::ISODateWithMs);
+    return ContactAttempt::fromJson(json);
+}
+
+ResponseTask TestWard::task(const QString& id, const QDateTime& createdAt, const QString& category,
+                            const QString& description)
+{
+    QJsonObject json = ResponseTask::create(category, description).toJson();
+    json["id"] = id;
+    json["createdAt"] = createdAt.toString(Qt::ISODateWithMs);
+    return ResponseTask::fromJson(json);
+}
+
+FamilyRecordTarget TestWard::smithInStorm()
+{
+    return FamilyRecordTarget::forFamily(stormId(), smith());
+}
+
+EmergencyResponse TestWard::stormWithSmithRecord(const QList<ContactAttempt>& attempts, const QList<ResponseTask>& tasks)
+{
+    EmergencyResponse response = storm();
+    FamilyResponseRecord record = smithInStorm().recordIn(response);
+    for (const ContactAttempt& attempt : attempts)
+    {
+        record.insertContactAttempt(attempt);
+    }
+    for (const ResponseTask& task : tasks)
+    {
+        record.insertTask(task);
+    }
+    response.setRecord(record);
+    return response;
+}
+
+Document TestWard::withResponse(const Document& document, const EmergencyResponse& response)
+{
+    Document updated = document;
+    updated.setEmergencyResponse(response);
     return updated;
 }
 

@@ -2,6 +2,7 @@
 
 #include <QString>
 
+class Document;
 class EmergencyResponse;
 class QDateTime;
 
@@ -10,14 +11,13 @@ class QDateTime;
 class ReportGenerator
 {
 public:
-    /// Generate a PDF report for the given emergency response.
-    /// Returns true on success, false on failure.
-    /// @param response The emergency response data
-    /// @param wardName Ward name to display in the report header
+    /// Writes the summary report of response, the record of the emergency: its statistics,
+    /// counting every family in document without a record as Not Contacted, and each
+    /// family record's attempts and tasks, oldest first. People and teams are named as
+    /// document holds them. Returns false when the file cannot be written.
     /// @param writtenAt When the report is written; the header's date range ends here
-    /// @param filePath Output PDF file path
     static bool generateReport(const EmergencyResponse& response,
-                               const QString& wardName,
+                               const Document& document,
                                const QDateTime& writtenAt,
                                const QString& filePath);
 };

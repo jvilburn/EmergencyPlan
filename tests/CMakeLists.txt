@@ -32,6 +32,8 @@ add_executable(WardPlanningTests
     services/TeamCommandsTest.cpp
     services/EmergencyAssetCommandsTest.h
     services/EmergencyAssetCommandsTest.cpp
+    services/EmergencyCommandsTest.h
+    services/EmergencyCommandsTest.cpp
     services/FilterTest.h
     services/FilterTest.cpp
     services/PersonJsonTest.h

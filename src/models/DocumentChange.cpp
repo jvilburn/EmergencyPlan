@@ -35,6 +35,24 @@ DocumentChange EmergencyAssetScopeBuilder::updated(const EmergencyAssetId& id) c
     return c;
 }
 
+// EmergencyResponseScopeBuilder
+DocumentChange EmergencyResponseScopeBuilder::updated(const EmergencyResponseId& id) const
+{
+    DocumentChange c;
+    c.action = ChangeAction::Updated;
+    c.responseId = id;
+    return c;
+}
+
+DocumentChange EmergencyResponseScopeBuilder::updated(const EmergencyResponseId& id, const FamilyId& familyId) const
+{
+    DocumentChange c;
+    c.action = ChangeAction::Updated;
+    c.responseId = id;
+    c.familyId = familyId;
+    return c;
+}
+
 // DocumentChange factory methods
 DocumentChange DocumentChange::full()
 {
@@ -45,3 +63,4 @@ FamilyScopeBuilder DocumentChange::family() { return FamilyScopeBuilder{}; }
 MetadataScopeBuilder DocumentChange::metadata() { return MetadataScopeBuilder{}; }
 TeamScopeBuilder DocumentChange::team() { return TeamScopeBuilder{}; }
 EmergencyAssetScopeBuilder DocumentChange::emergencyAsset() { return EmergencyAssetScopeBuilder{}; }
+EmergencyResponseScopeBuilder DocumentChange::emergencyResponse() { return EmergencyResponseScopeBuilder{}; }

@@ -1,5 +1,9 @@
 #include "WardSession.h"
 #include "CommandRegistry.h"
+#include "EmergencyCommands.h"
+#include "ReportGenerator.h"
+
+#include <QDateTime>
 
 #include <QStringList>
 
@@ -107,6 +111,21 @@ QString WardSession::redoHeading() const
         return QString();
     }
     return m_redoStack.last()->description().heading();
+}
+
+EndResult WardSession::endEmergency(const EmergencyResponseId& id, const QString& reportPath)
+{
+    std::optional<EmergencyResponse> response = m_document.findEmergencyResponseById(id);
+    if (!response.has_value())
+    {
+        return EndResult::AlreadyEnded;
+    }
+    if (!ReportGenerator::generateReport(*response, m_document, QDateTime::currentDateTimeUtc(), reportPath))
+    {
+        return EndResult::ReportFailed;
+    }
+    commit(EndEmergencyCommand::fromReported(*response));
+    return EndResult::Ended;
 }
 
 ReplayResult WardSession::replayOnto(const Document& version)

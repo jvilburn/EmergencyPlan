@@ -43,6 +43,14 @@ struct ReplayResult
     QString toRedo;  ///< when status is Abandoned, the abandoned changes as plain text
 };
 
+/// How ending an emergency went.
+enum class EndResult
+{
+    Ended,         ///< the report was written, and the response removed
+    AlreadyEnded,  ///< the document holds no response with that id, so nothing was written
+    ReportFailed   ///< the report could not be written, so the response stays
+};
+
 /// One open ward: its document, journal and undo stack, and the commit step and replay
 /// that change them. It owns the ward's AutomaticUpdates, which change the same document
 /// outside the journal. Holds no global state, so a test creates as many sessions as it
@@ -84,6 +92,11 @@ public:
     bool canRedo() const { return !m_redoStack.isEmpty(); }
     QString undoHeading() const;
     QString redoHeading() const;
+
+    /// Ends the emergency response with that id: reads it, writes its report to
+    /// reportPath, and commits EndEmergencyCommand with the response as the report was
+    /// written from. Nothing runs between the read and the commit, so the commit applies.
+    EndResult endEmergency(const EmergencyResponseId& id, const QString& reportPath);
 
     /// Replays the journal onto version. With the journal empty, version becomes the
     /// document as it stands. Otherwise each entry is rebuilt from its serialised form and

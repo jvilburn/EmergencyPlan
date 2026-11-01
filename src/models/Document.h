@@ -15,6 +15,7 @@
 #include "MinisteringGroup.h"
 #include "ItemType.h"
 #include "EmergencyAsset.h"
+#include "EmergencyResponse.h"
 #include "ResponseArea.h"
 #include <QSet>
 
@@ -93,6 +94,15 @@ public:
     QList<EmergencyAsset> emergencyAssetsByArea(ResponseArea area) const;
 
     // ========================================================================
+    // Emergency responses in progress
+    // ========================================================================
+    const QHash<EmergencyResponseId, EmergencyResponse>& emergencyResponses() const { return m_emergencyResponses; }
+    /// Sets the response with response's id to response, adding it when there is none.
+    void setEmergencyResponse(const EmergencyResponse& response);
+    void removeEmergencyResponse(const EmergencyResponseId& id);
+    std::optional<EmergencyResponse> findEmergencyResponseById(const EmergencyResponseId& id) const;
+
+    // ========================================================================
     // Lookup helpers
     // ========================================================================
     std::optional<Family> findFamilyById(const FamilyId& id) const;
@@ -136,6 +146,9 @@ private:
 
     // Emergency assets
     QHash<EmergencyAssetId, EmergencyAsset> m_emergencyAssets;
+
+    // Emergency responses in progress
+    QHash<EmergencyResponseId, EmergencyResponse> m_emergencyResponses;
 
     // Ministering
     QHash<MinisteringDistrictId, MinisteringDistrict> m_eqDistricts;

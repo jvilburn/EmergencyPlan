@@ -2,6 +2,7 @@
 
 #include "Address.h"
 #include "Birthday.h"
+#include "EmergencyResponse.h"
 #include "FieldChange.h"
 #include "Gender.h"
 #include "Id.h"
@@ -23,6 +24,8 @@ QJsonValue toJsonValue(const Address& value);
 QJsonValue toJsonValue(const Birthday& value);
 QJsonValue toJsonValue(const std::optional<Gender>& value);
 QJsonValue toJsonValue(const std::optional<PersonId>& value);
+QJsonValue toJsonValue(const std::optional<TaskAssignment>& value);
+QJsonValue toJsonValue(const std::optional<TaskResolution>& value);
 
 template<typename T>
 T fromJsonValue(const QJsonValue& value);
@@ -45,6 +48,10 @@ template<>
 std::optional<Gender> fromJsonValue<std::optional<Gender>>(const QJsonValue& value);
 template<>
 std::optional<PersonId> fromJsonValue<std::optional<PersonId>>(const QJsonValue& value);
+template<>
+std::optional<TaskAssignment> fromJsonValue<std::optional<TaskAssignment>>(const QJsonValue& value);
+template<>
+std::optional<TaskResolution> fromJsonValue<std::optional<TaskResolution>>(const QJsonValue& value);
 
 /// The ids added and the ids removed, each as a sorted array of id strings.
 QJsonObject peopleChangeToJson(const IdSetChange<PersonId>& change);

@@ -1,4 +1,5 @@
 #include "ReportGenerator.h"
+#include "Document.h"
 #include "EmergencyResponse.h"
 
 #include <QFont>
@@ -18,6 +19,8 @@ const int kSectionSpacing = 12;
 const int kHeaderFontSize = 16;
 const int kSubheaderFontSize = 12;
 const int kBodyFontSize = 10;
+
+const QString kDateFormat = "MMM d, yyyy h:mm AP";
 
 struct ReportContext
 {
@@ -78,7 +81,8 @@ void drawSpacer(ReportContext& ctx, int height)
     ctx.y += height;
 }
 
-void drawKeyValue(ReportContext& ctx, const QString& key, const QString& value)
+/// Draws text in the body font, indent past the page margin.
+void drawIndented(ReportContext& ctx, const QString& text, int indent)
 {
     QFont font(ctx.fontFamily, kBodyFontSize);
     ctx.painter->setFont(font);
@@ -87,23 +91,18 @@ void drawKeyValue(ReportContext& ctx, const QString& key, const QString& value)
     int textHeight = fm.height();
     ensureSpace(ctx, textHeight);
 
-    ctx.painter->drawText(kPageMargin + 20, ctx.y + fm.ascent(),
-                          key + ": " + value);
+    ctx.painter->drawText(kPageMargin + indent, ctx.y + fm.ascent(), text);
     ctx.y += textHeight + 2;
+}
+
+void drawKeyValue(ReportContext& ctx, const QString& key, const QString& value)
+{
+    drawIndented(ctx, key + ": " + value, 20);
 }
 
 void drawBulletItem(ReportContext& ctx, const QString& text)
 {
-    QFont font(ctx.fontFamily, kBodyFontSize);
-    ctx.painter->setFont(font);
-
-    QFontMetrics fm(font);
-    int textHeight = fm.height();
-    ensureSpace(ctx, textHeight);
-
-    ctx.painter->drawText(kPageMargin + 20, ctx.y + fm.ascent(),
-                          "\u2022 " + text);
-    ctx.y += textHeight + 2;
+    drawIndented(ctx, "\u2022 " + text, 20);
 }
 
 QString percentString(int count, int total)
@@ -116,24 +115,6 @@ QString percentString(int count, int total)
     return QString::number(pct) + "%";
 }
 
-QString contactMethodName(ContactMethod method)
-{
-    switch (method)
-    {
-    case ContactMethod::Phone:
-        return QObject::tr("Phone");
-    case ContactMethod::Text:
-        return QObject::tr("Text");
-    case ContactMethod::Email:
-        return QObject::tr("Email");
-    case ContactMethod::Visit:
-        return QObject::tr("Visit");
-    case ContactMethod::Other:
-        return QObject::tr("Other");
-    }
-    return QString();
-}
-
 // Fixed order for consistent reports
 const QList<ContactMethod> kMethodOrder =
 {
@@ -144,10 +125,143 @@ const QList<ContactMethod> kMethodOrder =
     ContactMethod::Other
 };
 
+QString timeText(const QDateTime& time)
+{
+    return time.toLocalTime().toString(kDateFormat);
+}
+
+/// The parts that are not empty, joined by " - ".
+QString joined(const QStringList& parts)
+{
+    QStringList present;
+    for (const QString& part : parts)
+    {
+        if (!part.isEmpty())
+        {
+            present.append(part);
+        }
+    }
+    return present.join(" - ");
+}
+
+/// The person's display name as document holds them, or empty when there is no id or
+/// document lacks them.
+QString personNameIn(const std::optional<PersonId>& id, const Document& document)
+{
+    if (!id.has_value())
+    {
+        return QString();
+    }
+    std::optional<Person> person = document.findPersonById(*id);
+    return person.has_value() ? person->displayName() : QString();
+}
+
+/// How an attempt with no method, recorded by a button, reads: "Marked OK" or "Marked
+/// Unable to Reach".
+QString markedName(ContactOutcome outcome)
+{
+    switch (outcome)
+    {
+    case ContactOutcome::OK:
+        return QObject::tr("Marked OK");
+    case ContactOutcome::UnableToReach:
+        return QObject::tr("Marked Unable to Reach");
+    }
+    return QString();
+}
+
+/// One attempt: its time, method, who, outcome and notes, whichever it has.
+QString attemptLine(const ContactAttempt& attempt, const Document& document)
+{
+    QStringList parts = {timeText(attempt.timestamp())};
+    std::optional<ContactMethod> method = attempt.method();
+    std::optional<ContactOutcome> outcome = attempt.outcome();
+    if (method.has_value())
+    {
+        parts.append(contactMethodName(*method));
+    }
+    parts.append(personNameIn(attempt.who(), document));
+    if (outcome.has_value())
+    {
+        parts.append(method.has_value() ? contactOutcomeName(*outcome) : markedName(*outcome));
+    }
+    parts.append(attempt.notes());
+    return joined(parts);
+}
+
+QString assigneeLine(const TaskAssignment& assignment, const Document& document)
+{
+    QString assignee;
+    if (assignment.teamId().has_value())
+    {
+        std::optional<Team> team = document.findTeamById(*assignment.teamId());
+        assignee = team.has_value() ? team->name() : QString();
+    }
+    else
+    {
+        assignee = personNameIn(assignment.personId(), document);
+    }
+    return joined({QObject::tr("Assigned to: %1").arg(assignee), assignment.notes()});
+}
+
+QString notificationLine(const TaskNotification& notification)
+{
+    return joined({QObject::tr("Notified: %1").arg(timeText(notification.timestamp())),
+                   contactMethodName(notification.method()),
+                   notification.notes()});
+}
+
+QString resolutionLine(const std::optional<TaskResolution>& resolution)
+{
+    if (!resolution.has_value())
+    {
+        return QObject::tr("Unresolved");
+    }
+    return joined({QObject::tr("Resolved: %1").arg(timeText(resolution->resolvedAt())), resolution->notes()});
+}
+
+/// The record's name and address, then its attempts and its tasks, each oldest first.
+void drawRecord(ReportContext& ctx, const FamilyResponseRecord& record, const Document& document)
+{
+    drawText(ctx, record.displayName(), kBodyFontSize, true);
+    drawIndented(ctx, record.address(), 20);
+
+    const QList<ContactAttempt>& attempts = record.contactAttempts();
+    if (!attempts.isEmpty())
+    {
+        drawIndented(ctx, QObject::tr("Contact attempts"), 20);
+        for (auto it = attempts.crbegin(); it != attempts.crend(); ++it)
+        {
+            drawIndented(ctx, attemptLine(*it, document), 40);
+        }
+    }
+
+    const QList<ResponseTask>& tasks = record.tasks();
+    if (!tasks.isEmpty())
+    {
+        drawIndented(ctx, QObject::tr("Tasks"), 20);
+        for (auto it = tasks.crbegin(); it != tasks.crend(); ++it)
+        {
+            drawIndented(ctx, joined({timeText(it->createdAt()), it->category(), it->description()}), 40);
+            const std::optional<TaskAssignment>& assignment = it->assignment();
+            if (assignment.has_value())
+            {
+                drawIndented(ctx, assigneeLine(*assignment, document), 60);
+                if (assignment->notification().has_value())
+                {
+                    drawIndented(ctx, notificationLine(*assignment->notification()), 60);
+                }
+            }
+            drawIndented(ctx, resolutionLine(it->resolution()), 60);
+        }
+    }
+    drawSpacer(ctx, 6);
+}
+
 }  // namespace
 
 bool ReportGenerator::generateReport(const EmergencyResponse& response,
-                                     const QString& wardName,
+                                     const Document& document,
                                      const QDateTime& writtenAt,
                                      const QString& filePath)
 {
@@ -178,25 +292,25 @@ bool ReportGenerator::generateReport(const EmergencyResponse& response,
     ctx.printer = &printer;
     ctx.fontFamily = selectFontFamily();
 
+    const QHash<FamilyId, Family>& families = document.families();
+    const QHash<FamilyId, FamilyResponseRecord>& records = response.familyRecords();
+
     // === 1. Header ===
     drawText(ctx, QObject::tr("Emergency Response Report"), kHeaderFontSize, true);
     drawSpacer(ctx, 4);
     drawText(ctx, response.name(), kSubheaderFontSize, false);
-    drawText(ctx, wardName, kBodyFontSize, false);
+    drawText(ctx, document.wardName(), kBodyFontSize, false);
 
-    const QString dateFormat = "MMM d, yyyy h:mm AP";
-    QString dateRange = QObject::tr("%1 - %2")
-        .arg(response.startedAt().toLocalTime().toString(dateFormat),
-             writtenAt.toLocalTime().toString(dateFormat));
+    QString dateRange = QObject::tr("%1 - %2").arg(timeText(response.startedAt()), timeText(writtenAt));
     drawText(ctx, dateRange, kBodyFontSize, false);
     drawLine(ctx);
 
     // === 2. Overview Statistics ===
-    int total = response.totalFamilies();
-    int okCount = response.countByStatus(EffectiveContactStatus::OK);
-    int needsHelpCount = response.countByStatus(EffectiveContactStatus::NeedsHelp);
-    int unableCount = response.countByStatus(EffectiveContactStatus::UnableToReach);
-    int notContactedCount = response.countByStatus(EffectiveContactStatus::NotContacted);
+    int total = response.totalFamilies(families);
+    int okCount = response.countByStatus(EffectiveContactStatus::OK, families);
+    int needsHelpCount = response.countByStatus(EffectiveContactStatus::NeedsHelp, families);
+    int unableCount = response.countByStatus(EffectiveContactStatus::UnableToReach, families);
+    int notContactedCount = response.countByStatus(EffectiveContactStatus::NotContacted, families);
     int contactedCount = total - notContactedCount;
 
     drawText(ctx, QObject::tr("Overview"), kSubheaderFontSize, true);
@@ -218,19 +332,16 @@ bool ReportGenerator::generateReport(const EmergencyResponse& response,
     drawSpacer(ctx, kSectionSpacing);
 
     // === 4. Task Summary ===
-    const QHash<FamilyId, FamilyResponseRecord>& records = response.familyRecords();
-
     int totalTasks = 0;
     int resolvedTasks = 0;
     int assignedTasks = 0;
     int totalAttempts = 0;
     QHash<QString, int> tasksByCategory;
     QHash<ContactMethod, int> attemptsByMethod;
+    QHash<ContactOutcome, int> marksByOutcome;
 
-    for (auto it = records.constBegin(); it != records.constEnd(); ++it)
+    for (const FamilyResponseRecord& record : records)
     {
-        const FamilyResponseRecord& record = it.value();
-
         for (const ResponseTask& task : record.tasks())
         {
             totalTasks++;
@@ -248,7 +359,14 @@ bool ReportGenerator::generateReport(const EmergencyResponse& response,
         for (const ContactAttempt& attempt : record.contactAttempts())
         {
             totalAttempts++;
-            attemptsByMethod[attempt.method()]++;
+            if (attempt.method().has_value())
+            {
+                attemptsByMethod[*attempt.method()]++;
+            }
+            else if (attempt.outcome().has_value())
+            {
+                marksByOutcome[*attempt.outcome()]++;
+            }
         }
     }
 
@@ -278,7 +396,8 @@ bool ReportGenerator::generateReport(const EmergencyResponse& response,
     drawText(ctx, QObject::tr("Response Activity"), kSubheaderFontSize, true);
     drawKeyValue(ctx, QObject::tr("Total contact attempts"), QString::number(totalAttempts));
 
-    // List contact methods in fixed order for consistent reports
+    // Contact methods in fixed order for consistent reports, then the attempts with no
+    // method, each on its own line
     for (ContactMethod method : kMethodOrder)
     {
         if (attemptsByMethod.contains(method))
@@ -287,17 +406,22 @@ bool ReportGenerator::generateReport(const EmergencyResponse& response,
                          QString::number(attemptsByMethod[method]));
         }
     }
+    for (ContactOutcome outcome : {ContactOutcome::OK, ContactOutcome::UnableToReach})
+    {
+        if (marksByOutcome.contains(outcome))
+        {
+            drawKeyValue(ctx, markedName(outcome), QString::number(marksByOutcome[outcome]));
+        }
+    }
     drawSpacer(ctx, kSectionSpacing);
 
     // === 6. Unresolved Items ===
     QList<QString> needsHelpFamilies;
     QList<QString> notContactedFamilies;
 
-    for (auto it = records.constBegin(); it != records.constEnd(); ++it)
+    for (const FamilyResponseRecord& record : records)
     {
-        const FamilyResponseRecord& record = it.value();
         EffectiveContactStatus status = record.effectiveStatus();
-
         if (status == EffectiveContactStatus::NeedsHelp)
         {
             needsHelpFamilies.append(record.displayName());
@@ -305,6 +429,13 @@ bool ReportGenerator::generateReport(const EmergencyResponse& response,
         else if (status == EffectiveContactStatus::NotContacted)
         {
             notContactedFamilies.append(record.displayName());
+        }
+    }
+    for (const Family& family : families)
+    {
+        if (!records.contains(family.id()))
+        {
+            notContactedFamilies.append(family.displayName());
         }
     }
 
@@ -334,6 +465,28 @@ bool ReportGenerator::generateReport(const EmergencyResponse& response,
             {
                 drawBulletItem(ctx, name);
             }
+        }
+        drawSpacer(ctx, kSectionSpacing);
+    }
+
+    // === 7. Family Records ===
+    QList<FamilyResponseRecord> logged;
+    for (const FamilyResponseRecord& record : records)
+    {
+        if (!record.contactAttempts().isEmpty() || !record.tasks().isEmpty())
+        {
+            logged.append(record);
+        }
+    }
+    std::sort(logged.begin(), logged.end(),
+              [](const FamilyResponseRecord& a, const FamilyResponseRecord& b) { return a.displayName() < b.displayName(); });
+
+    if (!logged.isEmpty())
+    {
+        drawText(ctx, QObject::tr("Family Records"), kSubheaderFontSize, true);
+        for (const FamilyResponseRecord& record : logged)
+        {
+            drawRecord(ctx, record, document);
         }
     }
 

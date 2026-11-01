@@ -102,6 +102,7 @@ Document
 |-- addressCoordinates: QHash<QString, Coordinates>  (keyed by Address::full())
 |-- teams: QHash<TeamId, Team>
 |-- emergencyAssets: QHash<EmergencyAssetId, EmergencyAsset>
+|-- emergencyResponses: QHash<EmergencyResponseId, EmergencyResponse>  (the emergencies in progress)
 |-- districts (EQ/RS current/proposed): QHash<MinisteringDistrictId, MinisteringDistrict>
 |-- groups (EQ/RS current/proposed): QHash<MinisteringGroupId, MinisteringGroup>
 `-- metadata: DocumentMetadata (wards, stakes)
@@ -110,6 +111,8 @@ Document
 Collections use `QHash<Id, Model>` for O(1) lookup by ID and automatic uniqueness enforcement. Display order is computed at render time (sorted by name, etc.).
 
 Coordinates belong to addresses: a family's place on the map is its address's entry in `addressCoordinates`, read through `Document::coordinatesFor(family.address())`. Families at one address share an entry, and a family whose address has none is unmapped.
+
+An emergency response holds a `FamilyResponseRecord` for each family a command has written to: its contact attempts and tasks, with the family's name and address as the command saw them. A directory family without a record is Not Contacted. A family's status is Needs Help while a task is unresolved, otherwise the outcome of its most recent attempt that has one. `WardSession::endEmergency` writes the response's summary report and then removes the response, so the document holds only emergencies in progress.
 
 ### Unified Models
 

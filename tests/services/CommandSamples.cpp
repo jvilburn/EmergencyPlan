@@ -1,6 +1,7 @@
 #include "CommandSamples.h"
 #include "AddressCoordinatesCommands.h"
 #include "EmergencyAssetCommands.h"
+#include "EmergencyCommands.h"
 #include "FamilyCommands.h"
 #include "TeamCommands.h"
 #include "TestWard.h"
@@ -160,6 +161,152 @@ QList<CommandSample> deleteEmergencyAssetSamples()
     return samples;
 }
 
+/// The test ward holding response.
+Document withResponse(const EmergencyResponse& response)
+{
+    return TestWard::withResponse(TestWard::document(), response);
+}
+
+/// Bob phoned the Smiths and found them well.
+ContactAttempt phonedSmiths()
+{
+    return TestWard::attempt("attempt-phoned", TestWard::octoberFirst(10, 0), ContactMethod::Phone, TestWard::bobId(),
+                             ContactOutcome::OK, "All well");
+}
+
+ResponseTask floodedBasement()
+{
+    return TestWard::task("task-basement", TestWard::octoberFirst(10, 30), "Flooding", "Water in the basement");
+}
+
+/// Start never conflicts, so it has no Conflicts sample.
+QList<CommandSample> startEmergencySamples()
+{
+    CommandPtr start = StartEmergencyCommand::fromNew(TestWard::storm());
+
+    QList<CommandSample> samples;
+    samples.append(CommandSample{SampleCase::StartHolds, TestWard::document(), start});
+    samples.append(CommandSample{SampleCase::ResultHolds, withResponse(TestWard::storm()), start});
+    return samples;
+}
+
+QList<CommandSample> endEmergencySamples()
+{
+    CommandPtr end = EndEmergencyCommand::fromReported(TestWard::storm());
+
+    QList<CommandSample> samples;
+    samples.append(CommandSample{SampleCase::StartHolds, withResponse(TestWard::storm()), end});
+    samples.append(CommandSample{SampleCase::ResultHolds, TestWard::document(), end});
+    samples.append(CommandSample{SampleCase::Conflicts,
+                                 withResponse(TestWard::stormWithSmithRecord({phonedSmiths()}, {})),
+                                 end});
+    return samples;
+}
+
+/// Restore never conflicts, so it has no Conflicts sample. Its result holds whatever the
+/// response with its id holds.
+QList<CommandSample> restoreEmergencySamples()
+{
+    CommandPtr restore = EndEmergencyCommand::fromReported(TestWard::storm())->inverse();
+
+    QList<CommandSample> samples;
+    samples.append(CommandSample{SampleCase::StartHolds, TestWard::document(), restore});
+    samples.append(CommandSample{SampleCase::ResultHolds,
+                                 withResponse(TestWard::stormWithSmithRecord({phonedSmiths()}, {})),
+                                 restore});
+    return samples;
+}
+
+QList<CommandSample> recordContactAttemptSamples()
+{
+    CommandPtr record = RecordContactAttemptCommand::fromNew(TestWard::smithInStorm(), phonedSmiths(), TestWard::document());
+
+    QList<CommandSample> samples;
+    samples.append(CommandSample{SampleCase::StartHolds, withResponse(TestWard::storm()), record});
+    samples.append(CommandSample{SampleCase::ResultHolds,
+                                 withResponse(TestWard::stormWithSmithRecord({phonedSmiths()}, {})),
+                                 record});
+    samples.append(CommandSample{SampleCase::Conflicts, TestWard::document(), record});
+    return samples;
+}
+
+QList<CommandSample> deleteContactAttemptSamples()
+{
+    CommandPtr remove = RecordContactAttemptCommand::fromNew(TestWard::smithInStorm(), phonedSmiths(), TestWard::document())
+                            ->inverse();
+
+    QList<CommandSample> samples;
+    samples.append(CommandSample{SampleCase::StartHolds,
+                                 withResponse(TestWard::stormWithSmithRecord({phonedSmiths()}, {})),
+                                 remove});
+    samples.append(CommandSample{SampleCase::ResultHolds, withResponse(TestWard::storm()), remove});
+    samples.append(CommandSample{SampleCase::Conflicts, TestWard::document(), remove});
+    return samples;
+}
+
+/// The conflict is the Setup team missing, since a task's assignee must exist.
+QList<CommandSample> addTaskSamples()
+{
+    ResponseTask task = floodedBasement();
+    task.setAssignment(TaskAssignment::toTeam(TestWard::setupTeamId(), "Bring the pump"));
+    Document withTeam = TestWard::withTeam(TestWard::document(), TestWard::setupTeam());
+    CommandPtr add = AddTaskCommand::fromNew(TestWard::smithInStorm(), task, withTeam);
+
+    QList<CommandSample> samples;
+    samples.append(CommandSample{SampleCase::StartHolds, TestWard::withResponse(withTeam, TestWard::storm()), add});
+    samples.append(CommandSample{SampleCase::ResultHolds,
+                                 TestWard::withResponse(withTeam, TestWard::stormWithSmithRecord({}, {task})),
+                                 add});
+    samples.append(CommandSample{SampleCase::Conflicts, withResponse(TestWard::storm()), add});
+    return samples;
+}
+
+QList<CommandSample> updateTaskSamples()
+{
+    ResponseTask opened = floodedBasement();
+    ResponseTask saved = opened;
+    saved.setCategory("Shelter");
+    saved.setDescription("Water in the basement and the garage");
+    saved.setAssignment(TaskAssignment::toPerson(TestWard::carolId(), "Has a pump"));
+    saved.setResolution(TaskResolution::create("Pumped out"));
+    ResponseTask moved = opened;
+    moved.setDescription("Water in the garage");
+    CommandPtr edit = UpdateTaskCommand::fromEdit(TestWard::smithInStorm(), opened, saved, TestWard::document());
+
+    QList<CommandSample> samples;
+    samples.append(CommandSample{SampleCase::StartHolds, withResponse(TestWard::stormWithSmithRecord({}, {opened})), edit});
+    samples.append(CommandSample{SampleCase::ResultHolds, withResponse(TestWard::stormWithSmithRecord({}, {saved})), edit});
+    samples.append(CommandSample{SampleCase::Conflicts, withResponse(TestWard::stormWithSmithRecord({}, {moved})), edit});
+    return samples;
+}
+
+QList<CommandSample> deleteTaskSamples()
+{
+    ResponseTask seen = floodedBasement();
+    ResponseTask resolved = seen;
+    resolved.setResolution(TaskResolution::create("Pumped out"));
+    CommandPtr remove = DeleteTaskCommand::fromSeen(TestWard::smithInStorm(), seen, TestWard::document());
+
+    QList<CommandSample> samples;
+    samples.append(CommandSample{SampleCase::StartHolds, withResponse(TestWard::stormWithSmithRecord({}, {seen})), remove});
+    samples.append(CommandSample{SampleCase::ResultHolds, withResponse(TestWard::stormWithSmithRecord({}, {})), remove});
+    samples.append(CommandSample{SampleCase::Conflicts, withResponse(TestWard::stormWithSmithRecord({}, {resolved})), remove});
+    return samples;
+}
+
+QList<CommandSample> addTaskCategorySamples()
+{
+    CommandPtr add = AddTaskCategoryCommand::fromNew(TestWard::stormId(), "Power lines");
+    EmergencyResponse withCategory = TestWard::storm();
+    withCategory.addTaskCategory("Power lines");
+
+    QList<CommandSample> samples;
+    samples.append(CommandSample{SampleCase::StartHolds, withResponse(TestWard::storm()), add});
+    samples.append(CommandSample{SampleCase::ResultHolds, withResponse(withCategory), add});
+    samples.append(CommandSample{SampleCase::Conflicts, TestWard::document(), add});
+    return samples;
+}
+
 }  // namespace
 
 QList<CommandSample> CommandSamples::forType(const QString& type)
@@ -199,6 +346,42 @@ QList<CommandSample> CommandSamples::forType(const QString& type)
     if (type == DeleteEmergencyAssetCommand::TypeName)
     {
         return deleteEmergencyAssetSamples();
+    }
+    if (type == StartEmergencyCommand::TypeName)
+    {
+        return startEmergencySamples();
+    }
+    if (type == EndEmergencyCommand::TypeName)
+    {
+        return endEmergencySamples();
+    }
+    if (type == RestoreEmergencyCommand::TypeName)
+    {
+        return restoreEmergencySamples();
+    }
+    if (type == RecordContactAttemptCommand::TypeName)
+    {
+        return recordContactAttemptSamples();
+    }
+    if (type == DeleteContactAttemptCommand::TypeName)
+    {
+        return deleteContactAttemptSamples();
+    }
+    if (type == AddTaskCommand::TypeName)
+    {
+        return addTaskSamples();
+    }
+    if (type == UpdateTaskCommand::TypeName)
+    {
+        return updateTaskSamples();
+    }
+    if (type == DeleteTaskCommand::TypeName)
+    {
+        return deleteTaskSamples();
+    }
+    if (type == AddTaskCategoryCommand::TypeName)
+    {
+        return addTaskCategorySamples();
     }
     return {};
 }

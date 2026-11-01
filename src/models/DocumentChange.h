@@ -35,17 +35,28 @@ struct EmergencyAssetScopeBuilder
     DocumentChange updated(const EmergencyAssetId& id) const;
 };
 
+struct EmergencyResponseScopeBuilder
+{
+    /// A change to the response as a whole: started, ended, restored, or a category added.
+    DocumentChange updated(const EmergencyResponseId& id) const;
+
+    /// A change to one family's record in the response.
+    DocumentChange updated(const EmergencyResponseId& id, const FamilyId& familyId) const;
+};
+
 // === DocumentChange struct ===
 
 struct DocumentChange
 {
     ChangeAction action = ChangeAction::Full;
 
-    // At most one of these is set: a change to one family, team or emergency asset. An
-    // Updated change with none set is to the ward details.
+    // An Updated change sets one of these: a change to one family, team, emergency asset
+    // or emergency response. A change to one family's record in an emergency response sets
+    // both responseId and familyId. An Updated change with none set is to the ward details.
     std::optional<FamilyId> familyId;
     std::optional<TeamId> teamId;
     std::optional<EmergencyAssetId> assetId;
+    std::optional<EmergencyResponseId> responseId;
 
     // Full document change (no ID fields set)
     static DocumentChange full();
@@ -55,6 +66,7 @@ struct DocumentChange
     static MetadataScopeBuilder metadata();
     static TeamScopeBuilder team();
     static EmergencyAssetScopeBuilder emergencyAsset();
+    static EmergencyResponseScopeBuilder emergencyResponse();
 };
 
 Q_DECLARE_METATYPE(DocumentChange)
