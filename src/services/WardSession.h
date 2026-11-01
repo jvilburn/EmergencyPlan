@@ -1,15 +1,13 @@
 #pragma once
 
+#include "AutomaticUpdates.h"
 #include "Command.h"
-#include "Coordinates.h"
 #include "Document.h"
 #include "DocumentChange.h"
 #include "Journal.h"
 
-#include <QHash>
 #include <QList>
 #include <QObject>
-#include <QSet>
 #include <QString>
 
 class Geocoder;
@@ -46,9 +44,9 @@ struct ReplayResult
 };
 
 /// One open ward: its document, journal and undo stack, and the commit step and replay
-/// that change them, and the automatic updates (geocoding and ward and stake lookup), whose
-/// results change the document outside the journal. Holds no global state, so a test
-/// creates as many sessions as it needs; the app holds one.
+/// that change them. It owns the ward's AutomaticUpdates, which change the same document
+/// outside the journal. Holds no global state, so a test creates as many sessions as it
+/// needs; the app holds one.
 class WardSession : public QObject
 {
     Q_OBJECT
@@ -59,18 +57,18 @@ public:
 
     const Document& document() const { return m_document; }
     const Journal& journal() const { return m_journal; }
+    AutomaticUpdates& automaticUpdates() { return m_automaticUpdates; }
 
-    /// Opens a ward: its document replaces the open one by assignment, and the journal and
-    /// the undo and redo stacks start empty. Automatic updates under way carry on, and apply
-    /// to the document as it stands when they answer.
+    /// Opens a ward: its document replaces the open one by assignment, the journal and the
+    /// undo and redo stacks start empty, and the automatic updates hear that a ward opened.
     void open(const Document& document);
 
     /// The commit step: the command's rule, then execute, then the journal. A command that
     /// applies empties the redo stack, and enters the undo stack when it is an
     /// UndoableCommand. One that conflicts or is refused changes nothing and enters neither.
-    /// An empty command is nothing to do and changes nothing. A command that applies and
-    /// gives a family an address the batch would request starts the automatic updates; so
-    /// does an undo or redo that does.
+    /// An empty command is nothing to do and changes nothing. A command that applies is
+    /// handed to the automatic updates, which start a run when it gives them work; an undo
+    /// or redo is handed on the same way.
     CommitResult commit(CommandPtr command);
 
     /// Builds the inverse of the command on top of the undo stack and runs it through the
@@ -97,33 +95,10 @@ public:
     /// automatic update.
     ReplayResult replayOnto(const Document& version);
 
-    /// Starts the automatic updates. The batch requests, once each, every address some
-    /// family has that the table of address coordinates lacks, skipping addresses with no
-    /// street, those on the failed list and those it has requested already, and applies when
-    /// its last request answers; a batch with nothing to request applies at once. Units are
-    /// looked up one at a time: each stake a ward names that the document lacks, and each
-    /// ward lacking its details, skipping units on the failed list.
-    void runAutomaticUpdates();
-
 signals:
+    /// The document changed, through a command, a replay, an open or an automatic update.
     void documentChanged(const DocumentChange& change);
     void undoStackChanged();
-
-    /// The batch's requests answered, out of those it has made.
-    void geocodingProgress(int completed, int total);
-
-    /// The last request of a batch that made any has answered.
-    void geocodingFinished();
-
-    /// An automatic update changed the document. Nothing enters the journal for it.
-    void automaticUpdateApplied();
-
-private slots:
-    void onGeocoded(const QString& address, const Coordinates& coordinates);
-    void onGeocodeFailed(const QString& address);
-    void onWardFound(const QString& wardUnitNumber, const Ward& ward);
-    void onStakeFound(const QString& stakeUnitNumber, const Stake& stake);
-    void onLookupFailed(const QString& unitNumber, const QString& error);
 
 private:
     CommitResult run(const Command& command);
@@ -135,40 +110,11 @@ private:
     void replaceDocument(const Document& document);
     void clearUndoStack();
 
-    /// True when the batch would request address: it has a street, the table lacks it, and
-    /// it is not on the failed list or requested already.
-    bool needsCoordinates(const Address& address) const;
-
-    /// One request of the batch has answered; the last one applies the batch.
-    void onBatchRequestAnswered();
-
-    /// Each result adds the entry for its address where the table has none, then every
-    /// entry no family's address uses is dropped.
-    void applyBatch();
-
-    /// Starts the next unit lookup, unless one is under way or none is needed.
-    void lookUpNextUnit();
-
-    /// The first stake, by ward unit number, that a ward names and the document lacks and
-    /// that is not on the failed list; empty when there is none.
-    QString nextStakeToLookUp() const;
-
-    /// The first ward, by unit number, lacking its details and not on the failed list;
-    /// empty when there is none.
-    QString nextWardToLookUp() const;
-
     Document m_document;
     Journal m_journal;
     QList<UndoableCommandPtr> m_undoStack;
     QList<UndoableCommandPtr> m_redoStack;
-
-    Geocoder* m_geocoder;
-    UnitLookup* m_unitLookup;
-    QSet<QString> m_failed;                  ///< addresses and unit numbers that did not resolve
-    QSet<QString> m_pending;                 ///< the batch's addresses not yet answered
-    QHash<QString, Coordinates> m_resolved;  ///< the batch's results, held by address
-    int m_batchTotal = 0;                    ///< the requests the batch has made
-    QString m_unitInFlight;                  ///< the unit being looked up; empty when none
+    AutomaticUpdates m_automaticUpdates;  ///< declared after m_document, which it works on
 
     static constexpr int UndoLimit = 100;
 };

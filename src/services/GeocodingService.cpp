@@ -14,6 +14,9 @@ GeocodingService::GeocodingService(QObject* parent)
     , m_networkManager(new QNetworkAccessManager(this))
     , m_rateLimitTimer(new QTimer(this))
 {
+    // A request that receives nothing for Qt's default 30 seconds ends as an error, so a
+    // stalled request cannot hold up the batch waiting on it.
+    m_networkManager->setTransferTimeout();
     m_rateLimitTimer->setSingleShot(true);
     connect(m_rateLimitTimer, &QTimer::timeout,
             this, &GeocodingService::processNextRequest);
@@ -39,6 +42,11 @@ void GeocodingService::geocodeAddress(const QString& address)
     {
         processNextRequest();
     }
+}
+
+bool GeocodingService::hasPendingRequests() const
+{
+    return !m_requestQueue.isEmpty() || m_requestInFlight;
 }
 
 void GeocodingService::processNextRequest()

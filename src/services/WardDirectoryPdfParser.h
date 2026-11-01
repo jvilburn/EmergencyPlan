@@ -4,6 +4,7 @@
 #include <QStringList>
 #include <QHash>
 
+#include "Coordinates.h"
 #include "Family.h"
 #include "Person.h"
 
@@ -16,6 +17,10 @@ namespace WardDirectoryPdfParser
 
         // All families from the directory
         QHash<FamilyId, Family> families;
+
+        // The coordinates the directory prints for each family's address, keyed by
+        // Address::full(); the directory import seeds the table of address coordinates with them
+        QHash<QString, Coordinates> addressCoordinates;
 
         // Metadata from PDF header
         QString wardName;

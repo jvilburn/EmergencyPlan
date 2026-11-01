@@ -37,6 +37,9 @@ public:
     /// Result will be emitted via geocodingComplete signal.
     void geocodeAddress(const QString& address);
 
+    /// True while a request is queued or awaiting its answer.
+    bool hasPendingRequests() const;
+
 signals:
     /// Emitted when geocoding completes (success or failure).
     /// On failure, latitude/longitude will be nullopt.

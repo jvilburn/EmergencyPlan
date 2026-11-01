@@ -4051,8 +4051,9 @@ gives the same order; with Fay's year unknown, the member stays last. Both are l
   `document.coordinatesFor(family.address())`: `Filter.cpp:190,194,468,472`,
   `MapViewModel.cpp:38,55,56,61`, `MapWidget.cpp:202,890,950`.
 - `WardDirectoryImportService::preserveIds` and the parsers stop passing coordinates to
-  `Family`. The directory PDF's own coordinates seed the address table through the import
-  command (task 7).
+  `Family`. The directory parser keeps reading each family's coordinates and returns them in
+  `ParseResult::addressCoordinates`, keyed by address; they seed the address table through the
+  import command (task 7).
 
 **Typed coordinates are a journalled command on the address's entry.**
 - `SetAddressCoordinatesCommand(const QString& address, const std::optional<Coordinates>& before, const Coordinates& typed, const CommandDescription& description)`,
@@ -4065,10 +4066,12 @@ gives the same order; with Fay's year unknown, the member stays last. Both are l
   `tr("latitude %1, longitude %2")`.
 - `FamilyEditPanel` shows `coordinatesFor` the address it displays, disables the coordinate
   fields while that address is empty, and exposes `std::optional<Coordinates> typedCoordinates() const`
-  when the user typed or looked up a position. `MainWindow::onSaveFamily` commits the family
-  edit, then a `SetAddressCoordinatesCommand` against the saved address when typed coordinates
-  differ from its entry, so one save can make two undo entries: the family edit and the map
-  position.
+  when the fields hold text other than what the panel showed and parse as a latitude and a
+  longitude; while they hold other text that does not parse, Save is disabled. `MainWindow::onSaveFamily`
+  commits the family edit, then a `SetAddressCoordinatesCommand` against the saved address when
+  typed coordinates differ from its entry, whatever happened to the family edit, since the
+  position belongs to the address; so one save can make two undo entries: the family edit and
+  the map position.
 
 **Automatic updates live in `WardSession`, behind fakeable interfaces.**
 - `class Geocoder : public QObject` with `virtual void geocode(const QString& address) = 0;` and
@@ -4077,28 +4080,43 @@ gives the same order; with Fay's year unknown, the member stays last. Both are l
 - `class UnitLookup : public QObject` with `lookupWard`, `lookupStake` and signals `wardFound`,
   `stakeFound`, `lookupFailed`. `UnitLookupService` derives from it.
 - `WardSession(Geocoder* geocoder, UnitLookup* unitLookup, QObject* parent)`.
-- `Command` gains `virtual QStringList addressesGiven() const;` (base returns empty): the
-  addresses this command gives a family, known at construction. `UpdateFamilyCommand` returns the
+- `Command` gains `virtual QList<Address> addressesGiven() const;` and
+  `virtual QStringList unitsGiven() const;` (both empty in the base): the addresses this command
+  gives a family and the ward units it gives the document, known at construction. `UpdateFamilyCommand` returns the
   address after when its change sets a non-empty address (`FamilyChange` gains
   `const std::optional<FieldChange<Address>>& address() const`).
-- `WardSession::run` starts `runAutomaticUpdates()` after an applied command when any of its
-  `addressesGiven()` lacks an entry and is not on the failed list. `DocumentManager` calls
-  `runAutomaticUpdates()` when a ward opens (`newDocument`). Replay starts
+- **The automatic updates are their own class, `AutomaticUpdates`, which `WardSession` owns and
+  constructs over its `Document&`;** it holds the failed list, the pending and resolved
+  addresses and the unit in flight, and its signals `geocodingProgress`, `geocodingFinished`
+  and `applied` are read through `WardSession::automaticUpdates()`. Its `documentChanged` the
+  session passes on as its own. `open()` calls `wardOpened()`, which empties the failed list.
+- `WardSession::run` hands each applied command to `AutomaticUpdates::commandApplied`, which
+  starts `run()` when any of its
+  `addressesGiven()` lacks an entry and is not on the failed list, or any of its `unitsGiven()`
+  is a ward lacking its details, or naming a stake the document lacks, that is not on the
+  failed list. `DocumentManager` calls
+  `automaticUpdates().run()` when a ward opens (`newDocument`). Replay starts
   nothing, so a device that takes another device's work runs no batch for it. Nothing else
   starts one.
-- `runAutomaticUpdates()`: requests, once each, every address some family has that the table
+- `AutomaticUpdates::run()`: requests, once each, every address some family has that the table
   lacks, is not on the failed list and is not already pending (addresses with no street are
   skipped, as today); and looks up, one at a time, each ward lacking its details whose unit is
-  not on the failed list. Results are held by address as they arrive; a failure adds the text
-  to the failed list (`QSet<QString> m_failed`, device-local, addresses and unit numbers).
-- When the last request answers, the batch applies: each result adds the entry for its address
-  and never replaces one already there, then every entry no family's address uses is dropped.
-  A batch with nothing to request finishes at once. Only when something changed does the
-  session emit `documentChanged(DocumentChange::full())` and `automaticUpdateApplied()`. This
-  plan's tests count `automaticUpdateApplied`; plan 2 saves in the session and deletes it.
+  not on the failed list. Each result is held by address as it arrives, and also adds its
+  address's entry at once when the document lacks one and some family has that address,
+  emitting `documentChanged(DocumentChange::family().updated(id))` for each such family, so the
+  map and the unmapped list update as results land; a failure adds the text
+  to the failed list (`QSet<QString> m_failed`, device-local, addresses and unit numbers), which belongs to
+  the open ward: `open()` empties it with the journal.
+- When the last request answers, the batch finishes: each held result adds the entry for its
+  address where the document lacks one and never replaces one already there, which restores any
+  a document replaced mid-batch lost, then every entry no family's address uses is dropped.
+  A batch with nothing to request finishes at once. The session emits
+  `documentChanged(DocumentChange::full())` when finishing changed the table, and
+  `applied()` once when the batch changed it at all, mid-batch or at the end. This plan's tests
+  count `applied`; plan 2's session saves on it.
   Nothing enters the journal.
 - A completed ward or stake lookup applies its details as `onWardLookupComplete` does today and
-  emits `automaticUpdateApplied()` only when they changed something. A failed lookup puts the
+  emits `applied()` only when they changed something. A failed lookup puts the
   unit on the failed list and continues to the next ward (today `DocumentManager::onLookupFailed`
   ends the chain).
 - `DocumentManager` loses `startBatchGeocoding`, `stopGeocoding`, `onFamilyGeocoded`,
@@ -4121,7 +4139,7 @@ answering when the test says, and `FakeUnitLookup` likewise):
 - `typedCoordinatesSetTheEntryAndAGeocodeNeverReplacesThem`; `undoOfTypedCoordinatesRestoresThePreviousEntry`;
   `typedCoordinatesReplayedAfterAGeocodeOfThatAddressApply` (journal not abandoned).
 - `batchDropsEntriesNoFamilyUsesAndKeepsEveryEntryInUse`
-- `batchOfSeveralAddressesAppliesOnce`: three addresses resolved, `automaticUpdateApplied`
+- `batchOfSeveralAddressesAppliesOnce`: three addresses resolved, `applied`
   emitted exactly once (`QSignalSpy` count 1).
 - `failedAddressIsNotRequestedAgainUntilItsTextChanges`: not after a replay, not after another
   family is given a new address; requested again once the text changes. (After reopening the
@@ -4424,14 +4442,17 @@ several collections.
   families removed as last seen with their `ReferenceCleanup`, the directory PDF date as a
   `FieldChange<std::optional<QDate>>`, and the ward record created if missing (result holds when one is
   there). An import never changes a special-need note.
-- The PDF's own coordinates seed the address table: the command holds them for each address the
+- The PDF's own coordinates seed the address table: `WardDirectoryPdfParser::ParseResult::addressCoordinates`
+  (from task 3) carries them keyed by address, and the command holds them for each address the
   table lacks at construction, and at execute adds each one only where the table still lacks it,
   never replacing an entry.
 - Execute: every change's start condition or result must hold, or it conflicts touching nothing;
   a family someone else added meanwhile is not among its removals.
 - Inverse: the same changes swapped. A ward record the import created stays in place, since the
   lookup fills its details afterwards.
-- `addressesGiven()` returns the addresses of the families it adds or re-addresses.
+- `addressesGiven()` returns the addresses of the families it adds or re-addresses, and
+  `unitsGiven()` the ward unit it creates or keeps, so an import whose PDF seeds every address
+  still looks up its ward.
 - Member order: each family's change is `FamilyChange::between(existing, imported)`, which
   takes each added member's index from `imported`, the family in the PDF's order, so the family
   keeps the PDF's order.

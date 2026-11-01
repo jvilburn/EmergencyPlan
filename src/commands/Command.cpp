@@ -58,6 +58,11 @@ QList<Address> Command::addressesGiven() const
     return {};
 }
 
+QStringList Command::unitsGiven() const
+{
+    return {};
+}
+
 UndoableCommand::UndoableCommand(const CommandDescription& description)
     : Command(description)
 {

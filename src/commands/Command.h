@@ -79,6 +79,11 @@ public:
     /// geocodes the ones the table of address coordinates lacks after the command applies.
     virtual QList<Address> addressesGiven() const;
 
+    /// The ward units this command gives the document, known at construction. WardSession
+    /// looks up each one lacking its details, and the stake it names, after the command
+    /// applies.
+    virtual QStringList unitsGiven() const;
+
     const CommandDescription& description() const { return m_description; }
 
 protected:

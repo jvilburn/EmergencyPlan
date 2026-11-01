@@ -376,6 +376,10 @@ void MainWindow::onDocumentChanged(const DocumentChange& change)
     int count = DocumentManager::instance()->document().families().size();
     statusBar()->showMessage(tr("%1 families").arg(count));
     updateWindowTitle();
+    if (m_editPanel->isVisible())
+    {
+        m_editPanel->refreshCoordinates(DocumentManager::instance()->document());
+    }
 }
 
 void MainWindow::updateWindowTitle()
@@ -605,13 +609,13 @@ void MainWindow::onSaveFamily()
     }
 
     // The family edit, then the map position typed for the saved address, each its own
-    // undo entry. When the family edit conflicts or is refused, neither is committed.
+    // undo entry. The position belongs to the address, so it is committed whatever happens
+    // to the family edit.
     Family saved = m_editPanel->family();
-    CommitResult result = DocumentManager::instance()->executeCommand(
+    DocumentManager::instance()->executeCommand(
         UpdateFamilyCommand::fromEdit(m_editPanel->openedFamily(), saved));
     std::optional<Coordinates> typed = m_editPanel->typedCoordinates();
-    bool familySaved = result.status == CommitStatus::Applied || result.status == CommitStatus::NothingToDo;
-    if (familySaved && typed.has_value())
+    if (typed.has_value())
     {
         DocumentManager::instance()->executeCommand(SetAddressCoordinatesCommand::fromTyped(
             DocumentManager::instance()->document(), saved.address().full(), *typed));

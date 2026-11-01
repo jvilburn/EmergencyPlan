@@ -128,17 +128,19 @@ class Family
 {
 public:
     // Factory methods
-    static Family create();
-    static Family createWithId(const FamilyId& id);
+    static Family create(const Address& address, const QList<Person>& members);
+    static Family createWithId(const FamilyId& id, const Address& address,
+                               const QList<Person>& members);
 
     // Read-only access
     const FamilyId& id() const;
-    const QString& name() const;
+    const Address& address() const;
+    const QList<Person>& members() const;
+    QString displayName() const;
 
     // Mutation via setters
     void setAddress(const Address& address);
     void setMembers(const QList<Person>& members);
-    void setLocation(std::optional<double> lat, std::optional<double> lng);
 
     // Serialization
     QJsonObject toJson() const;
@@ -246,6 +248,9 @@ public:
     // The addresses this command gives a family, known at construction; empty by default
     virtual QList<Address> addressesGiven() const;
 
+    // The ward units this command gives the document, known at construction; empty by default
+    virtual QStringList unitsGiven() const;
+
     // A heading and a line per value set, fixed when the command is built
     const CommandDescription& description() const;
 };
@@ -293,25 +298,22 @@ public:
     // The journal replayed onto another version of the document
     ReplayResult replayOnto(const Document& version);
 
-    // Geocoding and ward and stake lookup
-    void runAutomaticUpdates();
+    // The ward's geocoding and ward and stake lookup
+    AutomaticUpdates& automaticUpdates();
 
 signals:
     void documentChanged(const DocumentChange& change);
     void undoStackChanged();
-    void geocodingProgress(int completed, int total);
-    void geocodingFinished();
-    void automaticUpdateApplied();
 };
 ```
 
-`WardSession` holds one open ward: its document, its journal and its undo and redo stacks, and runs its automatic updates. It holds no global state, so tests create as many sessions as they need.
+`WardSession` holds one open ward: its document, its journal and its undo and redo stacks, and owns the ward's `AutomaticUpdates`, which works on the same document and whose document changes the session passes on as its own. It holds no global state, so tests create as many sessions as they need.
 
 - **The commit step** asks the command's rule, then runs `execute`. It answers `Applied`, `Conflicted`, or `Refused` with the rule's wording, and `NothingToDo` for an empty command, which is what an edit that changed nothing builds. A command that applies is appended to the journal, empties the redo stack, and enters the undo stack when it is an `UndoableCommand`; the undo stack holds at most 100 commands, with the oldest dropped. A command that conflicts or is refused changes nothing.
 - **The journal** (`Journal`) holds each applied command's serialised form under the next sequence number, in the order the commands were made.
 - **Replay** rebuilds each journal entry with `CommandRegistry` and puts it through the rule and `execute` on a copy of the version, in order. When every entry applies, the copy becomes the document. The first entry that conflicts or is refused abandons the replay: the version becomes the document as it stands, the journal and the undo and redo stacks are emptied, and the result holds the abandoned changes as plain text, which the app writes to a file for the user to redo.
 - **Undo** builds the inverse of the command on top of the undo stack and runs it through the commit step; when it applies, the command moves to the redo stack. **Redo** runs that command again through the commit step and moves it back. An undo whose inverse conflicts or is refused leaves the command where it was.
-- **Automatic updates** (geocoding and ward and stake lookup) change the document outside the journal, since their results are derived data that is computed again whenever it is missing. They start when a ward opens, and after a command (or an undo or redo) applies that gives a family an address the table of address coordinates lacks; a replay starts none. A batch requests each address some family has that the table lacks, once, skipping addresses with no street and those on the failed list, and applies when its last request answers: each result adds the entry for its address and never replaces one already there, then every entry no family's address uses is dropped. Ward and stake lookups run one at a time and apply as each completes. Addresses and unit numbers that fail go on the failed list, and are not tried again until their text changes. A batch or lookup that changes the document emits `documentChanged` and `automaticUpdateApplied` once; one that changes nothing emits neither.
+- **Automatic updates** (`AutomaticUpdates`: geocoding and ward and stake lookup) change the document outside the journal, since their results are derived data that is computed again whenever it is missing. They start when a ward opens (`run()`), and after a command (or an undo or redo) applies that gives a family an address the table of address coordinates lacks, or gives the document a ward unit that lacks its details or names a stake the document lacks; the session hands each applied command to `commandApplied()`, and a replay starts none. A batch requests each address some family has that the table lacks, once, skipping addresses with no street and those on the failed list, and maps the families at each address as its result arrives, adding the entry and never replacing one already there. When its last request answers, the batch adds again every held result the document lacks, so a document replaced mid-batch loses none, then drops every entry no family's address uses, and emits `applied` once if the batch changed the table. Ward and stake lookups run one at a time and apply as each completes. Addresses and unit numbers that fail, and wards a lookup finds without a chapel, go on the failed list, and are not tried again until their text changes; the list belongs to the open ward and starts empty when a ward opens. A lookup that changes the document emits `documentChanged` and `applied` once; a batch emits `documentChanged` for each family it maps and `applied` once at its end; one that changes nothing emits neither.
 - **Typed coordinates** are a journalled command on the address's entry, `SetAddressCoordinatesCommand`, which sets the entry whatever it holds; its inverse, `RevertAddressCoordinatesCommand`, puts back what the entry held when the command was built, provided the entry still holds the typed value.
 
 ### Example Command

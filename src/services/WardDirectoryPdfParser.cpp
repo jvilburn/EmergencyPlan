@@ -288,8 +288,26 @@ namespace
     // Family Parsing
     // ============================================================================
 
+    /// A family as the directory prints it, with the coordinates it prints for the address
+    struct ParsedFamily
+    {
+        Family family;
+        std::optional<Coordinates> coordinates;
+    };
+
+    /// The coordinates a field holds, when it is a coordinates line
+    std::optional<Coordinates> parseCoordinates(const QString& text)
+    {
+        QRegularExpressionMatch match = COORDINATES_PATTERN.match(text.trimmed());
+        if (!match.hasMatch())
+        {
+            return std::nullopt;
+        }
+        return Coordinates(match.captured(1).toDouble(), match.captured(2).toDouble());
+    }
+
     /// Parse a single family from its fields
-    Family parseFamily(const QList<PdfTextField>& contentFields)
+    ParsedFamily parseFamily(const QList<PdfTextField>& contentFields)
     {
         auto fieldIter = contentFields.constBegin();
 
@@ -365,6 +383,7 @@ namespace
         // ====================================================================
         QString familyName;
         Address address;
+        std::optional<Coordinates> coordinates;
 
         // Family name from column 0
         if (!familyHeaderColumns[0].isEmpty())
@@ -372,11 +391,20 @@ namespace
             familyName = familyHeaderColumns[0].first().text().trimmed();
         }
 
-        // Address from column 1, which also holds the family's coordinates
+        // Address and coordinates from column 1
         for (const PdfTextField& field : familyHeaderColumns[1])
         {
             QString text = field.text().trimmed();
-            if (!text.isEmpty() && !COORDINATES_PATTERN.match(text).hasMatch())
+            if (text.isEmpty())
+            {
+                continue;
+            }
+            std::optional<Coordinates> lineCoordinates = parseCoordinates(text);
+            if (lineCoordinates.has_value())
+            {
+                coordinates = lineCoordinates;
+            }
+            else
             {
                 address.addLine(text);
             }
@@ -415,7 +443,7 @@ namespace
         // ====================================================================
         // Build and return family
         // ====================================================================
-        return Family::create(address, members);
+        return ParsedFamily{Family::create(address, members), coordinates};
     }
 
 }  // anonymous namespace
@@ -525,8 +553,12 @@ WardDirectoryPdfParser::ParseResult WardDirectoryPdfParser::parse(const QString&
 
     for (QList<PdfTextField>& block : familyBlocks)
     {
-        Family family = parseFamily(block);
-        result.families.insert(family.id(), family);
+        ParsedFamily parsed = parseFamily(block);
+        result.families.insert(parsed.family.id(), parsed.family);
+        if (parsed.coordinates.has_value() && !parsed.family.address().isEmpty())
+        {
+            result.addressCoordinates.insert(parsed.family.address().full(), *parsed.coordinates);
+        }
     }
 
     result.success = true;

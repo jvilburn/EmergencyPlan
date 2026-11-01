@@ -12,6 +12,7 @@ class QLineEdit;
 class QPushButton;
 class QLabel;
 class MemberAccordion;
+class GeocodingService;
 struct GeocodingResult;
 
 /// Side panel for editing a family's address, location, and members.
@@ -25,6 +26,11 @@ public:
     /// Opens the panel on family. The coordinate fields show the entry that the document's
     /// table of address coordinates holds for the address the panel shows.
     void setFamily(const Family& family, const Document& document);
+
+    /// Takes the document's current table of address coordinates. While the coordinate
+    /// fields still read what the panel showed, they show the entry for the address shown;
+    /// typed coordinates are left as they are.
+    void refreshCoordinates(const Document& document);
     Family family() const;
 
     /// The family as setFamily gave it: the start condition of the edit.
@@ -60,17 +66,26 @@ private:
     /// The entry the table the panel opened with holds for address, or none.
     std::optional<Coordinates> entryFor(const Address& address) const;
 
-    /// Shows the entry for address in the coordinate fields, or clears them.
+    /// Shows the entry for address in the coordinate fields, or clears them, and remembers
+    /// the text shown.
     void showEntryFor(const Address& address);
+
+    /// True when the coordinate fields hold text other than what showEntryFor last wrote.
+    bool coordinatesTyped() const;
 
     /// Enables the coordinate fields and the lookup while the panel shows an address.
     void updateCoordinatesEnabled();
+
+    /// Disables Save while the coordinate fields are typed but do not hold a latitude and a
+    /// longitude.
+    void updateSaveEnabled();
 
     FamilyId m_familyId;
     Family m_originalFamily;
     Family m_editedFamily;
     QHash<QString, Coordinates> m_addressCoordinates;
-    bool m_coordinatesTyped = false;
+    QString m_shownLatitude;
+    QString m_shownLongitude;
 
     QLabel* m_titleLabel;
     QPushButton* m_closeButton;
@@ -82,6 +97,7 @@ private:
     QLineEdit* m_latEdit;
     QLineEdit* m_lonEdit;
     QPushButton* m_lookupButton;
+    GeocodingService* m_geocoder;
 
     // Members
     MemberAccordion* m_memberAccordion;

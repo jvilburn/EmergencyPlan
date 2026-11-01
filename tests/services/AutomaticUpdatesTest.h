@@ -24,4 +24,13 @@ private slots:
     void batchThatChangesNothingEmitsNothing();
     void lookupThatChangesNothingEmitsNothing();
     void failedWardLookupContinuesToTheNextWard();
+    void wardFoundNamingAMissingStakeLooksUpTheStakeBeforeTheNextWard();
+    void undoOfAnAddressEditRequestsTheRestoredAddress();
+    void lateAnswersChangeNothing();
+    void wardFoundWithoutAChapelIsNotLookedUpAgain();
+    void failedListEmptiesWhenAWardOpens();
+    void resultsMapFamiliesAsTheyArrive();
+    void documentReplacedMidBatchLosesNoResults();
+    void commandThatGivesAWardNeedingALookupStartsOne();
+    void addressEditFromAnotherDeviceLeavesTheFamilyUnmappedAndRequestsNothing();
 };

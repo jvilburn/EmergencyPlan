@@ -171,6 +171,7 @@ set(SERVICE_SOURCES
     src/services/ReportGenerator.cpp
     src/services/Journal.cpp
     src/services/WardSession.cpp
+    src/services/AutomaticUpdates.cpp
     # src/services/StatisticsService.cpp
     # src/services/ResourceService.cpp
     # src/services/SearchService.cpp
@@ -200,6 +201,7 @@ set(SERVICE_HEADERS
     src/services/ReportGenerator.h
     src/services/Journal.h
     src/services/WardSession.h
+    src/services/AutomaticUpdates.h
     # src/services/StatisticsService.h
     # src/services/ResourceService.h
     # src/services/SearchService.h

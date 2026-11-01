@@ -15,8 +15,8 @@ DocumentManager::DocumentManager(QObject* parent)
 
     connect(&m_session, &WardSession::documentChanged, this, &DocumentManager::documentChanged);
     connect(&m_session, &WardSession::undoStackChanged, this, &DocumentManager::undoStackChanged);
-    connect(&m_session, &WardSession::geocodingProgress, this, &DocumentManager::geocodingProgressChanged);
-    connect(&m_session, &WardSession::geocodingFinished, this, &DocumentManager::geocodingFinished);
+    connect(&m_session.automaticUpdates(), &AutomaticUpdates::geocodingProgress, this, &DocumentManager::geocodingProgressChanged);
+    connect(&m_session.automaticUpdates(), &AutomaticUpdates::geocodingFinished, this, &DocumentManager::geocodingFinished);
 }
 
 DocumentManager* DocumentManager::instance()
@@ -66,5 +66,5 @@ void DocumentManager::afterCommit(const CommitResult& result)
 void DocumentManager::newDocument()
 {
     m_session.open(Document::empty());
-    m_session.runAutomaticUpdates();
+    m_session.automaticUpdates().run();
 }

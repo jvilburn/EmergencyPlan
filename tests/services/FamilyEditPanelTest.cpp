@@ -1,4 +1,6 @@
 #include "FamilyEditPanelTest.h"
+#include "Coordinates.h"
+#include "Document.h"
 #include "FamilyChange.h"
 #include "FamilyEditPanel.h"
 #include "MemberEditor.h"
@@ -7,9 +9,13 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QTest>
+#include <QTextEdit>
 
 namespace
 {
+
+const Coordinates ElmPosition(40.2338, -111.6585);
+const Coordinates OakPosition(40.2410, -111.6520);
 
 QList<PersonId> idsOf(const Family& family)
 {
@@ -48,10 +54,10 @@ MemberEditor* addedMemberEditor(const FamilyEditPanel& panel)
     return nullptr;
 }
 
-/// The editor's line edit with that placeholder text, or null when it has none.
-QLineEdit* lineEditWithPlaceholder(const MemberEditor& editor, const QString& placeholder)
+/// The widget's line edit with that placeholder text, or null when it has none.
+QLineEdit* lineEditWithPlaceholder(const QWidget& widget, const QString& placeholder)
 {
-    for (QLineEdit* edit : editor.findChildren<QLineEdit*>())
+    for (QLineEdit* edit : widget.findChildren<QLineEdit*>())
     {
         if (edit->placeholderText() == placeholder)
         {
@@ -59,6 +65,25 @@ QLineEdit* lineEditWithPlaceholder(const MemberEditor& editor, const QString& pl
         }
     }
     return nullptr;
+}
+
+/// The panel's address field, or null when it has none.
+QTextEdit* addressField(const FamilyEditPanel& panel)
+{
+    for (QTextEdit* edit : panel.findChildren<QTextEdit*>())
+    {
+        if (edit->placeholderText() == "Enter address (one line per row)")
+        {
+            return edit;
+        }
+    }
+    return nullptr;
+}
+
+/// The test ward with an entry for the Smith address.
+Document smithMapped(const Coordinates& coordinates)
+{
+    return TestWard::withCoordinates(TestWard::document(), TestWard::smith().address(), coordinates);
 }
 
 /// Adds a member through the panel's + Add button, checks it starts last, and types its
@@ -126,4 +151,186 @@ void FamilyEditPanelTest::addedChildStaysLastWhileAMemberHasNoBirthYear()
     QList<PersonId> expected = idsOf(opened);
     expected.append(added);
     QCOMPARE(idsOf(panel.family()), expected);
+}
+
+void FamilyEditPanelTest::coordinateFieldsAreEnabledOnlyWhileTheAddressIsNotEmpty()
+{
+    Family unaddressed = TestWard::smith();
+    unaddressed.setAddress(Address());
+    FamilyEditPanel panel(nullptr);
+    panel.setFamily(unaddressed, TestWard::document());
+    QLineEdit* latitude = lineEditWithPlaceholder(panel, "Latitude");
+    QLineEdit* longitude = lineEditWithPlaceholder(panel, "Longitude");
+    QTextEdit* address = addressField(panel);
+    QPushButton* lookUp = buttonWithText(panel, "Look Up Coordinates");
+    QVERIFY(latitude != nullptr);
+    QVERIFY(longitude != nullptr);
+    QVERIFY(address != nullptr);
+    QVERIFY(lookUp != nullptr);
+
+    QVERIFY(!latitude->isEnabled());
+    QVERIFY(!longitude->isEnabled());
+    QVERIFY(!lookUp->isEnabled());
+
+    address->setPlainText("12 Elm St\nProvo, UT");
+    QVERIFY(latitude->isEnabled());
+    QVERIFY(longitude->isEnabled());
+    QVERIFY(lookUp->isEnabled());
+
+    address->clear();
+    QVERIFY(!latitude->isEnabled());
+    QVERIFY(!longitude->isEnabled());
+    QVERIFY(!lookUp->isEnabled());
+
+    panel.setFamily(TestWard::smith(), TestWard::document());
+    QVERIFY(latitude->isEnabled());
+    QVERIFY(longitude->isEnabled());
+    QVERIFY(lookUp->isEnabled());
+}
+
+void FamilyEditPanelTest::coordinatesShownFromTheEntryAreNotTyped()
+{
+    FamilyEditPanel panel(nullptr);
+    panel.setFamily(TestWard::smith(), smithMapped(Coordinates(40.12345678, -111.98765432)));
+    QLineEdit* latitude = lineEditWithPlaceholder(panel, "Latitude");
+    QLineEdit* longitude = lineEditWithPlaceholder(panel, "Longitude");
+    QVERIFY(latitude != nullptr);
+    QVERIFY(longitude != nullptr);
+
+    QCOMPARE(latitude->text(), QString("40.123457"));
+    QCOMPARE(longitude->text(), QString("-111.987654"));
+    QVERIFY(!panel.typedCoordinates().has_value());
+    QVERIFY(!panel.isDirty());
+
+    // A character typed, then deleted again.
+    latitude->end(false);
+    latitude->insert("9");
+    QVERIFY(panel.typedCoordinates() == Coordinates(40.1234579, -111.987654));
+    QVERIFY(panel.isDirty());
+    latitude->backspace();
+
+    QCOMPARE(latitude->text(), QString("40.123457"));
+    QVERIFY(!panel.typedCoordinates().has_value());
+    QVERIFY(!panel.isDirty());
+}
+
+void FamilyEditPanelTest::typedCoordinatesAreReturnedAndMakeThePanelDirty()
+{
+    FamilyEditPanel panel(nullptr);
+    panel.setFamily(TestWard::smith(), TestWard::document());
+    QLineEdit* latitude = lineEditWithPlaceholder(panel, "Latitude");
+    QLineEdit* longitude = lineEditWithPlaceholder(panel, "Longitude");
+    QVERIFY(latitude != nullptr);
+    QVERIFY(longitude != nullptr);
+    QVERIFY(latitude->text().isEmpty());
+    QVERIFY(longitude->text().isEmpty());
+    QVERIFY(!panel.typedCoordinates().has_value());
+    QVERIFY(!panel.isDirty());
+
+    latitude->setText("40.2339");
+    QVERIFY(!panel.typedCoordinates().has_value());
+    longitude->setText("-111.6587");
+
+    QVERIFY(panel.typedCoordinates() == Coordinates(40.2339, -111.6587));
+    QVERIFY(panel.isDirty());
+    QVERIFY(panel.family() == TestWard::smith());
+
+    // Text other than what the panel showed that reads as the entry is typed, and not dirty.
+    FamilyEditPanel mapped(nullptr);
+    mapped.setFamily(TestWard::smith(), smithMapped(ElmPosition));
+    QLineEdit* mappedLatitude = lineEditWithPlaceholder(mapped, "Latitude");
+    QVERIFY(mappedLatitude != nullptr);
+    QCOMPARE(mappedLatitude->text(), QString("40.233800"));
+    mappedLatitude->setText("40.2338");
+
+    QVERIFY(mapped.typedCoordinates() == ElmPosition);
+    QVERIFY(!mapped.isDirty());
+}
+
+void FamilyEditPanelTest::saveIsDisabledWhileTypedCoordinatesDoNotParse()
+{
+    QString prompt("Enter a latitude and a longitude");
+    FamilyEditPanel panel(nullptr);
+    panel.setFamily(TestWard::smith(), smithMapped(ElmPosition));
+    QLineEdit* latitude = lineEditWithPlaceholder(panel, "Latitude");
+    QLineEdit* longitude = lineEditWithPlaceholder(panel, "Longitude");
+    QPushButton* save = buttonWithText(panel, "Save");
+    QVERIFY(latitude != nullptr);
+    QVERIFY(longitude != nullptr);
+    QVERIFY(save != nullptr);
+    QVERIFY(save->isEnabled());
+    QVERIFY(save->toolTip().isEmpty());
+
+    longitude->clear();
+    QVERIFY(!save->isEnabled());
+    QCOMPARE(save->toolTip(), prompt);
+
+    longitude->setText("-111.7");
+    QVERIFY(save->isEnabled());
+    QVERIFY(save->toolTip().isEmpty());
+
+    latitude->setText("north");
+    QVERIFY(!save->isEnabled());
+    QCOMPARE(save->toolTip(), prompt);
+
+    latitude->setText("40.3");
+    QVERIFY(save->isEnabled());
+    QVERIFY(save->toolTip().isEmpty());
+    QVERIFY(panel.typedCoordinates() == Coordinates(40.3, -111.7));
+}
+
+void FamilyEditPanelTest::refreshShowsTheNewEntryUnlessCoordinatesAreTyped()
+{
+    Document document = TestWard::document();
+
+    // Untyped fields show the entry for the address shown, once there is one.
+    FamilyEditPanel untyped(nullptr);
+    untyped.setFamily(TestWard::smith(), document);
+    QLineEdit* latitude = lineEditWithPlaceholder(untyped, "Latitude");
+    QLineEdit* longitude = lineEditWithPlaceholder(untyped, "Longitude");
+    QVERIFY(latitude != nullptr);
+    QVERIFY(longitude != nullptr);
+    QVERIFY(latitude->text().isEmpty());
+
+    untyped.refreshCoordinates(TestWard::withCoordinates(document, TestWard::jones().address(), OakPosition));
+    QVERIFY(latitude->text().isEmpty());
+    QVERIFY(longitude->text().isEmpty());
+
+    untyped.refreshCoordinates(smithMapped(ElmPosition));
+    QCOMPARE(latitude->text(), QString("40.233800"));
+    QCOMPARE(longitude->text(), QString("-111.658500"));
+    QVERIFY(!untyped.typedCoordinates().has_value());
+    QVERIFY(!untyped.isDirty());
+
+    // The address shown, not the one opened.
+    FamilyEditPanel readdressed(nullptr);
+    readdressed.setFamily(TestWard::smith(), document);
+    QTextEdit* address = addressField(readdressed);
+    QLineEdit* readdressedLatitude = lineEditWithPlaceholder(readdressed, "Latitude");
+    QLineEdit* readdressedLongitude = lineEditWithPlaceholder(readdressed, "Longitude");
+    QVERIFY(address != nullptr);
+    QVERIFY(readdressedLatitude != nullptr);
+    QVERIFY(readdressedLongitude != nullptr);
+    address->setPlainText("4 Oak Ave\nProvo, UT");
+    Document bothMapped = TestWard::withCoordinates(smithMapped(ElmPosition), TestWard::jones().address(), OakPosition);
+    readdressed.refreshCoordinates(bothMapped);
+    QCOMPARE(readdressedLatitude->text(), QString("40.241000"));
+    QCOMPARE(readdressedLongitude->text(), QString("-111.652000"));
+
+    // Typed fields are left as typed.
+    FamilyEditPanel typed(nullptr);
+    typed.setFamily(TestWard::smith(), document);
+    QLineEdit* typedLatitude = lineEditWithPlaceholder(typed, "Latitude");
+    QLineEdit* typedLongitude = lineEditWithPlaceholder(typed, "Longitude");
+    QVERIFY(typedLatitude != nullptr);
+    QVERIFY(typedLongitude != nullptr);
+    typedLatitude->setText("40.3");
+    typedLongitude->setText("-111.7");
+
+    typed.refreshCoordinates(smithMapped(ElmPosition));
+
+    QCOMPARE(typedLatitude->text(), QString("40.3"));
+    QCOMPARE(typedLongitude->text(), QString("-111.7"));
+    QVERIFY(typed.typedCoordinates() == Coordinates(40.3, -111.7));
+    QVERIFY(typed.isDirty());
 }

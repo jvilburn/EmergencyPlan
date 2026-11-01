@@ -80,6 +80,9 @@ void FamilyEditPanel::setupUi()
     locationHeaderLayout->addStretch();
     m_lookupButton = new QPushButton(tr("Look Up Coordinates"), this);
     connect(m_lookupButton, &QPushButton::clicked, this, &FamilyEditPanel::onLookUpCoordinates);
+    m_geocoder = new GeocodingService(this);
+    connect(m_geocoder, &GeocodingService::geocodingComplete,
+            this, &FamilyEditPanel::onGeocodingComplete);
     locationHeaderLayout->addWidget(m_lookupButton);
     contentLayout->addLayout(locationHeaderLayout);
 
@@ -130,7 +133,6 @@ void FamilyEditPanel::setFamily(const Family& family, const Document& document)
     m_originalFamily = family;
     m_editedFamily = family;
     m_addressCoordinates = document.addressCoordinates();
-    m_coordinatesTyped = false;
 
     // Address
     {
@@ -141,6 +143,7 @@ void FamilyEditPanel::setFamily(const Family& family, const Document& document)
     // Location
     showEntryFor(family.address());
     updateCoordinatesEnabled();
+    updateSaveEnabled();
 
     // Members
     m_memberAccordion->setMembers(family.members());
@@ -155,7 +158,7 @@ Family FamilyEditPanel::family() const
 
 std::optional<Coordinates> FamilyEditPanel::typedCoordinates() const
 {
-    if (!m_coordinatesTyped || m_editedFamily.address().isEmpty())
+    if (!coordinatesTyped() || m_editedFamily.address().isEmpty())
     {
         return std::nullopt;
     }
@@ -202,6 +205,13 @@ void FamilyEditPanel::showEntryFor(const Address& address)
         m_latEdit->clear();
         m_lonEdit->clear();
     }
+    m_shownLatitude = m_latEdit->text();
+    m_shownLongitude = m_lonEdit->text();
+}
+
+bool FamilyEditPanel::coordinatesTyped() const
+{
+    return m_latEdit->text() != m_shownLatitude || m_lonEdit->text() != m_shownLongitude;
 }
 
 void FamilyEditPanel::updateCoordinatesEnabled()
@@ -209,25 +219,38 @@ void FamilyEditPanel::updateCoordinatesEnabled()
     bool hasAddress = !m_editedFamily.address().isEmpty();
     m_latEdit->setEnabled(hasAddress);
     m_lonEdit->setEnabled(hasAddress);
-    m_lookupButton->setEnabled(hasAddress);
+    m_lookupButton->setEnabled(hasAddress && !m_geocoder->hasPendingRequests());
+}
+
+void FamilyEditPanel::refreshCoordinates(const Document& document)
+{
+    m_addressCoordinates = document.addressCoordinates();
+    if (!coordinatesTyped())
+    {
+        showEntryFor(m_editedFamily.address());
+    }
+    updateSaveEnabled();
+}
+
+void FamilyEditPanel::updateSaveEnabled()
+{
+    bool unusable = coordinatesTyped()
+        && !m_editedFamily.address().isEmpty()
+        && !typedCoordinates().has_value();
+    m_saveButton->setEnabled(!unusable);
+    m_saveButton->setToolTip(unusable ? tr("Enter a latitude and a longitude") : QString());
 }
 
 void FamilyEditPanel::onLookUpCoordinates()
 {
     QString addressText = m_addressEdit->toPlainText().trimmed();
 
-    m_lookupButton->setEnabled(false);
     m_lookupButton->setText(tr("Looking up..."));
-
-    GeocodingService* geocoder = new GeocodingService(this);
-    connect(geocoder, &GeocodingService::geocodingComplete,
-            this, &FamilyEditPanel::onGeocodingComplete);
-    connect(geocoder, &GeocodingService::geocodingComplete,
-            geocoder, &QObject::deleteLater);
 
     // Join address lines with commas for geocoding
     QString query = addressText.replace('\n', ", ");
-    geocoder->geocodeAddress(query);
+    m_geocoder->geocodeAddress(query);
+    updateCoordinatesEnabled();
 }
 
 void FamilyEditPanel::onGeocodingComplete(const GeocodingResult& result)
@@ -272,17 +295,18 @@ void FamilyEditPanel::onAddressChanged()
     m_editedFamily.setAddress(address);
 
     // Until the user types coordinates, the fields show where the address shown is mapped.
-    if (!m_coordinatesTyped)
+    if (!coordinatesTyped())
     {
         showEntryFor(address);
     }
     updateCoordinatesEnabled();
+    updateSaveEnabled();
     emit dataChanged();
 }
 
 void FamilyEditPanel::onCoordinatesTyped()
 {
-    m_coordinatesTyped = true;
+    updateSaveEnabled();
     emit dataChanged();
 }
 
