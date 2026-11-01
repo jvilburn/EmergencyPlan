@@ -15,4 +15,5 @@ private slots:
     void phoneEditKeepsEveryOtherField();
     void untouchedFormReturnsThePersonAsGiven();
     void untouchedFormKeepsEachPartialBirthday();
+    void typedNoteIsReturnedTrimmed();
 };

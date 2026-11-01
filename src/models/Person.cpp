@@ -110,6 +110,10 @@ QJsonObject Person::toJson() const
     {
         json["specialNeedNote"] = m_specialNeedNote;
     }
+    if (!m_note.isEmpty())
+    {
+        json["note"] = m_note;
+    }
 
     return json;
 }
@@ -145,6 +149,7 @@ Person Person::fromJson(const QJsonObject& json)
     person.m_wardUnitNumber = json["wardUnitNumber"].toString();
     person.m_isParent = json["isParent"].toBool();  // false if missing
     person.m_specialNeedNote = json["specialNeedNote"].toString();  // empty if missing
+    person.m_note = json["note"].toString();  // empty if missing
 
     return person;
 }
@@ -162,5 +167,6 @@ bool Person::operator==(const Person& other) const
         && m_stakeUnitNumber == other.m_stakeUnitNumber
         && m_wardUnitNumber == other.m_wardUnitNumber
         && m_isParent == other.m_isParent
-        && m_specialNeedNote == other.m_specialNeedNote;
+        && m_specialNeedNote == other.m_specialNeedNote
+        && m_note == other.m_note;
 }

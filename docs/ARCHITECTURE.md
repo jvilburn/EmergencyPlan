@@ -101,7 +101,6 @@ Document
 |-- families: QHash<FamilyId, Family>
 |-- addressCoordinates: QHash<QString, Coordinates>  (keyed by Address::full())
 |-- teams: QHash<TeamId, Team>
-|-- tags: QHash<TagId, Tag>
 |-- emergencyAssets: QHash<EmergencyAssetId, EmergencyAsset>
 |-- districts (EQ/RS current/proposed): QHash<MinisteringDistrictId, MinisteringDistrict>
 |-- groups (EQ/RS current/proposed): QHash<MinisteringGroupId, MinisteringGroup>

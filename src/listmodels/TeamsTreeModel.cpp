@@ -66,8 +66,8 @@ void TeamsTreeModel::clearNodes()
 
 void TeamsTreeModel::onDocumentChanged(const DocumentChange& change)
 {
-    // Full document reload
-    if (change.action == ChangeAction::Full)
+    // Full document reload or a team changed
+    if (change.action == ChangeAction::Full || change.teamId)
     {
         rebuild();
         return;

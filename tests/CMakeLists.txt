@@ -28,6 +28,12 @@ add_executable(WardPlanningTests
     services/WardSessionTest.cpp
     services/AutomaticUpdatesTest.h
     services/AutomaticUpdatesTest.cpp
+    services/TeamCommandsTest.h
+    services/TeamCommandsTest.cpp
+    services/EmergencyAssetCommandsTest.h
+    services/EmergencyAssetCommandsTest.cpp
+    services/FilterTest.h
+    services/FilterTest.cpp
     services/PersonJsonTest.h
     services/PersonJsonTest.cpp
     services/BirthdayTest.h

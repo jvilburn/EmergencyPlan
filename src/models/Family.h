@@ -27,6 +27,7 @@ public:
     const FamilyId& id() const { return m_id; }
     const Address& address() const { return m_address; }
     const QList<Person>& members() const { return m_members; }
+    const QString& note() const { return m_note; }
 
     // Computed properties from members
     QString surname() const;
@@ -43,6 +44,7 @@ public:
     // Setters
     void setAddress(const Address& address);
     void setMembers(const QList<Person>& members);
+    void setNote(const QString& note) { m_note = note; }
 
     // Contact helpers - aggregate from all members
     Phone displayPhone() const;
@@ -62,4 +64,5 @@ private:
     FamilyId m_id;
     Address m_address;
     QList<Person> m_members;
+    QString m_note;
 };

@@ -9,7 +9,6 @@
 #include "Person.h"
 #include "ResponseArea.h"
 #include "SearchField.h"
-#include "Tag.h"
 #include "Team.h"
 #include "AppStyles.h"
 
@@ -110,20 +109,6 @@ void FilterBar::rebuildChips()
     m_chips.clear();
 
     const Document& doc = DocumentManager::instance()->document();
-
-    // Tags
-    for (const TagId& tagId : m_filter->tagIds())
-    {
-        std::optional<Tag> tag = doc.findTagById(tagId);
-        if (tag)
-        {
-            addChip(tr("Tag"), tag->name(), [this, tagId]() {
-                QSet<TagId> ids = m_filter->tagIds();
-                ids.remove(tagId);
-                m_filter->setTagIds(ids);
-            });
-        }
-    }
 
     // Teams
     for (const TeamId& teamId : m_filter->teamIds())
@@ -259,7 +244,6 @@ void FilterBar::showAddFilterMenu()
 {
     QMenu menu(this);
 
-    addTagSubmenu(&menu);
     addTeamSubmenu(&menu);
     addCallingSubmenu(&menu);
 
@@ -290,42 +274,6 @@ void FilterBar::showAddFilterMenu()
 
     menu.exec(m_addFilterButton->mapToGlobal(
         QPoint(0, m_addFilterButton->height())));
-}
-
-void FilterBar::addTagSubmenu(QMenu* menu)
-{
-    QMenu* sub = menu->addMenu(tr("Tag"));
-
-    const Document& doc = DocumentManager::instance()->document();
-    QList<Tag> tags = doc.tags().values();
-    std::sort(tags.begin(), tags.end(), [](const Tag& a, const Tag& b) {
-        return a.name().toLower() < b.name().toLower();
-    });
-
-    if (tags.isEmpty())
-    {
-        sub->addAction(tr("(No tags)"))->setEnabled(false);
-        return;
-    }
-
-    for (const Tag& tag : tags)
-    {
-        QAction* action = sub->addAction(tag.name());
-        action->setCheckable(true);
-        action->setChecked(m_filter->tagIds().contains(tag.id()));
-        connect(action, &QAction::triggered, this, [this, tagId = tag.id()](bool checked) {
-            QSet<TagId> ids = m_filter->tagIds();
-            if (checked)
-            {
-                ids.insert(tagId);
-            }
-            else
-            {
-                ids.remove(tagId);
-            }
-            m_filter->setTagIds(ids);
-        });
-    }
 }
 
 void FilterBar::addTeamSubmenu(QMenu* menu)

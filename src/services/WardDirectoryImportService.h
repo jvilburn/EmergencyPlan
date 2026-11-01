@@ -48,6 +48,9 @@ private:
         const Person& person,
         const Family& family);
 
+    /// parsedFamily with existingFamily's id, each matched member's id, and what the app
+    /// keeps that the directory does not print: the family's note, and each matched member's
+    /// note and special-need note.
     Family preserveIds(
         const Family& parsedFamily,
         const Family& existingFamily);

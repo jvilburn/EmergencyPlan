@@ -83,9 +83,11 @@ Family TestWard::smithWithEveryFieldChanged()
     bob.setWardUnitNumber("123456");
     bob.setStakeUnitNumber("654321");
     bob.setSpecialNeedNote("Uses a wheelchair; the ramp is at the back door.");
+    bob.setNote("Drives the ward van");
 
     Family saved = smith();
     saved.setAddress(address("14 Elm St", "Provo, UT"));
+    saved.setNote("Gate code is 1234");
     saved.setMembers({bob, dan()});
     return saved;
 }
@@ -97,6 +99,40 @@ Document TestWard::document()
     document.addFamily(jones());
     document.onDocumentChanged(DocumentChange::full());
     return document;
+}
+
+Team TestWard::setupTeam()
+{
+    QJsonObject json;
+    json["id"] = setupTeamId().toString();
+    json["name"] = "Setup";
+    json["memberIds"] = QJsonArray({bobId().toString(), aliceId().toString()});
+    return Team::fromJson(json);
+}
+
+EmergencyAsset TestWard::generator()
+{
+    QJsonObject json;
+    json["id"] = generatorId().toString();
+    json["name"] = "Generator";
+    json["responseArea"] = responseAreaToString(ResponseArea::Recovery);
+    json["personIds"] = QJsonArray({bobId().toString(), aliceId().toString()});
+    return EmergencyAsset::fromJson(json);
+}
+
+Document TestWard::withTeam(const Document& document, const Team& team)
+{
+    Document updated = document;
+    updated.updateTeam(team);
+    return updated;
+}
+
+Document TestWard::withAsset(const Document& document, const EmergencyAsset& asset)
+{
+    Document updated = document;
+    updated.updateEmergencyAsset(asset);
+    updated.onDocumentChanged(DocumentChange::full());
+    return updated;
 }
 
 Family TestWard::withMember(const Family& family, const Person& member)

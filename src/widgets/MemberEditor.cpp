@@ -10,6 +10,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QSpinBox>
+#include <QTextEdit>
 #include <QPushButton>
 #include <QFormLayout>
 #include <QVBoxLayout>
@@ -109,6 +110,13 @@ void MemberEditor::setupUi()
     m_callingsEditor = new CallingsEditor(this);
     mainLayout->addWidget(m_callingsEditor);
 
+    // Note section
+    mainLayout->addWidget(new QLabel(tr("Notes:"), this));
+    m_noteEdit = new QTextEdit(this);
+    m_noteEdit->setMaximumHeight(80);
+    m_noteEdit->setPlaceholderText(tr("Anything worth noting about this person"));
+    mainLayout->addWidget(m_noteEdit);
+
     // Remove button
     QHBoxLayout* removeLayout = new QHBoxLayout();
     removeLayout->addStretch();
@@ -133,6 +141,7 @@ void MemberEditor::setupUi()
     connect(m_altPhoneEdit, &QLineEdit::textChanged, this, &MemberEditor::dataChanged);
     connect(m_emailEdit, &QLineEdit::textChanged, this, &MemberEditor::dataChanged);
     connect(m_callingsEditor, &CallingsEditor::callingsChanged, this, &MemberEditor::dataChanged);
+    connect(m_noteEdit, &QTextEdit::textChanged, this, &MemberEditor::dataChanged);
 }
 
 void MemberEditor::setPerson(const Person& person)
@@ -181,6 +190,7 @@ void MemberEditor::setPerson(const Person& person)
     m_altPhoneEdit->setText(person.altPhone());
     m_emailEdit->setText(person.email());
     m_callingsEditor->setCallings(person.callings());
+    m_noteEdit->setPlainText(person.note());
 }
 
 Person MemberEditor::person() const
@@ -219,6 +229,10 @@ Person MemberEditor::person() const
     if (m_callingsEditor->callings() != m_person.callings())
     {
         edited.setCallings(m_callingsEditor->callings());
+    }
+    if (m_noteEdit->toPlainText() != m_person.note())
+    {
+        edited.setNote(m_noteEdit->toPlainText().trimmed());
     }
     return edited;
 }

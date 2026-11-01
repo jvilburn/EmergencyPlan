@@ -58,6 +58,7 @@ private slots:
     void onAddressChanged();
     void onCoordinatesTyped();
     void onMembersChanged();
+    void onNoteChanged();
 
 private:
     void setupUi();
@@ -98,6 +99,9 @@ private:
     QLineEdit* m_lonEdit;
     QPushButton* m_lookupButton;
     GeocodingService* m_geocoder;
+
+    // Note
+    QTextEdit* m_noteEdit;
 
     // Members
     MemberAccordion* m_memberAccordion;

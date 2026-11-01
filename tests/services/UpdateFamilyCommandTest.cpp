@@ -30,14 +30,20 @@ Family smithWithout(const PersonId& id)
     return family;
 }
 
-/// The Smith family with one of Bob's fields, or the address, at a value that is neither
-/// its value in TestWard::smith() nor in TestWard::smithWithEveryFieldChanged().
+/// The Smith family with one of Bob's fields, the address or the family's note at a value
+/// that is neither its value in TestWard::smith() nor in
+/// TestWard::smithWithEveryFieldChanged().
 Family smithWithThirdValue(const QString& field)
 {
     Family family = TestWard::smith();
     if (field == "address")
     {
         family.setAddress(TestWard::address("16 Elm St", "Provo, UT"));
+        return family;
+    }
+    if (field == "familyNote")
+    {
+        family.setNote("Dog in the yard");
         return family;
     }
 
@@ -81,6 +87,10 @@ Family smithWithThirdValue(const QString& field)
     else if (field == "specialNeedNote")
     {
         bob.setSpecialNeedNote("Hard of hearing");
+    }
+    else if (field == "note")
+    {
+        bob.setNote("Has a truck");
     }
     return TestWard::withMember(family, bob);
 }
@@ -177,9 +187,11 @@ void UpdateFamilyCommandTest::everyFieldEditDescribesEachField()
                           "Bob, ward unit: 123456",
                           "Bob, stake unit: 654321",
                           "Bob, special need: Uses a wheelchair; the ramp is at the back door.",
+                          "Bob, note: Drives the ward van",
                           "added: Smith, Dan",
                           "removed: Smith, Alice",
-                          "address: 14 Elm St, Provo, UT"}));
+                          "address: 14 Elm St, Provo, UT",
+                          "note: Gate code is 1234"}));
 }
 
 void UpdateFamilyCommandTest::appliesWhereItsStartConditionHolds()
@@ -225,7 +237,8 @@ void UpdateFamilyCommandTest::everyFieldMovedToAThirdValueConflicts_data()
     QTest::addColumn<QString>("field");
     // isParent has two values, so it has no third value to move to.
     const QStringList fields = {"name", "gender", "phone", "altPhone", "email", "birthday", "callings",
-                                "wardUnitNumber", "stakeUnitNumber", "specialNeedNote", "address"};
+                                "wardUnitNumber", "stakeUnitNumber", "specialNeedNote", "note", "address",
+                                "familyNote"};
     for (const QString& field : fields)
     {
         QTest::newRow(qPrintable(field)) << field;

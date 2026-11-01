@@ -4,6 +4,7 @@
 
 #include <QLineEdit>
 #include <QTest>
+#include <QTextEdit>
 
 namespace
 {
@@ -21,6 +22,7 @@ Person bobWithFieldsTheFormDoesNotShow()
     bob.setSpecialNeedNote("Uses a wheelchair");
     bob.setWardUnitNumber("123456");
     bob.setStakeUnitNumber("654321");
+    bob.setNote("Has a key to the building");
     return bob;
 }
 
@@ -92,4 +94,20 @@ void MemberEditorTest::untouchedFormKeepsEachPartialBirthday()
         QVERIFY2(editor.person().birthday() == birthday, qPrintable(birthday.display()));
         QVERIFY(editor.person() == original);
     }
+}
+
+void MemberEditorTest::typedNoteIsReturnedTrimmed()
+{
+    Person original = bobWithFieldsTheFormDoesNotShow();
+    MemberEditor editor(nullptr);
+    editor.setPerson(original);
+    QTextEdit* note = editor.findChild<QTextEdit*>();
+    QVERIFY(note != nullptr);
+    QCOMPARE(note->toPlainText(), QString("Has a key to the building"));
+
+    note->setPlainText("  Drives the ward van\n");
+
+    Person expected = original;
+    expected.setNote("Drives the ward van");
+    QVERIFY(editor.person() == expected);
 }

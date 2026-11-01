@@ -99,6 +99,14 @@ void FamilyEditPanel::setupUi()
     coordLayout->addWidget(m_lonEdit);
     contentLayout->addLayout(coordLayout);
 
+    // Note section
+    contentLayout->addWidget(new QLabel(tr("Notes"), this));
+    m_noteEdit = new QTextEdit(this);
+    m_noteEdit->setMaximumHeight(80);
+    m_noteEdit->setPlaceholderText(tr("Anything worth noting about this family"));
+    connect(m_noteEdit, &QTextEdit::textChanged, this, &FamilyEditPanel::onNoteChanged);
+    contentLayout->addWidget(m_noteEdit);
+
     // Separator
     QFrame* separator = new QFrame(this);
     separator->setFrameShape(QFrame::HLine);
@@ -138,6 +146,12 @@ void FamilyEditPanel::setFamily(const Family& family, const Document& document)
     {
         const QSignalBlocker addressBlocker(m_addressEdit);
         m_addressEdit->setPlainText(family.address().multiLine());
+    }
+
+    // Note
+    {
+        const QSignalBlocker noteBlocker(m_noteEdit);
+        m_noteEdit->setPlainText(family.note());
     }
 
     // Location
@@ -340,5 +354,11 @@ void FamilyEditPanel::onMembersChanged()
             m_editedFamily.setMembers(members);
         }
     }
+    emit dataChanged();
+}
+
+void FamilyEditPanel::onNoteChanged()
+{
+    m_editedFamily.setNote(m_noteEdit->toPlainText().trimmed());
     emit dataChanged();
 }

@@ -1,8 +1,10 @@
 #pragma once
 
 #include "Document.h"
+#include "EmergencyAsset.h"
 #include "Family.h"
 #include "Person.h"
+#include "Team.h"
 
 /// A small ward with fixed ids, and helpers for building versions of it.
 ///
@@ -18,6 +20,8 @@ public:
     static PersonId aliceId() { return PersonId::fromString("person-alice"); }
     static PersonId carolId() { return PersonId::fromString("person-carol"); }
     static PersonId danId() { return PersonId::fromString("person-dan"); }
+    static TeamId setupTeamId() { return TeamId::fromString("team-setup"); }
+    static EmergencyAssetId generatorId() { return EmergencyAssetId::fromString("asset-generator"); }
 
     static Person bob();
     static Person alice();
@@ -42,12 +46,25 @@ public:
 
     static Address address(const QString& street, const QString& city);
 
-    /// The Smith family with every field of Bob changed, Alice removed, Dan added and the
-    /// address changed, so an edit to it holds every value type a family edit holds.
+    /// The Smith family with every field of Bob changed, Alice removed, Dan added, and the
+    /// address and note changed, so an edit to it holds every value type a family edit holds.
     static Family smithWithEveryFieldChanged();
 
     /// The ward holding the Smith and Jones families, with its lookup caches built.
     static Document document();
+
+    /// The Setup team, which is not in document(): Bob and Alice, with no leader.
+    static Team setupTeam();
+
+    /// The Generator asset in the recovery area, which is not in document(): Bob and Alice.
+    static EmergencyAsset generator();
+
+    /// document with team added, or put in place of the team with the same id.
+    static Document withTeam(const Document& document, const Team& team);
+
+    /// document with asset added, or put in place of the asset with the same id, caches
+    /// rebuilt.
+    static Document withAsset(const Document& document, const EmergencyAsset& asset);
 
     /// family with the member of the same id replaced by member.
     static Family withMember(const Family& family, const Person& member);

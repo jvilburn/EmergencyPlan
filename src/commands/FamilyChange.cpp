@@ -317,18 +317,21 @@ std::optional<FamilyChange> FamilyChange::between(const Family& opened, const Fa
     }
 
     std::optional<FieldChange<Address>> address = changeBetween(opened.address(), saved.address());
-    if (!address.has_value() && members.isEmpty() && added.isEmpty() && removed.isEmpty())
+    std::optional<FieldChange<QString>> note = changeBetween(opened.note(), saved.note());
+    if (!address.has_value() && !note.has_value() && members.isEmpty() && added.isEmpty() && removed.isEmpty())
     {
         return std::nullopt;
     }
-    return FamilyChange(address, members, added, removed);
+    return FamilyChange(address, note, members, added, removed);
 }
 
 FamilyChange::FamilyChange(const std::optional<FieldChange<Address>>& address,
+                           const std::optional<FieldChange<QString>>& note,
                            const QHash<PersonId, MemberChange>& members,
                            const QList<PlacedMember>& added,
                            const QList<PlacedMember>& removed)
     : m_address(address)
+    , m_note(note)
     , m_members(members)
     , m_added(added)
     , m_removed(removed)
@@ -337,7 +340,7 @@ FamilyChange::FamilyChange(const std::optional<FieldChange<Address>>& address,
 
 bool FamilyChange::holds(const Family& current) const
 {
-    if (!changeHolds(m_address, current.address()))
+    if (!changeHolds(m_address, current.address()) || !changeHolds(m_note, current.note()))
     {
         return false;
     }
@@ -389,6 +392,7 @@ Family FamilyChange::appliedTo(const Family& current) const
 
     Family updated = current;
     updated.setAddress(changedValue(m_address, current.address()));
+    updated.setNote(changedValue(m_note, current.note()));
     updated.setMembers(members);
     return updated;
 }
@@ -400,7 +404,7 @@ FamilyChange FamilyChange::swapped() const
     {
         members.insert(it.key(), it.value().swapped());
     }
-    return FamilyChange(changeSwapped(m_address), members, m_removed, m_added);
+    return FamilyChange(changeSwapped(m_address), changeSwapped(m_note), members, m_removed, m_added);
 }
 
 QStringList FamilyChange::describe(const Family& opened) const
@@ -426,6 +430,10 @@ QStringList FamilyChange::describe(const Family& opened) const
     {
         lines.append(QObject::tr("address: %1").arg(orNone(m_address->after().full())));
     }
+    if (m_note.has_value())
+    {
+        lines.append(QObject::tr("note: %1").arg(orNone(m_note->after())));
+    }
     return lines;
 }
 
@@ -433,6 +441,7 @@ QJsonObject FamilyChange::toJson() const
 {
     QJsonObject json;
     writeChange(json, "address", m_address);
+    writeChange(json, "note", m_note);
     if (!m_members.isEmpty())
     {
         QJsonObject members;
@@ -462,6 +471,7 @@ FamilyChange FamilyChange::fromJson(const QJsonObject& json)
         members.insert(PersonId::fromString(it.key()), MemberChange::fromJson(it.value().toObject()));
     }
     return FamilyChange(readChange<Address>(json, "address"),
+                        readChange<QString>(json, "note"),
                         members,
                         placedFromJson(json["added"].toArray()),
                         placedFromJson(json["removed"].toArray()));

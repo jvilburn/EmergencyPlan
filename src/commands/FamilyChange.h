@@ -64,6 +64,8 @@ private:
                 &Person::stakeUnitNumber, &Person::setStakeUnitNumber, change.m_stakeUnitNumber);
         visitor("specialNeedNote", QT_TRANSLATE_NOOP("QObject", "%1, special need: %2"),
                 &Person::specialNeedNote, &Person::setSpecialNeedNote, change.m_specialNeedNote);
+        visitor("note", QT_TRANSLATE_NOOP("QObject", "%1, note: %2"),
+                &Person::note, &Person::setNote, change.m_note);
     }
 
     std::optional<FieldChange<Name>> m_name;
@@ -77,6 +79,7 @@ private:
     std::optional<FieldChange<QString>> m_wardUnitNumber;
     std::optional<FieldChange<QString>> m_stakeUnitNumber;
     std::optional<FieldChange<QString>> m_specialNeedNote;
+    std::optional<FieldChange<QString>> m_note;
 };
 
 /// A member a family change adds or removes, with its place in the family's member order:
@@ -88,11 +91,11 @@ struct PlacedMember
     qsizetype index;
 };
 
-/// What an edit changes in one family: its address, a change per member keyed by PersonId,
-/// the members it adds, and the members it removes as last seen. Members are matched by
-/// PersonId. A family's member order is the order it was given, and a change keeps it: it
-/// inserts each addition at its index and moves no one else. Order is not part of any
-/// start condition.
+/// What an edit changes in one family: its address, its note, a change per member keyed by
+/// PersonId, the members it adds, and the members it removes as last seen. Members are
+/// matched by PersonId. A family's member order is the order it was given, and a change
+/// keeps it: it inserts each addition at its index and moves no one else. Order is not part
+/// of any start condition.
 class FamilyChange
 {
 public:
@@ -102,13 +105,15 @@ public:
     static std::optional<FamilyChange> between(const Family& opened, const Family& saved);
 
     FamilyChange(const std::optional<FieldChange<Address>>& address,
+                 const std::optional<FieldChange<QString>>& note,
                  const QHash<PersonId, MemberChange>& members,
                  const QList<PlacedMember>& added,
                  const QList<PlacedMember>& removed);
 
-    /// The start condition or the result holds: the address and every changed member are at
-    /// before or after, and every removed member is gone or exactly as last seen. An added
-    /// member never conflicts; its result holds when that PersonId is already there.
+    /// The start condition or the result holds: the address, the note and every changed
+    /// member are at before or after, and every removed member is gone or exactly as last
+    /// seen. An added member never conflicts; its result holds when that PersonId is already
+    /// there.
     bool holds(const Family& current) const;
 
     /// current with the removed members taken out, the member changes made, and then each
@@ -116,13 +121,13 @@ public:
     /// member count at that point.
     Family appliedTo(const Family& current) const;
 
-    /// The change that takes this one back: the address and member changes swapped, the
-    /// removed members added again at the indices they were seen at, and the added ones
+    /// The change that takes this one back: the address, note and member changes swapped,
+    /// the removed members added again at the indices they were seen at, and the added ones
     /// removed.
     FamilyChange swapped() const;
 
     /// The lines of what to do again: member lines in the opened family's member order,
-    /// then additions, removals and the address.
+    /// then additions, removals, the address and the note.
     QStringList describe(const Family& opened) const;
 
     const std::optional<FieldChange<Address>>& address() const { return m_address; }
@@ -132,6 +137,7 @@ public:
 
 private:
     std::optional<FieldChange<Address>> m_address;
+    std::optional<FieldChange<QString>> m_note;
     QHash<PersonId, MemberChange> m_members;
     QList<PlacedMember> m_added;
     QList<PlacedMember> m_removed;

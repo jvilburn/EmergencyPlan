@@ -39,8 +39,8 @@ void EmergencyAssetModel::clearNodes()
 
 void EmergencyAssetModel::onDocumentChanged(const DocumentChange& change)
 {
-    // Full document reload
-    if (change.action == ChangeAction::Full)
+    // Full document reload or an asset changed
+    if (change.action == ChangeAction::Full || change.assetId)
     {
         rebuild();
         return;

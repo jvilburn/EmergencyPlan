@@ -17,6 +17,24 @@ DocumentChange MetadataScopeBuilder::updated() const
     return c;
 }
 
+// TeamScopeBuilder
+DocumentChange TeamScopeBuilder::updated(const TeamId& id) const
+{
+    DocumentChange c;
+    c.action = ChangeAction::Updated;
+    c.teamId = id;
+    return c;
+}
+
+// EmergencyAssetScopeBuilder
+DocumentChange EmergencyAssetScopeBuilder::updated(const EmergencyAssetId& id) const
+{
+    DocumentChange c;
+    c.action = ChangeAction::Updated;
+    c.assetId = id;
+    return c;
+}
+
 // DocumentChange factory methods
 DocumentChange DocumentChange::full()
 {
@@ -25,3 +43,5 @@ DocumentChange DocumentChange::full()
 
 FamilyScopeBuilder DocumentChange::family() { return FamilyScopeBuilder{}; }
 MetadataScopeBuilder DocumentChange::metadata() { return MetadataScopeBuilder{}; }
+TeamScopeBuilder DocumentChange::team() { return TeamScopeBuilder{}; }
+EmergencyAssetScopeBuilder DocumentChange::emergencyAsset() { return EmergencyAssetScopeBuilder{}; }

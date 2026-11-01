@@ -1,15 +1,20 @@
 #include "Team.h"
 
-Team Team::create(const QString& name,
-                  const QColor& color,
-                  std::optional<PersonId> leaderId)
+Team Team::create(const QString& name)
 {
     Team team;
     team.m_id = TeamId::generate();
     team.m_name = name;
-    team.m_color = color;
-    team.m_leaderId = leaderId;
     return team;
+}
+
+void Team::setMemberIds(const QSet<PersonId>& memberIds)
+{
+    m_memberIds = memberIds;
+    if (m_leaderId.has_value() && !m_memberIds.contains(*m_leaderId))
+    {
+        m_leaderId = std::nullopt;
+    }
 }
 
 QJsonObject Team::toJson() const
@@ -29,12 +34,13 @@ QJsonObject Team::toJson() const
 
     if (!m_memberIds.isEmpty())
     {
-        QJsonArray memberIdsArray;
+        QStringList memberIds;
         for (const PersonId& id : m_memberIds)
         {
-            memberIdsArray.append(id.toString());
+            memberIds.append(id.toString());
         }
-        json["memberIds"] = memberIdsArray;
+        memberIds.sort();
+        json["memberIds"] = QJsonArray::fromStringList(memberIds);
     }
 
     return json;

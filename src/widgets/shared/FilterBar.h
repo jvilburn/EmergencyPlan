@@ -36,7 +36,6 @@ private:
     void showAddFilterMenu();
 
     // Add filter menu helpers
-    void addTagSubmenu(QMenu* menu);
     void addTeamSubmenu(QMenu* menu);
     void addCallingSubmenu(QMenu* menu);
     void addGenderSubmenu(QMenu* menu);

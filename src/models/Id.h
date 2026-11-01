@@ -81,14 +81,6 @@ public:
     static constexpr const char* typeName() { return "TeamId"; }
 };
 
-class TagId : public IdBase<TagId>
-{
-    friend class IdBase<TagId>;
-    using IdBase::IdBase;
-public:
-    static constexpr const char* typeName() { return "TagId"; }
-};
-
 class EmergencyAssetId : public IdBase<EmergencyAssetId>
 {
     friend class IdBase<EmergencyAssetId>;
@@ -153,7 +145,6 @@ public:
 Q_DECLARE_METATYPE(PersonId)
 Q_DECLARE_METATYPE(FamilyId)
 Q_DECLARE_METATYPE(TeamId)
-Q_DECLARE_METATYPE(TagId)
 Q_DECLARE_METATYPE(EmergencyAssetId)
 Q_DECLARE_METATYPE(MinisteringGroupId)
 Q_DECLARE_METATYPE(MinisteringDistrictId)

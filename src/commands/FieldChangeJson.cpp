@@ -36,6 +36,15 @@ QJsonValue toJsonValue(const std::optional<Gender>& value)
     return value->toJson();
 }
 
+QJsonValue toJsonValue(const std::optional<PersonId>& value)
+{
+    if (!value.has_value())
+    {
+        return QJsonValue(QJsonValue::Null);
+    }
+    return value->toString();
+}
+
 template<>
 QString fromJsonValue<QString>(const QJsonValue& value)
 {
@@ -94,4 +103,54 @@ template<>
 std::optional<Gender> fromJsonValue<std::optional<Gender>>(const QJsonValue& value)
 {
     return Gender::fromJson(value);
+}
+
+template<>
+std::optional<PersonId> fromJsonValue<std::optional<PersonId>>(const QJsonValue& value)
+{
+    if (!value.isString())
+    {
+        return std::nullopt;
+    }
+    return PersonId::fromString(value.toString());
+}
+
+namespace
+{
+
+QJsonArray idsToJson(const QSet<PersonId>& ids)
+{
+    QStringList strings;
+    for (const PersonId& id : ids)
+    {
+        strings.append(id.toString());
+    }
+    strings.sort();
+    return QJsonArray::fromStringList(strings);
+}
+
+QSet<PersonId> idsFromJson(const QJsonValue& value)
+{
+    QSet<PersonId> ids;
+    QJsonArray array = value.toArray();
+    for (const QJsonValue& item : array)
+    {
+        ids.insert(PersonId::fromString(item.toString()));
+    }
+    return ids;
+}
+
+}  // namespace
+
+QJsonObject peopleChangeToJson(const IdSetChange<PersonId>& change)
+{
+    QJsonObject json;
+    json["added"] = idsToJson(change.added());
+    json["removed"] = idsToJson(change.removed());
+    return json;
+}
+
+IdSetChange<PersonId> peopleChangeFromJson(const QJsonObject& json)
+{
+    return IdSetChange<PersonId>(idsFromJson(json["added"]), idsFromJson(json["removed"]));
 }

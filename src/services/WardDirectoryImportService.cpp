@@ -145,6 +145,8 @@ Family WardDirectoryImportService::preserveIds(
                 parsedPerson.isParent(),
                 parsedPerson.wardUnitNumber(),
                 parsedPerson.stakeUnitNumber());
+            updated.setSpecialNeedNote(existingPerson->specialNeedNote());
+            updated.setNote(existingPerson->note());
             updatedMembers.append(updated);
         }
         else
@@ -153,5 +155,7 @@ Family WardDirectoryImportService::preserveIds(
         }
     }
 
-    return Family::createWithId(existingFamily.id(), parsedFamily.address(), updatedMembers);
+    Family updated = Family::createWithId(existingFamily.id(), parsedFamily.address(), updatedMembers);
+    updated.setNote(existingFamily.note());
+    return updated;
 }

@@ -11,7 +11,6 @@
 #include "DocumentMetadata.h"
 #include "Family.h"
 #include "Team.h"
-#include "Tag.h"
 #include "MinisteringDistrict.h"
 #include "MinisteringGroup.h"
 #include "ItemType.h"
@@ -43,7 +42,6 @@ public:
     // ========================================================================
     const QHash<FamilyId, Family>& families() const { return m_families; }
     const QHash<TeamId, Team>& teams() const { return m_teams; }
-    const QHash<TagId, Tag>& tags() const { return m_tags; }
 
     // ========================================================================
     // Ministering getters
@@ -65,6 +63,13 @@ public:
     void removeFamily(const FamilyId& id);
 
     // ========================================================================
+    // Mutating operations - teams
+    // ========================================================================
+    void addTeam(const Team& team);
+    void updateTeam(const Team& team);
+    void removeTeam(const TeamId& id);
+
+    // ========================================================================
     // Address coordinates
     // ========================================================================
 
@@ -82,6 +87,8 @@ public:
     // ========================================================================
     const QHash<EmergencyAssetId, EmergencyAsset>& emergencyAssets() const { return m_emergencyAssets; }
     void addEmergencyAsset(const EmergencyAsset& asset);
+    void updateEmergencyAsset(const EmergencyAsset& asset);
+    void removeEmergencyAsset(const EmergencyAssetId& id);
     std::optional<EmergencyAsset> findEmergencyAssetById(const EmergencyAssetId& id) const;
     QList<EmergencyAsset> emergencyAssetsByArea(ResponseArea area) const;
 
@@ -92,7 +99,6 @@ public:
     std::optional<Person> findPersonById(const PersonId& id) const;
     std::optional<FamilyId> familyIdForPerson(const PersonId& personId) const;
     std::optional<Team> findTeamById(const TeamId& id) const;
-    std::optional<Tag> findTagById(const TagId& id) const;
 
     /// Get response areas for a person based on their emergency asset assignments (from cache)
     QSet<ResponseArea> personResponseAreas(const PersonId& personId) const;
@@ -121,7 +127,6 @@ private:
     // Core collections
     QHash<FamilyId, Family> m_families;
     QHash<TeamId, Team> m_teams;
-    QHash<TagId, Tag> m_tags;
 
     // Address text -> its place on the map
     QHash<QString, Coordinates> m_addressCoordinates;

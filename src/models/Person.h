@@ -61,6 +61,7 @@ public:
     bool isParent() const { return m_isParent; }
     const QString& specialNeedNote() const { return m_specialNeedNote; }
     bool hasSpecialNeed() const { return !m_specialNeedNote.isEmpty(); }
+    const QString& note() const { return m_note; }
 
     // Setters
     void setName(const Name& name) { m_name = name; }
@@ -74,6 +75,7 @@ public:
     void setWardUnitNumber(const QString& wardUnitNumber) { m_wardUnitNumber = wardUnitNumber; }
     void setIsParent(bool isParent) { m_isParent = isParent; }
     void setSpecialNeedNote(const QString& note) { m_specialNeedNote = note; }
+    void setNote(const QString& note) { m_note = note; }
 
     // Display name: "Surname, GivenNames" (delegates to Name)
     QString displayName() const { return m_name.full(); }
@@ -108,4 +110,5 @@ private:
     QString m_wardUnitNumber;   // Associates person with a ward
     bool m_isParent = false;
     QString m_specialNeedNote;
+    QString m_note;
 };

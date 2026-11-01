@@ -8,6 +8,8 @@
 
 #include "Address.h"
 #include "DocumentChange.h"
+#include "FieldChange.h"
+#include "Id.h"
 
 class Document;
 
@@ -44,6 +46,14 @@ private:
     QString m_heading;
     QStringList m_lines;
 };
+
+/// A description line per person a change to a set of people adds, then per person it
+/// removes: "added: <name>" and "removed: <name>", named as document holds them, in name
+/// order.
+QStringList describePeopleChange(const IdSetChange<PersonId>& change, const Document& document);
+
+/// True when document holds a person with each of the ids.
+bool everyPersonExists(const QSet<PersonId>& ids, const Document& document);
 
 class Command;
 using CommandPtr = std::shared_ptr<const Command>;

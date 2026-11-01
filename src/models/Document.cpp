@@ -43,6 +43,25 @@ void Document::removeFamily(const FamilyId& id)
 }
 
 // ============================================================================
+// Team operations
+// ============================================================================
+
+void Document::addTeam(const Team& team)
+{
+    m_teams.insert(team.id(), team);
+}
+
+void Document::updateTeam(const Team& team)
+{
+    m_teams.insert(team.id(), team);
+}
+
+void Document::removeTeam(const TeamId& id)
+{
+    m_teams.remove(id);
+}
+
+// ============================================================================
 // Address coordinates
 // ============================================================================
 
@@ -75,6 +94,16 @@ void Document::setAddressCoordinates(const QString& address, const std::optional
 void Document::addEmergencyAsset(const EmergencyAsset& asset)
 {
     m_emergencyAssets.insert(asset.id(), asset);
+}
+
+void Document::updateEmergencyAsset(const EmergencyAsset& asset)
+{
+    m_emergencyAssets.insert(asset.id(), asset);
+}
+
+void Document::removeEmergencyAsset(const EmergencyAssetId& id)
+{
+    m_emergencyAssets.remove(id);
 }
 
 std::optional<EmergencyAsset> Document::findEmergencyAssetById(const EmergencyAssetId& id) const
@@ -153,16 +182,6 @@ std::optional<Team> Document::findTeamById(const TeamId& id) const
     return std::nullopt;
 }
 
-std::optional<Tag> Document::findTagById(const TagId& id) const
-{
-    auto it = m_tags.find(id);
-    if (it != m_tags.end())
-    {
-        return *it;
-    }
-    return std::nullopt;
-}
-
 void Document::rebuildPersonToFamilyMap()
 {
     m_personToFamily.clear();
@@ -220,7 +239,7 @@ void Document::onDocumentChanged(const DocumentChange& change)
     }
 
     // Decoration caches for map markers
-    if (change.action == ChangeAction::Full)
+    if (change.action == ChangeAction::Full || change.assetId.has_value())
     {
         rebuildDecorationCaches();
     }
@@ -273,7 +292,6 @@ QJsonObject Document::toJson() const
     // Core collections
     serializeHashToJson(json, "families", m_families);
     serializeHashToJson(json, "teams", m_teams);
-    serializeHashToJson(json, "tags", m_tags);
 
     // Address coordinates
     if (!m_addressCoordinates.isEmpty())
@@ -320,7 +338,6 @@ Document Document::fromJson(const QJsonObject& json)
     // Core collections
     deserializeJsonToHash(json, "families", document.m_families);
     deserializeJsonToHash(json, "teams", document.m_teams);
-    deserializeJsonToHash(json, "tags", document.m_tags);
 
     // Address coordinates
     QJsonArray addressCoordinates = json["addressCoordinates"].toArray();
@@ -369,7 +386,6 @@ bool Document::operator==(const Document& other) const
     return m_metadata == other.m_metadata
         && m_families == other.m_families
         && m_teams == other.m_teams
-        && m_tags == other.m_tags
         && m_addressCoordinates == other.m_addressCoordinates
         && m_emergencyAssets == other.m_emergencyAssets
         && m_eqDistricts == other.m_eqDistricts

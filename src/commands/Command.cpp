@@ -1,7 +1,53 @@
 #include "Command.h"
+#include "Document.h"
 
 #include <QJsonArray>
 #include <QObject>
+
+namespace
+{
+
+/// The display names of the people with those ids, in name order. A person the document
+/// lacks is named by their id.
+QStringList namesOf(const QSet<PersonId>& ids, const Document& document)
+{
+    QStringList names;
+    for (const PersonId& id : ids)
+    {
+        std::optional<Person> person = document.findPersonById(id);
+        names.append(person.has_value() ? person->displayName() : id.toString());
+    }
+    names.sort();
+    return names;
+}
+
+}  // namespace
+
+QStringList describePeopleChange(const IdSetChange<PersonId>& change, const Document& document)
+{
+    QStringList lines;
+    for (const QString& name : namesOf(change.added(), document))
+    {
+        lines.append(QObject::tr("added: %1").arg(name));
+    }
+    for (const QString& name : namesOf(change.removed(), document))
+    {
+        lines.append(QObject::tr("removed: %1").arg(name));
+    }
+    return lines;
+}
+
+bool everyPersonExists(const QSet<PersonId>& ids, const Document& document)
+{
+    for (const PersonId& id : ids)
+    {
+        if (!document.findPersonById(id).has_value())
+        {
+            return false;
+        }
+    }
+    return true;
+}
 
 CommandDescription::CommandDescription(const QString& heading, const QStringList& lines)
     : m_heading(heading)

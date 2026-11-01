@@ -4,6 +4,7 @@
 #include "Birthday.h"
 #include "FieldChange.h"
 #include "Gender.h"
+#include "Id.h"
 #include "Name.h"
 #include "Phone.h"
 
@@ -21,6 +22,7 @@ QJsonValue toJsonValue(const QStringList& value);
 QJsonValue toJsonValue(const Address& value);
 QJsonValue toJsonValue(const Birthday& value);
 QJsonValue toJsonValue(const std::optional<Gender>& value);
+QJsonValue toJsonValue(const std::optional<PersonId>& value);
 
 template<typename T>
 T fromJsonValue(const QJsonValue& value);
@@ -41,6 +43,12 @@ template<>
 Birthday fromJsonValue<Birthday>(const QJsonValue& value);
 template<>
 std::optional<Gender> fromJsonValue<std::optional<Gender>>(const QJsonValue& value);
+template<>
+std::optional<PersonId> fromJsonValue<std::optional<PersonId>>(const QJsonValue& value);
+
+/// The ids added and the ids removed, each as a sorted array of id strings.
+QJsonObject peopleChangeToJson(const IdSetChange<PersonId>& change);
+IdSetChange<PersonId> peopleChangeFromJson(const QJsonObject& json);
 
 template<typename T>
 QJsonObject changeToJson(const FieldChange<T>& change)

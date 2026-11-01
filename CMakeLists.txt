@@ -90,7 +90,6 @@ set(MODEL_SOURCES
     src/models/Family.cpp
     src/models/Coordinates.cpp
     src/models/Team.cpp
-    src/models/Tag.cpp
     src/models/Ward.cpp
     src/models/Stake.cpp
     src/models/DocumentMetadata.cpp
@@ -114,7 +113,6 @@ set(MODEL_HEADERS
     src/models/Family.h
     src/models/Coordinates.h
     src/models/Team.h
-    src/models/Tag.h
     src/models/Ward.h
     src/models/Stake.h
     src/models/DocumentMetadata.h
@@ -135,6 +133,8 @@ set(COMMAND_SOURCES
     src/commands/CommandRegistry.cpp
     src/commands/FamilyCommands.cpp
     src/commands/AddressCoordinatesCommands.cpp
+    src/commands/TeamCommands.cpp
+    src/commands/EmergencyAssetCommands.cpp
     # src/commands/ImportCommands.cpp
 )
 
@@ -146,6 +146,8 @@ set(COMMAND_HEADERS
     src/commands/CommandRegistry.h
     src/commands/FamilyCommands.h
     src/commands/AddressCoordinatesCommands.h
+    src/commands/TeamCommands.h
+    src/commands/EmergencyAssetCommands.h
     # src/commands/ImportCommands.h
 )
 
@@ -252,7 +254,6 @@ set(WIDGET_SOURCES
     # src/widgets/Sidebar.cpp
     # src/widgets/MinisteringSidebar.cpp
     # src/widgets/ResourceView.cpp
-    # src/widgets/TagsView.cpp
     src/widgets/TeamsView.cpp
     # src/widgets/SelectionView.cpp
     # src/widgets/shared/FilterChips.cpp
@@ -264,7 +265,6 @@ set(WIDGET_SOURCES
     # src/widgets/dialogs/VisitDialog.cpp
     # src/widgets/dialogs/ImportDialog.cpp
     # src/widgets/dialogs/StatisticsDialog.cpp
-    # src/widgets/dialogs/TagDialog.cpp
     # src/widgets/dialogs/ResourceDialog.cpp
 )
 
@@ -301,7 +301,6 @@ set(WIDGET_HEADERS
     # src/widgets/Sidebar.h
     # src/widgets/MinisteringSidebar.h
     # src/widgets/ResourceView.h
-    # src/widgets/TagsView.h
     src/widgets/TeamsView.h
     # src/widgets/SelectionView.h
     # src/widgets/shared/FilterChips.h
@@ -313,7 +312,6 @@ set(WIDGET_HEADERS
     # src/widgets/dialogs/VisitDialog.h
     # src/widgets/dialogs/ImportDialog.h
     # src/widgets/dialogs/StatisticsDialog.h
-    # src/widgets/dialogs/TagDialog.h
     # src/widgets/dialogs/ResourceDialog.h
 )
 
@@ -329,7 +327,6 @@ set(LISTMODEL_SOURCES
     src/listmodels/PersonTreeModel.cpp
     src/listmodels/UnassignedMinisteringModel.cpp
     src/listmodels/TeamListModel.cpp
-    src/listmodels/TagListModel.cpp
     src/listmodels/TaskListModel.cpp
     src/listmodels/TeamsTreeModel.cpp
     # src/listmodels/DistrictTreeModel.cpp
@@ -348,7 +345,6 @@ set(LISTMODEL_HEADERS
     src/listmodels/TaskListModel.h
     src/listmodels/UnassignedMinisteringModel.h
     src/listmodels/TeamListModel.h
-    src/listmodels/TagListModel.h
     src/listmodels/TeamsTreeModel.h
     # src/listmodels/DistrictTreeModel.h
     # src/listmodels/ResourceTreeModel.h

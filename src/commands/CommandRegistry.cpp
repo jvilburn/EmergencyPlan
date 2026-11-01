@@ -1,6 +1,8 @@
 #include "CommandRegistry.h"
 #include "AddressCoordinatesCommands.h"
+#include "EmergencyAssetCommands.h"
 #include "FamilyCommands.h"
+#include "TeamCommands.h"
 
 const QList<CommandType>& CommandRegistry::types()
 {
@@ -8,6 +10,12 @@ const QList<CommandType>& CommandRegistry::types()
         {UpdateFamilyCommand::TypeName, &UpdateFamilyCommand::fromJson},
         {SetAddressCoordinatesCommand::TypeName, &SetAddressCoordinatesCommand::fromJson},
         {RevertAddressCoordinatesCommand::TypeName, &RevertAddressCoordinatesCommand::fromJson},
+        {AddTeamCommand::TypeName, &AddTeamCommand::fromJson},
+        {UpdateTeamCommand::TypeName, &UpdateTeamCommand::fromJson},
+        {DeleteTeamCommand::TypeName, &DeleteTeamCommand::fromJson},
+        {AddEmergencyAssetCommand::TypeName, &AddEmergencyAssetCommand::fromJson},
+        {UpdateEmergencyAssetCommand::TypeName, &UpdateEmergencyAssetCommand::fromJson},
+        {DeleteEmergencyAssetCommand::TypeName, &DeleteEmergencyAssetCommand::fromJson},
     };
     return types;
 }

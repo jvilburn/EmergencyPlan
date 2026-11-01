@@ -435,3 +435,35 @@ void FamilyEditPanelTest::lookUpIsDisabledWhileItsRequestIsPending()
     QCOMPARE(cache->askedFor().size(), 1);
     QCOMPARE(QUrlQuery(cache->askedFor().first()).queryItemValue("q", QUrl::FullyDecoded), query);
 }
+
+void FamilyEditPanelTest::typedFamilyNoteIsReturnedTrimmedAndMakesThePanelDirty()
+{
+    Family noted = TestWard::smith();
+    noted.setNote("Gate code is 1234");
+    FamilyEditPanel panel(nullptr);
+    panel.setFamily(noted, TestWard::document());
+    QTextEdit* note = nullptr;
+    for (QTextEdit* edit : panel.findChildren<QTextEdit*>())
+    {
+        if (edit->placeholderText() == "Anything worth noting about this family")
+        {
+            note = edit;
+        }
+    }
+    QVERIFY(note != nullptr);
+    QCOMPARE(note->toPlainText(), QString("Gate code is 1234"));
+    QVERIFY(!panel.isDirty());
+
+    note->setPlainText("  Gate code is 5678\n");
+
+    QCOMPARE(panel.family().note(), QString("Gate code is 5678"));
+    QVERIFY(panel.isDirty());
+    Family expected = noted;
+    expected.setNote("Gate code is 5678");
+    QVERIFY(panel.family() == expected);
+
+    note->setPlainText("Gate code is 1234");
+
+    QVERIFY(panel.family() == noted);
+    QVERIFY(!panel.isDirty());
+}

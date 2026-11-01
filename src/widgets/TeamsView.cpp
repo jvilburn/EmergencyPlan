@@ -507,28 +507,25 @@ void TeamsView::deleteTeam()
     QString message = tr("Delete team \"%1\"?").arg(teamOpt->name());
     if (QMessageBox::question(this, tr("Delete Team"), message) == QMessageBox::Yes)
     {
-        DocumentManager::instance()->executeCommand(
-            std::make_unique<DeleteTeamCommand>(*teamOpt));
+        DocumentManager::instance()->executeCommand(DeleteTeamCommand::fromSeen(*teamOpt, doc));
     }
 }
 
 void TeamsView::showTeamDialog(const std::optional<TeamId>& teamId)
 {
-    QString initialName;
-    QList<PersonId> initialIds;
-
+    // The team as the dialog opens on it: the edit's start condition.
+    std::optional<Team> opened;
     if (teamId)
     {
-        const Document& doc = DocumentManager::instance()->document();
-        std::optional<Team> teamOpt = doc.findTeamById(*teamId);
-        if (!teamOpt)
+        opened = DocumentManager::instance()->document().findTeamById(*teamId);
+        if (!opened)
         {
             return;
         }
-        initialName = teamOpt->name();
-        initialIds = teamOpt->memberIds().values();
     }
 
+    QString initialName = opened ? opened->name() : QString();
+    QList<PersonId> initialIds = opened ? opened->memberIds().values() : QList<PersonId>();
     std::optional<PersonSelectionResult> result = WardListDialog::selectPersons(
         tr("Team"), initialName, initialIds, this);
 
@@ -537,78 +534,65 @@ void TeamsView::showTeamDialog(const std::optional<TeamId>& teamId)
         return;
     }
 
-    QSet<PersonId> newMembers(result->personIds.begin(), result->personIds.end());
-
-    if (teamId)
+    QSet<PersonId> members(result->personIds.begin(), result->personIds.end());
+    const Document& doc = DocumentManager::instance()->document();
+    if (opened)
     {
-        // Edit existing team
-        const Document& doc = DocumentManager::instance()->document();
-        std::optional<Team> teamOpt = doc.findTeamById(*teamId);
-        if (!teamOpt)
-        {
-            return;
-        }
-
-        Team updated = *teamOpt;
-        updated.setName(result->name);
-        updated.setMemberIds(newMembers);
-
-        // Clear leader if they were removed
-        if (updated.leaderId() && !newMembers.contains(*updated.leaderId()))
-        {
-            updated.setLeaderId(std::nullopt);
-        }
-
-        if (updated != *teamOpt)
-        {
-            DocumentManager::instance()->executeCommand(
-                std::make_unique<UpdateTeamCommand>(*teamOpt, updated));
-        }
+        Team saved = *opened;
+        saved.setName(result->name);
+        saved.setMemberIds(members);
+        DocumentManager::instance()->executeCommand(UpdateTeamCommand::fromEdit(*opened, saved, doc));
     }
     else
     {
-        // Create new team
-        Team team = Team::create(result->name, QColor(), std::nullopt);
-        team.setMemberIds(newMembers);
-        DocumentManager::instance()->executeCommand(
-            std::make_unique<AddTeamCommand>(team));
+        Team team = Team::create(result->name);
+        team.setMemberIds(members);
+        DocumentManager::instance()->executeCommand(AddTeamCommand::fromNew(team, doc));
     }
 }
 
 void TeamsView::setLeader(const TeamId& teamId, const PersonId& personId)
 {
     const Document& doc = DocumentManager::instance()->document();
-    std::optional<Team> teamOpt = doc.findTeamById(teamId);
-    if (!teamOpt)
+    std::optional<Team> team = doc.findTeamById(teamId);
+    if (!team)
     {
         return;
     }
 
-    Team updated = *teamOpt;
-    updated.setLeaderId(personId);
-    DocumentManager::instance()->executeCommand(
-        std::make_unique<UpdateTeamCommand>(*teamOpt, updated));
+    Team saved = *team;
+    saved.setLeaderId(personId);
+    DocumentManager::instance()->executeCommand(UpdateTeamCommand::fromEdit(*team, saved, doc));
 }
 
 void TeamsView::clearLeader(const TeamId& teamId)
 {
     const Document& doc = DocumentManager::instance()->document();
-    std::optional<Team> teamOpt = doc.findTeamById(teamId);
-    if (!teamOpt)
+    std::optional<Team> team = doc.findTeamById(teamId);
+    if (!team)
     {
         return;
     }
 
-    Team updated = *teamOpt;
-    updated.setLeaderId(std::nullopt);
-    DocumentManager::instance()->executeCommand(
-        std::make_unique<UpdateTeamCommand>(*teamOpt, updated));
+    Team saved = *team;
+    saved.setLeaderId(std::nullopt);
+    DocumentManager::instance()->executeCommand(UpdateTeamCommand::fromEdit(*team, saved, doc));
 }
 
 void TeamsView::removeMemberFromTeam(const TeamId& teamId, const PersonId& personId)
 {
-    DocumentManager::instance()->executeCommand(
-        std::make_unique<RemoveTeamMemberCommand>(teamId, personId));
+    const Document& doc = DocumentManager::instance()->document();
+    std::optional<Team> team = doc.findTeamById(teamId);
+    if (!team)
+    {
+        return;
+    }
+
+    Team saved = *team;
+    QSet<PersonId> members = team->memberIds();
+    members.remove(personId);
+    saved.setMemberIds(members);
+    DocumentManager::instance()->executeCommand(UpdateTeamCommand::fromEdit(*team, saved, doc));
 }
 
 void TeamsView::assignTaskFromContextMenu()

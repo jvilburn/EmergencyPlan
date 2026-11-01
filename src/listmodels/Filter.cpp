@@ -3,7 +3,6 @@
 #include "EmergencyAsset.h"
 #include "Family.h"
 #include "Person.h"
-#include "Tag.h"
 #include "Team.h"
 
 Filter::Filter(QObject* parent)
@@ -16,15 +15,6 @@ void Filter::setSearchText(const QString& text)
     if (m_searchText != text)
     {
         m_searchText = text;
-        emit changed();
-    }
-}
-
-void Filter::setTagIds(const QSet<TagId>& ids)
-{
-    if (m_tagIds != ids)
-    {
-        m_tagIds = ids;
         emit changed();
     }
 }
@@ -149,7 +139,6 @@ void Filter::clear()
     bool wasEmpty = isEmpty();
 
     m_searchText.clear();
-    m_tagIds.clear();
     m_teamIds.clear();
     m_assetTypeIds.clear();
     m_callings.clear();
@@ -171,7 +160,6 @@ void Filter::clear()
 bool Filter::isEmpty() const
 {
     return m_searchText.isEmpty()
-        && m_tagIds.isEmpty()
         && m_teamIds.isEmpty()
         && m_assetTypeIds.isEmpty()
         && m_callings.isEmpty()
@@ -273,7 +261,8 @@ bool Filter::personContainsWord(const Person& person, const QString& word)
     return person.displayName().toLower().contains(word)
         || person.phone().toLower().contains(word)
         || person.altPhone().toLower().contains(word)
-        || person.email().toLower().contains(word);
+        || person.email().toLower().contains(word)
+        || person.note().toLower().contains(word);
 }
 
 bool Filter::familyContainsWord(const Family& family, const QString& word)
@@ -281,33 +270,8 @@ bool Filter::familyContainsWord(const Family& family, const QString& word)
     return family.displayName().toLower().contains(word)
         || family.address().full().toLower().contains(word)
         || family.displayPhone().toLower().contains(word)
-        || family.displayEmail().toLower().contains(word);
-}
-
-bool Filter::hasFamilyLevelTag(const Document& document, const FamilyId& familyId) const
-{
-    for (const TagId& tagId : m_tagIds)
-    {
-        std::optional<Tag> tagOpt = document.findTagById(tagId);
-        if (tagOpt && tagOpt->isFamilyLevel() && tagOpt->hasFamily(familyId))
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
-bool Filter::hasPersonLevelTag(const Document& document, const PersonId& personId) const
-{
-    for (const TagId& tagId : m_tagIds)
-    {
-        std::optional<Tag> tagOpt = document.findTagById(tagId);
-        if (tagOpt && !tagOpt->isFamilyLevel() && tagOpt->hasPerson(personId))
-        {
-            return true;
-        }
-    }
-    return false;
+        || family.displayEmail().toLower().contains(word)
+        || family.note().toLower().contains(word);
 }
 
 bool Filter::isOnTeam(const Document& document, const PersonId& personId) const
@@ -392,8 +356,7 @@ bool Filter::passes(const Document& document, const Family& family) const
         }
     }
 
-    // Pre-compute family-level tag/asset matches
-    bool tagsOk = m_tagIds.isEmpty() || hasFamilyLevelTag(document, family.id());
+    // Pre-compute family-level asset matches
     bool assetsOk = m_responseAreas.isEmpty() && m_assetTypeIds.isEmpty();
     bool teamsOk = m_teamIds.isEmpty();
     bool personCriteriaOk = m_callings.isEmpty()
@@ -413,12 +376,6 @@ bool Filter::passes(const Document& document, const Family& family) const
             {
                 famMatchedWordIndices.insert(i);
             }
-        }
-
-        // Tags: person-level
-        if (!tagsOk && hasPersonLevelTag(document, member.id()))
-        {
-            tagsOk = true;
         }
 
         // Assets: response areas
@@ -441,7 +398,7 @@ bool Filter::passes(const Document& document, const Family& family) const
 
         // Early exit if all satisfied
         bool allWordsFound = (famMatchedWordIndices.size() == searchWords.size());
-        if (allWordsFound && tagsOk && assetsOk && teamsOk && personCriteriaOk)
+        if (allWordsFound && assetsOk && teamsOk && personCriteriaOk)
         {
             return true;
         }
@@ -450,7 +407,7 @@ bool Filter::passes(const Document& document, const Family& family) const
     // Final check
     bool allWordsFound = searchWords.isEmpty()
         || (famMatchedWordIndices.size() == searchWords.size());
-    return allWordsFound && tagsOk && assetsOk && teamsOk && personCriteriaOk;
+    return allWordsFound && assetsOk && teamsOk && personCriteriaOk;
 }
 
 bool Filter::passes(const Document& document, const Person& person) const
@@ -504,20 +461,6 @@ bool Filter::passes(const Document& document, const Person& person) const
             {
                 return false;
             }
-        }
-    }
-
-    // Tags: person-level OR family-level
-    if (!m_tagIds.isEmpty())
-    {
-        bool found = hasPersonLevelTag(document, person.id());
-        if (!found && familyId)
-        {
-            found = hasFamilyLevelTag(document, *familyId);
-        }
-        if (!found)
-        {
-            return false;
         }
     }
 

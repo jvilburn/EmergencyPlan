@@ -218,6 +218,11 @@ QJsonObject Family::toJson() const
         json["members"] = membersArray;
     }
 
+    if (!m_note.isEmpty())
+    {
+        json["note"] = m_note;
+    }
+
     return json;
 }
 
@@ -244,6 +249,8 @@ Family Family::fromJson(const QJsonObject& json)
         }
     }
 
+    family.m_note = json["note"].toString();  // empty if missing
+
     return family;
 }
 
@@ -251,5 +258,6 @@ bool Family::operator==(const Family& other) const
 {
     return m_id == other.m_id
         && m_address == other.m_address
-        && m_members == other.m_members;
+        && m_members == other.m_members
+        && m_note == other.m_note;
 }

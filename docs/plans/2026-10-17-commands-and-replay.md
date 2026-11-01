@@ -525,8 +525,7 @@ private:
 };
 ```
 
-`IdSetChange` is the shape every set field uses (team members, asset people, tag people and
-families); its first command is `UpdateTeamCommand` in task 4, and `FieldChangeTest` covers it here.
+`IdSetChange` is the shape every set field uses (team members, asset people); its first command is `UpdateTeamCommand` in task 4, and `FieldChangeTest` covers it here.
 
 ### `src/commands/FieldChangeJson.h`
 
@@ -4156,81 +4155,100 @@ answering when the test says, and `FakeUnitLookup` likewise):
 
 ---
 
-## Task 4: Teams, emergency assets and tags take the update shape
+## Task 4: Teams and emergency assets take the update shape, and notes replace tags
 
 *The journal* (every update command takes this shape; *References stay whole*, first and
 third bullets).
 
 **Files:**
-- Create: `src/commands/TeamCommands.h/.cpp`, `src/commands/EmergencyAssetCommands.h/.cpp`,
-  `src/commands/TagCommands.h/.cpp`
-- Modify: `src/commands/FieldChangeJson.h/.cpp`, `src/commands/CommandRegistry.cpp`, `CMakeLists.txt`
-- Modify: `src/models/Document.h/.cpp`, `src/models/Team.h/.cpp`, `src/models/Tag.h/.cpp`,
-  `src/models/EmergencyAsset.h/.cpp`, `src/models/DocumentChange.h/.cpp`
-- Modify: `src/listmodels/TeamsTreeModel.cpp`, `src/listmodels/EmergencyAssetModel.cpp`
-- Modify: `src/widgets/TeamsView.h/.cpp`, `src/widgets/EmergencyAssetView.h/.cpp`
+- Create: `src/commands/TeamCommands.h/.cpp`, `src/commands/EmergencyAssetCommands.h/.cpp`
+- Modify: `src/commands/Command.h/.cpp`, `src/commands/FieldChangeJson.h/.cpp`,
+  `src/commands/FamilyChange.h/.cpp`, `src/commands/CommandRegistry.cpp`, `CMakeLists.txt`
+- Modify: `src/models/Document.h/.cpp`, `src/models/Team.h/.cpp`, `src/models/EmergencyAsset.cpp`,
+  `src/models/Person.h/.cpp`, `src/models/Family.h/.cpp`, `src/models/DocumentChange.h/.cpp`,
+  `src/models/Id.h`
+- Delete: `src/models/Tag.h/.cpp`, `src/listmodels/TagListModel.h/.cpp`
+- Modify: `src/listmodels/Filter.h/.cpp`, `src/listmodels/TeamsTreeModel.cpp`,
+  `src/listmodels/EmergencyAssetModel.cpp`, `src/widgets/shared/FilterBar.h/.cpp`
+- Modify: `src/widgets/TeamsView.cpp`, `src/widgets/EmergencyAssetView.cpp`,
+  `src/widgets/MemberEditor.h/.cpp`, `src/widgets/FamilyEditPanel.h/.cpp`
+- Modify: `src/services/WardDirectoryImportService.h/.cpp`
 - Modify: `tests/CMakeLists.txt`, `tests/main.cpp`, `tests/services/TestWard.h/.cpp`,
-  `tests/services/CommandSamples.cpp`
-- Create: `tests/services/TeamCommandsTest.h/.cpp`, `tests/services/AssetAndTagCommandsTest.h/.cpp`
+  `tests/services/CommandSamples.cpp`, `tests/services/UpdateFamilyCommandTest.cpp`,
+  `tests/services/MemberEditorTest.h/.cpp`, `tests/services/FamilyEditPanelTest.h/.cpp`
+- Create: `tests/services/TeamCommandsTest.h/.cpp`, `tests/services/EmergencyAssetCommandsTest.h/.cpp`,
+  `tests/services/FilterTest.h/.cpp`
 
-**JSON.** `FieldChangeJson.h` gains `toJsonValue` / `fromJsonValue` for `QColor`
-(`name(QColor::HexArgb)`), `std::optional<PersonId>`, `ResponseArea` (through
-`responseAreaToString` / `responseAreaFromString`) and `TagLevel`, and
-`template<typename Id> QJsonObject setChangeToJson(const IdSetChange<Id>&)` /
-`setChangeFromJson<Id>(const QJsonObject&)` writing `added` and `removed` as string arrays.
+**Notes.** A person and a family each hold a free-text note (`Person::note`, `Family::note`,
+written as `note` when not empty), which is how people are grouped and found: the filter's
+text search matches both notes, and a person also passes on their family's note. Tags go
+entirely: the model, `TagId`, the document's `tags` collection, `TagListModel`, and the filter
+bar's tag menu and chips.
+- The member note is one more field in `MemberChange::forEachField` (`"%1, note: %2"`); the
+  family note is a field change in `FamilyChange` beside the address (`note: %1`).
+- The member editor and the family edit panel each have a Notes box; the text typed is saved
+  trimmed.
+- The directory import keeps what the directory does not print: the family's note, and each
+  matched member's note and special-need note.
 
-**Model.** The commands apply their changes through `Document::addTeam`, `updateTeam`,
-`removeTeam`, `addTag`, `updateTag`, `removeTag`, `updateEmergencyAsset` and
-`removeEmergencyAsset` (with the existing `addEmergencyAsset`), and through the setters each
-command's fields need on `Team`, `Tag` and `EmergencyAsset`; `Tag::create(name, level, color)`
-builds a new tag. This task adds each of them.
+**JSON.** `FieldChangeJson.h` gains `toJsonValue` / `fromJsonValue` for `std::optional<PersonId>`
+(a string, or null), and `peopleChangeToJson` / `peopleChangeFromJson`, which write an
+`IdSetChange<PersonId>` as `added` and `removed` sorted string arrays. `Team::toJson` and
+`EmergencyAsset::toJson` write their ids sorted, so a command's entry reads back to the same
+JSON.
+
+**Model.** `Document` gains `addTeam`, `updateTeam`, `removeTeam`, `updateEmergencyAsset` and
+`removeEmergencyAsset`. `Team::create(name)` builds a team with no members. `Team::setMemberIds`
+clears a leader who is not among the new members, so a team's leader is one of its members.
 
 **Document changes.** Team commands report `DocumentChange::team().updated(id)`, which
 `TeamsTreeModel` rebuilds on; asset commands report `DocumentChange::emergencyAsset().updated(id)`,
 which `EmergencyAssetModel` and `Document::rebuildDecorationCaches` rebuild on. `DocumentChange`
-gains `teamId` and `assetId` with those two builders. Tag commands report `DocumentChange::full()`,
-since no view refreshes by tag.
+gains `teamId` and `assetId` with those two builders.
 
-**Teams.**
-- `AddTeamCommand(team)`: result holds when the id is present; start condition includes that
-  every member and the leader exist. Inverse `DeleteTeamCommand`.
-- `UpdateTeamCommand(teamId, std::optional<FieldChange<QString>> name, std::optional<FieldChange<QColor>> color, std::optional<FieldChange<std::optional<PersonId>>> leader, IdSetChange<PersonId> members, CommandDescription)`
-  with `static fromEdit(const Team& opened, const Team& saved)`. Execute conflicts when the team
-  is gone or a field moved; applies the set change; then requires the leader after, when set, to
-  be on the team; requires every added id to exist as a person; and for every removed id that was
-  not the leader at construction (no leader change whose before is that id), requires that it is
-  not the leader now.
-- `fromEdit` worked out at construction: removing the member who is leader also clears the leader,
-  holding the leader's before value.
-- `DeleteTeamCommand(team as last seen)`: conflicts when the team differs, result holds when it
-  is gone; inverse `AddTeamCommand`.
-- `TeamsView::removeMemberFromTeam` commits `UpdateTeamCommand::fromEdit` with that member
-  removed.
-- `TeamsView::showTeamDialog` captures the team when the dialog opens; `setLeader`, `clearLeader`
-  and `removeMemberFromTeam` use the team captured when the context menu or button chose it
-  (`m_contextTeam`), so a version landing under the menu's event loop makes the confirm conflict.
+**People in commands.** `Command.h` gains `describePeopleChange(change, document)`, a
+description line per person added and then per person removed (`added: Smith, Dan`), in name
+order, and `everyPersonExists(ids, document)`, the start condition every addition of a person
+takes.
 
-**Emergency assets.** `AddEmergencyAssetCommand`, `UpdateEmergencyAssetCommand` (name, response
-area, people as a `IdSetChange<PersonId>`, added people must exist), `DeleteEmergencyAssetCommand`
-as last seen. `EmergencyAssetView::removePersonFromAsset` commits
-`UpdateEmergencyAssetCommand::fromEdit` with that person removed. `showAssetDialog` captures the
-asset at open.
+**Teams** hold what the UI changes: name, leader and members.
+- `AddTeamCommand::fromNew(team, document)`: result holds when the id is present; start
+  condition includes that every member exists. Inverse `DeleteTeamCommand`.
+- `UpdateTeamCommand::fromEdit(opened, saved, document)` holds a name and a leader
+  `FieldChange` and the members as an `IdSetChange<PersonId>`. Execute conflicts when the team
+  is gone, a field moved, or an added person is missing; works out the members and leader the
+  changes leave; and conflicts when that leader is not one of those members. That one rule
+  makes a leader change to someone off the team conflict, and a member removal replayed after
+  someone made that person leader. Removing the leader passes, because `setMemberIds` clears
+  the leader in the saved team, so the edit carries the leader's change too.
+- `DeleteTeamCommand::fromSeen(team, document)`: conflicts when the team differs, result holds
+  when it is gone; inverse `AddTeamCommand`.
+- `TeamsView::showTeamDialog` captures the team when the dialog opens. Set leader, clear leader
+  and remove member read the team when the action runs and commit `UpdateTeamCommand::fromEdit`
+  with the change.
 
-**Tags.** `AddTagCommand`, `UpdateTagCommand` (name, color, level, people and families as set
-changes, added ids must exist), `DeleteTagCommand` as last seen.
+**Emergency assets** hold what the UI changes: name and people. `AddEmergencyAssetCommand::fromNew`,
+`UpdateEmergencyAssetCommand::fromEdit` (name, people as an `IdSetChange<PersonId>`, added
+people must exist), `DeleteEmergencyAssetCommand::fromSeen` as last seen. `showAssetDialog`
+captures the asset at open; `removePersonFromAsset` commits `UpdateEmergencyAssetCommand::fromEdit`
+with that person removed.
 
 **Tests:**
-- `twoUsersAddingDifferentMembersToOneTeamBothLand`
-- `memberRemovalReplayedAfterTheyBecameLeaderConflictsAndLeavesThemMemberAndLeader`
-- `removingTheLeaderClearsTheLeaderAndUndoRestoresBoth`
-- `leaderChangeNeedsTheNewLeaderOnTheTeam`
-- `additionOfAPersonReplayedAfterTheyWereRemovedConflicts` (removal through `UpdateFamilyCommand`;
-  afterwards no team holds an id the document lacks)
-- `teamDeletionReplayedAfterSomeoneAddedAMemberConflictsAndLeavesTheTeam`
-- `assetEditsAddingDifferentPeopleBothLand`; `tagRemovalOfAnAbsentPersonIsDone`
+- `TeamCommandsTest`: `twoUsersAddingDifferentMembersToOneTeamBothLand`,
+  `memberRemovalReplayedAfterTheyBecameLeaderConflictsAndLeavesThemMemberAndLeader`,
+  `removingTheLeaderClearsTheLeaderAndUndoRestoresBoth`, `leaderChangeNeedsTheNewLeaderOnTheTeam`,
+  `additionOfAPersonReplayedAfterTheyWereRemovedConflicts` (removal through
+  `UpdateFamilyCommand`; afterwards no team holds an id the document lacks),
+  `teamDeletionReplayedAfterSomeoneAddedAMemberConflictsAndLeavesTheTeam`
+- `EmergencyAssetCommandsTest`: `assetEditsAddingDifferentPeopleBothLand`,
+  `removalOfAPersonAlreadyRemovedIsDone`
+- `FilterTest`: `searchMatchesAPersonsNote`, `searchMatchesAFamilysNote`
+- the member and family notes in `UpdateFamilyCommandTest`'s every-field tests;
+  `MemberEditorTest::typedNoteIsReturnedTrimmed`;
+  `FamilyEditPanelTest::typedFamilyNoteIsReturnedTrimmedAndMakesThePanelDirty`
 - Samples for every new type.
 
-**Commit:** `git commit -m "Teams, assets and tags hold their changed fields and set changes only"`
+**Commit:** `git commit -m "Teams and assets hold their changed fields and set changes only, and notes replace tags"`
 
 ---
 
@@ -4369,7 +4387,7 @@ table, and a missing response making every command but `EndEmergency` conflict:
 - Create: `src/commands/ReferenceCleanup.h`, `src/commands/ReferenceCleanup.cpp`
 - Modify: `src/commands/FamilyChange.h/.cpp`, `src/commands/FamilyCommands.h/.cpp`,
   `src/commands/TeamCommands.h/.cpp`, `src/commands/CommandRegistry.cpp`
-- Modify: `src/models/Document.h/.cpp`, `src/models/Team.h`, `src/models/Tag.h`,
+- Modify: `src/models/Document.h/.cpp`, `src/models/Team.h`,
   `src/models/EmergencyAsset.h`, `src/models/MinisteringGroup.h`, `src/models/MinisteringDistrict.h`
   (the `Document` updates for groups and districts, and the setters on each, that
   `ReferenceCleanup::apply` and `restore` call)
@@ -4378,10 +4396,9 @@ table, and a missing response making every command but `EndEmergency` conflict:
 - Create: `tests/services/ReferenceCleanupTest.h/.cpp`
 
 **`ReferenceCleanup`** holds, for a set of removed people and families, every place that holds
-them, as seen at construction: team memberships and leaders, person-level tags, assets, ministering
-groups (ministers, ministered people, presidency) and districts (presidency), and task assignments
-(response, family, task, and the assignment before); for families, family-level tags and groups'
-families. API:
+them, as seen at construction: team memberships and leaders, assets, ministering groups
+(ministers, ministered people, presidency) and districts (presidency), and task assignments
+(response, family, task, and the assignment before); for families, groups' families. API:
 - `static ReferenceCleanup of(const Document& document, const QSet<PersonId>& people, const QSet<FamilyId>& families)`
 - `static ReferenceCleanup ofTeam(const Document& document, const TeamId& team)` (task assignments
   to that team)
@@ -4405,8 +4422,8 @@ several collections.
   its inverse assigns them again.
 
 **Tests:**
-- `deletingAFamilyRemovesItAndItsPeopleFromEveryPlaceAndUndoRestoresEach` (family-level tag,
-  group families; its people in teams, person-level tags, assets, ministering, task assignments)
+- `deletingAFamilyRemovesItAndItsPeopleFromEveryPlaceAndUndoRestoresEach` (group families; its
+  people in teams, assets, ministering, task assignments)
 - `removingAMemberThroughTheEditPanelCleansUpThatPerson`
 - `deletingATeamUnassignsItsTasksAndUndoAssignsThemAgain`
 - `removalReplayedAfterThePersonJoinedAnotherTeamConflicts` and
@@ -4480,7 +4497,7 @@ source.
 **Tests:**
 - `importReplayedAfterSomeoneAddedAFamilyKeepsThatFamily` (asserted by id)
 - `importReplayedAfterAnEditToAFamilyItChangesConflicts`
-- `undoingADirectoryImportRestoresTheRemovedPeoplesMemberships` (team, tag, asset, ministering)
+- `undoingADirectoryImportRestoresTheRemovedPeoplesMemberships` (team, asset, ministering)
 - `reimportingTheSameDirectoryKeepsNotesAndCoordinatesAndHoldsNoChange`
 - `olderMinisteringPdfAddsNoUnknownFamilyOrMemberAndNoGroupNamesAMissingId`
 - `ministeringImportReplayedAfterACleanupChangedAGroupConflicts` (the group keeps the cleanup's

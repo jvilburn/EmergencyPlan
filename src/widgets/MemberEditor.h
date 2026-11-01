@@ -7,6 +7,7 @@ class QLineEdit;
 class QCheckBox;
 class QComboBox;
 class QSpinBox;
+class QTextEdit;
 class CallingsEditor;
 
 /// Widget for editing the fields of a Person that the form shows.
@@ -55,4 +56,7 @@ private:
 
     // Callings
     CallingsEditor* m_callingsEditor;
+
+    // Note
+    QTextEdit* m_noteEdit;
 };

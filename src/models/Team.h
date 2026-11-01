@@ -14,10 +14,8 @@ class Team
 public:
     Team() = default;
 
-    // Factory method for creating new teams
-    static Team create(const QString& name,
-                       const QColor& color,
-                       std::optional<PersonId> leaderId);
+    /// A new team with a fresh id, that name, and no members or leader.
+    static Team create(const QString& name);
 
     // Getters
     const TeamId& id() const { return m_id; }
@@ -29,7 +27,10 @@ public:
     // Setters
     void setName(const QString& name) { m_name = name; }
     void setLeaderId(std::optional<PersonId> leaderId) { m_leaderId = leaderId; }
-    void setMemberIds(const QSet<PersonId>& memberIds) { m_memberIds = memberIds; }
+
+    /// Sets the members, and clears the leader when the leader is not among them: a team's
+    /// leader is one of its members.
+    void setMemberIds(const QSet<PersonId>& memberIds);
 
     // Computed properties
     bool hasLeader() const { return m_leaderId.has_value(); }
