@@ -111,8 +111,8 @@ design's answer, not a gap:
   from or given to the server, which the server now answers `404` for - deleted and since
   pruned, pruned while in use, or lost - is a removal (see *Everything else, from the
   document*). A ward not yet on the server makes its first push as usual.
-- **Tags stay**: add, update and delete are converted with the rest, though nothing calls
-  them yet.
+- **Notes group people and families**: each person and each family holds a free-text note,
+  which the text search matches.
 - **No bandwidth estimate**; whole-blob-per-edit holds during an emergency too.
 - **No guards against a future developer's mistake**, such as a command type left out of
   the registry.
@@ -447,7 +447,7 @@ inflates the rest.
 }
 ```
 
-`ward` is the ward's content: families, teams, tags, emergency assets, ministering,
+`ward` is the ward's content: families, teams, emergency assets, ministering,
 emergencies in progress, the PDF dates, the ward and stake records, and the table of
 address coordinates. `access` is the
 access list (see *What the document carries*). `landed` maps each device's fingerprint to
@@ -818,8 +818,8 @@ dialog's `exec()` is such an edit.
 **A start condition covers exactly what the command changes.** An update command is built
 from the difference between what the edit opened with and what it saved, and holds the
 before and after of the changed fields only. The fields are typed per command:
-`UpdateFamilyCommand` holds an optional address change and a change per member keyed by
-`PersonId`. Each field it holds is judged on its own: one
+`UpdateFamilyCommand` holds an optional address change, an optional note change and a
+change per member keyed by `PersonId`. Each field it holds is judged on its own: one
 still at its before value is set, one already at its after value is left, and one at
 anything else makes the whole command a conflict that touches nothing. A command whose
 fields are all already at their after values is the result-already-holds case. Two users
@@ -827,7 +827,7 @@ editing different members of one family both apply, and a family edit never meet
 geocode, which writes the table of address coordinates instead (see *Saving*).
 
 The same holds one level down. A member change is per field - name, gender, phones, email,
-birthday, callings, parent flag, units, special-need note - each judged on its own. A
+birthday, callings, parent flag, units, special-need note, note - each judged on its own. A
 member added carries the whole new `Person`, and its result holds if that `PersonId` is
 already there; a member removed carries the person as last seen, and every field of that
 is its start condition, so an edit to that member since makes the removal conflict, and
@@ -836,19 +836,19 @@ looking at the old phone, and being told someone changed that person first costs
 Its result holds if they are already gone. **Every removal of content takes this shape**
 (an access-list removal takes a user whatever they hold by then; see *Who has access,
 changed by two users*): a member, a
-family (by a delete or an import), a team, a tag, an asset, a task and a contact attempt
+family (by a delete or an import), a team, an asset, a task and a contact attempt
 are each held as last seen, which is the removal's start condition, so a change to the
 thing since makes the removal conflict, it being gone already means the result holds, and
 the undo re-adds exactly what was removed. Members are matched by `PersonId`, and their order is not part of
 any start condition.
 
 Every update command takes this shape, not only the family's. Single values - a name, a
-leader, a response area - are per field. Sets - a team's members, an asset's people, a
-tag's people and families - are held as the ids added and the ids removed: an addition is
+leader - are per field. Sets - a team's members, an asset's people - are held as the ids
+added and the ids removed: an addition is
 done if the id is present, a removal if it is absent, so two users adding different
 members to one team both apply.
 
-**References stay whole.** Teams, tags, assets, ministering groups and districts, and task
+**References stay whole.** Teams, assets, ministering groups and districts, and task
 assignments refer to people, families and teams by id, and replay keeps every such id
 pointing at something that exists:
 
@@ -859,20 +859,19 @@ pointing at something that exists:
   the ids they were made with, and take no such condition (see below).
 - **A removal carries its cleanup and where it saw the removed thing.** Removing a member,
   deleting a family, and an import's removals all use one cleanup routine. It takes each
-  removed person out of every team, person-level tag, asset and ministering group that
+  removed person out of every team, asset and ministering group that
   holds them, clears any leader or presidency role they held, and unassigns every task
-  assigned to them; a removed family it also takes out of every family-level tag and
-  ministering group that holds it. Deleting a team unassigns every task assigned to that
+  assigned to them; a removed family it also takes out of every ministering group that
+  holds it. Deleting a team unassigns every task assigned to that
   team the same way. The command holds that list of places as the user saw it, and its
   start condition includes it: if what it removes has been added or assigned somewhere
   since, the removal conflicts rather than leave that reference behind.
-- **A leader is a member.** A leader change's start condition includes that the new leader
-  is on the team. Removing an id from a team's members also clears the leader when the
-  leader is that id, holding the leader's before value, worked out at construction; and a
-  removal of someone who was not the leader when the command was built includes in its
-  start condition that they still are not. So a removal replayed after someone made that
-  person leader conflicts and is handed back, as two users disagreeing about their place
-  on the team.
+- **A leader is a member.** A team edit conflicts when the team it would leave has a leader
+  who is not one of its members. So a leader change to someone off the team conflicts, and
+  so does a removal replayed after someone made that person leader, which is handed back as
+  two users disagreeing about their place on the team. Removing the leader from the members
+  also clears the leader, holding the leader's before value, worked out at construction, so
+  that edit applies.
 
 A removal therefore conflicts with a concurrent membership change or task assignment for
 the same person, which is two users disagreeing about that person and is handed back as
@@ -908,7 +907,7 @@ a fault, retried, and never overwrites the file.
 
 **Every write is a command, and making it so is the core of this work**, because a write
 that is not a command cannot replay. That covers the directory's edits and imports,
-ministering, tags, the emergency response and the access list. In particular:
+ministering, the emergency response and the access list. In particular:
 
 - **Deleting a family** is a command, carrying the same cleanup as an import's removal,
   worked out at construction.
@@ -1192,8 +1191,8 @@ that actually differ. The import service builds merged families, and the command
 them with the existing ones field by field, holding only what differs. How the imports
 match families and members, and which fields a ministering import fills, is settled during
 implementation (see *Settled*).
-**An import never changes a person's special-need note**, which is the app's own and which
-no PDF carries.
+**An import never changes a note or a person's special-need note**, which are the app's own
+and which no PDF carries.
 
 Both imports work all of this out at construction. An import then conflicts only with an edit to something it also changes. A
 family someone else added in the meantime is not among the ones it removes, so it survives.
@@ -1861,17 +1860,17 @@ The journal and replay, in `tests/services`:
 - an import replayed onto a version where someone else added a family applies, and that
   family is still there afterwards, asserted by its id; an import replayed onto a version
   where someone else edited a family the import changes is a conflict
-- undoing a directory import that removed a family restores its people's team, tag, asset
-  and ministering memberships
-- re-importing the same directory keeps every special-need note and every family on the
-  map, and holds no change for families the PDF leaves as they were
+- undoing a directory import that removed a family restores its people's team, asset and
+  ministering memberships
+- re-importing the same directory keeps every note, every special-need note and every
+  family on the map, and holds no change for families the PDF leaves as they were
 - a ministering import from a PDF older than the directory, naming one family and one member
   of a matched family that the directory does not list, applies on its first run, adds
   neither, and leaves no group or district holding an id the document lacks
 - a ministering import replayed after a member removal's cleanup changed a group conflicts,
   and the group keeps the cleanup's result
-- deleting a family in a family-level tag and a ministering group's families, whose people
-  are in teams, person-level tags, assets, ministering and task assignments, removes the
+- deleting a family in a ministering group's families, whose people are in teams, assets,
+  ministering and task assignments, removes the
   family and its people from every one of them, and undoing the delete restores each;
   removing one member through the edit panel does the same for that person
 - deleting a team unassigns the tasks assigned to it, and undoing the delete assigns them
