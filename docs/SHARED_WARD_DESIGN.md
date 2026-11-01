@@ -931,12 +931,12 @@ ministering, the emergency response and the access list. In particular:
   whatever its latest outcome.
 - **The response lives only in the document.** The emergency being shown is read from the
   document by its id, and every change to it goes through a command. Starting an emergency
-  is one command that adds the response with a record for every family, keeping names and
-  addresses as they stood at the start. A family added after the start has no record and
-  reads as Not Contacted, and a command that writes to a family's record creates it when
-  missing, from the name and address snapshot the command took at construction, so it
-  depends on nothing but the response id. Two responders touching a new family both land,
-  since each change is an addition. Statistics - the progress bar and the report - count
+  is one command that adds the response, holding no family records. A family's record is
+  made by the first command that writes to it, from the name and address snapshot that
+  command took at construction, so the command depends on nothing but the response id, and
+  a family with no record reads as Not Contacted. Two responders who each make the first
+  change to a family both land in one record, since each command makes the record only when
+  it is missing. Statistics - the progress bar and the report - count
   the response's records plus every directory family without a record as Not Contacted,
   by one rule, so the two agree when the emergency ends. The report tallies an attempt with
   no method as a status mark, on its own line.
@@ -944,7 +944,7 @@ ministering, the emergency response and the access list. In particular:
 
   | Command | Covers | On replay |
   |---|---|---|
-  | `StartEmergency` | start, with a record per family | an addition; never conflicts |
+  | `StartEmergency` | start | an addition; never conflicts |
   | `EndEmergency` | end, removing the response once its report is saved | conflicts if the response differs from what the report holds; result holds if already gone |
   | `RestoreEmergency` | the inverse of `EndEmergency`, adding the response back as it was removed | result holds if a response with that id is present |
   | `RecordContactAttempt` | logging a contact, and the OK and Unable to Reach buttons | an addition |
@@ -1691,12 +1691,11 @@ with itself.
   registers a sample instance with a document for each outcome the type can give: one where
   its start condition holds, and, where the type has them, one where its result already
   holds and one where it conflicts. The round-trip test iterates the registry.
-- **Every outside dependency has a fake in `WardSession`**: the server, the geocoder, the
-  ward and stake lookup, the clock that stamps attempts and resolutions, and the local file
-  store, which a test can make fail to save. A test sets
-  each, so nothing reaches the network and timestamp ordering is decided by the test. Every
-  timestamp the app writes comes from that clock: a command reads it at construction, and
-  the report's end time comes from it too.
+- **The network services and the local file store each have a fake in `WardSession`**: the
+  server, the geocoder, the ward and stake lookup, and the local file store, which a test can
+  make fail to save. A test sets each, so nothing reaches the network. A command reads the
+  time from the system clock at construction; a test decides timestamp ordering by building
+  the attempts, tasks and responses it commits with the times it chooses.
 
 Format and crypto, in `tests/services`:
 
