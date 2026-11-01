@@ -855,8 +855,8 @@ pointing at something that exists:
 - **Any value a command writes that names a person, family or team includes in its start
   condition that the id exists**, whether a set addition, a leader or an assignee. Adding
   Bob to a team, or assigning him a task, replayed after Bob was removed, conflicts. A
-  response's family records and contact attempts are the exception: they are its log, keep
-  the ids they were made with, and take no such condition (see below).
+  response's contact attempts and the family a task is for are the exception: they are its
+  log, keep the ids they were made with, and take no such condition (see below).
 - **A removal carries its cleanup and where it saw the removed thing.** Removing a member,
   deleting a family, and an import's removals all use one cleanup routine. It takes each
   removed person out of every team, asset and ministering group that
@@ -877,11 +877,11 @@ A removal therefore conflicts with a concurrent membership change or task assign
 the same person, which is two users disagreeing about that person and is handed back as
 such.
 
-A response's family records and contact attempts are the log of what happened during it,
-and keep the ids they were made with. A record holds its family's name and address as they
-stood when the record was made, so it reads the same after the family is removed; an
-attempt whose `who` has been removed since shows no name there. The log leaves the document
-when the emergency ends, as its summary report (see *The record of an emergency*).
+A response's contact attempts and tasks are the log of what happened during it, and keep
+the ids they were made with. The report names families, people and teams from the
+directory when it is written, and one the document no longer holds reads *(removed)*. The
+log leaves the document when the emergency ends, as its summary report (see *The record of
+an emergency*).
 
 Online the journal is almost always empty: a command enters it and leaves it as the push
 succeeds. Offline it grows, and it survives closing the app, which is what makes a week of
@@ -916,7 +916,7 @@ ministering, the emergency response and the access list. In particular:
   between them. Ending saves the summary report and then removes the response (see
   *The record of an emergency*).
 - **A family's contact status is the outcome of an attempt.** A contact attempt may carry
-  an outcome, OK or Unable to Reach; the two buttons each record an attempt carrying theirs,
+  an outcome, OK or Unable to Reach; the two buttons each add an attempt carrying theirs,
   and a family's status is the outcome of its latest attempt that has one, or Not Contacted
   when none does. Latest means the greatest timestamp, ties broken by the attempt's id. A
   command inserts an attempt at its place in that order, most recent first, as
@@ -925,20 +925,18 @@ ministering, the emergency response and the access list. In particular:
   replay lands them in, the same attempts always make an equal list, and a family's status
   is its first attempt that has an outcome. Timestamps come from each device's clock, so a
   wrong clock can show an older outcome as current; every attempt stays in the history, and
-  this is accepted. An attempt's method and who are optional: a button press records only
+  this is accepted. An attempt's method and who are optional: a button press gives only
   its outcome and time, shown as *Marked OK* or *Marked Unable to Reach*, while the contact
   dialog fills in both. Needs Help still comes first while a family has unresolved tasks,
   whatever its latest outcome.
 - **The response lives only in the document.** The emergency being shown is read from the
   document by its id, and every change to it goes through a command. Starting an emergency
-  is one command that adds the response, holding no family records. A family's record is
-  made by the first command that writes to it, from the name and address snapshot that
-  command took at construction, so the command depends on nothing but the response id, and
-  a family with no record reads as Not Contacted. Two responders who each make the first
-  change to a family both land in one record, since each command makes the record only when
-  it is missing. Statistics - the progress bar and the report - count
-  the response's records plus every directory family without a record as Not Contacted,
-  by one rule, so the two agree when the emergency ends. The report tallies an attempt with
+  is one command that adds the response. The response holds its contact attempts and its
+  tasks, each carrying the id of the family it is about, so a command depends on nothing but
+  the response id, and a family with no attempt or task reads as Not Contacted. Statistics -
+  the progress bar and the report - count every directory family, and every family no
+  longer in the directory that an attempt or task names, by one rule, so the two agree when
+  the emergency ends. The report tallies an attempt with
   no method as a status mark, on its own line.
 - **The emergency response's changes are these commands:**
 
@@ -947,8 +945,8 @@ ministering, the emergency response and the access list. In particular:
   | `StartEmergency` | start | an addition; never conflicts |
   | `EndEmergency` | end, removing the response once its report is saved | conflicts if the response differs from what the report holds; result holds if already gone |
   | `RestoreEmergency` | the inverse of `EndEmergency`, adding the response back as it was removed | result holds if a response with that id is present |
-  | `RecordContactAttempt` | logging a contact, and the OK and Unable to Reach buttons | an addition |
-  | `DeleteContactAttempt` | the inverse of `RecordContactAttempt`, which is how an attempt is undone | as last seen; result holds if already gone |
+  | `AddContactAttempt` | logging a contact, and the OK and Unable to Reach buttons | an addition |
+  | `DeleteContactAttempt` | the inverse of `AddContactAttempt`, which is how an attempt is undone | result holds if already gone |
   | `AddTask` | adding a task | an addition |
   | `UpdateTask` | the task dialog, resolve, reopen, assign, unassign, notify | per value, as `UpdateFamilyCommand` |
   | `DeleteTask` | removing a task | as last seen; result holds if already gone |
@@ -1132,12 +1130,12 @@ what it saw.
 
 **An emergency needs no special case.** A ward holds its emergency responses as a keyed
 collection, each with its own id, so starting one is an addition like any other and collides
-with nothing. Several responders working offline each record `RecordContactAttempt` entries,
+with nothing. Several responders working offline each journal `AddContactAttempt` entries,
 which are additions too, and the whole journal replays. Marking a family OK or Unable to
-Reach records an attempt as well, so two responders who mark the same family differently
+Reach adds an attempt as well, so two responders who mark the same family differently
 both land, and the family shows the later outcome with both in its history. Two responders who each started a
-response while disconnected end up with two events, each carrying the records its own
-responder made, because the app has no way to know they were the same emergency and does not
+response while disconnected end up with two events, each carrying the attempts and tasks
+its own responder made, because the app has no way to know they were the same emergency and does not
 pretend otherwise. The app lists the emergencies in progress, and the user switches to any
 of them. Whoever is coordinating ends the one they do not want.
 
@@ -1148,7 +1146,7 @@ report was written from. If the response is gone by then, ended by someone else 
 dialog stood open, there is nothing to end and the user is told so. A version that changed the response in the meantime makes the end
 conflict, and the coordinator ends it again with a report that includes the change, so the
 report of the end that removes a response holds everything in it. Ending a duplicate leaves
-its records in its own report. A change replayed onto a response that has ended conflicts,
+its attempts and tasks in its own report. A change replayed onto a response that has ended conflicts,
 which is accepted under *Settled*.
 
 **While the network is down, responders cannot see each other's work.** The server relays
@@ -1837,8 +1835,8 @@ The journal and replay, in `tests/services`:
   further command; closing while saves still fail asks before discarding it
 - two responders working offline: every attempt from both sides lands, asserted by exact
   attempt counts per family and each attempt's notes
-- two responders offline each record an attempt on a family that had no record: both land,
-  in one record holding both attempts
+- two responders offline each add the first attempt on a family: both land, and the family
+  shows both
 - two responders offline mark the same family OK and Unable to Reach: both attempts land,
   neither journal is abandoned, and the family's status is the outcome with the later
   timestamp, whichever responder reconnects first; the two reconnect orders leave equal
@@ -1846,7 +1844,7 @@ The journal and replay, in `tests/services`:
 - two responders who each start a response offline produce two events, each holding its own
   responder's attempts, and neither journal is abandoned
 - ending a response saves a report holding every one of its attempts and tasks, then removes
-  the response; a responder offline records attempts in it and reconnects after the end:
+  the response; a responder offline adds attempts in it and reconnects after the end:
   their journal is abandoned to the to-redo list, which holds each of those attempts
 - an end replayed onto a version where another responder added an attempt to that response
   conflicts, and the response is still there with that attempt
@@ -1854,8 +1852,8 @@ The journal and replay, in `tests/services`:
   left in place
 - an end whose report cannot be written leaves the response in progress and adds nothing
   to the journal
-- an attempt on a family with no record replays onto a version where an import removed that
-  family, and lands with the snapshot it took at construction
+- an attempt on a family replays onto a version where an import removed that family, lands,
+  and the report names that family *(removed)*
 - an import replayed onto a version where someone else added a family applies, and that
   family is still there afterwards, asserted by its id; an import replayed onto a version
   where someone else edited a family the import changes is a conflict
