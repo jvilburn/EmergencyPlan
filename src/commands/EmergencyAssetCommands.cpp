@@ -31,7 +31,7 @@ CommandOutcome AddEmergencyAssetCommand::execute(Document& document) const
     {
         return CommandOutcome::Conflicted;
     }
-    document.addEmergencyAsset(m_asset);
+    document.setEmergencyAsset(m_asset);
     return CommandOutcome::Applied;
 }
 
@@ -106,7 +106,7 @@ CommandOutcome UpdateEmergencyAssetCommand::execute(Document& document) const
     EmergencyAsset updated = *asset;
     updated.setName(changedValue(m_name, asset->name()));
     updated.setPersonIds(m_people.appliedTo(asset->personIds()));
-    document.updateEmergencyAsset(updated);
+    document.setEmergencyAsset(updated);
     return CommandOutcome::Applied;
 }
 

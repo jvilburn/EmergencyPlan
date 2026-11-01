@@ -2,7 +2,6 @@
 
 #include <QString>
 #include <QSet>
-#include <QColor>
 #include <QJsonObject>
 #include <QJsonArray>
 #include <optional>
@@ -20,7 +19,6 @@ public:
     // Getters
     const TeamId& id() const { return m_id; }
     const QString& name() const { return m_name; }
-    const QColor& color() const { return m_color; }
     std::optional<PersonId> leaderId() const { return m_leaderId; }
     const QSet<PersonId>& memberIds() const { return m_memberIds; }
 
@@ -49,7 +47,6 @@ public:
 private:
     TeamId m_id;
     QString m_name;
-    QColor m_color;
     std::optional<PersonId> m_leaderId;
     QSet<PersonId> m_memberIds;
 };

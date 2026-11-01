@@ -15,7 +15,7 @@ class MemberAccordion;
 class GeocodingService;
 struct GeocodingResult;
 
-/// Side panel for editing a family's address, location, and members.
+/// Side panel for editing a family's address, location, note, and members.
 class FamilyEditPanel : public QFrame
 {
     Q_OBJECT

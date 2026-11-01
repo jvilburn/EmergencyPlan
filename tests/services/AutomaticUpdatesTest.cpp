@@ -296,7 +296,7 @@ void AutomaticUpdatesTest::batchOfSeveralAddressesAppliesOnce()
 {
     Family lee = TestWard::lee(2010);
     Document document = TestWard::document();
-    document.addFamily(lee);
+    document.setFamily(lee);
     document.onDocumentChanged(DocumentChange::full());
     TestSession session;
     session.open(document);

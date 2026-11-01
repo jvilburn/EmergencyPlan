@@ -1397,7 +1397,7 @@ CommandOutcome UpdateFamilyCommand::execute(Document& document) const
     {
         return CommandOutcome::Conflicted;
     }
-    document.updateFamily(m_change.appliedTo(*family));
+    document.setFamily(m_change.appliedTo(*family));
     return CommandOutcome::Applied;
 }
 
@@ -2167,8 +2167,8 @@ Family TestWard::smithWithEveryFieldChanged()
 Document TestWard::document()
 {
     Document document;
-    document.addFamily(smith());
-    document.addFamily(jones());
+    document.setFamily(smith());
+    document.setFamily(jones());
     document.onDocumentChanged(DocumentChange::full());
     return document;
 }
@@ -2206,7 +2206,7 @@ Family TestWard::withPhone(const Family& family, const PersonId& id, const QStri
 Document TestWard::withFamily(const Document& document, const Family& family)
 {
     Document updated = document;
-    updated.updateFamily(family);
+    updated.setFamily(family);
     updated.onDocumentChanged(DocumentChange::full());
     return updated;
 }
@@ -2274,7 +2274,7 @@ CommandOutcome ForcePhoneCommand::execute(Document& document) const
 {
     FamilyId familyId = document.familyIdForPerson(m_personId).value();
     Family family = TestWard::family(document, familyId);
-    document.updateFamily(TestWard::withPhone(family, m_personId, m_phone));
+    document.setFamily(TestWard::withPhone(family, m_personId, m_phone));
     return CommandOutcome::Applied;
 }
 
@@ -2617,7 +2617,7 @@ Family withGusAt(const Family& family, qsizetype index)
 Document documentWith(const Family& family)
 {
     Document document;
-    document.addFamily(family);
+    document.setFamily(family);
     document.onDocumentChanged(DocumentChange::full());
     return document;
 }
@@ -4049,7 +4049,7 @@ gives the same order; with Fay's year unknown, the member stays last. Both are l
   coordinate parameters, and `toJson` / `fromJson` lose the keys. Every reader asks
   `document.coordinatesFor(family.address())`: `Filter.cpp:190,194,468,472`,
   `MapViewModel.cpp:38,55,56,61`, `MapWidget.cpp:202,890,950`.
-- `WardDirectoryImportService::preserveIds` and the parsers stop passing coordinates to
+- `WardDirectoryImportService::mergeWithExisting` and the parsers stop passing coordinates to
   `Family`. The directory parser keeps reading each family's coordinates and returns them in
   `ParseResult::addressCoordinates`, keyed by address; they seed the address table through the
   import command (task 7).
@@ -4167,7 +4167,8 @@ third bullets).
 - Modify: `src/models/Document.h/.cpp`, `src/models/Team.h/.cpp`, `src/models/EmergencyAsset.cpp`,
   `src/models/Person.h/.cpp`, `src/models/Family.h/.cpp`, `src/models/DocumentChange.h/.cpp`,
   `src/models/Id.h`
-- Delete: `src/models/Tag.h/.cpp`, `src/listmodels/TagListModel.h/.cpp`
+- Delete: `src/models/Tag.h/.cpp`, `src/listmodels/TagListModel.h/.cpp`,
+  `src/listmodels/TeamListModel.h/.cpp`
 - Modify: `src/listmodels/Filter.h/.cpp`, `src/listmodels/TeamsTreeModel.cpp`,
   `src/listmodels/EmergencyAssetModel.cpp`, `src/widgets/shared/FilterBar.h/.cpp`
 - Modify: `src/widgets/TeamsView.cpp`, `src/widgets/EmergencyAssetView.cpp`,
@@ -4197,21 +4198,24 @@ bar's tag menu and chips.
 `EmergencyAsset::toJson` write their ids sorted, so a command's entry reads back to the same
 JSON.
 
-**Model.** `Document` gains `addTeam`, `updateTeam`, `removeTeam`, `updateEmergencyAsset` and
-`removeEmergencyAsset`. `Team::create(name)` builds a team with no members. `Team::setMemberIds`
+**Model.** `Document` has one `set` function each for families, teams and assets
+(`setFamily`, `setTeam`, `setEmergencyAsset`), which adds or replaces by id, and gains
+`removeTeam` and `removeEmergencyAsset`. `Team::create(name)` builds a team with no members. `Team::setMemberIds`
 clears a leader who is not among the new members, so a team's leader is one of its members.
 
 **Document changes.** Team commands report `DocumentChange::team().updated(id)`, which
 `TeamsTreeModel` rebuilds on; asset commands report `DocumentChange::emergencyAsset().updated(id)`,
 which `EmergencyAssetModel` and `Document::rebuildDecorationCaches` rebuild on. `DocumentChange`
-gains `teamId` and `assetId` with those two builders.
+gains `teamId` and `assetId` with those two builders. Both trees also rebuild on a family
+change, since a family edit can change a name and whom the filter shows.
 
 **People in commands.** `Command.h` gains `describePeopleChange(change, document)`, a
 description line per person added and then per person removed (`added: Smith, Dan`), in name
 order, and `everyPersonExists(ids, document)`, the start condition every addition of a person
 takes.
 
-**Teams** hold what the UI changes: name, leader and members.
+**Teams** hold a name, a leader and members; the map highlights the selected team's families
+the way it highlights any selection.
 - `AddTeamCommand::fromNew(team, document)`: result holds when the id is present; start
   condition includes that every member exists. Inverse `DeleteTeamCommand`.
 - `UpdateTeamCommand::fromEdit(opened, saved, document)` holds a name and a leader
@@ -4452,8 +4456,8 @@ several collections.
 
 **Directory import.**
 - `WardDirectoryImportService` gains a public `merge(parsed, existing, pdfDate, ministeringPdfDate)`
-  that `importFromPdf` calls after parsing, so tests reach it without a PDF. `preserveIds` copies
-  the existing person's special-need note; each existing family is matched at most once.
+  that `importFromPdf` calls after parsing, so tests reach it without a PDF. Each existing
+  family is matched at most once.
 - `ImportWardDirectoryCommand::fromImport(const Document& document, const WardDirectoryImportResult& result, const QString& fileName)`
   holds the families added, a `FamilyChange` per family that differs (none for the rest), the
   families removed as last seen with their `ReferenceCleanup`, the directory PDF date as a
@@ -4490,9 +4494,8 @@ several collections.
 - `addressesGiven()` returns the addresses of the families it adds.
 - Description: `tr("Import the ministering assignments from %1.").arg(fileName)`.
 
-**Docs.** `docs/IMPORT_DESIGN.md`: the special-need note and the coordinates are the app's own and
-an import keeps them; a ministering import adds someone it cannot match only when it is the newer
-source.
+**Docs.** `docs/IMPORT_DESIGN.md`: the coordinates are the app's own and an import keeps them; a
+ministering import adds someone it cannot match only when it is the newer source.
 
 **Tests:**
 - `importReplayedAfterSomeoneAddedAFamilyKeepsThatFamily` (asserted by id)

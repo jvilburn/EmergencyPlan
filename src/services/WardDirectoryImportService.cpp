@@ -52,8 +52,8 @@ WardDirectoryImportResult WardDirectoryImportService::importFromPdf(
 
         if (existingMatch.has_value())
         {
-            Family preserved = preserveIds(parsedFamily, *existingMatch);
-            result.families.insert(preserved.id(), preserved);
+            Family merged = mergeWithExisting(parsedFamily, *existingMatch);
+            result.families.insert(merged.id(), merged);
             matchedExistingIds.insert(existingMatch->id());
         }
         else
@@ -122,7 +122,7 @@ std::optional<Person> WardDirectoryImportService::findMatchingPerson(
     return std::nullopt;
 }
 
-Family WardDirectoryImportService::preserveIds(
+Family WardDirectoryImportService::mergeWithExisting(
     const Family& parsedFamily,
     const Family& existingFamily)
 {

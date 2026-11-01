@@ -95,8 +95,8 @@ Family TestWard::smithWithEveryFieldChanged()
 Document TestWard::document()
 {
     Document document;
-    document.addFamily(smith());
-    document.addFamily(jones());
+    document.setFamily(smith());
+    document.setFamily(jones());
     document.onDocumentChanged(DocumentChange::full());
     return document;
 }
@@ -123,14 +123,14 @@ EmergencyAsset TestWard::generator()
 Document TestWard::withTeam(const Document& document, const Team& team)
 {
     Document updated = document;
-    updated.updateTeam(team);
+    updated.setTeam(team);
     return updated;
 }
 
 Document TestWard::withAsset(const Document& document, const EmergencyAsset& asset)
 {
     Document updated = document;
-    updated.updateEmergencyAsset(asset);
+    updated.setEmergencyAsset(asset);
     updated.onDocumentChanged(DocumentChange::full());
     return updated;
 }
@@ -168,7 +168,7 @@ Family TestWard::withPhone(const Family& family, const PersonId& id, const QStri
 Document TestWard::withFamily(const Document& document, const Family& family)
 {
     Document updated = document;
-    updated.updateFamily(family);
+    updated.setFamily(family);
     updated.onDocumentChanged(DocumentChange::full());
     return updated;
 }

@@ -7,21 +7,25 @@
 namespace
 {
 
-/// The display names of the people with those ids, in name order. A person the document
-/// lacks is named by their id.
+/// The names of the people with those ids, in name order.
 QStringList namesOf(const QSet<PersonId>& ids, const Document& document)
 {
     QStringList names;
     for (const PersonId& id : ids)
     {
-        std::optional<Person> person = document.findPersonById(id);
-        names.append(person.has_value() ? person->displayName() : id.toString());
+        names.append(personName(id, document));
     }
     names.sort();
     return names;
 }
 
 }  // namespace
+
+QString personName(const PersonId& id, const Document& document)
+{
+    std::optional<Person> person = document.findPersonById(id);
+    return person.has_value() ? person->displayName() : id.toString();
+}
 
 QStringList describePeopleChange(const IdSetChange<PersonId>& change, const Document& document)
 {

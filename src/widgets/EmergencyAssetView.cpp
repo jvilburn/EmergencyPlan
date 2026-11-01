@@ -328,7 +328,7 @@ void EmergencyAssetView::editSelectedAsset()
 
 void EmergencyAssetView::deleteAsset()
 {
-    auto assetId = selectedAssetId();
+    std::optional<EmergencyAssetId> assetId = selectedAssetId();
     if (!assetId)
     {
         return;

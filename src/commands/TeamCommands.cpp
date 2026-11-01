@@ -4,21 +4,6 @@
 
 #include <QObject>
 
-namespace
-{
-
-QString leaderText(const std::optional<PersonId>& leader, const Document& document)
-{
-    if (!leader.has_value())
-    {
-        return QObject::tr("(none)");
-    }
-    std::optional<Person> person = document.findPersonById(*leader);
-    return person.has_value() ? person->displayName() : leader->toString();
-}
-
-}  // namespace
-
 // ----------------------------------------------------------------------------
 // AddTeamCommand
 // ----------------------------------------------------------------------------
@@ -46,7 +31,7 @@ CommandOutcome AddTeamCommand::execute(Document& document) const
     {
         return CommandOutcome::Conflicted;
     }
-    document.addTeam(m_team);
+    document.setTeam(m_team);
     return CommandOutcome::Applied;
 }
 
@@ -93,7 +78,9 @@ UndoableCommandPtr UpdateTeamCommand::fromEdit(const Team& opened, const Team& s
     }
     if (leader.has_value())
     {
-        lines.append(QObject::tr("leader: %1").arg(leaderText(leader->after(), document)));
+        const std::optional<PersonId>& after = leader->after();
+        QString leaderName = after.has_value() ? personName(*after, document) : QObject::tr("(none)");
+        lines.append(QObject::tr("leader: %1").arg(leaderName));
     }
     lines.append(describePeopleChange(members, document));
     CommandDescription description(QObject::tr("%1 team").arg(opened.name()), lines);
@@ -135,7 +122,7 @@ CommandOutcome UpdateTeamCommand::execute(Document& document) const
     updated.setName(changedValue(m_name, team->name()));
     updated.setMemberIds(members);
     updated.setLeaderId(leader);
-    document.updateTeam(updated);
+    document.setTeam(updated);
     return CommandOutcome::Applied;
 }
 

@@ -30,7 +30,7 @@ CommandOutcome UpdateFamilyCommand::execute(Document& document) const
     {
         return CommandOutcome::Conflicted;
     }
-    document.updateFamily(m_change.appliedTo(*family));
+    document.setFamily(m_change.appliedTo(*family));
     return CommandOutcome::Applied;
 }
 

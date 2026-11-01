@@ -14,7 +14,7 @@ CommandOutcome ForcePhoneCommand::execute(Document& document) const
 {
     FamilyId familyId = document.familyIdForPerson(m_personId).value();
     Family family = TestWard::family(document, familyId);
-    document.updateFamily(TestWard::withPhone(family, m_personId, m_phone));
+    document.setFamily(TestWard::withPhone(family, m_personId, m_phone));
     return CommandOutcome::Applied;
 }
 

@@ -15,7 +15,7 @@ A C++/Qt desktop application for managing ward/stake family data, emergency resp
 - **Interactive Map**: View families on a map with custom markers and highlighting
 - **Ministering Organization**: Display EQ and RS ministering assignments and track emergency response contacts
 - **Emergency Response**: Organize teams and track skills/equipment for emergency preparedness
-- **Tag System**: Flexible categorization of families and individuals
+- **Notes**: A note on each family and person, found by the search box, for grouping and anything worth writing down
 - **PDF Import**: Import ward directories and ministering assignments from PDF
 
 ## Internet Access

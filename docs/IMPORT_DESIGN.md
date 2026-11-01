@@ -41,7 +41,7 @@ IDs must be preserved to maintain references from teams, skills, resources.
 - Remove from ministering groups (ministerIds, ministeredPersonIds, familyIds)
 - Remove from district/group presidencyMemberId if matches
 
-**Key distinction**: We're preserving IDs, not merging data. The family data gets completely replaced.
+**Key distinction**: The family's directory data is replaced by the PDF's, keeping the ids and what the app holds that no PDF prints: the family's note, and each matched member's note and special-need note.
 
 **Benefits of ID preservation**:
 - Ministering assignments remain valid (no re-import needed)

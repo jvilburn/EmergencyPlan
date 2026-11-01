@@ -17,19 +17,14 @@ is deleted once the plan is written.
 - `ImportWardDirectoryCommand` and `ImportMinisteringCommand` read their previous state inside
   `execute`; the directory import's `undo` restores none of the cleanup. `SetFamiliesCommand`
   has no callers.
-- `UpdateTeamCommand`, `UpdateEmergencyAssetCommand` and `UpdateTagCommand` hold whole objects.
 - `Document::cleanupPersonReferences` has no callers; it can become the person half of the
-  cleanup routine. It touches tags only when `isPersonLevel()`, and no family-level cleanup;
-  `ImportWardDirectoryCommand::cleanupRemovedFamily` also removes the family id from tags and
-  groups.
+  cleanup routine. It does no family-level cleanup;
+  `ImportWardDirectoryCommand::cleanupRemovedFamily` also removes the family id from groups.
 - `MainWindow::saveEmergencyReport` holds `const EmergencyResponse&` across its
   save dialog (`MainWindow.cpp:1012`), safe only while `EmergencyManager` keeps its own copy.
 - `MinisteringImportService::mergeFamilies` points groups at the id of an unmatched,
   unadded family or person when not authoritative (`MinisteringImportService.cpp:156-164`,
   `:330-334`).
-- `WardDirectoryImportService::preserveIds` drops the special-need note and takes the PDF's
-  coordinates, so every re-import wipes special needs; it should copy the note and keep the
-  coordinates when the address is unchanged.
 - Directory import matching: `findMatchingFamily` (surname + display name) and
   `findMatchingPerson` (first name). `PersonMatching` (`findFamilyByMembers`,
   `findReplacedFamily`, `findBestPersonMatch`) is used only by the ministering import and is
@@ -79,11 +74,7 @@ is deleted once the plan is written.
 **Making every write a command is the core of this work.** What runs through
 `CommandHistory` today is family update; team add, update, delete and member removal;
 emergency-asset add, update, delete and unassign; and the two imports. Ministering changes
-only by import. The tag commands exist and convert with the rest, though nothing in the
-interface calls them yet: `AddTagCommand`, `UpdateTagCommand` and `DeleteTagCommand` stay,
-while `AssignTagToPersonCommand`, `AssignTagToFamilyCommand`,
-`UnassignTagFromPersonCommand` and `UnassignTagFromFamilyCommand` are deleted, since each is
-an `UpdateTagCommand` holding one id added or removed. `AddFamilyCommand`, `AddTeamMemberCommand` and
+only by import. `AddFamilyCommand`, `AddTeamMemberCommand` and
 `AssignEmergencyAssetToPersonCommand` have no callers - families arrive by import, and the
 team and asset dialogs change members through their update commands - so they are deleted.
 `RemoveTeamMemberCommand` and `UnassignEmergencyAssetFromPersonCommand` are deleted too:

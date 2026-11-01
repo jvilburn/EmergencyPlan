@@ -118,17 +118,6 @@ std::optional<PersonId> fromJsonValue<std::optional<PersonId>>(const QJsonValue&
 namespace
 {
 
-QJsonArray idsToJson(const QSet<PersonId>& ids)
-{
-    QStringList strings;
-    for (const PersonId& id : ids)
-    {
-        strings.append(id.toString());
-    }
-    strings.sort();
-    return QJsonArray::fromStringList(strings);
-}
-
 QSet<PersonId> idsFromJson(const QJsonValue& value)
 {
     QSet<PersonId> ids;
@@ -145,8 +134,8 @@ QSet<PersonId> idsFromJson(const QJsonValue& value)
 QJsonObject peopleChangeToJson(const IdSetChange<PersonId>& change)
 {
     QJsonObject json;
-    json["added"] = idsToJson(change.added());
-    json["removed"] = idsToJson(change.removed());
+    json["added"] = sortedIdArray(change.added());
+    json["removed"] = sortedIdArray(change.removed());
     return json;
 }
 

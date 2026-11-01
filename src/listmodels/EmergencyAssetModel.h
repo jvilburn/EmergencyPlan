@@ -66,7 +66,6 @@ private slots:
 
 private:
     void rebuild();
-    void refreshFamilyDisplayText(const FamilyId& familyId);
     void clearNodes();
 
     /// Internal tree node structure

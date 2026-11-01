@@ -58,15 +58,15 @@ public:
     // ========================================================================
     // Mutating operations - families
     // ========================================================================
-    void addFamily(const Family& family);
-    void updateFamily(const Family& family);
+    /// Sets the family with family's id to family, adding it when there is none.
+    void setFamily(const Family& family);
     void removeFamily(const FamilyId& id);
 
     // ========================================================================
     // Mutating operations - teams
     // ========================================================================
-    void addTeam(const Team& team);
-    void updateTeam(const Team& team);
+    /// Sets the team with team's id to team, adding it when there is none.
+    void setTeam(const Team& team);
     void removeTeam(const TeamId& id);
 
     // ========================================================================
@@ -86,8 +86,8 @@ public:
     // EmergencyAsset operations
     // ========================================================================
     const QHash<EmergencyAssetId, EmergencyAsset>& emergencyAssets() const { return m_emergencyAssets; }
-    void addEmergencyAsset(const EmergencyAsset& asset);
-    void updateEmergencyAsset(const EmergencyAsset& asset);
+    /// Sets the asset with asset's id to asset, adding it when there is none.
+    void setEmergencyAsset(const EmergencyAsset& asset);
     void removeEmergencyAsset(const EmergencyAssetId& id);
     std::optional<EmergencyAsset> findEmergencyAssetById(const EmergencyAssetId& id) const;
     QList<EmergencyAsset> emergencyAssetsByArea(ResponseArea area) const;

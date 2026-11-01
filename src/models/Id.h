@@ -1,9 +1,12 @@
 #pragma once
 
 #include <QString>
+#include <QStringList>
 #include <QUuid>
 #include <QDebug>
+#include <QJsonArray>
 #include <QMetaType>
+#include <QSet>
 
 template<typename Derived>
 class IdBase
@@ -150,3 +153,16 @@ Q_DECLARE_METATYPE(MinisteringGroupId)
 Q_DECLARE_METATYPE(MinisteringDistrictId)
 Q_DECLARE_METATYPE(TaskId)
 Q_DECLARE_METATYPE(ContactAttemptId)
+
+/// The ids as a JSON array of their strings in sorted order, so equal sets write equal JSON.
+template<typename Id>
+QJsonArray sortedIdArray(const QSet<Id>& ids)
+{
+    QStringList strings;
+    for (const Id& id : ids)
+    {
+        strings.append(id.toString());
+    }
+    strings.sort();
+    return QJsonArray::fromStringList(strings);
+}

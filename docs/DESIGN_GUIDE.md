@@ -377,8 +377,8 @@ QStatusBar {
 1. **File Operations**: New, Import
 2. **Edit Operations**: Undo, Redo, Cut, Copy, Paste, Delete
 3. **Navigation**: Home, Back, Forward, Refresh
-4. **View Modes**: EQ, RS, Emergency, Tags
-5. **Entities**: Family, Person, Team, Tag, Resource
+4. **View Modes**: EQ, RS, Emergency
+5. **Entities**: Family, Person, Team, Resource
 6. **Actions**: Add, Edit, Remove, Search, Filter
 7. **Status**: Success, Warning, Error, Info
 8. **Map**: Markers (home, medical, recovery, special, antenna)
@@ -463,8 +463,6 @@ QStatusBar {
 │ ░░░ Ministering ░░░░ │  ← Unselected tab
 ├───────────────────────┤
 │ ░░░ Emergency ░░░░░░ │
-├───────────────────────┤
-│ ░░░ Tags ░░░░░░░░░░░ │
 ├───────────────────────┤
 │                       │
 │   Content area        │

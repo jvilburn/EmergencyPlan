@@ -47,6 +47,9 @@ private:
     QStringList m_lines;
 };
 
+/// The person's display name as document holds them, or their id when document lacks them.
+QString personName(const PersonId& id, const Document& document);
+
 /// A description line per person a change to a set of people adds, then per person it
 /// removes: "added: <name>" and "removed: <name>", named as document holds them, in name
 /// order.

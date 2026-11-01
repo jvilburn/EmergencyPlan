@@ -23,13 +23,7 @@ QJsonObject EmergencyAsset::toJson() const
     json["name"] = m_name;
     json["responseArea"] = responseAreaToString(m_responseArea);
 
-    QStringList personIds;
-    for (const PersonId& personId : m_personIds)
-    {
-        personIds.append(personId.toString());
-    }
-    personIds.sort();
-    json["personIds"] = QJsonArray::fromStringList(personIds);
+    json["personIds"] = sortedIdArray(m_personIds);
 
     return json;
 }

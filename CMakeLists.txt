@@ -326,7 +326,6 @@ set(LISTMODEL_SOURCES
     src/listmodels/NeedsModel.cpp
     src/listmodels/PersonTreeModel.cpp
     src/listmodels/UnassignedMinisteringModel.cpp
-    src/listmodels/TeamListModel.cpp
     src/listmodels/TaskListModel.cpp
     src/listmodels/TeamsTreeModel.cpp
     # src/listmodels/DistrictTreeModel.cpp
@@ -344,7 +343,6 @@ set(LISTMODEL_HEADERS
     src/listmodels/PersonTreeModel.h
     src/listmodels/TaskListModel.h
     src/listmodels/UnassignedMinisteringModel.h
-    src/listmodels/TeamListModel.h
     src/listmodels/TeamsTreeModel.h
     # src/listmodels/DistrictTreeModel.h
     # src/listmodels/ResourceTreeModel.h

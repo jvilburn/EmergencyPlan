@@ -11,28 +11,23 @@ Document Document::empty()
 
 void Document::initializeDefaultAssets()
 {
-    addEmergencyAsset(EmergencyAsset::create(QObject::tr("First Aid"), ResponseArea::Medical));
-    addEmergencyAsset(EmergencyAsset::create(QObject::tr("CPR Certified"), ResponseArea::Medical));
-    addEmergencyAsset(EmergencyAsset::create(QObject::tr("Nurse / Doctor"), ResponseArea::Medical));
+    setEmergencyAsset(EmergencyAsset::create(QObject::tr("First Aid"), ResponseArea::Medical));
+    setEmergencyAsset(EmergencyAsset::create(QObject::tr("CPR Certified"), ResponseArea::Medical));
+    setEmergencyAsset(EmergencyAsset::create(QObject::tr("Nurse / Doctor"), ResponseArea::Medical));
 
-    addEmergencyAsset(EmergencyAsset::create(QObject::tr("Ham Radio"), ResponseArea::Communications));
-    addEmergencyAsset(EmergencyAsset::create(QObject::tr("CERT Trained"), ResponseArea::Communications));
+    setEmergencyAsset(EmergencyAsset::create(QObject::tr("Ham Radio"), ResponseArea::Communications));
+    setEmergencyAsset(EmergencyAsset::create(QObject::tr("CERT Trained"), ResponseArea::Communications));
 
-    addEmergencyAsset(EmergencyAsset::create(QObject::tr("Chainsaw"), ResponseArea::Recovery));
-    addEmergencyAsset(EmergencyAsset::create(QObject::tr("Generator"), ResponseArea::Recovery));
-    addEmergencyAsset(EmergencyAsset::create(QObject::tr("4WD Vehicle"), ResponseArea::Recovery));
+    setEmergencyAsset(EmergencyAsset::create(QObject::tr("Chainsaw"), ResponseArea::Recovery));
+    setEmergencyAsset(EmergencyAsset::create(QObject::tr("Generator"), ResponseArea::Recovery));
+    setEmergencyAsset(EmergencyAsset::create(QObject::tr("4WD Vehicle"), ResponseArea::Recovery));
 }
 
 // ============================================================================
 // Family operations
 // ============================================================================
 
-void Document::addFamily(const Family& family)
-{
-    m_families.insert(family.id(), family);
-}
-
-void Document::updateFamily(const Family& family)
+void Document::setFamily(const Family& family)
 {
     m_families.insert(family.id(), family);
 }
@@ -46,12 +41,7 @@ void Document::removeFamily(const FamilyId& id)
 // Team operations
 // ============================================================================
 
-void Document::addTeam(const Team& team)
-{
-    m_teams.insert(team.id(), team);
-}
-
-void Document::updateTeam(const Team& team)
+void Document::setTeam(const Team& team)
 {
     m_teams.insert(team.id(), team);
 }
@@ -91,12 +81,7 @@ void Document::setAddressCoordinates(const QString& address, const std::optional
 // EmergencyAsset operations
 // ============================================================================
 
-void Document::addEmergencyAsset(const EmergencyAsset& asset)
-{
-    m_emergencyAssets.insert(asset.id(), asset);
-}
-
-void Document::updateEmergencyAsset(const EmergencyAsset& asset)
+void Document::setEmergencyAsset(const EmergencyAsset& asset)
 {
     m_emergencyAssets.insert(asset.id(), asset);
 }

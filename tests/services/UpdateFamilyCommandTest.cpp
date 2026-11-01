@@ -108,7 +108,7 @@ Family withGusAt(const Family& family, qsizetype index)
 Document documentWith(const Family& family)
 {
     Document document;
-    document.addFamily(family);
+    document.setFamily(family);
     document.onDocumentChanged(DocumentChange::full());
     return document;
 }

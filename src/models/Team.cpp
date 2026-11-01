@@ -23,10 +23,6 @@ QJsonObject Team::toJson() const
     json["id"] = m_id.toString();
     json["name"] = m_name;
 
-    if (m_color.isValid())
-    {
-        json["color"] = m_color.name();
-    }
     if (m_leaderId.has_value())
     {
         json["leaderId"] = m_leaderId->toString();
@@ -34,13 +30,7 @@ QJsonObject Team::toJson() const
 
     if (!m_memberIds.isEmpty())
     {
-        QStringList memberIds;
-        for (const PersonId& id : m_memberIds)
-        {
-            memberIds.append(id.toString());
-        }
-        memberIds.sort();
-        json["memberIds"] = QJsonArray::fromStringList(memberIds);
+        json["memberIds"] = sortedIdArray(m_memberIds);
     }
 
     return json;
@@ -51,11 +41,6 @@ Team Team::fromJson(const QJsonObject& json)
     Team team;
     team.m_id = TeamId::fromString(json["id"].toString());
     team.m_name = json["name"].toString();
-
-    if (json.contains("color"))
-    {
-        team.m_color = QColor(json["color"].toString());
-    }
 
     QString leaderStr = json["leaderId"].toString();
     if (!leaderStr.isEmpty())
@@ -79,7 +64,6 @@ bool Team::operator==(const Team& other) const
 {
     return m_id == other.m_id
         && m_name == other.m_name
-        && m_color == other.m_color
         && m_leaderId == other.m_leaderId
         && m_memberIds == other.m_memberIds;
 }
