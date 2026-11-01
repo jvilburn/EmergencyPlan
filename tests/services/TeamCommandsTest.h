@@ -19,4 +19,5 @@ private slots:
     void leaderChangeNeedsTheNewLeaderOnTheTeam();
     void additionOfAPersonReplayedAfterTheyWereRemovedConflicts();
     void teamDeletionReplayedAfterSomeoneAddedAMemberConflictsAndLeavesTheTeam();
+    void undoTakesBackAnAddAndADeletion();
 };

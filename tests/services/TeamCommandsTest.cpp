@@ -179,3 +179,22 @@ void TeamCommandsTest::teamDeletionReplayedAfterSomeoneAddedAMemberConflictsAndL
     QVERIFY(result.toRedo.contains("Delete team: Setup"));
     QVERIFY(teamIn(mine) == grown);
 }
+
+void TeamCommandsTest::undoTakesBackAnAddAndADeletion()
+{
+    TestSession session;
+    session.open(TestWard::document());
+    Team team = TestWard::setupTeam();
+
+    QVERIFY(session.commit(AddTeamCommand::fromNew(team, session.document())).status == CommitStatus::Applied);
+    QVERIFY(teamIn(session) == team);
+    QVERIFY(session.undo().status == CommitStatus::Applied);
+    QVERIFY(!session.document().findTeamById(TestWard::setupTeamId()).has_value());
+    QVERIFY(session.redo().status == CommitStatus::Applied);
+    QVERIFY(teamIn(session) == team);
+
+    QVERIFY(session.commit(DeleteTeamCommand::fromSeen(team, session.document())).status == CommitStatus::Applied);
+    QVERIFY(!session.document().findTeamById(TestWard::setupTeamId()).has_value());
+    QVERIFY(session.undo().status == CommitStatus::Applied);
+    QVERIFY(teamIn(session) == team);
+}
