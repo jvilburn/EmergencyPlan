@@ -20,7 +20,7 @@ const QList<CommandType>& CommandRegistry::types()
         {StartEmergencyCommand::TypeName, &StartEmergencyCommand::fromJson},
         {EndEmergencyCommand::TypeName, &EndEmergencyCommand::fromJson},
         {RestoreEmergencyCommand::TypeName, &RestoreEmergencyCommand::fromJson},
-        {RecordContactAttemptCommand::TypeName, &RecordContactAttemptCommand::fromJson},
+        {AddContactAttemptCommand::TypeName, &AddContactAttemptCommand::fromJson},
         {DeleteContactAttemptCommand::TypeName, &DeleteContactAttemptCommand::fromJson},
         {AddTaskCommand::TypeName, &AddTaskCommand::fromJson},
         {UpdateTaskCommand::TypeName, &UpdateTaskCommand::fromJson},

@@ -3,8 +3,6 @@
 #include <QJsonArray>
 #include <QObject>
 
-#include <algorithm>
-
 namespace
 {
 
@@ -134,6 +132,21 @@ qsizetype indexOfId(const QList<T>& items, const Id& id)
     return -1;
 }
 
+/// The items that carry familyId, in their order.
+template<typename T>
+QList<T> itemsFor(const QList<T>& items, const FamilyId& familyId)
+{
+    QList<T> found;
+    for (const T& item : items)
+    {
+        if (item.familyId() == familyId)
+        {
+            found.append(item);
+        }
+    }
+    return found;
+}
+
 template<typename T>
 QJsonArray arrayOf(const QList<T>& items)
 {
@@ -227,15 +240,15 @@ bool TaskNotification::operator==(const TaskNotification& other) const
 
 // === ContactAttempt ===
 
-ContactAttempt ContactAttempt::create(std::optional<ContactMethod> method,
+ContactAttempt ContactAttempt::create(const FamilyId& familyId,
+                                      std::optional<ContactMethod> method,
                                       const std::optional<PersonId>& who,
                                       std::optional<ContactOutcome> outcome,
                                       const QString& notes)
 {
-    Q_ASSERT(method != ContactMethod::Other || !notes.isEmpty());
-
     ContactAttempt attempt;
     attempt.m_id = ContactAttemptId::generate();
+    attempt.m_familyId = familyId;
     attempt.m_method = method;
     attempt.m_who = who;
     attempt.m_outcome = outcome;
@@ -248,6 +261,7 @@ QJsonObject ContactAttempt::toJson() const
 {
     QJsonObject json;
     json["id"] = m_id.toString();
+    json["familyId"] = m_familyId.toString();
     if (m_method.has_value())
     {
         json["method"] = methodToJson(*m_method);
@@ -269,6 +283,7 @@ ContactAttempt ContactAttempt::fromJson(const QJsonObject& json)
 {
     ContactAttempt attempt;
     attempt.m_id = ContactAttemptId::fromString(json["id"].toString());
+    attempt.m_familyId = FamilyId::fromString(json["familyId"].toString());
     attempt.m_method = methodFromJson(json["method"]);
     if (json.contains("who"))
     {
@@ -283,6 +298,7 @@ ContactAttempt ContactAttempt::fromJson(const QJsonObject& json)
 bool ContactAttempt::operator==(const ContactAttempt& other) const
 {
     return m_id == other.m_id
+        && m_familyId == other.m_familyId
         && m_method == other.m_method
         && m_who == other.m_who
         && m_outcome == other.m_outcome
@@ -388,10 +404,11 @@ bool TaskResolution::operator==(const TaskResolution& other) const
 
 // === ResponseTask ===
 
-ResponseTask ResponseTask::create(const QString& category, const QString& description)
+ResponseTask ResponseTask::create(const FamilyId& familyId, const QString& category, const QString& description)
 {
     ResponseTask task;
     task.m_id = TaskId::generate();
+    task.m_familyId = familyId;
     task.m_category = category;
     task.m_description = description;
     task.m_createdAt = QDateTime::currentDateTimeUtc();
@@ -402,6 +419,7 @@ QJsonObject ResponseTask::toJson() const
 {
     QJsonObject json;
     json["id"] = m_id.toString();
+    json["familyId"] = m_familyId.toString();
     json["category"] = m_category;
     json["description"] = m_description;
     json["createdAt"] = timeToJson(m_createdAt);
@@ -420,6 +438,7 @@ ResponseTask ResponseTask::fromJson(const QJsonObject& json)
 {
     ResponseTask task;
     task.m_id = TaskId::fromString(json["id"].toString());
+    task.m_familyId = FamilyId::fromString(json["familyId"].toString());
     task.m_category = json["category"].toString();
     task.m_description = json["description"].toString();
     task.m_createdAt = timeFromJson(json["createdAt"]);
@@ -437,133 +456,12 @@ ResponseTask ResponseTask::fromJson(const QJsonObject& json)
 bool ResponseTask::operator==(const ResponseTask& other) const
 {
     return m_id == other.m_id
+        && m_familyId == other.m_familyId
         && m_category == other.m_category
         && m_description == other.m_description
         && m_createdAt == other.m_createdAt
         && m_assignment == other.m_assignment
         && m_resolution == other.m_resolution;
-}
-
-// === FamilyResponseRecord ===
-
-FamilyResponseRecord FamilyResponseRecord::create(const FamilyId& familyId,
-                                                   const QString& displayName,
-                                                   const QString& address)
-{
-    FamilyResponseRecord record;
-    record.m_familyId = familyId;
-    record.m_displayName = displayName;
-    record.m_address = address;
-    return record;
-}
-
-const ContactAttempt* FamilyResponseRecord::findContactAttempt(const ContactAttemptId& id) const
-{
-    qsizetype index = indexOfId(m_contactAttempts, id);
-    return index < 0 ? nullptr : &m_contactAttempts[index];
-}
-
-const ResponseTask* FamilyResponseRecord::findTask(const TaskId& id) const
-{
-    qsizetype index = indexOfId(m_tasks, id);
-    return index < 0 ? nullptr : &m_tasks[index];
-}
-
-void FamilyResponseRecord::insertContactAttempt(const ContactAttempt& attempt)
-{
-    insertInOrder(m_contactAttempts, attempt, &attemptComesFirst);
-}
-
-void FamilyResponseRecord::insertTask(const ResponseTask& task)
-{
-    insertInOrder(m_tasks, task, &taskComesFirst);
-}
-
-void FamilyResponseRecord::setTask(const ResponseTask& task)
-{
-    qsizetype index = indexOfId(m_tasks, task.id());
-    if (index >= 0)
-    {
-        m_tasks[index] = task;
-    }
-}
-
-void FamilyResponseRecord::removeContactAttempt(const ContactAttemptId& id)
-{
-    qsizetype index = indexOfId(m_contactAttempts, id);
-    if (index >= 0)
-    {
-        m_contactAttempts.removeAt(index);
-    }
-}
-
-void FamilyResponseRecord::removeTask(const TaskId& id)
-{
-    qsizetype index = indexOfId(m_tasks, id);
-    if (index >= 0)
-    {
-        m_tasks.removeAt(index);
-    }
-}
-
-EffectiveContactStatus FamilyResponseRecord::effectiveStatus() const
-{
-    for (const ResponseTask& task : m_tasks)
-    {
-        if (!task.isResolved())
-        {
-            return EffectiveContactStatus::NeedsHelp;
-        }
-    }
-    for (const ContactAttempt& attempt : m_contactAttempts)
-    {
-        if (attempt.outcome() == ContactOutcome::OK)
-        {
-            return EffectiveContactStatus::OK;
-        }
-        if (attempt.outcome() == ContactOutcome::UnableToReach)
-        {
-            return EffectiveContactStatus::UnableToReach;
-        }
-    }
-    return EffectiveContactStatus::NotContacted;
-}
-
-QJsonObject FamilyResponseRecord::toJson() const
-{
-    QJsonObject json;
-    json["familyId"] = m_familyId.toString();
-    json["displayName"] = m_displayName;
-    json["address"] = m_address;
-    if (!m_contactAttempts.isEmpty())
-    {
-        json["contactAttempts"] = arrayOf(m_contactAttempts);
-    }
-    if (!m_tasks.isEmpty())
-    {
-        json["tasks"] = arrayOf(m_tasks);
-    }
-    return json;
-}
-
-FamilyResponseRecord FamilyResponseRecord::fromJson(const QJsonObject& json)
-{
-    FamilyResponseRecord record;
-    record.m_familyId = FamilyId::fromString(json["familyId"].toString());
-    record.m_displayName = json["displayName"].toString();
-    record.m_address = json["address"].toString();
-    record.m_contactAttempts = listFrom<ContactAttempt>(json["contactAttempts"]);
-    record.m_tasks = listFrom<ResponseTask>(json["tasks"]);
-    return record;
-}
-
-bool FamilyResponseRecord::operator==(const FamilyResponseRecord& other) const
-{
-    return m_familyId == other.m_familyId
-        && m_displayName == other.m_displayName
-        && m_address == other.m_address
-        && m_contactAttempts == other.m_contactAttempts
-        && m_tasks == other.m_tasks;
 }
 
 // === EmergencyResponse ===
@@ -580,19 +478,53 @@ EmergencyResponse EmergencyResponse::create(const QString& name)
     return response;
 }
 
-const FamilyResponseRecord* EmergencyResponse::findRecord(const FamilyId& familyId) const
+const ContactAttempt* EmergencyResponse::findContactAttempt(const ContactAttemptId& id) const
 {
-    auto it = m_familyRecords.constFind(familyId);
-    if (it != m_familyRecords.constEnd())
-    {
-        return &it.value();
-    }
-    return nullptr;
+    qsizetype index = indexOfId(m_contactAttempts, id);
+    return index < 0 ? nullptr : &m_contactAttempts[index];
 }
 
-void EmergencyResponse::setRecord(const FamilyResponseRecord& record)
+const ResponseTask* EmergencyResponse::findTask(const TaskId& id) const
 {
-    m_familyRecords.insert(record.familyId(), record);
+    qsizetype index = indexOfId(m_tasks, id);
+    return index < 0 ? nullptr : &m_tasks[index];
+}
+
+void EmergencyResponse::insertContactAttempt(const ContactAttempt& attempt)
+{
+    insertInOrder(m_contactAttempts, attempt, &attemptComesFirst);
+}
+
+void EmergencyResponse::insertTask(const ResponseTask& task)
+{
+    insertInOrder(m_tasks, task, &taskComesFirst);
+}
+
+void EmergencyResponse::setTask(const ResponseTask& task)
+{
+    qsizetype index = indexOfId(m_tasks, task.id());
+    if (index >= 0)
+    {
+        m_tasks[index] = task;
+    }
+}
+
+void EmergencyResponse::removeContactAttempt(const ContactAttemptId& id)
+{
+    qsizetype index = indexOfId(m_contactAttempts, id);
+    if (index >= 0)
+    {
+        m_contactAttempts.removeAt(index);
+    }
+}
+
+void EmergencyResponse::removeTask(const TaskId& id)
+{
+    qsizetype index = indexOfId(m_tasks, id);
+    if (index >= 0)
+    {
+        m_tasks.removeAt(index);
+    }
 }
 
 void EmergencyResponse::addTaskCategory(const QString& category)
@@ -600,37 +532,101 @@ void EmergencyResponse::addTaskCategory(const QString& category)
     m_taskCategories.append(category);
 }
 
-int EmergencyResponse::totalFamilies(const QHash<FamilyId, Family>& families) const
+QSet<FamilyId> EmergencyResponse::familyIds() const
 {
-    int total = static_cast<int>(m_familyRecords.size());
-    for (auto it = families.constBegin(); it != families.constEnd(); ++it)
+    QSet<FamilyId> ids;
+    for (const ContactAttempt& attempt : m_contactAttempts)
     {
-        if (!m_familyRecords.contains(it.key()))
+        ids.insert(attempt.familyId());
+    }
+    for (const ResponseTask& task : m_tasks)
+    {
+        ids.insert(task.familyId());
+    }
+    return ids;
+}
+
+QList<ContactAttempt> EmergencyResponse::contactAttemptsFor(const FamilyId& familyId) const
+{
+    return itemsFor(m_contactAttempts, familyId);
+}
+
+QList<ResponseTask> EmergencyResponse::tasksFor(const FamilyId& familyId) const
+{
+    return itemsFor(m_tasks, familyId);
+}
+
+EffectiveContactStatus EmergencyResponse::statusOf(const FamilyId& familyId) const
+{
+    for (const ResponseTask& task : m_tasks)
+    {
+        if (task.familyId() == familyId && !task.isResolved())
         {
-            ++total;
+            return EffectiveContactStatus::NeedsHelp;
         }
     }
-    return total;
+    for (const ContactAttempt& attempt : m_contactAttempts)
+    {
+        if (attempt.familyId() == familyId && attempt.outcome().has_value())
+        {
+            return *attempt.outcome() == ContactOutcome::OK
+                ? EffectiveContactStatus::OK
+                : EffectiveContactStatus::UnableToReach;
+        }
+    }
+    return EffectiveContactStatus::NotContacted;
+}
+
+QHash<FamilyId, EffectiveContactStatus> EmergencyResponse::statusByFamily() const
+{
+    QHash<FamilyId, EffectiveContactStatus> statuses;
+
+    // Attempts are newest first, so the first outcome seen for a family is its latest.
+    for (const ContactAttempt& attempt : m_contactAttempts)
+    {
+        if (!attempt.outcome().has_value() || statuses.contains(attempt.familyId()))
+        {
+            continue;
+        }
+        statuses.insert(attempt.familyId(),
+                        *attempt.outcome() == ContactOutcome::OK
+                            ? EffectiveContactStatus::OK
+                            : EffectiveContactStatus::UnableToReach);
+    }
+    for (const ResponseTask& task : m_tasks)
+    {
+        if (!task.isResolved())
+        {
+            statuses.insert(task.familyId(), EffectiveContactStatus::NeedsHelp);
+        }
+    }
+    return statuses;
+}
+
+QSet<FamilyId> EmergencyResponse::countedFamilies(const QHash<FamilyId, Family>& families) const
+{
+    QSet<FamilyId> ids = familyIds();
+    for (auto it = families.constBegin(); it != families.constEnd(); ++it)
+    {
+        ids.insert(it.key());
+    }
+    return ids;
+}
+
+int EmergencyResponse::totalFamilies(const QHash<FamilyId, Family>& families) const
+{
+    return static_cast<int>(countedFamilies(families).size());
 }
 
 int EmergencyResponse::countByStatus(EffectiveContactStatus status, const QHash<FamilyId, Family>& families) const
 {
+    QHash<FamilyId, EffectiveContactStatus> statuses = statusByFamily();
     int count = 0;
-    for (const FamilyResponseRecord& record : m_familyRecords)
+    for (const FamilyId& familyId : countedFamilies(families))
     {
-        if (record.effectiveStatus() == status)
+        if (statuses.value(familyId, EffectiveContactStatus::NotContacted) == status)
         {
             ++count;
-        }
-    }
-    if (status == EffectiveContactStatus::NotContacted)
-    {
-        for (auto it = families.constBegin(); it != families.constEnd(); ++it)
-        {
-            if (!m_familyRecords.contains(it.key()))
-            {
-                ++count;
-            }
         }
     }
     return count;
@@ -643,16 +639,13 @@ QJsonObject EmergencyResponse::toJson() const
     json["name"] = m_name;
     json["startedAt"] = timeToJson(m_startedAt);
     json["taskCategories"] = QJsonArray::fromStringList(m_taskCategories);
-    if (!m_familyRecords.isEmpty())
+    if (!m_contactAttempts.isEmpty())
     {
-        QList<FamilyId> familyIds = m_familyRecords.keys();
-        std::sort(familyIds.begin(), familyIds.end());
-        QJsonArray records;
-        for (const FamilyId& familyId : familyIds)
-        {
-            records.append(m_familyRecords[familyId].toJson());
-        }
-        json["familyRecords"] = records;
+        json["contactAttempts"] = arrayOf(m_contactAttempts);
+    }
+    if (!m_tasks.isEmpty())
+    {
+        json["tasks"] = arrayOf(m_tasks);
     }
     return json;
 }
@@ -668,10 +661,8 @@ EmergencyResponse EmergencyResponse::fromJson(const QJsonObject& json)
     {
         response.m_taskCategories.append(category.toString());
     }
-    for (const FamilyResponseRecord& record : listFrom<FamilyResponseRecord>(json["familyRecords"]))
-    {
-        response.m_familyRecords.insert(record.familyId(), record);
-    }
+    response.m_contactAttempts = listFrom<ContactAttempt>(json["contactAttempts"]);
+    response.m_tasks = listFrom<ResponseTask>(json["tasks"]);
     return response;
 }
 
@@ -680,6 +671,7 @@ bool EmergencyResponse::operator==(const EmergencyResponse& other) const
     return m_id == other.m_id
         && m_name == other.m_name
         && m_startedAt == other.m_startedAt
-        && m_familyRecords == other.m_familyRecords
-        && m_taskCategories == other.m_taskCategories;
+        && m_taskCategories == other.m_taskCategories
+        && m_contactAttempts == other.m_contactAttempts
+        && m_tasks == other.m_tasks;
 }

@@ -24,7 +24,7 @@ QStringList namesOf(const QSet<PersonId>& ids, const Document& document)
 QString personName(const PersonId& id, const Document& document)
 {
     std::optional<Person> person = document.findPersonById(id);
-    return person.has_value() ? person->displayName() : id.toString();
+    return person.has_value() ? person->displayName() : QObject::tr("(removed)");
 }
 
 QStringList describePeopleChange(const IdSetChange<PersonId>& change, const Document& document)

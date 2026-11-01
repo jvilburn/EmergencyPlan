@@ -252,6 +252,51 @@ void Document::onDocumentChanged(const DocumentChange& change)
     {
         rebuildDecorationCaches();
     }
+
+    // Emergency status for map markers and lists
+    if (change.action == ChangeAction::Full)
+    {
+        m_emergencyStatuses.clear();
+        for (const EmergencyResponse& response : m_emergencyResponses)
+        {
+            m_emergencyStatuses.insert(response.id(), response.statusByFamily());
+        }
+    }
+    else if (change.responseId.has_value())
+    {
+        updateEmergencyStatuses(*change.responseId, change.responseFamilyId);
+    }
+}
+
+void Document::updateEmergencyStatuses(const EmergencyResponseId& responseId, const std::optional<FamilyId>& familyId)
+{
+    auto response = m_emergencyResponses.constFind(responseId);
+    if (response == m_emergencyResponses.constEnd())
+    {
+        m_emergencyStatuses.remove(responseId);
+        return;
+    }
+    if (!familyId.has_value())
+    {
+        m_emergencyStatuses.insert(responseId, response->statusByFamily());
+        return;
+    }
+
+    QHash<FamilyId, EffectiveContactStatus>& statuses = m_emergencyStatuses[responseId];
+    EffectiveContactStatus status = response->statusOf(*familyId);
+    if (status == EffectiveContactStatus::NotContacted)
+    {
+        statuses.remove(*familyId);
+    }
+    else
+    {
+        statuses.insert(*familyId, status);
+    }
+}
+
+EffectiveContactStatus Document::emergencyStatus(const EmergencyResponseId& responseId, const FamilyId& familyId) const
+{
+    return m_emergencyStatuses.value(responseId).value(familyId, EffectiveContactStatus::NotContacted);
 }
 
 // ============================================================================

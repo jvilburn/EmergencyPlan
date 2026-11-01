@@ -150,43 +150,51 @@ EmergencyResponse TestWard::storm()
     return EmergencyResponse::fromJson(json);
 }
 
-ContactAttempt TestWard::attempt(const QString& id, const QDateTime& timestamp, std::optional<ContactMethod> method,
+ContactAttempt TestWard::attempt(const QString& id, const FamilyId& familyId, const QDateTime& timestamp,
+                                 std::optional<ContactMethod> method,
                                  const std::optional<PersonId>& who, std::optional<ContactOutcome> outcome,
                                  const QString& notes)
 {
-    QJsonObject json = ContactAttempt::create(method, who, outcome, notes).toJson();
+    QJsonObject json = ContactAttempt::create(familyId, method, who, outcome, notes).toJson();
     json["id"] = id;
     json["timestamp"] = timestamp.toString(Qt::ISODateWithMs);
     return ContactAttempt::fromJson(json);
 }
 
-ResponseTask TestWard::task(const QString& id, const QDateTime& createdAt, const QString& category,
-                            const QString& description)
+ResponseTask TestWard::task(const QString& id, const FamilyId& familyId, const QDateTime& createdAt,
+                            const QString& category, const QString& description)
 {
-    QJsonObject json = ResponseTask::create(category, description).toJson();
+    QJsonObject json = ResponseTask::create(familyId, category, description).toJson();
     json["id"] = id;
     json["createdAt"] = createdAt.toString(Qt::ISODateWithMs);
     return ResponseTask::fromJson(json);
 }
 
-FamilyRecordTarget TestWard::smithInStorm()
+TaskResolution TestWard::resolution(const QString& notes, const QDateTime& resolvedAt)
 {
-    return FamilyRecordTarget::forFamily(stormId(), smith());
+    QJsonObject json = TaskResolution::create(notes).toJson();
+    json["resolvedAt"] = resolvedAt.toString(Qt::ISODateWithMs);
+    return TaskResolution::fromJson(json);
 }
 
-EmergencyResponse TestWard::stormWithSmithRecord(const QList<ContactAttempt>& attempts, const QList<ResponseTask>& tasks)
+TaskNotification TestWard::notification(ContactMethod method, const QString& notes, const QDateTime& timestamp)
+{
+    QJsonObject json = TaskNotification::create(method, notes).toJson();
+    json["timestamp"] = timestamp.toString(Qt::ISODateWithMs);
+    return TaskNotification::fromJson(json);
+}
+
+EmergencyResponse TestWard::stormWith(const QList<ContactAttempt>& attempts, const QList<ResponseTask>& tasks)
 {
     EmergencyResponse response = storm();
-    FamilyResponseRecord record = smithInStorm().recordIn(response);
     for (const ContactAttempt& attempt : attempts)
     {
-        record.insertContactAttempt(attempt);
+        response.insertContactAttempt(attempt);
     }
     for (const ResponseTask& task : tasks)
     {
-        record.insertTask(task);
+        response.insertTask(task);
     }
-    response.setRecord(record);
     return response;
 }
 
@@ -194,6 +202,7 @@ Document TestWard::withResponse(const Document& document, const EmergencyRespons
 {
     Document updated = document;
     updated.setEmergencyResponse(response);
+    updated.onDocumentChanged(DocumentChange::full());
     return updated;
 }
 

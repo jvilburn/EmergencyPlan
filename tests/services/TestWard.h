@@ -2,7 +2,6 @@
 
 #include "Document.h"
 #include "EmergencyAsset.h"
-#include "EmergencyCommands.h"
 #include "EmergencyResponse.h"
 #include "Family.h"
 #include "Person.h"
@@ -73,27 +72,31 @@ public:
     static QDateTime octoberFirst(int hour, int minute);
 
     /// The Storm response, which is not in document(): started on 1 October 2026 at 08:00
-    /// UTC, with the default task categories and no family records.
+    /// UTC, with the default task categories and no attempts or tasks.
     static EmergencyResponse storm();
 
     /// An attempt with that id made at timestamp, otherwise as ContactAttempt::create makes
     /// it.
-    static ContactAttempt attempt(const QString& id, const QDateTime& timestamp, std::optional<ContactMethod> method,
+    static ContactAttempt attempt(const QString& id, const FamilyId& familyId, const QDateTime& timestamp,
+                                  std::optional<ContactMethod> method,
                                   const std::optional<PersonId>& who, std::optional<ContactOutcome> outcome,
                                   const QString& notes);
 
     /// A task with that id created at createdAt, unassigned and unresolved.
-    static ResponseTask task(const QString& id, const QDateTime& createdAt, const QString& category,
-                             const QString& description);
+    static ResponseTask task(const QString& id, const FamilyId& familyId, const QDateTime& createdAt,
+                             const QString& category, const QString& description);
 
-    /// The Smith family's record in the Storm response, named and addressed as smith() is.
-    static FamilyRecordTarget smithInStorm();
+    /// A resolution with those notes made at resolvedAt.
+    static TaskResolution resolution(const QString& notes, const QDateTime& resolvedAt);
 
-    /// The Storm response with a Smith record, made as a command makes it, holding attempts
-    /// and tasks.
-    static EmergencyResponse stormWithSmithRecord(const QList<ContactAttempt>& attempts, const QList<ResponseTask>& tasks);
+    /// A notification by method with those notes made at timestamp.
+    static TaskNotification notification(ContactMethod method, const QString& notes, const QDateTime& timestamp);
 
-    /// document with response added, or put in place of the response with the same id.
+    /// The Storm response holding attempts and tasks.
+    static EmergencyResponse stormWith(const QList<ContactAttempt>& attempts, const QList<ResponseTask>& tasks);
+
+    /// document with response added, or put in place of the response with the same id,
+    /// caches rebuilt.
     static Document withResponse(const Document& document, const EmergencyResponse& response);
 
     /// family with the member of the same id replaced by member.

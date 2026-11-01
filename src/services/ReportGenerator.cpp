@@ -2,34 +2,30 @@
 #include "Document.h"
 #include "EmergencyResponse.h"
 
+#include <QDateTime>
 #include <QFont>
 #include <QFontDatabase>
-#include <QPainter>
-#include <QPrinter>
-#include <QDateTime>
 #include <QHash>
+#include <QPrinter>
+#include <QTextDocument>
 
 #include <algorithm>
 
 namespace
 {
 
-const int kPageMargin = 50;
-const int kSectionSpacing = 12;
-const int kHeaderFontSize = 16;
-const int kSubheaderFontSize = 12;
 const int kBodyFontSize = 10;
 
 const QString kDateFormat = "MMM d, yyyy h:mm AP";
 
-struct ReportContext
+// Fixed order for consistent reports
+const QList<ContactMethod> kMethodOrder =
 {
-    QPainter* painter;
-    int y;
-    int pageWidth;
-    int pageHeight;
-    QPrinter* printer;
-    QString fontFamily;
+    ContactMethod::Phone,
+    ContactMethod::Text,
+    ContactMethod::Email,
+    ContactMethod::Visit,
+    ContactMethod::Other
 };
 
 QString selectFontFamily()
@@ -46,64 +42,39 @@ QString selectFontFamily()
     return QFont().family();
 }
 
-void ensureSpace(ReportContext& ctx, int needed)
+// --- HTML, each function escaping the text it is given ---
+
+void addHeading(QString& html, const QString& text, int level)
 {
-    if (ctx.y + needed > ctx.pageHeight - kPageMargin)
+    html += QString("<h%1>%2</h%1>").arg(level).arg(text.toHtmlEscaped());
+}
+
+void addParagraph(QString& html, const QString& text)
+{
+    html += QString("<p>%1</p>").arg(text.toHtmlEscaped());
+}
+
+void addBoldParagraph(QString& html, const QString& text)
+{
+    html += QString("<p><b>%1</b></p>").arg(text.toHtmlEscaped());
+}
+
+void addKeyValue(QString& html, const QString& key, const QString& value)
+{
+    addParagraph(html, key + ": " + value);
+}
+
+void addList(QString& html, const QStringList& items)
+{
+    html += "<ul>";
+    for (const QString& item : items)
     {
-        ctx.printer->newPage();
-        ctx.y = kPageMargin;
+        html += QString("<li>%1</li>").arg(item.toHtmlEscaped());
     }
+    html += "</ul>";
 }
 
-void drawText(ReportContext& ctx, const QString& text, int fontSize, bool bold)
-{
-    QFont font(ctx.fontFamily, fontSize);
-    font.setBold(bold);
-    ctx.painter->setFont(font);
-
-    QFontMetrics fm(font);
-    int textHeight = fm.height();
-    ensureSpace(ctx, textHeight);
-
-    ctx.painter->drawText(kPageMargin, ctx.y + fm.ascent(), text);
-    ctx.y += textHeight + 2;
-}
-
-void drawLine(ReportContext& ctx)
-{
-    ensureSpace(ctx, 4);
-    ctx.painter->drawLine(kPageMargin, ctx.y, ctx.pageWidth - kPageMargin, ctx.y);
-    ctx.y += 6;
-}
-
-void drawSpacer(ReportContext& ctx, int height)
-{
-    ctx.y += height;
-}
-
-/// Draws text in the body font, indent past the page margin.
-void drawIndented(ReportContext& ctx, const QString& text, int indent)
-{
-    QFont font(ctx.fontFamily, kBodyFontSize);
-    ctx.painter->setFont(font);
-
-    QFontMetrics fm(font);
-    int textHeight = fm.height();
-    ensureSpace(ctx, textHeight);
-
-    ctx.painter->drawText(kPageMargin + indent, ctx.y + fm.ascent(), text);
-    ctx.y += textHeight + 2;
-}
-
-void drawKeyValue(ReportContext& ctx, const QString& key, const QString& value)
-{
-    drawIndented(ctx, key + ": " + value, 20);
-}
-
-void drawBulletItem(ReportContext& ctx, const QString& text)
-{
-    drawIndented(ctx, "\u2022 " + text, 20);
-}
+// --- Text ---
 
 QString percentString(int count, int total)
 {
@@ -115,15 +86,11 @@ QString percentString(int count, int total)
     return QString::number(pct) + "%";
 }
 
-// Fixed order for consistent reports
-const QList<ContactMethod> kMethodOrder =
+/// "<count> (<percent>)"
+QString countWithPercent(int count, int total)
 {
-    ContactMethod::Phone,
-    ContactMethod::Text,
-    ContactMethod::Email,
-    ContactMethod::Visit,
-    ContactMethod::Other
-};
+    return QString::number(count) + " (" + percentString(count, total) + ")";
+}
 
 QString timeText(const QDateTime& time)
 {
@@ -144,8 +111,13 @@ QString joined(const QStringList& parts)
     return present.join(" - ");
 }
 
-/// The person's display name as document holds them, or empty when there is no id or
-/// document lacks them.
+QString removed()
+{
+    return QObject::tr("(removed)");
+}
+
+/// The person's display name as document holds them, "(removed)" when document lacks them,
+/// or empty when there is no id.
 QString personNameIn(const std::optional<PersonId>& id, const Document& document)
 {
     if (!id.has_value())
@@ -153,10 +125,17 @@ QString personNameIn(const std::optional<PersonId>& id, const Document& document
         return QString();
     }
     std::optional<Person> person = document.findPersonById(*id);
-    return person.has_value() ? person->displayName() : QString();
+    return person.has_value() ? person->displayName() : removed();
 }
 
-/// How an attempt with no method, recorded by a button, reads: "Marked OK" or "Marked
+/// The family's display name as document holds it, or "(removed)" when document lacks it.
+QString familyNameIn(const FamilyId& id, const Document& document)
+{
+    std::optional<Family> family = document.findFamilyById(id);
+    return family.has_value() ? family->displayName() : removed();
+}
+
+/// How an attempt with no method, made by a button, reads: "Marked OK" or "Marked
 /// Unable to Reach".
 QString markedName(ContactOutcome outcome)
 {
@@ -195,7 +174,7 @@ QString assigneeLine(const TaskAssignment& assignment, const Document& document)
     if (assignment.teamId().has_value())
     {
         std::optional<Team> team = document.findTeamById(*assignment.teamId());
-        assignee = team.has_value() ? team->name() : QString();
+        assignee = team.has_value() ? team->name() : removed();
     }
     else
     {
@@ -220,90 +199,74 @@ QString resolutionLine(const std::optional<TaskResolution>& resolution)
     return joined({QObject::tr("Resolved: %1").arg(timeText(resolution->resolvedAt())), resolution->notes()});
 }
 
-/// The record's name and address, then its attempts and its tasks, each oldest first.
-void drawRecord(ReportContext& ctx, const FamilyResponseRecord& record, const Document& document)
+/// The task's line, then its assignment, notification and resolution as a list under it.
+QString taskItem(const ResponseTask& task, const Document& document)
 {
-    drawText(ctx, record.displayName(), kBodyFontSize, true);
-    drawIndented(ctx, record.address(), 20);
-
-    const QList<ContactAttempt>& attempts = record.contactAttempts();
-    if (!attempts.isEmpty())
+    QStringList details;
+    const std::optional<TaskAssignment>& assignment = task.assignment();
+    if (assignment.has_value())
     {
-        drawIndented(ctx, QObject::tr("Contact attempts"), 20);
-        for (auto it = attempts.crbegin(); it != attempts.crend(); ++it)
+        details.append(assigneeLine(*assignment, document));
+        if (assignment->notification().has_value())
         {
-            drawIndented(ctx, attemptLine(*it, document), 40);
+            details.append(notificationLine(*assignment->notification()));
         }
     }
+    details.append(resolutionLine(task.resolution()));
 
-    const QList<ResponseTask>& tasks = record.tasks();
-    if (!tasks.isEmpty())
-    {
-        drawIndented(ctx, QObject::tr("Tasks"), 20);
-        for (auto it = tasks.crbegin(); it != tasks.crend(); ++it)
-        {
-            drawIndented(ctx, joined({timeText(it->createdAt()), it->category(), it->description()}), 40);
-            const std::optional<TaskAssignment>& assignment = it->assignment();
-            if (assignment.has_value())
-            {
-                drawIndented(ctx, assigneeLine(*assignment, document), 60);
-                if (assignment->notification().has_value())
-                {
-                    drawIndented(ctx, notificationLine(*assignment->notification()), 60);
-                }
-            }
-            drawIndented(ctx, resolutionLine(it->resolution()), 60);
-        }
-    }
-    drawSpacer(ctx, 6);
+    QString html = QString("<li>%1").arg(joined({timeText(task.createdAt()), task.category(), task.description()}).toHtmlEscaped());
+    addList(html, details);
+    return html + "</li>";
 }
 
-}  // namespace
-
-bool ReportGenerator::generateReport(const EmergencyResponse& response,
-                                     const Document& document,
-                                     const QDateTime& writtenAt,
-                                     const QString& filePath)
+/// The family's name and address as document holds them, then its attempts and its tasks
+/// in response, each oldest first.
+void addFamily(QString& html, const EmergencyResponse& response, const FamilyId& familyId, const Document& document)
 {
-    QPrinter printer(QPrinter::HighResolution);
-    printer.setOutputFormat(QPrinter::PdfFormat);
-    printer.setOutputFileName(filePath);
-    printer.setPageSize(QPageSize(QPageSize::Letter));
-
-    QPainter painter;
-    if (!painter.begin(&printer))
+    addHeading(html, familyNameIn(familyId, document), 3);
+    std::optional<Family> family = document.findFamilyById(familyId);
+    if (family.has_value())
     {
-        return false;
+        addParagraph(html, family->address().full());
     }
 
-    // Scale to logical coordinates (printer DPI is high, we want ~600px width feel)
-    int dpi = printer.resolution();
-    double scale = dpi / 96.0;
-    painter.scale(scale, scale);
+    QList<ContactAttempt> attempts = response.contactAttemptsFor(familyId);
+    if (!attempts.isEmpty())
+    {
+        QStringList lines;
+        for (auto it = attempts.crbegin(); it != attempts.crend(); ++it)
+        {
+            lines.append(attemptLine(*it, document));
+        }
+        addBoldParagraph(html, QObject::tr("Contact attempts"));
+        addList(html, lines);
+    }
 
-    int pageWidth = static_cast<int>(printer.width() / scale);
-    int pageHeight = static_cast<int>(printer.height() / scale);
+    QList<ResponseTask> tasks = response.tasksFor(familyId);
+    if (!tasks.isEmpty())
+    {
+        addBoldParagraph(html, QObject::tr("Tasks"));
+        html += "<ul>";
+        for (auto it = tasks.crbegin(); it != tasks.crend(); ++it)
+        {
+            html += taskItem(*it, document);
+        }
+        html += "</ul>";
+    }
+}
 
-    ReportContext ctx;
-    ctx.painter = &painter;
-    ctx.y = kPageMargin;
-    ctx.pageWidth = pageWidth;
-    ctx.pageHeight = pageHeight;
-    ctx.printer = &printer;
-    ctx.fontFamily = selectFontFamily();
-
+/// The whole report as HTML.
+QString reportHtml(const EmergencyResponse& response, const Document& document, const QDateTime& writtenAt)
+{
     const QHash<FamilyId, Family>& families = document.families();
-    const QHash<FamilyId, FamilyResponseRecord>& records = response.familyRecords();
+    QString html;
 
     // === 1. Header ===
-    drawText(ctx, QObject::tr("Emergency Response Report"), kHeaderFontSize, true);
-    drawSpacer(ctx, 4);
-    drawText(ctx, response.name(), kSubheaderFontSize, false);
-    drawText(ctx, document.wardName(), kBodyFontSize, false);
-
-    QString dateRange = QObject::tr("%1 - %2").arg(timeText(response.startedAt()), timeText(writtenAt));
-    drawText(ctx, dateRange, kBodyFontSize, false);
-    drawLine(ctx);
+    addHeading(html, QObject::tr("Emergency Response Report"), 1);
+    addHeading(html, response.name(), 2);
+    addParagraph(html, document.wardName());
+    addParagraph(html, QObject::tr("%1 - %2").arg(timeText(response.startedAt()), timeText(writtenAt)));
+    html += "<hr/>";
 
     // === 2. Overview Statistics ===
     int total = response.totalFamilies(families);
@@ -313,88 +276,71 @@ bool ReportGenerator::generateReport(const EmergencyResponse& response,
     int notContactedCount = response.countByStatus(EffectiveContactStatus::NotContacted, families);
     int contactedCount = total - notContactedCount;
 
-    drawText(ctx, QObject::tr("Overview"), kSubheaderFontSize, true);
-    drawKeyValue(ctx, QObject::tr("Total families"), QString::number(total));
-    drawKeyValue(ctx, QObject::tr("Contacted"),
-                 QString::number(contactedCount) + " (" + percentString(contactedCount, total) + ")");
-    drawSpacer(ctx, kSectionSpacing);
+    addHeading(html, QObject::tr("Overview"), 2);
+    addKeyValue(html, QObject::tr("Total families"), QString::number(total));
+    addKeyValue(html, QObject::tr("Contacted"), countWithPercent(contactedCount, total));
 
     // === 3. Status Breakdown ===
-    drawText(ctx, QObject::tr("Status Breakdown"), kSubheaderFontSize, true);
-    drawKeyValue(ctx, QObject::tr("OK"),
-                 QString::number(okCount) + " (" + percentString(okCount, total) + ")");
-    drawKeyValue(ctx, QObject::tr("Needs Help"),
-                 QString::number(needsHelpCount) + " (" + percentString(needsHelpCount, total) + ")");
-    drawKeyValue(ctx, QObject::tr("Unable to Reach"),
-                 QString::number(unableCount) + " (" + percentString(unableCount, total) + ")");
-    drawKeyValue(ctx, QObject::tr("Not Contacted"),
-                 QString::number(notContactedCount) + " (" + percentString(notContactedCount, total) + ")");
-    drawSpacer(ctx, kSectionSpacing);
+    addHeading(html, QObject::tr("Status Breakdown"), 2);
+    addKeyValue(html, QObject::tr("OK"), countWithPercent(okCount, total));
+    addKeyValue(html, QObject::tr("Needs Help"), countWithPercent(needsHelpCount, total));
+    addKeyValue(html, QObject::tr("Unable to Reach"), countWithPercent(unableCount, total));
+    addKeyValue(html, QObject::tr("Not Contacted"), countWithPercent(notContactedCount, total));
 
     // === 4. Task Summary ===
     int totalTasks = 0;
     int resolvedTasks = 0;
     int assignedTasks = 0;
-    int totalAttempts = 0;
     QHash<QString, int> tasksByCategory;
-    QHash<ContactMethod, int> attemptsByMethod;
-    QHash<ContactOutcome, int> marksByOutcome;
-
-    for (const FamilyResponseRecord& record : records)
+    for (const ResponseTask& task : response.tasks())
     {
-        for (const ResponseTask& task : record.tasks())
+        totalTasks++;
+        if (task.isResolved())
         {
-            totalTasks++;
-            if (task.isResolved())
-            {
-                resolvedTasks++;
-            }
-            if (task.isAssigned())
-            {
-                assignedTasks++;
-            }
-            tasksByCategory[task.category()]++;
+            resolvedTasks++;
         }
-
-        for (const ContactAttempt& attempt : record.contactAttempts())
+        if (task.isAssigned())
         {
-            totalAttempts++;
-            if (attempt.method().has_value())
-            {
-                attemptsByMethod[*attempt.method()]++;
-            }
-            else if (attempt.outcome().has_value())
-            {
-                marksByOutcome[*attempt.outcome()]++;
-            }
+            assignedTasks++;
         }
+        tasksByCategory[task.category()]++;
     }
 
-    drawText(ctx, QObject::tr("Task Summary"), kSubheaderFontSize, true);
-    drawKeyValue(ctx, QObject::tr("Total tasks"), QString::number(totalTasks));
-    drawKeyValue(ctx, QObject::tr("Resolved"),
-                 QString::number(resolvedTasks) + " (" + percentString(resolvedTasks, totalTasks) + ")");
-    drawKeyValue(ctx, QObject::tr("Unresolved"), QString::number(totalTasks - resolvedTasks));
-    drawKeyValue(ctx, QObject::tr("Assigned"), QString::number(assignedTasks));
-    drawKeyValue(ctx, QObject::tr("Unassigned"), QString::number(totalTasks - assignedTasks));
-    drawSpacer(ctx, 4);
+    addHeading(html, QObject::tr("Task Summary"), 2);
+    addKeyValue(html, QObject::tr("Total tasks"), QString::number(totalTasks));
+    addKeyValue(html, QObject::tr("Resolved"), countWithPercent(resolvedTasks, totalTasks));
+    addKeyValue(html, QObject::tr("Unresolved"), QString::number(totalTasks - resolvedTasks));
+    addKeyValue(html, QObject::tr("Assigned"), QString::number(assignedTasks));
+    addKeyValue(html, QObject::tr("Unassigned"), QString::number(totalTasks - assignedTasks));
 
-    // Tasks by category
     if (!tasksByCategory.isEmpty())
     {
-        drawText(ctx, QObject::tr("Tasks by Category"), kBodyFontSize, true);
+        addBoldParagraph(html, QObject::tr("Tasks by Category"));
         QList<QString> categories = tasksByCategory.keys();
         std::sort(categories.begin(), categories.end());
-        for (const QString& cat : categories)
+        for (const QString& category : categories)
         {
-            drawKeyValue(ctx, cat, QString::number(tasksByCategory[cat]));
+            addKeyValue(html, category, QString::number(tasksByCategory[category]));
         }
     }
-    drawSpacer(ctx, kSectionSpacing);
 
     // === 5. Response Activity ===
-    drawText(ctx, QObject::tr("Response Activity"), kSubheaderFontSize, true);
-    drawKeyValue(ctx, QObject::tr("Total contact attempts"), QString::number(totalAttempts));
+    QHash<ContactMethod, int> attemptsByMethod;
+    QHash<ContactOutcome, int> marksByOutcome;
+    for (const ContactAttempt& attempt : response.contactAttempts())
+    {
+        if (attempt.method().has_value())
+        {
+            attemptsByMethod[*attempt.method()]++;
+        }
+        else if (attempt.outcome().has_value())
+        {
+            marksByOutcome[*attempt.outcome()]++;
+        }
+    }
+
+    addHeading(html, QObject::tr("Response Activity"), 2);
+    addKeyValue(html, QObject::tr("Total contact attempts"), QString::number(response.contactAttempts().size()));
 
     // Contact methods in fixed order for consistent reports, then the attempts with no
     // method, each on its own line
@@ -402,93 +348,85 @@ bool ReportGenerator::generateReport(const EmergencyResponse& response,
     {
         if (attemptsByMethod.contains(method))
         {
-            drawKeyValue(ctx, contactMethodName(method),
-                         QString::number(attemptsByMethod[method]));
+            addKeyValue(html, contactMethodName(method), QString::number(attemptsByMethod[method]));
         }
     }
     for (ContactOutcome outcome : {ContactOutcome::OK, ContactOutcome::UnableToReach})
     {
         if (marksByOutcome.contains(outcome))
         {
-            drawKeyValue(ctx, markedName(outcome), QString::number(marksByOutcome[outcome]));
+            addKeyValue(html, markedName(outcome), QString::number(marksByOutcome[outcome]));
         }
     }
-    drawSpacer(ctx, kSectionSpacing);
 
     // === 6. Unresolved Items ===
-    QList<QString> needsHelpFamilies;
-    QList<QString> notContactedFamilies;
-
-    for (const FamilyResponseRecord& record : records)
+    QStringList needsHelpFamilies;
+    QStringList notContactedFamilies;
+    QHash<FamilyId, EffectiveContactStatus> statuses = response.statusByFamily();
+    for (const FamilyId& familyId : response.countedFamilies(families))
     {
-        EffectiveContactStatus status = record.effectiveStatus();
+        EffectiveContactStatus status = statuses.value(familyId, EffectiveContactStatus::NotContacted);
         if (status == EffectiveContactStatus::NeedsHelp)
         {
-            needsHelpFamilies.append(record.displayName());
+            needsHelpFamilies.append(familyNameIn(familyId, document));
         }
         else if (status == EffectiveContactStatus::NotContacted)
         {
-            notContactedFamilies.append(record.displayName());
+            notContactedFamilies.append(familyNameIn(familyId, document));
         }
     }
-    for (const Family& family : families)
-    {
-        if (!records.contains(family.id()))
-        {
-            notContactedFamilies.append(family.displayName());
-        }
-    }
-
-    std::sort(needsHelpFamilies.begin(), needsHelpFamilies.end());
-    std::sort(notContactedFamilies.begin(), notContactedFamilies.end());
+    needsHelpFamilies.sort();
+    notContactedFamilies.sort();
 
     if (!needsHelpFamilies.isEmpty() || !notContactedFamilies.isEmpty())
     {
-        drawText(ctx, QObject::tr("Unresolved Items"), kSubheaderFontSize, true);
-
+        addHeading(html, QObject::tr("Unresolved Items"), 2);
         if (!needsHelpFamilies.isEmpty())
         {
-            drawText(ctx, QObject::tr("Families Needing Help (%1)").arg(needsHelpFamilies.size()),
-                     kBodyFontSize, true);
-            for (const QString& name : needsHelpFamilies)
-            {
-                drawBulletItem(ctx, name);
-            }
-            drawSpacer(ctx, 4);
+            addBoldParagraph(html, QObject::tr("Families Needing Help (%1)").arg(needsHelpFamilies.size()));
+            addList(html, needsHelpFamilies);
         }
-
         if (!notContactedFamilies.isEmpty())
         {
-            drawText(ctx, QObject::tr("Families Not Contacted (%1)").arg(notContactedFamilies.size()),
-                     kBodyFontSize, true);
-            for (const QString& name : notContactedFamilies)
-            {
-                drawBulletItem(ctx, name);
-            }
+            addBoldParagraph(html, QObject::tr("Families Not Contacted (%1)").arg(notContactedFamilies.size()));
+            addList(html, notContactedFamilies);
         }
-        drawSpacer(ctx, kSectionSpacing);
     }
 
-    // === 7. Family Records ===
-    QList<FamilyResponseRecord> logged;
-    for (const FamilyResponseRecord& record : records)
-    {
-        if (!record.contactAttempts().isEmpty() || !record.tasks().isEmpty())
-        {
-            logged.append(record);
-        }
-    }
+    // === 7. By Family ===
+    QList<FamilyId> logged = response.familyIds().values();
     std::sort(logged.begin(), logged.end(),
-              [](const FamilyResponseRecord& a, const FamilyResponseRecord& b) { return a.displayName() < b.displayName(); });
-
+              [&document](const FamilyId& a, const FamilyId& b) { return familyNameIn(a, document) < familyNameIn(b, document); });
     if (!logged.isEmpty())
     {
-        drawText(ctx, QObject::tr("Family Records"), kSubheaderFontSize, true);
-        for (const FamilyResponseRecord& record : logged)
+        addHeading(html, QObject::tr("By Family"), 2);
+        for (const FamilyId& familyId : logged)
         {
-            drawRecord(ctx, record, document);
+            addFamily(html, response, familyId, document);
         }
     }
 
-    return painter.end();
+    return html;
+}
+
+}  // namespace
+
+bool ReportGenerator::generateReport(const EmergencyResponse& response,
+                                     const Document& document,
+                                     const QDateTime& writtenAt,
+                                     const QString& filePath)
+{
+    QTextDocument report;
+    report.setDefaultFont(QFont(selectFontFamily(), kBodyFontSize));
+    report.setHtml(reportHtml(response, document, writtenAt));
+
+    QPrinter printer(QPrinter::HighResolution);
+    printer.setOutputFormat(QPrinter::PdfFormat);
+    printer.setOutputFileName(filePath);
+    printer.setPageSize(QPageSize(QPageSize::Letter));
+    report.print(&printer);
+
+    // print() returns nothing; a PDF that cannot be opened for writing leaves the printer in
+    // its Error state.
+    return printer.printerState() != QPrinter::Error;
 }

@@ -49,7 +49,7 @@ DocumentChange EmergencyResponseScopeBuilder::updated(const EmergencyResponseId&
     DocumentChange c;
     c.action = ChangeAction::Updated;
     c.responseId = id;
-    c.familyId = familyId;
+    c.responseFamilyId = familyId;
     return c;
 }
 

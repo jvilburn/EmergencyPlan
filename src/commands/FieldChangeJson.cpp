@@ -45,24 +45,6 @@ QJsonValue toJsonValue(const std::optional<PersonId>& value)
     return value->toString();
 }
 
-QJsonValue toJsonValue(const std::optional<TaskAssignment>& value)
-{
-    if (!value.has_value())
-    {
-        return QJsonValue(QJsonValue::Null);
-    }
-    return value->toJson();
-}
-
-QJsonValue toJsonValue(const std::optional<TaskResolution>& value)
-{
-    if (!value.has_value())
-    {
-        return QJsonValue(QJsonValue::Null);
-    }
-    return value->toJson();
-}
-
 template<>
 QString fromJsonValue<QString>(const QJsonValue& value)
 {
@@ -131,26 +113,6 @@ std::optional<PersonId> fromJsonValue<std::optional<PersonId>>(const QJsonValue&
         return std::nullopt;
     }
     return PersonId::fromString(value.toString());
-}
-
-template<>
-std::optional<TaskAssignment> fromJsonValue<std::optional<TaskAssignment>>(const QJsonValue& value)
-{
-    if (!value.isObject())
-    {
-        return std::nullopt;
-    }
-    return TaskAssignment::fromJson(value.toObject());
-}
-
-template<>
-std::optional<TaskResolution> fromJsonValue<std::optional<TaskResolution>>(const QJsonValue& value)
-{
-    if (!value.isObject())
-    {
-        return std::nullopt;
-    }
-    return TaskResolution::fromJson(value.toObject());
 }
 
 namespace

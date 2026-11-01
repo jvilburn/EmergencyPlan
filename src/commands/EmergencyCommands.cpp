@@ -4,6 +4,47 @@
 
 #include <QObject>
 
+// JSON for the task values UpdateTaskCommand changes, read and written through the templates
+// in FieldChangeJson.h.
+
+QJsonValue toJsonValue(const std::optional<TaskAssignment>& value)
+{
+    if (!value.has_value())
+    {
+        return QJsonValue(QJsonValue::Null);
+    }
+    return value->toJson();
+}
+
+QJsonValue toJsonValue(const std::optional<TaskResolution>& value)
+{
+    if (!value.has_value())
+    {
+        return QJsonValue(QJsonValue::Null);
+    }
+    return value->toJson();
+}
+
+template<>
+std::optional<TaskAssignment> fromJsonValue<std::optional<TaskAssignment>>(const QJsonValue& value)
+{
+    if (!value.isObject())
+    {
+        return std::nullopt;
+    }
+    return TaskAssignment::fromJson(value.toObject());
+}
+
+template<>
+std::optional<TaskResolution> fromJsonValue<std::optional<TaskResolution>>(const QJsonValue& value)
+{
+    if (!value.isObject())
+    {
+        return std::nullopt;
+    }
+    return TaskResolution::fromJson(value.toObject());
+}
+
 namespace
 {
 
@@ -12,11 +53,18 @@ QString orNone(const QString& text)
     return text.isEmpty() ? QObject::tr("(none)") : text;
 }
 
-/// The team's name as document holds it, or its id when document lacks it.
+/// The family's display name as document holds it, or "(removed)" when document lacks it.
+QString familyName(const FamilyId& id, const Document& document)
+{
+    std::optional<Family> family = document.findFamilyById(id);
+    return family.has_value() ? family->displayName() : QObject::tr("(removed)");
+}
+
+/// The team's name as document holds it, or "(removed)" when document lacks it.
 QString teamName(const TeamId& id, const Document& document)
 {
     std::optional<Team> team = document.findTeamById(id);
-    return team.has_value() ? team->name() : id.toString();
+    return team.has_value() ? team->name() : QObject::tr("(removed)");
 }
 
 QString assigneeName(const TaskAssignment& assignment, const Document& document)
@@ -120,67 +168,7 @@ QStringList describeTask(const ResponseTask& task, const Document& document)
     return lines;
 }
 
-/// Puts record into response, and response into document.
-void writeRecord(Document& document, EmergencyResponse response, const FamilyResponseRecord& record)
-{
-    response.setRecord(record);
-    document.setEmergencyResponse(response);
-}
-
-DocumentChange recordChange(const FamilyRecordTarget& target)
-{
-    return DocumentChange::emergencyResponse().updated(target.responseId(), target.familyId());
-}
-
 }  // namespace
-
-// ----------------------------------------------------------------------------
-// FamilyRecordTarget
-// ----------------------------------------------------------------------------
-
-FamilyRecordTarget::FamilyRecordTarget(const EmergencyResponseId& responseId,
-                                       const FamilyId& familyId,
-                                       const QString& displayName,
-                                       const QString& address)
-    : m_responseId(responseId)
-    , m_familyId(familyId)
-    , m_displayName(displayName)
-    , m_address(address)
-{
-}
-
-FamilyRecordTarget FamilyRecordTarget::forFamily(const EmergencyResponseId& responseId, const Family& family)
-{
-    return FamilyRecordTarget(responseId, family.id(), family.displayName(), family.address().full());
-}
-
-FamilyResponseRecord FamilyRecordTarget::recordIn(const EmergencyResponse& response) const
-{
-    const FamilyResponseRecord* record = response.findRecord(m_familyId);
-    if (record)
-    {
-        return *record;
-    }
-    return FamilyResponseRecord::create(m_familyId, m_displayName, m_address);
-}
-
-QJsonObject FamilyRecordTarget::toJson() const
-{
-    QJsonObject json;
-    json["responseId"] = m_responseId.toString();
-    json["familyId"] = m_familyId.toString();
-    json["displayName"] = m_displayName;
-    json["address"] = m_address;
-    return json;
-}
-
-FamilyRecordTarget FamilyRecordTarget::fromJson(const QJsonObject& json)
-{
-    return FamilyRecordTarget(EmergencyResponseId::fromString(json["responseId"].toString()),
-                              FamilyId::fromString(json["familyId"].toString()),
-                              json["displayName"].toString(),
-                              json["address"].toString());
-}
 
 // ----------------------------------------------------------------------------
 // StartEmergencyCommand
@@ -319,126 +307,116 @@ CommandPtr RestoreEmergencyCommand::fromJson(const QJsonObject& json, const Comm
 }
 
 // ----------------------------------------------------------------------------
-// RecordContactAttemptCommand
+// AddContactAttemptCommand
 // ----------------------------------------------------------------------------
 
-UndoableCommandPtr RecordContactAttemptCommand::fromNew(const FamilyRecordTarget& target,
-                                                        const ContactAttempt& attempt,
-                                                        const Document& document)
+UndoableCommandPtr AddContactAttemptCommand::fromNew(const EmergencyResponseId& responseId,
+                                                     const ContactAttempt& attempt,
+                                                     const Document& document)
 {
-    CommandDescription description(QObject::tr("Contact with %1").arg(target.displayName()),
+    CommandDescription description(QObject::tr("Contact with %1").arg(familyName(attempt.familyId(), document)),
                                    describeAttempt(attempt, document));
-    return std::make_shared<RecordContactAttemptCommand>(target, attempt, description);
+    return std::make_shared<AddContactAttemptCommand>(responseId, attempt, description);
 }
 
-RecordContactAttemptCommand::RecordContactAttemptCommand(const FamilyRecordTarget& target,
-                                                         const ContactAttempt& attempt,
-                                                         const CommandDescription& description)
+AddContactAttemptCommand::AddContactAttemptCommand(const EmergencyResponseId& responseId,
+                                                   const ContactAttempt& attempt,
+                                                   const CommandDescription& description)
     : UndoableCommand(description)
-    , m_target(target)
+    , m_responseId(responseId)
     , m_attempt(attempt)
 {
 }
 
-CommandOutcome RecordContactAttemptCommand::execute(Document& document) const
+CommandOutcome AddContactAttemptCommand::execute(Document& document) const
 {
-    std::optional<EmergencyResponse> response = document.findEmergencyResponseById(m_target.responseId());
+    std::optional<EmergencyResponse> response = document.findEmergencyResponseById(m_responseId);
     if (!response.has_value())
     {
         return CommandOutcome::Conflicted;
     }
-    FamilyResponseRecord record = m_target.recordIn(*response);
-    if (record.findContactAttempt(m_attempt.id()))
+    if (!response->findContactAttempt(m_attempt.id()))
     {
-        return CommandOutcome::Applied;
+        response->insertContactAttempt(m_attempt);
+        document.setEmergencyResponse(*response);
     }
-    record.insertContactAttempt(m_attempt);
-    writeRecord(document, *response, record);
     return CommandOutcome::Applied;
 }
 
-UndoableCommandPtr RecordContactAttemptCommand::inverse() const
+UndoableCommandPtr AddContactAttemptCommand::inverse() const
 {
-    return std::make_shared<DeleteContactAttemptCommand>(m_target, m_attempt, description().undone());
+    return std::make_shared<DeleteContactAttemptCommand>(m_responseId, m_attempt, description().undone());
 }
 
-QJsonObject RecordContactAttemptCommand::toJson() const
+QJsonObject AddContactAttemptCommand::toJson() const
 {
     QJsonObject json;
-    json["target"] = m_target.toJson();
+    json["responseId"] = m_responseId.toString();
     json["attempt"] = m_attempt.toJson();
     return json;
 }
 
-DocumentChange RecordContactAttemptCommand::documentChange() const
+DocumentChange AddContactAttemptCommand::documentChange() const
 {
-    return recordChange(m_target);
+    return DocumentChange::emergencyResponse().updated(m_responseId, m_attempt.familyId());
 }
 
-CommandPtr RecordContactAttemptCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
+CommandPtr AddContactAttemptCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
 {
-    return std::make_shared<RecordContactAttemptCommand>(FamilyRecordTarget::fromJson(json["target"].toObject()),
-                                                         ContactAttempt::fromJson(json["attempt"].toObject()),
-                                                         description);
+    return std::make_shared<AddContactAttemptCommand>(EmergencyResponseId::fromString(json["responseId"].toString()),
+                                                      ContactAttempt::fromJson(json["attempt"].toObject()),
+                                                      description);
 }
 
 // ----------------------------------------------------------------------------
 // DeleteContactAttemptCommand
 // ----------------------------------------------------------------------------
 
-DeleteContactAttemptCommand::DeleteContactAttemptCommand(const FamilyRecordTarget& target,
+DeleteContactAttemptCommand::DeleteContactAttemptCommand(const EmergencyResponseId& responseId,
                                                          const ContactAttempt& attempt,
                                                          const CommandDescription& description)
     : UndoableCommand(description)
-    , m_target(target)
+    , m_responseId(responseId)
     , m_attempt(attempt)
 {
 }
 
 CommandOutcome DeleteContactAttemptCommand::execute(Document& document) const
 {
-    std::optional<EmergencyResponse> response = document.findEmergencyResponseById(m_target.responseId());
+    std::optional<EmergencyResponse> response = document.findEmergencyResponseById(m_responseId);
     if (!response.has_value())
     {
         return CommandOutcome::Conflicted;
     }
-    const FamilyResponseRecord* record = response->findRecord(m_target.familyId());
-    const ContactAttempt* attempt = record ? record->findContactAttempt(m_attempt.id()) : nullptr;
-    if (!attempt)
+    if (response->findContactAttempt(m_attempt.id()))
     {
-        return CommandOutcome::Applied;
+        response->removeContactAttempt(m_attempt.id());
+        document.setEmergencyResponse(*response);
     }
-    if (*attempt != m_attempt)
-    {
-        return CommandOutcome::Conflicted;
-    }
-    FamilyResponseRecord changed = *record;
-    changed.removeContactAttempt(m_attempt.id());
-    writeRecord(document, *response, changed);
     return CommandOutcome::Applied;
 }
 
 UndoableCommandPtr DeleteContactAttemptCommand::inverse() const
 {
-    return std::make_shared<RecordContactAttemptCommand>(m_target, m_attempt, description().undone());
+    return std::make_shared<AddContactAttemptCommand>(m_responseId, m_attempt, description().undone());
 }
 
 QJsonObject DeleteContactAttemptCommand::toJson() const
 {
     QJsonObject json;
-    json["target"] = m_target.toJson();
+    json["responseId"] = m_responseId.toString();
     json["attempt"] = m_attempt.toJson();
     return json;
 }
 
 DocumentChange DeleteContactAttemptCommand::documentChange() const
 {
-    return recordChange(m_target);
+    return DocumentChange::emergencyResponse().updated(m_responseId, m_attempt.familyId());
 }
 
 CommandPtr DeleteContactAttemptCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
 {
-    return std::make_shared<DeleteContactAttemptCommand>(FamilyRecordTarget::fromJson(json["target"].toObject()),
+    return std::make_shared<DeleteContactAttemptCommand>(EmergencyResponseId::fromString(json["responseId"].toString()),
                                                          ContactAttempt::fromJson(json["attempt"].toObject()),
                                                          description);
 }
@@ -447,29 +425,28 @@ CommandPtr DeleteContactAttemptCommand::fromJson(const QJsonObject& json, const 
 // AddTaskCommand
 // ----------------------------------------------------------------------------
 
-UndoableCommandPtr AddTaskCommand::fromNew(const FamilyRecordTarget& target, const ResponseTask& task, const Document& document)
+UndoableCommandPtr AddTaskCommand::fromNew(const EmergencyResponseId& responseId, const ResponseTask& task, const Document& document)
 {
-    CommandDescription description(QObject::tr("New %1 task for %2").arg(task.category(), target.displayName()),
+    CommandDescription description(QObject::tr("New %1 task for %2").arg(task.category(), familyName(task.familyId(), document)),
                                    describeTask(task, document));
-    return std::make_shared<AddTaskCommand>(target, task, description);
+    return std::make_shared<AddTaskCommand>(responseId, task, description);
 }
 
-AddTaskCommand::AddTaskCommand(const FamilyRecordTarget& target, const ResponseTask& task, const CommandDescription& description)
+AddTaskCommand::AddTaskCommand(const EmergencyResponseId& responseId, const ResponseTask& task, const CommandDescription& description)
     : UndoableCommand(description)
-    , m_target(target)
+    , m_responseId(responseId)
     , m_task(task)
 {
 }
 
 CommandOutcome AddTaskCommand::execute(Document& document) const
 {
-    std::optional<EmergencyResponse> response = document.findEmergencyResponseById(m_target.responseId());
+    std::optional<EmergencyResponse> response = document.findEmergencyResponseById(m_responseId);
     if (!response.has_value())
     {
         return CommandOutcome::Conflicted;
     }
-    FamilyResponseRecord record = m_target.recordIn(*response);
-    if (record.findTask(m_task.id()))
+    if (response->findTask(m_task.id()))
     {
         return CommandOutcome::Applied;
     }
@@ -477,32 +454,32 @@ CommandOutcome AddTaskCommand::execute(Document& document) const
     {
         return CommandOutcome::Conflicted;
     }
-    record.insertTask(m_task);
-    writeRecord(document, *response, record);
+    response->insertTask(m_task);
+    document.setEmergencyResponse(*response);
     return CommandOutcome::Applied;
 }
 
 UndoableCommandPtr AddTaskCommand::inverse() const
 {
-    return std::make_shared<DeleteTaskCommand>(m_target, m_task, description().undone());
+    return std::make_shared<DeleteTaskCommand>(m_responseId, m_task, description().undone());
 }
 
 QJsonObject AddTaskCommand::toJson() const
 {
     QJsonObject json;
-    json["target"] = m_target.toJson();
+    json["responseId"] = m_responseId.toString();
     json["task"] = m_task.toJson();
     return json;
 }
 
 DocumentChange AddTaskCommand::documentChange() const
 {
-    return recordChange(m_target);
+    return DocumentChange::emergencyResponse().updated(m_responseId, m_task.familyId());
 }
 
 CommandPtr AddTaskCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
 {
-    return std::make_shared<AddTaskCommand>(FamilyRecordTarget::fromJson(json["target"].toObject()),
+    return std::make_shared<AddTaskCommand>(EmergencyResponseId::fromString(json["responseId"].toString()),
                                             ResponseTask::fromJson(json["task"].toObject()),
                                             description);
 }
@@ -511,7 +488,7 @@ CommandPtr AddTaskCommand::fromJson(const QJsonObject& json, const CommandDescri
 // UpdateTaskCommand
 // ----------------------------------------------------------------------------
 
-UndoableCommandPtr UpdateTaskCommand::fromEdit(const FamilyRecordTarget& target,
+UndoableCommandPtr UpdateTaskCommand::fromEdit(const EmergencyResponseId& responseId,
                                                const ResponseTask& opened,
                                                const ResponseTask& saved,
                                                const Document& document)
@@ -542,8 +519,9 @@ UndoableCommandPtr UpdateTaskCommand::fromEdit(const FamilyRecordTarget& target,
     {
         lines.append(describeResolution(resolution->after()));
     }
-    CommandDescription description(QObject::tr("%1 task for %2").arg(opened.category(), target.displayName()), lines);
-    return std::make_shared<UpdateTaskCommand>(target.responseId(), target.familyId(), opened.id(),
+    CommandDescription description(QObject::tr("%1 task for %2").arg(opened.category(), familyName(opened.familyId(), document)),
+                                   lines);
+    return std::make_shared<UpdateTaskCommand>(responseId, opened.familyId(), opened.id(),
                                                category, taskDescription, assignment, resolution, description);
 }
 
@@ -569,8 +547,7 @@ UpdateTaskCommand::UpdateTaskCommand(const EmergencyResponseId& responseId,
 CommandOutcome UpdateTaskCommand::execute(Document& document) const
 {
     std::optional<EmergencyResponse> response = document.findEmergencyResponseById(m_responseId);
-    const FamilyResponseRecord* record = response.has_value() ? response->findRecord(m_familyId) : nullptr;
-    const ResponseTask* task = record ? record->findTask(m_taskId) : nullptr;
+    const ResponseTask* task = response.has_value() ? response->findTask(m_taskId) : nullptr;
     if (!task
         || !changeHolds(m_category, task->category())
         || !changeHolds(m_taskDescription, task->description())
@@ -579,8 +556,7 @@ CommandOutcome UpdateTaskCommand::execute(Document& document) const
     {
         return CommandOutcome::Conflicted;
     }
-    std::optional<TaskAssignment> assignment = changedValue(m_assignment, task->assignment());
-    if (!assigneeExists(assignment, document))
+    if (m_assignment.has_value() && !assigneeExists(m_assignment->after(), document))
     {
         return CommandOutcome::Conflicted;
     }
@@ -588,11 +564,10 @@ CommandOutcome UpdateTaskCommand::execute(Document& document) const
     ResponseTask updated = *task;
     updated.setCategory(changedValue(m_category, task->category()));
     updated.setDescription(changedValue(m_taskDescription, task->description()));
-    updated.setAssignment(assignment);
+    updated.setAssignment(changedValue(m_assignment, task->assignment()));
     updated.setResolution(changedValue(m_resolution, task->resolution()));
-    FamilyResponseRecord changed = *record;
-    changed.setTask(updated);
-    writeRecord(document, *response, changed);
+    response->setTask(updated);
+    document.setEmergencyResponse(*response);
     return CommandOutcome::Applied;
 }
 
@@ -642,29 +617,28 @@ CommandPtr UpdateTaskCommand::fromJson(const QJsonObject& json, const CommandDes
 // DeleteTaskCommand
 // ----------------------------------------------------------------------------
 
-UndoableCommandPtr DeleteTaskCommand::fromSeen(const FamilyRecordTarget& target, const ResponseTask& task, const Document& document)
+UndoableCommandPtr DeleteTaskCommand::fromSeen(const EmergencyResponseId& responseId, const ResponseTask& task, const Document& document)
 {
-    CommandDescription description(QObject::tr("Delete %1 task for %2").arg(task.category(), target.displayName()),
+    CommandDescription description(QObject::tr("Delete %1 task for %2").arg(task.category(), familyName(task.familyId(), document)),
                                    describeTask(task, document));
-    return std::make_shared<DeleteTaskCommand>(target, task, description);
+    return std::make_shared<DeleteTaskCommand>(responseId, task, description);
 }
 
-DeleteTaskCommand::DeleteTaskCommand(const FamilyRecordTarget& target, const ResponseTask& task, const CommandDescription& description)
+DeleteTaskCommand::DeleteTaskCommand(const EmergencyResponseId& responseId, const ResponseTask& task, const CommandDescription& description)
     : UndoableCommand(description)
-    , m_target(target)
+    , m_responseId(responseId)
     , m_task(task)
 {
 }
 
 CommandOutcome DeleteTaskCommand::execute(Document& document) const
 {
-    std::optional<EmergencyResponse> response = document.findEmergencyResponseById(m_target.responseId());
+    std::optional<EmergencyResponse> response = document.findEmergencyResponseById(m_responseId);
     if (!response.has_value())
     {
         return CommandOutcome::Conflicted;
     }
-    const FamilyResponseRecord* record = response->findRecord(m_target.familyId());
-    const ResponseTask* task = record ? record->findTask(m_task.id()) : nullptr;
+    const ResponseTask* task = response->findTask(m_task.id());
     if (!task)
     {
         return CommandOutcome::Applied;
@@ -673,33 +647,32 @@ CommandOutcome DeleteTaskCommand::execute(Document& document) const
     {
         return CommandOutcome::Conflicted;
     }
-    FamilyResponseRecord changed = *record;
-    changed.removeTask(m_task.id());
-    writeRecord(document, *response, changed);
+    response->removeTask(m_task.id());
+    document.setEmergencyResponse(*response);
     return CommandOutcome::Applied;
 }
 
 UndoableCommandPtr DeleteTaskCommand::inverse() const
 {
-    return std::make_shared<AddTaskCommand>(m_target, m_task, description().undone());
+    return std::make_shared<AddTaskCommand>(m_responseId, m_task, description().undone());
 }
 
 QJsonObject DeleteTaskCommand::toJson() const
 {
     QJsonObject json;
-    json["target"] = m_target.toJson();
+    json["responseId"] = m_responseId.toString();
     json["task"] = m_task.toJson();
     return json;
 }
 
 DocumentChange DeleteTaskCommand::documentChange() const
 {
-    return recordChange(m_target);
+    return DocumentChange::emergencyResponse().updated(m_responseId, m_task.familyId());
 }
 
 CommandPtr DeleteTaskCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
 {
-    return std::make_shared<DeleteTaskCommand>(FamilyRecordTarget::fromJson(json["target"].toObject()),
+    return std::make_shared<DeleteTaskCommand>(EmergencyResponseId::fromString(json["responseId"].toString()),
                                                ResponseTask::fromJson(json["task"].toObject()),
                                                description);
 }

@@ -4270,7 +4270,7 @@ core; the app does not build in between.
 - Modify: `src/models/Id.h` (`EmergencyResponseId`), `src/models/EmergencyResponse.h/.cpp`,
   `src/models/Document.h/.cpp`, `src/models/DocumentChange.h/.cpp`
 - Create: `src/commands/EmergencyCommands.h`, `src/commands/EmergencyCommands.cpp`
-- Modify: `src/commands/CommandRegistry.cpp`, `src/commands/FieldChangeJson.h/.cpp`
+- Modify: `src/commands/CommandRegistry.cpp`
 - Modify: `src/services/WardSession.h/.cpp`, `src/services/ReportGenerator.h/.cpp`
 - Modify: `docs/ARCHITECTURE.md` (the emergency responses in the document)
 - Modify: `CMakeLists.txt`, `tests/CMakeLists.txt`, `tests/main.cpp`, `tests/services/TestWard.h/.cpp`,
@@ -4291,31 +4291,48 @@ core; the app does not build in between.
 **Times.** App code stamps times from the system clock where it does today: each `create()`
 reads `QDateTime::currentDateTimeUtc()`, and `WardSession::endEmergency` reads it for the
 report's end time. A command holds the times its values were made with, so replay and undo
-write the same ones. Tests choose timestamps from test code, building attempts, tasks and
-responses through `fromJson` the way `TestWard::setupTeam()` builds a team with a fixed id.
+write the same ones. Tests choose timestamps from test code, building attempts, tasks,
+resolutions, notifications and responses through `fromJson` the way `TestWard::setupTeam()`
+builds a team with a fixed id.
 
 **Model.**
 - `Document` holds `QHash<EmergencyResponseId, EmergencyResponse>` with `emergencyResponses()`,
   `findEmergencyResponseById`, `setEmergencyResponse` (adds or replaces by id, as `setTeam` does)
   and `removeEmergencyResponse`. JSON key `emergencyResponses`. `EmergencyResponse`,
-  `FamilyResponseRecord`, `ResponseTask`, `ContactAttempt`, `TaskNotification`, `TaskAssignment`
-  and `TaskResolution` have `toJson`, `fromJson` and `operator==` over every field, which the
-  document's JSON and equality use. Times are written as ISO 8601 with milliseconds, and a
-  response writes its records sorted by family id, so a command's entry reads back to the same
-  JSON.
-- `EmergencyResponse` has an id; `create(name)` gives it a fresh id, the start time, the default
-  task categories, and no family records. A family has a record once a command writes to it.
+  `ResponseTask`, `ContactAttempt`, `TaskNotification`, `TaskAssignment` and `TaskResolution`
+  have `toJson`, `fromJson` and `operator==` over every field, which the document's JSON and
+  equality use. Times are written as ISO 8601 with milliseconds, so a command's entry reads back
+  to the same JSON.
+- `EmergencyResponse` holds an id, a name, the start time, the task categories, a list of
+  `ContactAttempt` and a list of `ResponseTask`. `create(name)` gives it a fresh id, the start
+  time, the default task categories, and no attempts or tasks.
+- Each `ContactAttempt` and each `ResponseTask` carries the `FamilyId` it is for, and keeps it
+  after the family is removed, since the attempts and tasks are the log of the emergency.
+  `ContactAttempt::create(familyId, method, who, outcome, notes)` and
+  `ResponseTask::create(familyId, category, description)`.
 - `ContactAttempt`: `std::optional<ContactMethod> method`, `std::optional<PersonId> who`, and
-  `std::optional<ContactOutcome> outcome` with `enum class ContactOutcome { OK, UnableToReach }`;
-  `create(method, who, outcome, notes)`. `ContactStatus`, `m_contactStatus` and
-  `setContactStatus` are deleted. `FamilyResponseRecord::effectiveStatus()`: Needs Help while a
-  task is unresolved, else the outcome of the first attempt that has one, else Not Contacted.
-  `contactMethodName` and `contactOutcomeName` give the names the user sees.
-- `FamilyResponseRecord::insertContactAttempt` places an attempt at its place, greatest
-  timestamp first, ties by the greater `ContactAttemptId` first; `insertTask` likewise by
-  `createdAt`, ties by `TaskId`. `setTask` replaces a task in place, `findContactAttempt` and
-  `findTask` read one, and `removeContactAttempt` and `removeTask` take one out.
+  `std::optional<ContactOutcome> outcome` with `enum class ContactOutcome { OK, UnableToReach }`.
+  `ContactStatus`, `m_contactStatus` and `setContactStatus` are deleted. `contactMethodName` and
+  `contactOutcomeName` give the names the user sees.
+- `EmergencyResponse::insertContactAttempt` places an attempt at its place, greatest timestamp
+  first, ties by the greater `ContactAttemptId` first; `insertTask` likewise by `createdAt`, ties
+  by `TaskId`. `setTask` replaces a task in place, `findContactAttempt` and `findTask` read one,
+  and `removeContactAttempt` and `removeTask` take one out. `contactAttemptsFor(familyId)` and
+  `tasksFor(familyId)` give one family's, in that order, and `familyIds()` every family an
+  attempt or task carries. `FamilyResponseRecord`, `addFamilyRecord`, `mutableRecord`,
   `addContactAttempt`, `addTask`, `updateTask` and `mutableTask` are deleted.
+  `addTaskCategory` appends.
+- `EmergencyResponse::statusByFamily()` works out every family's status in one pass: Needs
+  Help while one of its tasks is unresolved, else the outcome of its most recent attempt that
+  has one; a family missing from it is Not Contacted. `EmergencyResponse::statusOf(familyId)`
+  works out one family's, walking each list from its newest end and stopping at the first
+  entry that decides it. `Document` keeps each response's statuses in a cache beside its other
+  decoration caches, outside the file and equality: `onDocumentChanged` rebuilds every table
+  on a full change, recomputes one family's entry with `statusOf` on a change carrying
+  `responseFamilyId`, and rebuilds or drops one response's table on any other change
+  carrying its `responseId`, and
+  `Document::emergencyStatus(responseId, familyId)` reads it, so the map reads one hash entry
+  per marker while it is dragged.
 - `ResponseTask` holds `std::optional<TaskAssignment>` and `std::optional<TaskResolution>`. A
   `TaskAssignment` is one team or one person (`toTeam`, `toPerson`), notes, and an optional
   notification (`setNotification`); a `TaskResolution` is notes and the time
@@ -4324,53 +4341,61 @@ responses through `fromJson` the way `TestWard::setupTeam()` builds a team with 
   `setNotification`, `resolve` and `reopen` on the task are replaced by `setAssignment` and
   `setResolution`. A new assignment has no notification, so a change of assignee leaves the
   task untold.
-- `EmergencyResponse::setRecord` adds or replaces a family's record; `mutableRecord` and
-  `addFamilyRecord` are deleted. `addTaskCategory` appends.
-- Statistics: `EmergencyResponse::totalFamilies(const QHash<FamilyId, Family>& families)` and
-  `countByStatus(EffectiveContactStatus status, const QHash<FamilyId, Family>& families)` count
-  the records plus every directory family without one as Not Contacted.
+- Statistics: `EmergencyResponse::countedFamilies(families)` is every directory family plus
+  every family an attempt or task carries that the directory no longer holds;
+  `totalFamilies(const QHash<FamilyId, Family>& families)` counts them, and
+  `countByStatus(EffectiveContactStatus status, const QHash<FamilyId, Family>& families)` counts
+  those whose status in `statusByFamily` is status.
 
-**Document changes.** `DocumentChange` gains `std::optional<EmergencyResponseId> responseId` and
-the builder `DocumentChange::emergencyResponse()`: `updated(responseId)` for a change to the
-response as a whole (start, end, restore, a category added), and `updated(responseId, familyId)`
-for a change to one family's record, which sets both `responseId` and `familyId`.
+**Names.** A family, person or team the document no longer holds is named `tr("(removed)")`:
+in the report, and in command descriptions through `personName` in `Command.cpp` and the
+family and team name helpers in `EmergencyCommands.cpp`.
+
+**Document changes.** `DocumentChange` gains `std::optional<EmergencyResponseId> responseId`,
+`std::optional<FamilyId> responseFamilyId`, and the builder `DocumentChange::emergencyResponse()`:
+`updated(responseId)` for a change to the response as a whole (start, end, restore, a category
+added), and `updated(responseId, familyId)` for a change to one family's attempts or tasks, which
+sets `responseId` and `responseFamilyId`. `familyId` keeps meaning that the family itself
+changed, so an emergency change never sets it.
 
 **Commands** (`EmergencyCommands.h`), each with `TypeName`, the outcome rules of the design's
 table, and a missing response making every command but `EndEmergency` and `RestoreEmergency`
 conflict:
-- `FamilyRecordTarget(responseId, familyId, displayName, address)`, built by
-  `FamilyRecordTarget::forFamily(responseId, family)`, is where a record command writes: one
-  family's record, with the name and address snapshot taken at construction. `recordIn(response)`
-  is the response's record, or a new one from the snapshot when there is none, so a command
-  that writes to a family's record creates it when missing and depends on nothing but the
-  response id.
 - `StartEmergencyCommand::fromNew(response)`: an addition, result holds when the id is present;
   not undoable, so it derives from `Command`.
 - `EndEmergencyCommand::fromReported(response)`: conflicts when the response differs; result
   holds when it is gone; inverse `RestoreEmergencyCommand`.
 - `RestoreEmergencyCommand(response)`: result holds when a response with that id is present;
   inverse `EndEmergencyCommand`.
-- `RecordContactAttemptCommand::fromNew(target, attempt, document)`: inserts in order; result
-  holds when the attempt id is present; inverse `DeleteContactAttemptCommand`. The attempt's
-  `who` takes no existence condition, since the record is the log.
-- `DeleteContactAttemptCommand(target, attempt as last seen)`, the inverse of recording.
-- `AddTaskCommand::fromNew(target, task, document)`: result holds when the task id is present;
-  the task's assignee must exist; inverse `DeleteTaskCommand`.
-- `UpdateTaskCommand::fromEdit(target, opened, saved, document)` holds a
-  `std::optional<FieldChange<...>>` each for category, description, assignment and resolution;
-  it conflicts when the task is gone or a value moved, and when the assignment it leaves names a
-  team or person the document lacks.
-- `DeleteTaskCommand::fromSeen(target, task, document)`, as last seen; inverse `AddTaskCommand`.
+- `AddContactAttemptCommand::fromNew(responseId, attempt, document)` (`addContactAttempt`):
+  inserts in order; result holds when the attempt id is present; inverse
+  `DeleteContactAttemptCommand`. The attempt's family and `who` take no existence condition,
+  since the attempts are the log.
+- `DeleteContactAttemptCommand(responseId, attempt)`, the inverse of adding: removes by id, and
+  its result holds when the attempt is gone. No command edits an attempt, so it holds no "as
+  last seen" condition; it holds the whole attempt for its own inverse.
+- `AddTaskCommand::fromNew(responseId, task, document)`: result holds when the task id is
+  present; the task's assignee must exist; inverse `DeleteTaskCommand`.
+- `UpdateTaskCommand::fromEdit(responseId, opened, saved, document)` holds the task id, its
+  family (for the document change), and a `std::optional<FieldChange<...>>` each for category,
+  description, assignment and resolution; it conflicts when the task is gone or a value moved,
+  and when it changes the assignment and the assignment it sets names a team or person the
+  document lacks.
+- `DeleteTaskCommand::fromSeen(responseId, task, document)`, as last seen, since `UpdateTask`
+  edits tasks; inverse `AddTaskCommand`.
 - `AddTaskCategoryCommand::fromNew(responseId, category)`: result holds when present; not
   undoable, so it derives from `Command`.
-- The record commands report `DocumentChange::emergencyResponse().updated(responseId, familyId)`;
-  the others report `updated(responseId)`.
-- `FieldChangeJson` gains `toJsonValue` / `fromJsonValue` for `std::optional<TaskAssignment>`
-  and `std::optional<TaskResolution>` (an object, or null).
-- Descriptions: `Start emergency: <name>`, `End emergency: <name>`, `Contact with <family>`
-  with a line each for method, who, outcome and notes, `New <category> task for <family>`,
-  `<category> task for <family>` with a line per changed value, `Delete <category> task for
-  <family>`, `New task category: <category>`.
+- The attempt and task commands report `DocumentChange::emergencyResponse().updated(responseId,
+  familyId)` with the family their attempt or task carries; the others report
+  `updated(responseId)`.
+- `EmergencyCommands.cpp` defines `toJsonValue` / `fromJsonValue` for
+  `std::optional<TaskAssignment>` and `std::optional<TaskResolution>` (an object, or null), which
+  the templates in `FieldChangeJson.h` reach through argument-dependent lookup, so that header
+  stays free of the emergency types.
+- Descriptions, naming the family as the document holds it at construction: `Start emergency:
+  <name>`, `End emergency: <name>`, `Contact with <family>` with a line each for method, who,
+  outcome and notes, `New <category> task for <family>`, `<category> task for <family>` with a
+  line per changed value, `Delete <category> task for <family>`, `New task category: <category>`.
 
 **Session.**
 - `WardSession::endEmergency(const EmergencyResponseId& id, const QString& reportPath)`
@@ -4382,13 +4407,18 @@ conflict:
 
 **Report.** `ReportGenerator::generateReport(response, document, writtenAt, filePath)` takes
 the document, which gives it the ward name, the directory's families for the statistics, and
-the names of people and teams. It tallies an attempt with no method on its own line, *Marked OK*
-or *Marked Unable to Reach*, draws its overview from `totalFamilies(families)` / `countByStatus`,
-and lists directory families without a record among the families not contacted. Since the report
-is the record of the emergency, it also has a section per family record listing, oldest first,
-each attempt - time, method, who, outcome and notes - and each task - time, category,
-description, assignee and assignment notes, notification, and resolution with its notes and
-time. A person or team the document no longer holds shows no name there.
+the names and addresses of families and the names of people and teams as they stand when the
+report is written. It builds the report as HTML in a `QTextDocument`, every user-entered string
+passed through `toHtmlEscaped`, and prints it with `QTextDocument::print` to a PDF `QPrinter`,
+so Qt wraps long lines and breaks pages, a long paragraph included. `print` returns nothing; a
+PDF that cannot be opened for writing leaves the printer in `QPrinter::Error`, which is how
+`generateReport` answers false. It tallies an attempt with no method on its own line, *Marked OK* or *Marked
+Unable to Reach*, draws its overview from `totalFamilies(families)` / `countByStatus`, and lists
+the families needing help and not contacted from `countedFamilies`. Since the report is the
+record of the emergency, it also has a section per family an attempt or task carries, listing,
+oldest first, each attempt - time, method, who, outcome and notes - and each task - time,
+category, description, assignee and assignment notes, notification, and resolution with its
+notes and time.
 
 **UI and manager** (after the core):
 - `EmergencyManager` keeps `std::optional<EmergencyResponseId> m_shownId`, reads the response
@@ -4402,35 +4432,46 @@ time. A person or team the document no longer holds shows no name there.
 - Emergencies in progress are switched with a combo box on `EmergencyBanner`, shown only when
   more than one is in progress.
 - UI sites build their commands from what was captured when the target was chosen: the OK and
-  Unable to Reach buttons (`ActionButtonsWidget::onOkClicked` / `onUnableToReachClicked`) record
+  Unable to Reach buttons (`ActionButtonsWidget::onOkClicked` / `onUnableToReachClicked`) add
   an attempt carrying only the outcome; `ContactAttemptDialog` fills method and who; the task
   dialog, resolve, reopen, assign, unassign and notify in `WardListView`, `TaskListView`,
   `TeamsView`, `TaskDialog` and `TaskListModel::setData` build `UpdateTaskCommand` from the task
-  captured at open. A family's status in the views is its record's `effectiveStatus()`, or Not
-  Contacted without a record.
+  captured at open. A family's status in the views and on the map is
+  `Document::emergencyStatus` for the shown response, and its
+  attempts and tasks are `contactAttemptsFor` and `tasksFor`. Views that redraw one family on
+  an emergency change read `responseFamilyId`.
 
 **Tests** (`EmergencyCommandsTest`, timestamps from `TestWard::attempt`, `TestWard::task` and
-`TestWard::storm`):
+`TestWard::resolution`, `TestWard::notification` and `TestWard::storm`, and responses holding
+attempts and tasks from `TestWard::stormWith`):
 - `twoRespondersOfflineLandEveryAttempt`: exact attempt counts per family and each attempt's notes.
-- `twoRespondersOnAFamilyWithNoRecordLandInOneRecord`, with the record's name and address.
+- `twoRespondersFirstAttemptsOnOneFamilyBothLand`, and the later outcome is the family's status.
 - `differentOutcomesOnOneFamilyShowTheLaterTimestampWhicheverReplaysFirst`: neither journal
   abandoned; both orders give equal documents with the attempts newest first.
+- `attemptsAtOneTimeAreOrderedByIdWhicheverReplaysFirst`: both orders give the greater id first.
+- `undoingAnAddedAttemptRestoresTheResponseAndRedoAddsItAgain`
 - `twoOfflineStartsMakeTwoEvents`, each holding its own responder's attempts.
 - `startAndNewCategoryAreNotUndoable`
 - `endingWritesAReportHoldingEveryAttemptAndTaskThenRemovesTheResponse`: the report's text, read
-  back through `PdfExtractor`, contains each attempt's notes, oldest first, the *Marked OK* tally,
-  and each task's description and assignee.
+  back through `PdfExtractor`, contains short phrases (lines may wrap anywhere): each attempt's
+  notes, oldest first, the last word of a note long enough to wrap, the attempt's who, the
+  *Marked OK* tally, each task's description and assignee notes, a notification and a
+  resolution, a directory family with no attempt or task among those not contacted, and
+  `(removed)` for an assignee removed before the end.
 - `attemptsReplayedOntoAnEndedResponseAreInTheToRedoText`: the abandoned replay's `toRedo`
   holds each attempt's heading and lines.
 - `endReplayedAfterAnotherAttemptConflictsAndLeavesTheResponse`
-- `undoingAnEndRestoresAnEqualResponseAndLeavesTheReportFile`
+- `undoingAnEndRestoresAnEqualResponseKeepsTheReportAndRedoEndsItAgain`
 - `endWhoseReportCannotBeWrittenEndsNothing`: `ReportFailed`, response present, journal unchanged.
 - `endingAResponseAlreadyGoneWritesNothing`: `AlreadyEnded`, no file, journal unchanged.
 - `taskDeletionReplayedAfterAnotherResolvedItConflicts`: the task stays resolved with its notes.
+- `taskEditReplayedAfterTheTaskWasDeletedConflicts`
 - `taskEditsToDifferentValuesBothApply`; `oneTaskValueSetDifferentlyConflicts`
 - `assignmentToAPersonReplayedAfterTheyWereRemovedConflicts`
-- `changingTheAssigneeClearsTheNotification`, and undo restores the notification.
-- `statisticsCountFamiliesWithoutARecordAsNotContacted`
+- `reassigningReplacesTheWholeAssignmentAndUndoRestoresTheNotification`: the assignment is one
+  value, so a new assignee carries no notification.
+- `statisticsCountEveryDirectoryFamilyAndEveryRemovedFamilyTheResponseNames`
+- `statusTableFollowsEachChangeToOneFamily`
 - Samples for every emergency command type.
 
 **Commit:** `git commit -m "Emergency responses are a keyed collection, changed only by commands; ending saves the report and removes the response"`
@@ -4559,7 +4600,7 @@ ministering import adds someone it cannot match only when it is the newer source
 - `olderMinisteringPdfAddsNoUnknownFamilyOrMemberAndNoGroupNamesAMissingId`
 - `ministeringImportReplayedAfterACleanupChangedAGroupConflicts` (the group keeps the cleanup's
   result)
-- `attemptOnAFamilyWithNoRecordLandsAfterAnImportRemovedIt` (with its construction-time snapshot)
+- `attemptOnAFamilyLandsAfterAnImportRemovedIt` (the attempt keeps its family id)
 - `importDescriptionIsOneLineNamingTheFile`
 - Samples for both import types.
 

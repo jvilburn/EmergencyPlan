@@ -6,39 +6,6 @@
 
 #include <optional>
 
-/// Where a command writes in an emergency response: one family's record, with the family's
-/// name and address as the command saw them. A command that writes to a family without a
-/// record makes the record from these, so it depends on nothing but the response.
-class FamilyRecordTarget
-{
-public:
-    FamilyRecordTarget(const EmergencyResponseId& responseId,
-                       const FamilyId& familyId,
-                       const QString& displayName,
-                       const QString& address);
-
-    /// The target for family's record in that response, named and addressed as family is.
-    static FamilyRecordTarget forFamily(const EmergencyResponseId& responseId, const Family& family);
-
-    const EmergencyResponseId& responseId() const { return m_responseId; }
-    const FamilyId& familyId() const { return m_familyId; }
-    const QString& displayName() const { return m_displayName; }
-    const QString& address() const { return m_address; }
-
-    /// The response's record for the family, or a new record with this name and address
-    /// when the response has none.
-    FamilyResponseRecord recordIn(const EmergencyResponse& response) const;
-
-    QJsonObject toJson() const;
-    static FamilyRecordTarget fromJson(const QJsonObject& json);
-
-private:
-    EmergencyResponseId m_responseId;
-    FamilyId m_familyId;
-    QString m_displayName;
-    QString m_address;
-};
-
 /// A new emergency response, an addition that never conflicts: its result holds when a
 /// response with its id is already there. Undoing a start would delete a response other
 /// responders may already be writing to, so it is not undoable.
@@ -108,19 +75,21 @@ private:
     EmergencyResponse m_response;
 };
 
-/// A contact attempt logged, or the OK or Unable to Reach button pressed, on one family: an
-/// addition. Its result holds when the record holds the attempt's id; it conflicts when the
-/// response is gone. The attempt keeps the who it was made with, with no condition that the
-/// person exists, since the record is the log of what happened.
-class RecordContactAttemptCommand : public UndoableCommand
+/// A contact attempt added to a response, from the contact dialog or the OK or Unable to
+/// Reach button: an addition. Its result holds when the response holds the attempt's id;
+/// it conflicts when the response is gone. The attempt keeps the family and who it was made
+/// with, with no condition that they exist, since the attempts are the log of what
+/// happened.
+class AddContactAttemptCommand : public UndoableCommand
 {
 public:
-    static constexpr const char* TypeName = "recordContactAttempt";
+    static constexpr const char* TypeName = "addContactAttempt";
 
-    /// The command that records attempt, naming who made it as document holds them.
-    static UndoableCommandPtr fromNew(const FamilyRecordTarget& target, const ContactAttempt& attempt, const Document& document);
+    /// The command that adds attempt, naming its family and who made it as document holds
+    /// them.
+    static UndoableCommandPtr fromNew(const EmergencyResponseId& responseId, const ContactAttempt& attempt, const Document& document);
 
-    RecordContactAttemptCommand(const FamilyRecordTarget& target, const ContactAttempt& attempt, const CommandDescription& description);
+    AddContactAttemptCommand(const EmergencyResponseId& responseId, const ContactAttempt& attempt, const CommandDescription& description);
 
     QString type() const override { return TypeName; }
     CommandOutcome execute(Document& document) const override;
@@ -131,19 +100,19 @@ public:
     static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
 
 private:
-    FamilyRecordTarget m_target;
+    EmergencyResponseId m_responseId;
     ContactAttempt m_attempt;
 };
 
-/// The inverse of RecordContactAttemptCommand, which is how an attempt is undone. The
-/// attempt is held as last seen: its result holds when the attempt is already gone, and it
-/// conflicts when the response is gone or the attempt differs.
+/// The inverse of AddContactAttemptCommand, which is how an attempt is undone. It removes
+/// the attempt by id: its result holds when the attempt is already gone, and it conflicts
+/// when the response is gone. It holds the whole attempt for its inverse to add back.
 class DeleteContactAttemptCommand : public UndoableCommand
 {
 public:
     static constexpr const char* TypeName = "deleteContactAttempt";
 
-    DeleteContactAttemptCommand(const FamilyRecordTarget& target, const ContactAttempt& attempt, const CommandDescription& description);
+    DeleteContactAttemptCommand(const EmergencyResponseId& responseId, const ContactAttempt& attempt, const CommandDescription& description);
 
     QString type() const override { return TypeName; }
     CommandOutcome execute(Document& document) const override;
@@ -154,11 +123,11 @@ public:
     static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
 
 private:
-    FamilyRecordTarget m_target;
+    EmergencyResponseId m_responseId;
     ContactAttempt m_attempt;
 };
 
-/// A new task for one family: an addition. Its result holds when the record holds the
+/// A new task in a response: an addition. Its result holds when the response holds the
 /// task's id; it conflicts when the response is gone, or when the task is assigned to a team
 /// or person the document lacks.
 class AddTaskCommand : public UndoableCommand
@@ -166,10 +135,10 @@ class AddTaskCommand : public UndoableCommand
 public:
     static constexpr const char* TypeName = "addTask";
 
-    /// The command that adds task, naming its assignee as document holds them.
-    static UndoableCommandPtr fromNew(const FamilyRecordTarget& target, const ResponseTask& task, const Document& document);
+    /// The command that adds task, naming its family and assignee as document holds them.
+    static UndoableCommandPtr fromNew(const EmergencyResponseId& responseId, const ResponseTask& task, const Document& document);
 
-    AddTaskCommand(const FamilyRecordTarget& target, const ResponseTask& task, const CommandDescription& description);
+    AddTaskCommand(const EmergencyResponseId& responseId, const ResponseTask& task, const CommandDescription& description);
 
     QString type() const override { return TypeName; }
     CommandOutcome execute(Document& document) const override;
@@ -180,23 +149,24 @@ public:
     static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
 
 private:
-    FamilyRecordTarget m_target;
+    EmergencyResponseId m_responseId;
     ResponseTask m_task;
 };
 
 /// An edit to one task, built from the difference between the task as opened and as saved:
 /// its category, description, assignment and resolution, each judged on its own. It
-/// conflicts when the response, record or task is gone, a value moved, or the assignment it
-/// leaves names a team or person the document lacks.
+/// conflicts when the response or task is gone, a value moved, or the assignment it sets
+/// names a team or person the document lacks. It holds the task's family for its document
+/// change.
 class UpdateTaskCommand : public UndoableCommand
 {
 public:
     static constexpr const char* TypeName = "updateTask";
 
-    /// The edit from the task as opened to the task as saved, naming its assignee as
-    /// document holds them, or an empty pointer when nothing differs, which
+    /// The edit from the task as opened to the task as saved, naming its family and
+    /// assignee as document holds them, or an empty pointer when nothing differs, which
     /// WardSession::commit takes as nothing to do.
-    static UndoableCommandPtr fromEdit(const FamilyRecordTarget& target,
+    static UndoableCommandPtr fromEdit(const EmergencyResponseId& responseId,
                                        const ResponseTask& opened,
                                        const ResponseTask& saved,
                                        const Document& document);
@@ -236,11 +206,11 @@ class DeleteTaskCommand : public UndoableCommand
 public:
     static constexpr const char* TypeName = "deleteTask";
 
-    /// The command that removes task as the user sees it, naming its assignee as document
-    /// holds them.
-    static UndoableCommandPtr fromSeen(const FamilyRecordTarget& target, const ResponseTask& task, const Document& document);
+    /// The command that removes task as the user sees it, naming its family and assignee as
+    /// document holds them.
+    static UndoableCommandPtr fromSeen(const EmergencyResponseId& responseId, const ResponseTask& task, const Document& document);
 
-    DeleteTaskCommand(const FamilyRecordTarget& target, const ResponseTask& task, const CommandDescription& description);
+    DeleteTaskCommand(const EmergencyResponseId& responseId, const ResponseTask& task, const CommandDescription& description);
 
     QString type() const override { return TypeName; }
     CommandOutcome execute(Document& document) const override;
@@ -251,7 +221,7 @@ public:
     static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
 
 private:
-    FamilyRecordTarget m_target;
+    EmergencyResponseId m_responseId;
     ResponseTask m_task;
 };
 

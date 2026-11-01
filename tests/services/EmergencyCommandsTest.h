@@ -15,20 +15,24 @@ public:
 
 private slots:
     void twoRespondersOfflineLandEveryAttempt();
-    void twoRespondersOnAFamilyWithNoRecordLandInOneRecord();
+    void twoRespondersFirstAttemptsOnOneFamilyBothLand();
     void differentOutcomesOnOneFamilyShowTheLaterTimestampWhicheverReplaysFirst();
+    void attemptsAtOneTimeAreOrderedByIdWhicheverReplaysFirst();
+    void undoingAnAddedAttemptRestoresTheResponseAndRedoAddsItAgain();
     void twoOfflineStartsMakeTwoEvents();
     void startAndNewCategoryAreNotUndoable();
     void endingWritesAReportHoldingEveryAttemptAndTaskThenRemovesTheResponse();
     void attemptsReplayedOntoAnEndedResponseAreInTheToRedoText();
     void endReplayedAfterAnotherAttemptConflictsAndLeavesTheResponse();
-    void undoingAnEndRestoresAnEqualResponseAndLeavesTheReportFile();
+    void undoingAnEndRestoresAnEqualResponseKeepsTheReportAndRedoEndsItAgain();
     void endWhoseReportCannotBeWrittenEndsNothing();
     void endingAResponseAlreadyGoneWritesNothing();
     void taskDeletionReplayedAfterAnotherResolvedItConflicts();
+    void taskEditReplayedAfterTheTaskWasDeletedConflicts();
     void taskEditsToDifferentValuesBothApply();
     void oneTaskValueSetDifferentlyConflicts();
     void assignmentToAPersonReplayedAfterTheyWereRemovedConflicts();
-    void changingTheAssigneeClearsTheNotification();
-    void statisticsCountFamiliesWithoutARecordAsNotContacted();
+    void reassigningReplacesTheWholeAssignmentAndUndoRestoresTheNotification();
+    void statisticsCountEveryDirectoryFamilyAndEveryRemovedFamilyTheResponseNames();
+    void statusTableFollowsEachChangeToOneFamily();
 };

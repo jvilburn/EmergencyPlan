@@ -40,7 +40,7 @@ struct EmergencyResponseScopeBuilder
     /// A change to the response as a whole: started, ended, restored, or a category added.
     DocumentChange updated(const EmergencyResponseId& id) const;
 
-    /// A change to one family's record in the response.
+    /// A change to one family's attempts or tasks in the response.
     DocumentChange updated(const EmergencyResponseId& id, const FamilyId& familyId) const;
 };
 
@@ -50,13 +50,15 @@ struct DocumentChange
 {
     ChangeAction action = ChangeAction::Full;
 
-    // An Updated change sets one of these: a change to one family, team, emergency asset
-    // or emergency response. A change to one family's record in an emergency response sets
-    // both responseId and familyId. An Updated change with none set is to the ward details.
+    // An Updated change sets one of familyId, teamId, assetId and responseId: a change to
+    // one family, team, emergency asset or emergency response. A change to one family's
+    // attempts or tasks in an emergency response also sets responseFamilyId. An Updated
+    // change with none set is to the ward details.
     std::optional<FamilyId> familyId;
     std::optional<TeamId> teamId;
     std::optional<EmergencyAssetId> assetId;
     std::optional<EmergencyResponseId> responseId;
+    std::optional<FamilyId> responseFamilyId;
 
     // Full document change (no ID fields set)
     static DocumentChange full();

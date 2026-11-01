@@ -113,6 +113,11 @@ public:
     /// Get response areas for a person based on their emergency asset assignments (from cache)
     QSet<ResponseArea> personResponseAreas(const PersonId& personId) const;
 
+    /// The family's status in that response, from a table kept up to date as the response
+    /// changes, so the map reads it once per marker. Not Contacted when the response is gone
+    /// or gives the family no status.
+    EffectiveContactStatus emergencyStatus(const EmergencyResponseId& responseId, const FamilyId& familyId) const;
+
     /// Rebuilds the lookup caches the change touches.
     void onDocumentChanged(const struct DocumentChange& change);
 
@@ -130,6 +135,9 @@ private:
 
     void rebuildPersonToFamilyMap();
     void rebuildDecorationCaches();
+    /// Brings the status table up to date for an emergency change: one family's entry when
+    /// the change names one, otherwise that response's whole table.
+    void updateEmergencyStatuses(const EmergencyResponseId& responseId, const std::optional<FamilyId>& familyId);
 
     // Ward/Stake hierarchy and document naming
     DocumentMetadata m_metadata;
@@ -162,4 +170,7 @@ private:
 
     // Decoration cache: personId -> set of response areas (rebuilt when emergency assets change)
     QHash<PersonId, QSet<ResponseArea>> m_personResponseAreas;
+
+    // Status cache: each response's statusByFamily (kept up to date as a response changes)
+    QHash<EmergencyResponseId, QHash<FamilyId, EffectiveContactStatus>> m_emergencyStatuses;
 };

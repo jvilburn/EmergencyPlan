@@ -4,6 +4,7 @@
 #include <QHash>
 #include <QJsonObject>
 #include <QList>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <optional>
@@ -72,20 +73,22 @@ private:
 
 // === ContactAttempt ===
 
-/// One try at reaching a family. The OK and Unable to Reach buttons record only an outcome;
-/// the contact dialog records a method and who made the contact.
+/// One try at reaching a family. The OK and Unable to Reach buttons give only an outcome;
+/// the contact dialog gives a method and who made the contact.
 class ContactAttempt
 {
 public:
     ContactAttempt() = default;
 
-    /// An attempt made now, with a fresh id.
-    static ContactAttempt create(std::optional<ContactMethod> method,
+    /// An attempt on that family made now, with a fresh id.
+    static ContactAttempt create(const FamilyId& familyId,
+                                 std::optional<ContactMethod> method,
                                  const std::optional<PersonId>& who,
                                  std::optional<ContactOutcome> outcome,
                                  const QString& notes);
 
     const ContactAttemptId& id() const { return m_id; }
+    const FamilyId& familyId() const { return m_familyId; }
     std::optional<ContactMethod> method() const { return m_method; }
     const std::optional<PersonId>& who() const { return m_who; }
     std::optional<ContactOutcome> outcome() const { return m_outcome; }
@@ -100,6 +103,7 @@ public:
 
 private:
     ContactAttemptId m_id;
+    FamilyId m_familyId;
     std::optional<ContactMethod> m_method;
     std::optional<PersonId> m_who;
     std::optional<ContactOutcome> m_outcome;
@@ -175,10 +179,11 @@ class ResponseTask
 public:
     ResponseTask() = default;
 
-    /// A task created now, with a fresh id, unassigned and unresolved.
-    static ResponseTask create(const QString& category, const QString& description);
+    /// A task for that family created now, with a fresh id, unassigned and unresolved.
+    static ResponseTask create(const FamilyId& familyId, const QString& category, const QString& description);
 
     const TaskId& id() const { return m_id; }
+    const FamilyId& familyId() const { return m_familyId; }
     const QString& category() const { return m_category; }
     const QString& description() const { return m_description; }
     const QDateTime& createdAt() const { return m_createdAt; }
@@ -202,6 +207,7 @@ public:
 
 private:
     TaskId m_id;
+    FamilyId m_familyId;
     QString m_category;
     QString m_description;
     QDateTime m_createdAt;
@@ -209,36 +215,35 @@ private:
     std::optional<TaskResolution> m_resolution;
 };
 
-// === FamilyResponseRecord ===
+// === EmergencyResponse ===
 
-/// One family's log in an emergency response: its attempts and tasks, with the family's
-/// name and address as they stood when the record was made, so it reads the same after the
-/// family changes or is removed.
+/// One emergency in progress: its contact attempts and tasks, each carrying the family it
+/// is for. A family's status is worked out from the attempts and tasks that carry its id.
 ///
 /// Attempts are held most recent first: greatest timestamp first, ties broken by the
 /// greater id first. Tasks are held the same way by when they were created. So the same
-/// attempts and tasks make an equal record whatever order they were inserted in.
-class FamilyResponseRecord
+/// attempts and tasks make an equal response whatever order they were inserted in.
+class EmergencyResponse
 {
 public:
-    FamilyResponseRecord() = default;
+    EmergencyResponse() = default;
 
-    /// A record with no attempts or tasks.
-    static FamilyResponseRecord create(const FamilyId& familyId,
-                                       const QString& displayName,
-                                       const QString& address);
+    /// A response started now, with a fresh id, the default task categories, and no
+    /// attempts or tasks.
+    static EmergencyResponse create(const QString& name);
 
-    const FamilyId& familyId() const { return m_familyId; }
-    const QString& displayName() const { return m_displayName; }
-    const QString& address() const { return m_address; }
+    const EmergencyResponseId& id() const { return m_id; }
+    const QString& name() const { return m_name; }
+    const QDateTime& startedAt() const { return m_startedAt; }
+    const QStringList& taskCategories() const { return m_taskCategories; }
     const QList<ContactAttempt>& contactAttempts() const { return m_contactAttempts; }
     const QList<ResponseTask>& tasks() const { return m_tasks; }
 
-    /// The attempt or task with that id, or null when the record has none.
+    /// The attempt or task with that id, or null when the response has none.
     const ContactAttempt* findContactAttempt(const ContactAttemptId& id) const;
     const ResponseTask* findTask(const TaskId& id) const;
 
-    /// Inserts at its place in the order. The record holds no attempt or task with its id.
+    /// Inserts at its place in the order. The response holds no attempt or task with its id.
     void insertContactAttempt(const ContactAttempt& attempt);
     void insertTask(const ResponseTask& task);
 
@@ -249,57 +254,34 @@ public:
     void removeContactAttempt(const ContactAttemptId& id);
     void removeTask(const TaskId& id);
 
-    /// Needs Help while a task is unresolved; otherwise the outcome of the most recent
-    /// attempt that has one; otherwise Not Contacted.
-    EffectiveContactStatus effectiveStatus() const;
-
-    QJsonObject toJson() const;
-    static FamilyResponseRecord fromJson(const QJsonObject& json);
-
-    bool operator==(const FamilyResponseRecord& other) const;
-    bool operator!=(const FamilyResponseRecord& other) const { return !(*this == other); }
-
-private:
-    FamilyId m_familyId;
-    QString m_displayName;
-    QString m_address;
-    QList<ContactAttempt> m_contactAttempts;
-    QList<ResponseTask> m_tasks;
-};
-
-// === EmergencyResponse ===
-
-/// One emergency in progress. A family has a record once a command writes to it; a
-/// directory family without one is Not Contacted.
-class EmergencyResponse
-{
-public:
-    EmergencyResponse() = default;
-
-    /// A response started now, with a fresh id, the default task categories, and no family
-    /// records.
-    static EmergencyResponse create(const QString& name);
-
-    const EmergencyResponseId& id() const { return m_id; }
-    const QString& name() const { return m_name; }
-    const QDateTime& startedAt() const { return m_startedAt; }
-    const QHash<FamilyId, FamilyResponseRecord>& familyRecords() const { return m_familyRecords; }
-    const QStringList& taskCategories() const { return m_taskCategories; }
-
-    /// The record for that family, or null when the family has none.
-    const FamilyResponseRecord* findRecord(const FamilyId& familyId) const;
-
-    /// Sets the record for record's family to record, adding it when there is none.
-    void setRecord(const FamilyResponseRecord& record);
-
     /// Appends category. The response does not hold it already.
     void addTaskCategory(const QString& category);
 
-    /// The response's records, plus every family in families without one.
+    /// Every family id that an attempt or task carries.
+    QSet<FamilyId> familyIds() const;
+
+    /// The family's attempts and tasks, in the response's order.
+    QList<ContactAttempt> contactAttemptsFor(const FamilyId& familyId) const;
+    QList<ResponseTask> tasksFor(const FamilyId& familyId) const;
+
+    /// One family's status: Needs Help while one of its tasks is unresolved, otherwise the
+    /// outcome of its most recent attempt that has one, otherwise Not Contacted. Walks from
+    /// the newest end of each list and stops at the first entry that decides it.
+    EffectiveContactStatus statusOf(const FamilyId& familyId) const;
+
+    /// Each family's status, worked out in one pass: Needs Help while one of its tasks is
+    /// unresolved, otherwise the outcome of its most recent attempt that has one. A family
+    /// missing from it is Not Contacted.
+    QHash<FamilyId, EffectiveContactStatus> statusByFamily() const;
+
+    /// The families the statistics count: every family in families, and every family an
+    /// attempt or task carries.
+    QSet<FamilyId> countedFamilies(const QHash<FamilyId, Family>& families) const;
+
+    /// The number of countedFamilies.
     int totalFamilies(const QHash<FamilyId, Family>& families) const;
 
-    /// The records with that status, plus, for Not Contacted, every family in families
-    /// without a record.
+    /// The families counted by totalFamilies whose status is status.
     int countByStatus(EffectiveContactStatus status, const QHash<FamilyId, Family>& families) const;
 
     QJsonObject toJson() const;
@@ -312,6 +294,7 @@ private:
     EmergencyResponseId m_id;
     QString m_name;
     QDateTime m_startedAt;
-    QHash<FamilyId, FamilyResponseRecord> m_familyRecords;
     QStringList m_taskCategories;
+    QList<ContactAttempt> m_contactAttempts;
+    QList<ResponseTask> m_tasks;
 };

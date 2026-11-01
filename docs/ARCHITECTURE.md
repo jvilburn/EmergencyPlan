@@ -112,7 +112,7 @@ Collections use `QHash<Id, Model>` for O(1) lookup by ID and automatic uniquenes
 
 Coordinates belong to addresses: a family's place on the map is its address's entry in `addressCoordinates`, read through `Document::coordinatesFor(family.address())`. Families at one address share an entry, and a family whose address has none is unmapped.
 
-An emergency response holds a `FamilyResponseRecord` for each family a command has written to: its contact attempts and tasks, with the family's name and address as the command saw them. A directory family without a record is Not Contacted. A family's status is Needs Help while a task is unresolved, otherwise the outcome of its most recent attempt that has one. `WardSession::endEmergency` writes the response's summary report and then removes the response, so the document holds only emergencies in progress.
+An emergency response holds its contact attempts and tasks, each carrying the id of the family it is for. A family's status is worked out from the attempts and tasks that carry its id: Needs Help while one of its tasks is unresolved, otherwise the outcome of its most recent attempt that has one, otherwise Not Contacted. `WardSession::endEmergency` writes the response's summary report, naming families, people and teams as the document holds them then, and then removes the response, so the document holds only emergencies in progress.
 
 ### Unified Models
 
