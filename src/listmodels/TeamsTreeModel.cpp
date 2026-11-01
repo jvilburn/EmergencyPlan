@@ -67,10 +67,17 @@ void TeamsTreeModel::clearNodes()
 
 void TeamsTreeModel::onDocumentChanged(const DocumentChange& change)
 {
-    // A family change can change a member's name and whether the filter shows them.
-    if (change.action == ChangeAction::Full || change.teamId || change.familyId)
+    // Full document reload or a team changed
+    if (change.action == ChangeAction::Full || change.teamId)
     {
         rebuild();
+        return;
+    }
+
+    // Family updated: refresh display text only
+    if (change.familyId)
+    {
+        refreshFamilyDisplayText(*change.familyId);
     }
 }
 
@@ -720,3 +727,54 @@ void TeamsTreeModel::loadContactDetails(const QModelIndex& index)
     node->contactsLoaded = true;
 }
 
+void TeamsTreeModel::refreshFamilyDisplayText(const FamilyId& familyId)
+{
+    const Document& doc = DocumentManager::instance()->document();
+    const QHash<FamilyId, Family>& families = doc.families();
+
+    if (!families.contains(familyId))
+    {
+        return;
+    }
+
+    const Family& family = families[familyId];
+
+    QSet<PersonId> personIds;
+    for (const Person& member : family.members())
+    {
+        personIds.insert(member.id());
+    }
+
+    for (int teamRow = 0; teamRow < m_teamNodes.size(); ++teamRow)
+    {
+        TreeNode* teamNode = m_teamNodes[teamRow];
+
+        for (int memberRow = 0; memberRow < teamNode->children.size(); ++memberRow)
+        {
+            TreeNode* memberNode = teamNode->children[memberRow];
+
+            if (memberNode->type == ItemType::TeamMember
+                && memberNode->personId
+                && personIds.contains(*memberNode->personId))
+            {
+                std::optional<Person> person = doc.findPersonById(*memberNode->personId);
+                if (person)
+                {
+                    QString displayName = person->displayName() + formatContactSuffix(*person);
+                    std::optional<Team> teamOpt = teamNode->teamId
+                        ? doc.findTeamById(*teamNode->teamId)
+                        : std::nullopt;
+                    if (teamOpt && teamOpt->leaderId() && *teamOpt->leaderId() == *memberNode->personId)
+                    {
+                        displayName += tr(" (leader)");
+                    }
+                    memberNode->displayText = displayName;
+
+                    QModelIndex teamIndex = createIndex(teamRow, 0, teamNode);
+                    QModelIndex memberIndex = index(memberRow, 0, teamIndex);
+                    emit dataChanged(memberIndex, memberIndex);
+                }
+            }
+        }
+    }
+}

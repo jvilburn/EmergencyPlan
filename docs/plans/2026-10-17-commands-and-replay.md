@@ -4206,8 +4206,7 @@ clears a leader who is not among the new members, so a team's leader is one of i
 **Document changes.** Team commands report `DocumentChange::team().updated(id)`, which
 `TeamsTreeModel` rebuilds on; asset commands report `DocumentChange::emergencyAsset().updated(id)`,
 which `EmergencyAssetModel` and `Document::rebuildDecorationCaches` rebuild on. `DocumentChange`
-gains `teamId` and `assetId` with those two builders. Both trees also rebuild on a family
-change, since a family edit can change a name and whom the filter shows.
+gains `teamId` and `assetId` with those two builders.
 
 **People in commands.** `Command.h` gains `describePeopleChange(change, document)`, a
 description line per person added and then per person removed (`added: Smith, Dan`), in name
