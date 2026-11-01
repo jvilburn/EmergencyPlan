@@ -1417,11 +1417,13 @@ are disabled for it, and such a family stays off the map; this is accepted. Each
 table holds only what is used; an address that comes back later is geocoded, or typed,
 again.
 
-**An automatic batch pushes once.** Results are held by address as they arrive, and the save
-and push happen once, when the batch finishes or when a lookup completes, so an import
-costs one more version rather than one per family, and a batch or lookup that changed nothing
-neither saves nor pushes. When the batch saves, its results apply to the document as it
-stands then.
+**An automatic batch pushes once.** Each result adds its address's entry, where the document
+lacks one, as it arrives, so a family leaves the unmapped list as soon as its address
+resolves; it is also held by address until the batch finishes. The save and push happen
+once, when the batch finishes or when a lookup completes, so an import costs one more version
+rather than one per family, and a batch or lookup that changed nothing neither saves nor
+pushes. When the batch finishes, every held result the document as it stands lacks is added
+again, so a version that replaced the document while the batch ran loses none of them.
 Addresses and unit numbers that fail to resolve go on a failed list, kept
 by their text in the device-local state, and are not tried again until the text changes. A
 family whose address is on it stays unmapped until someone corrects the address or types
@@ -1439,8 +1441,8 @@ succeeds, once the problem is fixed, writes the document and journal together wi
 change in them, and pushes as usual; one write still carries both, so the local file never
 disagrees with itself. Every push carries only what this device has already saved, except
 a join (see *Invites*) and Leave and *Remove this device* (below), and memory runs ahead of
-the file only while saves
-are failing. **Whatever is pending - a failed save first, then a push - is retried on the
+the file only while saves are failing and while an automatic batch's results wait for its
+save. **Whatever is pending - a failed save first, then a push - is retried on the
 next command, when the window regains focus, on reconnecting, and on closing.** If a save
 still fails at closing, closing asks first: *Your latest changes could not be saved and will be lost. Close anyway?* A
 crash or power loss while saves are failing loses the unsaved changes.
@@ -1769,6 +1771,8 @@ The journal and replay, in `tests/services`:
   address that fails to resolve is not tried again - on later versions, after closing and
   reopening the app, or by a command that gives another family a new address - until its
   text changes
+- each geocode result maps its family as it arrives, before the batch finishes; a version
+  that replaces the document while the batch runs ends with every held result applied
 - a batch with two families at one address sends one request for it, maps both families
   by their shared entry, finishes, and pushes once
 - a command that changes no address starts no geocoding; two connected clients that each
