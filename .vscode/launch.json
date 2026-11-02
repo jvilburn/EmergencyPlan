@@ -52,7 +52,7 @@
             "name": "Debug Tests (Windows)",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/bin/EmergencyPlanTests.exe",
+            "program": "${workspaceFolder}/build/bin/WardPlanningTests.exe",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",

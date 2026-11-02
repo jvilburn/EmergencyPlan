@@ -17,15 +17,15 @@ UndoableCommandPtr bobPhoneEdit(const QString& phone)
 
 Family smithWithout(const PersonId& id)
 {
+    Family family = TestWard::smith();
     QList<Person> members;
-    for (const Person& member : TestWard::smith().members())
+    for (const Person& member : family.members())
     {
         if (member.id() != id)
         {
             members.append(member);
         }
     }
-    Family family = TestWard::smith();
     family.setMembers(members);
     return family;
 }
