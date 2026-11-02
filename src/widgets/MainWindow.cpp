@@ -196,10 +196,7 @@ void MainWindow::setupConnections()
             this, &MainWindow::onEmergencyEnded);
     connect(EmergencyManager::instance(), &EmergencyManager::responseDataChanged,
             m_mapWidget, &MapWidget::updateHighlights);
-    connect(EmergencyManager::instance(), &EmergencyManager::responsesChanged,
-            this, &MainWindow::updateEmergencyBanner);
-    connect(m_emergencyBanner, &EmergencyBanner::responseChosen,
-            EmergencyManager::instance(), &EmergencyManager::show);
+
     // Sidebar tab changes
     connect(m_sidebarTabs, &SidebarWidget::currentChanged,
             this, &MainWindow::onSidebarTabChanged);
@@ -351,13 +348,18 @@ void MainWindow::onRedo()
 
 void MainWindow::onDocumentChanged(const DocumentChange& change)
 {
-    Q_UNUSED(change)
     int count = DocumentManager::instance()->document().families().size();
     statusBar()->showMessage(tr("%1 families").arg(count));
     updateWindowTitle();
     if (m_editPanel->isVisible())
     {
         m_editPanel->refreshCoordinates(DocumentManager::instance()->document());
+    }
+
+    // A full change can put a different emergency in place of the one in progress
+    if (change.action == ChangeAction::Full)
+    {
+        updateEmergencyBanner();
     }
 }
 
@@ -510,7 +512,7 @@ void MainWindow::onSidebarTabChanged(int index)
 {
     QWidget* currentTab = m_sidebarTabs->widget(index);
 
-    if (auto* provider = dynamic_cast<FamilyMarkerProvider*>(currentTab))
+    if (FamilyMarkerProvider* provider = dynamic_cast<FamilyMarkerProvider*>(currentTab))
     {
         m_mapWidget->setMarkerProvider(provider);
     }
@@ -553,7 +555,7 @@ void MainWindow::onEditFamilyRequested(const FamilyId& familyId)
 
 void MainWindow::onDeleteFamilyRequested(const FamilyId& familyId)
 {
-    const auto& families = DocumentManager::instance()->document().families();
+    const QHash<FamilyId, Family>& families = DocumentManager::instance()->document().families();
     auto it = families.find(familyId);
     if (it == families.end())
     {
@@ -658,7 +660,7 @@ void MainWindow::onCloseEditPanel()
 
 void MainWindow::openEditPanel(const FamilyId& familyId)
 {
-    const auto& families = DocumentManager::instance()->document().families();
+    const QHash<FamilyId, Family>& families = DocumentManager::instance()->document().families();
     auto it = families.find(familyId);
     if (it == families.end())
     {
@@ -738,15 +740,14 @@ void MainWindow::onEndEmergency()
     {
         return;
     }
-    const EmergencyResponse& shown = EmergencyManager::instance()->response();
-    EmergencyResponseId id = shown.id();
-    QString emergencyName = shown.name();
-    QString defaultPath = defaultReportPath(shown);
+    const EmergencyResponse& inProgress = EmergencyManager::instance()->response();
+    QString emergencyName = inProgress.name();
+    QString defaultPath = defaultReportPath(inProgress);
 
     QMessageBox dialog(this);
     dialog.setWindowTitle(tr("End Emergency"));
     dialog.setText(tr("End \"%1\"?").arg(emergencyName));
-    dialog.setInformativeText(tr("Ending saves the summary report, which is the record of the emergency, and then removes the response."));
+    dialog.setInformativeText(tr("Ending saves the summary report, which is the record of the emergency, and then removes the emergency."));
     dialog.setIcon(QMessageBox::Question);
 
     QPushButton* endButton = dialog.addButton(tr("End"), QMessageBox::DestructiveRole);
@@ -766,7 +767,7 @@ void MainWindow::onEndEmergency()
         return;
     }
 
-    switch (DocumentManager::instance()->endEmergency(id, filePath))
+    switch (DocumentManager::instance()->endEmergency(filePath))
     {
     case EndResult::Ended:
         statusBar()->showMessage(tr("Emergency \"%1\" ended; report saved to %2").arg(emergencyName, filePath), 5000);
@@ -788,7 +789,6 @@ void MainWindow::generateEmergencyReport()
     {
         return;
     }
-    EmergencyResponseId id = *EmergencyManager::instance()->shownId();
 
     QString filePath = QFileDialog::getSaveFileName(
         this, tr("Save Emergency Report"), defaultReportPath(EmergencyManager::instance()->response()),
@@ -798,9 +798,9 @@ void MainWindow::generateEmergencyReport()
         return;
     }
 
-    // The response as it stands after the dialog, which may have changed or ended meanwhile
+    // The emergency as it stands after the dialog, which may have changed or ended meanwhile
     const Document& document = DocumentManager::instance()->document();
-    std::optional<EmergencyResponse> response = document.findEmergencyResponseById(id);
+    const std::optional<EmergencyResponse>& response = document.emergencyResponse();
     if (!response)
     {
         QMessageBox::information(this, tr("Report"), tr("The emergency has been ended by someone else."));
@@ -828,7 +828,6 @@ QString MainWindow::defaultReportPath(const EmergencyResponse& response)
 void MainWindow::onEmergencyStarted()
 {
     updateEmergencyBanner();
-    m_taskListView->rebuild();
     m_sidebarTabs->setPageVisible(m_taskListTabIndex, true);
     m_splitter->setSizes({600, 0, 1100});
     updateEmergencyActions();
@@ -850,7 +849,7 @@ void MainWindow::updateEmergencyBanner()
         m_emergencyBanner->clearBanner();
         return;
     }
-    m_emergencyBanner->setResponses(manager->responsesInProgress(), *manager->shownId());
+    m_emergencyBanner->showEmergency(manager->response().name());
 }
 
 void MainWindow::updateEmergencyActions()

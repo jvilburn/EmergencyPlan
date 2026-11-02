@@ -182,7 +182,8 @@ ResponseTask floodedBasement()
                           "Water in the basement");
 }
 
-/// Start never conflicts, so it has no Conflicts sample.
+/// Start never conflicts, so it has no Conflicts sample. Its result holds whatever
+/// emergency is in progress.
 QList<CommandSample> startEmergencySamples()
 {
     CommandPtr start = StartEmergencyCommand::fromNew(TestWard::storm());
@@ -190,9 +191,11 @@ QList<CommandSample> startEmergencySamples()
     QList<CommandSample> samples;
     samples.append(CommandSample{SampleCase::StartHolds, TestWard::document(), start});
     samples.append(CommandSample{SampleCase::ResultHolds, withResponse(TestWard::storm()), start});
+    samples.append(CommandSample{SampleCase::ResultHolds, withResponse(TestWard::flood()), start});
     return samples;
 }
 
+/// End conflicts with the emergency in progress changed since the report, or a different one.
 QList<CommandSample> endEmergencySamples()
 {
     CommandPtr end = EndEmergencyCommand::fromReported(TestWard::storm());
@@ -203,26 +206,29 @@ QList<CommandSample> endEmergencySamples()
     samples.append(CommandSample{SampleCase::Conflicts,
                                  withResponse(TestWard::stormWith({phonedSmiths()}, {})),
                                  end});
+    samples.append(CommandSample{SampleCase::Conflicts, withResponse(TestWard::flood()), end});
     return samples;
 }
 
-/// Restore never conflicts, so it has no Conflicts sample. Its result holds whatever the
-/// response with its id holds.
+/// Restore's result holds when the emergency in progress equals it, and it conflicts with any
+/// other: the same one changed since, or a different one.
 QList<CommandSample> restoreEmergencySamples()
 {
     CommandPtr restore = EndEmergencyCommand::fromReported(TestWard::storm())->inverse();
 
     QList<CommandSample> samples;
     samples.append(CommandSample{SampleCase::StartHolds, TestWard::document(), restore});
-    samples.append(CommandSample{SampleCase::ResultHolds,
+    samples.append(CommandSample{SampleCase::ResultHolds, withResponse(TestWard::storm()), restore});
+    samples.append(CommandSample{SampleCase::Conflicts,
                                  withResponse(TestWard::stormWith({phonedSmiths()}, {})),
                                  restore});
+    samples.append(CommandSample{SampleCase::Conflicts, withResponse(TestWard::flood()), restore});
     return samples;
 }
 
 QList<CommandSample> addContactAttemptSamples()
 {
-    CommandPtr add = AddContactAttemptCommand::fromNew(TestWard::stormId(), phonedSmiths(), TestWard::document());
+    CommandPtr add = AddContactAttemptCommand::fromNew(phonedSmiths(), TestWard::document());
 
     QList<CommandSample> samples;
     samples.append(CommandSample{SampleCase::StartHolds, withResponse(TestWard::storm()), add});
@@ -235,8 +241,7 @@ QList<CommandSample> addContactAttemptSamples()
 
 QList<CommandSample> deleteContactAttemptSamples()
 {
-    CommandPtr remove = AddContactAttemptCommand::fromNew(TestWard::stormId(), phonedSmiths(), TestWard::document())
-                            ->inverse();
+    CommandPtr remove = AddContactAttemptCommand::fromNew(phonedSmiths(), TestWard::document())->inverse();
 
     QList<CommandSample> samples;
     samples.append(CommandSample{SampleCase::StartHolds,
@@ -247,13 +252,14 @@ QList<CommandSample> deleteContactAttemptSamples()
     return samples;
 }
 
-/// The conflict is the Setup team missing, since a task's assignee must exist.
+/// The conflicts are the Setup team missing, since a task's assignee must exist, and no
+/// emergency in progress.
 QList<CommandSample> addTaskSamples()
 {
     ResponseTask task = floodedBasement();
-    task.setAssignment(TaskAssignment::toTeam(TestWard::setupTeamId(), "Bring the pump"));
+    task.setAssignment(TaskAssignment::toTeam(TestWard::setupTeamId()));
     Document withTeam = TestWard::withTeam(TestWard::document(), TestWard::setupTeam());
-    CommandPtr add = AddTaskCommand::fromNew(TestWard::stormId(), task, withTeam);
+    CommandPtr add = AddTaskCommand::fromNew(task, withTeam);
 
     QList<CommandSample> samples;
     samples.append(CommandSample{SampleCase::StartHolds, TestWard::withResponse(withTeam, TestWard::storm()), add});
@@ -261,6 +267,7 @@ QList<CommandSample> addTaskSamples()
                                  TestWard::withResponse(withTeam, TestWard::stormWith({}, {task})),
                                  add});
     samples.append(CommandSample{SampleCase::Conflicts, withResponse(TestWard::storm()), add});
+    samples.append(CommandSample{SampleCase::Conflicts, withTeam, add});
     return samples;
 }
 
@@ -270,11 +277,11 @@ QList<CommandSample> updateTaskSamples()
     ResponseTask saved = opened;
     saved.setCategory("Shelter");
     saved.setDescription("Water in the basement and the garage");
-    saved.setAssignment(TaskAssignment::toPerson(TestWard::carolId(), "Has a pump"));
+    saved.setAssignment(TaskAssignment::toPerson(TestWard::carolId()));
     saved.setResolution(TestWard::resolution("Pumped out", TestWard::octoberFirst(12, 0)));
     ResponseTask moved = opened;
     moved.setDescription("Water in the garage");
-    CommandPtr edit = UpdateTaskCommand::fromEdit(TestWard::stormId(), opened, saved, TestWard::document());
+    CommandPtr edit = UpdateTaskCommand::fromEdit(opened, saved, TestWard::document());
 
     QList<CommandSample> samples;
     samples.append(CommandSample{SampleCase::StartHolds, withResponse(TestWard::stormWith({}, {opened})), edit});
@@ -288,7 +295,7 @@ QList<CommandSample> deleteTaskSamples()
     ResponseTask seen = floodedBasement();
     ResponseTask resolved = seen;
     resolved.setResolution(TestWard::resolution("Pumped out", TestWard::octoberFirst(12, 0)));
-    CommandPtr remove = DeleteTaskCommand::fromSeen(TestWard::stormId(), seen, TestWard::document());
+    CommandPtr remove = DeleteTaskCommand::fromSeen(seen, TestWard::document());
 
     QList<CommandSample> samples;
     samples.append(CommandSample{SampleCase::StartHolds, withResponse(TestWard::stormWith({}, {seen})), remove});
@@ -299,7 +306,7 @@ QList<CommandSample> deleteTaskSamples()
 
 QList<CommandSample> addTaskCategorySamples()
 {
-    CommandPtr add = AddTaskCategoryCommand::fromNew(TestWard::stormId(), "Power lines");
+    CommandPtr add = AddTaskCategoryCommand::fromNew("Power lines");
     EmergencyResponse withCategory = TestWard::storm();
     withCategory.addTaskCategory("Power lines");
 

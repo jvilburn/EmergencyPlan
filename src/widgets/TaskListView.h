@@ -6,17 +6,16 @@
 
 class QTreeView;
 class QPushButton;
-class ResponseTask;
 class TaskListModel;
 
+/// The Tasks tab: every task in the emergency in progress, with buttons that run their
+/// actions through EmergencyActions.
 class TaskListView : public QWidget, public FamilyMarkerProvider
 {
     Q_OBJECT
 
 public:
     explicit TaskListView(QWidget* parent);
-
-    void rebuild();
 
     // FamilyMarkerProvider
     HighlightInfo highlightInfo() const override;
@@ -35,9 +34,6 @@ private slots:
     void onSelectionChanged();
 
 private:
-    /// Offers to notify task's assignee when it has one who has not been told.
-    void promptNotifyIfNeeded(const ResponseTask& task);
-
     TaskListModel* m_model;
     QTreeView* m_treeView;
     QPushButton* m_addButton;

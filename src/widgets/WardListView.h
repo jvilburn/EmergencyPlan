@@ -4,10 +4,8 @@
 
 #include <QWidget>
 #include <QModelIndex>
-#include <QHash>
 #include <optional>
 
-class ActionButtonsWidget;
 class EmergencyProgressBar;
 class FamilyTreeModel;
 class Filter;
@@ -46,27 +44,28 @@ signals:
 private slots:
     void onSelectionChanged();
     void onModelReset();
-    void onRowsRemoved(const QModelIndex& parent, int first, int last);
-    void onRowsInserted(const QModelIndex& parent, int first, int last);
+    void onRowsRemoved(const QModelIndex& parent);
+    void onRowsInserted(const QModelIndex& parent);
     void onItemExpanded(const QModelIndex& index);
     void onItemCollapsed(const QModelIndex& index);
     void onEmergencyStateChanged();
     void onStatusFilterTabClicked();
     void onStatusFilterClicked(int statusIndex);
     void updateFilterTabCounts();
-    void onLogContactRequested(const FamilyId& familyId);
-    void onAddTaskRequested(const FamilyId& familyId);
     void onTreeContextMenu(const QPoint& pos);
 
 private:
+    /// The family's Actions row, where its buttons go.
+    QModelIndex actionsIndex(const QModelIndex& familyIndex) const;
+
+    /// Puts the family's buttons on its Actions row, unless they are there already.
     void attachActionButtons(const QModelIndex& familyIndex);
-    void detachActionButtons(const FamilyId& familyId);
+    void detachActionButtons(const QModelIndex& familyIndex);
     void setupEmergencyWidgets();
 
     FilterBar* m_filterBar;
     FamilyTreeModel* m_model;
     SelectionPreservingTreeView* m_treeView;
-    QHash<FamilyId, ActionButtonsWidget*> m_actionWidgets;
 
     // Emergency mode widgets (initially hidden)
     QWidget* m_emergencyPanel = nullptr;

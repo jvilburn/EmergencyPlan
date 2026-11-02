@@ -48,6 +48,14 @@ QString contactOutcomeName(ContactOutcome outcome);
 /// "Marked Unable to Reach".
 QString contactMarkName(ContactOutcome outcome);
 
+class ContactAttempt;
+
+/// The attempt's parts in the order every view shows them: time, method, who, outcome and
+/// notes, leaving out the ones it lacks. The outcome of an attempt with no method reads as
+/// its mark. timeText and whoName are the time and the person as the caller names them, and
+/// whoName is empty when the attempt names no one.
+QStringList contactAttemptParts(const ContactAttempt& attempt, const QString& timeText, const QString& whoName);
+
 // === TaskNotification ===
 
 /// The assignee was told about a task: how, when, and what was said.
@@ -117,21 +125,20 @@ private:
 
 // === TaskAssignment ===
 
-/// Who a task is given to - one team or one person - with notes for them, and whether they
-/// have been told. A new assignment has no notification, so giving a task to someone else
-/// leaves it untold until it is notified again.
+/// Who a task is given to - one team or one person - and whether they have been told. A new
+/// assignment has no notification, so giving a task to someone else leaves it untold until
+/// it is notified again.
 class TaskAssignment
 {
 public:
     TaskAssignment() = default;
 
-    static TaskAssignment toTeam(const TeamId& teamId, const QString& notes);
-    static TaskAssignment toPerson(const PersonId& personId, const QString& notes);
+    static TaskAssignment toTeam(const TeamId& teamId);
+    static TaskAssignment toPerson(const PersonId& personId);
 
     /// Exactly one of teamId and personId is set.
     const std::optional<TeamId>& teamId() const { return m_teamId; }
     const std::optional<PersonId>& personId() const { return m_personId; }
-    const QString& notes() const { return m_notes; }
     const std::optional<TaskNotification>& notification() const { return m_notification; }
 
     void setNotification(const TaskNotification& notification) { m_notification = notification; }
@@ -145,7 +152,6 @@ public:
 private:
     std::optional<TeamId> m_teamId;
     std::optional<PersonId> m_personId;
-    QString m_notes;
     std::optional<TaskNotification> m_notification;
 };
 
@@ -221,8 +227,8 @@ private:
 
 // === EmergencyResponse ===
 
-/// One emergency in progress: its contact attempts and tasks, each carrying the family it
-/// is for. A family's status is worked out from the attempts and tasks that carry its id.
+/// The emergency in progress: its contact attempts and tasks, each carrying the family it is
+/// for. A family's status is worked out from the attempts and tasks that carry its id.
 ///
 /// Attempts are held most recent first: greatest timestamp first, ties broken by the
 /// greater id first. Tasks are held the same way by when they were created. So the same
@@ -232,11 +238,9 @@ class EmergencyResponse
 public:
     EmergencyResponse() = default;
 
-    /// A response started now, with a fresh id, the default task categories, and no
-    /// attempts or tasks.
+    /// A response started now, with the default task categories, and no attempts or tasks.
     static EmergencyResponse create(const QString& name);
 
-    const EmergencyResponseId& id() const { return m_id; }
     const QString& name() const { return m_name; }
     const QDateTime& startedAt() const { return m_startedAt; }
     const QStringList& taskCategories() const { return m_taskCategories; }
@@ -295,7 +299,6 @@ public:
     bool operator!=(const EmergencyResponse& other) const { return !(*this == other); }
 
 private:
-    EmergencyResponseId m_id;
     QString m_name;
     QDateTime m_startedAt;
     QStringList m_taskCategories;

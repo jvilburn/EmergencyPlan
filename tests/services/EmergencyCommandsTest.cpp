@@ -12,9 +12,11 @@
 namespace
 {
 
-EmergencyResponse stormIn(const WardSession& session)
+/// The emergency in progress in the session's document; throws std::bad_optional_access
+/// when none is.
+EmergencyResponse emergencyIn(const WardSession& session)
 {
-    return session.document().findEmergencyResponseById(TestWard::stormId()).value();
+    return session.document().emergencyResponse().value();
 }
 
 /// The notes of each of the family's attempts in response, in the response's order.
@@ -66,29 +68,20 @@ ResponseTask floodedBasement()
                           "Water in the basement");
 }
 
-/// The Storm response with another id and name.
-EmergencyResponse otherResponse(const QString& id, const QString& name)
-{
-    QJsonObject json = TestWard::storm().toJson();
-    json["id"] = id;
-    json["name"] = name;
-    return EmergencyResponse::fromJson(json);
-}
-
-/// The family's status in the Storm response, from the session's document.
+/// The family's status in the emergency in progress, from the session's document.
 EffectiveContactStatus statusIn(const WardSession& session, const FamilyId& familyId)
 {
-    return session.document().emergencyStatus(TestWard::stormId(), familyId);
+    return session.document().emergencyStatus(familyId);
 }
 
 CommitResult addAttempt(WardSession& session, const ContactAttempt& attempt)
 {
-    return session.commit(AddContactAttemptCommand::fromNew(TestWard::stormId(), attempt, session.document()));
+    return session.commit(AddContactAttemptCommand::fromNew(attempt, session.document()));
 }
 
 CommitResult commitTaskEdit(WardSession& session, const ResponseTask& opened, const ResponseTask& saved)
 {
-    return session.commit(UpdateTaskCommand::fromEdit(TestWard::stormId(), opened, saved, session.document()));
+    return session.commit(UpdateTaskCommand::fromEdit(opened, saved, session.document()));
 }
 
 /// The Smith family with Alice removed through the family edit, as another user would.
@@ -150,7 +143,7 @@ void EmergencyCommandsTest::twoRespondersOfflineLandEveryAttempt()
     ReplayResult result = mine.replayOnto(theirs.document());
 
     QVERIFY(result.status == ReplayStatus::Replayed);
-    EmergencyResponse storm = stormIn(mine);
+    EmergencyResponse storm = emergencyIn(mine);
     QCOMPARE(storm.contactAttempts().size(), qsizetype(4));
     QCOMPARE(notesOf(storm, TestWard::smithId()), QStringList({"Visited, roof damage", "No answer"}));
     QCOMPARE(notesOf(storm, TestWard::jonesId()), QStringList({"Texted back", "Carol is fine"}));
@@ -161,7 +154,7 @@ void EmergencyCommandsTest::twoRespondersFirstAttemptsOnOneFamilyBothLand()
     TestSession mine;
     TestSession theirs;
     openBoth(mine, theirs, TestWard::withResponse(TestWard::document(), TestWard::storm()));
-    QVERIFY(stormIn(mine).contactAttempts().isEmpty());
+    QVERIFY(emergencyIn(mine).contactAttempts().isEmpty());
 
     QVERIFY(addAttempt(theirs, phoned("attempt-theirs", TestWard::jonesId(), 10, 0, ContactOutcome::UnableToReach, "Phoned Carol"))
                 .status == CommitStatus::Applied);
@@ -171,13 +164,12 @@ void EmergencyCommandsTest::twoRespondersFirstAttemptsOnOneFamilyBothLand()
     ReplayResult result = mine.replayOnto(theirs.document());
 
     QVERIFY(result.status == ReplayStatus::Replayed);
-    EmergencyResponse storm = stormIn(mine);
+    EmergencyResponse storm = emergencyIn(mine);
     QCOMPARE(storm.contactAttempts().size(), qsizetype(2));
     QCOMPARE(notesOf(storm, TestWard::jonesId()), QStringList({"Visited Carol", "Phoned Carol"}));
     QVERIFY(storm.statusByFamily().value(TestWard::jonesId()) == EffectiveContactStatus::OK);
-    QVERIFY(mine.document().emergencyStatus(TestWard::stormId(), TestWard::jonesId()) == EffectiveContactStatus::OK);
-    QVERIFY(theirs.document().emergencyStatus(TestWard::stormId(), TestWard::jonesId())
-            == EffectiveContactStatus::UnableToReach);
+    QVERIFY(statusIn(mine, TestWard::jonesId()) == EffectiveContactStatus::OK);
+    QVERIFY(statusIn(theirs, TestWard::jonesId()) == EffectiveContactStatus::UnableToReach);
 }
 
 void EmergencyCommandsTest::differentOutcomesOnOneFamilyShowTheLaterTimestampWhicheverReplaysFirst()
@@ -197,11 +189,10 @@ void EmergencyCommandsTest::differentOutcomesOnOneFamilyShowTheLaterTimestampWhi
     QVERIFY(theirs.replayOnto(mineAlone).status == ReplayStatus::Replayed);
 
     QVERIFY(mine.document() == theirs.document());
-    EmergencyResponse storm = stormIn(mine);
+    EmergencyResponse storm = emergencyIn(mine);
     QCOMPARE(notesOf(storm, TestWard::smithId()), QStringList({"No answer at five past", "Fine at ten"}));
     QVERIFY(storm.statusByFamily().value(TestWard::smithId()) == EffectiveContactStatus::UnableToReach);
-    QVERIFY(mine.document().emergencyStatus(TestWard::stormId(), TestWard::smithId())
-            == EffectiveContactStatus::UnableToReach);
+    QVERIFY(statusIn(mine, TestWard::smithId()) == EffectiveContactStatus::UnableToReach);
 }
 
 void EmergencyCommandsTest::attemptsAtOneTimeAreOrderedByIdWhicheverReplaysFirst()
@@ -221,57 +212,78 @@ void EmergencyCommandsTest::attemptsAtOneTimeAreOrderedByIdWhicheverReplaysFirst
     QVERIFY(theirs.replayOnto(mineAlone).status == ReplayStatus::Replayed);
 
     QVERIFY(mine.document() == theirs.document());
-    EmergencyResponse storm = stormIn(mine);
+    EmergencyResponse storm = emergencyIn(mine);
     QCOMPARE(attemptIdsOf(storm, TestWard::smithId()), QStringList({"attempt-b", "attempt-a"}));
     QVERIFY(storm.statusByFamily().value(TestWard::smithId()) == EffectiveContactStatus::UnableToReach);
 }
 
-void EmergencyCommandsTest::undoingAnAddedAttemptRestoresTheResponseAndRedoAddsItAgain()
+void EmergencyCommandsTest::undoingAnAddedAttemptRestoresTheEmergencyAndRedoAddsItAgain()
 {
     TestSession session;
     session.open(TestWard::withResponse(
         TestWard::document(),
         TestWard::stormWith({phoned("attempt-jones", TestWard::jonesId(), 9, 0, ContactOutcome::OK, "Fine")}, {})));
-    EmergencyResponse before = stormIn(session);
+    EmergencyResponse before = emergencyIn(session);
     ContactAttempt first = phoned("attempt-smith", TestWard::smithId(), 10, 0, ContactOutcome::OK, "All safe");
 
     QVERIFY(addAttempt(session, first).status == CommitStatus::Applied);
-    QCOMPARE(attemptIdsOf(stormIn(session), TestWard::smithId()), QStringList({"attempt-smith"}));
+    QCOMPARE(attemptIdsOf(emergencyIn(session), TestWard::smithId()), QStringList({"attempt-smith"}));
 
     QVERIFY(session.undo().status == CommitStatus::Applied);
-    QVERIFY(stormIn(session) == before);
+    QVERIFY(emergencyIn(session) == before);
 
     QVERIFY(session.redo().status == CommitStatus::Applied);
-    EmergencyResponse redone = stormIn(session);
+    EmergencyResponse redone = emergencyIn(session);
     const ContactAttempt* again = redone.findContactAttempt(first.id());
     QVERIFY(again);
     QVERIFY(*again == first);
     QCOMPARE(redone.contactAttempts().size(), qsizetype(2));
 }
 
-void EmergencyCommandsTest::twoOfflineStartsMakeTwoEvents()
+void EmergencyCommandsTest::twoOfflineStartsBecomeOneEmergency()
 {
+    // Each responder starts an emergency offline and records an attempt in it. Theirs
+    // reaches the ward first, so mine replays onto it: my start's result holds, and my
+    // attempt lands in their emergency.
     TestSession mine;
     TestSession theirs;
     openBoth(mine, theirs, TestWard::document());
-    EmergencyResponse flood = otherResponse("response-flood", "Flood");
-
-    QVERIFY(theirs.commit(StartEmergencyCommand::fromNew(flood)).status == CommitStatus::Applied);
     ContactAttempt dry = phoned("attempt-flood", TestWard::smithId(), 10, 0, ContactOutcome::OK, "Dry");
-    QVERIFY(theirs.commit(AddContactAttemptCommand::fromNew(flood.id(), dry, theirs.document())).status == CommitStatus::Applied);
+    ContactAttempt roof = phoned("attempt-storm", TestWard::smithId(), 10, 5, ContactOutcome::OK, "Roof intact");
+
+    QVERIFY(theirs.commit(StartEmergencyCommand::fromNew(TestWard::flood())).status == CommitStatus::Applied);
+    QVERIFY(addAttempt(theirs, dry).status == CommitStatus::Applied);
     QVERIFY(mine.commit(StartEmergencyCommand::fromNew(TestWard::storm())).status == CommitStatus::Applied);
-    QVERIFY(addAttempt(mine, phoned("attempt-storm", TestWard::smithId(), 10, 5, ContactOutcome::OK, "Roof intact"))
-                .status == CommitStatus::Applied);
+    QVERIFY(addAttempt(mine, roof).status == CommitStatus::Applied);
+    QCOMPARE(emergencyIn(mine).name(), QString("Storm"));
 
     ReplayResult result = mine.replayOnto(theirs.document());
 
     QVERIFY(result.status == ReplayStatus::Replayed);
-    QCOMPARE(mine.document().emergencyResponses().size(), qsizetype(2));
-    QCOMPARE(notesOf(stormIn(mine), TestWard::smithId()), QStringList({"Roof intact"}));
-    std::optional<EmergencyResponse> floodAfter = mine.document().findEmergencyResponseById(flood.id());
-    QVERIFY(floodAfter.has_value());
-    QCOMPARE(floodAfter->name(), QString("Flood"));
-    QCOMPARE(notesOf(*floodAfter, TestWard::smithId()), QStringList({"Dry"}));
+    EmergencyResponse expected = TestWard::flood();
+    expected.insertContactAttempt(dry);
+    expected.insertContactAttempt(roof);
+    QVERIFY(emergencyIn(mine) == expected);
+    QCOMPARE(notesOf(emergencyIn(mine), TestWard::smithId()), QStringList({"Roof intact", "Dry"}));
+    QVERIFY(statusIn(mine, TestWard::smithId()) == EffectiveContactStatus::OK);
+}
+
+void EmergencyCommandsTest::attemptWithNoEmergencyInProgressConflicts()
+{
+    TestSession session;
+    session.open(TestWard::document());
+    ContactAttempt attempt = phoned("attempt-smith", TestWard::smithId(), 10, 0, ContactOutcome::OK, "All safe");
+
+    QVERIFY(addAttempt(session, attempt).status == CommitStatus::Conflicted);
+
+    QVERIFY(session.document() == TestWard::document());
+    QVERIFY(session.journal().isEmpty());
+    QVERIFY(!session.canUndo());
+
+    // The same attempt lands once an emergency is in progress
+    QVERIFY(session.commit(StartEmergencyCommand::fromNew(TestWard::storm())).status == CommitStatus::Applied);
+    QVERIFY(addAttempt(session, attempt).status == CommitStatus::Applied);
+    QCOMPARE(attemptIdsOf(emergencyIn(session), TestWard::smithId()), QStringList({"attempt-smith"}));
 }
 
 void EmergencyCommandsTest::startAndNewCategoryAreNotUndoable()
@@ -280,18 +292,18 @@ void EmergencyCommandsTest::startAndNewCategoryAreNotUndoable()
     session.open(TestWard::document());
 
     QVERIFY(session.commit(StartEmergencyCommand::fromNew(TestWard::storm())).status == CommitStatus::Applied);
-    QVERIFY(stormIn(session) == TestWard::storm());
+    QVERIFY(emergencyIn(session) == TestWard::storm());
     QVERIFY(!session.canUndo());
 
-    QVERIFY(session.commit(AddTaskCategoryCommand::fromNew(TestWard::stormId(), "Power lines")).status == CommitStatus::Applied);
-    QStringList categories = stormIn(session).taskCategories();
+    QVERIFY(session.commit(AddTaskCategoryCommand::fromNew("Power lines")).status == CommitStatus::Applied);
+    QStringList categories = emergencyIn(session).taskCategories();
     QCOMPARE(categories.size(), TestWard::storm().taskCategories().size() + 1);
     QCOMPARE(categories.last(), QString("Power lines"));
     QVERIFY(!session.canUndo());
     QCOMPARE(session.journal().entries().size(), qsizetype(2));
 }
 
-void EmergencyCommandsTest::endingWritesAReportHoldingEveryAttemptAndTaskThenRemovesTheResponse()
+void EmergencyCommandsTest::endingWritesAReportHoldingEveryAttemptAndTaskThenRemovesTheEmergency()
 {
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
@@ -313,45 +325,45 @@ void EmergencyCommandsTest::endingWritesAReportHoldingEveryAttemptAndTaskThenRem
     QVERIFY(addAttempt(session, marked("attempt-marked", TestWard::jonesId(), 9, 30, ContactOutcome::OK)).status
             == CommitStatus::Applied);
     ResponseTask basement = floodedBasement();
-    basement.setAssignment(TaskAssignment::toTeam(TestWard::setupTeamId(), "Bring the pump"));
-    QVERIFY(session.commit(AddTaskCommand::fromNew(TestWard::stormId(), basement, session.document())).status
-            == CommitStatus::Applied);
+    basement.setAssignment(TaskAssignment::toTeam(TestWard::setupTeamId()));
+    QVERIFY(session.commit(AddTaskCommand::fromNew(basement, session.document())).status == CommitStatus::Applied);
     ResponseTask tree = TestWard::task("task-tree", TestWard::jonesId(), TestWard::octoberFirst(10, 45), "Tree removal",
                                        "Oak across the driveway");
-    TaskAssignment toAlice = TaskAssignment::toPerson(TestWard::aliceId(), QString());
+    TaskAssignment toAlice = TaskAssignment::toPerson(TestWard::aliceId());
     toAlice.setNotification(TestWard::notification(ContactMethod::Text, "Sent the address", TestWard::octoberFirst(10, 50)));
     tree.setAssignment(toAlice);
     tree.setResolution(TestWard::resolution("Cut and cleared", TestWard::octoberFirst(12, 0)));
-    QVERIFY(session.commit(AddTaskCommand::fromNew(TestWard::stormId(), tree, session.document())).status == CommitStatus::Applied);
+    QVERIFY(session.commit(AddTaskCommand::fromNew(tree, session.document())).status == CommitStatus::Applied);
     QVERIFY(removeAlice(session).status == CommitStatus::Applied);
 
-    EndResult result = session.endEmergency(TestWard::stormId(), path);
+    EndResult result = session.endEmergency(path);
 
     QVERIFY(result == EndResult::Ended);
-    QVERIFY(!session.document().findEmergencyResponseById(TestWard::stormId()).has_value());
+    QVERIFY(!session.document().emergencyResponse().has_value());
     QCOMPARE(session.journal().entries().last().command["type"].toString(), QString(EndEmergencyCommand::TypeName));
     QString text = pdfText(path);
     QVERIFY2(text.contains("No answer at nine"), qPrintable(text));
     QVERIFY(text.contains("gatepost"));
     QVERIFY(text.indexOf("No answer at nine") < text.indexOf("gatepost"));
-    QVERIFY(text.contains("Smith, Bob"));
+    // An attempt's fields in their one order: time, method, who, outcome, notes
+    QVERIFY2(text.contains("Phone - Smith, Bob - Unable to Reach - No answer at nine"), qPrintable(text));
     QVERIFY(text.contains("Marked OK: 1"));
     QVERIFY(text.contains("Water in the basement"));
-    QVERIFY(text.contains("Bring the pump"));
+    QVERIFY(text.contains("Assigned to: Setup"));
     QVERIFY(text.contains("Oak across the driveway"));
     QVERIFY(text.contains("Sent the address"));
     QVERIFY(text.contains("Cut and cleared"));
-    QVERIFY(text.contains("(removed)"));
+    QVERIFY(text.contains("Assigned to: (removed)"));
     QVERIFY(text.contains("Families Not Contacted (1)"));
     QVERIFY(text.contains("Lee, Ken & Mia"));
 }
 
-void EmergencyCommandsTest::attemptsReplayedOntoAnEndedResponseAreInTheToRedoText()
+void EmergencyCommandsTest::attemptsReplayedOntoAnEndedEmergencyAreInTheToRedoText()
 {
     TestSession mine;
     TestSession theirs;
     openBoth(mine, theirs, TestWard::withResponse(TestWard::document(), TestWard::storm()));
-    QVERIFY(theirs.commit(EndEmergencyCommand::fromReported(stormIn(theirs))).status == CommitStatus::Applied);
+    QVERIFY(theirs.commit(EndEmergencyCommand::fromReported(emergencyIn(theirs))).status == CommitStatus::Applied);
     QVERIFY(addAttempt(mine, phoned("attempt-smith", TestWard::smithId(), 10, 0, ContactOutcome::OK, "All safe")).status
             == CommitStatus::Applied);
     QVERIFY(addAttempt(mine, marked("attempt-jones", TestWard::jonesId(), 10, 5, ContactOutcome::UnableToReach)).status
@@ -371,28 +383,28 @@ void EmergencyCommandsTest::attemptsReplayedOntoAnEndedResponseAreInTheToRedoTex
                                     "\n"
                                     "Contact with Jones, Carol\n"
                                     "- outcome: Unable to Reach\n"));
-    QVERIFY(mine.document().emergencyResponses().isEmpty());
+    QVERIFY(!mine.document().emergencyResponse().has_value());
 }
 
-void EmergencyCommandsTest::endReplayedAfterAnotherAttemptConflictsAndLeavesTheResponse()
+void EmergencyCommandsTest::endReplayedAfterAnotherAttemptConflictsAndLeavesTheEmergency()
 {
     TestSession mine;
     TestSession theirs;
     openBoth(mine, theirs, TestWard::withResponse(TestWard::document(), TestWard::storm()));
     QVERIFY(addAttempt(theirs, phoned("attempt-theirs", TestWard::smithId(), 10, 0, ContactOutcome::OK, "Phoned the Smiths"))
                 .status == CommitStatus::Applied);
-    QVERIFY(mine.commit(EndEmergencyCommand::fromReported(stormIn(mine))).status == CommitStatus::Applied);
-    QVERIFY(mine.document().emergencyResponses().isEmpty());
+    QVERIFY(mine.commit(EndEmergencyCommand::fromReported(emergencyIn(mine))).status == CommitStatus::Applied);
+    QVERIFY(!mine.document().emergencyResponse().has_value());
 
     ReplayResult result = mine.replayOnto(theirs.document());
 
     QVERIFY(result.status == ReplayStatus::Abandoned);
     QVERIFY(result.toRedo.contains("End emergency: Storm (stopped here)"));
-    QVERIFY(stormIn(mine) == stormIn(theirs));
-    QCOMPARE(notesOf(stormIn(mine), TestWard::smithId()), QStringList({"Phoned the Smiths"}));
+    QVERIFY(emergencyIn(mine) == emergencyIn(theirs));
+    QCOMPARE(notesOf(emergencyIn(mine), TestWard::smithId()), QStringList({"Phoned the Smiths"}));
 }
 
-void EmergencyCommandsTest::undoingAnEndRestoresAnEqualResponseKeepsTheReportAndRedoEndsItAgain()
+void EmergencyCommandsTest::undoingAnEndRestoresAnEqualEmergencyKeepsTheReportAndRedoEndsItAgain()
 {
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
@@ -402,19 +414,43 @@ void EmergencyCommandsTest::undoingAnEndRestoresAnEqualResponseKeepsTheReportAnd
                                                   {floodedBasement()});
     session.open(TestWard::withResponse(TestWard::document(), storm));
 
-    QVERIFY(session.endEmergency(TestWard::stormId(), path) == EndResult::Ended);
-    QVERIFY(session.document().emergencyResponses().isEmpty());
+    QVERIFY(session.endEmergency(path) == EndResult::Ended);
+    QVERIFY(!session.document().emergencyResponse().has_value());
     QCOMPARE(session.undoHeading(), QString("End emergency: Storm"));
 
     QVERIFY(session.undo().status == CommitStatus::Applied);
 
-    QVERIFY(stormIn(session) == storm);
+    QVERIFY(emergencyIn(session) == storm);
+    QVERIFY(statusIn(session, TestWard::smithId()) == EffectiveContactStatus::NeedsHelp);
     QVERIFY(QFile::exists(path));
 
     QVERIFY(session.redo().status == CommitStatus::Applied);
 
-    QVERIFY(session.document().emergencyResponses().isEmpty());
+    QVERIFY(!session.document().emergencyResponse().has_value());
+    QVERIFY(statusIn(session, TestWard::smithId()) == EffectiveContactStatus::NotContacted);
     QCOMPARE(session.undoHeading(), QString("End emergency: Storm"));
+}
+
+void EmergencyCommandsTest::restoreConflictsWhenADifferentEmergencyIsInProgress()
+{
+    // Storm ends, then Flood starts. Undoing the end would put Storm back, but Flood is in
+    // progress, so it conflicts and the end stays on the undo stack.
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    TestSession session;
+    session.open(TestWard::withResponse(TestWard::document(), TestWard::storm()));
+    QVERIFY(session.endEmergency(dir.filePath("storm.pdf")) == EndResult::Ended);
+    QVERIFY(session.commit(StartEmergencyCommand::fromNew(TestWard::flood())).status == CommitStatus::Applied);
+    QCOMPARE(session.undoHeading(), QString("End emergency: Storm"));
+    Document before = session.document();
+
+    CommitResult result = session.undo();
+
+    QVERIFY(result.status == CommitStatus::Conflicted);
+    QVERIFY(session.document() == before);
+    QVERIFY(emergencyIn(session) == TestWard::flood());
+    QCOMPARE(session.undoHeading(), QString("End emergency: Storm"));
+    QVERIFY(!session.canRedo());
 }
 
 void EmergencyCommandsTest::endWhoseReportCannotBeWrittenEndsNothing()
@@ -425,15 +461,15 @@ void EmergencyCommandsTest::endWhoseReportCannotBeWrittenEndsNothing()
     TestSession session;
     session.open(TestWard::withResponse(TestWard::document(), TestWard::storm()));
 
-    QVERIFY(session.endEmergency(TestWard::stormId(), path) == EndResult::ReportFailed);
+    QVERIFY(session.endEmergency(path) == EndResult::ReportFailed);
 
-    QVERIFY(stormIn(session) == TestWard::storm());
+    QVERIFY(emergencyIn(session) == TestWard::storm());
     QVERIFY(session.journal().isEmpty());
     QVERIFY(!session.canUndo());
     QVERIFY(!QFile::exists(path));
 }
 
-void EmergencyCommandsTest::endingAResponseAlreadyGoneWritesNothing()
+void EmergencyCommandsTest::endingWithNoEmergencyInProgressWritesNothing()
 {
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
@@ -441,7 +477,7 @@ void EmergencyCommandsTest::endingAResponseAlreadyGoneWritesNothing()
     TestSession session;
     session.open(TestWard::document());
 
-    QVERIFY(session.endEmergency(TestWard::stormId(), path) == EndResult::AlreadyEnded);
+    QVERIFY(session.endEmergency(path) == EndResult::AlreadyEnded);
 
     QVERIFY(session.document() == TestWard::document());
     QVERIFY(session.journal().isEmpty());
@@ -458,15 +494,14 @@ void EmergencyCommandsTest::taskDeletionReplayedAfterAnotherResolvedItConflicts(
     resolved.setResolution(TestWard::resolution("Pumped out", TestWard::octoberFirst(12, 0)));
 
     QVERIFY(commitTaskEdit(theirs, task, resolved).status == CommitStatus::Applied);
-    QVERIFY(mine.commit(DeleteTaskCommand::fromSeen(TestWard::stormId(), task, mine.document())).status
-            == CommitStatus::Applied);
-    QVERIFY(!stormIn(mine).findTask(basementId()));
+    QVERIFY(mine.commit(DeleteTaskCommand::fromSeen(task, mine.document())).status == CommitStatus::Applied);
+    QVERIFY(!emergencyIn(mine).findTask(basementId()));
 
     ReplayResult result = mine.replayOnto(theirs.document());
 
     QVERIFY(result.status == ReplayStatus::Abandoned);
     QVERIFY(result.toRedo.contains("Delete Flooding task for Smith, Bob & Alice (stopped here)"));
-    EmergencyResponse storm = stormIn(mine);
+    EmergencyResponse storm = emergencyIn(mine);
     const ResponseTask* after = storm.findTask(basementId());
     QVERIFY(after);
     QVERIFY(*after == resolved);
@@ -481,18 +516,17 @@ void EmergencyCommandsTest::taskEditReplayedAfterTheTaskWasDeletedConflicts()
     ResponseTask described = task;
     described.setDescription("Water in the basement and the garage");
 
-    QVERIFY(theirs.commit(DeleteTaskCommand::fromSeen(TestWard::stormId(), task, theirs.document())).status
-            == CommitStatus::Applied);
+    QVERIFY(theirs.commit(DeleteTaskCommand::fromSeen(task, theirs.document())).status == CommitStatus::Applied);
     QVERIFY(commitTaskEdit(mine, task, described).status == CommitStatus::Applied);
-    QVERIFY(stormIn(mine).findTask(basementId()));
+    QVERIFY(emergencyIn(mine).findTask(basementId()));
 
     ReplayResult result = mine.replayOnto(theirs.document());
 
     QVERIFY(result.status == ReplayStatus::Abandoned);
     QVERIFY(result.toRedo.contains("Flooding task for Smith, Bob & Alice (stopped here)\n"
                                    "- description: Water in the basement and the garage"));
-    QVERIFY(!stormIn(mine).findTask(basementId()));
-    QVERIFY(stormIn(mine) == stormIn(theirs));
+    QVERIFY(!emergencyIn(mine).findTask(basementId()));
+    QVERIFY(emergencyIn(mine) == emergencyIn(theirs));
 }
 
 void EmergencyCommandsTest::taskEditsToDifferentValuesBothApply()
@@ -505,7 +539,7 @@ void EmergencyCommandsTest::taskEditsToDifferentValuesBothApply()
     ResponseTask described = task;
     described.setDescription("Water in the basement and the garage");
     ResponseTask assigned = task;
-    assigned.setAssignment(TaskAssignment::toTeam(TestWard::setupTeamId(), "Bring the pump"));
+    assigned.setAssignment(TaskAssignment::toTeam(TestWard::setupTeamId()));
 
     QVERIFY(commitTaskEdit(theirs, task, described).status == CommitStatus::Applied);
     QVERIFY(commitTaskEdit(mine, task, assigned).status == CommitStatus::Applied);
@@ -513,11 +547,11 @@ void EmergencyCommandsTest::taskEditsToDifferentValuesBothApply()
     ReplayResult result = mine.replayOnto(theirs.document());
 
     QVERIFY(result.status == ReplayStatus::Replayed);
-    EmergencyResponse storm = stormIn(mine);
+    EmergencyResponse storm = emergencyIn(mine);
     const ResponseTask* after = storm.findTask(basementId());
     QVERIFY(after);
     QCOMPARE(after->description(), QString("Water in the basement and the garage"));
-    QVERIFY(after->assignment() == TaskAssignment::toTeam(TestWard::setupTeamId(), "Bring the pump"));
+    QVERIFY(after->assignment() == TaskAssignment::toTeam(TestWard::setupTeamId()));
     QCOMPARE(after->category(), QString("Flooding"));
     QVERIFY(!after->isResolved());
 }
@@ -540,7 +574,7 @@ void EmergencyCommandsTest::oneTaskValueSetDifferentlyConflicts()
 
     QVERIFY(result.status == ReplayStatus::Abandoned);
     QVERIFY(result.toRedo.contains("Flooding task for Smith, Bob & Alice (stopped here)\n- description: Water in the cellar"));
-    EmergencyResponse storm = stormIn(mine);
+    EmergencyResponse storm = emergencyIn(mine);
     const ResponseTask* after = storm.findTask(basementId());
     QVERIFY(after);
     QCOMPARE(after->description(), QString("Water in the garage"));
@@ -553,11 +587,11 @@ void EmergencyCommandsTest::assignmentToAPersonReplayedAfterTheyWereRemovedConfl
     ResponseTask task = floodedBasement();
     openBoth(mine, theirs, TestWard::withResponse(TestWard::document(), TestWard::stormWith({}, {task})));
     ResponseTask assigned = task;
-    assigned.setAssignment(TaskAssignment::toPerson(TestWard::aliceId(), QString()));
+    assigned.setAssignment(TaskAssignment::toPerson(TestWard::aliceId()));
 
     QVERIFY(removeAlice(theirs).status == CommitStatus::Applied);
     QVERIFY(commitTaskEdit(mine, task, assigned).status == CommitStatus::Applied);
-    EmergencyResponse beforeReplay = stormIn(mine);
+    EmergencyResponse beforeReplay = emergencyIn(mine);
     const ResponseTask* mineAssigned = beforeReplay.findTask(basementId());
     QVERIFY(mineAssigned);
     QVERIFY(mineAssigned->assignment() == assigned.assignment());
@@ -566,7 +600,7 @@ void EmergencyCommandsTest::assignmentToAPersonReplayedAfterTheyWereRemovedConfl
 
     QVERIFY(result.status == ReplayStatus::Abandoned);
     QVERIFY(!mine.document().findPersonById(TestWard::aliceId()).has_value());
-    EmergencyResponse storm = stormIn(mine);
+    EmergencyResponse storm = emergencyIn(mine);
     const ResponseTask* after = storm.findTask(basementId());
     QVERIFY(after);
     QVERIFY(!after->isAssigned());
@@ -576,23 +610,23 @@ void EmergencyCommandsTest::reassigningReplacesTheWholeAssignmentAndUndoRestores
 {
     TestSession session;
     ResponseTask notified = floodedBasement();
-    TaskAssignment toSetup = TaskAssignment::toTeam(TestWard::setupTeamId(), "Bring the pump");
+    TaskAssignment toSetup = TaskAssignment::toTeam(TestWard::setupTeamId());
     toSetup.setNotification(TestWard::notification(ContactMethod::Text, "Sent the address", TestWard::octoberFirst(10, 40)));
     notified.setAssignment(toSetup);
     Document withTeam = TestWard::withTeam(TestWard::document(), TestWard::setupTeam());
     session.open(TestWard::withResponse(withTeam, TestWard::stormWith({}, {notified})));
-    EmergencyResponse opened = stormIn(session);
+    EmergencyResponse opened = emergencyIn(session);
     const ResponseTask* before = opened.findTask(basementId());
     QVERIFY(before);
     QVERIFY(before->isNotified());
     ResponseTask reassigned = notified;
-    reassigned.setAssignment(TaskAssignment::toPerson(TestWard::carolId(), QString()));
+    reassigned.setAssignment(TaskAssignment::toPerson(TestWard::carolId()));
 
     CommitResult result = commitTaskEdit(session, notified, reassigned);
 
     QVERIFY(result.status == CommitStatus::Applied);
     QCOMPARE(result.description, CommandDescription("Flooding task for Smith, Bob & Alice", {"assigned to: Jones, Carol"}));
-    EmergencyResponse storm = stormIn(session);
+    EmergencyResponse storm = emergencyIn(session);
     const ResponseTask* after = storm.findTask(basementId());
     QVERIFY(after);
     QVERIFY(after->assignment()->personId() == TestWard::carolId());
@@ -601,13 +635,13 @@ void EmergencyCommandsTest::reassigningReplacesTheWholeAssignmentAndUndoRestores
 
     QVERIFY(session.undo().status == CommitStatus::Applied);
 
-    EmergencyResponse undone = stormIn(session);
+    EmergencyResponse undone = emergencyIn(session);
     const ResponseTask* restored = undone.findTask(basementId());
     QVERIFY(restored);
     QVERIFY(*restored == notified);
 }
 
-void EmergencyCommandsTest::statisticsCountEveryDirectoryFamilyAndEveryRemovedFamilyTheResponseNames()
+void EmergencyCommandsTest::statisticsCountEveryDirectoryFamilyAndEveryRemovedFamilyTheEmergencyNames()
 {
     // Smith: OK, then a visit with no outcome. Jones: OK, with an unresolved task. A family
     // no longer in the directory: Unable to Reach. Lee: no attempt or task.
@@ -637,11 +671,15 @@ void EmergencyCommandsTest::statisticsCountEveryDirectoryFamilyAndEveryRemovedFa
     QVERIFY(!statuses.contains(FamilyId::fromString("family-lee")));
 
     Document withStorm = TestWard::withResponse(document, response);
-    QVERIFY(withStorm.emergencyStatus(TestWard::stormId(), TestWard::jonesId()) == EffectiveContactStatus::NeedsHelp);
-    QVERIFY(withStorm.emergencyStatus(TestWard::stormId(), FamilyId::fromString("family-lee"))
-            == EffectiveContactStatus::NotContacted);
-    QVERIFY(withStorm.emergencyStatus(EmergencyResponseId::fromString("response-other"), TestWard::jonesId())
-            == EffectiveContactStatus::NotContacted);
+    QVERIFY(withStorm.emergencyStatus(TestWard::jonesId()) == EffectiveContactStatus::NeedsHelp);
+    QVERIFY(withStorm.emergencyStatus(FamilyId::fromString("family-lee")) == EffectiveContactStatus::NotContacted);
+
+    // A change to the emergency as a whole rebuilds the table: with none in progress, every
+    // family is Not Contacted
+    Document ended = withStorm;
+    ended.setEmergencyResponse(std::nullopt);
+    ended.onDocumentChanged(DocumentChange::emergency().updated());
+    QVERIFY(ended.emergencyStatus(TestWard::jonesId()) == EffectiveContactStatus::NotContacted);
 }
 
 void EmergencyCommandsTest::statusTableFollowsEachChangeToOneFamily()
@@ -658,8 +696,7 @@ void EmergencyCommandsTest::statusTableFollowsEachChangeToOneFamily()
             == CommitStatus::Applied);
     QVERIFY(statusIn(session, TestWard::smithId()) == EffectiveContactStatus::OK);
 
-    QVERIFY(session.commit(AddTaskCommand::fromNew(TestWard::stormId(), floodedBasement(), session.document())).status
-            == CommitStatus::Applied);
+    QVERIFY(session.commit(AddTaskCommand::fromNew(floodedBasement(), session.document())).status == CommitStatus::Applied);
     QVERIFY(statusIn(session, TestWard::smithId()) == EffectiveContactStatus::NeedsHelp);
 
     ResponseTask unresolved = floodedBasement();
@@ -676,9 +713,9 @@ void EmergencyCommandsTest::statusTableFollowsEachChangeToOneFamily()
     QVERIFY(session.undo().status == CommitStatus::Applied);
     QVERIFY(statusIn(session, TestWard::smithId()) == EffectiveContactStatus::NotContacted);
 
-    // The other family was left alone, and the table equals a rebuild from the response.
+    // The other family was left alone, and the table equals a rebuild from the emergency.
     QVERIFY(statusIn(session, TestWard::jonesId()) == EffectiveContactStatus::UnableToReach);
-    QHash<FamilyId, EffectiveContactStatus> rebuilt = stormIn(session).statusByFamily();
+    QHash<FamilyId, EffectiveContactStatus> rebuilt = emergencyIn(session).statusByFamily();
     QCOMPARE(rebuilt.size(), qsizetype(1));
     QVERIFY(rebuilt.value(TestWard::jonesId()) == EffectiveContactStatus::UnableToReach);
 }

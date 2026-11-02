@@ -6,7 +6,8 @@
 
 class QPushButton;
 
-/// Widget with Edit/Delete buttons and optional emergency action buttons.
+/// Widget with Edit/Delete buttons and, while an emergency is in progress, its OK, Unable to
+/// Reach, Add Task and Log Contact buttons, which run their actions through EmergencyActions.
 /// Used in the tree view via setIndexWidget().
 class ActionButtonsWidget : public QWidget
 {
@@ -21,8 +22,6 @@ public:
 signals:
     void editRequested(const FamilyId& familyId);
     void deleteRequested(const FamilyId& familyId);
-    void addTaskRequested(const FamilyId& familyId);
-    void logContactRequested(const FamilyId& familyId);
 
 private slots:
     void onEditClicked();

@@ -17,8 +17,8 @@ ActionButtonsWidget::ActionButtonsWidget(const FamilyId& familyId,
 
     int row = 0;
 
-    // Emergency action buttons (only during an active emergency)
-    if (EmergencyManager::instance() && EmergencyManager::instance()->isActive())
+    // Emergency action buttons (only while an emergency is in progress)
+    if (EmergencyManager::instance()->isActive())
     {
         QPushButton* okButton = new QPushButton(tr("OK"), this);
         okButton->setStyleSheet("color: #4CAF50; font-weight: bold;");
@@ -72,22 +72,22 @@ void ActionButtonsWidget::onDeleteClicked()
 
 void ActionButtonsWidget::onOkClicked()
 {
-    EmergencyActions::addContactAttempt(
-        ContactAttempt::create(m_familyId, std::nullopt, std::nullopt, ContactOutcome::OK, QString()));
+    EmergencyActions::markContact(m_familyId, ContactOutcome::OK);
 }
 
 void ActionButtonsWidget::onUnableToReachClicked()
 {
-    EmergencyActions::addContactAttempt(
-        ContactAttempt::create(m_familyId, std::nullopt, std::nullopt, ContactOutcome::UnableToReach, QString()));
+    EmergencyActions::markContact(m_familyId, ContactOutcome::UnableToReach);
 }
 
+// The dialogs take the window as their parent, since this widget goes with its row when the
+// family's rows change while a dialog is open
 void ActionButtonsWidget::onAddTaskClicked()
 {
-    emit addTaskRequested(m_familyId);
+    EmergencyActions::addTask(m_familyId, window());
 }
 
 void ActionButtonsWidget::onLogContactClicked()
 {
-    emit logContactRequested(m_familyId);
+    EmergencyActions::logContact(m_familyId, window());
 }

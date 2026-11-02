@@ -1,6 +1,7 @@
 #include "Filter.h"
 #include "Document.h"
 #include "EmergencyAsset.h"
+#include "EmergencyManager.h"
 #include "Family.h"
 #include "Person.h"
 #include "Team.h"
@@ -130,7 +131,12 @@ void Filter::setContactStatusFilter(std::optional<EffectiveContactStatus> status
     if (m_contactStatusFilter != status)
     {
         m_contactStatusFilter = status;
-        emit changed();
+        // The status applies only while an emergency is in progress, so at other times
+        // setting it changes nothing that passes
+        if (EmergencyManager::instance()->isActive())
+        {
+            emit changed();
+        }
     }
 }
 
@@ -189,6 +195,16 @@ bool Filter::passesFamilyCriteria(const Document& document, const Family& family
         return false;
     }
     return true;
+}
+
+bool Filter::passesContactStatus(const Family& family) const
+{
+    if (!m_contactStatusFilter.has_value())
+    {
+        return true;
+    }
+    EmergencyManager* manager = EmergencyManager::instance();
+    return !manager->isActive() || manager->familyStatus(family.id()) == *m_contactStatusFilter;
 }
 
 bool Filter::passesPersonCriteria(const Person& person) const
@@ -336,7 +352,7 @@ bool Filter::hasResponseArea(const Document& document, const PersonId& personId)
 bool Filter::passes(const Document& document, const Family& family) const
 {
     // 1. Family-only criteria (fail fast)
-    if (!passesFamilyCriteria(document, family))
+    if (!passesFamilyCriteria(document, family) || !passesContactStatus(family))
     {
         return false;
     }

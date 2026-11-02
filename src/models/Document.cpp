@@ -115,30 +115,6 @@ QList<EmergencyAsset> Document::emergencyAssetsByArea(ResponseArea area) const
 }
 
 // ============================================================================
-// Emergency responses
-// ============================================================================
-
-void Document::setEmergencyResponse(const EmergencyResponse& response)
-{
-    m_emergencyResponses.insert(response.id(), response);
-}
-
-void Document::removeEmergencyResponse(const EmergencyResponseId& id)
-{
-    m_emergencyResponses.remove(id);
-}
-
-std::optional<EmergencyResponse> Document::findEmergencyResponseById(const EmergencyResponseId& id) const
-{
-    auto it = m_emergencyResponses.constFind(id);
-    if (it != m_emergencyResponses.constEnd())
-    {
-        return *it;
-    }
-    return std::nullopt;
-}
-
-// ============================================================================
 // Ministering operations
 // ============================================================================
 
@@ -278,49 +254,38 @@ void Document::onDocumentChanged(const DocumentChange& change)
     }
 
     // Emergency status for map markers and lists
-    if (change.action == ChangeAction::Full)
+    if (change.action == ChangeAction::Full || change.emergencyChanged)
     {
         m_emergencyStatuses.clear();
-        for (const EmergencyResponse& response : m_emergencyResponses)
+        if (m_emergencyResponse.has_value())
         {
-            m_emergencyStatuses.insert(response.id(), response.statusByFamily());
+            m_emergencyStatuses = m_emergencyResponse->statusByFamily();
         }
     }
-    else if (change.responseId.has_value())
+    else if (change.emergencyFamilyId.has_value())
     {
-        updateEmergencyStatuses(*change.responseId, change.responseFamilyId);
+        updateEmergencyStatus(*change.emergencyFamilyId);
     }
 }
 
-void Document::updateEmergencyStatuses(const EmergencyResponseId& responseId, const std::optional<FamilyId>& familyId)
+void Document::updateEmergencyStatus(const FamilyId& familyId)
 {
-    auto response = m_emergencyResponses.constFind(responseId);
-    if (response == m_emergencyResponses.constEnd())
-    {
-        m_emergencyStatuses.remove(responseId);
-        return;
-    }
-    if (!familyId.has_value())
-    {
-        m_emergencyStatuses.insert(responseId, response->statusByFamily());
-        return;
-    }
-
-    QHash<FamilyId, EffectiveContactStatus>& statuses = m_emergencyStatuses[responseId];
-    EffectiveContactStatus status = response->statusOf(*familyId);
+    EffectiveContactStatus status = m_emergencyResponse.has_value()
+        ? m_emergencyResponse->statusOf(familyId)
+        : EffectiveContactStatus::NotContacted;
     if (status == EffectiveContactStatus::NotContacted)
     {
-        statuses.remove(*familyId);
+        m_emergencyStatuses.remove(familyId);
     }
     else
     {
-        statuses.insert(*familyId, status);
+        m_emergencyStatuses.insert(familyId, status);
     }
 }
 
-EffectiveContactStatus Document::emergencyStatus(const EmergencyResponseId& responseId, const FamilyId& familyId) const
+EffectiveContactStatus Document::emergencyStatus(const FamilyId& familyId) const
 {
-    return m_emergencyStatuses.value(responseId).value(familyId, EffectiveContactStatus::NotContacted);
+    return m_emergencyStatuses.value(familyId, EffectiveContactStatus::NotContacted);
 }
 
 // ============================================================================
@@ -387,8 +352,11 @@ QJsonObject Document::toJson() const
     // Emergency assets
     serializeHashToJson(json, "emergencyResources", m_emergencyAssets);
 
-    // Emergency responses in progress
-    serializeHashToJson(json, "emergencyResponses", m_emergencyResponses);
+    // The emergency in progress
+    if (m_emergencyResponse.has_value())
+    {
+        json["emergencyResponse"] = m_emergencyResponse->toJson();
+    }
 
     // Ministering
     serializeHashToJson(json, "eqDistricts", m_eqDistricts);
@@ -431,8 +399,11 @@ Document Document::fromJson(const QJsonObject& json)
     // Emergency assets
     deserializeJsonToHash(json, "emergencyResources", document.m_emergencyAssets);
 
-    // Emergency responses in progress
-    deserializeJsonToHash(json, "emergencyResponses", document.m_emergencyResponses);
+    // The emergency in progress
+    if (json.contains("emergencyResponse"))
+    {
+        document.m_emergencyResponse = EmergencyResponse::fromJson(json["emergencyResponse"].toObject());
+    }
 
     // Ministering
     deserializeJsonToHash(json, "eqDistricts", document.m_eqDistricts);
@@ -472,7 +443,7 @@ bool Document::operator==(const Document& other) const
         && m_teams == other.m_teams
         && m_addressCoordinates == other.m_addressCoordinates
         && m_emergencyAssets == other.m_emergencyAssets
-        && m_emergencyResponses == other.m_emergencyResponses
+        && m_emergencyResponse == other.m_emergencyResponse
         && m_eqDistricts == other.m_eqDistricts
         && m_eqGroups == other.m_eqGroups
         && m_rsDistricts == other.m_rsDistricts

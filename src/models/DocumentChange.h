@@ -35,13 +35,13 @@ struct EmergencyAssetScopeBuilder
     DocumentChange updated(const EmergencyAssetId& id) const;
 };
 
-struct EmergencyResponseScopeBuilder
+struct EmergencyScopeBuilder
 {
-    /// A change to the response as a whole: started, ended, restored, or a category added.
-    DocumentChange updated(const EmergencyResponseId& id) const;
+    /// A change to the emergency as a whole: started, ended, restored, or a category added.
+    DocumentChange updated() const;
 
-    /// A change to one family's attempts or tasks in the response.
-    DocumentChange updated(const EmergencyResponseId& id, const FamilyId& familyId) const;
+    /// A change to one family's attempts or tasks in the emergency.
+    DocumentChange updated(const FamilyId& familyId) const;
 };
 
 // === DocumentChange struct ===
@@ -50,15 +50,16 @@ struct DocumentChange
 {
     ChangeAction action = ChangeAction::Full;
 
-    // An Updated change sets one of familyId, teamId, assetId and responseId: a change to
-    // one family, team, emergency asset or emergency response. A change to one family's
-    // attempts or tasks in an emergency response also sets responseFamilyId. An Updated
-    // change with none set is to the ward details.
+    // An Updated change sets one of familyId, teamId, assetId, emergencyChanged and
+    // emergencyFamilyId: a change to one family, team or emergency asset, to the emergency as
+    // a whole, or to one family's attempts or tasks in the emergency. familyId means the
+    // family itself changed, so an emergency change never sets it. An Updated change with
+    // none set is to the ward details.
     std::optional<FamilyId> familyId;
     std::optional<TeamId> teamId;
     std::optional<EmergencyAssetId> assetId;
-    std::optional<EmergencyResponseId> responseId;
-    std::optional<FamilyId> responseFamilyId;
+    bool emergencyChanged = false;
+    std::optional<FamilyId> emergencyFamilyId;
 
     // Full document change (no ID fields set)
     static DocumentChange full();
@@ -68,7 +69,7 @@ struct DocumentChange
     static MetadataScopeBuilder metadata();
     static TeamScopeBuilder team();
     static EmergencyAssetScopeBuilder emergencyAsset();
-    static EmergencyResponseScopeBuilder emergencyResponse();
+    static EmergencyScopeBuilder emergency();
 };
 
 Q_DECLARE_METATYPE(DocumentChange)

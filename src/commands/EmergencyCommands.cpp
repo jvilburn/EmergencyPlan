@@ -123,10 +123,6 @@ QStringList describeAssignment(const std::optional<TaskAssignment>& assignment, 
     }
     QStringList lines;
     lines.append(QObject::tr("assigned to: %1").arg(assigneeName(*assignment, document)));
-    if (!assignment->notes().isEmpty())
-    {
-        lines.append(QObject::tr("assignment notes: %1").arg(assignment->notes()));
-    }
     const std::optional<TaskNotification>& notification = assignment->notification();
     if (notification.has_value())
     {
@@ -188,7 +184,7 @@ StartEmergencyCommand::StartEmergencyCommand(const EmergencyResponse& response, 
 
 CommandOutcome StartEmergencyCommand::execute(Document& document) const
 {
-    if (!document.findEmergencyResponseById(m_response.id()).has_value())
+    if (!document.emergencyResponse().has_value())
     {
         document.setEmergencyResponse(m_response);
     }
@@ -204,7 +200,7 @@ QJsonObject StartEmergencyCommand::toJson() const
 
 DocumentChange StartEmergencyCommand::documentChange() const
 {
-    return DocumentChange::emergencyResponse().updated(m_response.id());
+    return DocumentChange::emergency().updated();
 }
 
 CommandPtr StartEmergencyCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
@@ -230,16 +226,16 @@ EndEmergencyCommand::EndEmergencyCommand(const EmergencyResponse& response, cons
 
 CommandOutcome EndEmergencyCommand::execute(Document& document) const
 {
-    std::optional<EmergencyResponse> response = document.findEmergencyResponseById(m_response.id());
-    if (!response.has_value())
+    const std::optional<EmergencyResponse>& inProgress = document.emergencyResponse();
+    if (!inProgress.has_value())
     {
         return CommandOutcome::Applied;
     }
-    if (*response != m_response)
+    if (*inProgress != m_response)
     {
         return CommandOutcome::Conflicted;
     }
-    document.removeEmergencyResponse(m_response.id());
+    document.setEmergencyResponse(std::nullopt);
     return CommandOutcome::Applied;
 }
 
@@ -257,7 +253,7 @@ QJsonObject EndEmergencyCommand::toJson() const
 
 DocumentChange EndEmergencyCommand::documentChange() const
 {
-    return DocumentChange::emergencyResponse().updated(m_response.id());
+    return DocumentChange::emergency().updated();
 }
 
 CommandPtr EndEmergencyCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
@@ -277,11 +273,13 @@ RestoreEmergencyCommand::RestoreEmergencyCommand(const EmergencyResponse& respon
 
 CommandOutcome RestoreEmergencyCommand::execute(Document& document) const
 {
-    if (!document.findEmergencyResponseById(m_response.id()).has_value())
+    const std::optional<EmergencyResponse>& inProgress = document.emergencyResponse();
+    if (!inProgress.has_value())
     {
         document.setEmergencyResponse(m_response);
+        return CommandOutcome::Applied;
     }
-    return CommandOutcome::Applied;
+    return *inProgress == m_response ? CommandOutcome::Applied : CommandOutcome::Conflicted;
 }
 
 UndoableCommandPtr RestoreEmergencyCommand::inverse() const
@@ -298,7 +296,7 @@ QJsonObject RestoreEmergencyCommand::toJson() const
 
 DocumentChange RestoreEmergencyCommand::documentChange() const
 {
-    return DocumentChange::emergencyResponse().updated(m_response.id());
+    return DocumentChange::emergency().updated();
 }
 
 CommandPtr RestoreEmergencyCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
@@ -310,27 +308,22 @@ CommandPtr RestoreEmergencyCommand::fromJson(const QJsonObject& json, const Comm
 // AddContactAttemptCommand
 // ----------------------------------------------------------------------------
 
-UndoableCommandPtr AddContactAttemptCommand::fromNew(const EmergencyResponseId& responseId,
-                                                     const ContactAttempt& attempt,
-                                                     const Document& document)
+UndoableCommandPtr AddContactAttemptCommand::fromNew(const ContactAttempt& attempt, const Document& document)
 {
     CommandDescription description(QObject::tr("Contact with %1").arg(familyName(attempt.familyId(), document)),
                                    describeAttempt(attempt, document));
-    return std::make_shared<AddContactAttemptCommand>(responseId, attempt, description);
+    return std::make_shared<AddContactAttemptCommand>(attempt, description);
 }
 
-AddContactAttemptCommand::AddContactAttemptCommand(const EmergencyResponseId& responseId,
-                                                   const ContactAttempt& attempt,
-                                                   const CommandDescription& description)
+AddContactAttemptCommand::AddContactAttemptCommand(const ContactAttempt& attempt, const CommandDescription& description)
     : UndoableCommand(description)
-    , m_responseId(responseId)
     , m_attempt(attempt)
 {
 }
 
 CommandOutcome AddContactAttemptCommand::execute(Document& document) const
 {
-    std::optional<EmergencyResponse> response = document.findEmergencyResponseById(m_responseId);
+    std::optional<EmergencyResponse> response = document.emergencyResponse();
     if (!response.has_value())
     {
         return CommandOutcome::Conflicted;
@@ -338,52 +331,46 @@ CommandOutcome AddContactAttemptCommand::execute(Document& document) const
     if (!response->findContactAttempt(m_attempt.id()))
     {
         response->insertContactAttempt(m_attempt);
-        document.setEmergencyResponse(*response);
+        document.setEmergencyResponse(response);
     }
     return CommandOutcome::Applied;
 }
 
 UndoableCommandPtr AddContactAttemptCommand::inverse() const
 {
-    return std::make_shared<DeleteContactAttemptCommand>(m_responseId, m_attempt, description().undone());
+    return std::make_shared<DeleteContactAttemptCommand>(m_attempt, description().undone());
 }
 
 QJsonObject AddContactAttemptCommand::toJson() const
 {
     QJsonObject json;
-    json["responseId"] = m_responseId.toString();
     json["attempt"] = m_attempt.toJson();
     return json;
 }
 
 DocumentChange AddContactAttemptCommand::documentChange() const
 {
-    return DocumentChange::emergencyResponse().updated(m_responseId, m_attempt.familyId());
+    return DocumentChange::emergency().updated(m_attempt.familyId());
 }
 
 CommandPtr AddContactAttemptCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
 {
-    return std::make_shared<AddContactAttemptCommand>(EmergencyResponseId::fromString(json["responseId"].toString()),
-                                                      ContactAttempt::fromJson(json["attempt"].toObject()),
-                                                      description);
+    return std::make_shared<AddContactAttemptCommand>(ContactAttempt::fromJson(json["attempt"].toObject()), description);
 }
 
 // ----------------------------------------------------------------------------
 // DeleteContactAttemptCommand
 // ----------------------------------------------------------------------------
 
-DeleteContactAttemptCommand::DeleteContactAttemptCommand(const EmergencyResponseId& responseId,
-                                                         const ContactAttempt& attempt,
-                                                         const CommandDescription& description)
+DeleteContactAttemptCommand::DeleteContactAttemptCommand(const ContactAttempt& attempt, const CommandDescription& description)
     : UndoableCommand(description)
-    , m_responseId(responseId)
     , m_attempt(attempt)
 {
 }
 
 CommandOutcome DeleteContactAttemptCommand::execute(Document& document) const
 {
-    std::optional<EmergencyResponse> response = document.findEmergencyResponseById(m_responseId);
+    std::optional<EmergencyResponse> response = document.emergencyResponse();
     if (!response.has_value())
     {
         return CommandOutcome::Conflicted;
@@ -391,57 +378,53 @@ CommandOutcome DeleteContactAttemptCommand::execute(Document& document) const
     if (response->findContactAttempt(m_attempt.id()))
     {
         response->removeContactAttempt(m_attempt.id());
-        document.setEmergencyResponse(*response);
+        document.setEmergencyResponse(response);
     }
     return CommandOutcome::Applied;
 }
 
 UndoableCommandPtr DeleteContactAttemptCommand::inverse() const
 {
-    return std::make_shared<AddContactAttemptCommand>(m_responseId, m_attempt, description().undone());
+    return std::make_shared<AddContactAttemptCommand>(m_attempt, description().undone());
 }
 
 QJsonObject DeleteContactAttemptCommand::toJson() const
 {
     QJsonObject json;
-    json["responseId"] = m_responseId.toString();
     json["attempt"] = m_attempt.toJson();
     return json;
 }
 
 DocumentChange DeleteContactAttemptCommand::documentChange() const
 {
-    return DocumentChange::emergencyResponse().updated(m_responseId, m_attempt.familyId());
+    return DocumentChange::emergency().updated(m_attempt.familyId());
 }
 
 CommandPtr DeleteContactAttemptCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
 {
-    return std::make_shared<DeleteContactAttemptCommand>(EmergencyResponseId::fromString(json["responseId"].toString()),
-                                                         ContactAttempt::fromJson(json["attempt"].toObject()),
-                                                         description);
+    return std::make_shared<DeleteContactAttemptCommand>(ContactAttempt::fromJson(json["attempt"].toObject()), description);
 }
 
 // ----------------------------------------------------------------------------
 // AddTaskCommand
 // ----------------------------------------------------------------------------
 
-UndoableCommandPtr AddTaskCommand::fromNew(const EmergencyResponseId& responseId, const ResponseTask& task, const Document& document)
+UndoableCommandPtr AddTaskCommand::fromNew(const ResponseTask& task, const Document& document)
 {
     CommandDescription description(QObject::tr("New %1 task for %2").arg(task.category(), familyName(task.familyId(), document)),
                                    describeTask(task, document));
-    return std::make_shared<AddTaskCommand>(responseId, task, description);
+    return std::make_shared<AddTaskCommand>(task, description);
 }
 
-AddTaskCommand::AddTaskCommand(const EmergencyResponseId& responseId, const ResponseTask& task, const CommandDescription& description)
+AddTaskCommand::AddTaskCommand(const ResponseTask& task, const CommandDescription& description)
     : UndoableCommand(description)
-    , m_responseId(responseId)
     , m_task(task)
 {
 }
 
 CommandOutcome AddTaskCommand::execute(Document& document) const
 {
-    std::optional<EmergencyResponse> response = document.findEmergencyResponseById(m_responseId);
+    std::optional<EmergencyResponse> response = document.emergencyResponse();
     if (!response.has_value())
     {
         return CommandOutcome::Conflicted;
@@ -455,43 +438,37 @@ CommandOutcome AddTaskCommand::execute(Document& document) const
         return CommandOutcome::Conflicted;
     }
     response->insertTask(m_task);
-    document.setEmergencyResponse(*response);
+    document.setEmergencyResponse(response);
     return CommandOutcome::Applied;
 }
 
 UndoableCommandPtr AddTaskCommand::inverse() const
 {
-    return std::make_shared<DeleteTaskCommand>(m_responseId, m_task, description().undone());
+    return std::make_shared<DeleteTaskCommand>(m_task, description().undone());
 }
 
 QJsonObject AddTaskCommand::toJson() const
 {
     QJsonObject json;
-    json["responseId"] = m_responseId.toString();
     json["task"] = m_task.toJson();
     return json;
 }
 
 DocumentChange AddTaskCommand::documentChange() const
 {
-    return DocumentChange::emergencyResponse().updated(m_responseId, m_task.familyId());
+    return DocumentChange::emergency().updated(m_task.familyId());
 }
 
 CommandPtr AddTaskCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
 {
-    return std::make_shared<AddTaskCommand>(EmergencyResponseId::fromString(json["responseId"].toString()),
-                                            ResponseTask::fromJson(json["task"].toObject()),
-                                            description);
+    return std::make_shared<AddTaskCommand>(ResponseTask::fromJson(json["task"].toObject()), description);
 }
 
 // ----------------------------------------------------------------------------
 // UpdateTaskCommand
 // ----------------------------------------------------------------------------
 
-UndoableCommandPtr UpdateTaskCommand::fromEdit(const EmergencyResponseId& responseId,
-                                               const ResponseTask& opened,
-                                               const ResponseTask& saved,
-                                               const Document& document)
+UndoableCommandPtr UpdateTaskCommand::fromEdit(const ResponseTask& opened, const ResponseTask& saved, const Document& document)
 {
     std::optional<FieldChange<QString>> category = changeBetween(opened.category(), saved.category());
     std::optional<FieldChange<QString>> taskDescription = changeBetween(opened.description(), saved.description());
@@ -521,12 +498,11 @@ UndoableCommandPtr UpdateTaskCommand::fromEdit(const EmergencyResponseId& respon
     }
     CommandDescription description(QObject::tr("%1 task for %2").arg(opened.category(), familyName(opened.familyId(), document)),
                                    lines);
-    return std::make_shared<UpdateTaskCommand>(responseId, opened.familyId(), opened.id(),
+    return std::make_shared<UpdateTaskCommand>(opened.familyId(), opened.id(),
                                                category, taskDescription, assignment, resolution, description);
 }
 
-UpdateTaskCommand::UpdateTaskCommand(const EmergencyResponseId& responseId,
-                                     const FamilyId& familyId,
+UpdateTaskCommand::UpdateTaskCommand(const FamilyId& familyId,
                                      const TaskId& taskId,
                                      const std::optional<FieldChange<QString>>& category,
                                      const std::optional<FieldChange<QString>>& taskDescription,
@@ -534,7 +510,6 @@ UpdateTaskCommand::UpdateTaskCommand(const EmergencyResponseId& responseId,
                                      const std::optional<FieldChange<std::optional<TaskResolution>>>& resolution,
                                      const CommandDescription& description)
     : UndoableCommand(description)
-    , m_responseId(responseId)
     , m_familyId(familyId)
     , m_taskId(taskId)
     , m_category(category)
@@ -546,7 +521,7 @@ UpdateTaskCommand::UpdateTaskCommand(const EmergencyResponseId& responseId,
 
 CommandOutcome UpdateTaskCommand::execute(Document& document) const
 {
-    std::optional<EmergencyResponse> response = document.findEmergencyResponseById(m_responseId);
+    std::optional<EmergencyResponse> response = document.emergencyResponse();
     const ResponseTask* task = response.has_value() ? response->findTask(m_taskId) : nullptr;
     if (!task
         || !changeHolds(m_category, task->category())
@@ -567,14 +542,13 @@ CommandOutcome UpdateTaskCommand::execute(Document& document) const
     updated.setAssignment(changedValue(m_assignment, task->assignment()));
     updated.setResolution(changedValue(m_resolution, task->resolution()));
     response->setTask(updated);
-    document.setEmergencyResponse(*response);
+    document.setEmergencyResponse(response);
     return CommandOutcome::Applied;
 }
 
 UndoableCommandPtr UpdateTaskCommand::inverse() const
 {
-    return std::make_shared<UpdateTaskCommand>(m_responseId,
-                                               m_familyId,
+    return std::make_shared<UpdateTaskCommand>(m_familyId,
                                                m_taskId,
                                                changeSwapped(m_category),
                                                changeSwapped(m_taskDescription),
@@ -586,7 +560,6 @@ UndoableCommandPtr UpdateTaskCommand::inverse() const
 QJsonObject UpdateTaskCommand::toJson() const
 {
     QJsonObject json;
-    json["responseId"] = m_responseId.toString();
     json["familyId"] = m_familyId.toString();
     json["taskId"] = m_taskId.toString();
     writeChange(json, "category", m_category);
@@ -598,13 +571,12 @@ QJsonObject UpdateTaskCommand::toJson() const
 
 DocumentChange UpdateTaskCommand::documentChange() const
 {
-    return DocumentChange::emergencyResponse().updated(m_responseId, m_familyId);
+    return DocumentChange::emergency().updated(m_familyId);
 }
 
 CommandPtr UpdateTaskCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
 {
-    return std::make_shared<UpdateTaskCommand>(EmergencyResponseId::fromString(json["responseId"].toString()),
-                                               FamilyId::fromString(json["familyId"].toString()),
+    return std::make_shared<UpdateTaskCommand>(FamilyId::fromString(json["familyId"].toString()),
                                                TaskId::fromString(json["taskId"].toString()),
                                                readChange<QString>(json, "category"),
                                                readChange<QString>(json, "taskDescription"),
@@ -617,23 +589,22 @@ CommandPtr UpdateTaskCommand::fromJson(const QJsonObject& json, const CommandDes
 // DeleteTaskCommand
 // ----------------------------------------------------------------------------
 
-UndoableCommandPtr DeleteTaskCommand::fromSeen(const EmergencyResponseId& responseId, const ResponseTask& task, const Document& document)
+UndoableCommandPtr DeleteTaskCommand::fromSeen(const ResponseTask& task, const Document& document)
 {
     CommandDescription description(QObject::tr("Delete %1 task for %2").arg(task.category(), familyName(task.familyId(), document)),
                                    describeTask(task, document));
-    return std::make_shared<DeleteTaskCommand>(responseId, task, description);
+    return std::make_shared<DeleteTaskCommand>(task, description);
 }
 
-DeleteTaskCommand::DeleteTaskCommand(const EmergencyResponseId& responseId, const ResponseTask& task, const CommandDescription& description)
+DeleteTaskCommand::DeleteTaskCommand(const ResponseTask& task, const CommandDescription& description)
     : UndoableCommand(description)
-    , m_responseId(responseId)
     , m_task(task)
 {
 }
 
 CommandOutcome DeleteTaskCommand::execute(Document& document) const
 {
-    std::optional<EmergencyResponse> response = document.findEmergencyResponseById(m_responseId);
+    std::optional<EmergencyResponse> response = document.emergencyResponse();
     if (!response.has_value())
     {
         return CommandOutcome::Conflicted;
@@ -648,57 +619,51 @@ CommandOutcome DeleteTaskCommand::execute(Document& document) const
         return CommandOutcome::Conflicted;
     }
     response->removeTask(m_task.id());
-    document.setEmergencyResponse(*response);
+    document.setEmergencyResponse(response);
     return CommandOutcome::Applied;
 }
 
 UndoableCommandPtr DeleteTaskCommand::inverse() const
 {
-    return std::make_shared<AddTaskCommand>(m_responseId, m_task, description().undone());
+    return std::make_shared<AddTaskCommand>(m_task, description().undone());
 }
 
 QJsonObject DeleteTaskCommand::toJson() const
 {
     QJsonObject json;
-    json["responseId"] = m_responseId.toString();
     json["task"] = m_task.toJson();
     return json;
 }
 
 DocumentChange DeleteTaskCommand::documentChange() const
 {
-    return DocumentChange::emergencyResponse().updated(m_responseId, m_task.familyId());
+    return DocumentChange::emergency().updated(m_task.familyId());
 }
 
 CommandPtr DeleteTaskCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
 {
-    return std::make_shared<DeleteTaskCommand>(EmergencyResponseId::fromString(json["responseId"].toString()),
-                                               ResponseTask::fromJson(json["task"].toObject()),
-                                               description);
+    return std::make_shared<DeleteTaskCommand>(ResponseTask::fromJson(json["task"].toObject()), description);
 }
 
 // ----------------------------------------------------------------------------
 // AddTaskCategoryCommand
 // ----------------------------------------------------------------------------
 
-CommandPtr AddTaskCategoryCommand::fromNew(const EmergencyResponseId& responseId, const QString& category)
+CommandPtr AddTaskCategoryCommand::fromNew(const QString& category)
 {
     CommandDescription description(QObject::tr("New task category: %1").arg(category), {});
-    return std::make_shared<AddTaskCategoryCommand>(responseId, category, description);
+    return std::make_shared<AddTaskCategoryCommand>(category, description);
 }
 
-AddTaskCategoryCommand::AddTaskCategoryCommand(const EmergencyResponseId& responseId,
-                                               const QString& category,
-                                               const CommandDescription& description)
+AddTaskCategoryCommand::AddTaskCategoryCommand(const QString& category, const CommandDescription& description)
     : Command(description)
-    , m_responseId(responseId)
     , m_category(category)
 {
 }
 
 CommandOutcome AddTaskCategoryCommand::execute(Document& document) const
 {
-    std::optional<EmergencyResponse> response = document.findEmergencyResponseById(m_responseId);
+    std::optional<EmergencyResponse> response = document.emergencyResponse();
     if (!response.has_value())
     {
         return CommandOutcome::Conflicted;
@@ -706,7 +671,7 @@ CommandOutcome AddTaskCategoryCommand::execute(Document& document) const
     if (!response->taskCategories().contains(m_category))
     {
         response->addTaskCategory(m_category);
-        document.setEmergencyResponse(*response);
+        document.setEmergencyResponse(response);
     }
     return CommandOutcome::Applied;
 }
@@ -714,19 +679,16 @@ CommandOutcome AddTaskCategoryCommand::execute(Document& document) const
 QJsonObject AddTaskCategoryCommand::toJson() const
 {
     QJsonObject json;
-    json["responseId"] = m_responseId.toString();
     json["category"] = m_category;
     return json;
 }
 
 DocumentChange AddTaskCategoryCommand::documentChange() const
 {
-    return DocumentChange::emergencyResponse().updated(m_responseId);
+    return DocumentChange::emergency().updated();
 }
 
 CommandPtr AddTaskCategoryCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
 {
-    return std::make_shared<AddTaskCategoryCommand>(EmergencyResponseId::fromString(json["responseId"].toString()),
-                                                    json["category"].toString(),
-                                                    description);
+    return std::make_shared<AddTaskCategoryCommand>(json["category"].toString(), description);
 }

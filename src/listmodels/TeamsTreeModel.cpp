@@ -7,6 +7,7 @@
 #include "Family.h"
 #include "Filter.h"
 #include "Person.h"
+#include "StatusIcons.h"
 #include "Team.h"
 
 #include <QColor>
@@ -16,26 +17,26 @@
 namespace
 {
 
-const QString kCheckmark = "\u2713";
-const QString kBullet = "\u2022";
-
-bool leaderFirstThenAlpha(const QPair<PersonId, QString>& a,
-                          const QPair<PersonId, QString>& b,
-                          const std::optional<PersonId>& leaderId)
+/// A team member's row: the person's id, and the name the row shows. The leader sorts first.
+struct MemberRow
 {
-    bool aIsLeader = leaderId && *leaderId == a.first;
-    bool bIsLeader = leaderId && *leaderId == b.first;
-    if (aIsLeader != bIsLeader)
+    PersonId personId;
+    QString displayName;
+    bool isLeader = false;
+};
+
+bool leaderFirstThenAlpha(const MemberRow& a, const MemberRow& b)
+{
+    if (a.isLeader != b.isLeader)
     {
-        return aIsLeader;
+        return a.isLeader;
     }
-    return a.second.toLower() < b.second.toLower();
+    return a.displayName.toLower() < b.displayName.toLower();
 }
 
-/// The team the task is assigned to, or none when it is unassigned or assigned to a person.
-std::optional<TeamId> assignedTeam(const ResponseTask& task)
+bool byTeamName(const Team& a, const Team& b)
 {
-    return task.assignment() ? task.assignment()->teamId() : std::nullopt;
+    return a.name().toLower() < b.name().toLower();
 }
 
 /// The family's display name as the document holds it, or "(removed)".
@@ -43,6 +44,47 @@ QString familyName(const FamilyId& familyId)
 {
     std::optional<Family> family = DocumentManager::instance()->document().findFamilyById(familyId);
     return family ? family->displayName() : QObject::tr("(removed)");
+}
+
+/// "Category - Family - Description", then whether its assignee was told when it has one,
+/// then "[RESOLVED]" when it is resolved.
+QString taskText(const ResponseTask& task)
+{
+    QString text = task.category()
+        + " - " + familyName(task.familyId())
+        + " - \"" + task.description() + "\"";
+    if (task.isAssigned())
+    {
+        text += task.isNotified()
+            ? " " + StatusIcons::Checkmark + " " + QObject::tr("notified")
+            : " " + StatusIcons::Bullet + " " + QObject::tr("not notified");
+    }
+    if (task.isResolved())
+    {
+        text += " [" + QObject::tr("RESOLVED") + "]";
+    }
+    return text;
+}
+
+/// The tasks of the emergency in progress that sit under teamId's row: those assigned to
+/// the team, or with no team, those with no assignment at all. In the emergency's order.
+QList<ResponseTask> tasksUnder(const std::optional<TeamId>& teamId)
+{
+    QList<ResponseTask> tasks;
+    for (const ResponseTask& task : EmergencyManager::instance()->response().tasks())
+    {
+        bool under = teamId ? task.isAssigned() && task.assignment()->teamId() == teamId : !task.isAssigned();
+        if (under)
+        {
+            tasks.append(task);
+        }
+    }
+    return tasks;
+}
+
+QString unassignedHeaderText(int count)
+{
+    return QObject::tr("Unassigned Tasks (%1)").arg(count);
 }
 
 }  // namespace
@@ -59,11 +101,11 @@ TeamsTreeModel::TeamsTreeModel(Filter* filter,
         connect(m_filter, &Filter::changed, this, &TeamsTreeModel::rebuild);
     }
     connect(EmergencyManager::instance(), &EmergencyManager::emergencyStarted,
-            this, &TeamsTreeModel::onEmergencyStateChanged);
-    connect(EmergencyManager::instance(), &EmergencyManager::emergencyEnded,
-            this, &TeamsTreeModel::onEmergencyStateChanged);
-    connect(EmergencyManager::instance(), &EmergencyManager::responseDataChanged,
             this, &TeamsTreeModel::rebuild);
+    connect(EmergencyManager::instance(), &EmergencyManager::emergencyEnded,
+            this, &TeamsTreeModel::rebuild);
+    connect(EmergencyManager::instance(), &EmergencyManager::familyStatusChanged,
+            this, &TeamsTreeModel::replaceFamilyTasks);
     rebuild();
 }
 
@@ -87,16 +129,12 @@ void TeamsTreeModel::onDocumentChanged(const DocumentChange& change)
         return;
     }
 
-    // Family updated: refresh display text only
+    // Family updated: its members' names, and its task rows, which name it
     if (change.familyId)
     {
         refreshFamilyDisplayText(*change.familyId);
+        replaceFamilyTasks(*change.familyId);
     }
-}
-
-void TeamsTreeModel::onEmergencyStateChanged()
-{
-    rebuild();
 }
 
 void TeamsTreeModel::rebuild()
@@ -107,155 +145,200 @@ void TeamsTreeModel::rebuild()
 
     const Document& doc = DocumentManager::instance()->document();
     QList<Team> teams = doc.teams().values();
-    bool emergencyActive = EmergencyManager::instance() && EmergencyManager::instance()->isActive();
-
-    // Sort teams by name
-    std::sort(teams.begin(), teams.end(),
-              [](const Team& a, const Team& b)
-              { return a.name().toLower() < b.name().toLower(); });
+    bool emergencyActive = EmergencyManager::instance()->isActive();
+    std::sort(teams.begin(), teams.end(), &byTeamName);
 
     for (const Team& team : teams)
     {
         // Collect and sort members (with filtering)
-        QList<QPair<PersonId, QString>> members;  // (personId, displayName)
+        QList<MemberRow> members;
         std::optional<PersonId> leaderId = team.leaderId();
-
         for (const PersonId& personId : team.memberIds())
         {
             std::optional<Person> person = doc.findPersonById(personId);
-            if (person)
+            if (!person || (m_filter && !m_filter->passes(doc, *person)))
             {
-                if (m_filter && !m_filter->passes(doc, *person))
-                {
-                    continue;
-                }
-                QString displayName = person->displayName() + formatContactSuffix(*person);
-                if (leaderId && *leaderId == personId)
-                {
-                    displayName += tr(" (leader)");
-                }
-                members.append({personId, displayName});
+                continue;
             }
+            MemberRow row;
+            row.personId = personId;
+            row.isLeader = leaderId == personId;
+            row.displayName = person->displayName() + formatContactSuffix(*person);
+            if (row.isLeader)
+            {
+                row.displayName += tr(" (leader)");
+            }
+            members.append(row);
         }
+        std::sort(members.begin(), members.end(), &leaderFirstThenAlpha);
 
-        // Sort: leader first, then alphabetically
-        std::sort(members.begin(), members.end(),
-                  [&leaderId](const QPair<PersonId, QString>& a, const QPair<PersonId, QString>& b)
-                  { return leaderFirstThenAlpha(a, b, leaderId); });
-
-        // Create team node
+        // Display: "Team Name (N)"
         TreeNode* teamNode = new TreeNode();
         teamNode->type = ItemType::Team;
         teamNode->teamId = team.id();
-
-        // Display: "Team Name (N)"
         teamNode->displayText = tr("%1 (%2)")
             .arg(team.name())
             .arg(members.size());
 
-        // Create member nodes
-        for (const QPair<PersonId, QString>& memberData : members)
+        for (const MemberRow& member : members)
         {
             TreeNode* memberNode = new TreeNode();
             memberNode->type = ItemType::TeamMember;
-            memberNode->personId = memberData.first;
+            memberNode->personId = member.personId;
             memberNode->teamId = team.id();
-            memberNode->displayText = memberData.second;
+            memberNode->displayText = member.displayName;
             memberNode->parent = teamNode;
             teamNode->children.append(memberNode);
         }
 
-        // During emergencies, add task rows assigned to this team
+        // During emergencies, the tasks assigned to this team follow its members
         if (emergencyActive)
         {
-            for (const ResponseTask& task : EmergencyManager::instance()->response().tasks())
+            for (const ResponseTask& task : tasksUnder(team.id()))
             {
-                if (assignedTeam(task) == team.id())
-                {
-                    TreeNode* taskNode = new TreeNode();
-                    taskNode->type = ItemType::TaskRow;
-                    taskNode->teamId = team.id();
-                    taskNode->taskId = task.id();
-                    taskNode->familyId = task.familyId();
-                    taskNode->taskResolved = task.isResolved();
-                    taskNode->parent = teamNode;
-
-                    // Format: "Category - Family - Description", then a check mark and "notified" or a bullet and
-                    // "not notified", then "[RESOLVED]" if resolved
-                    QString text = task.category()
-                        + " - " + familyName(task.familyId())
-                        + " - \"" + task.description() + "\"";
-
-                    if (task.isNotified())
-                    {
-                        text += " " + kCheckmark + " " + tr("notified");
-                    }
-                    else
-                    {
-                        text += " " + kBullet + " " + tr("not notified");
-                    }
-
-                    if (task.isResolved())
-                    {
-                        text += " [" + tr("RESOLVED") + "]";
-                    }
-
-                    taskNode->displayText = text;
-                    teamNode->children.append(taskNode);
-                }
+                teamNode->children.append(newTaskNode(task, teamNode));
             }
         }
 
         m_teamNodes.append(teamNode);
     }
 
-    // During emergencies, add "Unassigned Tasks" section
+    // During emergencies, the tasks with no assignment at all
     if (emergencyActive)
     {
-        // Collect unassigned tasks (not assigned to any team)
-        QList<TreeNode*> unassignedNodes;
-
-        for (const ResponseTask& task : EmergencyManager::instance()->response().tasks())
+        QList<ResponseTask> unassigned = tasksUnder(std::nullopt);
+        if (!unassigned.isEmpty())
         {
-            if (!assignedTeam(task))
-            {
-                TreeNode* taskNode = new TreeNode();
-                taskNode->type = ItemType::TaskRow;
-                taskNode->taskId = task.id();
-                taskNode->familyId = task.familyId();
-                taskNode->taskResolved = task.isResolved();
-
-                QString text = task.category()
-                    + " - " + familyName(task.familyId())
-                    + " - \"" + task.description() + "\"";
-
-                if (task.isResolved())
-                {
-                    text += " [" + tr("RESOLVED") + "]";
-                }
-
-                taskNode->displayText = text;
-                unassignedNodes.append(taskNode);
-            }
-        }
-
-        if (!unassignedNodes.isEmpty())
-        {
-            TreeNode* unassignedHeader = new TreeNode();
-            unassignedHeader->type = ItemType::UnassignedTasksHeader;
-            unassignedHeader->displayText = tr("Unassigned Tasks (%1)").arg(unassignedNodes.size());
-
-            for (TreeNode* taskNode : unassignedNodes)
-            {
-                taskNode->parent = unassignedHeader;
-                unassignedHeader->children.append(taskNode);
-            }
-
-            m_teamNodes.append(unassignedHeader);
+            m_teamNodes.append(newUnassignedHeader(unassigned));
         }
     }
 
     endResetModel();
+}
+
+TeamsTreeModel::TreeNode* TeamsTreeModel::newTaskNode(const ResponseTask& task, TreeNode* parent)
+{
+    TreeNode* taskNode = new TreeNode();
+    taskNode->type = ItemType::TaskRow;
+    taskNode->teamId = parent->teamId;
+    taskNode->parent = parent;
+    setTask(taskNode, task);
+    return taskNode;
+}
+
+void TeamsTreeModel::setTask(TreeNode* taskNode, const ResponseTask& task)
+{
+    taskNode->taskId = task.id();
+    taskNode->familyId = task.familyId();
+    taskNode->taskResolved = task.isResolved();
+    taskNode->displayText = taskText(task);
+}
+
+TeamsTreeModel::TreeNode* TeamsTreeModel::newUnassignedHeader(const QList<ResponseTask>& tasks)
+{
+    TreeNode* header = new TreeNode();
+    header->type = ItemType::UnassignedTasksHeader;
+    header->displayText = unassignedHeaderText(tasks.size());
+    for (const ResponseTask& task : tasks)
+    {
+        header->children.append(newTaskNode(task, header));
+    }
+    return header;
+}
+
+void TeamsTreeModel::replaceFamilyTasks(const FamilyId& familyId)
+{
+    if (!EmergencyManager::instance()->isActive())
+    {
+        return;
+    }
+
+    for (int row = 0; row < m_teamNodes.size(); ++row)
+    {
+        TreeNode* teamNode = m_teamNodes.at(row);
+        if (teamNode->type == ItemType::Team)
+        {
+            syncTaskRows(teamNode, index(row, 0), tasksUnder(teamNode->teamId), familyId);
+        }
+    }
+
+    // The Unassigned Tasks section is last, and shown only while it holds a task
+    QList<ResponseTask> unassigned = tasksUnder(std::nullopt);
+    int headerRow = m_teamNodes.size() - 1;
+    bool hasHeader = headerRow >= 0 && m_teamNodes.at(headerRow)->type == ItemType::UnassignedTasksHeader;
+    if (hasHeader && unassigned.isEmpty())
+    {
+        beginRemoveRows(QModelIndex(), headerRow, headerRow);
+        delete m_teamNodes.takeLast();
+        endRemoveRows();
+    }
+    else if (!hasHeader && !unassigned.isEmpty())
+    {
+        int newRow = m_teamNodes.size();
+        beginInsertRows(QModelIndex(), newRow, newRow);
+        m_teamNodes.append(newUnassignedHeader(unassigned));
+        endInsertRows();
+    }
+    else if (hasHeader)
+    {
+        TreeNode* header = m_teamNodes.at(headerRow);
+        QModelIndex headerIndex = index(headerRow, 0);
+        syncTaskRows(header, headerIndex, unassigned, familyId);
+        header->displayText = unassignedHeaderText(unassigned.size());
+        emit dataChanged(headerIndex, headerIndex);
+    }
+}
+
+void TeamsTreeModel::syncTaskRows(TreeNode* parentNode, const QModelIndex& parentIndex,
+                                  const QList<ResponseTask>& tasks, const FamilyId& familyId)
+{
+    QList<TreeNode*>& children = parentNode->children;
+
+    // Task rows follow any member rows
+    int first = 0;
+    while (first < children.size() && children.at(first)->type != ItemType::TaskRow)
+    {
+        ++first;
+    }
+
+    // The family's rows whose task is no longer here go
+    QSet<TaskId> taskIds;
+    for (const ResponseTask& task : tasks)
+    {
+        taskIds.insert(task.id());
+    }
+    for (int row = children.size() - 1; row >= first; --row)
+    {
+        TreeNode* node = children.at(row);
+        if (node->familyId == familyId && !taskIds.contains(*node->taskId))
+        {
+            beginRemoveRows(parentIndex, row, row);
+            delete children.takeAt(row);
+            endRemoveRows();
+        }
+    }
+
+    // The rows left are in the tasks' order, since a task's place never changes. Walk the
+    // tasks with them: the family's rows take their task as it stands, and its tasks with
+    // no row get one at their place.
+    for (int i = 0; i < tasks.size(); ++i)
+    {
+        const ResponseTask& task = tasks.at(i);
+        int row = first + i;
+        if (row < children.size() && children.at(row)->taskId == task.id())
+        {
+            if (task.familyId() == familyId)
+            {
+                setTask(children.at(row), task);
+                QModelIndex taskIndex = index(row, 0, parentIndex);
+                emit dataChanged(taskIndex, taskIndex);
+            }
+            continue;
+        }
+        beginInsertRows(parentIndex, row, row);
+        children.insert(row, newTaskNode(task, parentNode));
+        endInsertRows();
+    }
 }
 
 TeamsTreeModel::TreeNode* TeamsTreeModel::nodeFromIndex(const QModelIndex& index) const

@@ -2,31 +2,29 @@
 
 #include "EmergencyResponse.h"
 
-#include <optional>
-
 class QWidget;
 
-/// The user's actions on the shown emergency response that more than one view offers. Each
-/// takes the task as it stands and the shown response's id when it starts, before any dialog,
-/// builds its command from them, and commits it through DocumentManager. Each does nothing
-/// when no response is shown or the task is gone. A removal takes the task as the caller saw
-/// it, before its confirmation.
+/// The user's actions on the emergency in progress, each a whole flow: its dialogs, then the
+/// command it builds and commits through DocumentManager. Every view that offers an action
+/// calls the one here, so it behaves the same wherever it starts. An action on a task takes
+/// the task as the document holds it when the action starts, before any dialog, and does
+/// nothing when no emergency is in progress or the task is gone.
 namespace EmergencyActions
 {
 
-/// The shown response's task with that id, as the document holds it now.
-std::optional<ResponseTask> findTask(const TaskId& taskId);
+/// Records an attempt on the family carrying only outcome, as the OK and Unable to Reach
+/// buttons do.
+void markContact(const FamilyId& familyId, ContactOutcome outcome);
 
-/// Adds attempt to the shown response.
-void addContactAttempt(const ContactAttempt& attempt);
+/// Asks for a contact attempt on the family and records it.
+void logContact(const FamilyId& familyId, QWidget* parent);
 
-/// Asks for a new task for the family and adds it. The task added, or none when the user
-/// cancelled or it did not apply.
-std::optional<ResponseTask> addTask(const FamilyId& familyId, QWidget* parent);
+/// Asks for a new task for the family and adds it, then offers to notify its assignee.
+void addTask(const FamilyId& familyId, QWidget* parent);
 
-/// Opens the task dialog on the task and commits the edit. The task as saved, or none when
-/// the user cancelled or it did not apply.
-std::optional<ResponseTask> editTask(const TaskId& taskId, QWidget* parent);
+/// Opens the task dialog on the task and commits the edit, then offers to notify its
+/// assignee when they have not been told.
+void editTask(const TaskId& taskId, QWidget* parent);
 
 /// Asks how the task's assignee was told and records it on the assignment.
 void notifyAssignee(const TaskId& taskId, QWidget* parent);
@@ -34,7 +32,7 @@ void notifyAssignee(const TaskId& taskId, QWidget* parent);
 /// Asks for resolution notes and resolves the task.
 void resolveTask(const TaskId& taskId, QWidget* parent);
 
-/// Removes the task as seen.
-void deleteTask(const ResponseTask& seen);
+/// Asks to confirm, then removes the task as it stood when the user chose to delete it.
+void deleteTask(const TaskId& taskId, QWidget* parent);
 
 }  // namespace EmergencyActions

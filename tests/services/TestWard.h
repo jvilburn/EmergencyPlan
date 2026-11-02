@@ -23,7 +23,6 @@ public:
     static PersonId danId() { return PersonId::fromString("person-dan"); }
     static TeamId setupTeamId() { return TeamId::fromString("team-setup"); }
     static EmergencyAssetId generatorId() { return EmergencyAssetId::fromString("asset-generator"); }
-    static EmergencyResponseId stormId() { return EmergencyResponseId::fromString("response-storm"); }
 
     static Person bob();
     static Person alice();
@@ -71,9 +70,13 @@ public:
     /// 1 October 2026 at hour:minute UTC.
     static QDateTime octoberFirst(int hour, int minute);
 
-    /// The Storm response, which is not in document(): started on 1 October 2026 at 08:00
+    /// The Storm emergency, which is not in document(): started on 1 October 2026 at 08:00
     /// UTC, with the default task categories and no attempts or tasks.
     static EmergencyResponse storm();
+
+    /// The Flood emergency, which is not in document(): started on 1 October 2026 at 09:00
+    /// UTC, with the default task categories and no attempts or tasks.
+    static EmergencyResponse flood();
 
     /// An attempt with that id made at timestamp, otherwise as ContactAttempt::create makes
     /// it.
@@ -92,11 +95,10 @@ public:
     /// A notification by method with those notes made at timestamp.
     static TaskNotification notification(ContactMethod method, const QString& notes, const QDateTime& timestamp);
 
-    /// The Storm response holding attempts and tasks.
+    /// The Storm emergency holding attempts and tasks.
     static EmergencyResponse stormWith(const QList<ContactAttempt>& attempts, const QList<ResponseTask>& tasks);
 
-    /// document with response added, or put in place of the response with the same id,
-    /// caches rebuilt.
+    /// document with response as its emergency in progress, caches rebuilt.
     static Document withResponse(const Document& document, const EmergencyResponse& response);
 
     /// family with the member of the same id replaced by member.

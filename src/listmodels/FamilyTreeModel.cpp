@@ -9,11 +9,44 @@
 #include "Team.h"
 
 #include <QColor>
-#include <QDebug>
 #include <QFont>
 #include <QIcon>
 
 #include <algorithm>
+
+namespace
+{
+
+const Document& document()
+{
+    return DocumentManager::instance()->document();
+}
+
+/// The person's display name as the document holds them, or "(removed)".
+QString personNameOrRemoved(const PersonId& personId)
+{
+    std::optional<Person> person = document().findPersonById(personId);
+    return person ? person->displayName() : QObject::tr("(removed)");
+}
+
+/// Who the task is assigned to, "(removed)" when the ward no longer holds them, or empty
+/// when it is unassigned.
+QString assigneeName(const ResponseTask& task)
+{
+    const std::optional<TaskAssignment>& assignment = task.assignment();
+    if (assignment && assignment->teamId())
+    {
+        std::optional<Team> team = document().findTeamById(*assignment->teamId());
+        return team ? team->name() : QObject::tr("(removed)");
+    }
+    if (assignment && assignment->personId())
+    {
+        return personNameOrRemoved(*assignment->personId());
+    }
+    return QString();
+}
+
+}  // namespace
 
 FamilyTreeModel::FamilyTreeModel(Filter* filter,
                                  bool checkable,
@@ -60,312 +93,151 @@ void FamilyTreeModel::onDocumentChanged(const DocumentChange& change)
     // Family updated: surgical update, preserving expanded state
     if (change.familyId)
     {
-        updateFamilyRow(*change.familyId);
+        int row = applyFilter(*change.familyId);
+        if (row >= 0)
+        {
+            replaceChildren(row);
+        }
     }
 }
 
 void FamilyTreeModel::onFamilyStatusChanged(const FamilyId& familyId)
 {
-    int row = m_familyIds.indexOf(familyId);
-    if (row < 0)
+    int row = applyFilter(familyId);
+    if (row >= 0)
     {
-        return;
+        replaceEmergencyRows(row);
     }
-
-    // Update the family icon
-    QModelIndex idx = index(row, 0);
-    emit dataChanged(idx, idx, {Qt::DecorationRole, ResponseStatusRole});
-
-    // Rebuild children to reflect contact attempt changes
-    updateFamilyRow(familyId);
 }
 
 void FamilyTreeModel::onEmergencyStateChanged()
 {
-    if (m_familyNodes.isEmpty())
+    // Every family the document holds or the tree shows, since the status filter can both
+    // add and remove families
+    QList<FamilyId> shown = m_familyIds;
+    QSet<FamilyId> ids(shown.begin(), shown.end());
+    const QHash<FamilyId, Family>& families = document().families();
+    for (auto it = families.constBegin(); it != families.constEnd(); ++it)
     {
-        return;
+        ids.insert(it.key());
     }
-    QModelIndex first = index(0, 0);
-    QModelIndex last = index(m_familyNodes.size() - 1, 0);
-    emit dataChanged(first, last, {Qt::DecorationRole, ResponseStatusRole});
+    for (const FamilyId& familyId : ids)
+    {
+        onFamilyStatusChanged(familyId);
+    }
 }
 
-void FamilyTreeModel::updateFamilyRow(const FamilyId& familyId)
+int FamilyTreeModel::applyFilter(const FamilyId& familyId)
 {
-    // Find the row index for this family
+    std::optional<Family> family = document().findFamilyById(familyId);
+    bool passes = family.has_value() && m_filter->passes(document(), *family);
     int row = m_familyIds.indexOf(familyId);
-    if (row < 0)
+    if (row < 0 && passes)
     {
-        // Family not currently shown (might be filtered out or new)
-        // Check if family exists and passes filter
-        auto family = DocumentManager::instance()->document().findFamilyById(familyId);
-        if (family.has_value() && m_filter->passes(DocumentManager::instance()->document(), *family))
-        {
-            // Family should now be visible - insert it
-            insertFamilyRow(familyId);
-        }
-        return;
+        insertFamilyRow(*family);
     }
-
-    // Check if family still passes filter
-    auto family = DocumentManager::instance()->document().findFamilyById(familyId);
-    if (!family.has_value() || !m_filter->passes(DocumentManager::instance()->document(), *family))
+    else if (row >= 0 && !passes)
     {
-        // Family no longer passes filter - remove it
-        removeFamilyRow(familyId);
-        return;
+        removeFamilyRow(row);
     }
+    return passes ? row : -1;
+}
 
-    // Rebuild just this family's subtree
-    TreeNode* oldNode = m_familyNodes.at(row);
+void FamilyTreeModel::replaceChildren(int row)
+{
+    TreeNode* familyNode = m_familyNodes.at(row);
+    QModelIndex familyIndex = index(row, 0);
+    std::optional<Family> family = document().findFamilyById(m_familyIds.at(row));
 
-    // Remove old children
-    if (!oldNode->children.isEmpty())
+    if (!familyNode->children.isEmpty())
     {
-        QModelIndex familyIndex = index(row, 0);
-        beginRemoveRows(familyIndex, 0, oldNode->children.size() - 1);
-        qDeleteAll(oldNode->children);
-        oldNode->children.clear();
+        beginRemoveRows(familyIndex, 0, familyNode->children.size() - 1);
+        qDeleteAll(familyNode->children);
+        familyNode->children.clear();
         endRemoveRows();
     }
 
-    // Update the family node display text
-    oldNode->displayText = family->displayName();
+    familyNode->displayText = family->displayName();
+    QList<TreeNode*> children = childNodes(familyNode, *family);
+    beginInsertRows(familyIndex, 0, children.size() - 1);
+    familyNode->children = children;
+    endInsertRows();
 
-    // Rebuild children for this family
-    const QList<Person>& members = family->members();
-    QModelIndex familyIndex = index(row, 0);
-
-    // We need to add all children at once
-    QList<TreeNode*> newChildren;
-
-    // Build member nodes
-    for (int memberIdx = 0; memberIdx < members.size(); ++memberIdx)
-    {
-        const Person& person = members.at(memberIdx);
-
-        TreeNode* memberNode = new TreeNode();
-        memberNode->type = RowType::Member;
-        memberNode->familyIndex = row;
-        memberNode->memberIndex = memberIdx;
-        memberNode->parent = oldNode;
-
-        QString displayName = person.givenNames();
-        if (!person.surname().isEmpty() && person.surname() != family->surname())
-        {
-            displayName = person.displayName();
-        }
-        memberNode->displayText = displayName;
-
-        // Add member detail nodes
-        Phone phone = person.displayPhone();
-        if (!phone.isEmpty())
-        {
-            TreeNode* detailNode = new TreeNode();
-            detailNode->type = RowType::MemberDetail;
-            detailNode->familyIndex = row;
-            detailNode->memberIndex = memberIdx;
-            detailNode->detailType = DetailType::Phone;
-            detailNode->displayText = tr("Phone: %1").arg(QString(phone));
-            detailNode->parent = memberNode;
-            memberNode->children.append(detailNode);
-        }
-
-        if (!person.altPhone().isEmpty())
-        {
-            TreeNode* detailNode = new TreeNode();
-            detailNode->type = RowType::MemberDetail;
-            detailNode->familyIndex = row;
-            detailNode->memberIndex = memberIdx;
-            detailNode->detailType = DetailType::AltPhone;
-            detailNode->displayText = tr("Alt: %1").arg(QString(person.altPhone()));
-            detailNode->parent = memberNode;
-            memberNode->children.append(detailNode);
-        }
-
-        if (!person.email().isEmpty())
-        {
-            TreeNode* detailNode = new TreeNode();
-            detailNode->type = RowType::MemberDetail;
-            detailNode->familyIndex = row;
-            detailNode->memberIndex = memberIdx;
-            detailNode->detailType = DetailType::Email;
-            detailNode->displayText = tr("Email: %1").arg(person.email());
-            detailNode->parent = memberNode;
-            memberNode->children.append(detailNode);
-        }
-
-        if (!person.callings().isEmpty())
-        {
-            TreeNode* detailNode = new TreeNode();
-            detailNode->type = RowType::MemberDetail;
-            detailNode->familyIndex = row;
-            detailNode->memberIndex = memberIdx;
-            detailNode->detailType = DetailType::Callings;
-            detailNode->displayText = tr("Callings: %1").arg(person.callings().join(", "));
-            detailNode->parent = memberNode;
-            memberNode->children.append(detailNode);
-        }
-
-        QString birthDisplay = person.birthDateDisplay();
-        if (!birthDisplay.isEmpty())
-        {
-            QString ageStr = person.ageDisplay();
-            if (!ageStr.isEmpty())
-            {
-                birthDisplay += " " + ageStr;
-            }
-
-            TreeNode* detailNode = new TreeNode();
-            detailNode->type = RowType::MemberDetail;
-            detailNode->familyIndex = row;
-            detailNode->memberIndex = memberIdx;
-            detailNode->detailType = DetailType::Age;
-            detailNode->displayText = birthDisplay;
-            detailNode->parent = memberNode;
-            memberNode->children.append(detailNode);
-        }
-
-        if (memberNode->children.isEmpty())
-        {
-            TreeNode* detailNode = new TreeNode();
-            detailNode->type = RowType::MemberDetail;
-            detailNode->familyIndex = row;
-            detailNode->memberIndex = memberIdx;
-            detailNode->detailType = DetailType::Phone;
-            detailNode->displayText = tr("No contact info");
-            detailNode->parent = memberNode;
-            memberNode->children.append(detailNode);
-        }
-
-        newChildren.append(memberNode);
-    }
-
-    // Add address node
-    TreeNode* addressNode = new TreeNode();
-    addressNode->type = RowType::Address;
-    addressNode->familyIndex = row;
-    addressNode->parent = oldNode;
-    QString addressText = family->address().multiLine();
-    addressNode->displayText = addressText.isEmpty() ? tr("No address") : addressText;
-    newChildren.append(addressNode);
-
-    // Add phone node
-    TreeNode* phoneNode = new TreeNode();
-    phoneNode->type = RowType::Phone;
-    phoneNode->familyIndex = row;
-    phoneNode->parent = oldNode;
-    Phone familyPhone = family->displayPhone();
-    phoneNode->displayText = familyPhone.isEmpty() ? tr("No phone") : QString(familyPhone);
-    newChildren.append(phoneNode);
-
-    // Add contact attempt and task rows (only during active emergency)
-    const FamilyId& updateFamilyId = m_familyIds.at(row);
-    appendContactAttemptNodes(oldNode, row, updateFamilyId, newChildren);
-    appendTaskNodes(oldNode, row, updateFamilyId, newChildren);
-
-    // Add actions node
-    TreeNode* actionsNode = new TreeNode();
-    actionsNode->type = RowType::Actions;
-    actionsNode->familyIndex = row;
-    actionsNode->parent = oldNode;
-    newChildren.append(actionsNode);
-
-    // Insert all children
-    if (!newChildren.isEmpty())
-    {
-        beginInsertRows(familyIndex, 0, newChildren.size() - 1);
-        oldNode->children = newChildren;
-        endInsertRows();
-    }
-
-    // Emit dataChanged for the family row itself
     emit dataChanged(familyIndex, familyIndex);
 }
 
-void FamilyTreeModel::insertFamilyRow(const FamilyId& familyId)
+void FamilyTreeModel::replaceEmergencyRows(int row)
 {
-    // Check if family exists and passes filter
-    auto family = DocumentManager::instance()->document().findFamilyById(familyId);
-    if (!family.has_value() || !m_filter->passes(DocumentManager::instance()->document(), *family))
-    {
-        return;
-    }
+    TreeNode* familyNode = m_familyNodes.at(row);
+    QModelIndex familyIndex = index(row, 0);
+    QList<TreeNode*>& children = familyNode->children;
 
-    // Already exists?
-    if (m_familyIds.contains(familyId))
+    // The attempt and task rows sit between the Phone row and the Actions row, which is last
+    int first = 0;
+    while (children.at(first)->type != RowType::Phone)
     {
-        updateFamilyRow(familyId);
-        return;
+        ++first;
     }
+    ++first;
+    int last = children.size() - 2;
 
-    // Find insertion point (sorted by display name)
-    QString newName = family->displayName().toLower();
-    int insertRow = 0;
-    for (int i = 0; i < m_familyIds.size(); ++i)
+    if (last >= first)
     {
-        auto existingFamily = DocumentManager::instance()->document().findFamilyById(m_familyIds.at(i));
-        if (existingFamily.has_value()
-            && existingFamily->displayName().toLower() > newName)
+        beginRemoveRows(familyIndex, first, last);
+        for (int i = last; i >= first; --i)
         {
-            break;
+            delete children.takeAt(i);
         }
-        insertRow = i + 1;
+        endRemoveRows();
     }
 
-    // Insert into the model
-    beginInsertRows(QModelIndex(), insertRow, insertRow);
-    m_familyIds.insert(insertRow, familyId);
-
-    // Build the family node
-    TreeNode* familyNode = new TreeNode();
-    familyNode->type = RowType::Family;
-    familyNode->familyIndex = insertRow;
-    familyNode->displayText = family->displayName();
-    m_familyNodes.insert(insertRow, familyNode);
-
-    // Update familyIndex for all nodes after this one
-    for (int i = insertRow + 1; i < m_familyNodes.size(); ++i)
+    QList<TreeNode*> rows = emergencyNodes(familyNode, m_familyIds.at(row));
+    if (!rows.isEmpty())
     {
-        m_familyNodes.at(i)->familyIndex = i;
-        // Also update all children
-        for (TreeNode* child : m_familyNodes.at(i)->children)
+        beginInsertRows(familyIndex, first, first + rows.size() - 1);
+        for (int i = 0; i < rows.size(); ++i)
         {
-            child->familyIndex = i;
-            for (TreeNode* grandchild : child->children)
-            {
-                grandchild->familyIndex = i;
-            }
+            children.insert(first + i, rows.at(i));
         }
+        endInsertRows();
     }
 
-    endInsertRows();
-
-    // Now build the children for this family
-    updateFamilyRow(familyId);
+    emit dataChanged(familyIndex, familyIndex, {Qt::DecorationRole, ResponseStatusRole});
 }
 
-void FamilyTreeModel::removeFamilyRow(const FamilyId& familyId)
+void FamilyTreeModel::insertFamilyRow(const Family& family)
 {
-    int row = m_familyIds.indexOf(familyId);
-    if (row < 0)
+    // Find insertion point (sorted by display name)
+    QString newName = family.displayName().toLower();
+    int insertRow = 0;
+    while (insertRow < m_familyNodes.size() && m_familyNodes.at(insertRow)->displayText.toLower() <= newName)
     {
-        return;
+        ++insertRow;
     }
 
+    beginInsertRows(QModelIndex(), insertRow, insertRow);
+    m_familyIds.insert(insertRow, family.id());
+    m_familyNodes.insert(insertRow, buildFamilyNode(insertRow, family));
+    reindexFrom(insertRow + 1);
+    endInsertRows();
+}
+
+void FamilyTreeModel::removeFamilyRow(int row)
+{
     beginRemoveRows(QModelIndex(), row, row);
-
-    // Delete the node
-    delete m_familyNodes.at(row);
-    m_familyNodes.removeAt(row);
+    delete m_familyNodes.takeAt(row);
     m_familyIds.removeAt(row);
+    reindexFrom(row);
+    endRemoveRows();
+}
 
-    // Update familyIndex for all nodes after this one
+void FamilyTreeModel::reindexFrom(int row)
+{
     for (int i = row; i < m_familyNodes.size(); ++i)
     {
-        m_familyNodes.at(i)->familyIndex = i;
-        for (TreeNode* child : m_familyNodes.at(i)->children)
+        TreeNode* familyNode = m_familyNodes.at(i);
+        familyNode->familyIndex = i;
+        for (TreeNode* child : familyNode->children)
         {
             child->familyIndex = i;
             for (TreeNode* grandchild : child->children)
@@ -374,8 +246,6 @@ void FamilyTreeModel::removeFamilyRow(const FamilyId& familyId)
             }
         }
     }
-
-    endRemoveRows();
 }
 
 void FamilyTreeModel::rebuild()
@@ -385,81 +255,66 @@ void FamilyTreeModel::rebuild()
     clearNodes();
     m_familyIds.clear();
 
-    const Document& doc = DocumentManager::instance()->document();
+    const Document& doc = document();
     const QHash<FamilyId, Family>& families = doc.families();
 
     // Collect and filter family IDs
     QList<FamilyId> ids;
     ids.reserve(families.size());
-
-    std::optional<EffectiveContactStatus> statusFilter = m_filter->contactStatusFilter();
-
     for (auto it = families.begin(); it != families.end(); ++it)
     {
-        if (!m_filter->passes(doc, it.value()))
+        if (m_filter->passes(doc, it.value()))
         {
-            continue;
+            ids.append(it.key());
         }
-
-        // Apply contact status filter (requires EmergencyManager)
-        if (statusFilter.has_value() && EmergencyManager::instance())
-        {
-            EffectiveContactStatus familyStatus = EmergencyManager::instance()->familyStatus(it.key());
-            if (familyStatus != *statusFilter)
-            {
-                continue;
-            }
-        }
-
-        ids.append(it.key());
     }
 
     // Sort by display name
-    std::sort(ids.begin(), ids.end(), [&families](const FamilyId& a, const FamilyId& b) {
-        return families.value(a).displayName().toLower()
-             < families.value(b).displayName().toLower();
-    });
+    std::sort(ids.begin(), ids.end(), [&families](const FamilyId& a, const FamilyId& b) { return families.value(a).displayName().toLower() < families.value(b).displayName().toLower(); });
 
     m_familyIds = ids;
-
-    // Build tree nodes for each family
     for (int i = 0; i < m_familyIds.size(); ++i)
     {
-        buildFamilyNode(i);
+        m_familyNodes.append(buildFamilyNode(i, families.value(m_familyIds.at(i))));
     }
 
     endResetModel();
 }
 
-void FamilyTreeModel::buildFamilyNode(int familyIndex)
+FamilyTreeModel::TreeNode* FamilyTreeModel::newNode(RowType type, TreeNode* parent, int familyIndex, const QString& text)
 {
-    const FamilyId& familyId = m_familyIds.at(familyIndex);
-    std::optional<Family> opt = DocumentManager::instance()->document().findFamilyById(familyId);
-    if (!opt)
-    {
-        return;
-    }
+    TreeNode* node = new TreeNode();
+    node->type = type;
+    node->parent = parent;
+    node->familyIndex = familyIndex;
+    node->displayText = text;
+    return node;
+}
 
-    const Family& family = *opt;
+void FamilyTreeModel::appendDetail(TreeNode* memberNode, DetailType detailType, const QString& text)
+{
+    TreeNode* detailNode = newNode(RowType::MemberDetail, memberNode, memberNode->familyIndex, text);
+    detailNode->memberIndex = memberNode->memberIndex;
+    detailNode->detailType = detailType;
+    memberNode->children.append(detailNode);
+}
 
-    // Create family node
-    TreeNode* familyNode = new TreeNode();
-    familyNode->type = RowType::Family;
-    familyNode->familyIndex = familyIndex;
-    familyNode->displayText = family.displayName();
-    m_familyNodes.append(familyNode);
+FamilyTreeModel::TreeNode* FamilyTreeModel::buildFamilyNode(int familyIndex, const Family& family) const
+{
+    TreeNode* node = newNode(RowType::Family, nullptr, familyIndex, family.displayName());
+    node->children = childNodes(node, family);
+    return node;
+}
 
-    // Add member nodes
+QList<FamilyTreeModel::TreeNode*> FamilyTreeModel::childNodes(TreeNode* familyNode, const Family& family) const
+{
+    int familyIndex = familyNode->familyIndex;
+    QList<TreeNode*> children;
+
     const QList<Person>& members = family.members();
     for (int memberIdx = 0; memberIdx < members.size(); ++memberIdx)
     {
         const Person& person = members.at(memberIdx);
-
-        TreeNode* memberNode = new TreeNode();
-        memberNode->type = RowType::Member;
-        memberNode->familyIndex = familyIndex;
-        memberNode->memberIndex = memberIdx;
-        memberNode->parent = familyNode;
 
         // Show given name if same surname, full name otherwise
         QString displayName = person.givenNames();
@@ -467,58 +322,26 @@ void FamilyTreeModel::buildFamilyNode(int familyIndex)
         {
             displayName = person.displayName();
         }
-        memberNode->displayText = displayName;
+        TreeNode* memberNode = newNode(RowType::Member, familyNode, familyIndex, displayName);
+        memberNode->memberIndex = memberIdx;
 
-        familyNode->children.append(memberNode);
-
-        // Add member detail nodes (only for non-empty values)
+        // Member detail nodes, only for values the member has
         Phone phone = person.displayPhone();
         if (!phone.isEmpty())
         {
-            TreeNode* detailNode = new TreeNode();
-            detailNode->type = RowType::MemberDetail;
-            detailNode->familyIndex = familyIndex;
-            detailNode->memberIndex = memberIdx;
-            detailNode->detailType = DetailType::Phone;
-            detailNode->displayText = tr("Phone: %1").arg(QString(phone));
-            detailNode->parent = memberNode;
-            memberNode->children.append(detailNode);
+            appendDetail(memberNode, DetailType::Phone, tr("Phone: %1").arg(QString(phone)));
         }
-
         if (!person.altPhone().isEmpty())
         {
-            TreeNode* detailNode = new TreeNode();
-            detailNode->type = RowType::MemberDetail;
-            detailNode->familyIndex = familyIndex;
-            detailNode->memberIndex = memberIdx;
-            detailNode->detailType = DetailType::AltPhone;
-            detailNode->displayText = tr("Alt: %1").arg(QString(person.altPhone()));
-            detailNode->parent = memberNode;
-            memberNode->children.append(detailNode);
+            appendDetail(memberNode, DetailType::AltPhone, tr("Alt: %1").arg(QString(person.altPhone())));
         }
-
         if (!person.email().isEmpty())
         {
-            TreeNode* detailNode = new TreeNode();
-            detailNode->type = RowType::MemberDetail;
-            detailNode->familyIndex = familyIndex;
-            detailNode->memberIndex = memberIdx;
-            detailNode->detailType = DetailType::Email;
-            detailNode->displayText = tr("Email: %1").arg(person.email());
-            detailNode->parent = memberNode;
-            memberNode->children.append(detailNode);
+            appendDetail(memberNode, DetailType::Email, tr("Email: %1").arg(person.email()));
         }
-
         if (!person.callings().isEmpty())
         {
-            TreeNode* detailNode = new TreeNode();
-            detailNode->type = RowType::MemberDetail;
-            detailNode->familyIndex = familyIndex;
-            detailNode->memberIndex = memberIdx;
-            detailNode->detailType = DetailType::Callings;
-            detailNode->displayText = tr("Callings: %1").arg(person.callings().join(", "));
-            detailNode->parent = memberNode;
-            memberNode->children.append(detailNode);
+            appendDetail(memberNode, DetailType::Callings, tr("Callings: %1").arg(person.callings().join(", ")));
         }
 
         // Birthday: show date for everyone, append age for children
@@ -530,188 +353,77 @@ void FamilyTreeModel::buildFamilyNode(int familyIndex)
             {
                 birthDisplay += " " + ageStr;
             }
-
-            TreeNode* detailNode = new TreeNode();
-            detailNode->type = RowType::MemberDetail;
-            detailNode->familyIndex = familyIndex;
-            detailNode->memberIndex = memberIdx;
-            detailNode->detailType = DetailType::Age;
-            detailNode->displayText = birthDisplay;
-            detailNode->parent = memberNode;
-            memberNode->children.append(detailNode);
+            appendDetail(memberNode, DetailType::Age, birthDisplay);
         }
 
-        // If member has no details, add a "No contact info" placeholder
         if (memberNode->children.isEmpty())
         {
-            TreeNode* detailNode = new TreeNode();
-            detailNode->type = RowType::MemberDetail;
-            detailNode->familyIndex = familyIndex;
-            detailNode->memberIndex = memberIdx;
-            detailNode->detailType = DetailType::Phone;
-            detailNode->displayText = tr("No contact info");
-            detailNode->parent = memberNode;
-            memberNode->children.append(detailNode);
+            appendDetail(memberNode, DetailType::Phone, tr("No contact info"));
         }
+
+        children.append(memberNode);
     }
 
-    // Add address node
-    TreeNode* addressNode = new TreeNode();
-    addressNode->type = RowType::Address;
-    addressNode->familyIndex = familyIndex;
-    addressNode->parent = familyNode;
     QString addressText = family.address().multiLine();
-    addressNode->displayText = addressText.isEmpty() ? tr("No address") : addressText;
-    familyNode->children.append(addressNode);
+    children.append(newNode(RowType::Address, familyNode, familyIndex,
+                            addressText.isEmpty() ? tr("No address") : addressText));
 
-    // Add phone node
-    TreeNode* phoneNode = new TreeNode();
-    phoneNode->type = RowType::Phone;
-    phoneNode->familyIndex = familyIndex;
-    phoneNode->parent = familyNode;
     Phone familyPhone = family.displayPhone();
-    phoneNode->displayText = familyPhone.isEmpty() ? tr("No phone") : QString(familyPhone);
-    familyNode->children.append(phoneNode);
+    children.append(newNode(RowType::Phone, familyNode, familyIndex,
+                            familyPhone.isEmpty() ? tr("No phone") : QString(familyPhone)));
 
-    // Add contact attempt and task rows (only during active emergency)
-    appendContactAttemptNodes(familyNode, familyIndex, familyId, familyNode->children);
-    appendTaskNodes(familyNode, familyIndex, familyId, familyNode->children);
+    children.append(emergencyNodes(familyNode, family.id()));
 
-    // Add actions node
-    TreeNode* actionsNode = new TreeNode();
-    actionsNode->type = RowType::Actions;
-    actionsNode->familyIndex = familyIndex;
-    actionsNode->parent = familyNode;
-    familyNode->children.append(actionsNode);
+    // The Actions row's text is empty; the view puts its buttons there
+    children.append(newNode(RowType::Actions, familyNode, familyIndex, QString()));
+    return children;
 }
 
-void FamilyTreeModel::appendContactAttemptNodes(TreeNode* parent, int familyIndex,
-                                                 const FamilyId& familyId,
-                                                 QList<TreeNode*>& children)
+QList<FamilyTreeModel::TreeNode*> FamilyTreeModel::emergencyNodes(TreeNode* familyNode, const FamilyId& familyId) const
 {
-    if (!EmergencyManager::instance() || !EmergencyManager::instance()->isActive())
+    QList<TreeNode*> rows;
+    EmergencyManager* manager = EmergencyManager::instance();
+    if (!manager->isActive())
     {
-        return;
+        return rows;
+    }
+    int familyIndex = familyNode->familyIndex;
+
+    QList<ContactAttempt> attempts = manager->response().contactAttemptsFor(familyId);
+    if (!attempts.isEmpty())
+    {
+        rows.append(newNode(RowType::ContactAttempt, familyNode, familyIndex, tr("Contact Attempts:")));
+        for (const ContactAttempt& attempt : attempts)
+        {
+            QString time = attempt.timestamp().toLocalTime().toString(tr("MMM d, h:mm AP"));
+            QString who = attempt.who() ? personNameOrRemoved(*attempt.who()) : QString();
+            rows.append(newNode(RowType::ContactAttempt, familyNode, familyIndex,
+                                "  " + contactAttemptParts(attempt, time, who).join(" - ")));
+        }
     }
 
-    QList<ContactAttempt> attempts = EmergencyManager::instance()->response().contactAttemptsFor(familyId);
-    if (attempts.isEmpty())
+    QList<ResponseTask> tasks = manager->response().tasksFor(familyId);
+    if (!tasks.isEmpty())
     {
-        return;
-    }
-
-    // Add "Contact Attempts:" header
-    TreeNode* headerNode = new TreeNode();
-    headerNode->type = RowType::ContactAttempt;
-    headerNode->familyIndex = familyIndex;
-    headerNode->parent = parent;
-    headerNode->displayText = tr("Contact Attempts:");
-    children.append(headerNode);
-
-    const Document& doc = DocumentManager::instance()->document();
-    for (const ContactAttempt& attempt : attempts)
-    {
-        TreeNode* attemptNode = new TreeNode();
-        attemptNode->type = RowType::ContactAttempt;
-        attemptNode->familyIndex = familyIndex;
-        attemptNode->parent = parent;
-
-        // Format: "Phone - John Smith - Jan 4, 2:15 PM - OK - notes", or "Marked OK - Jan 4,
-        // 2:15 PM" for a button press, with whichever parts the attempt has
-        QStringList parts;
-        std::optional<ContactMethod> method = attempt.method();
-        std::optional<ContactOutcome> outcome = attempt.outcome();
-        if (method)
+        rows.append(newNode(RowType::Task, familyNode, familyIndex, tr("Tasks:")));
+        for (const ResponseTask& task : tasks)
         {
-            parts.append(contactMethodName(*method));
-        }
-        else if (outcome)
-        {
-            parts.append(contactMarkName(*outcome));
-        }
-        if (attempt.who())
-        {
-            std::optional<Person> person = doc.findPersonById(*attempt.who());
-            parts.append(person ? person->displayName() : tr("(removed)"));
-        }
-        parts.append(attempt.timestamp().toLocalTime().toString(tr("MMM d, h:mm AP")));
-        if (method && outcome)
-        {
-            parts.append(contactOutcomeName(*outcome));
-        }
-        QString display = "  " + parts.join(" - ");
-        if (!attempt.notes().isEmpty())
-        {
-            display += tr(" - \"%1\"").arg(attempt.notes());
-        }
+            // Line 1: a bullet and "Category - Description", with a check mark in place of
+            // the bullet if resolved
+            QString prefix = task.isResolved() ? StatusIcons::Checkmark : StatusIcons::Bullet;
+            TreeNode* taskNode = newNode(RowType::Task, familyNode, familyIndex,
+                                         tr("  %1 %2 - \"%3\"").arg(prefix, task.category(), task.description()));
+            taskNode->taskId = task.id();
+            taskNode->taskResolved = task.isResolved();
+            rows.append(taskNode);
 
-        attemptNode->displayText = display;
-        children.append(attemptNode);
-    }
-}
-
-void FamilyTreeModel::appendTaskNodes(TreeNode* parent, int familyIndex,
-                                       const FamilyId& familyId,
-                                       QList<TreeNode*>& children)
-{
-    if (!EmergencyManager::instance() || !EmergencyManager::instance()->isActive())
-    {
-        return;
-    }
-
-    QList<ResponseTask> tasks = EmergencyManager::instance()->response().tasksFor(familyId);
-    if (tasks.isEmpty())
-    {
-        return;
-    }
-
-    // Add "Tasks:" header
-    TreeNode* headerNode = new TreeNode();
-    headerNode->type = RowType::Task;
-    headerNode->familyIndex = familyIndex;
-    headerNode->parent = parent;
-    headerNode->displayText = tr("Tasks:");
-    children.append(headerNode);
-
-    const Document& doc = DocumentManager::instance()->document();
-    for (const ResponseTask& task : tasks)
-    {
-        // Line 1: a bullet and "Category - Description", with a check mark in place of the bullet if resolved
-        TreeNode* taskNode = new TreeNode();
-        taskNode->type = RowType::Task;
-        taskNode->familyIndex = familyIndex;
-        taskNode->parent = parent;
-        taskNode->taskId = task.id();
-        taskNode->taskResolved = task.isResolved();
-
-        QString prefix = task.isResolved() ? StatusIcons::Checkmark : StatusIcons::Bullet;
-        QString display = tr("  %1 %2 - \"%3\"").arg(prefix, task.category(), task.description());
-        taskNode->displayText = display;
-        children.append(taskNode);
-
-        // Line 2: assignment info (as child-like indented row)
-        QString assignmentText;
-        const std::optional<TaskAssignment>& assignment = task.assignment();
-        if (assignment && assignment->teamId())
-        {
-            const QHash<TeamId, Team>& teams = doc.teams();
-            auto it = teams.constFind(*assignment->teamId());
-            if (it != teams.constEnd())
+            // Line 2: who it is assigned to, and whether they have been told
+            QString assignee = assigneeName(task);
+            if (assignee.isEmpty())
             {
-                assignmentText = tr("    Assigned to %1").arg(it.value().name());
+                continue;
             }
-        }
-        else if (assignment && assignment->personId())
-        {
-            std::optional<Person> person = doc.findPersonById(*assignment->personId());
-            if (person)
-            {
-                assignmentText = tr("    Assigned to %1").arg(person->displayName());
-            }
-        }
-
-        if (!assignmentText.isEmpty())
-        {
+            QString assignmentText = tr("    Assigned to %1").arg(assignee);
             if (task.isNotified())
             {
                 assignmentText += " " + StatusIcons::Checkmark + " " + tr("notified");
@@ -720,17 +432,13 @@ void FamilyTreeModel::appendTaskNodes(TreeNode* parent, int familyIndex,
             {
                 assignmentText += " " + StatusIcons::Circle + " " + tr("not notified");
             }
-
-            TreeNode* assignNode = new TreeNode();
-            assignNode->type = RowType::Task;
-            assignNode->familyIndex = familyIndex;
-            assignNode->parent = parent;
+            TreeNode* assignNode = newNode(RowType::Task, familyNode, familyIndex, assignmentText);
             assignNode->taskId = task.id();
             assignNode->taskResolved = task.isResolved();
-            assignNode->displayText = assignmentText;
-            children.append(assignNode);
+            rows.append(assignNode);
         }
     }
+    return rows;
 }
 
 FamilyTreeModel::TreeNode* FamilyTreeModel::nodeFromIndex(const QModelIndex& index) const
@@ -891,8 +599,7 @@ QVariant FamilyTreeModel::data(const QModelIndex& index, int role) const
             return QVariant();
 
         case ResponseStatusRole:
-            if (node->type == RowType::Family && EmergencyManager::instance()
-                && EmergencyManager::instance()->isActive())
+            if (node->type == RowType::Family && EmergencyManager::instance()->isActive())
             {
                 FamilyId familyId = m_familyIds.at(node->familyIndex);
                 return QVariant::fromValue(
@@ -986,7 +693,7 @@ std::optional<PersonId> FamilyTreeModel::personIdAt(const QModelIndex& index) co
         return std::nullopt;
     }
 
-    const auto& families = DocumentManager::instance()->document().families();
+    const QHash<FamilyId, Family>& families = document().families();
     auto it = families.find(*famId);
     if (it == families.end())
     {
@@ -1057,7 +764,7 @@ SelectionKey FamilyTreeModel::selectionKeyAt(const QModelIndex& index) const
     {
     case RowType::Family:
     {
-        auto famId = familyIdAt(index);
+        std::optional<FamilyId> famId = familyIdAt(index);
         if (famId)
         {
             return SelectionKey::from(*famId);
@@ -1066,7 +773,7 @@ SelectionKey FamilyTreeModel::selectionKeyAt(const QModelIndex& index) const
     }
     case RowType::Member:
     {
-        auto personId = personIdAt(index);
+        std::optional<PersonId> personId = personIdAt(index);
         if (personId)
         {
             return SelectionKey::from(*personId);

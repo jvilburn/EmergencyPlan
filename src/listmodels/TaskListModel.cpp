@@ -4,15 +4,51 @@
 #include "EmergencyCommands.h"
 #include "EmergencyManager.h"
 #include "EmergencyResponse.h"
-#include "Family.h"
-#include "Person.h"
-#include "Team.h"
+
+#include <QHash>
+
+#include <algorithm>
+
+namespace
+{
+
+const Document& document()
+{
+    return DocumentManager::instance()->document();
+}
+
+/// Who the task is assigned to, "(removed)" when the ward no longer holds them, or empty
+/// when it is unassigned.
+QString assigneeName(const ResponseTask& task)
+{
+    const std::optional<TaskAssignment>& assignment = task.assignment();
+    if (assignment && assignment->teamId())
+    {
+        std::optional<Team> team = document().findTeamById(*assignment->teamId());
+        return team ? team->name() : QObject::tr("(removed)");
+    }
+    if (assignment && assignment->personId())
+    {
+        std::optional<Person> person = document().findPersonById(*assignment->personId());
+        return person ? person->displayName() : QObject::tr("(removed)");
+    }
+    return QString();
+}
+
+}  // namespace
 
 TaskListModel::TaskListModel(QObject* parent)
     : QAbstractTableModel(parent)
 {
-    connect(EmergencyManager::instance(), &EmergencyManager::responseDataChanged,
+    connect(DocumentManager::instance(), &DocumentManager::documentChanged,
+            this, &TaskListModel::onDocumentChanged);
+    connect(EmergencyManager::instance(), &EmergencyManager::emergencyStarted,
             this, &TaskListModel::rebuild);
+    connect(EmergencyManager::instance(), &EmergencyManager::emergencyEnded,
+            this, &TaskListModel::rebuild);
+    connect(EmergencyManager::instance(), &EmergencyManager::familyStatusChanged,
+            this, &TaskListModel::replaceFamilyRows);
+    rebuild();
 }
 
 int TaskListModel::rowCount(const QModelIndex& parent) const
@@ -52,7 +88,7 @@ QVariant TaskListModel::data(const QModelIndex& index, int role) const
         switch (index.column())
         {
         case AssignedToCol:
-            return resolveAssignedName(entry.assignedTeamId, entry.assignedPersonId);
+            return entry.assigneeName;
         case CategoryCol:
             return entry.category;
         case FamilyCol:
@@ -130,11 +166,8 @@ bool TaskListModel::setData(const QModelIndex& index, const QVariant& value, int
     {
         saved.setResolution(std::nullopt);
     }
-    const Document& document = DocumentManager::instance()->document();
-    DocumentManager::instance()->executeCommand(UpdateTaskCommand::fromEdit(*manager->shownId(), opened, saved, document));
-
-    // rebuild() will be triggered by responseDataChanged signal
-    return true;
+    CommitResult result = DocumentManager::instance()->executeCommand(UpdateTaskCommand::fromEdit(opened, saved, document()));
+    return result.status == CommitStatus::Applied;
 }
 
 FamilyId TaskListModel::familyIdForRow(int row) const
@@ -149,8 +182,7 @@ TaskId TaskListModel::taskIdForRow(int row) const
 
 bool TaskListModel::isAssignedForRow(int row) const
 {
-    const TaskEntry& entry = m_entries.at(row);
-    return entry.assignedTeamId.has_value() || entry.assignedPersonId.has_value();
+    return m_entries.at(row).assigned;
 }
 
 bool TaskListModel::isNotifiedForRow(int row) const
@@ -158,64 +190,144 @@ bool TaskListModel::isNotifiedForRow(int row) const
     return m_entries.at(row).notified;
 }
 
+void TaskListModel::onDocumentChanged(const DocumentChange& change)
+{
+    if (change.action == ChangeAction::Full)
+    {
+        rebuild();
+        return;
+    }
+
+    // A family or team renamed renames the rows that show it
+    EmergencyManager* manager = EmergencyManager::instance();
+    if ((change.familyId || change.teamId) && manager->isActive())
+    {
+        for (const FamilyId& familyId : manager->response().familyIds())
+        {
+            replaceFamilyRows(familyId);
+        }
+    }
+}
+
 void TaskListModel::rebuild()
 {
     beginResetModel();
     m_entries.clear();
 
-    if (!EmergencyManager::instance()->isActive())
+    EmergencyManager* manager = EmergencyManager::instance();
+    if (manager->isActive())
     {
-        endResetModel();
-        return;
+        for (const ResponseTask& task : manager->response().tasks())
+        {
+            m_entries.append(entryFor(task));
+        }
+        std::sort(m_entries.begin(), m_entries.end(), &TaskListModel::taskEntryLessThan);
     }
-
-    const QHash<FamilyId, Family>& families = DocumentManager::instance()->document().families();
-    for (const ResponseTask& task : EmergencyManager::instance()->response().tasks())
-    {
-        auto family = families.constFind(task.familyId());
-        const std::optional<TaskAssignment>& assignment = task.assignment();
-
-        TaskEntry entry;
-        entry.familyId = task.familyId();
-        entry.familyName = family != families.constEnd() ? family.value().displayName() : tr("(removed)");
-        entry.taskId = task.id();
-        entry.category = task.category();
-        entry.description = task.description();
-        entry.assignedTeamId = assignment ? assignment->teamId() : std::nullopt;
-        entry.assignedPersonId = assignment ? assignment->personId() : std::nullopt;
-        entry.resolved = task.isResolved();
-        entry.notified = task.isNotified();
-        m_entries.append(entry);
-    }
-
-    std::sort(m_entries.begin(), m_entries.end(), &TaskListModel::taskEntryLessThan);
 
     endResetModel();
 }
 
-// Sort: unresolved first, then assignedTo, then category, then family
+void TaskListModel::replaceFamilyRows(const FamilyId& familyId)
+{
+    EmergencyManager* manager = EmergencyManager::instance();
+    if (!manager->isActive())
+    {
+        return;
+    }
+    QHash<TaskId, TaskEntry> wanted;
+    for (const ResponseTask& task : manager->response().tasksFor(familyId))
+    {
+        wanted.insert(task.id(), entryFor(task));
+    }
+
+    // The family's rows whose task is gone go; the others take the task as it stands, and
+    // move to their place
+    for (int row = m_entries.size() - 1; row >= 0; --row)
+    {
+        if (m_entries.at(row).familyId == familyId && !wanted.contains(m_entries.at(row).taskId))
+        {
+            beginRemoveRows(QModelIndex(), row, row);
+            m_entries.removeAt(row);
+            endRemoveRows();
+        }
+    }
+    for (auto it = wanted.begin(); it != wanted.end();)
+    {
+        int row = 0;
+        while (row < m_entries.size() && m_entries.at(row).taskId != it.key())
+        {
+            ++row;
+        }
+        if (row == m_entries.size())
+        {
+            ++it;
+            continue;
+        }
+
+        m_entries[row] = it.value();
+        emit dataChanged(index(row, 0), index(row, ColumnCount - 1));
+
+        // Its place among the other rows, which are in order
+        TaskEntry entry = m_entries.takeAt(row);
+        int target = sortedRow(entry);
+        m_entries.insert(row, entry);
+        if (target != row)
+        {
+            beginMoveRows(QModelIndex(), row, row, QModelIndex(), target > row ? target + 1 : target);
+            m_entries.move(row, target);
+            endMoveRows();
+        }
+        it = wanted.erase(it);
+    }
+
+    // What is left in wanted are the family's new tasks
+    for (const TaskEntry& entry : wanted)
+    {
+        int row = sortedRow(entry);
+        beginInsertRows(QModelIndex(), row, row);
+        m_entries.insert(row, entry);
+        endInsertRows();
+    }
+}
+
+TaskListModel::TaskEntry TaskListModel::entryFor(const ResponseTask& task)
+{
+    std::optional<Family> family = document().findFamilyById(task.familyId());
+
+    TaskEntry entry;
+    entry.familyId = task.familyId();
+    entry.familyName = family ? family->displayName() : tr("(removed)");
+    entry.taskId = task.id();
+    entry.category = task.category();
+    entry.description = task.description();
+    entry.assigned = task.isAssigned();
+    entry.assigneeName = assigneeName(task);
+    entry.resolved = task.isResolved();
+    entry.notified = task.isNotified();
+    return entry;
+}
+
+int TaskListModel::sortedRow(const TaskEntry& entry) const
+{
+    return static_cast<int>(std::upper_bound(m_entries.begin(), m_entries.end(), entry, &TaskListModel::taskEntryLessThan)
+                            - m_entries.begin());
+}
+
+// Sort: unresolved first, then assigned before unassigned, then assignee, category and family
 bool TaskListModel::taskEntryLessThan(const TaskEntry& a, const TaskEntry& b)
 {
     if (a.resolved != b.resolved)
     {
-        return !a.resolved;  // unresolved first
+        return !a.resolved;
     }
-    // Assigned before unassigned, then alphabetical
-    QString aName = resolveAssignedName(a.assignedTeamId, a.assignedPersonId);
-    QString bName = resolveAssignedName(b.assignedTeamId, b.assignedPersonId);
-    bool aAssigned = !aName.isEmpty();
-    bool bAssigned = !bName.isEmpty();
-    if (aAssigned != bAssigned)
+    if (a.assigned != b.assigned)
     {
-        return aAssigned;
+        return a.assigned;
     }
-    if (aAssigned && bAssigned)
+    int assigneeCmp = a.assigneeName.compare(b.assigneeName, Qt::CaseInsensitive);
+    if (assigneeCmp != 0)
     {
-        int cmp = aName.compare(bName, Qt::CaseInsensitive);
-        if (cmp != 0)
-        {
-            return cmp < 0;
-        }
+        return assigneeCmp < 0;
     }
     int catCmp = a.category.compare(b.category, Qt::CaseInsensitive);
     if (catCmp != 0)
@@ -223,33 +335,4 @@ bool TaskListModel::taskEntryLessThan(const TaskEntry& a, const TaskEntry& b)
         return catCmp < 0;
     }
     return a.familyName.compare(b.familyName, Qt::CaseInsensitive) < 0;
-}
-
-QString TaskListModel::resolveAssignedName(const std::optional<TeamId>& teamId,
-                                           const std::optional<PersonId>& personId)
-{
-    const Document& doc = DocumentManager::instance()->document();
-    if (teamId)
-    {
-        auto it = doc.teams().constFind(*teamId);
-        if (it != doc.teams().constEnd())
-        {
-            return it.value().name();
-        }
-    }
-    if (personId)
-    {
-        const QHash<FamilyId, Family>& families = doc.families();
-        for (auto it = families.constBegin(); it != families.constEnd(); ++it)
-        {
-            for (const Person& person : it.value().members())
-            {
-                if (person.id() == *personId)
-                {
-                    return person.displayName();
-                }
-            }
-        }
-    }
-    return QString();
 }

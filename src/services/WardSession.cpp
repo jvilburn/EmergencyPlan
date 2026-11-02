@@ -113,9 +113,9 @@ QString WardSession::redoHeading() const
     return m_redoStack.last()->description().heading();
 }
 
-EndResult WardSession::endEmergency(const EmergencyResponseId& id, const QString& reportPath)
+EndResult WardSession::endEmergency(const QString& reportPath)
 {
-    std::optional<EmergencyResponse> response = m_document.findEmergencyResponseById(id);
+    std::optional<EmergencyResponse> response = m_document.emergencyResponse();
     if (!response.has_value())
     {
         return EndResult::AlreadyEnded;

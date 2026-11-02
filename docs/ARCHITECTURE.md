@@ -102,7 +102,7 @@ Document
 |-- addressCoordinates: QHash<QString, Coordinates>  (keyed by Address::full())
 |-- teams: QHash<TeamId, Team>
 |-- emergencyAssets: QHash<EmergencyAssetId, EmergencyAsset>
-|-- emergencyResponses: QHash<EmergencyResponseId, EmergencyResponse>  (the emergencies in progress)
+|-- emergencyResponse: std::optional<EmergencyResponse>  (the emergency in progress, if any)
 |-- districts (EQ/RS current/proposed): QHash<MinisteringDistrictId, MinisteringDistrict>
 |-- groups (EQ/RS current/proposed): QHash<MinisteringGroupId, MinisteringGroup>
 `-- metadata: DocumentMetadata (wards, stakes)
@@ -112,7 +112,9 @@ Collections use `QHash<Id, Model>` for O(1) lookup by ID and automatic uniquenes
 
 Coordinates belong to addresses: a family's place on the map is its address's entry in `addressCoordinates`, read through `Document::coordinatesFor(family.address())`. Families at one address share an entry, and a family whose address has none is unmapped.
 
-An emergency response holds its contact attempts and tasks, each carrying the id of the family it is for. A family's status is worked out from the attempts and tasks that carry its id: Needs Help while one of its tasks is unresolved, otherwise the outcome of its most recent attempt that has one, otherwise Not Contacted. `WardSession::endEmergency` writes the response's summary report, naming families, people and teams as the document holds them then, and then removes the response, so the document holds only emergencies in progress.
+A ward holds at most one emergency in progress, which holds its contact attempts and tasks, each carrying the id of the family it is for. A family's status is worked out from the attempts and tasks that carry its id: Needs Help while one of its tasks is unresolved, otherwise the outcome of its most recent attempt that has one, otherwise Not Contacted. The attempt, task and category commands write to the emergency in progress and conflict when there is none. Starting one while one is in progress changes nothing, so two responders who each start one offline end up in one emergency. `WardSession::endEmergency` writes the emergency's summary report, naming families, people and teams as the document holds them then, and then removes it.
+
+`EmergencyManager` turns the document's changes into four signals: `emergencyStarted` (none in progress to one), `emergencyEnded` (one to none), `familyStatusChanged(familyId)` (one family's attempts or tasks), and `responseDataChanged` (the counts, the progress bar and the map). On a change to one family's attempts or tasks, the family tree, the task table and the teams tree each replace only that family's rows. On a start or an end, the family tree replaces each family's attempt and task rows and the task table and the teams tree rebuild; every view rebuilds on a full document change.
 
 ### Unified Models
 

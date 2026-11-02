@@ -145,8 +145,14 @@ QDateTime TestWard::octoberFirst(int hour, int minute)
 EmergencyResponse TestWard::storm()
 {
     QJsonObject json = EmergencyResponse::create("Storm").toJson();
-    json["id"] = stormId().toString();
     json["startedAt"] = octoberFirst(8, 0).toString(Qt::ISODateWithMs);
+    return EmergencyResponse::fromJson(json);
+}
+
+EmergencyResponse TestWard::flood()
+{
+    QJsonObject json = EmergencyResponse::create("Flood").toJson();
+    json["startedAt"] = octoberFirst(9, 0).toString(Qt::ISODateWithMs);
     return EmergencyResponse::fromJson(json);
 }
 

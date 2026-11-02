@@ -1,6 +1,5 @@
 #include "EmergencyBanner.h"
 
-#include <QComboBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QStyle>
@@ -15,55 +14,28 @@ EmergencyBanner::EmergencyBanner(QWidget* parent)
     icon->setPixmap(style()->standardIcon(QStyle::SP_MessageBoxWarning).pixmap(16, 16));
     m_label = new QLabel(this);
     m_label->setAlignment(Qt::AlignCenter);
-    m_switcher = new QComboBox(this);
-    m_switcher->hide();
 
     layout->addWidget(icon);
     layout->addWidget(m_label, 1);
-    layout->addWidget(m_switcher);
-
-    connect(m_switcher, &QComboBox::activated, this, &EmergencyBanner::onSwitcherActivated);
 
     setStyleSheet(
-        "QFrame {"
+        "EmergencyBanner {"
         "  background-color: #FFA726;"
+        "}"
+        "EmergencyBanner QLabel {"
         "  color: #333;"
         "  font-weight: bold;"
         "}");
     hide();
 }
 
-void EmergencyBanner::setResponses(const QList<EmergencyResponse>& inProgress, const EmergencyResponseId& shownId)
+void EmergencyBanner::showEmergency(const QString& name)
 {
-    m_switcher->clear();
-    for (const EmergencyResponse& response : inProgress)
-    {
-        // Two responders who each started one offline may have given them the same name
-        QString started = response.startedAt().toLocalTime().toString(tr("MMM d, h:mm AP"));
-        m_switcher->addItem(tr("%1 (started %2)").arg(response.name(), started), response.id().toString());
-        if (response.id() == shownId)
-        {
-            m_switcher->setCurrentIndex(m_switcher->count() - 1);
-            m_label->setText(tr("EMERGENCY: %1").arg(response.name()));
-        }
-    }
-
-    bool several = inProgress.size() > 1;
-    m_switcher->setVisible(several);
-    if (several)
-    {
-        m_label->setText(tr("EMERGENCIES IN PROGRESS: %1").arg(inProgress.size()));
-    }
+    m_label->setText(tr("EMERGENCY: %1").arg(name));
     show();
 }
 
 void EmergencyBanner::clearBanner()
 {
-    m_switcher->clear();
     hide();
-}
-
-void EmergencyBanner::onSwitcherActivated(int index)
-{
-    emit responseChosen(EmergencyResponseId::fromString(m_switcher->itemData(index).toString()));
 }

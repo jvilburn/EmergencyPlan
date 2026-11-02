@@ -1,4 +1,5 @@
 #include "EmergencyActions.h"
+#include "ContactAttemptDialog.h"
 #include "DocumentManager.h"
 #include "EmergencyCommands.h"
 #include "EmergencyManager.h"
@@ -6,6 +7,7 @@
 #include "TaskDialog.h"
 
 #include <QInputDialog>
+#include <QMessageBox>
 #include <QObject>
 
 namespace
@@ -21,107 +23,106 @@ bool commitApplied(CommandPtr command)
     return DocumentManager::instance()->executeCommand(command).status == CommitStatus::Applied;
 }
 
-}  // namespace
-
-std::optional<ResponseTask> EmergencyActions::findTask(const TaskId& taskId)
+/// The task with that id in the emergency in progress, as the document holds it now, or
+/// null.
+const ResponseTask* taskInProgress(const TaskId& taskId)
 {
     EmergencyManager* manager = EmergencyManager::instance();
-    if (!manager->isActive())
-    {
-        return std::nullopt;
-    }
-    const ResponseTask* task = manager->response().findTask(taskId);
-    if (!task)
-    {
-        return std::nullopt;
-    }
-    return *task;
+    return manager->isActive() ? manager->response().findTask(taskId) : nullptr;
 }
 
-void EmergencyActions::addContactAttempt(const ContactAttempt& attempt)
+/// Offers to notify the task's assignee when it has one who has not been told.
+void offerToNotify(const ResponseTask& task, QWidget* parent)
 {
-    EmergencyManager* manager = EmergencyManager::instance();
-    if (!manager->isActive())
+    if (task.isAssigned() && !task.isNotified())
+    {
+        EmergencyActions::notifyAssignee(task.id(), parent);
+    }
+}
+
+}  // namespace
+
+void EmergencyActions::markContact(const FamilyId& familyId, ContactOutcome outcome)
+{
+    ContactAttempt attempt = ContactAttempt::create(familyId, std::nullopt, std::nullopt, outcome, QString());
+    DocumentManager::instance()->executeCommand(AddContactAttemptCommand::fromNew(attempt, document()));
+}
+
+void EmergencyActions::logContact(const FamilyId& familyId, QWidget* parent)
+{
+    ContactAttemptDialog dialog(familyId, parent);
+    if (dialog.exec() != QDialog::Accepted || !dialog.result())
     {
         return;
     }
-    DocumentManager::instance()->executeCommand(AddContactAttemptCommand::fromNew(*manager->shownId(), attempt, document()));
+    DocumentManager::instance()->executeCommand(AddContactAttemptCommand::fromNew(*dialog.result(), document()));
 }
 
-std::optional<ResponseTask> EmergencyActions::addTask(const FamilyId& familyId, QWidget* parent)
+void EmergencyActions::addTask(const FamilyId& familyId, QWidget* parent)
 {
-    EmergencyManager* manager = EmergencyManager::instance();
-    if (!manager->isActive())
-    {
-        return std::nullopt;
-    }
-    EmergencyResponseId responseId = *manager->shownId();
-
     TaskDialog dialog(familyId, parent);
     if (dialog.exec() != QDialog::Accepted || !dialog.result())
     {
-        return std::nullopt;
+        return;
     }
     ResponseTask task = *dialog.result();
-    if (!commitApplied(AddTaskCommand::fromNew(responseId, task, document())))
+    if (commitApplied(AddTaskCommand::fromNew(task, document())))
     {
-        return std::nullopt;
+        offerToNotify(task, parent);
     }
-    return task;
 }
 
-std::optional<ResponseTask> EmergencyActions::editTask(const TaskId& taskId, QWidget* parent)
+void EmergencyActions::editTask(const TaskId& taskId, QWidget* parent)
 {
-    std::optional<ResponseTask> opened = findTask(taskId);
-    if (!opened)
+    const ResponseTask* found = taskInProgress(taskId);
+    if (!found)
     {
-        return std::nullopt;
+        return;
     }
-    EmergencyResponseId responseId = *EmergencyManager::instance()->shownId();
+    ResponseTask opened = *found;
 
-    TaskDialog dialog(opened->familyId(), parent);
-    dialog.setTask(*opened);
+    TaskDialog dialog(opened.familyId(), parent);
+    dialog.setTask(opened);
     if (dialog.exec() != QDialog::Accepted || !dialog.result())
     {
-        return std::nullopt;
+        return;
     }
     ResponseTask saved = *dialog.result();
-    if (!commitApplied(UpdateTaskCommand::fromEdit(responseId, *opened, saved, document())))
+    if (commitApplied(UpdateTaskCommand::fromEdit(opened, saved, document())))
     {
-        return std::nullopt;
+        offerToNotify(saved, parent);
     }
-    return saved;
 }
 
 void EmergencyActions::notifyAssignee(const TaskId& taskId, QWidget* parent)
 {
-    std::optional<ResponseTask> opened = findTask(taskId);
-    if (!opened || !opened->assignment())
+    const ResponseTask* found = taskInProgress(taskId);
+    if (!found || !found->assignment())
     {
         return;
     }
-    EmergencyResponseId responseId = *EmergencyManager::instance()->shownId();
+    ResponseTask opened = *found;
 
     NotifyDialog dialog(parent);
     if (dialog.exec() != QDialog::Accepted || !dialog.result())
     {
         return;
     }
-    TaskAssignment notified = *opened->assignment();
+    TaskAssignment notified = *opened.assignment();
     notified.setNotification(*dialog.result());
-    ResponseTask saved = *opened;
+    ResponseTask saved = opened;
     saved.setAssignment(notified);
-    DocumentManager::instance()->executeCommand(UpdateTaskCommand::fromEdit(responseId, *opened, saved, document()));
+    DocumentManager::instance()->executeCommand(UpdateTaskCommand::fromEdit(opened, saved, document()));
 }
 
 void EmergencyActions::resolveTask(const TaskId& taskId, QWidget* parent)
 {
-    std::optional<ResponseTask> opened = findTask(taskId);
-    if (!opened)
+    const ResponseTask* found = taskInProgress(taskId);
+    if (!found)
     {
         return;
     }
-    EmergencyResponseId responseId = *EmergencyManager::instance()->shownId();
+    ResponseTask opened = *found;
 
     bool ok = false;
     QString notes = QInputDialog::getText(
@@ -131,17 +132,26 @@ void EmergencyActions::resolveTask(const TaskId& taskId, QWidget* parent)
     {
         return;
     }
-    ResponseTask saved = *opened;
+    ResponseTask saved = opened;
     saved.setResolution(TaskResolution::create(notes.trimmed()));
-    DocumentManager::instance()->executeCommand(UpdateTaskCommand::fromEdit(responseId, *opened, saved, document()));
+    DocumentManager::instance()->executeCommand(UpdateTaskCommand::fromEdit(opened, saved, document()));
 }
 
-void EmergencyActions::deleteTask(const ResponseTask& seen)
+void EmergencyActions::deleteTask(const TaskId& taskId, QWidget* parent)
 {
-    EmergencyManager* manager = EmergencyManager::instance();
-    if (!manager->isActive())
+    const ResponseTask* found = taskInProgress(taskId);
+    if (!found)
     {
         return;
     }
-    DocumentManager::instance()->executeCommand(DeleteTaskCommand::fromSeen(*manager->shownId(), seen, document()));
+    // The task as the user sees it, which the removal takes as its start condition
+    ResponseTask seen = *found;
+
+    QMessageBox::StandardButton answer = QMessageBox::question(
+        parent, QObject::tr("Delete Task"), QObject::tr("Delete this task?"),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (answer == QMessageBox::Yes)
+    {
+        DocumentManager::instance()->executeCommand(DeleteTaskCommand::fromSeen(seen, document()));
+    }
 }

@@ -3,8 +3,7 @@
 #include "DocumentManager.h"
 #include "EmergencyCommands.h"
 #include "EmergencyManager.h"
-#include "Family.h"
-#include "Person.h"
+#include "PersonCombo.h"
 #include "Team.h"
 
 #include <QButtonGroup>
@@ -94,31 +93,8 @@ TaskDialog::TaskDialog(const FamilyId& familyId, QWidget* parent)
     QHBoxLayout* personRow = new QHBoxLayout();
     personRow->addWidget(m_personRadio);
     m_personCombo = new QComboBox(this);
-    m_personCombo->setEditable(true);
-    m_personCombo->setInsertPolicy(QComboBox::NoInsert);
+    PersonCombo::fill(m_personCombo, DocumentManager::instance()->document(), std::nullopt);
     m_personCombo->setEnabled(false);
-
-    struct PersonEntry
-    {
-        QString displayName;
-        PersonId id;
-    };
-    QList<PersonEntry> personEntries;
-
-    const QHash<FamilyId, Family>& families = DocumentManager::instance()->document().families();
-    for (auto it = families.constBegin(); it != families.constEnd(); ++it)
-    {
-        for (const Person& person : it.value().members())
-        {
-            personEntries.append({person.displayName(), person.id()});
-        }
-    }
-    std::sort(personEntries.begin(), personEntries.end(),
-              [](const PersonEntry& a, const PersonEntry& b) { return a.displayName.toLower() < b.displayName.toLower(); });
-    for (const PersonEntry& entry : personEntries)
-    {
-        m_personCombo->addItem(entry.displayName, entry.id.toString());
-    }
 
     personRow->addWidget(m_personCombo);
     layout->addLayout(personRow);
@@ -142,36 +118,29 @@ void TaskDialog::setTask(const ResponseTask& task)
     setWindowTitle(tr("Edit Task"));
     m_originalTask = task;
 
-    // Set category
+    // The task's own category, which the emergency may not list
     int catIndex = m_categoryCombo->findText(task.category());
-    if (catIndex >= 0)
+    if (catIndex < 0)
     {
-        m_categoryCombo->setCurrentIndex(catIndex);
+        catIndex = addCategory(task.category());
     }
+    m_categoryCombo->setCurrentIndex(catIndex);
 
-    // Set description
     m_descriptionEdit->setText(task.description());
 
-    // Set assignment
+    // The task's assignee, which the ward may no longer hold: saving it unchanged keeps the
+    // assignment as it is
     const std::optional<TaskAssignment>& assignment = task.assignment();
     if (assignment && assignment->teamId())
     {
         m_teamRadio->setChecked(true);
-        int teamIndex = m_teamCombo->findData(assignment->teamId()->toString());
-        if (teamIndex >= 0)
-        {
-            m_teamCombo->setCurrentIndex(teamIndex);
-        }
+        selectAssignee(m_teamCombo, assignment->teamId()->toString());
         m_teamCombo->setEnabled(true);
     }
     else if (assignment && assignment->personId())
     {
         m_personRadio->setChecked(true);
-        int personIndex = m_personCombo->findData(assignment->personId()->toString());
-        if (personIndex >= 0)
-        {
-            m_personCombo->setCurrentIndex(personIndex);
-        }
+        selectAssignee(m_personCombo, assignment->personId()->toString());
         m_personCombo->setEnabled(true);
     }
     else
@@ -215,14 +184,22 @@ void TaskDialog::onAccepted()
     std::optional<TaskAssignment> assignment;
     if (m_teamRadio->isChecked() && m_teamCombo->currentIndex() >= 0)
     {
-        assignment = TaskAssignment::toTeam(TeamId::fromString(m_teamCombo->currentData().toString()), QString());
+        assignment = TaskAssignment::toTeam(TeamId::fromString(m_teamCombo->currentData().toString()));
     }
-    else if (m_personRadio->isChecked() && m_personCombo->currentIndex() >= 0)
+    else if (m_personRadio->isChecked())
     {
-        assignment = TaskAssignment::toPerson(PersonId::fromString(m_personCombo->currentData().toString()), QString());
+        std::optional<PersonId> person = PersonCombo::chosen(m_personCombo);
+        if (!person)
+        {
+            QMessageBox::warning(this, tr("Task"),
+                                 tr("Please choose a person from the list."));
+            m_personCombo->setFocus();
+            return;
+        }
+        assignment = TaskAssignment::toPerson(*person);
     }
 
-    // The same assignee keeps the assignment as it was, notes and notification included
+    // The same assignee keeps the assignment as it was, notification included
     const std::optional<TaskAssignment>& original = task.assignment();
     if (assignment && original
         && assignment->teamId() == original->teamId()
@@ -259,17 +236,41 @@ void TaskDialog::onCategoryActivated(int index)
         return;
     }
 
+    // A name already listed is chosen rather than added again
     name = name.trimmed();
-    if (EmergencyManager::instance()->isActive())
+    int existing = m_categoryCombo->findText(name, Qt::MatchFixedString);
+    if (existing >= 0 && existing != m_categoryCombo->count() - 1)
     {
-        DocumentManager::instance()->executeCommand(
-            AddTaskCategoryCommand::fromNew(*EmergencyManager::instance()->shownId(), name));
+        m_categoryCombo->setCurrentIndex(existing);
+        return;
     }
 
-    // Insert before the "+ Add new..." item
-    int insertIndex = m_categoryCombo->count() - 1;
-    m_categoryCombo->insertItem(insertIndex, name);
-    m_categoryCombo->setCurrentIndex(insertIndex);
+    CommitResult result = DocumentManager::instance()->executeCommand(AddTaskCategoryCommand::fromNew(name));
+    if (result.status != CommitStatus::Applied)
+    {
+        m_categoryCombo->setCurrentIndex(0);
+        return;
+    }
+    m_categoryCombo->setCurrentIndex(addCategory(name));
+}
+
+int TaskDialog::addCategory(const QString& category)
+{
+    // Before the "+ Add new..." item
+    int index = m_categoryCombo->count() - 1;
+    m_categoryCombo->insertItem(index, category);
+    return index;
+}
+
+void TaskDialog::selectAssignee(QComboBox* combo, const QString& id)
+{
+    int index = combo->findData(id);
+    if (index < 0)
+    {
+        combo->insertItem(0, tr("(removed)"), id);
+        index = 0;
+    }
+    combo->setCurrentIndex(index);
 }
 
 void TaskDialog::onAssignmentChanged()

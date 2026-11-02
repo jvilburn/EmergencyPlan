@@ -138,20 +138,7 @@ QString familyNameIn(const FamilyId& id, const Document& document)
 /// One attempt: its time, method, who, outcome and notes, whichever it has.
 QString attemptLine(const ContactAttempt& attempt, const Document& document)
 {
-    QStringList parts = {timeText(attempt.timestamp())};
-    std::optional<ContactMethod> method = attempt.method();
-    std::optional<ContactOutcome> outcome = attempt.outcome();
-    if (method.has_value())
-    {
-        parts.append(contactMethodName(*method));
-    }
-    parts.append(personNameIn(attempt.who(), document));
-    if (outcome.has_value())
-    {
-        parts.append(method.has_value() ? contactOutcomeName(*outcome) : contactMarkName(*outcome));
-    }
-    parts.append(attempt.notes());
-    return joined(parts);
+    return contactAttemptParts(attempt, timeText(attempt.timestamp()), personNameIn(attempt.who(), document)).join(" - ");
 }
 
 QString assigneeLine(const TaskAssignment& assignment, const Document& document)
@@ -166,7 +153,7 @@ QString assigneeLine(const TaskAssignment& assignment, const Document& document)
     {
         assignee = personNameIn(assignment.personId(), document);
     }
-    return joined({QObject::tr("Assigned to: %1").arg(assignee), assignment.notes()});
+    return QObject::tr("Assigned to: %1").arg(assignee);
 }
 
 QString notificationLine(const TaskNotification& notification)

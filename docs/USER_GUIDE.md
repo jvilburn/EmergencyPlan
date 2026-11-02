@@ -84,6 +84,8 @@ Create and manage emergency response teams.
 
 Expand a team to see members and their contact details (phone, email).
 
+During an emergency, each team also lists the tasks assigned to it, and **Unassigned Tasks** lists the tasks no one has been given; right-click one to assign it to a team. A task assigned to a person is listed in the Tasks tab.
+
 ### Needs
 
 Track special needs for ward members (e.g., oxygen dependency, mobility issues, dialysis).
@@ -129,7 +131,7 @@ The interactive map shows family locations as markers.
 
 ### Starting an Emergency
 
-1. **Emergency > Start Emergency**
+1. **Emergency > Start Emergency**, offered while no emergency is in progress
 2. Enter a name (e.g., "January 2026 Ice Storm")
 3. The app enters emergency mode:
    - An orange banner appears: **EMERGENCY: [name]**
@@ -140,11 +142,9 @@ The interactive map shows family locations as markers.
 
 Everyone who has the ward open sees the emergency once their copy is up to date, and their welfare checks and tasks go into the same emergency.
 
-### Several Emergencies in Progress
+A ward has one emergency in progress at a time. Two people who each start one while they are offline end up with one emergency: the first to reach the ward is the one in progress, under its name, and the other person's checks and tasks go into it. In the same way, if an emergency ends and a new one starts while someone is offline, the checks and new tasks they recorded go into the new one.
 
-Two people who each start an emergency while they are offline end up with two emergencies, each holding the checks and tasks its own responder recorded, because the app cannot tell they were meant to be the same one. When more than one emergency is in progress, the banner shows how many and a list to switch between them; each is listed with its name and when it started. Whoever is coordinating ends the one that is not wanted, which saves its report like any other.
-
-Opening a ward, or **File > New**, shows that ward's own emergencies: none, or one of those in progress.
+Opening a ward, or **File > New**, shows that ward's own emergency, if it has one in progress.
 
 ### Welfare Checks
 
@@ -153,9 +153,9 @@ In the Families tab during an emergency, each family has action buttons:
 - **OK** (green) - Family has been contacted and is fine
 - **Unable to Reach** (orange) - Contact attempted but no response
 - **Add Task** - Create a task for something the family needs
-- **Log Contact** - Record a contact attempt (method, who contacted, notes)
+- **Log Contact** - Record a contact attempt: the method, who made the contact, the outcome (none, OK, or Unable to Reach), and notes
 
-**OK** and **Unable to Reach** each record a contact attempt marked with that outcome. A family's status is the outcome of its most recent attempt that has one, so two people who mark the same family differently both appear in its history, and the family shows the later one. A family with an unresolved task shows as "Needs Help" whatever its last outcome.
+**OK** and **Unable to Reach** each record a contact attempt marked with that outcome, as does a logged contact given an outcome. A family's status is the outcome of its most recent attempt that has one, so two people who mark the same family differently both appear in its history, and the family shows the later one. A family with an unresolved task shows as "Needs Help" whatever its last outcome.
 
 The progress bar at the top updates in real time:
 ```
@@ -168,10 +168,10 @@ Use the filter tabs (**All**, **Remaining**, **OK**, **Needs Help**, **Unable to
 
 The Tasks tab shows all emergency tasks across all families in a single table.
 
-- **Add Task**: Select a family, choose a category (Tree Removal, Generator, Medical, Transport, Shelter, Flooding, Other), enter a description, and optionally assign to a team or person
+- **Add Task**: Select a family, choose a category (Tree removal, Flooding, Generator, Medical, Transport, Shelter, Other, or one added for this emergency), enter a description, and optionally assign to a team or person
 - **Edit**: Update task details or assignment
-- **Delete**: Remove a task
-- **Notify**: Record that you've notified the assignee (method, notes)
+- **Delete**: Remove a task, after you confirm
+- **Notify**: Record that you've notified the assignee (method, notes). After you add or edit a task whose assignee has not been told, the app offers this straight away.
 - **Resolved checkbox**: Toggle task completion
 
 A family with unresolved tasks automatically shows as "Needs Help". Giving a task to someone else clears its notification, since the new assignee has not been told.
@@ -185,7 +185,7 @@ If someone else ended the emergency while you were choosing, the app says so and
 
 ### Reports
 
-**Emergency > Generate Report** creates a PDF summary of the emergency shown, without ending it: contact status breakdown, task assignments, resolution statistics, and each family's contact attempts and tasks. Its header shows the time the emergency started and the time the report was written. Families, people and teams are named as they stand when the report is written, and as "(removed)" when they are no longer in the ward.
+**Emergency > Generate Report** creates a PDF summary of the emergency in progress, without ending it: contact status breakdown, task assignments, resolution statistics, and each family's contact attempts and tasks. Its header shows the time the emergency started and the time the report was written. Families, people and teams are named as they stand when the report is written, and as "(removed)" when they are no longer in the ward.
 
 ---
 

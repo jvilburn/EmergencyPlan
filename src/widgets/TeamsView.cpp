@@ -1,5 +1,6 @@
 #include "TeamsView.h"
 #include "BaseTreeModel.h"
+#include "ChoiceDialog.h"
 #include "WardListDialog.h"
 #include "DocumentManager.h"
 #include "Document.h"
@@ -20,8 +21,6 @@
 #include <QPushButton>
 #include <QMenu>
 #include <QMessageBox>
-#include <QInputDialog>
-#include <QLineEdit>
 
 TeamsView::TeamsView(QWidget* parent)
     : QWidget(parent)
@@ -85,8 +84,10 @@ TeamsView::TeamsView(QWidget* parent)
     connect(m_tree, &QTreeView::customContextMenuRequested,
             this, &TeamsView::onContextMenu);
 
-    // Expand top-level items when model is reset
+    // Expand top-level items when model is reset, and the Unassigned Tasks section when it
+    // comes back
     connect(m_model, &QAbstractItemModel::modelReset, this, &TeamsView::expandTeams);
+    connect(m_model, &QAbstractItemModel::rowsInserted, this, &TeamsView::onRowsInserted);
 
     // Load contact details when member node is expanded
     connect(m_tree, &QTreeView::expanded,
@@ -237,8 +238,9 @@ void TeamsView::onContextMenu(const QPoint& pos)
                                &TeamsView::assignTaskFromContextMenu);
             }
 
-            // Notify action (only if assigned and not yet notified)
-            std::optional<ResponseTask> task = EmergencyActions::findTask(taskId);
+            // Notify action (only if assigned and not yet notified). Task rows exist only
+            // while an emergency is in progress.
+            const ResponseTask* task = EmergencyManager::instance()->response().findTask(taskId);
             if (task)
             {
                 if (task->isAssigned() && !task->isNotified())
@@ -276,6 +278,18 @@ void TeamsView::onContextMenu(const QPoint& pos)
 void TeamsView::expandTeams()
 {
     m_tree->expandToDepth(0);
+}
+
+void TeamsView::onRowsInserted(const QModelIndex& parent, int first, int last)
+{
+    if (parent.isValid())
+    {
+        return;
+    }
+    for (int row = first; row <= last; ++row)
+    {
+        m_tree->expand(m_model->index(row, 0));
+    }
 }
 
 void TeamsView::editTeamFromContextMenu()
@@ -615,55 +629,47 @@ void TeamsView::resolveTaskFromContextMenu()
     }
 }
 
+namespace
+{
+
+bool byName(const QPair<QString, QString>& a, const QPair<QString, QString>& b)
+{
+    return a.first.toLower() < b.first.toLower();
+}
+
+}  // namespace
+
 void TeamsView::assignTaskToTeam(const TaskId& taskId)
 {
-    std::optional<ResponseTask> opened = EmergencyActions::findTask(taskId);
-    if (!opened)
+    EmergencyManager* manager = EmergencyManager::instance();
+    const ResponseTask* found = manager->isActive() ? manager->response().findTask(taskId) : nullptr;
+    if (!found)
     {
         return;
     }
-    EmergencyResponseId responseId = *EmergencyManager::instance()->shownId();
+    // The task as the dialog opens on it: the edit's start condition
+    ResponseTask opened = *found;
 
-    const Document& doc = DocumentManager::instance()->document();
-    QList<Team> teams = doc.teams().values();
-
-    if (teams.isEmpty())
+    QList<QPair<QString, QString>> choices;
+    const QHash<TeamId, Team>& teams = DocumentManager::instance()->document().teams();
+    for (auto it = teams.constBegin(); it != teams.constEnd(); ++it)
+    {
+        choices.append({it.value().name(), it.key().toString()});
+    }
+    if (choices.isEmpty())
     {
         QMessageBox::information(this, tr("Assign Task"), tr("No teams available."));
         return;
     }
+    std::sort(choices.begin(), choices.end(), &byName);
 
-    // Build team name list
-    std::sort(teams.begin(), teams.end(),
-              [](const Team& a, const Team& b)
-              { return a.name().toLower() < b.name().toLower(); });
-
-    QStringList teamNames;
-    for (const Team& team : teams)
-    {
-        teamNames.append(team.name());
-    }
-
-    bool ok = false;
-    QString selected = QInputDialog::getItem(
-        this, tr("Assign Task"), tr("Select team:"),
-        teamNames, 0, false, &ok);
-
-    if (!ok || selected.isEmpty())
+    std::optional<QString> teamId = ChoiceDialog::choose(this, tr("Assign Task"), tr("Select team:"), choices);
+    if (!teamId)
     {
         return;
     }
-
-    // Find selected team
-    for (const Team& team : teams)
-    {
-        if (team.name() == selected)
-        {
-            ResponseTask saved = *opened;
-            saved.setAssignment(TaskAssignment::toTeam(team.id(), QString()));
-            DocumentManager::instance()->executeCommand(
-                UpdateTaskCommand::fromEdit(responseId, *opened, saved, DocumentManager::instance()->document()));
-            return;
-        }
-    }
+    ResponseTask saved = opened;
+    saved.setAssignment(TaskAssignment::toTeam(TeamId::fromString(*teamId)));
+    DocumentManager::instance()->executeCommand(
+        UpdateTaskCommand::fromEdit(opened, saved, DocumentManager::instance()->document()));
 }

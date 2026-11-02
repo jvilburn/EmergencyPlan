@@ -225,8 +225,10 @@ set(VIEWMODEL_HEADERS
 
 set(WIDGET_SOURCES
     src/widgets/ActionButtonsWidget.cpp
+    src/widgets/ChoiceDialog.cpp
     src/widgets/ContactAttemptDialog.cpp
     src/widgets/NotifyDialog.cpp
+    src/widgets/PersonCombo.cpp
     src/widgets/TaskDialog.cpp
     src/widgets/TaskListView.cpp
     src/widgets/CallingsEditor.cpp
@@ -275,8 +277,10 @@ set(WIDGET_SOURCES
 
 set(WIDGET_HEADERS
     src/widgets/ActionButtonsWidget.h
+    src/widgets/ChoiceDialog.h
     src/widgets/ContactAttemptDialog.h
     src/widgets/NotifyDialog.h
+    src/widgets/PersonCombo.h
     src/widgets/TaskDialog.h
     src/widgets/TaskListView.h
     src/widgets/CallingsEditor.h

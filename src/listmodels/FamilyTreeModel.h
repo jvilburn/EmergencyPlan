@@ -17,7 +17,14 @@ class Filter;
 ///       - MemberDetail (level 2) - phone, email, callings, age
 ///     - Address (level 1) - text only
 ///     - Phone (level 1) - text only
+///     - ContactAttempt and Task (level 1) - while an emergency is in progress, the family's
+///       attempts and tasks, each list under its header row
 ///     - Actions (level 1) - widget row for Edit/Delete buttons
+///
+/// A change to one family replaces that family's rows; a change to its attempts or tasks,
+/// and an emergency starting or ending, replace only the attempt and task rows, so expanded
+/// members and the scroll position stay. Each of these shows or hides the family by the
+/// filter.
 class FamilyTreeModel : public BaseTreeModel
 {
     Q_OBJECT
@@ -101,10 +108,22 @@ private slots:
     void rebuild();
 
 private:
-    // Surgical update methods
-    void updateFamilyRow(const FamilyId& familyId);
-    void insertFamilyRow(const FamilyId& familyId);
-    void removeFamilyRow(const FamilyId& familyId);
+    /// Shows or hides the family by the filter: inserts it, rows and all, when it newly
+    /// passes, and removes it when it no longer does. Its row when it was shown and still
+    /// is, otherwise -1.
+    int applyFilter(const FamilyId& familyId);
+
+    /// Replaces every child row of the family at row.
+    void replaceChildren(int row);
+
+    /// Replaces the attempt and task rows of the family at row.
+    void replaceEmergencyRows(int row);
+
+    void insertFamilyRow(const Family& family);
+    void removeFamilyRow(int row);
+
+    /// Sets familyIndex on the nodes of each family from row on to its place.
+    void reindexFrom(int row);
 
     /// Internal tree node structure
     struct TreeNode
@@ -126,11 +145,19 @@ private:
     };
 
     void clearNodes();
-    void buildFamilyNode(int familyIndex);
-    void appendContactAttemptNodes(TreeNode* parent, int familyIndex,
-                                    const FamilyId& familyId, QList<TreeNode*>& children);
-    void appendTaskNodes(TreeNode* parent, int familyIndex,
-                          const FamilyId& familyId, QList<TreeNode*>& children);
+
+    static TreeNode* newNode(RowType type, TreeNode* parent, int familyIndex, const QString& text);
+    static void appendDetail(TreeNode* memberNode, DetailType detailType, const QString& text);
+
+    /// The family's node at familyIndex, with its child rows.
+    TreeNode* buildFamilyNode(int familyIndex, const Family& family) const;
+
+    /// The family's child rows: members, address, phone, attempts and tasks, actions.
+    QList<TreeNode*> childNodes(TreeNode* familyNode, const Family& family) const;
+
+    /// The family's attempt and task rows while an emergency is in progress, otherwise none.
+    QList<TreeNode*> emergencyNodes(TreeNode* familyNode, const FamilyId& familyId) const;
+
     TreeNode* nodeFromIndex(const QModelIndex& index) const;
 
     QList<FamilyId> m_familyIds;

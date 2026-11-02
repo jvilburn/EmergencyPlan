@@ -1,12 +1,11 @@
 #include "ContactAttemptDialog.h"
-#include "Document.h"
 #include "DocumentManager.h"
-#include "Family.h"
-#include "Person.h"
+#include "PersonCombo.h"
 
 #include <QButtonGroup>
 #include <QComboBox>
 #include <QDialogButtonBox>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -52,40 +51,33 @@ ContactAttemptDialog::ContactAttemptDialog(const FamilyId& familyId, QWidget* pa
     m_methodGroup->addButton(otherRadio, static_cast<int>(ContactMethod::Other));
     phoneRadio->setChecked(true);
 
-    // Who combo box
+    // Who: blank records no one
     QLabel* whoLabel = new QLabel(tr("Who:"), this);
     layout->addWidget(whoLabel);
 
     m_whoCombo = new QComboBox(this);
-    m_whoCombo->setEditable(true);
-    m_whoCombo->setInsertPolicy(QComboBox::NoInsert);
-
-    // Populate with all persons from document, sorted by display name
-    struct PersonEntry
-    {
-        QString displayName;
-        PersonId id;
-    };
-    QList<PersonEntry> entries;
-
-    const QHash<FamilyId, Family>& families = DocumentManager::instance()->document().families();
-    for (auto it = families.constBegin(); it != families.constEnd(); ++it)
-    {
-        for (const Person& person : it.value().members())
-        {
-            entries.append({person.displayName(), person.id()});
-        }
-    }
-
-    std::sort(entries.begin(), entries.end(),
-              [](const PersonEntry& a, const PersonEntry& b) { return a.displayName.toLower() < b.displayName.toLower(); });
-
-    for (const PersonEntry& entry : entries)
-    {
-        m_whoCombo->addItem(entry.displayName, entry.id.toString());
-    }
-
+    PersonCombo::fill(m_whoCombo, DocumentManager::instance()->document(), m_familyId);
     layout->addWidget(m_whoCombo);
+
+    // Outcome: none, or the status the contact found
+    QLabel* outcomeLabel = new QLabel(tr("Outcome:"), this);
+    layout->addWidget(outcomeLabel);
+
+    QHBoxLayout* outcomeRow = new QHBoxLayout();
+    QRadioButton* noOutcomeRadio = new QRadioButton(tr("None"), this);
+    m_okRadio = new QRadioButton(tr("OK"), this);
+    m_unableToReachRadio = new QRadioButton(tr("Unable to Reach"), this);
+    outcomeRow->addWidget(noOutcomeRadio);
+    outcomeRow->addWidget(m_okRadio);
+    outcomeRow->addWidget(m_unableToReachRadio);
+    outcomeRow->addStretch();
+    layout->addLayout(outcomeRow);
+
+    QButtonGroup* outcomeGroup = new QButtonGroup(this);
+    outcomeGroup->addButton(noOutcomeRadio);
+    outcomeGroup->addButton(m_okRadio);
+    outcomeGroup->addButton(m_unableToReachRadio);
+    noOutcomeRadio->setChecked(true);
 
     // Notes field
     QLabel* notesLabel = new QLabel(tr("Notes:"), this);
@@ -113,15 +105,6 @@ std::optional<ContactAttempt> ContactAttemptDialog::result() const
 
 void ContactAttemptDialog::onAccepted()
 {
-    // Validate selection
-    int comboIndex = m_whoCombo->currentIndex();
-    if (comboIndex < 0)
-    {
-        QMessageBox::warning(this, tr("Log Contact Attempt"),
-                             tr("Please select a person."));
-        return;
-    }
-
     ContactMethod method = static_cast<ContactMethod>(m_methodGroup->checkedId());
     QString notes = m_notesEdit->text().trimmed();
 
@@ -134,8 +117,16 @@ void ContactAttemptDialog::onAccepted()
         return;
     }
 
-    PersonId who = PersonId::fromString(m_whoCombo->currentData().toString());
-    m_result = ContactAttempt::create(m_familyId, method, who, std::nullopt, notes);
+    std::optional<ContactOutcome> outcome;
+    if (m_okRadio->isChecked())
+    {
+        outcome = ContactOutcome::OK;
+    }
+    else if (m_unableToReachRadio->isChecked())
+    {
+        outcome = ContactOutcome::UnableToReach;
+    }
 
+    m_result = ContactAttempt::create(m_familyId, method, PersonCombo::chosen(m_whoCombo), outcome, notes);
     accept();
 }

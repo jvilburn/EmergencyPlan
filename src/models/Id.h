@@ -124,14 +124,6 @@ public:
     static constexpr const char* typeName() { return "ContactAttemptId"; }
 };
 
-class EmergencyResponseId : public IdBase<EmergencyResponseId>
-{
-    friend class IdBase<EmergencyResponseId>;
-    using IdBase::IdBase;
-public:
-    static constexpr const char* typeName() { return "EmergencyResponseId"; }
-};
-
 // === SelectionKey ===
 
 class SelectionKey
@@ -161,7 +153,6 @@ Q_DECLARE_METATYPE(MinisteringGroupId)
 Q_DECLARE_METATYPE(MinisteringDistrictId)
 Q_DECLARE_METATYPE(TaskId)
 Q_DECLARE_METATYPE(ContactAttemptId)
-Q_DECLARE_METATYPE(EmergencyResponseId)
 
 /// The ids as a JSON array of their strings in sorted order, so equal sets write equal JSON.
 template<typename Id>

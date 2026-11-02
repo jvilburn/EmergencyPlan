@@ -1,6 +1,5 @@
 #include "WardListView.h"
 #include "ActionButtonsWidget.h"
-#include "ContactAttemptDialog.h"
 #include "EmergencyActions.h"
 #include "Document.h"
 #include "DocumentManager.h"
@@ -82,15 +81,12 @@ WardListView::WardListView(QWidget* parent)
             this, &WardListView::onRowsInserted);
 
     // Emergency lifecycle
-    if (EmergencyManager::instance())
-    {
-        connect(EmergencyManager::instance(), &EmergencyManager::emergencyStarted,
-                this, &WardListView::onEmergencyStateChanged);
-        connect(EmergencyManager::instance(), &EmergencyManager::emergencyEnded,
-                this, &WardListView::onEmergencyStateChanged);
-        connect(EmergencyManager::instance(), &EmergencyManager::responseDataChanged,
-                this, &WardListView::updateFilterTabCounts);
-    }
+    connect(EmergencyManager::instance(), &EmergencyManager::emergencyStarted,
+            this, &WardListView::onEmergencyStateChanged);
+    connect(EmergencyManager::instance(), &EmergencyManager::emergencyEnded,
+            this, &WardListView::onEmergencyStateChanged);
+    connect(EmergencyManager::instance(), &EmergencyManager::responseDataChanged,
+            this, &WardListView::updateFilterTabCounts);
 
     // Emit initial visible families
     emit visibleFamiliesChanged(visibleFamilyIdsList());
@@ -139,7 +135,7 @@ QList<FamilyId> WardListView::visibleFamilyIdsList() const
 HighlightInfo WardListView::highlightInfo() const
 {
     HighlightInfo info;
-    auto selected = selectedFamilyId();
+    std::optional<FamilyId> selected = selectedFamilyId();
     if (selected)
     {
         info.highlightedFamilyIds.insert(*selected);
@@ -193,45 +189,31 @@ Filter* WardListView::filter() const
 
 void WardListView::onModelReset()
 {
-    // Clear all action widgets - they were deleted by the model reset
-    m_actionWidgets.clear();
     emit visibleFamiliesChanged(visibleFamilyIdsList());
 }
 
-void WardListView::onRowsRemoved(const QModelIndex& parent, int first, int last)
+void WardListView::onRowsRemoved(const QModelIndex& parent)
 {
-    Q_UNUSED(first)
-    Q_UNUSED(last)
-
-    // When a family's children are removed (during surgical update),
-    // the action widget is deleted by Qt. Clean up our tracking.
-    if (parent.isValid())
+    // A family left the list. A family's own rows taking its Actions row take its buttons
+    // with them.
+    if (!parent.isValid())
     {
-        FamilyTreeModel::RowType type = m_model->rowTypeAt(parent);
-        if (type == FamilyTreeModel::RowType::Family)
-        {
-            auto familyId = m_model->familyIdAt(parent);
-            if (familyId)
-            {
-                m_actionWidgets.remove(*familyId);
-            }
-        }
+        emit visibleFamiliesChanged(visibleFamilyIdsList());
     }
 }
 
-void WardListView::onRowsInserted(const QModelIndex& parent, int first, int last)
+void WardListView::onRowsInserted(const QModelIndex& parent)
 {
-    Q_UNUSED(first)
-    Q_UNUSED(last)
-
-    // When children are inserted under an expanded family, re-attach action buttons
-    if (parent.isValid())
+    if (!parent.isValid())
     {
-        FamilyTreeModel::RowType type = m_model->rowTypeAt(parent);
-        if (type == FamilyTreeModel::RowType::Family && m_treeView->isExpanded(parent))
-        {
-            attachActionButtons(parent);
-        }
+        emit visibleFamiliesChanged(visibleFamilyIdsList());
+        return;
+    }
+
+    // Rows inserted under an expanded family may bring a new Actions row
+    if (m_model->rowTypeAt(parent) == FamilyTreeModel::RowType::Family && m_treeView->isExpanded(parent))
+    {
+        attachActionButtons(parent);
     }
 }
 
@@ -246,85 +228,43 @@ void WardListView::onItemExpanded(const QModelIndex& index)
 
 void WardListView::onItemCollapsed(const QModelIndex& index)
 {
-    FamilyTreeModel::RowType type = m_model->rowTypeAt(index);
-    if (type == FamilyTreeModel::RowType::Family)
+    if (m_model->rowTypeAt(index) == FamilyTreeModel::RowType::Family)
     {
-        auto familyId = m_model->familyIdAt(index);
-        if (familyId)
-        {
-            detachActionButtons(*familyId);
-        }
+        detachActionButtons(index);
     }
+}
+
+QModelIndex WardListView::actionsIndex(const QModelIndex& familyIndex) const
+{
+    // The Actions row is the family's last child
+    return m_model->index(m_model->rowCount(familyIndex) - 1, 0, familyIndex);
 }
 
 void WardListView::attachActionButtons(const QModelIndex& familyIndex)
 {
-    auto familyId = m_model->familyIdAt(familyIndex);
-    if (!familyId)
+    std::optional<FamilyId> familyId = m_model->familyIdAt(familyIndex);
+    QModelIndex actions = actionsIndex(familyIndex);
+    if (!familyId || !actions.isValid() || m_treeView->indexWidget(actions))
     {
         return;
     }
 
-    // Already have buttons for this family?
-    if (m_actionWidgets.contains(*familyId))
-    {
-        return;
-    }
-
-    // Find the Actions row (last child of family)
-    int childCount = m_model->rowCount(familyIndex);
-    for (int i = 0; i < childCount; ++i)
-    {
-        QModelIndex childIndex = m_model->index(i, 0, familyIndex);
-        FamilyTreeModel::RowType childType = m_model->rowTypeAt(childIndex);
-
-        if (childType == FamilyTreeModel::RowType::Actions)
-        {
-            ActionButtonsWidget* widget = new ActionButtonsWidget(
-                *familyId, m_treeView);
-
-            connect(widget, &ActionButtonsWidget::editRequested,
-                    this, &WardListView::editFamilyRequested);
-            connect(widget, &ActionButtonsWidget::deleteRequested,
-                    this, &WardListView::deleteFamilyRequested);
-            connect(widget, &ActionButtonsWidget::logContactRequested,
-                    this, &WardListView::onLogContactRequested);
-            connect(widget, &ActionButtonsWidget::addTaskRequested,
-                    this, &WardListView::onAddTaskRequested);
-
-            m_treeView->setIndexWidget(childIndex, widget);
-            m_actionWidgets[*familyId] = widget;
-            break;
-        }
-    }
+    ActionButtonsWidget* widget = new ActionButtonsWidget(*familyId, m_treeView);
+    connect(widget, &ActionButtonsWidget::editRequested,
+            this, &WardListView::editFamilyRequested);
+    connect(widget, &ActionButtonsWidget::deleteRequested,
+            this, &WardListView::deleteFamilyRequested);
+    m_treeView->setIndexWidget(actions, widget);
 }
 
-void WardListView::detachActionButtons(const FamilyId& familyId)
+void WardListView::detachActionButtons(const QModelIndex& familyIndex)
 {
-    if (!m_actionWidgets.contains(familyId))
+    // The view deletes the widget it held
+    QModelIndex actions = actionsIndex(familyIndex);
+    if (actions.isValid())
     {
-        return;
+        m_treeView->setIndexWidget(actions, nullptr);
     }
-
-    // The widget will be deleted by setIndexWidget(nullptr)
-    QModelIndex familyIndex = m_model->indexForFamilyId(familyId);
-    if (familyIndex.isValid())
-    {
-        int childCount = m_model->rowCount(familyIndex);
-        for (int i = 0; i < childCount; ++i)
-        {
-            QModelIndex childIndex = m_model->index(i, 0, familyIndex);
-            FamilyTreeModel::RowType childType = m_model->rowTypeAt(childIndex);
-
-            if (childType == FamilyTreeModel::RowType::Actions)
-            {
-                m_treeView->setIndexWidget(childIndex, nullptr);
-                break;
-            }
-        }
-    }
-
-    m_actionWidgets.remove(familyId);
 }
 
 void WardListView::setupEmergencyWidgets()
@@ -373,31 +313,24 @@ void WardListView::setupEmergencyWidgets()
 
 void WardListView::onEmergencyStateChanged()
 {
-    bool active = EmergencyManager::instance() && EmergencyManager::instance()->isActive();
+    bool active = EmergencyManager::instance()->isActive();
     m_emergencyPanel->setVisible(active);
 
     if (!active)
     {
-        // Clear contact status filter when emergency ends
+        // The status tabs go with the emergency. The filter applies no status once it has
+        // ended, so clearing it changes nothing shown.
         m_filterBar->filter()->setContactStatusFilter(std::nullopt);
-        if (!m_filterTabs.isEmpty())
-        {
-            m_filterTabs.first()->setChecked(true);
-        }
-    }
-    else
-    {
-        updateFilterTabCounts();
+        m_filterTabs.first()->setChecked(true);
     }
 
-    // Rebuild all action button widgets so they reflect the current emergency state
-    QList<FamilyId> expandedFamilies = m_actionWidgets.keys();
-    for (const FamilyId& familyId : expandedFamilies)
+    // The buttons of each expanded family again, with or without the emergency's
+    for (int row = 0; row < m_model->rowCount(); ++row)
     {
-        detachActionButtons(familyId);
-        QModelIndex familyIndex = m_model->indexForFamilyId(familyId);
-        if (familyIndex.isValid())
+        QModelIndex familyIndex = m_model->index(row, 0);
+        if (m_treeView->isExpanded(familyIndex))
         {
+            detachActionButtons(familyIndex);
             attachActionButtons(familyIndex);
         }
     }
@@ -441,36 +374,23 @@ void WardListView::onStatusFilterClicked(int statusIndex)
 
 void WardListView::updateFilterTabCounts()
 {
-    if (!EmergencyManager::instance() || !EmergencyManager::instance()->isActive())
+    EmergencyManager* manager = EmergencyManager::instance();
+    if (!manager->isActive())
     {
         return;
     }
 
-    int total = EmergencyManager::instance()->totalFamilies();
-    int ok = EmergencyManager::instance()->countByStatus(EffectiveContactStatus::OK);
-    int needsHelp = EmergencyManager::instance()->countByStatus(EffectiveContactStatus::NeedsHelp);
-    int unable = EmergencyManager::instance()->countByStatus(EffectiveContactStatus::UnableToReach);
-    int remaining = EmergencyManager::instance()->countByStatus(EffectiveContactStatus::NotContacted);
+    int total = manager->totalFamilies();
+    int ok = manager->countByStatus(EffectiveContactStatus::OK);
+    int needsHelp = manager->countByStatus(EffectiveContactStatus::NeedsHelp);
+    int unable = manager->countByStatus(EffectiveContactStatus::UnableToReach);
+    int remaining = manager->countByStatus(EffectiveContactStatus::NotContacted);
 
     m_filterTabs[StatusFilterIndex::All]->setText(tr("All (%1)").arg(total));
     m_filterTabs[StatusFilterIndex::Remaining]->setText(tr("Remaining (%1)").arg(remaining));
     m_filterTabs[StatusFilterIndex::NeedsHelp]->setText(tr("Needs Help (%1)").arg(needsHelp));
     m_filterTabs[StatusFilterIndex::OK]->setText(tr("OK (%1)").arg(ok));
     m_filterTabs[StatusFilterIndex::UnableToReach]->setText(tr("Unable to Reach (%1)").arg(unable));
-}
-
-void WardListView::onLogContactRequested(const FamilyId& familyId)
-{
-    ContactAttemptDialog dialog(familyId, this);
-    if (dialog.exec() == QDialog::Accepted && dialog.result())
-    {
-        EmergencyActions::addContactAttempt(*dialog.result());
-    }
-}
-
-void WardListView::onAddTaskRequested(const FamilyId& familyId)
-{
-    EmergencyActions::addTask(familyId, this);
 }
 
 void WardListView::onTreeContextMenu(const QPoint& pos)
@@ -493,8 +413,9 @@ void WardListView::onTreeContextMenu(const QPoint& pos)
         return;
     }
 
-    // The task as the user sees it, which a removal takes as its start condition
-    std::optional<ResponseTask> task = EmergencyActions::findTask(TaskId::fromString(taskIdStr));
+    // Task rows exist only while an emergency is in progress
+    TaskId taskId = TaskId::fromString(taskIdStr);
+    const ResponseTask* task = EmergencyManager::instance()->response().findTask(taskId);
     if (!task)
     {
         return;
@@ -525,20 +446,21 @@ void WardListView::onTreeContextMenu(const QPoint& pos)
         return;
     }
 
+    // The menu ran an event loop, so each action finds the task again by its id
     if (chosen == editAction)
     {
-        EmergencyActions::editTask(task->id(), this);
+        EmergencyActions::editTask(taskId, this);
     }
     else if (chosen == notifyAction)
     {
-        EmergencyActions::notifyAssignee(task->id(), this);
+        EmergencyActions::notifyAssignee(taskId, this);
     }
     else if (chosen == resolveAction)
     {
-        EmergencyActions::resolveTask(task->id(), this);
+        EmergencyActions::resolveTask(taskId, this);
     }
     else if (chosen == deleteAction)
     {
-        EmergencyActions::deleteTask(*task);
+        EmergencyActions::deleteTask(taskId, this);
     }
 }

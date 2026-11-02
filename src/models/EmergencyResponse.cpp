@@ -214,6 +214,30 @@ QString contactMarkName(ContactOutcome outcome)
     return QString();
 }
 
+QStringList contactAttemptParts(const ContactAttempt& attempt, const QString& timeText, const QString& whoName)
+{
+    QStringList parts = {timeText};
+    std::optional<ContactMethod> method = attempt.method();
+    std::optional<ContactOutcome> outcome = attempt.outcome();
+    if (method.has_value())
+    {
+        parts.append(contactMethodName(*method));
+    }
+    if (!whoName.isEmpty())
+    {
+        parts.append(whoName);
+    }
+    if (outcome.has_value())
+    {
+        parts.append(method.has_value() ? contactOutcomeName(*outcome) : contactMarkName(*outcome));
+    }
+    if (!attempt.notes().isEmpty())
+    {
+        parts.append(attempt.notes());
+    }
+    return parts;
+}
+
 // === TaskNotification ===
 
 TaskNotification TaskNotification::create(ContactMethod method, const QString& notes)
@@ -320,19 +344,17 @@ bool ContactAttempt::operator==(const ContactAttempt& other) const
 
 // === TaskAssignment ===
 
-TaskAssignment TaskAssignment::toTeam(const TeamId& teamId, const QString& notes)
+TaskAssignment TaskAssignment::toTeam(const TeamId& teamId)
 {
     TaskAssignment assignment;
     assignment.m_teamId = teamId;
-    assignment.m_notes = notes;
     return assignment;
 }
 
-TaskAssignment TaskAssignment::toPerson(const PersonId& personId, const QString& notes)
+TaskAssignment TaskAssignment::toPerson(const PersonId& personId)
 {
     TaskAssignment assignment;
     assignment.m_personId = personId;
-    assignment.m_notes = notes;
     return assignment;
 }
 
@@ -347,7 +369,6 @@ QJsonObject TaskAssignment::toJson() const
     {
         json["personId"] = m_personId->toString();
     }
-    writeNotes(json, m_notes);
     if (m_notification.has_value())
     {
         json["notification"] = m_notification->toJson();
@@ -366,7 +387,6 @@ TaskAssignment TaskAssignment::fromJson(const QJsonObject& json)
     {
         assignment.m_personId = PersonId::fromString(json["personId"].toString());
     }
-    assignment.m_notes = json["notes"].toString();
     if (json.contains("notification"))
     {
         assignment.m_notification = TaskNotification::fromJson(json["notification"].toObject());
@@ -378,7 +398,6 @@ bool TaskAssignment::operator==(const TaskAssignment& other) const
 {
     return m_teamId == other.m_teamId
         && m_personId == other.m_personId
-        && m_notes == other.m_notes
         && m_notification == other.m_notification;
 }
 
@@ -481,7 +500,6 @@ bool ResponseTask::operator==(const ResponseTask& other) const
 EmergencyResponse EmergencyResponse::create(const QString& name)
 {
     EmergencyResponse response;
-    response.m_id = EmergencyResponseId::generate();
     response.m_name = name;
     response.m_startedAt = QDateTime::currentDateTimeUtc();
     response.m_taskCategories = {QObject::tr("Tree removal"), QObject::tr("Flooding"), QObject::tr("Generator"),
@@ -647,7 +665,6 @@ int EmergencyResponse::countByStatus(EffectiveContactStatus status, const QHash<
 QJsonObject EmergencyResponse::toJson() const
 {
     QJsonObject json;
-    json["id"] = m_id.toString();
     json["name"] = m_name;
     json["startedAt"] = timeToJson(m_startedAt);
     json["taskCategories"] = QJsonArray::fromStringList(m_taskCategories);
@@ -665,7 +682,6 @@ QJsonObject EmergencyResponse::toJson() const
 EmergencyResponse EmergencyResponse::fromJson(const QJsonObject& json)
 {
     EmergencyResponse response;
-    response.m_id = EmergencyResponseId::fromString(json["id"].toString());
     response.m_name = json["name"].toString();
     response.m_startedAt = timeFromJson(json["startedAt"]);
     QJsonArray categories = json["taskCategories"].toArray();
@@ -680,8 +696,7 @@ EmergencyResponse EmergencyResponse::fromJson(const QJsonObject& json)
 
 bool EmergencyResponse::operator==(const EmergencyResponse& other) const
 {
-    return m_id == other.m_id
-        && m_name == other.m_name
+    return m_name == other.m_name
         && m_startedAt == other.m_startedAt
         && m_taskCategories == other.m_taskCategories
         && m_contactAttempts == other.m_contactAttempts

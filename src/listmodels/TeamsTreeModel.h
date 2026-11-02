@@ -9,14 +9,20 @@
 #include <optional>
 
 class Filter;
+class ResponseTask;
 
-/// Model for teams tree (2-level: Team → Member → ContactDetail).
-/// During emergencies, adds task rows under each team and an "Unassigned Tasks" section.
+/// Model for teams tree (2-level: Team -> Member -> ContactDetail).
+/// During emergencies, adds the tasks assigned to each team under it, and an "Unassigned
+/// Tasks" section for the tasks with no assignment. A task assigned to a person is shown in
+/// the Tasks tab only.
 ///
 /// Level 0: Teams sorted by name, displayed as "Name (N)" where N = member count
 /// Level 1: Members in each team, sorted by display name. Leader shown first with "(leader)" suffix.
 ///          During emergencies: task rows appended after members.
 /// Level 2: Contact details (phone, email, address) - lazy loaded on expand
+///
+/// A change to one family's tasks updates only that family's task rows; an emergency
+/// starting or ending, a team changing, or a full document change rebuilds the tree.
 ///
 /// Selection key formats:
 ///   Team         -> {teamId}
@@ -68,10 +74,13 @@ public:
 
 private slots:
     void onDocumentChanged(const DocumentChange& change);
-    void onEmergencyStateChanged();
+    void rebuild();
+
+    /// Brings the family's task rows up to date under every team and in the Unassigned
+    /// Tasks section, which comes or goes with its tasks.
+    void replaceFamilyTasks(const FamilyId& familyId);
 
 private:
-    void rebuild();
     void refreshFamilyDisplayText(const FamilyId& familyId);
     void clearNodes();
 
@@ -92,6 +101,18 @@ private:
     };
 
     TreeNode* nodeFromIndex(const QModelIndex& index) const;
+
+    /// A row under parent showing task.
+    static TreeNode* newTaskNode(const ResponseTask& task, TreeNode* parent);
+    static void setTask(TreeNode* taskNode, const ResponseTask& task);
+
+    /// The Unassigned Tasks section holding a row for each of tasks.
+    static TreeNode* newUnassignedHeader(const QList<ResponseTask>& tasks);
+
+    /// Makes parentNode's task rows show tasks, its tasks in order, changing only the rows
+    /// of familyId's tasks: the rows of every other family's tasks are already in place.
+    void syncTaskRows(TreeNode* parentNode, const QModelIndex& parentIndex,
+                      const QList<ResponseTask>& tasks, const FamilyId& familyId);
 
     QList<TreeNode*> m_teamNodes;  // Top-level team nodes (owned)
     Filter* m_filter;

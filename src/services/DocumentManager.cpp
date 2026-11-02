@@ -63,9 +63,9 @@ void DocumentManager::afterCommit(const CommitResult& result)
     }
 }
 
-EndResult DocumentManager::endEmergency(const EmergencyResponseId& id, const QString& reportPath)
+EndResult DocumentManager::endEmergency(const QString& reportPath)
 {
-    return m_session.endEmergency(id, reportPath);
+    return m_session.endEmergency(reportPath);
 }
 
 void DocumentManager::newDocument()

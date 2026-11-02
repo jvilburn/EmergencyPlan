@@ -222,14 +222,13 @@ void ImportCommandsTest::attemptOnAFamilyLandsAfterAnImportRemovedIt()
     ContactAttempt attempt = TestWard::attempt("attempt-jones", TestWard::jonesId(), TestWard::octoberFirst(10, 0),
                                                ContactMethod::Phone, TestWard::bobId(), ContactOutcome::OK,
                                                "All well");
-    QVERIFY(mine.commit(AddContactAttemptCommand::fromNew(TestWard::stormId(), attempt, mine.document())).status
-            == CommitStatus::Applied);
+    QVERIFY(mine.commit(AddContactAttemptCommand::fromNew(attempt, mine.document())).status == CommitStatus::Applied);
 
     ReplayResult replay = mine.replayOnto(theirs.document());
 
     QVERIFY(replay.status == ReplayStatus::Replayed);
     QVERIFY(!mine.document().findFamilyById(TestWard::jonesId()).has_value());
-    EmergencyResponse response = mine.document().findEmergencyResponseById(TestWard::stormId()).value();
+    EmergencyResponse response = mine.document().emergencyResponse().value();
     const ContactAttempt* landed = response.findContactAttempt(attempt.id());
     QVERIFY(landed != nullptr);
     QVERIFY(landed->familyId() == TestWard::jonesId());

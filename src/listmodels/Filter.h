@@ -73,7 +73,8 @@ public:
     void clear();
     bool isEmpty() const;
 
-    // Check if individual items pass current filter criteria
+    // Check if individual items pass current filter criteria. A family passes the contact
+    // status only while an emergency is in progress and the family has that status in it.
     bool passes(const Document& document, const Family& family) const;
     bool passes(const Document& document, const Person& person) const;
 
@@ -84,6 +85,10 @@ private:
     /// Family-only criteria: mapped (its address has an entry in the document's table of
     /// address coordinates), contact (family.hasContact()).
     bool passesFamilyCriteria(const Document& document, const Family& family) const;
+
+    /// The selected contact status, read through EmergencyManager::familyStatus. Every
+    /// family passes it while no emergency is in progress.
+    bool passesContactStatus(const Family& family) const;
 
     /// Person-only criteria: callings, gender, age.
     bool passesPersonCriteria(const Person& person) const;

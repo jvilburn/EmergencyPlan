@@ -1,16 +1,16 @@
 #include "TaskListView.h"
 #include "TaskListModel.h"
+#include "ChoiceDialog.h"
 #include "Document.h"
 #include "DocumentManager.h"
 #include "EmergencyActions.h"
+#include "EmergencyManager.h"
 #include "EmergencyResponse.h"
 #include "Family.h"
 #include "Team.h"
 
 #include <QHBoxLayout>
 #include <QHeaderView>
-#include <QInputDialog>
-#include <QMessageBox>
 #include <QPushButton>
 #include <QTreeView>
 #include <QVBoxLayout>
@@ -73,91 +73,53 @@ TaskListView::TaskListView(QWidget* parent)
             this, &TaskListView::onSelectionChanged);
     connect(m_model, &QAbstractItemModel::modelReset,
             this, &TaskListView::onSelectionChanged);
+    connect(m_model, &QAbstractItemModel::dataChanged,
+            this, &TaskListView::onSelectionChanged);
 }
 
-void TaskListView::rebuild()
+namespace
 {
-    m_model->rebuild();
+
+bool byName(const QPair<QString, QString>& a, const QPair<QString, QString>& b)
+{
+    return a.first.toLower() < b.first.toLower();
 }
+
+}  // namespace
 
 void TaskListView::onAddTask()
 {
     // Ask which family the task is for
+    QList<QPair<QString, QString>> choices;
     const QHash<FamilyId, Family>& families = DocumentManager::instance()->document().families();
-    QList<QPair<QString, FamilyId>> familyList;
     for (auto it = families.constBegin(); it != families.constEnd(); ++it)
     {
-        familyList.append(QPair<QString, FamilyId>(it.value().displayName(), it.key()));
+        choices.append({it.value().displayName(), it.key().toString()});
     }
-    std::sort(familyList.begin(), familyList.end(),
-              [](const QPair<QString, FamilyId>& a, const QPair<QString, FamilyId>& b) { return a.first.toLower() < b.first.toLower(); });
+    std::sort(choices.begin(), choices.end(), &byName);
 
-    QStringList names;
-    for (const auto& entry : familyList)
+    std::optional<QString> familyId = ChoiceDialog::choose(this, tr("Add Task"), tr("Family:"), choices);
+    if (familyId)
     {
-        names.append(entry.first);
-    }
-
-    bool ok = false;
-    QString selected = QInputDialog::getItem(
-        this, tr("Add Task"), tr("Family:"), names, 0, false, &ok);
-    if (!ok || selected.isEmpty())
-    {
-        return;
-    }
-
-    int selectedIndex = names.indexOf(selected);
-    if (selectedIndex < 0)
-    {
-        return;
-    }
-
-    FamilyId familyId = familyList.at(selectedIndex).second;
-
-    std::optional<ResponseTask> task = EmergencyActions::addTask(familyId, this);
-    if (task)
-    {
-        promptNotifyIfNeeded(*task);
+        EmergencyActions::addTask(FamilyId::fromString(*familyId), this);
     }
 }
 
 void TaskListView::onEditTask()
 {
     QModelIndex index = m_treeView->currentIndex();
-    if (!index.isValid())
+    if (index.isValid())
     {
-        return;
-    }
-
-    std::optional<ResponseTask> saved = EmergencyActions::editTask(m_model->taskIdForRow(index.row()), this);
-    if (saved)
-    {
-        promptNotifyIfNeeded(*saved);
+        EmergencyActions::editTask(m_model->taskIdForRow(index.row()), this);
     }
 }
 
 void TaskListView::onDeleteTask()
 {
     QModelIndex index = m_treeView->currentIndex();
-    if (!index.isValid())
+    if (index.isValid())
     {
-        return;
-    }
-
-    // The task as the user sees it, which the removal takes as its start condition
-    std::optional<ResponseTask> seen = EmergencyActions::findTask(m_model->taskIdForRow(index.row()));
-    if (!seen)
-    {
-        return;
-    }
-
-    QMessageBox::StandardButton result = QMessageBox::question(
-        this, tr("Delete Task"), tr("Delete this task?"),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-
-    if (result == QMessageBox::Yes)
-    {
-        EmergencyActions::deleteTask(*seen);
+        EmergencyActions::deleteTask(m_model->taskIdForRow(index.row()), this);
     }
 }
 
@@ -170,14 +132,6 @@ void TaskListView::onNotifyTask()
     }
 
     EmergencyActions::notifyAssignee(m_model->taskIdForRow(index.row()), this);
-}
-
-void TaskListView::promptNotifyIfNeeded(const ResponseTask& task)
-{
-    if (task.isAssigned() && !task.isNotified())
-    {
-        EmergencyActions::notifyAssignee(task.id(), this);
-    }
 }
 
 void TaskListView::onSelectionChanged()
@@ -210,7 +164,8 @@ HighlightInfo TaskListView::highlightInfo() const
     FamilyId familyId = m_model->familyIdForRow(row);
     info.highlightedFamilyIds.insert(familyId);
 
-    std::optional<ResponseTask> task = EmergencyActions::findTask(m_model->taskIdForRow(row));
+    EmergencyManager* manager = EmergencyManager::instance();
+    const ResponseTask* task = manager->isActive() ? manager->response().findTask(m_model->taskIdForRow(row)) : nullptr;
     if (!task || !task->assignment())
     {
         return info;

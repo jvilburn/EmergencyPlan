@@ -2,10 +2,10 @@
 
 #include <QObject>
 
-/// Emergency responses are a keyed collection changed only by commands: responders working
-/// apart all land, a family's status is its latest outcome whatever order replay lands
-/// attempts in, ending writes the report and removes the response, and task edits are
-/// judged value by value.
+/// The ward holds at most one emergency in progress, changed only by commands: responders
+/// working apart all land in it, two offline starts become one emergency, a family's status
+/// is its latest outcome whatever order replay lands attempts in, ending writes the report
+/// and removes the emergency, and task edits are judged value by value.
 class EmergencyCommandsTest : public QObject
 {
     Q_OBJECT
@@ -18,21 +18,23 @@ private slots:
     void twoRespondersFirstAttemptsOnOneFamilyBothLand();
     void differentOutcomesOnOneFamilyShowTheLaterTimestampWhicheverReplaysFirst();
     void attemptsAtOneTimeAreOrderedByIdWhicheverReplaysFirst();
-    void undoingAnAddedAttemptRestoresTheResponseAndRedoAddsItAgain();
-    void twoOfflineStartsMakeTwoEvents();
+    void undoingAnAddedAttemptRestoresTheEmergencyAndRedoAddsItAgain();
+    void twoOfflineStartsBecomeOneEmergency();
+    void attemptWithNoEmergencyInProgressConflicts();
     void startAndNewCategoryAreNotUndoable();
-    void endingWritesAReportHoldingEveryAttemptAndTaskThenRemovesTheResponse();
-    void attemptsReplayedOntoAnEndedResponseAreInTheToRedoText();
-    void endReplayedAfterAnotherAttemptConflictsAndLeavesTheResponse();
-    void undoingAnEndRestoresAnEqualResponseKeepsTheReportAndRedoEndsItAgain();
+    void endingWritesAReportHoldingEveryAttemptAndTaskThenRemovesTheEmergency();
+    void attemptsReplayedOntoAnEndedEmergencyAreInTheToRedoText();
+    void endReplayedAfterAnotherAttemptConflictsAndLeavesTheEmergency();
+    void undoingAnEndRestoresAnEqualEmergencyKeepsTheReportAndRedoEndsItAgain();
+    void restoreConflictsWhenADifferentEmergencyIsInProgress();
     void endWhoseReportCannotBeWrittenEndsNothing();
-    void endingAResponseAlreadyGoneWritesNothing();
+    void endingWithNoEmergencyInProgressWritesNothing();
     void taskDeletionReplayedAfterAnotherResolvedItConflicts();
     void taskEditReplayedAfterTheTaskWasDeletedConflicts();
     void taskEditsToDifferentValuesBothApply();
     void oneTaskValueSetDifferentlyConflicts();
     void assignmentToAPersonReplayedAfterTheyWereRemovedConflicts();
     void reassigningReplacesTheWholeAssignmentAndUndoRestoresTheNotification();
-    void statisticsCountEveryDirectoryFamilyAndEveryRemovedFamilyTheResponseNames();
+    void statisticsCountEveryDirectoryFamilyAndEveryRemovedFamilyTheEmergencyNames();
     void statusTableFollowsEachChangeToOneFamily();
 };
