@@ -92,7 +92,7 @@ design's answer, not a gap:
 - **Code sites and what the code does today are not in this document**; they belong to the
   implementation plan.
 - **Replay, never reconciliation** of two finished versions.
-- **Emergency responses are a keyed collection**; two offline starts are two events.
+- **One emergency at a time**; two offline starts become one emergency.
 - **A family with no address cannot be placed on the map**: coordinates belong to addresses
   (see *Saving*), so the coordinate fields are disabled for it.
 - **Ending an emergency saves its report and removes the response.** A change replayed onto
@@ -449,7 +449,7 @@ inflates the rest.
 ```
 
 `ward` is the ward's content: families, teams, emergency assets, ministering,
-emergencies in progress, the PDF dates, the ward and stake records, and the table of
+the emergency in progress, the PDF dates, the ward and stake records, and the table of
 address coordinates. `access` is the
 access list (see *What the document carries*). `landed` maps each device's fingerprint to
 its landed mark (see *The journal*). `device` is this device's own state. A local file and a
@@ -932,10 +932,9 @@ ministering, the emergency response and the access list. In particular:
 
 - **Deleting a family** is a command, carrying the same cleanup as an import's removal,
   worked out at construction.
-- **Emergency responses are a keyed collection.** Each response has an id, the document
-  holds them by it, and the interface lists the emergencies in progress and switches
-  between them. Ending saves the summary report and then removes the response (see
-  *The record of an emergency*).
+- **A ward holds at most one emergency in progress.** Starting one while one is in progress
+  does nothing. Ending saves the summary report and then removes it (see *The record of an
+  emergency*).
 - **A family's contact status is the outcome of an attempt.** A contact attempt may carry
   an outcome, OK or Unable to Reach; the two buttons each add an attempt carrying theirs,
   and a family's status is the outcome of its latest attempt that has one, or Not Contacted
@@ -950,11 +949,11 @@ ministering, the emergency response and the access list. In particular:
   its outcome and time, shown as *Marked OK* or *Marked Unable to Reach*, while the contact
   dialog fills in both. Needs Help still comes first while a family has unresolved tasks,
   whatever its latest outcome.
-- **The response lives only in the document.** The emergency being shown is read from the
-  document by its id, and every change to it goes through a command. Starting an emergency
-  is one command that adds the response. The response holds its contact attempts and its
-  tasks, each carrying the id of the family it is about, so a command depends on nothing but
-  the response id, and a family with no attempt or task reads as Not Contacted. Statistics -
+- **The response lives only in the document.** The emergency in progress is read from the
+  document, and every change to it goes through a command. Starting an emergency is one
+  command that adds it. It holds its contact attempts and its tasks, each carrying the id of
+  the family it is about, so a command that writes to it needs only that an emergency is in
+  progress, and a family with no attempt or task reads as Not Contacted. Statistics -
   the progress bar and the report - count every directory family, and every family no
   longer in the directory that an attempt or task names, by one rule, so the two agree when
   the emergency ends. The report tallies an attempt with
@@ -963,9 +962,9 @@ ministering, the emergency response and the access list. In particular:
 
   | Command | Covers | On replay |
   |---|---|---|
-  | `StartEmergency` | start | an addition; never conflicts |
+  | `StartEmergency` | start | never conflicts; result holds if an emergency is in progress |
   | `EndEmergency` | end, removing the response once its report is saved | conflicts if the response differs from what the report holds; result holds if already gone |
-  | `RestoreEmergency` | the inverse of `EndEmergency`, adding the response back as it was removed | result holds if a response with that id is present |
+  | `RestoreEmergency` | the inverse of `EndEmergency`, adding the response back as it was removed | result holds if the emergency in progress equals it; conflicts if a different one is in progress |
   | `AddContactAttempt` | logging a contact, and the OK and Unable to Reach buttons | an addition |
   | `DeleteContactAttempt` | the inverse of `AddContactAttempt`, which is how an attempt is undone | result holds if already gone |
   | `AddTask` | adding a task | an addition |
@@ -1154,25 +1153,25 @@ state nobody authored and nobody can check, and it needs a rule for every pair o
 the document. Replay needs the one rule above, and what makes it safe is a command knowing
 what it saw.
 
-**An emergency needs no special case.** A ward holds its emergency responses as a keyed
-collection, each with its own id, so starting one is an addition like any other and collides
-with nothing. Several responders working offline each journal `AddContactAttempt` entries,
-which are additions too, and the whole journal replays. Marking a family OK or Unable to
-Reach adds an attempt as well, so two responders who mark the same family differently
-both land, and the family shows the later outcome with both in its history. Two responders who each started a
-response while disconnected end up with two events, each carrying the attempts and tasks
-its own responder made, because the app has no way to know they were the same emergency and does not
-pretend otherwise. The app lists the emergencies in progress, and the user switches to any
-of them. Whoever is coordinating ends the one they do not want.
+**An emergency needs no special case.** A ward holds at most one emergency in progress, and
+a start while one is in progress does nothing, so two responders who each started one while
+disconnected end up in one emergency, named by whichever start reached the ward first and
+holding both responders' attempts and tasks. Several responders working offline each
+journal `AddContactAttempt` entries, which are additions too, and the whole journal replays.
+Marking a family OK or Unable to Reach adds an attempt as well, so two responders who mark
+the same family differently both land, and the family shows the later outcome with both in
+its history. An attempt or task names no emergency, only the one in progress, so a responder
+offline while one emergency ends and another starts lands their old attempts in the new one
+on reconnecting; that takes an end, a new start and an offline responder at once, and is
+accepted.
 
 **Ending an emergency turns it into its report.** Ending asks where to save the summary
-report first. Then, with no event loop between, it reads the response by id, writes the
+report first. Then, with no event loop between, it reads the emergency in progress, writes the
 report from it, and runs `EndEmergency`, which removes the response and holds it as the
 report was written from. If the response is gone by then, ended by someone else while the
 dialog stood open, there is nothing to end and the user is told so. A version that changed the response in the meantime makes the end
 conflict, and the coordinator ends it again with a report that includes the change, so the
-report of the end that removes a response holds everything in it. Ending a duplicate leaves
-its attempts and tasks in its own report. A change replayed onto a response that has ended conflicts,
+report of the end that removes a response holds everything in it. A change replayed onto a response that has ended conflicts,
 which is accepted under *Settled*.
 
 **While the network is down, responders cannot see each other's work.** The server relays
@@ -1601,7 +1600,7 @@ every save would be trained away precisely where it matters most.
 ## The record of an emergency
 
 **The summary report is the record of an emergency.** Ending saves it and then removes the
-response from the document, so the document holds only emergencies in progress, and
+response from the document, so the document holds only the emergency in progress, and
 nothing in it describes a past one through ids that may since name nothing. The report is a
 plaintext PDF written wherever the user chooses, which is worth saying in the same breath.
 
@@ -1871,8 +1870,8 @@ The journal and replay, in `tests/services`:
   neither journal is abandoned, and the family's status is the outcome with the later
   timestamp, whichever responder reconnects first; the two reconnect orders leave equal
   documents, with the attempts newest first
-- two responders who each start a response offline produce two events, each holding its own
-  responder's attempts, and neither journal is abandoned
+- two responders who each start an emergency offline end up in one emergency holding both
+  responders' attempts, and neither journal is abandoned
 - ending a response saves a report holding every one of its attempts and tasks, then removes
   the response; a responder offline adds attempts in it and reconnects after the end:
   their journal is abandoned, and the to-redo text holds each of those attempts
