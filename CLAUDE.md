@@ -59,7 +59,6 @@ Using `QHash<QString, Model>` instead of `QList<Model>` because:
 
 ## Architecture References
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md) - Application architecture
-- [IMPORT_DESIGN.md](docs/IMPORT_DESIGN.md) - Import semantics for ward directory and ministering PDFs
 
 ---
 

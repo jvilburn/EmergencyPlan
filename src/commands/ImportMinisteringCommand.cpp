@@ -143,19 +143,22 @@ UndoableCommandPtr ImportMinisteringCommand::fromImport(const Document& document
     }
 
     CommandDescription description(QObject::tr("Import the ministering assignments from %1.").arg(fileName), {});
-    return std::make_shared<ImportMinisteringCommand>(org, collection, families, pdfDate, description);
+    return std::make_shared<ImportMinisteringCommand>(org, collection, families, pdfDate,
+                                                      document.wardDirectoryPdfDate(), description);
 }
 
 ImportMinisteringCommand::ImportMinisteringCommand(MinisteringOrg org,
                                                    const FieldChange<MinisteringCollection>& collection,
                                                    const FamilyCollectionChange& families,
                                                    const std::optional<FieldChange<std::optional<QDate>>>& pdfDate,
+                                                   const std::optional<QDate>& wardDirectoryPdfDate,
                                                    const CommandDescription& description)
     : UndoableCommand(description)
     , m_org(org)
     , m_collection(collection)
     , m_families(families)
     , m_pdfDate(pdfDate)
+    , m_wardDirectoryPdfDate(wardDirectoryPdfDate)
 {
 }
 
@@ -163,7 +166,8 @@ CommandOutcome ImportMinisteringCommand::execute(Document& document) const
 {
     if (!m_collection.holds(MinisteringCollection::of(document, m_org))
         || !m_families.holds(document)
-        || !changeHolds(m_pdfDate, document.ministeringPdfDate()))
+        || !changeHolds(m_pdfDate, document.ministeringPdfDate())
+        || document.wardDirectoryPdfDate() != m_wardDirectoryPdfDate)
     {
         return CommandOutcome::Conflicted;
     }
@@ -187,6 +191,7 @@ UndoableCommandPtr ImportMinisteringCommand::inverse() const
                                                       m_collection.swapped(),
                                                       m_families.swapped(),
                                                       changeSwapped(m_pdfDate),
+                                                      m_wardDirectoryPdfDate,
                                                       description().undone());
 }
 
@@ -197,6 +202,7 @@ QJsonObject ImportMinisteringCommand::toJson() const
     json["collection"] = changeToJson(m_collection);
     json["families"] = m_families.toJson();
     writeChange(json, "pdfDate", m_pdfDate);
+    json["wardDirectoryPdfDate"] = toJsonValue(m_wardDirectoryPdfDate);
     return json;
 }
 
@@ -216,5 +222,6 @@ CommandPtr ImportMinisteringCommand::fromJson(const QJsonObject& json, const Com
                                                       changeFromJson<MinisteringCollection>(json["collection"].toObject()),
                                                       FamilyCollectionChange::fromJson(json["families"].toObject()),
                                                       readChange<std::optional<QDate>>(json, "pdfDate"),
+                                                      fromJsonValue<std::optional<QDate>>(json["wardDirectoryPdfDate"]),
                                                       description);
 }

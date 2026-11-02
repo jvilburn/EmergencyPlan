@@ -126,7 +126,6 @@ WardPlanningQt/
 - **docs/ARCHITECTURE.md** - Application architecture guide
 - **docs/DESIGN_GUIDE.md** - Visual design specifications
 - **docs/CODING_STYLE.md** - Coding conventions
-- **docs/IMPORT_DESIGN.md** - Import semantics for ward directory and ministering PDFs
 - **docs/BUILDING.md** - Build prerequisites and setup
 - **docs/USER_GUIDE.md** - How to use the application
 

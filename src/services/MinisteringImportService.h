@@ -6,7 +6,6 @@
 #include "MinisteringPdfParser.h"
 
 #include <QDate>
-#include <QObject>
 #include <QString>
 #include <QHash>
 #include <optional>
@@ -29,16 +28,10 @@ struct MinisteringImportResult
     std::optional<QDate> pdfDate;  // From PDF footer (documentDate)
 };
 
-/// Service for importing ministering data from PDF files.
-/// Handles ID resolution and merging with existing Document data.
-class MinisteringImportService : public QObject
+/// Imports ministering data from PDF files: resolves the PDF's people and families to the
+/// existing ones and merges them with the existing families.
+namespace MinisteringImportService
 {
-    Q_OBJECT
-
-public:
-    explicit MinisteringImportService(QObject* parent);
-    ~MinisteringImportService();
-
     /// Import ministering assignments from a PDF file (auto-detects EQ or RS): parses it,
     /// then merges it.
     MinisteringImportResult importFromPdf(
@@ -47,57 +40,12 @@ public:
         std::optional<QDate> wardDirectoryDate);
 
     /// The import of parseResult onto existingFamilies.
-    /// When the PDF is not authoritative (see isMinisteringAuthoritative), family data from
-    /// it is treated as stale: it only fills empty fields, and a family or person it cannot
-    /// match is not added and is left out of the groups and districts.
+    /// The PDF is authoritative for family data when wardDirectoryDate is not set, or when
+    /// the PDF's date is set and is the same day as wardDirectoryDate or later. When it is
+    /// not, family data from it is treated as stale: it only fills empty fields, and a family
+    /// or person it cannot match is not added and is left out of the groups and districts.
     MinisteringImportResult merge(
         MinisteringPdfParser::ParseResult parseResult,
         const QHash<FamilyId, Family>& existingFamilies,
         std::optional<QDate> wardDirectoryDate);
-
-private:
-    /// Merge source families into target, remapping IDs in groups and districts.
-    /// - Matches families by surname, displayName, address, phone
-    /// - Matches persons by firstName, isParent
-    /// - isParent=true wins over isParent=false when merging
-    /// - When isAuthoritative: unmatched families are added, names can be updated
-    /// - When not authoritative: only fills empty fields, no new families or members added,
-    ///   and the source families and persons left unmatched are left out of the groups and
-    ///   districts
-    void mergeFamilies(
-        QHash<FamilyId, Family>& targetFamilies,
-        const QHash<FamilyId, Family>& sourceFamilies,
-        QHash<MinisteringDistrictId, MinisteringDistrict>& districts,
-        QHash<MinisteringGroupId, MinisteringGroup>& groups,
-        bool isAuthoritative);
-
-    /// Find existing family by surname, display name, address, and phone.
-    /// Matches by surname first, then narrows by display name if multiple,
-    /// then by address, then by phone if still ambiguous.
-    std::optional<Family> findMatchingFamily(
-        const Family& pdfFamily,
-        const QHash<FamilyId, Family>& families);
-
-    /// Find matching person in family by first name and isParent.
-    std::optional<Person> findMatchingPerson(
-        const Person& person,
-        const Family& family);
-
-    /// Merge PDF family members into existing family.
-    /// Builds personIdMapping. Returns updated family if any changes made.
-    /// When isAuthoritative: can update names and add new members.
-    /// When not authoritative: only fills empty fields.
-    std::optional<Family> mergeFamilyMembers(
-        const Family& sourceFamily,
-        Family targetFamily,
-        QHash<PersonId, PersonId>& personIdMapping,
-        bool isAuthoritative);
-
-    /// Determine if ministering PDF is authoritative for family data.
-    /// Returns true if:
-    /// - wardDirectoryDate is not set (first import), OR
-    /// - PDF date is set AND is >= wardDirectoryDate
-    bool isMinisteringAuthoritative(
-        std::optional<QDate> pdfDate,
-        std::optional<QDate> wardDirectoryDate) const;
-};
+}

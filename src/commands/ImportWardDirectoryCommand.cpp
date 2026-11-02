@@ -20,40 +20,41 @@ UndoableCommandPtr ImportWardDirectoryCommand::fromImport(const Document& docume
         }
     }
 
-    std::optional<Ward> ward;
-    if (!result.wardUnitNumber.isEmpty())
-    {
-        ward = Ward();
-        ward->setUnitNumber(result.wardUnitNumber);
-        ward->setName(result.wardName);
-    }
+    Ward ward;
+    ward.setUnitNumber(result.wardUnitNumber);
+    ward.setName(result.wardName);
 
-    bool wardThere = !ward.has_value() || document.metadata().findWardByUnit(ward->unitNumber()).has_value();
-    if (families.isEmpty() && !pdfDate.has_value() && coordinates.isEmpty() && wardThere)
+    bool wardAlreadyThere = document.metadata().findWardByUnit(ward.unitNumber()).has_value();
+    if (families.isEmpty() && !pdfDate.has_value() && coordinates.isEmpty() && wardAlreadyThere)
     {
         return nullptr;
     }
 
     CommandDescription description(QObject::tr("Import the ward directory from %1.").arg(fileName), {});
-    return std::make_shared<ImportWardDirectoryCommand>(families, pdfDate, coordinates, ward, description);
+    return std::make_shared<ImportWardDirectoryCommand>(families, pdfDate, coordinates, ward,
+                                                        document.ministeringPdfDate(), description);
 }
 
 ImportWardDirectoryCommand::ImportWardDirectoryCommand(const FamilyCollectionChange& families,
                                                        const std::optional<FieldChange<std::optional<QDate>>>& pdfDate,
                                                        const QHash<QString, Coordinates>& coordinates,
-                                                       const std::optional<Ward>& ward,
+                                                       const Ward& ward,
+                                                       const std::optional<QDate>& ministeringPdfDate,
                                                        const CommandDescription& description)
     : UndoableCommand(description)
     , m_families(families)
     , m_pdfDate(pdfDate)
     , m_coordinates(coordinates)
     , m_ward(ward)
+    , m_ministeringPdfDate(ministeringPdfDate)
 {
 }
 
 CommandOutcome ImportWardDirectoryCommand::execute(Document& document) const
 {
-    if (!m_families.holds(document) || !changeHolds(m_pdfDate, document.wardDirectoryPdfDate()))
+    if (!m_families.holds(document)
+        || !changeHolds(m_pdfDate, document.wardDirectoryPdfDate())
+        || document.ministeringPdfDate() != m_ministeringPdfDate)
     {
         return CommandOutcome::Conflicted;
     }
@@ -67,9 +68,9 @@ CommandOutcome ImportWardDirectoryCommand::execute(Document& document) const
             document.setAddressCoordinates(it.key(), it.value());
         }
     }
-    if (m_ward.has_value() && !document.metadata().findWardByUnit(m_ward->unitNumber()).has_value())
+    if (!document.metadata().findWardByUnit(m_ward.unitNumber()).has_value())
     {
-        document.metadata().updateWard(*m_ward);
+        document.metadata().updateWard(m_ward);
     }
     return CommandOutcome::Applied;
 }
@@ -79,7 +80,8 @@ UndoableCommandPtr ImportWardDirectoryCommand::inverse() const
     return std::make_shared<ImportWardDirectoryCommand>(m_families.swapped(),
                                                         changeSwapped(m_pdfDate),
                                                         QHash<QString, Coordinates>(),
-                                                        std::nullopt,
+                                                        m_ward,
+                                                        m_ministeringPdfDate,
                                                         description().undone());
 }
 
@@ -97,10 +99,8 @@ QJsonObject ImportWardDirectoryCommand::toJson() const
         }
         json["coordinates"] = coordinates;
     }
-    if (m_ward.has_value())
-    {
-        json["ward"] = m_ward->toJson();
-    }
+    json["ward"] = m_ward.toJson();
+    json["ministeringPdfDate"] = toJsonValue(m_ministeringPdfDate);
     return json;
 }
 
@@ -116,11 +116,7 @@ QList<Address> ImportWardDirectoryCommand::addressesGiven() const
 
 QStringList ImportWardDirectoryCommand::unitsGiven() const
 {
-    if (!m_ward.has_value())
-    {
-        return {};
-    }
-    return {m_ward->unitNumber()};
+    return {m_ward.unitNumber()};
 }
 
 CommandPtr ImportWardDirectoryCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
@@ -132,15 +128,10 @@ CommandPtr ImportWardDirectoryCommand::fromJson(const QJsonObject& json, const C
         coordinates.insert(it.key(), Coordinates::fromJson(it.value().toObject()));
     }
 
-    std::optional<Ward> ward;
-    if (json.contains("ward"))
-    {
-        ward = Ward::fromJson(json["ward"].toObject());
-    }
-
     return std::make_shared<ImportWardDirectoryCommand>(FamilyCollectionChange::fromJson(json["families"].toObject()),
                                                         readChange<std::optional<QDate>>(json, "pdfDate"),
                                                         coordinates,
-                                                        ward,
+                                                        Ward::fromJson(json["ward"].toObject()),
+                                                        fromJsonValue<std::optional<QDate>>(json["ministeringPdfDate"]),
                                                         description);
 }

@@ -52,13 +52,36 @@ WardDirectoryImportResult mergeDirectory(const WardDirectoryPdfParser::ParseResu
                                          const Document& document,
                                          const QDate& pdfDate)
 {
-    WardDirectoryImportService service(nullptr);
-    return service.merge(parsed, document.families(), pdfDate, document.ministeringPdfDate());
+    return WardDirectoryImportService::merge(parsed, document.families(), pdfDate, document.ministeringPdfDate());
 }
 
 QDate octoberFifteenth()
 {
     return QDate(2026, 10, 15);
+}
+
+/// An elders quorum import onto the families document holds, dated 1 September 2026: one
+/// group, Bob ministering to the Jones family.
+MinisteringImportResult bobMinistersToTheJoneses(const Document& document)
+{
+    MinisteringImportResult result;
+    result.success = true;
+    result.families = document.families();
+    MinisteringGroup group = MinisteringGroup::createEQ({TestWard::bobId()}, {TestWard::jonesId()});
+    result.groups.insert(group.id(), group);
+    result.pdfDate = QDate(2026, 9, 1);
+    return result;
+}
+
+/// The ids of family's members, in its member order.
+QStringList memberIds(const Family& family)
+{
+    QStringList ids;
+    for (const Person& member : family.members())
+    {
+        ids.append(member.id().toString());
+    }
+    return ids;
 }
 
 }  // namespace
@@ -179,8 +202,8 @@ void ImportCommandsTest::olderMinisteringPdfAddsNoUnknownFamilyOrMemberAndNoGrou
     parsed.groups.insert(group.id(), group);
     parsed.districts.insert(district.id(), district);
 
-    MinisteringImportService service(nullptr);
-    MinisteringImportResult result = service.merge(parsed, document.families(), document.wardDirectoryPdfDate());
+    MinisteringImportResult result = MinisteringImportService::merge(parsed, document.families(),
+                                                                     document.wardDirectoryPdfDate());
 
     QVERIFY(result.families == document.families());
     QCOMPARE(result.groups.value(group.id()).ministerIds(), QSet<PersonId>({TestWard::bobId()}));
@@ -256,4 +279,177 @@ void ImportCommandsTest::importDescriptionIsOneLineNamingTheFile()
 
     QCOMPARE(ministeringImport->description(),
              CommandDescription("Import the ministering assignments from Tanglewood EQ.pdf.", QStringList()));
+}
+
+void ImportCommandsTest::importNeverReplacesAnEntryInTheTableOfAddressCoordinates()
+{
+    Document document = TestWard::document();
+    WardDirectoryPdfParser::ParseResult parsed = directoryListing({TestWard::smith(), TestWard::jones()});
+    Coordinates listedSmith(40.2300, -111.6500);
+    Coordinates listedJones(40.2400, -111.6600);
+    parsed.addressCoordinates.insert(TestWard::smith().address().full(), listedSmith);
+    parsed.addressCoordinates.insert(TestWard::jones().address().full(), listedJones);
+    UndoableCommandPtr command = ImportWardDirectoryCommand::fromImport(
+        document, mergeDirectory(parsed, document, octoberFifteenth()), "Tanglewood.pdf");
+    QVERIFY(command != nullptr);
+
+    // Someone gives the Smith address its own entry after the import was worked out.
+    Coordinates own(40.2338, -111.6585);
+    Document applied = TestWard::withCoordinates(document, TestWard::smith().address(), own);
+
+    QVERIFY(command->execute(applied) == CommandOutcome::Applied);
+
+    QVERIFY(applied.coordinatesFor(TestWard::smith().address()) == own);
+    QVERIFY(applied.coordinatesFor(TestWard::jones().address()) == listedJones);
+}
+
+void ImportCommandsTest::importCreatesTheWardRecordOnlyWhenTheWardLacksIt()
+{
+    Document document = TestWard::document();
+    WardDirectoryImportResult result = mergeDirectory(
+        directoryListing({TestWard::smith(), TestWard::jones(), TestWard::lee(2010)}), document, octoberFifteenth());
+    UndoableCommandPtr command = ImportWardDirectoryCommand::fromImport(document, result, "Tanglewood.pdf");
+
+    QCOMPARE(command->unitsGiven(), QStringList({"123456"}));
+    QVERIFY(command->addressesGiven() == QList<Address>({TestWard::address("8 Pine St", "Provo, UT")}));
+
+    QVERIFY(!document.metadata().findWardByUnit("123456").has_value());
+    Document created = document;
+    QVERIFY(command->execute(created) == CommandOutcome::Applied);
+    Ward listed;
+    listed.setUnitNumber("123456");
+    listed.setName("Tanglewood");
+    QVERIFY(created.metadata().findWardByUnit("123456") == listed);
+
+    Ward own = listed;
+    own.setStakeUnitNumber("654321");
+    own.setMeetingTime(QString("9:00 AM"));
+    Document withWard = document;
+    withWard.metadata().updateWard(own);
+    UndoableCommandPtr onto = ImportWardDirectoryCommand::fromImport(withWard, result, "Tanglewood.pdf");
+    QVERIFY(onto->execute(withWard) == CommandOutcome::Applied);
+    QCOMPARE(memberIds(TestWard::family(withWard, FamilyId::fromString("pdf-family-lee"))),
+             QStringList({"pdf-person-ken", "pdf-person-mia", "pdf-person-ed", "pdf-person-fay"}));
+    QVERIFY(withWard.metadata().findWardByUnit("123456") == own);
+}
+
+void ImportCommandsTest::memberThePdfAddsLandsAtItsPdfIndex()
+{
+    Document document = TestWard::document();
+    Family listedSmith = TestWard::smith();
+    listedSmith.setMembers({TestWard::bob(), TestWard::dan(), TestWard::alice()});
+    UndoableCommandPtr command = ImportWardDirectoryCommand::fromImport(
+        document, mergeDirectory(directoryListing({listedSmith, TestWard::jones()}), document, octoberFifteenth()),
+        "Tanglewood.pdf");
+    Document applied = document;
+
+    QVERIFY(command->execute(applied) == CommandOutcome::Applied);
+
+    QCOMPARE(memberIds(TestWard::family(applied, TestWard::smithId())),
+             QStringList({"person-bob", "pdf-person-dan", "person-alice"}));
+}
+
+void ImportCommandsTest::undoOfADirectoryImportLeavesTheSeededCoordinatesAndTheWardRecord()
+{
+    Document document = TestWard::document();
+    WardDirectoryPdfParser::ParseResult parsed = directoryListing({TestWard::smith(), TestWard::jones(),
+                                                                   TestWard::lee(2010)});
+    Coordinates listedLee(40.2400, -111.6600);
+    parsed.addressCoordinates.insert(TestWard::lee(2010).address().full(), listedLee);
+    TestSession session;
+    session.open(document);
+    QVERIFY(session.commit(ImportWardDirectoryCommand::fromImport(
+                               document, mergeDirectory(parsed, document, octoberFifteenth()), "Tanglewood.pdf"))
+                .status
+            == CommitStatus::Applied);
+    QVERIFY(session.document().findFamilyById(FamilyId::fromString("pdf-family-lee")).has_value());
+
+    QVERIFY(session.undo().status == CommitStatus::Applied);
+
+    QVERIFY(!session.document().findFamilyById(FamilyId::fromString("pdf-family-lee")).has_value());
+    QVERIFY(!session.document().wardDirectoryPdfDate().has_value());
+    QVERIFY(session.document().coordinatesFor(TestWard::lee(2010).address()) == listedLee);
+    std::optional<Ward> ward = session.document().metadata().findWardByUnit("123456");
+    QVERIFY(ward.has_value());
+    QCOMPARE(ward->name(), QString("Tanglewood"));
+}
+
+void ImportCommandsTest::membersSharingAFirstGivenNameKeepTheirOwnIdsInEitherOrder()
+{
+    Person father = Person::createWithId(PersonId::fromString("person-john-robert"), Name("Carter", "John Robert"),
+                                         Gender::Male, Birthday::create(1970, 5, 1), Phone("555-5001"), Phone(),
+                                         "johnrobert@example.com", QStringList(), true, QString(), QString());
+    father.setNote("Ward clerk");
+    Person son = Person::createWithId(PersonId::fromString("person-john-david"), Name("Carter", "John David"),
+                                      Gender::Male, Birthday::create(2004, 8, 9), Phone("555-5002"), Phone(),
+                                      "johndavid@example.com", QStringList(), false, QString(), QString());
+    son.setNote("Away at college");
+    Family carter = Family::createWithId(FamilyId::fromString("family-carter"),
+                                         TestWard::address("3 Birch Ln", "Provo, UT"), {father, son});
+    Document document = TestWard::withFamily(TestWard::document(), carter);
+
+    QList<QList<Person>> orders = {{father, son}, {son, father}};
+    for (const QList<Person>& order : orders)
+    {
+        Family listed = carter;
+        listed.setMembers(order);
+        WardDirectoryImportResult result = mergeDirectory(
+            directoryListing({TestWard::smith(), TestWard::jones(), listed}), document, octoberFifteenth());
+        Document applied = document;
+
+        QVERIFY(ImportWardDirectoryCommand::fromImport(document, result, "Tanglewood.pdf")->execute(applied)
+                == CommandOutcome::Applied);
+
+        QCOMPARE(memberIds(TestWard::family(applied, carter.id())),
+                 QStringList({"person-john-robert", "person-john-david"}));
+        Person importedFather = TestWard::person(applied, father.id());
+        QCOMPARE(importedFather.givenNames(), QString("John Robert"));
+        QCOMPARE(QString(importedFather.phone()), QString("555-5001"));
+        QCOMPARE(importedFather.note(), QString("Ward clerk"));
+        Person importedSon = TestWard::person(applied, son.id());
+        QCOMPARE(importedSon.givenNames(), QString("John David"));
+        QCOMPARE(QString(importedSon.phone()), QString("555-5002"));
+        QCOMPARE(importedSon.note(), QString("Away at college"));
+    }
+}
+
+void ImportCommandsTest::eachImportReplayedAfterTheOtherImportChangedTheDateItReadConflicts()
+{
+    // A directory import, replayed after someone imported a newer ministering PDF.
+    TestSession directoryImporter;
+    directoryImporter.open(TestWard::document());
+    WardDirectoryImportResult directory = mergeDirectory(directoryListing({TestWard::smith()}),
+                                                         directoryImporter.document(), octoberFifteenth());
+    QVERIFY(directoryImporter.commit(ImportWardDirectoryCommand::fromImport(directoryImporter.document(), directory,
+                                                                            "Tanglewood.pdf"))
+                .status
+            == CommitStatus::Applied);
+    QVERIFY(!directoryImporter.document().findFamilyById(TestWard::jonesId()).has_value());
+    Document newerMinistering = TestWard::document();
+    newerMinistering.setMinisteringPdfDate(QDate(2026, 10, 20));
+
+    ReplayResult directoryReplay = directoryImporter.replayOnto(newerMinistering);
+
+    QVERIFY(directoryReplay.status == ReplayStatus::Abandoned);
+    QVERIFY(directoryReplay.toRedo.contains("Import the ward directory from Tanglewood.pdf. (stopped here)"));
+    QVERIFY(directoryImporter.document() == newerMinistering);
+
+    // A ministering import, replayed after someone imported a newer ward directory.
+    Document read = TestWard::document();
+    read.setWardDirectoryPdfDate(octoberFifteenth());
+    TestSession ministeringImporter;
+    ministeringImporter.open(read);
+    MinisteringImportResult ministering = bobMinistersToTheJoneses(read);
+    QVERIFY(ministeringImporter.commit(ImportMinisteringCommand::fromImport(read, ministering, "Tanglewood EQ.pdf"))
+                .status
+            == CommitStatus::Applied);
+    QVERIFY(ministeringImporter.document().groups(MinisteringOrg::EldersQuorum) == ministering.groups);
+    Document newerDirectory = read;
+    newerDirectory.setWardDirectoryPdfDate(QDate(2026, 10, 20));
+
+    ReplayResult ministeringReplay = ministeringImporter.replayOnto(newerDirectory);
+
+    QVERIFY(ministeringReplay.status == ReplayStatus::Abandoned);
+    QVERIFY(ministeringReplay.toRedo.contains("Import the ministering assignments from Tanglewood EQ.pdf. (stopped here)"));
+    QVERIFY(ministeringImporter.document() == newerDirectory);
 }

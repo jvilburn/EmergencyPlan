@@ -2,18 +2,118 @@
 
 #include <QFileInfo>
 
-// ============================================================================
-// Constructor / Destructor
-// ============================================================================
-
-WardDirectoryImportService::WardDirectoryImportService(QObject* parent)
-    : QObject(parent)
+namespace
 {
-}
+    std::optional<Family> findMatchingFamily(
+        const Family& pdfFamily,
+        const QHash<FamilyId, Family>& families)
+    {
+        for (const Family& family : families)
+        {
+            if (family.surname().compare(pdfFamily.surname(), Qt::CaseInsensitive) == 0
+                && family.displayName().compare(pdfFamily.displayName(), Qt::CaseInsensitive) == 0)
+            {
+                return family;
+            }
+        }
+        return std::nullopt;
+    }
 
-WardDirectoryImportService::~WardDirectoryImportService()
-{
-}
+    QString firstGivenName(const Person& person)
+    {
+        return person.givenNames().split(' ').first();
+    }
+
+    bool sameGivenNames(const Person& a, const Person& b)
+    {
+        return a.givenNames().compare(b.givenNames(), Qt::CaseInsensitive) == 0;
+    }
+
+    bool sameFirstGivenName(const Person& a, const Person& b)
+    {
+        return firstGivenName(a).compare(firstGivenName(b), Qt::CaseInsensitive) == 0;
+    }
+
+    /// The first of unmatched that matches person, taken out of unmatched, or none when
+    /// person has no first given name or none matches.
+    std::optional<Person> takeMatch(
+        const Person& person,
+        QList<Person>& unmatched,
+        bool (*matches)(const Person&, const Person&))
+    {
+        if (firstGivenName(person).isEmpty())
+        {
+            return std::nullopt;
+        }
+
+        for (qsizetype i = 0; i < unmatched.size(); ++i)
+        {
+            if (matches(person, unmatched[i]))
+            {
+                return unmatched.takeAt(i);
+            }
+        }
+        return std::nullopt;
+    }
+
+    /// parsedFamily with existingFamily's id, each matched member's id, and what the app
+    /// keeps that the directory does not print: the family's note, and each matched member's
+    /// note and special-need note.
+    Family mergeWithExisting(
+        const Family& parsedFamily,
+        const Family& existingFamily)
+    {
+        const QList<Person>& parsedMembers = parsedFamily.members();
+        QList<Person> unmatched = existingFamily.members();
+
+        QList<std::optional<Person>> matches;
+        for (const Person& parsedPerson : parsedMembers)
+        {
+            matches.append(takeMatch(parsedPerson, unmatched, sameGivenNames));
+        }
+        for (qsizetype i = 0; i < parsedMembers.size(); ++i)
+        {
+            if (!matches[i].has_value())
+            {
+                matches[i] = takeMatch(parsedMembers[i], unmatched, sameFirstGivenName);
+            }
+        }
+
+        QList<Person> updatedMembers;
+        for (qsizetype i = 0; i < parsedMembers.size(); ++i)
+        {
+            const Person& parsedPerson = parsedMembers[i];
+            const std::optional<Person>& existingPerson = matches[i];
+
+            if (existingPerson.has_value())
+            {
+                Person updated = Person::createWithId(
+                    existingPerson->id(),
+                    parsedPerson.name(),
+                    parsedPerson.gender(),
+                    parsedPerson.birthday(),
+                    parsedPerson.phone(),
+                    parsedPerson.altPhone(),
+                    parsedPerson.email(),
+                    parsedPerson.callings(),
+                    parsedPerson.isParent(),
+                    parsedPerson.wardUnitNumber(),
+                    parsedPerson.stakeUnitNumber());
+                updated.setSpecialNeedNote(existingPerson->specialNeedNote());
+                updated.setNote(existingPerson->note());
+                updatedMembers.append(updated);
+            }
+            else
+            {
+                updatedMembers.append(parsedPerson);
+            }
+        }
+
+        Family updated = Family::createWithId(existingFamily.id(), parsedFamily.address(), updatedMembers);
+        updated.setNote(existingFamily.note());
+        return updated;
+    }
+}  // anonymous namespace
 
 // ============================================================================
 // Public API
@@ -88,82 +188,4 @@ WardDirectoryImportResult WardDirectoryImportService::merge(
     }
 
     return result;
-}
-
-// ============================================================================
-// Private Helpers
-// ============================================================================
-
-std::optional<Family> WardDirectoryImportService::findMatchingFamily(
-    const Family& pdfFamily,
-    const QHash<FamilyId, Family>& families)
-{
-    for (const Family& family : families)
-    {
-        if (family.surname().compare(pdfFamily.surname(), Qt::CaseInsensitive) == 0
-            && family.displayName().compare(pdfFamily.displayName(), Qt::CaseInsensitive) == 0)
-        {
-            return family;
-        }
-    }
-    return std::nullopt;
-}
-
-std::optional<Person> WardDirectoryImportService::findMatchingPerson(
-    const Person& person,
-    const Family& family)
-{
-    QString firstName = person.givenNames().split(' ').first();
-    if (firstName.isEmpty())
-    {
-        return std::nullopt;
-    }
-
-    for (const Person& member : family.members())
-    {
-        QString existingFirstName = member.givenNames().split(' ').first();
-        if (existingFirstName.compare(firstName, Qt::CaseInsensitive) == 0)
-        {
-            return member;
-        }
-    }
-    return std::nullopt;
-}
-
-Family WardDirectoryImportService::mergeWithExisting(
-    const Family& parsedFamily,
-    const Family& existingFamily)
-{
-    QList<Person> updatedMembers;
-    for (const Person& parsedPerson : parsedFamily.members())
-    {
-        std::optional<Person> existingPerson = findMatchingPerson(parsedPerson, existingFamily);
-
-        if (existingPerson.has_value())
-        {
-            Person updated = Person::createWithId(
-                existingPerson->id(),
-                parsedPerson.name(),
-                parsedPerson.gender(),
-                parsedPerson.birthday(),
-                parsedPerson.phone(),
-                parsedPerson.altPhone(),
-                parsedPerson.email(),
-                parsedPerson.callings(),
-                parsedPerson.isParent(),
-                parsedPerson.wardUnitNumber(),
-                parsedPerson.stakeUnitNumber());
-            updated.setSpecialNeedNote(existingPerson->specialNeedNote());
-            updated.setNote(existingPerson->note());
-            updatedMembers.append(updated);
-        }
-        else
-        {
-            updatedMembers.append(parsedPerson);
-        }
-    }
-
-    Family updated = Family::createWithId(existingFamily.id(), parsedFamily.address(), updatedMembers);
-    updated.setNote(existingFamily.note());
-    return updated;
 }

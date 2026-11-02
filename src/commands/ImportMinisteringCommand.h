@@ -32,14 +32,18 @@ template<>
 MinisteringCollection fromJsonValue<MinisteringCollection>(const QJsonValue& value);
 
 /// A ministering import, worked out at construction: its organization's districts and
-/// groups, the families it adds or changes, and the ministering PDF date. The districts and
-/// groups name only people and families that exist once it applies.
+/// groups, the families it adds or changes, the ministering PDF date, and the ward directory
+/// PDF date the import read when deciding whether it is authoritative. The districts and
+/// groups name only people and families that exist once it applies. It conflicts with an
+/// edit to something it changes, and when the ward directory PDF date is no longer the one
+/// it read.
 class ImportMinisteringCommand : public UndoableCommand
 {
 public:
     static constexpr const char* TypeName = "importMinistering";
 
-    /// The import of result, read from the file named fileName, onto document.
+    /// The import of result, read from the file named fileName, onto document. result is the
+    /// merge onto document's families and its ward directory PDF date.
     static UndoableCommandPtr fromImport(const Document& document,
                                          const MinisteringImportResult& result,
                                          const QString& fileName);
@@ -48,6 +52,7 @@ public:
                              const FieldChange<MinisteringCollection>& collection,
                              const FamilyCollectionChange& families,
                              const std::optional<FieldChange<std::optional<QDate>>>& pdfDate,
+                             const std::optional<QDate>& wardDirectoryPdfDate,
                              const CommandDescription& description);
 
     QString type() const override { return TypeName; }
@@ -64,4 +69,5 @@ private:
     FieldChange<MinisteringCollection> m_collection;
     FamilyCollectionChange m_families;
     std::optional<FieldChange<std::optional<QDate>>> m_pdfDate;
+    std::optional<QDate> m_wardDirectoryPdfDate;
 };

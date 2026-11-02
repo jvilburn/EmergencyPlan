@@ -3,7 +3,6 @@
 #include "Family.h"
 #include "WardDirectoryPdfParser.h"
 
-#include <QObject>
 #include <QString>
 #include <QList>
 #include <QHash>
@@ -24,15 +23,9 @@ struct WardDirectoryImportResult
     std::optional<QDate> pdfDate;  // File modification date as proxy
 };
 
-/// Service for importing ward directory data from PDF files
-class WardDirectoryImportService : public QObject
+/// Imports ward directory data from PDF files.
+namespace WardDirectoryImportService
 {
-    Q_OBJECT
-
-public:
-    explicit WardDirectoryImportService(QObject* parent);
-    ~WardDirectoryImportService();
-
     /// Import families from a PDF file: parses it, then merges it, dated by the file's
     /// modification date.
     WardDirectoryImportResult importFromPdf(
@@ -41,27 +34,21 @@ public:
         std::optional<QDate> ministeringPdfDate);
 
     /// The import of parsed, from a PDF dated pdfDate, onto existingFamilies.
-    /// Preserves IDs for families/persons that match existing data. Each existing family is
-    /// matched at most once.
+    ///
+    /// Each parsed family takes the id of the first existing family with the same surname
+    /// and display name, ignoring case, that no other parsed family has taken; a family that
+    /// matches none keeps its new id. Within a matched family, each existing member is
+    /// matched at most once, in two passes: each parsed member takes the id of an existing
+    /// member with the same given names, ignoring case; then each parsed member still
+    /// unmatched takes the id of the first remaining existing member with the same first
+    /// given name. A member that matches none keeps its new id.
+    ///
+    /// An existing family no parsed family matches is removed when ministeringPdfDate is not
+    /// set, or when pdfDate is the same day as ministeringPdfDate or later; otherwise it is
+    /// kept as it is.
     WardDirectoryImportResult merge(
         const WardDirectoryPdfParser::ParseResult& parsed,
         const QHash<FamilyId, Family>& existingFamilies,
         std::optional<QDate> pdfDate,
         std::optional<QDate> ministeringPdfDate);
-
-private:
-    std::optional<Family> findMatchingFamily(
-        const Family& pdfFamily,
-        const QHash<FamilyId, Family>& families);
-
-    std::optional<Person> findMatchingPerson(
-        const Person& person,
-        const Family& family);
-
-    /// parsedFamily with existingFamily's id, each matched member's id, and what the app
-    /// keeps that the directory does not print: the family's note, and each matched member's
-    /// note and special-need note.
-    Family mergeWithExisting(
-        const Family& parsedFamily,
-        const Family& existingFamily);
-};
+}

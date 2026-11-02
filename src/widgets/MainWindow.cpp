@@ -247,8 +247,7 @@ void MainWindow::onImportPdf()
     statusBar()->showMessage(tr("Importing from PDF..."));
 
     // Parse PDF with ID preservation
-    WardDirectoryImportService importService(nullptr);
-    WardDirectoryImportResult result = importService.importFromPdf(
+    WardDirectoryImportResult result = WardDirectoryImportService::importFromPdf(
         filePath,
         DocumentManager::instance()->document().families(),
         DocumentManager::instance()->document().ministeringPdfDate());
@@ -265,19 +264,23 @@ void MainWindow::onImportPdf()
         return;
     }
 
-    DocumentManager::instance()->executeCommand(ImportWardDirectoryCommand::fromImport(
+    statusBar()->clearMessage();
+
+    CommitResult commit = DocumentManager::instance()->executeCommand(ImportWardDirectoryCommand::fromImport(
         DocumentManager::instance()->document(), result, QFileInfo(filePath).fileName()));
 
-    // Update UI
-    QString message = tr("Imported %1 families").arg(result.families.size());
-
-    statusBar()->showMessage(message, 5000);
-    m_mapWidget->fitAllFamilies();
-
-    if (!result.errors.isEmpty())
+    switch (commit.status)
     {
-        QMessageBox::information(this, tr("Import Warnings"),
-            tr("Some items had warnings:\n") + result.errors.join("\n"));
+    case CommitStatus::Applied:
+        statusBar()->showMessage(tr("Imported the ward directory"), 5000);
+        m_mapWidget->fitAllFamilies();
+        break;
+    case CommitStatus::NothingToDo:
+        statusBar()->showMessage(tr("Nothing changed"), 5000);
+        break;
+    case CommitStatus::Conflicted:
+    case CommitStatus::Refused:
+        break;
     }
 }
 
@@ -296,8 +299,7 @@ void MainWindow::onImportMinisteringPdf()
 
     statusBar()->showMessage(tr("Importing ministering assignments..."));
 
-    MinisteringImportService importService(nullptr);
-    MinisteringImportResult result = importService.importFromPdf(
+    MinisteringImportResult result = MinisteringImportService::importFromPdf(
         filePath,
         DocumentManager::instance()->document().families(),
         DocumentManager::instance()->document().wardDirectoryPdfDate());
@@ -316,23 +318,21 @@ void MainWindow::onImportMinisteringPdf()
 
     statusBar()->clearMessage();
 
-    QString orgType = result.isRSFormat ? tr("RS") : tr("EQ");
-    int groupCount = result.groups.size();
-
-    DocumentManager::instance()->executeCommand(ImportMinisteringCommand::fromImport(
+    CommitResult commit = DocumentManager::instance()->executeCommand(ImportMinisteringCommand::fromImport(
         DocumentManager::instance()->document(), result, QFileInfo(filePath).fileName()));
 
-    QString message = tr("Imported %1 ministering: %2 districts, %3 groups")
-        .arg(orgType)
-        .arg(result.districts.size())
-        .arg(groupCount);
-
-    statusBar()->showMessage(message, 5000);
-
-    if (!result.errors.isEmpty())
+    QString orgType = result.isRSFormat ? tr("RS") : tr("EQ");
+    switch (commit.status)
     {
-        QMessageBox::information(this, tr("Import Warnings"),
-            tr("Some items had warnings:\n") + result.errors.join("\n"));
+    case CommitStatus::Applied:
+        statusBar()->showMessage(tr("Imported the %1 ministering assignments").arg(orgType), 5000);
+        break;
+    case CommitStatus::NothingToDo:
+        statusBar()->showMessage(tr("Nothing changed"), 5000);
+        break;
+    case CommitStatus::Conflicted:
+    case CommitStatus::Refused:
+        break;
     }
 }
 
