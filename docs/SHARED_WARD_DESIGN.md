@@ -45,9 +45,9 @@ starting as a ward of one. Sharing it is inviting someone, with no step before i
 ## Scope
 
 This covers the encrypted document, who has access to it, concurrent use, and the
-contract between the app and the server. The server's own implementation, hosting and
-operation are a companion piece of work; what follows fixes the interface that work has
-to present.
+contract between the app and the server. The server's own implementation and operation
+are a companion piece of work; what follows fixes the interface that work has to present,
+and *Hosting notes* says where it runs.
 
 Two related ideas surfaced during design and are deferred to their own work:
 
@@ -61,6 +61,7 @@ Two related ideas surfaced during design and are deferred to their own work:
 | Primary goal | Sharing that a non-technical user completes in a couple of minutes |
 | Where the authoritative copy lives | A Ward Planning server, reached by the app directly |
 | Server address | Built into the app, with an advanced override; documents carry only their id |
+| Where the server runs | Cloudflare Workers, one SQLite-backed Durable Object per ward; its code in `server/` in this repository |
 | Local copy | Complete, always present, fully editable offline |
 | Running instances | One per user (see *Receiving an invitation*) |
 | Where the local file lives | Local application data (`QStandardPaths::AppLocalDataLocation`), keyed by document id; the user never chooses a path |
@@ -668,11 +669,31 @@ Removing a user is one write without their devices: the new header lacks them, s
 server refuses their next upload, closes their live channel, and their next head shows a
 header they are not in.
 
+## The live channel
+
+A WebSocket the client opens when it opens a ward and holds while the ward is open. What
+is settled of it is below; the rest is under *Open points*.
+
+- **Opening it answers with the current version.** The ward's object adds the socket and
+  answers in one step, so a version that landed while the client was away is fetched as
+  for a notice, and every later version reaches it as a notice.
+- **The client keeps it alive with WebSocket ping frames**, and treats a pong that does not
+  arrive in time as a closed channel and reconnects. The platform answers pings itself,
+  without waking the ward's object, and does not bill them.
+- **The server learns that someone left when their socket closes.** A device that reconnects
+  opens a new socket under the same fingerprint, which replaces its old one with no change
+  in who is here. A device that vanishes without closing shows as present until the
+  platform closes its socket.
+- **Retrying the channel is how a disconnected client catches up.** The open's answer
+  brings it current the moment it gets through. A network that carries HTTP but blocks
+  WebSockets leaves the ward not syncing; the device still pushes, and a `412` brings it
+  current when it edits.
+
 ## Who is here
 
 A client opens the live channel when it opens a ward. The server tells it which
 fingerprints are already there, and tells everyone already there about the newcomer. A
-closed channel, or a missed heartbeat, says they left.
+closed channel says they left.
 
 Each client turns fingerprints into names through its own access list, so the display reads
 "Alice Smith is also here" above the ward. A fingerprint the access list does not know shows as
@@ -743,7 +764,8 @@ Any other failure keeps the local file untouched: the local file is the one copy
 to survive a version nobody can read. The device keeps working on that copy and pushes
 nothing while the head fails; see the accepted stall under *Threat model*.
 
-**A ward is syncing** when this device is connected and in none of the states that stop its
+**A ward is syncing** when this device is connected, which is while its live channel to the
+ward is open, and in none of the states that stop its
 pushes: a newer format on the server, a head that fails a check above, saves failing, a
 push that faults, or a ward no longer this device's. The actions whose change must reach the
 server - *Add a user*, *Add a device*, Leave and *Remove this device* - are offered only
@@ -1980,40 +2002,29 @@ disagreement is resolved in whichever implementation is wrong, never by loosenin
 
 ## Hosting notes
 
-Preliminary findings to seed the server's own design. Figures marked *verified* were checked
-against Cloudflare's documentation on 2026-09-13; the rest are recalled or estimated and
-need confirming.
+Where the server runs, and findings to seed its own design. Figures marked *verified* were
+checked against Cloudflare's documentation on 2026-09-13; the rest are recalled or estimated
+and need confirming.
 
-**Cloudflare Workers with one SQLite-backed Durable Object per document** is the
-recommendation. A Durable Object is a single-threaded unit with its own storage, which maps
-directly onto what this design asks: atomic version checks, the blob, and the live channels
-for one ward held in one place, so broadcasting a version notice to everyone present is a
-local operation. Durable Objects accept WebSockets and can hibernate them, which is what
-makes a held-open channel per reader affordable. Patching, TLS, uptime and DDoS protection
-belong to the platform, which suits a server operated by one volunteer. It also runs away
-from any local disaster the ward is responding to.
+**The server runs on Cloudflare Workers, with one SQLite-backed Durable Object per ward**,
+and its code lives in `server/` in this repository. A Durable Object is a single-threaded
+unit with its own storage, which maps directly onto what this design asks: atomic version
+checks, the blob, and the live channels for one ward held in one place, so broadcasting a
+version notice to everyone present is a local operation. Durable Objects accept WebSockets
+and can hibernate them, which is what makes a held-open channel per reader affordable.
+Patching, TLS, uptime, DDoS protection and point-in-time recovery (believed 30 days,
+recalled) belong to the platform, which suits a server operated by one volunteer. It also
+runs away from any local disaster the ward is responding to. Members reach it over the
+public internet with no extra client.
 
-The runner-up is a small VPS running a plain server over SQLite, with Caddy for TLS and
-Litestream for continuous backup. It is portable and anyone can self-host it, in exchange
-for the operator carrying patching, uptime and restore testing.
+**The wire is what makes the server portable.** The interface above and the conformance
+suite define it, so moving to another host is a rewrite of a small server against the same
+suite.
 
-**Tailscale serves the operator, and only for development.** Members reach the server over
-the public internet with no extra client, because a tailnet would reintroduce a second
-access list. Tailscale Funnel can expose a home machine publicly over HTTPS, which is
-useful for testing against a real server; production belongs on infrastructure that stays
-up when the operator's house does not.
-
-| | Cloudflare Workers + Durable Objects | VPS + SQLite + Caddy + Litestream |
-|---|---|---|
-| Reliability | Distributed; rare global incidents, which take much of the web down too | One machine; roughly 99.9%, recovered by the operator |
-| Cost | Free tier, or about $5/month paid (recalled) | About $4-6/month plus cents for backup storage (recalled) |
-| Maintenance | Deploying code | OS updates, monitoring, backup checks, restore tests: about an hour a month plus incidents |
-| Backups | Built-in point-in-time recovery, believed 30 days (recalled) | Litestream to object storage, set up and tested by the operator |
-| Portability | Tied to Cloudflare's APIs | Runs anywhere |
-| Abuse handling | Rate limiting and DDoS protection included | Built by the operator |
-
-Server downtime stops sharing and live editing and leaves local editing untouched, so
-reliability is not the deciding factor. The choice is maintenance against portability.
+**Development runs the server locally** under `wrangler dev`, where test runs leave no
+documents behind and spend no quota, and the conformance suite reaches it through
+`WARD_PLANNING_SERVER_URL`. A development Worker at its `workers.dev` address is deployed
+alongside; the production Worker serves the domain.
 
 **Capacity needs working out for a held-open channel.** Free-plan limits (*verified*):
 100,000 Worker requests and 100,000 Durable Object requests per day, reset at midnight UTC;
@@ -2024,13 +2035,11 @@ ordinary use. Both
 numbers decide how many wards the free plan holds, so they belong in the server's own design
 rather than guessed at here.
 
-**Storage is ample.** At an estimated 200 KB compressed per document, 5 GB holds about
-25,000 documents. Every document reaches the server, throwaways included, and the store
-grows with documents rather than with edits. Pruning is an operator action and not part of
-this interface.
-
-**The 2 MB BLOB limit** is checked against a real document carrying an emergency response. A
-larger payload is chunked across rows or stored in R2.
+**Storage is ample.** A real ward's 1.0 file, 280 KB of JSON, compresses to 45 KB with
+zlib, so each ward's payload fits in one row well inside the 2 MB limit, and 5 GB holds
+over 100,000 such documents. Every document reaches the server, throwaways included, and
+the store grows with documents rather than with edits. Pruning is an operator action and
+not part of this interface.
 
 **Running unattended** needs billing on the free tier or on a payment method that outlives
 the operator, the domain registered for the maximum term with auto-renew, and no secrets
@@ -2057,11 +2066,10 @@ and keeps working; sharing is what pauses.
 
 - **The live channel is not specified** to the level the rest of the wire is: the open
   request and where its signature rides, the presence and version-notice messages, the
-  heartbeat interval and timeout, the reconnect rule, and how errors map. The conformance
+  ping interval and pong timeout, how soon a failed reconnect is retried, and how errors
+  map. The conformance
   suite needs that before it can be written.
-- **Whether head polling stays** as the channel's fallback, and at what interval.
-- **Where the server runs** is not chosen, and free-plan capacity under a held-open channel
-  is not estimated.
+- **Free-plan capacity** under a held-open channel is not estimated.
 - **Creating documents is open.** A per-address limit on `POST /documents` is the first
   answer; a shared secret in the app is the second.
 - **Access-list size in the payload** is a few hundred bytes per user and does not matter.
