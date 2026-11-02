@@ -17,6 +17,7 @@ struct WardDirectoryImportResult
     bool success = false;
     QHash<FamilyId, Family> families;
     QSet<FamilyId> removedFamilyIds;  // Families in existing but not in PDF
+    QHash<QString, Coordinates> addressCoordinates;  // The coordinates the PDF prints, keyed by Address::full()
     QStringList errors;
     QString wardName;
     QString wardUnitNumber;
@@ -32,11 +33,20 @@ public:
     explicit WardDirectoryImportService(QObject* parent);
     ~WardDirectoryImportService();
 
-    /// Import families from a PDF file.
-    /// Preserves IDs for families/persons that match existing data.
+    /// Import families from a PDF file: parses it, then merges it, dated by the file's
+    /// modification date.
     WardDirectoryImportResult importFromPdf(
         const QString& pdfPath,
         const QHash<FamilyId, Family>& existingFamilies,
+        std::optional<QDate> ministeringPdfDate);
+
+    /// The import of parsed, from a PDF dated pdfDate, onto existingFamilies.
+    /// Preserves IDs for families/persons that match existing data. Each existing family is
+    /// matched at most once.
+    WardDirectoryImportResult merge(
+        const WardDirectoryPdfParser::ParseResult& parsed,
+        const QHash<FamilyId, Family>& existingFamilies,
+        std::optional<QDate> pdfDate,
         std::optional<QDate> ministeringPdfDate);
 
 private:

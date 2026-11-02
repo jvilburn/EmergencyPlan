@@ -1,27 +1,30 @@
 #include "MinisteringImportService.h"
-#include "MinisteringPdfParser.h"
 #include "PersonMatching.h"
 
 namespace
 {
-    // Helper to remap a set of IDs using a mapping
+    // Helper to remap a set of IDs using a mapping, leaving out the ids in leftOut
     template<typename Id>
-    QSet<Id> remapIds(const QSet<Id>& ids, const QHash<Id, Id>& mapping)
+    QSet<Id> remapIds(const QSet<Id>& ids, const QHash<Id, Id>& mapping, const QSet<Id>& leftOut)
     {
         QSet<Id> result;
         for (const Id& id : ids)
         {
-            result.insert(mapping.value(id, id));
+            if (!leftOut.contains(id))
+            {
+                result.insert(mapping.value(id, id));
+            }
         }
         return result;
     }
 
-    // Helper to remap a single optional ID
+    // Helper to remap a single optional ID, which is none when leftOut holds it
     template<typename Id>
     std::optional<Id> remapId(const std::optional<Id>& id,
-                              const QHash<Id, Id>& mapping)
+                              const QHash<Id, Id>& mapping,
+                              const QSet<Id>& leftOut)
     {
-        if (!id.has_value())
+        if (!id.has_value() || leftOut.contains(*id))
         {
             return std::nullopt;
         }
@@ -51,17 +54,25 @@ MinisteringImportResult MinisteringImportService::importFromPdf(
     const QHash<FamilyId, Family>& existingFamilies,
     std::optional<QDate> wardDirectoryDate)
 {
-    MinisteringImportResult result;
-    result.success = false;
-
     // Parse the PDF
     MinisteringPdfParser::ParseResult parseResult = MinisteringPdfParser::parse(pdfPath);
 
     if (!parseResult.success)
     {
+        MinisteringImportResult result;
         result.errors = parseResult.errors;
         return result;
     }
+
+    return merge(parseResult, existingFamilies, wardDirectoryDate);
+}
+
+MinisteringImportResult MinisteringImportService::merge(
+    MinisteringPdfParser::ParseResult parseResult,
+    const QHash<FamilyId, Family>& existingFamilies,
+    std::optional<QDate> wardDirectoryDate)
+{
+    MinisteringImportResult result;
 
     result.isRSFormat = parseResult.isRSFormat;
     result.wardName = parseResult.wardName;
@@ -153,13 +164,23 @@ void MinisteringImportService::mergeFamilies(
             }
             targetFamilies.insert(sourceFamily.id(), sourceFamily);
         }
-        else
+        // No match and not authoritative - the family is not added, and gets no mapping
+    }
+
+    // The source families and persons with no mapping, which the merge left unmatched
+    QSet<FamilyId> leftOutFamilies;
+    QSet<PersonId> leftOutPersons;
+    for (const Family& sourceFamily : sourceFamilies)
+    {
+        if (!familyIdMapping.contains(sourceFamily.id()))
         {
-            // No match and not authoritative - just map IDs (don't add family)
-            familyIdMapping.insert(sourceFamily.id(), sourceFamily.id());
-            for (const Person& member : sourceFamily.members())
+            leftOutFamilies.insert(sourceFamily.id());
+        }
+        for (const Person& member : sourceFamily.members())
+        {
+            if (!personIdMapping.contains(member.id()))
             {
-                personIdMapping.insert(member.id(), member.id());
+                leftOutPersons.insert(member.id());
             }
         }
     }
@@ -167,16 +188,16 @@ void MinisteringImportService::mergeFamilies(
     // Remap IDs in groups (all fields - one set will be empty based on EQ/RS format)
     for (auto it = groups.begin(); it != groups.end(); ++it)
     {
-        it->setMinisterIds(remapIds(it->ministerIds(), personIdMapping));
-        it->setFamilyIds(remapIds(it->familyIds(), familyIdMapping));
-        it->setMinisteredPersonIds(remapIds(it->ministeredPersonIds(), personIdMapping));
-        it->setPresidencyMemberId(remapId(it->presidencyMemberId(), personIdMapping));
+        it->setMinisterIds(remapIds(it->ministerIds(), personIdMapping, leftOutPersons));
+        it->setFamilyIds(remapIds(it->familyIds(), familyIdMapping, leftOutFamilies));
+        it->setMinisteredPersonIds(remapIds(it->ministeredPersonIds(), personIdMapping, leftOutPersons));
+        it->setPresidencyMemberId(remapId(it->presidencyMemberId(), personIdMapping, leftOutPersons));
     }
 
     // Remap presidency member IDs in districts
     for (auto it = districts.begin(); it != districts.end(); ++it)
     {
-        it->setPresidencyMemberId(remapId(it->presidencyMemberId(), personIdMapping));
+        it->setPresidencyMemberId(remapId(it->presidencyMemberId(), personIdMapping, leftOutPersons));
     }
 }
 
@@ -327,11 +348,7 @@ std::optional<Family> MinisteringImportService::mergeFamilyMembers(
             updatedMembers.append(sourceMember);
             anyChanges = true;
         }
-        else
-        {
-            // No match and not authoritative - just map ID, don't add member
-            personIdMapping.insert(sourceMember.id(), sourceMember.id());
-        }
+        // No match and not authoritative - the member is not added, and gets no mapping
     }
 
     if (anyChanges)

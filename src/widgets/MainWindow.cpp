@@ -38,6 +38,7 @@
 #include <QProgressBar>
 #include <QStandardPaths>
 #include <QFile>
+#include <QFileInfo>
 #include <QDir>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -267,20 +268,8 @@ void MainWindow::onImportPdf()
         return;
     }
 
-    // Execute command
-    QString description = result.wardName.isEmpty()
-        ? QObject::tr("Import %1 families").arg(result.families.size())
-        : QObject::tr("Import %1: %2 families")
-            .arg(result.wardName)
-            .arg(result.families.size());
-
-    DocumentManager::instance()->executeCommand(std::make_unique<ImportWardDirectoryCommand>(
-        result.families,
-        result.removedFamilyIds,
-        result.wardUnitNumber,
-        result.wardName,
-        result.pdfDate,
-        description));
+    DocumentManager::instance()->executeCommand(ImportWardDirectoryCommand::fromImport(
+        DocumentManager::instance()->document(), result, QFileInfo(filePath).fileName()));
 
     // Update UI
     QString message = tr("Imported %1 families").arg(result.families.size());
@@ -333,22 +322,8 @@ void MainWindow::onImportMinisteringPdf()
     QString orgType = result.isRSFormat ? tr("RS") : tr("EQ");
     int groupCount = result.groups.size();
 
-    // Build description for undo
-    QString description = tr("Import %1 ministering: %2 districts, %3 groups")
-        .arg(orgType)
-        .arg(result.districts.size())
-        .arg(groupCount);
-
-    MinisteringOrg org = result.isRSFormat
-        ? MinisteringOrg::ReliefSociety
-        : MinisteringOrg::EldersQuorum;
-    DocumentManager::instance()->executeCommand(std::make_unique<ImportMinisteringCommand>(
-        org,
-        result.districts,
-        result.groups,
-        result.families,
-        result.pdfDate,
-        description));
+    DocumentManager::instance()->executeCommand(ImportMinisteringCommand::fromImport(
+        DocumentManager::instance()->document(), result, QFileInfo(filePath).fileName()));
 
     QString message = tr("Imported %1 ministering: %2 districts, %3 groups")
         .arg(orgType)

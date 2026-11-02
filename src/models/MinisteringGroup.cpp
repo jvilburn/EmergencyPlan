@@ -32,32 +32,17 @@ QJsonObject MinisteringGroup::toJson() const
 
     if (!m_ministerIds.isEmpty())
     {
-        QJsonArray ministerIdsArray;
-        for (const PersonId& id : m_ministerIds)
-        {
-            ministerIdsArray.append(id.toString());
-        }
-        json["ministerIds"] = ministerIdsArray;
+        json["ministerIds"] = sortedIdArray(m_ministerIds);
     }
 
     if (!m_familyIds.isEmpty())
     {
-        QJsonArray familyIdsArray;
-        for (const FamilyId& id : m_familyIds)
-        {
-            familyIdsArray.append(id.toString());
-        }
-        json["familyIds"] = familyIdsArray;
+        json["familyIds"] = sortedIdArray(m_familyIds);
     }
 
     if (!m_ministeredPersonIds.isEmpty())
     {
-        QJsonArray ministeredPersonIdsArray;
-        for (const PersonId& id : m_ministeredPersonIds)
-        {
-            ministeredPersonIdsArray.append(id.toString());
-        }
-        json["ministeredPersonIds"] = ministeredPersonIdsArray;
+        json["ministeredPersonIds"] = sortedIdArray(m_ministeredPersonIds);
     }
 
     if (m_interviewedDate.has_value())

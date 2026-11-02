@@ -45,6 +45,15 @@ QJsonValue toJsonValue(const std::optional<PersonId>& value)
     return value->toString();
 }
 
+QJsonValue toJsonValue(const std::optional<QDate>& value)
+{
+    if (!value.has_value())
+    {
+        return QJsonValue(QJsonValue::Null);
+    }
+    return value->toString(Qt::ISODate);
+}
+
 template<>
 QString fromJsonValue<QString>(const QJsonValue& value)
 {
@@ -113,6 +122,16 @@ std::optional<PersonId> fromJsonValue<std::optional<PersonId>>(const QJsonValue&
         return std::nullopt;
     }
     return PersonId::fromString(value.toString());
+}
+
+template<>
+std::optional<QDate> fromJsonValue<std::optional<QDate>>(const QJsonValue& value)
+{
+    if (!value.isString())
+    {
+        return std::nullopt;
+    }
+    return QDate::fromString(value.toString(), Qt::ISODate);
 }
 
 namespace

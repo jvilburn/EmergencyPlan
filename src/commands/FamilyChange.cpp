@@ -1,4 +1,5 @@
 #include "FamilyChange.h"
+#include "Document.h"
 #include "FieldChangeJson.h"
 
 #include <QJsonArray>
@@ -53,6 +54,28 @@ QList<PlacedMember> placedFromJson(const QJsonArray& array)
         placed.append(PlacedMember{Person::fromJson(json["person"].toObject()), json["index"].toInteger()});
     }
     return placed;
+}
+
+/// The families as an object keyed by family id.
+QJsonObject familiesToJson(const QHash<FamilyId, Family>& families)
+{
+    QJsonObject json;
+    for (const Family& family : families)
+    {
+        json[family.id().toString()] = family.toJson();
+    }
+    return json;
+}
+
+QHash<FamilyId, Family> familiesFromJson(const QJsonObject& json)
+{
+    QHash<FamilyId, Family> families;
+    for (auto it = json.constBegin(); it != json.constEnd(); ++it)
+    {
+        Family family = Family::fromJson(it.value().toObject());
+        families.insert(family.id(), family);
+    }
+    return families;
 }
 
 // ----------------------------------------------------------------------------
@@ -475,4 +498,163 @@ FamilyChange FamilyChange::fromJson(const QJsonObject& json)
                         members,
                         placedFromJson(json["added"].toArray()),
                         placedFromJson(json["removed"].toArray()));
+}
+
+// ============================================================================
+// FamilyCollectionChange
+// ============================================================================
+
+FamilyCollectionChange FamilyCollectionChange::between(const Document& document,
+                                                       const QHash<FamilyId, Family>& imported,
+                                                       const QSet<FamilyId>& removed)
+{
+    QHash<FamilyId, Family> added;
+    QHash<FamilyId, FamilyChange> changed;
+    for (const Family& family : imported)
+    {
+        std::optional<Family> existing = document.findFamilyById(family.id());
+        if (!existing.has_value())
+        {
+            added.insert(family.id(), family);
+            continue;
+        }
+        std::optional<FamilyChange> change = FamilyChange::between(*existing, family);
+        if (change.has_value())
+        {
+            changed.insert(family.id(), *change);
+        }
+    }
+
+    QHash<FamilyId, Family> lastSeen;
+    for (const FamilyId& id : removed)
+    {
+        std::optional<Family> existing = document.findFamilyById(id);
+        if (existing.has_value())
+        {
+            lastSeen.insert(id, *existing);
+        }
+    }
+    return FamilyCollectionChange(added, changed, lastSeen);
+}
+
+FamilyCollectionChange::FamilyCollectionChange(const QHash<FamilyId, Family>& added,
+                                               const QHash<FamilyId, FamilyChange>& changed,
+                                               const QHash<FamilyId, Family>& removed)
+    : m_added(added)
+    , m_changed(changed)
+    , m_removed(removed)
+{
+}
+
+bool FamilyCollectionChange::isEmpty() const
+{
+    return m_added.isEmpty()
+        && m_changed.isEmpty()
+        && m_removed.isEmpty();
+}
+
+bool FamilyCollectionChange::holds(const Document& current) const
+{
+    for (auto it = m_changed.constBegin(); it != m_changed.constEnd(); ++it)
+    {
+        std::optional<Family> family = current.findFamilyById(it.key());
+        if (!family.has_value() || !it.value().holds(*family))
+        {
+            return false;
+        }
+    }
+    for (const Family& removed : m_removed)
+    {
+        std::optional<Family> family = current.findFamilyById(removed.id());
+        if (family.has_value() && *family != removed)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+void FamilyCollectionChange::applyTo(Document& document) const
+{
+    for (const Family& added : m_added)
+    {
+        if (!document.findFamilyById(added.id()).has_value())
+        {
+            document.setFamily(added);
+        }
+    }
+    for (auto it = m_changed.constBegin(); it != m_changed.constEnd(); ++it)
+    {
+        document.setFamily(it.value().appliedTo(document.findFamilyById(it.key()).value()));
+    }
+    for (const Family& removed : m_removed)
+    {
+        document.removeFamily(removed.id());
+    }
+}
+
+FamilyCollectionChange FamilyCollectionChange::swapped() const
+{
+    QHash<FamilyId, FamilyChange> changed;
+    for (auto it = m_changed.constBegin(); it != m_changed.constEnd(); ++it)
+    {
+        changed.insert(it.key(), it.value().swapped());
+    }
+    return FamilyCollectionChange(m_removed, changed, m_added);
+}
+
+QList<Address> FamilyCollectionChange::addressesGiven() const
+{
+    QList<Address> addresses;
+    for (const Family& added : m_added)
+    {
+        if (!added.address().isEmpty())
+        {
+            addresses.append(added.address());
+        }
+    }
+    for (const FamilyChange& change : m_changed)
+    {
+        if (change.address().has_value() && !change.address()->after().isEmpty())
+        {
+            addresses.append(change.address()->after());
+        }
+    }
+    return addresses;
+}
+
+QJsonObject FamilyCollectionChange::toJson() const
+{
+    QJsonObject json;
+    if (!m_added.isEmpty())
+    {
+        json["added"] = familiesToJson(m_added);
+    }
+    if (!m_changed.isEmpty())
+    {
+        QJsonObject changed;
+        for (auto it = m_changed.constBegin(); it != m_changed.constEnd(); ++it)
+        {
+            changed[it.key().toString()] = it.value().toJson();
+        }
+        json["changed"] = changed;
+    }
+    if (!m_removed.isEmpty())
+    {
+        json["removed"] = familiesToJson(m_removed);
+    }
+    return json;
+}
+
+FamilyCollectionChange FamilyCollectionChange::fromJson(const QJsonObject& json)
+{
+    QHash<FamilyId, FamilyChange> changed;
+    QJsonObject changedJson = json["changed"].toObject();
+    for (auto it = changedJson.constBegin(); it != changedJson.constEnd(); ++it)
+    {
+        changed.insert(FamilyId::fromString(it.key()), FamilyChange::fromJson(it.value().toObject()));
+    }
+    return FamilyCollectionChange(familiesFromJson(json["added"].toObject()),
+                                  changed,
+                                  familiesFromJson(json["removed"].toObject()));
 }

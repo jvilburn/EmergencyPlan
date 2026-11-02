@@ -136,7 +136,8 @@ set(COMMAND_SOURCES
     src/commands/TeamCommands.cpp
     src/commands/EmergencyAssetCommands.cpp
     src/commands/EmergencyCommands.cpp
-    # src/commands/ImportCommands.cpp
+    src/commands/ImportWardDirectoryCommand.cpp
+    src/commands/ImportMinisteringCommand.cpp
 )
 
 set(COMMAND_HEADERS
@@ -150,7 +151,8 @@ set(COMMAND_HEADERS
     src/commands/TeamCommands.h
     src/commands/EmergencyAssetCommands.h
     src/commands/EmergencyCommands.h
-    # src/commands/ImportCommands.h
+    src/commands/ImportWardDirectoryCommand.h
+    src/commands/ImportMinisteringCommand.h
 )
 
 set(SERVICE_SOURCES

@@ -4512,7 +4512,8 @@ attempts and tasks from `TestWard::stormWith`):
 **Files:**
 - Create: `src/commands/ReferenceCleanup.h`, `src/commands/ReferenceCleanup.cpp`
 - Modify: `src/commands/FamilyChange.h/.cpp`, `src/commands/FamilyCommands.h/.cpp`,
-  `src/commands/TeamCommands.h/.cpp`, `src/commands/CommandRegistry.cpp`
+  `src/commands/TeamCommands.h/.cpp`, `src/commands/ImportWardDirectoryCommand.h/.cpp`,
+  `src/commands/CommandRegistry.cpp`
 - Modify: `src/models/Document.h/.cpp`, `src/models/Team.h`,
   `src/models/EmergencyAsset.h`, `src/models/MinisteringGroup.h`, `src/models/MinisteringDistrict.h`
   (the `Document` updates for groups and districts, and the setters on each, that
@@ -4546,6 +4547,8 @@ several collections.
   and commits `DeleteFamilyCommand`; its "Delete not yet implemented" message goes.
 - `DeleteTeamCommand` holds `ReferenceCleanup::ofTeam`, unassigning tasks assigned to the team;
   its inverse assigns them again.
+- `ImportWardDirectoryCommand` holds a `ReferenceCleanup` for the families it removes, worked
+  out at construction; its start condition includes it, and its inverse restores it.
 
 **Tests:**
 - `deletingAFamilyRemovesItAndItsPeopleFromEveryPlaceAndUndoRestoresEach` (group families; its
@@ -4555,7 +4558,11 @@ several collections.
 - `removalReplayedAfterThePersonJoinedAnotherTeamConflicts` and
   `removalReplayedAfterThePersonWasAssignedATaskConflicts`; in each, no team or task is left
   holding a missing id
-- Samples for `deleteFamily`, `restoreFamily`, and the changed `updateFamily` and `deleteTeam`.
+- `undoingADirectoryImportRestoresTheRemovedPeoplesMemberships` (team, asset, ministering)
+- `ministeringImportReplayedAfterACleanupChangedAGroupConflicts` (the group keeps the cleanup's
+  result)
+- Samples for `deleteFamily`, `restoreFamily`, and the changed `updateFamily`, `deleteTeam` and
+  `importWardDirectory`.
 
 **Commit:** `git commit -m "Removals carry their cleanup as a start condition, and Delete Family is a command"`
 
@@ -4582,7 +4589,8 @@ several collections.
   family is matched at most once.
 - `ImportWardDirectoryCommand::fromImport(const Document& document, const WardDirectoryImportResult& result, const QString& fileName)`
   holds the families added, a `FamilyChange` per family that differs (none for the rest), the
-  families removed as last seen with their `ReferenceCleanup`, the directory PDF date as a
+  families removed as last seen (they carry no cleanup until Task 6 adds a `ReferenceCleanup`
+  to them; a removal's result holds when the family is gone), the directory PDF date as a
   `FieldChange<std::optional<QDate>>`, and the ward record created if missing (result holds when one is
   there). An import never changes a special-need note.
 - The PDF's own coordinates seed the address table: `WardDirectoryPdfParser::ParseResult::addressCoordinates`
@@ -4622,11 +4630,8 @@ ministering import adds someone it cannot match only when it is the newer source
 **Tests:**
 - `importReplayedAfterSomeoneAddedAFamilyKeepsThatFamily` (asserted by id)
 - `importReplayedAfterAnEditToAFamilyItChangesConflicts`
-- `undoingADirectoryImportRestoresTheRemovedPeoplesMemberships` (team, asset, ministering)
 - `reimportingTheSameDirectoryKeepsNotesAndCoordinatesAndHoldsNoChange`
 - `olderMinisteringPdfAddsNoUnknownFamilyOrMemberAndNoGroupNamesAMissingId`
-- `ministeringImportReplayedAfterACleanupChangedAGroupConflicts` (the group keeps the cleanup's
-  result)
 - `attemptOnAFamilyLandsAfterAnImportRemovedIt` (the attempt keeps its family id)
 - `importDescriptionIsOneLineNamingTheFile`
 - Samples for both import types.

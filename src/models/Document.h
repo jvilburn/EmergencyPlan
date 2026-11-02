@@ -50,11 +50,18 @@ public:
     const QHash<MinisteringDistrictId, MinisteringDistrict>& districts(MinisteringOrg org) const;
     const QHash<MinisteringGroupId, MinisteringGroup>& groups(MinisteringOrg org) const;
 
+    /// Sets the organization's districts, or its groups, to those given, in place of the ones
+    /// it holds.
+    void setDistricts(MinisteringOrg org, const QHash<MinisteringDistrictId, MinisteringDistrict>& districts);
+    void setGroups(MinisteringOrg org, const QHash<MinisteringGroupId, MinisteringGroup>& groups);
+
     // ========================================================================
     // Import date tracking
     // ========================================================================
     std::optional<QDate> wardDirectoryPdfDate() const { return m_wardDirectoryPdfDate; }
     std::optional<QDate> ministeringPdfDate() const { return m_ministeringPdfDate; }
+    void setWardDirectoryPdfDate(const std::optional<QDate>& date) { m_wardDirectoryPdfDate = date; }
+    void setMinisteringPdfDate(const std::optional<QDate>& date) { m_ministeringPdfDate = date; }
 
     // ========================================================================
     // Mutating operations - families

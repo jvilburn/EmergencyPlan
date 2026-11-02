@@ -6,9 +6,12 @@
 #include <QHash>
 #include <QJsonObject>
 #include <QList>
+#include <QSet>
 #include <QStringList>
 #include <QtGlobal>
 #include <optional>
+
+class Document;
 
 /// The fields of one member that an edit changes, each judged on its own: one still at its
 /// before value is set, one already at its after value is left, and one at anything else
@@ -141,4 +144,48 @@ private:
     QHash<PersonId, MemberChange> m_members;
     QList<PlacedMember> m_added;
     QList<PlacedMember> m_removed;
+};
+
+/// What an import changes in the ward's families: the families it adds, a FamilyChange per
+/// family that differs, and the families it removes as last seen.
+class FamilyCollectionChange
+{
+public:
+    /// The change from the families document holds to imported, the families as an import
+    /// leaves them: each one document lacks is added, and each one that differs gets the
+    /// change between, which keeps the imported family's member order. Each family in removed
+    /// that document holds is removed as document holds it.
+    static FamilyCollectionChange between(const Document& document,
+                                          const QHash<FamilyId, Family>& imported,
+                                          const QSet<FamilyId>& removed);
+
+    FamilyCollectionChange(const QHash<FamilyId, Family>& added,
+                           const QHash<FamilyId, FamilyChange>& changed,
+                           const QHash<FamilyId, Family>& removed);
+
+    bool isEmpty() const;
+
+    /// The start condition or the result holds: every changed family is there and its
+    /// change holds, and every removed family is gone or exactly as last seen. An added
+    /// family never conflicts; its result holds when a family with its id is there.
+    bool holds(const Document& current) const;
+
+    /// Adds each added family that is not there, makes each change, and removes each removed
+    /// family. Called when holds is true.
+    void applyTo(Document& document) const;
+
+    /// The change that takes this one back: the added families removed as they were added,
+    /// the changes swapped, and the removed families added again.
+    FamilyCollectionChange swapped() const;
+
+    /// The non-empty addresses of the families it adds, and of the changes that set one.
+    QList<Address> addressesGiven() const;
+
+    QJsonObject toJson() const;
+    static FamilyCollectionChange fromJson(const QJsonObject& json);
+
+private:
+    QHash<FamilyId, Family> m_added;
+    QHash<FamilyId, FamilyChange> m_changed;
+    QHash<FamilyId, Family> m_removed;
 };

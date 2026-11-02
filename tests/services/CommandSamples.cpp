@@ -3,6 +3,8 @@
 #include "EmergencyAssetCommands.h"
 #include "EmergencyCommands.h"
 #include "FamilyCommands.h"
+#include "ImportMinisteringCommand.h"
+#include "ImportWardDirectoryCommand.h"
 #include "TeamCommands.h"
 #include "TestWard.h"
 
@@ -308,6 +310,74 @@ QList<CommandSample> addTaskCategorySamples()
     return samples;
 }
 
+/// document after command ran on it.
+Document runOn(const Document& document, const CommandPtr& command)
+{
+    Document applied = document;
+    command->execute(applied);
+    return applied;
+}
+
+/// A directory import onto the test ward: Bob's phone changed, the Jones family gone, the
+/// Lee family added with the coordinates the PDF prints for its address, and the
+/// Tanglewood ward record.
+QList<CommandSample> importWardDirectorySamples()
+{
+    Family smith = TestWard::withPhone(TestWard::smith(), TestWard::bobId(), "555-2222");
+    Family lee = TestWard::lee(2010);
+    WardDirectoryImportResult result;
+    result.success = true;
+    result.families.insert(smith.id(), smith);
+    result.families.insert(lee.id(), lee);
+    result.removedFamilyIds.insert(TestWard::jonesId());
+    result.addressCoordinates.insert(lee.address().full(), Coordinates(40.2400, -111.6600));
+    result.wardName = "Tanglewood";
+    result.wardUnitNumber = "123456";
+    result.pdfDate = QDate(2026, 10, 15);
+    CommandPtr import = ImportWardDirectoryCommand::fromImport(TestWard::document(), result, "Tanglewood.pdf");
+    Family moved = TestWard::withPhone(TestWard::smith(), TestWard::bobId(), "555-9999");
+
+    QList<CommandSample> samples;
+    samples.append(CommandSample{SampleCase::StartHolds, TestWard::document(), import});
+    samples.append(CommandSample{SampleCase::ResultHolds, runOn(TestWard::document(), import), import});
+    samples.append(CommandSample{SampleCase::Conflicts, TestWard::withFamily(TestWard::document(), moved), import});
+    return samples;
+}
+
+/// A ministering import onto the test ward: one group, Bob ministering to the Jones and Lee
+/// families, in a district Alice oversees; Carol's birthday filled in, and the Lee family
+/// added. The conflict is another group in place since the import was worked out.
+QList<CommandSample> importMinisteringSamples()
+{
+    Family jones = TestWard::jones();
+    Person carol = TestWard::carol();
+    carol.setBirthday(Birthday::create(1970, 3, 14));
+    jones = TestWard::withMember(jones, carol);
+    Family lee = TestWard::lee(2010);
+    MinisteringGroup group = MinisteringGroup::createEQ({TestWard::bobId()}, {TestWard::jonesId(), lee.id()});
+    MinisteringDistrict district = MinisteringDistrict::create("District 1", TestWard::aliceId(), {group.id()});
+
+    MinisteringImportResult result;
+    result.success = true;
+    result.families = TestWard::document().families();
+    result.families.insert(jones.id(), jones);
+    result.families.insert(lee.id(), lee);
+    result.groups.insert(group.id(), group);
+    result.districts.insert(district.id(), district);
+    result.pdfDate = QDate(2026, 9, 1);
+    CommandPtr import = ImportMinisteringCommand::fromImport(TestWard::document(), result, "Tanglewood EQ.pdf");
+
+    Document regrouped = TestWard::document();
+    MinisteringGroup other = MinisteringGroup::createEQ({TestWard::carolId()}, {TestWard::smithId()});
+    regrouped.setGroups(MinisteringOrg::EldersQuorum, {{other.id(), other}});
+
+    QList<CommandSample> samples;
+    samples.append(CommandSample{SampleCase::StartHolds, TestWard::document(), import});
+    samples.append(CommandSample{SampleCase::ResultHolds, runOn(TestWard::document(), import), import});
+    samples.append(CommandSample{SampleCase::Conflicts, regrouped, import});
+    return samples;
+}
+
 }  // namespace
 
 QList<CommandSample> CommandSamples::forType(const QString& type)
@@ -383,6 +453,14 @@ QList<CommandSample> CommandSamples::forType(const QString& type)
     if (type == AddTaskCategoryCommand::TypeName)
     {
         return addTaskCategorySamples();
+    }
+    if (type == ImportWardDirectoryCommand::TypeName)
+    {
+        return importWardDirectorySamples();
+    }
+    if (type == ImportMinisteringCommand::TypeName)
+    {
+        return importMinisteringSamples();
     }
     return {};
 }

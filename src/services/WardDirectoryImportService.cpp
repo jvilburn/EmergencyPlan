@@ -24,37 +24,48 @@ WardDirectoryImportResult WardDirectoryImportService::importFromPdf(
     const QHash<FamilyId, Family>& existingFamilies,
     std::optional<QDate> ministeringPdfDate)
 {
-    WardDirectoryImportResult result;
-
     WardDirectoryPdfParser::ParseResult parseResult = WardDirectoryPdfParser::parse(pdfPath);
-
-    result.success = parseResult.success;
-    result.errors = parseResult.errors;
-    result.wardName = parseResult.wardName;
-    result.wardUnitNumber = parseResult.wardUnitNumber;
 
     if (!parseResult.success)
     {
+        WardDirectoryImportResult result;
+        result.errors = parseResult.errors;
         return result;
     }
 
     // Get file modification date as proxy for PDF date
     QFileInfo fileInfo(pdfPath);
-    result.pdfDate = fileInfo.lastModified().date();
+    return merge(parseResult, existingFamilies, fileInfo.lastModified().date(), ministeringPdfDate);
+}
 
-    // Track which existing families were matched
-    QSet<FamilyId> matchedExistingIds;
+WardDirectoryImportResult WardDirectoryImportService::merge(
+    const WardDirectoryPdfParser::ParseResult& parsed,
+    const QHash<FamilyId, Family>& existingFamilies,
+    std::optional<QDate> pdfDate,
+    std::optional<QDate> ministeringPdfDate)
+{
+    WardDirectoryImportResult result;
+
+    result.success = parsed.success;
+    result.errors = parsed.errors;
+    result.wardName = parsed.wardName;
+    result.wardUnitNumber = parsed.wardUnitNumber;
+    result.addressCoordinates = parsed.addressCoordinates;
+    result.pdfDate = pdfDate;
+
+    // The existing families no parsed family has matched yet
+    QHash<FamilyId, Family> unmatched = existingFamilies;
 
     // Process each parsed family with ID preservation
-    for (const auto& [parsedId, parsedFamily] : parseResult.families.asKeyValueRange())
+    for (const Family& parsedFamily : parsed.families)
     {
-        std::optional<Family> existingMatch = findMatchingFamily(parsedFamily, existingFamilies);
+        std::optional<Family> existingMatch = findMatchingFamily(parsedFamily, unmatched);
 
         if (existingMatch.has_value())
         {
             Family merged = mergeWithExisting(parsedFamily, *existingMatch);
             result.families.insert(merged.id(), merged);
-            matchedExistingIds.insert(existingMatch->id());
+            unmatched.remove(existingMatch->id());
         }
         else
         {
@@ -63,19 +74,16 @@ WardDirectoryImportResult WardDirectoryImportService::importFromPdf(
     }
 
     // Determine which existing families should be removed
-    for (const auto& [existingId, existingFamily] : existingFamilies.asKeyValueRange())
+    for (const Family& existingFamily : unmatched)
     {
-        if (!matchedExistingIds.contains(existingId))
+        if (!ministeringPdfDate.has_value()
+            || (result.pdfDate.has_value() && result.pdfDate >= ministeringPdfDate))
         {
-            if (!ministeringPdfDate.has_value()
-                || (result.pdfDate.has_value() && result.pdfDate >= ministeringPdfDate))
-            {
-                result.removedFamilyIds.insert(existingId);
-            }
-            else
-            {
-                result.families.insert(existingId, existingFamily);
-            }
+            result.removedFamilyIds.insert(existingFamily.id());
+        }
+        else
+        {
+            result.families.insert(existingFamily.id(), existingFamily);
         }
     }
 

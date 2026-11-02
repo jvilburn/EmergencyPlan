@@ -3,6 +3,8 @@
 #include "EmergencyAssetCommands.h"
 #include "EmergencyCommands.h"
 #include "FamilyCommands.h"
+#include "ImportMinisteringCommand.h"
+#include "ImportWardDirectoryCommand.h"
 #include "TeamCommands.h"
 
 const QList<CommandType>& CommandRegistry::types()
@@ -26,6 +28,8 @@ const QList<CommandType>& CommandRegistry::types()
         {UpdateTaskCommand::TypeName, &UpdateTaskCommand::fromJson},
         {DeleteTaskCommand::TypeName, &DeleteTaskCommand::fromJson},
         {AddTaskCategoryCommand::TypeName, &AddTaskCategoryCommand::fromJson},
+        {ImportWardDirectoryCommand::TypeName, &ImportWardDirectoryCommand::fromJson},
+        {ImportMinisteringCommand::TypeName, &ImportMinisteringCommand::fromJson},
     };
     return types;
 }

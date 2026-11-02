@@ -26,12 +26,7 @@ QJsonObject MinisteringDistrict::toJson() const
 
     if (!m_groupIds.isEmpty())
     {
-        QJsonArray groupIdsArray;
-        for (const MinisteringGroupId& id : m_groupIds)
-        {
-            groupIdsArray.append(id.toString());
-        }
-        json["groupIds"] = groupIdsArray;
+        json["groupIds"] = sortedIdArray(m_groupIds);
     }
 
     return json;

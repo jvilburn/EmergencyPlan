@@ -3,6 +3,7 @@
 #include "Family.h"
 #include "MinisteringDistrict.h"
 #include "MinisteringGroup.h"
+#include "MinisteringPdfParser.h"
 
 #include <QDate>
 #include <QObject>
@@ -38,11 +39,19 @@ public:
     explicit MinisteringImportService(QObject* parent);
     ~MinisteringImportService();
 
-    /// Import ministering assignments from a PDF file (auto-detects EQ or RS).
-    /// If wardDirectoryDate is provided and is newer than the PDF date,
-    /// family data from the PDF is treated as stale (only fills empty fields).
+    /// Import ministering assignments from a PDF file (auto-detects EQ or RS): parses it,
+    /// then merges it.
     MinisteringImportResult importFromPdf(
         const QString& pdfPath,
+        const QHash<FamilyId, Family>& existingFamilies,
+        std::optional<QDate> wardDirectoryDate);
+
+    /// The import of parseResult onto existingFamilies.
+    /// When the PDF is not authoritative (see isMinisteringAuthoritative), family data from
+    /// it is treated as stale: it only fills empty fields, and a family or person it cannot
+    /// match is not added and is left out of the groups and districts.
+    MinisteringImportResult merge(
+        MinisteringPdfParser::ParseResult parseResult,
         const QHash<FamilyId, Family>& existingFamilies,
         std::optional<QDate> wardDirectoryDate);
 
@@ -52,7 +61,9 @@ private:
     /// - Matches persons by firstName, isParent
     /// - isParent=true wins over isParent=false when merging
     /// - When isAuthoritative: unmatched families are added, names can be updated
-    /// - When not authoritative: only fills empty fields, no new families added
+    /// - When not authoritative: only fills empty fields, no new families or members added,
+    ///   and the source families and persons left unmatched are left out of the groups and
+    ///   districts
     void mergeFamilies(
         QHash<FamilyId, Family>& targetFamilies,
         const QHash<FamilyId, Family>& sourceFamilies,
