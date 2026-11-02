@@ -660,37 +660,40 @@ header they are not in.
 
 ## The live channel
 
-A WebSocket the client opens when it opens a ward and holds while the ward is open. What
-is settled of it is below; the rest is under *Open points*.
+A WebSocket at `/documents/{id}/channel` that the client opens when it opens a ward and
+holds while the ward is open. The upgrade request carries `Ward-Signer` and
+`Ward-Signature`, signed over the `channel` line. The server sends JSON text messages, each
+fingerprint in base64url:
+
+- `{"present":[...],"version":n}` when the channel opens: the fingerprints already there,
+  and the current version;
+- `{"arrived":fp}` and `{"departed":fp}` as others come and go;
+- `{"version":n}` for each version it stores.
 
 - **Opening it answers with the current version.** The ward's object adds the socket and
-  answers in one step, so a version that landed while the client was away is fetched as
-  for a notice, and every later version reaches it as a notice.
-- **The client keeps it alive with WebSocket ping frames**, and treats a pong that does not
-  arrive in time as a closed channel and reconnects. The platform answers pings itself,
-  without waking the ward's object, and does not bill them.
+  sends `present` in one step, so a version that landed while the client was away is
+  fetched as for a notice, and every later version reaches it as a notice.
+- **The client keeps it alive with a WebSocket ping frame every 30 seconds**, and treats a
+  pong that does not arrive within 30 seconds as a closed channel. The platform answers
+  pings itself, without waking the ward's object, and does not bill them.
 - **The server learns that someone left when their socket closes.** A device that reconnects
   opens a new socket under the same fingerprint, which replaces its old one with no change
   in who is here. A device that vanishes without closing shows as present until the
   platform closes its socket.
-- **Retrying the channel is how a disconnected client catches up.** The open's answer
-  brings it current the moment it gets through. A network that carries HTTP but blocks
-  WebSockets leaves the ward not syncing; the device still pushes, and a `412` brings it
-  current when it edits.
+- **Retrying the channel is how a disconnected client catches up.** While the ward is
+  open, a closed channel is retried every 30 seconds and whenever whatever is pending is
+  retried (see *Saving*), and the open's answer brings it current the moment it gets
+  through.
+- **An open that fails makes the client fetch the head**, as a `PUT` answered `403` or `404`
+  does. The fetch settles a removal or a deleted ward; anything else waits for the next
+  retry. A network that carries HTTP but blocks WebSockets leaves the ward not syncing,
+  and each failed open's fetch still brings it current.
 
 ## Who is here
 
 A client opens the live channel when it opens a ward. The server tells it which
 fingerprints are already there, and tells everyone already there about the newcomer. A
 closed channel says they left.
-
-The live channel is a WebSocket at `/documents/{id}/channel`. The upgrade request carries
-`Ward-Signer` and `Ward-Signature`, signed over the `channel` line. The server sends JSON
-text messages: `{"present":[...]}` with the fingerprints already there when the channel
-opens, `{"arrived":fp}` and `{"departed":fp}` as others come and go, and `{"version":n}`
-for each version it stores. A heartbeat every 30 seconds keeps a client present. A client
-whose channel has closed opens it again when whatever is pending is next retried (see
-*Saving*).
 
 Each client turns fingerprints into names through its own access list, so the display reads
 "Alice Smith is also here" above the ward. A fingerprint the access list does not know shows as
@@ -2069,11 +2072,6 @@ and keeps working; sharing is what pauses.
 
 ## Open points
 
-- **The live channel is not specified** to the level the rest of the wire is: the open
-  request and where its signature rides, the presence and version-notice messages, the
-  ping interval and pong timeout, how soon a failed reconnect is retried, and how errors
-  map. The conformance
-  suite needs that before it can be written.
 - **Free-plan capacity** under a held-open channel is not estimated.
 - **Creating documents is open.** A per-address limit on `POST /documents` is the first
   answer; a shared secret in the app is the second.
