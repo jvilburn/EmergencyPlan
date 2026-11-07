@@ -18,7 +18,7 @@ private slots:
     void importReplayedAfterAnEditToAFamilyItChangesConflicts();
     void reimportingTheSameDirectoryKeepsNotesAndCoordinatesAndHoldsNoChange();
     void olderMinisteringPdfAddsNoUnknownFamilyOrMemberAndNoGroupNamesAMissingId();
-    void attemptOnAFamilyLandsAfterAnImportRemovedIt();
+    void attemptOnAFamilyLandsAfterAnImportRemovedItAndTheReportNamesItAsRecorded();
     void importDescriptionIsOneLineNamingTheFile();
     void importNeverReplacesAnEntryInTheTableOfAddressCoordinates();
     void importCreatesTheWardRecordOnlyWhenTheWardLacksIt();

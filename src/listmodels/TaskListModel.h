@@ -48,8 +48,8 @@ private slots:
     void replaceFamilyRows(const FamilyId& familyId);
 
 private:
-    /// One task's row. The names are the family's and the assignee's as the document held
-    /// them when the row was made, for display and sorting.
+    /// One task's row. The names are the family's and the assignee's as the task recorded
+    /// them, for display and sorting.
     struct TaskEntry
     {
         FamilyId familyId;

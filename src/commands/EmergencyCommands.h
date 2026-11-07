@@ -80,16 +80,16 @@ private:
 /// A contact attempt added to the emergency in progress, from the contact dialog or the OK
 /// or Unable to Reach button: an addition. Its result holds when the emergency holds the
 /// attempt's id; it conflicts when none is in progress. The attempt keeps the family and who
-/// it was made with, with no condition that they exist, since the attempts are the log of
-/// what happened.
+/// it was made with, by id and by name, with no condition that they exist, since the
+/// attempts are the log of what happened.
 class AddContactAttemptCommand : public UndoableCommand
 {
 public:
     static constexpr const char* TypeName = "addContactAttempt";
 
-    /// The command that adds attempt, naming its family and who made it as document holds
-    /// them.
-    static UndoableCommandPtr fromNew(const ContactAttempt& attempt, const Document& document);
+    /// The command that adds attempt, naming its family and who made it as the attempt
+    /// recorded them.
+    static UndoableCommandPtr fromNew(const ContactAttempt& attempt);
 
     AddContactAttemptCommand(const ContactAttempt& attempt, const CommandDescription& description);
 
@@ -128,15 +128,16 @@ private:
 };
 
 /// A new task in the emergency in progress: an addition. Its result holds when the emergency
-/// holds the task's id; it conflicts when none is in progress, or when the task is assigned
-/// to a team or person the document lacks.
+/// holds the task's id; it conflicts when none is in progress, or when the task is open and
+/// assigned to a team or person the document lacks. A resolved task's assignee is part of
+/// the log, so it takes no such condition.
 class AddTaskCommand : public UndoableCommand
 {
 public:
     static constexpr const char* TypeName = "addTask";
 
-    /// The command that adds task, naming its family and assignee as document holds them.
-    static UndoableCommandPtr fromNew(const ResponseTask& task, const Document& document);
+    /// The command that adds task, naming its family and assignee as the task recorded them.
+    static UndoableCommandPtr fromNew(const ResponseTask& task);
 
     AddTaskCommand(const ResponseTask& task, const CommandDescription& description);
 
@@ -155,17 +156,17 @@ private:
 /// An edit to one task, built from the difference between the task as opened and as saved:
 /// its category, description, assignment and resolution, each judged on its own. It
 /// conflicts when no emergency is in progress, the task is gone, a value moved, or the
-/// assignment it sets names a team or person the document lacks. It holds the task's family
-/// for its document change.
+/// assignment it sets on a task it leaves open names a team or person the document lacks.
+/// It holds the task's family for its document change.
 class UpdateTaskCommand : public UndoableCommand
 {
 public:
     static constexpr const char* TypeName = "updateTask";
 
     /// The edit from the task as opened to the task as saved, naming its family and
-    /// assignee as document holds them, or an empty pointer when nothing differs, which
+    /// assignee as the tasks recorded them, or an empty pointer when nothing differs, which
     /// WardSession::commit takes as nothing to do.
-    static UndoableCommandPtr fromEdit(const ResponseTask& opened, const ResponseTask& saved, const Document& document);
+    static UndoableCommandPtr fromEdit(const ResponseTask& opened, const ResponseTask& saved);
 
     UpdateTaskCommand(const FamilyId& familyId,
                       const TaskId& taskId,
@@ -201,8 +202,8 @@ public:
     static constexpr const char* TypeName = "deleteTask";
 
     /// The command that removes task as the user sees it, naming its family and assignee as
-    /// document holds them.
-    static UndoableCommandPtr fromSeen(const ResponseTask& task, const Document& document);
+    /// the task recorded them.
+    static UndoableCommandPtr fromSeen(const ResponseTask& task);
 
     DeleteTaskCommand(const ResponseTask& task, const CommandDescription& description);
 

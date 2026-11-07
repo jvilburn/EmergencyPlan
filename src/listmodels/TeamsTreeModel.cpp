@@ -39,19 +39,12 @@ bool byTeamName(const Team& a, const Team& b)
     return a.name().toLower() < b.name().toLower();
 }
 
-/// The family's display name as the document holds it, or "(removed)".
-QString familyName(const FamilyId& familyId)
-{
-    std::optional<Family> family = DocumentManager::instance()->document().findFamilyById(familyId);
-    return family ? family->displayName() : QObject::tr("(removed)");
-}
-
-/// "Category - Family - Description", then whether its assignee was told when it has one,
-/// then "[RESOLVED]" when it is resolved.
+/// "Category - Family - Description", naming the family as the task recorded it, then
+/// whether its assignee was told when it has one, then "[RESOLVED]" when it is resolved.
 QString taskText(const ResponseTask& task)
 {
     QString text = task.category()
-        + " - " + familyName(task.familyId())
+        + " - " + task.familyName()
         + " - \"" + task.description() + "\"";
     if (task.isAssigned())
     {
@@ -129,11 +122,10 @@ void TeamsTreeModel::onDocumentChanged(const DocumentChange& change)
         return;
     }
 
-    // Family updated: its members' names, and its task rows, which name it
+    // Family updated: its members' names
     if (change.familyId)
     {
         refreshFamilyDisplayText(*change.familyId);
-        replaceFamilyTasks(*change.familyId);
     }
 }
 

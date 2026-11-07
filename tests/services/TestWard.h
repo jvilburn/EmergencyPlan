@@ -103,13 +103,13 @@ public:
 
     /// An attempt with that id made at timestamp, otherwise as ContactAttempt::create makes
     /// it.
-    static ContactAttempt attempt(const QString& id, const FamilyId& familyId, const QDateTime& timestamp,
+    static ContactAttempt attempt(const QString& id, const Family& family, const QDateTime& timestamp,
                                   std::optional<ContactMethod> method,
-                                  const std::optional<PersonId>& who, std::optional<ContactOutcome> outcome,
+                                  const std::optional<Person>& who, std::optional<ContactOutcome> outcome,
                                   const QString& notes);
 
-    /// A task with that id created at createdAt, unassigned and unresolved.
-    static ResponseTask task(const QString& id, const FamilyId& familyId, const QDateTime& createdAt,
+    /// A task with that id created at createdAt, otherwise as ResponseTask::create makes it.
+    static ResponseTask task(const QString& id, const Family& family, const QDateTime& createdAt,
                              const QString& category, const QString& description);
 
     /// A resolution with those notes made at resolvedAt.

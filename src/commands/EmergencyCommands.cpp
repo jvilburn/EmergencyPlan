@@ -53,33 +53,6 @@ QString orNone(const QString& text)
     return text.isEmpty() ? QObject::tr("(none)") : text;
 }
 
-/// The family's display name as document holds it, or "(removed)" when document lacks it.
-QString familyName(const FamilyId& id, const Document& document)
-{
-    std::optional<Family> family = document.findFamilyById(id);
-    return family.has_value() ? family->displayName() : QObject::tr("(removed)");
-}
-
-/// The team's name as document holds it, or "(removed)" when document lacks it.
-QString teamName(const TeamId& id, const Document& document)
-{
-    std::optional<Team> team = document.findTeamById(id);
-    return team.has_value() ? team->name() : QObject::tr("(removed)");
-}
-
-QString assigneeName(const TaskAssignment& assignment, const Document& document)
-{
-    if (assignment.teamId().has_value())
-    {
-        return teamName(*assignment.teamId(), document);
-    }
-    if (assignment.personId().has_value())
-    {
-        return personName(*assignment.personId(), document);
-    }
-    return QObject::tr("(none)");
-}
-
 /// True when there is no assignment, or document holds the team or person it names.
 bool assigneeExists(const std::optional<TaskAssignment>& assignment, const Document& document)
 {
@@ -93,7 +66,7 @@ bool assigneeExists(const std::optional<TaskAssignment>& assignment, const Docum
         || (person.has_value() && document.findPersonById(*person).has_value());
 }
 
-QStringList describeAttempt(const ContactAttempt& attempt, const Document& document)
+QStringList describeAttempt(const ContactAttempt& attempt)
 {
     QStringList lines;
     if (attempt.method().has_value())
@@ -102,7 +75,7 @@ QStringList describeAttempt(const ContactAttempt& attempt, const Document& docum
     }
     if (attempt.who().has_value())
     {
-        lines.append(QObject::tr("who: %1").arg(personName(*attempt.who(), document)));
+        lines.append(QObject::tr("who: %1").arg(attempt.whoName()));
     }
     if (attempt.outcome().has_value())
     {
@@ -115,14 +88,14 @@ QStringList describeAttempt(const ContactAttempt& attempt, const Document& docum
     return lines;
 }
 
-QStringList describeAssignment(const std::optional<TaskAssignment>& assignment, const Document& document)
+QStringList describeAssignment(const std::optional<TaskAssignment>& assignment)
 {
     if (!assignment.has_value())
     {
         return {QObject::tr("assigned to: (none)")};
     }
     QStringList lines;
-    lines.append(QObject::tr("assigned to: %1").arg(assigneeName(*assignment, document)));
+    lines.append(QObject::tr("assigned to: %1").arg(assignment->assigneeName()));
     const std::optional<TaskNotification>& notification = assignment->notification();
     if (notification.has_value())
     {
@@ -149,13 +122,13 @@ QString describeResolution(const std::optional<TaskResolution>& resolution)
 }
 
 /// The task's description, and its assignment and resolution when it has them.
-QStringList describeTask(const ResponseTask& task, const Document& document)
+QStringList describeTask(const ResponseTask& task)
 {
     QStringList lines;
     lines.append(QObject::tr("description: %1").arg(orNone(task.description())));
     if (task.assignment().has_value())
     {
-        lines.append(describeAssignment(task.assignment(), document));
+        lines.append(describeAssignment(task.assignment()));
     }
     if (task.resolution().has_value())
     {
@@ -308,10 +281,9 @@ CommandPtr RestoreEmergencyCommand::fromJson(const QJsonObject& json, const Comm
 // AddContactAttemptCommand
 // ----------------------------------------------------------------------------
 
-UndoableCommandPtr AddContactAttemptCommand::fromNew(const ContactAttempt& attempt, const Document& document)
+UndoableCommandPtr AddContactAttemptCommand::fromNew(const ContactAttempt& attempt)
 {
-    CommandDescription description(QObject::tr("Contact with %1").arg(familyName(attempt.familyId(), document)),
-                                   describeAttempt(attempt, document));
+    CommandDescription description(QObject::tr("Contact with %1").arg(attempt.familyName()), describeAttempt(attempt));
     return std::make_shared<AddContactAttemptCommand>(attempt, description);
 }
 
@@ -409,10 +381,10 @@ CommandPtr DeleteContactAttemptCommand::fromJson(const QJsonObject& json, const 
 // AddTaskCommand
 // ----------------------------------------------------------------------------
 
-UndoableCommandPtr AddTaskCommand::fromNew(const ResponseTask& task, const Document& document)
+UndoableCommandPtr AddTaskCommand::fromNew(const ResponseTask& task)
 {
-    CommandDescription description(QObject::tr("New %1 task for %2").arg(task.category(), familyName(task.familyId(), document)),
-                                   describeTask(task, document));
+    CommandDescription description(QObject::tr("New %1 task for %2").arg(task.category(), task.familyName()),
+                                   describeTask(task));
     return std::make_shared<AddTaskCommand>(task, description);
 }
 
@@ -433,7 +405,7 @@ CommandOutcome AddTaskCommand::execute(Document& document) const
     {
         return CommandOutcome::Applied;
     }
-    if (!assigneeExists(m_task.assignment(), document))
+    if (!m_task.isResolved() && !assigneeExists(m_task.assignment(), document))
     {
         return CommandOutcome::Conflicted;
     }
@@ -468,7 +440,7 @@ CommandPtr AddTaskCommand::fromJson(const QJsonObject& json, const CommandDescri
 // UpdateTaskCommand
 // ----------------------------------------------------------------------------
 
-UndoableCommandPtr UpdateTaskCommand::fromEdit(const ResponseTask& opened, const ResponseTask& saved, const Document& document)
+UndoableCommandPtr UpdateTaskCommand::fromEdit(const ResponseTask& opened, const ResponseTask& saved)
 {
     std::optional<FieldChange<QString>> category = changeBetween(opened.category(), saved.category());
     std::optional<FieldChange<QString>> taskDescription = changeBetween(opened.description(), saved.description());
@@ -490,14 +462,13 @@ UndoableCommandPtr UpdateTaskCommand::fromEdit(const ResponseTask& opened, const
     }
     if (assignment.has_value())
     {
-        lines.append(describeAssignment(assignment->after(), document));
+        lines.append(describeAssignment(assignment->after()));
     }
     if (resolution.has_value())
     {
         lines.append(describeResolution(resolution->after()));
     }
-    CommandDescription description(QObject::tr("%1 task for %2").arg(opened.category(), familyName(opened.familyId(), document)),
-                                   lines);
+    CommandDescription description(QObject::tr("%1 task for %2").arg(opened.category(), opened.familyName()), lines);
     return std::make_shared<UpdateTaskCommand>(opened.familyId(), opened.id(),
                                                category, taskDescription, assignment, resolution, description);
 }
@@ -531,16 +502,16 @@ CommandOutcome UpdateTaskCommand::execute(Document& document) const
     {
         return CommandOutcome::Conflicted;
     }
-    if (m_assignment.has_value() && !assigneeExists(m_assignment->after(), document))
-    {
-        return CommandOutcome::Conflicted;
-    }
 
     ResponseTask updated = *task;
     updated.setCategory(changedValue(m_category, task->category()));
     updated.setDescription(changedValue(m_taskDescription, task->description()));
     updated.setAssignment(changedValue(m_assignment, task->assignment()));
     updated.setResolution(changedValue(m_resolution, task->resolution()));
+    if (m_assignment.has_value() && !updated.isResolved() && !assigneeExists(updated.assignment(), document))
+    {
+        return CommandOutcome::Conflicted;
+    }
     response->setTask(updated);
     document.setEmergencyResponse(response);
     return CommandOutcome::Applied;
@@ -589,10 +560,10 @@ CommandPtr UpdateTaskCommand::fromJson(const QJsonObject& json, const CommandDes
 // DeleteTaskCommand
 // ----------------------------------------------------------------------------
 
-UndoableCommandPtr DeleteTaskCommand::fromSeen(const ResponseTask& task, const Document& document)
+UndoableCommandPtr DeleteTaskCommand::fromSeen(const ResponseTask& task)
 {
-    CommandDescription description(QObject::tr("Delete %1 task for %2").arg(task.category(), familyName(task.familyId(), document)),
-                                   describeTask(task, document));
+    CommandDescription description(QObject::tr("Delete %1 task for %2").arg(task.category(), task.familyName()),
+                                   describeTask(task));
     return std::make_shared<DeleteTaskCommand>(task, description);
 }
 

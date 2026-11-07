@@ -16,11 +16,53 @@
 #include <QRadioButton>
 #include <QVBoxLayout>
 
-TaskDialog::TaskDialog(const FamilyId& familyId, QWidget* parent)
-    : QDialog(parent)
-    , m_familyId(familyId)
+TaskDialog::TaskDialog(const Family& family, QWidget* parent)
+    : TaskDialog(parent)
 {
     setWindowTitle(tr("Add Task"));
+    m_family = family;
+}
+
+TaskDialog::TaskDialog(const ResponseTask& task, QWidget* parent)
+    : TaskDialog(parent)
+{
+    setWindowTitle(tr("Edit Task"));
+    m_originalTask = task;
+
+    // The task's own category, which the emergency may not list
+    int catIndex = m_categoryCombo->findText(task.category());
+    if (catIndex < 0)
+    {
+        catIndex = addCategory(task.category());
+    }
+    m_categoryCombo->setCurrentIndex(catIndex);
+
+    m_descriptionEdit->setText(task.description());
+
+    // The task's assignee, which the ward may no longer hold: saving it unchanged keeps the
+    // assignment as it is
+    const std::optional<TaskAssignment>& assignment = task.assignment();
+    if (assignment && assignment->teamId())
+    {
+        m_teamRadio->setChecked(true);
+        selectAssignee(m_teamCombo, *assignment);
+        m_teamCombo->setEnabled(true);
+    }
+    else if (assignment && assignment->personId())
+    {
+        m_personRadio->setChecked(true);
+        selectAssignee(m_personCombo, *assignment);
+        m_personCombo->setEnabled(true);
+    }
+    else
+    {
+        m_unassignedRadio->setChecked(true);
+    }
+}
+
+TaskDialog::TaskDialog(QWidget* parent)
+    : QDialog(parent)
+{
     setMinimumWidth(400);
 
     QVBoxLayout* layout = new QVBoxLayout(this);
@@ -113,42 +155,6 @@ TaskDialog::TaskDialog(const FamilyId& familyId, QWidget* parent)
             this, &QDialog::reject);
 }
 
-void TaskDialog::setTask(const ResponseTask& task)
-{
-    setWindowTitle(tr("Edit Task"));
-    m_originalTask = task;
-
-    // The task's own category, which the emergency may not list
-    int catIndex = m_categoryCombo->findText(task.category());
-    if (catIndex < 0)
-    {
-        catIndex = addCategory(task.category());
-    }
-    m_categoryCombo->setCurrentIndex(catIndex);
-
-    m_descriptionEdit->setText(task.description());
-
-    // The task's assignee, which the ward may no longer hold: saving it unchanged keeps the
-    // assignment as it is
-    const std::optional<TaskAssignment>& assignment = task.assignment();
-    if (assignment && assignment->teamId())
-    {
-        m_teamRadio->setChecked(true);
-        selectAssignee(m_teamCombo, assignment->teamId()->toString());
-        m_teamCombo->setEnabled(true);
-    }
-    else if (assignment && assignment->personId())
-    {
-        m_personRadio->setChecked(true);
-        selectAssignee(m_personCombo, assignment->personId()->toString());
-        m_personCombo->setEnabled(true);
-    }
-    else
-    {
-        m_unassignedRadio->setChecked(true);
-    }
-}
-
 std::optional<ResponseTask> TaskDialog::result() const
 {
     return m_result;
@@ -174,38 +180,58 @@ void TaskDialog::onAccepted()
         return;
     }
 
-    // An edit starts from the original task, keeping its id, creation time and resolution
+    // An edit starts from the original task, keeping its id, creation time, family and
+    // resolution
     ResponseTask task = m_originalTask
         ? *m_originalTask
-        : ResponseTask::create(m_familyId, category, description);
+        : ResponseTask::create(*m_family, category, description);
     task.setCategory(category);
     task.setDescription(description);
 
+    // The same assignee keeps the assignment as it was, notification and name included; a
+    // new one names the assignee as the ward holds them now
+    const Document& document = DocumentManager::instance()->document();
+    const std::optional<TaskAssignment>& original = task.assignment();
     std::optional<TaskAssignment> assignment;
     if (m_teamRadio->isChecked() && m_teamCombo->currentIndex() >= 0)
     {
-        assignment = TaskAssignment::toTeam(TeamId::fromString(m_teamCombo->currentData().toString()));
+        TeamId teamId = TeamId::fromString(m_teamCombo->currentData().toString());
+        std::optional<Team> team = document.findTeamById(teamId);
+        if (original && original->teamId() == teamId)
+        {
+            assignment = original;
+        }
+        else if (team)
+        {
+            assignment = TaskAssignment::toTeam(*team);
+        }
+        else
+        {
+            QMessageBox::warning(this, tr("Task"),
+                                 tr("Please choose a team from the list."));
+            m_teamCombo->setFocus();
+            return;
+        }
     }
     else if (m_personRadio->isChecked())
     {
-        std::optional<PersonId> person = PersonCombo::chosen(m_personCombo);
-        if (!person)
+        std::optional<PersonId> personId = PersonCombo::chosen(m_personCombo);
+        std::optional<Person> person = personId ? document.findPersonById(*personId) : std::nullopt;
+        if (personId && original && original->personId() == personId)
+        {
+            assignment = original;
+        }
+        else if (person)
+        {
+            assignment = TaskAssignment::toPerson(*person);
+        }
+        else
         {
             QMessageBox::warning(this, tr("Task"),
                                  tr("Please choose a person from the list."));
             m_personCombo->setFocus();
             return;
         }
-        assignment = TaskAssignment::toPerson(*person);
-    }
-
-    // The same assignee keeps the assignment as it was, notification included
-    const std::optional<TaskAssignment>& original = task.assignment();
-    if (assignment && original
-        && assignment->teamId() == original->teamId()
-        && assignment->personId() == original->personId())
-    {
-        assignment = original;
     }
     task.setAssignment(assignment);
 
@@ -262,12 +288,13 @@ int TaskDialog::addCategory(const QString& category)
     return index;
 }
 
-void TaskDialog::selectAssignee(QComboBox* combo, const QString& id)
+void TaskDialog::selectAssignee(QComboBox* combo, const TaskAssignment& assignment)
 {
+    QString id = assignment.teamId() ? assignment.teamId()->toString() : assignment.personId()->toString();
     int index = combo->findData(id);
     if (index < 0)
     {
-        combo->insertItem(0, tr("(removed)"), id);
+        combo->insertItem(0, assignment.assigneeName(), id);
         index = 0;
     }
     combo->setCurrentIndex(index);

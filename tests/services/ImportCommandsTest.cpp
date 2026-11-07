@@ -3,6 +3,7 @@
 #include "ImportMinisteringCommand.h"
 #include "ImportWardDirectoryCommand.h"
 #include "MinisteringImportService.h"
+#include "PdfText.h"
 #include "TestSession.h"
 #include "TestWard.h"
 #include "WardDirectoryImportService.h"
@@ -229,7 +230,7 @@ void ImportCommandsTest::olderMinisteringPdfAddsNoUnknownFamilyOrMemberAndNoGrou
     QVERIFY(session.document() == before);
 }
 
-void ImportCommandsTest::attemptOnAFamilyLandsAfterAnImportRemovedIt()
+void ImportCommandsTest::attemptOnAFamilyLandsAfterAnImportRemovedItAndTheReportNamesItAsRecorded()
 {
     Document document = TestWard::withResponse(TestWard::document(), TestWard::storm());
     TestSession theirs;
@@ -242,10 +243,10 @@ void ImportCommandsTest::attemptOnAFamilyLandsAfterAnImportRemovedIt()
 
     TestSession mine;
     mine.open(document);
-    ContactAttempt attempt = TestWard::attempt("attempt-jones", TestWard::jonesId(), TestWard::octoberFirst(10, 0),
-                                               ContactMethod::Phone, TestWard::bobId(), ContactOutcome::OK,
+    ContactAttempt attempt = TestWard::attempt("attempt-jones", TestWard::jones(), TestWard::octoberFirst(10, 0),
+                                               ContactMethod::Phone, TestWard::bob(), ContactOutcome::OK,
                                                "All well");
-    QVERIFY(mine.commit(AddContactAttemptCommand::fromNew(attempt, mine.document())).status == CommitStatus::Applied);
+    QVERIFY(mine.commit(AddContactAttemptCommand::fromNew(attempt)).status == CommitStatus::Applied);
 
     ReplayResult replay = mine.replayOnto(theirs.document());
 
@@ -254,7 +255,13 @@ void ImportCommandsTest::attemptOnAFamilyLandsAfterAnImportRemovedIt()
     EmergencyResponse response = mine.document().emergencyResponse().value();
     const ContactAttempt* landed = response.findContactAttempt(attempt.id());
     QVERIFY(landed != nullptr);
-    QVERIFY(landed->familyId() == TestWard::jonesId());
+    QVERIFY(*landed == attempt);
+
+    // The report names the family as the attempt recorded it, though the ward no longer
+    // holds it
+    QString text = reportText(mine.document());
+    QVERIFY2(text.contains("Phone - Smith, Bob - OK - All well"), qPrintable(text));
+    QVERIFY2(text.contains("Jones, Carol"), qPrintable(text));
 }
 
 void ImportCommandsTest::importDescriptionIsOneLineNamingTheFile()

@@ -6,7 +6,6 @@
 #include "Filter.h"
 #include "Person.h"
 #include "StatusIcons.h"
-#include "Team.h"
 
 #include <QColor>
 #include <QFont>
@@ -20,30 +19,6 @@ namespace
 const Document& document()
 {
     return DocumentManager::instance()->document();
-}
-
-/// The person's display name as the document holds them, or "(removed)".
-QString personNameOrRemoved(const PersonId& personId)
-{
-    std::optional<Person> person = document().findPersonById(personId);
-    return person ? person->displayName() : QObject::tr("(removed)");
-}
-
-/// Who the task is assigned to, "(removed)" when the ward no longer holds them, or empty
-/// when it is unassigned.
-QString assigneeName(const ResponseTask& task)
-{
-    const std::optional<TaskAssignment>& assignment = task.assignment();
-    if (assignment && assignment->teamId())
-    {
-        std::optional<Team> team = document().findTeamById(*assignment->teamId());
-        return team ? team->name() : QObject::tr("(removed)");
-    }
-    if (assignment && assignment->personId())
-    {
-        return personNameOrRemoved(*assignment->personId());
-    }
-    return QString();
 }
 
 }  // namespace
@@ -396,9 +371,8 @@ QList<FamilyTreeModel::TreeNode*> FamilyTreeModel::emergencyNodes(TreeNode* fami
         for (const ContactAttempt& attempt : attempts)
         {
             QString time = attempt.timestamp().toLocalTime().toString(tr("MMM d, h:mm AP"));
-            QString who = attempt.who() ? personNameOrRemoved(*attempt.who()) : QString();
             rows.append(newNode(RowType::ContactAttempt, familyNode, familyIndex,
-                                "  " + contactAttemptParts(attempt, time, who).join(" - ")));
+                                "  " + contactAttemptParts(attempt, time).join(" - ")));
         }
     }
 
@@ -417,13 +391,13 @@ QList<FamilyTreeModel::TreeNode*> FamilyTreeModel::emergencyNodes(TreeNode* fami
             taskNode->taskResolved = task.isResolved();
             rows.append(taskNode);
 
-            // Line 2: who it is assigned to, and whether they have been told
-            QString assignee = assigneeName(task);
-            if (assignee.isEmpty())
+            // Line 2: who it is assigned to, as the assignment recorded them, and whether
+            // they have been told
+            if (!task.isAssigned())
             {
                 continue;
             }
-            QString assignmentText = tr("    Assigned to %1").arg(assignee);
+            QString assignmentText = tr("    Assigned to %1").arg(task.assignment()->assigneeName());
             if (task.isNotified())
             {
                 assignmentText += " " + StatusIcons::Checkmark + " " + tr("notified");

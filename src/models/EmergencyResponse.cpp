@@ -214,7 +214,7 @@ QString contactMarkName(ContactOutcome outcome)
     return QString();
 }
 
-QStringList contactAttemptParts(const ContactAttempt& attempt, const QString& timeText, const QString& whoName)
+QStringList contactAttemptParts(const ContactAttempt& attempt, const QString& timeText)
 {
     QStringList parts = {timeText};
     std::optional<ContactMethod> method = attempt.method();
@@ -223,9 +223,9 @@ QStringList contactAttemptParts(const ContactAttempt& attempt, const QString& ti
     {
         parts.append(contactMethodName(*method));
     }
-    if (!whoName.isEmpty())
+    if (!attempt.whoName().isEmpty())
     {
-        parts.append(whoName);
+        parts.append(attempt.whoName());
     }
     if (outcome.has_value())
     {
@@ -276,17 +276,22 @@ bool TaskNotification::operator==(const TaskNotification& other) const
 
 // === ContactAttempt ===
 
-ContactAttempt ContactAttempt::create(const FamilyId& familyId,
+ContactAttempt ContactAttempt::create(const Family& family,
                                       std::optional<ContactMethod> method,
-                                      const std::optional<PersonId>& who,
+                                      const std::optional<Person>& who,
                                       std::optional<ContactOutcome> outcome,
                                       const QString& notes)
 {
     ContactAttempt attempt;
     attempt.m_id = ContactAttemptId::generate();
-    attempt.m_familyId = familyId;
+    attempt.m_familyId = family.id();
+    attempt.m_familyName = family.displayName();
     attempt.m_method = method;
-    attempt.m_who = who;
+    if (who.has_value())
+    {
+        attempt.m_who = who->id();
+        attempt.m_whoName = who->displayName();
+    }
     attempt.m_outcome = outcome;
     attempt.m_timestamp = QDateTime::currentDateTimeUtc();
     attempt.m_notes = notes;
@@ -298,6 +303,7 @@ QJsonObject ContactAttempt::toJson() const
     QJsonObject json;
     json["id"] = m_id.toString();
     json["familyId"] = m_familyId.toString();
+    json["familyName"] = m_familyName;
     if (m_method.has_value())
     {
         json["method"] = methodToJson(*m_method);
@@ -305,6 +311,7 @@ QJsonObject ContactAttempt::toJson() const
     if (m_who.has_value())
     {
         json["who"] = m_who->toString();
+        json["whoName"] = m_whoName;
     }
     if (m_outcome.has_value())
     {
@@ -320,10 +327,12 @@ ContactAttempt ContactAttempt::fromJson(const QJsonObject& json)
     ContactAttempt attempt;
     attempt.m_id = ContactAttemptId::fromString(json["id"].toString());
     attempt.m_familyId = FamilyId::fromString(json["familyId"].toString());
+    attempt.m_familyName = json["familyName"].toString();
     attempt.m_method = methodFromJson(json["method"]);
     if (json.contains("who"))
     {
         attempt.m_who = PersonId::fromString(json["who"].toString());
+        attempt.m_whoName = json["whoName"].toString();
     }
     attempt.m_outcome = outcomeFromJson(json["outcome"]);
     attempt.m_timestamp = timeFromJson(json["timestamp"]);
@@ -335,8 +344,10 @@ bool ContactAttempt::operator==(const ContactAttempt& other) const
 {
     return m_id == other.m_id
         && m_familyId == other.m_familyId
+        && m_familyName == other.m_familyName
         && m_method == other.m_method
         && m_who == other.m_who
+        && m_whoName == other.m_whoName
         && m_outcome == other.m_outcome
         && m_timestamp == other.m_timestamp
         && m_notes == other.m_notes;
@@ -344,17 +355,19 @@ bool ContactAttempt::operator==(const ContactAttempt& other) const
 
 // === TaskAssignment ===
 
-TaskAssignment TaskAssignment::toTeam(const TeamId& teamId)
+TaskAssignment TaskAssignment::toTeam(const Team& team)
 {
     TaskAssignment assignment;
-    assignment.m_teamId = teamId;
+    assignment.m_teamId = team.id();
+    assignment.m_assigneeName = team.name();
     return assignment;
 }
 
-TaskAssignment TaskAssignment::toPerson(const PersonId& personId)
+TaskAssignment TaskAssignment::toPerson(const Person& person)
 {
     TaskAssignment assignment;
-    assignment.m_personId = personId;
+    assignment.m_personId = person.id();
+    assignment.m_assigneeName = person.displayName();
     return assignment;
 }
 
@@ -369,6 +382,7 @@ QJsonObject TaskAssignment::toJson() const
     {
         json["personId"] = m_personId->toString();
     }
+    json["assigneeName"] = m_assigneeName;
     if (m_notification.has_value())
     {
         json["notification"] = m_notification->toJson();
@@ -387,6 +401,7 @@ TaskAssignment TaskAssignment::fromJson(const QJsonObject& json)
     {
         assignment.m_personId = PersonId::fromString(json["personId"].toString());
     }
+    assignment.m_assigneeName = json["assigneeName"].toString();
     if (json.contains("notification"))
     {
         assignment.m_notification = TaskNotification::fromJson(json["notification"].toObject());
@@ -398,6 +413,7 @@ bool TaskAssignment::operator==(const TaskAssignment& other) const
 {
     return m_teamId == other.m_teamId
         && m_personId == other.m_personId
+        && m_assigneeName == other.m_assigneeName
         && m_notification == other.m_notification;
 }
 
@@ -435,11 +451,12 @@ bool TaskResolution::operator==(const TaskResolution& other) const
 
 // === ResponseTask ===
 
-ResponseTask ResponseTask::create(const FamilyId& familyId, const QString& category, const QString& description)
+ResponseTask ResponseTask::create(const Family& family, const QString& category, const QString& description)
 {
     ResponseTask task;
     task.m_id = TaskId::generate();
-    task.m_familyId = familyId;
+    task.m_familyId = family.id();
+    task.m_familyName = family.displayName();
     task.m_category = category;
     task.m_description = description;
     task.m_createdAt = QDateTime::currentDateTimeUtc();
@@ -451,6 +468,7 @@ QJsonObject ResponseTask::toJson() const
     QJsonObject json;
     json["id"] = m_id.toString();
     json["familyId"] = m_familyId.toString();
+    json["familyName"] = m_familyName;
     json["category"] = m_category;
     json["description"] = m_description;
     json["createdAt"] = timeToJson(m_createdAt);
@@ -470,6 +488,7 @@ ResponseTask ResponseTask::fromJson(const QJsonObject& json)
     ResponseTask task;
     task.m_id = TaskId::fromString(json["id"].toString());
     task.m_familyId = FamilyId::fromString(json["familyId"].toString());
+    task.m_familyName = json["familyName"].toString();
     task.m_category = json["category"].toString();
     task.m_description = json["description"].toString();
     task.m_createdAt = timeFromJson(json["createdAt"]);
@@ -488,6 +507,7 @@ bool ResponseTask::operator==(const ResponseTask& other) const
 {
     return m_id == other.m_id
         && m_familyId == other.m_familyId
+        && m_familyName == other.m_familyName
         && m_category == other.m_category
         && m_description == other.m_description
         && m_createdAt == other.m_createdAt

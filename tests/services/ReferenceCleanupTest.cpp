@@ -5,6 +5,7 @@
 #include "ImportMinisteringCommand.h"
 #include "ImportWardDirectoryCommand.h"
 #include "MemberEditor.h"
+#include "PdfText.h"
 #include "TeamCommands.h"
 #include "TestSession.h"
 #include "TestWard.h"
@@ -25,8 +26,8 @@ bool personExists(const Document& document, const std::optional<PersonId>& id)
         || document.findPersonById(*id).has_value();
 }
 
-/// True when every person, family and team that a team, asset, group, district or task
-/// assignment names is in document.
+/// True when every person, family and team that a team, asset, group, district or open
+/// task's assignment names is in document.
 bool referencesAreWhole(const Document& document)
 {
     for (const Team& team : document.teams())
@@ -73,7 +74,7 @@ bool referencesAreWhole(const Document& document)
     {
         for (const ResponseTask& task : document.emergencyResponse()->tasks())
         {
-            if (!task.assignment().has_value())
+            if (task.isResolved() || !task.assignment().has_value())
             {
                 continue;
             }
@@ -125,6 +126,25 @@ ResponseTask unassigned(const ResponseTask& task)
     ResponseTask updated = task;
     updated.setAssignment(std::nullopt);
     return updated;
+}
+
+/// document with task added to its emergency in progress.
+Document withTask(const Document& document, const ResponseTask& task)
+{
+    EmergencyResponse response = *document.emergencyResponse();
+    response.insertTask(task);
+    return TestWard::withResponse(document, response);
+}
+
+/// The Repairs task for the Jones family, created at 11:30, assigned to assignee and
+/// resolved at noon.
+ResponseTask resolvedFence(const TaskAssignment& assignee)
+{
+    ResponseTask fence = TestWard::task("task-fence", TestWard::jones(), TestWard::octoberFirst(11, 30), "Repairs",
+                                        "Fence down along the drive");
+    fence.setAssignment(assignee);
+    fence.setResolution(TestWard::resolution("Propped back up", TestWard::octoberFirst(12, 0)));
+    return fence;
 }
 
 Team withMembers(const Team& team, const QSet<PersonId>& members)
@@ -290,9 +310,11 @@ void ReferenceCleanupTest::removingAMemberThroughTheEditPanelCleansUpThatPerson(
     QVERIFY(session.document() == ward);
 }
 
-void ReferenceCleanupTest::deletingATeamUnassignsItsTasksAndUndoAssignsThemAgain()
+void ReferenceCleanupTest::deletingATeamUnassignsItsOpenTasksAndUndoAssignsThemAgain()
 {
-    Document ward = TestWard::documentWithPlaces();
+    Document places = TestWard::documentWithPlaces();
+    ResponseTask fence = resolvedFence(TaskAssignment::toTeam(setupIn(places)));
+    Document ward = withTask(places, fence);
     TestSession session;
     session.open(ward);
 
@@ -301,6 +323,10 @@ void ReferenceCleanupTest::deletingATeamUnassignsItsTasksAndUndoAssignsThemAgain
     QVERIFY(!session.document().findTeamById(TestWard::setupTeamId()).has_value());
     QVERIFY(taskIn(session.document(), TestWard::basementTaskId()) == unassigned(taskIn(ward, TestWard::basementTaskId())));
     QVERIFY(taskIn(session.document(), TestWard::shinglesTaskId()) == taskIn(ward, TestWard::shinglesTaskId()));
+    ResponseTask fenceAfter = taskIn(session.document(), fence.id());
+    QVERIFY(fenceAfter == fence);
+    QVERIFY(fenceAfter.assignment()->teamId() == TestWard::setupTeamId());
+    QCOMPARE(fenceAfter.assignment()->assigneeName(), QString("Setup"));
     QVERIFY(referencesAreWhole(session.document()));
 
     CommitResult undone = session.undo();
@@ -343,19 +369,17 @@ void ReferenceCleanupTest::removalReplayedAfterThePersonJoinedAnotherTeamTakesTh
 void ReferenceCleanupTest::removalReplayedAfterThePersonWasAssignedATaskUnassignsIt()
 {
     Document ward = TestWard::documentWithPlaces();
-    ResponseTask gutter = TestWard::task("task-gutter", TestWard::jonesId(), TestWard::octoberFirst(11, 0), "Repairs",
+    ResponseTask gutter = TestWard::task("task-gutter", TestWard::jones(), TestWard::octoberFirst(11, 0), "Repairs",
                                          "Gutter hanging loose");
-    EmergencyResponse response = *ward.emergencyResponse();
-    response.insertTask(gutter);
-    ward = TestWard::withResponse(ward, response);
+    ward = withTask(ward, gutter);
     TestSession mine;
     TestSession theirs;
     mine.open(ward);
     theirs.open(ward);
 
     ResponseTask assigned = gutter;
-    assigned.setAssignment(TaskAssignment::toPerson(TestWard::aliceId()));
-    QVERIFY(theirs.commit(UpdateTaskCommand::fromEdit(gutter, assigned, theirs.document())).status == CommitStatus::Applied);
+    assigned.setAssignment(TaskAssignment::toPerson(TestWard::alice()));
+    QVERIFY(theirs.commit(UpdateTaskCommand::fromEdit(gutter, assigned)).status == CommitStatus::Applied);
     QVERIFY(taskIn(theirs.document(), gutter.id()) == assigned);
     QVERIFY(removeFromSmiths(mine, TestWard::aliceId()).status == CommitStatus::Applied);
 
@@ -372,6 +396,45 @@ void ReferenceCleanupTest::removalReplayedAfterThePersonWasAssignedATaskUnassign
     QCOMPARE(undone.skipped, QStringList());
     QVERIFY(taskIn(mine.document(), gutter.id()) == gutter);
     QVERIFY(taskIn(mine.document(), TestWard::shinglesTaskId()) == taskIn(ward, TestWard::shinglesTaskId()));
+}
+
+void ReferenceCleanupTest::removingAPersonUnassignsTheirOpenTaskAndLeavesTheirResolvedOneAssigned()
+{
+    // Alice holds the open Shingles task and the resolved Fence task, and phoned the Joneses
+    Document places = TestWard::documentWithPlaces();
+    ResponseTask fence = resolvedFence(TaskAssignment::toPerson(TestWard::alice()));
+    EmergencyResponse response = *withTask(places, fence).emergencyResponse();
+    response.insertContactAttempt(TestWard::attempt("attempt-alice", TestWard::jones(), TestWard::octoberFirst(9, 45),
+                                                    ContactMethod::Phone, TestWard::alice(), std::nullopt,
+                                                    "Left a message"));
+    Document ward = TestWard::withResponse(places, response);
+    TestSession session;
+    session.open(ward);
+
+    QVERIFY(removeFromSmiths(session, TestWard::aliceId()).status == CommitStatus::Applied);
+
+    const Document& removed = session.document();
+    QVERIFY(!removed.findPersonById(TestWard::aliceId()).has_value());
+    QVERIFY(taskIn(removed, TestWard::shinglesTaskId()) == unassigned(taskIn(ward, TestWard::shinglesTaskId())));
+    ResponseTask fenceAfter = taskIn(removed, fence.id());
+    QVERIFY(fenceAfter == fence);
+    QVERIFY(fenceAfter.assignment()->personId() == TestWard::aliceId());
+    QCOMPARE(fenceAfter.assignment()->assigneeName(), QString("Smith, Alice"));
+    QVERIFY(referencesAreWhole(removed));
+
+    // The report names her as the assignment and the attempt recorded her; the open task,
+    // unassigned, names no one
+    QString text = reportText(removed);
+    QVERIFY2(text.contains("Fence down along the drive"), qPrintable(text));
+    QCOMPARE(text.count("Assigned to: Smith, Alice"), qsizetype(1));
+    QVERIFY2(text.contains("Phone - Smith, Alice - Left a message"), qPrintable(text));
+    QVERIFY2(text.contains("Assigned to: Setup"), qPrintable(text));
+
+    CommitResult undone = session.undo();
+
+    QVERIFY(undone.status == CommitStatus::Applied);
+    QCOMPARE(undone.skipped, QStringList());
+    QVERIFY(session.document() == ward);
 }
 
 void ReferenceCleanupTest::undoingARemovalSkipsATeamDeletedSinceAndNamesIt()

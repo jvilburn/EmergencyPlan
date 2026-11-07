@@ -158,12 +158,12 @@ Document TestWard::documentWithPlaces()
     Team setup = setupTeam();
     setup.setLeaderId(bobId());
 
-    ResponseTask shingles = task(shinglesTaskId().toString(), jonesId(), octoberFirst(10, 0), "Repairs",
+    ResponseTask shingles = task(shinglesTaskId().toString(), jones(), octoberFirst(10, 0), "Repairs",
                                  "Shingles off the roof");
-    shingles.setAssignment(TaskAssignment::toPerson(aliceId()));
-    ResponseTask basement = task(basementTaskId().toString(), smithId(), octoberFirst(10, 30), "Flooding",
+    shingles.setAssignment(TaskAssignment::toPerson(alice()));
+    ResponseTask basement = task(basementTaskId().toString(), smith(), octoberFirst(10, 30), "Flooding",
                                  "Water in the basement");
-    basement.setAssignment(TaskAssignment::toTeam(setupTeamId()));
+    basement.setAssignment(TaskAssignment::toTeam(setup));
 
     Document document = withAsset(withTeam(TestWard::document(), setup), generator());
     document.setGroups(MinisteringOrg::EldersQuorum, {{eqGroupId(), eqGroup()}});
@@ -206,21 +206,21 @@ EmergencyResponse TestWard::flood()
     return EmergencyResponse::fromJson(json);
 }
 
-ContactAttempt TestWard::attempt(const QString& id, const FamilyId& familyId, const QDateTime& timestamp,
+ContactAttempt TestWard::attempt(const QString& id, const Family& family, const QDateTime& timestamp,
                                  std::optional<ContactMethod> method,
-                                 const std::optional<PersonId>& who, std::optional<ContactOutcome> outcome,
+                                 const std::optional<Person>& who, std::optional<ContactOutcome> outcome,
                                  const QString& notes)
 {
-    QJsonObject json = ContactAttempt::create(familyId, method, who, outcome, notes).toJson();
+    QJsonObject json = ContactAttempt::create(family, method, who, outcome, notes).toJson();
     json["id"] = id;
     json["timestamp"] = timestamp.toString(Qt::ISODateWithMs);
     return ContactAttempt::fromJson(json);
 }
 
-ResponseTask TestWard::task(const QString& id, const FamilyId& familyId, const QDateTime& createdAt,
+ResponseTask TestWard::task(const QString& id, const Family& family, const QDateTime& createdAt,
                             const QString& category, const QString& description)
 {
-    QJsonObject json = ResponseTask::create(familyId, category, description).toJson();
+    QJsonObject json = ResponseTask::create(family, category, description).toJson();
     json["id"] = id;
     json["createdAt"] = createdAt.toString(Qt::ISODateWithMs);
     return ResponseTask::fromJson(json);

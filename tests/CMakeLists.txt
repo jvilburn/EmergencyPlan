@@ -14,6 +14,8 @@ add_executable(WardPlanningTests
     services/FakeUnitLookup.cpp
     services/TestSession.h
     services/TestSession.cpp
+    services/PdfText.h
+    services/PdfText.cpp
     services/CommandSamples.h
     services/CommandSamples.cpp
     services/FamilyOrderTest.h

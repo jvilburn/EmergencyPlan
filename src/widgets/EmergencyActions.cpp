@@ -44,29 +44,44 @@ void offerToNotify(const ResponseTask& task, QWidget* parent)
 
 void EmergencyActions::markContact(const FamilyId& familyId, ContactOutcome outcome)
 {
-    ContactAttempt attempt = ContactAttempt::create(familyId, std::nullopt, std::nullopt, outcome, QString());
-    DocumentManager::instance()->executeCommand(AddContactAttemptCommand::fromNew(attempt, document()));
+    std::optional<Family> family = document().findFamilyById(familyId);
+    if (!family)
+    {
+        return;
+    }
+    ContactAttempt attempt = ContactAttempt::create(*family, std::nullopt, std::nullopt, outcome, QString());
+    DocumentManager::instance()->executeCommand(AddContactAttemptCommand::fromNew(attempt));
 }
 
 void EmergencyActions::logContact(const FamilyId& familyId, QWidget* parent)
 {
-    ContactAttemptDialog dialog(familyId, parent);
+    std::optional<Family> family = document().findFamilyById(familyId);
+    if (!family)
+    {
+        return;
+    }
+    ContactAttemptDialog dialog(*family, parent);
     if (dialog.exec() != QDialog::Accepted || !dialog.result())
     {
         return;
     }
-    DocumentManager::instance()->executeCommand(AddContactAttemptCommand::fromNew(*dialog.result(), document()));
+    DocumentManager::instance()->executeCommand(AddContactAttemptCommand::fromNew(*dialog.result()));
 }
 
 void EmergencyActions::addTask(const FamilyId& familyId, QWidget* parent)
 {
-    TaskDialog dialog(familyId, parent);
+    std::optional<Family> family = document().findFamilyById(familyId);
+    if (!family)
+    {
+        return;
+    }
+    TaskDialog dialog(*family, parent);
     if (dialog.exec() != QDialog::Accepted || !dialog.result())
     {
         return;
     }
     ResponseTask task = *dialog.result();
-    if (commitApplied(AddTaskCommand::fromNew(task, document())))
+    if (commitApplied(AddTaskCommand::fromNew(task)))
     {
         offerToNotify(task, parent);
     }
@@ -81,14 +96,13 @@ void EmergencyActions::editTask(const TaskId& taskId, QWidget* parent)
     }
     ResponseTask opened = *found;
 
-    TaskDialog dialog(opened.familyId(), parent);
-    dialog.setTask(opened);
+    TaskDialog dialog(opened, parent);
     if (dialog.exec() != QDialog::Accepted || !dialog.result())
     {
         return;
     }
     ResponseTask saved = *dialog.result();
-    if (commitApplied(UpdateTaskCommand::fromEdit(opened, saved, document())))
+    if (commitApplied(UpdateTaskCommand::fromEdit(opened, saved)))
     {
         offerToNotify(saved, parent);
     }
@@ -112,7 +126,7 @@ void EmergencyActions::notifyAssignee(const TaskId& taskId, QWidget* parent)
     notified.setNotification(*dialog.result());
     ResponseTask saved = opened;
     saved.setAssignment(notified);
-    DocumentManager::instance()->executeCommand(UpdateTaskCommand::fromEdit(opened, saved, document()));
+    DocumentManager::instance()->executeCommand(UpdateTaskCommand::fromEdit(opened, saved));
 }
 
 void EmergencyActions::resolveTask(const TaskId& taskId, QWidget* parent)
@@ -134,7 +148,7 @@ void EmergencyActions::resolveTask(const TaskId& taskId, QWidget* parent)
     }
     ResponseTask saved = opened;
     saved.setResolution(TaskResolution::create(notes.trimmed()));
-    DocumentManager::instance()->executeCommand(UpdateTaskCommand::fromEdit(opened, saved, document()));
+    DocumentManager::instance()->executeCommand(UpdateTaskCommand::fromEdit(opened, saved));
 }
 
 void EmergencyActions::deleteTask(const TaskId& taskId, QWidget* parent)
@@ -152,6 +166,6 @@ void EmergencyActions::deleteTask(const TaskId& taskId, QWidget* parent)
         QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
     if (answer == QMessageBox::Yes)
     {
-        DocumentManager::instance()->executeCommand(DeleteTaskCommand::fromSeen(seen, document()));
+        DocumentManager::instance()->executeCommand(DeleteTaskCommand::fromSeen(seen));
     }
 }

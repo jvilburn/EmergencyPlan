@@ -15,9 +15,10 @@ public:
 private slots:
     void deletingAFamilyRemovesItAndItsPeopleFromEveryPlaceAndUndoRestoresEach();
     void removingAMemberThroughTheEditPanelCleansUpThatPerson();
-    void deletingATeamUnassignsItsTasksAndUndoAssignsThemAgain();
+    void deletingATeamUnassignsItsOpenTasksAndUndoAssignsThemAgain();
     void removalReplayedAfterThePersonJoinedAnotherTeamTakesThemOffItToo();
     void removalReplayedAfterThePersonWasAssignedATaskUnassignsIt();
+    void removingAPersonUnassignsTheirOpenTaskAndLeavesTheirResolvedOneAssigned();
     void undoingARemovalSkipsATeamDeletedSinceAndNamesIt();
     void undoingARemovalLeavesALeaderSetSince();
     void undoingADirectoryImportRestoresTheRemovedPeoplesMemberships();

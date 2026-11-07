@@ -1,5 +1,4 @@
 #include "TaskListModel.h"
-#include "Document.h"
 #include "DocumentManager.h"
 #include "EmergencyCommands.h"
 #include "EmergencyManager.h"
@@ -12,27 +11,11 @@
 namespace
 {
 
-const Document& document()
-{
-    return DocumentManager::instance()->document();
-}
-
-/// Who the task is assigned to, "(removed)" when the ward no longer holds them, or empty
-/// when it is unassigned.
+/// Who the task is assigned to, as the assignment recorded them, or empty when it is
+/// unassigned.
 QString assigneeName(const ResponseTask& task)
 {
-    const std::optional<TaskAssignment>& assignment = task.assignment();
-    if (assignment && assignment->teamId())
-    {
-        std::optional<Team> team = document().findTeamById(*assignment->teamId());
-        return team ? team->name() : QObject::tr("(removed)");
-    }
-    if (assignment && assignment->personId())
-    {
-        std::optional<Person> person = document().findPersonById(*assignment->personId());
-        return person ? person->displayName() : QObject::tr("(removed)");
-    }
-    return QString();
+    return task.isAssigned() ? task.assignment()->assigneeName() : QString();
 }
 
 }  // namespace
@@ -166,7 +149,7 @@ bool TaskListModel::setData(const QModelIndex& index, const QVariant& value, int
     {
         saved.setResolution(std::nullopt);
     }
-    CommitResult result = DocumentManager::instance()->executeCommand(UpdateTaskCommand::fromEdit(opened, saved, document()));
+    CommitResult result = DocumentManager::instance()->executeCommand(UpdateTaskCommand::fromEdit(opened, saved));
     return result.status == CommitStatus::Applied;
 }
 
@@ -195,17 +178,6 @@ void TaskListModel::onDocumentChanged(const DocumentChange& change)
     if (change.action == ChangeAction::Full)
     {
         rebuild();
-        return;
-    }
-
-    // A family or team renamed renames the rows that show it
-    EmergencyManager* manager = EmergencyManager::instance();
-    if ((change.familyId || change.teamId) && manager->isActive())
-    {
-        for (const FamilyId& familyId : manager->response().familyIds())
-        {
-            replaceFamilyRows(familyId);
-        }
     }
 }
 
@@ -292,11 +264,9 @@ void TaskListModel::replaceFamilyRows(const FamilyId& familyId)
 
 TaskListModel::TaskEntry TaskListModel::entryFor(const ResponseTask& task)
 {
-    std::optional<Family> family = document().findFamilyById(task.familyId());
-
     TaskEntry entry;
     entry.familyId = task.familyId();
-    entry.familyName = family ? family->displayName() : tr("(removed)");
+    entry.familyName = task.familyName();
     entry.taskId = task.id();
     entry.category = task.category();
     entry.description = task.description();

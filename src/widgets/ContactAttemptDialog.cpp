@@ -12,9 +12,9 @@
 #include <QRadioButton>
 #include <QVBoxLayout>
 
-ContactAttemptDialog::ContactAttemptDialog(const FamilyId& familyId, QWidget* parent)
+ContactAttemptDialog::ContactAttemptDialog(const Family& family, QWidget* parent)
     : QDialog(parent)
-    , m_familyId(familyId)
+    , m_family(family)
 {
     setWindowTitle(tr("Log Contact Attempt"));
     setMinimumWidth(400);
@@ -56,7 +56,7 @@ ContactAttemptDialog::ContactAttemptDialog(const FamilyId& familyId, QWidget* pa
     layout->addWidget(whoLabel);
 
     m_whoCombo = new QComboBox(this);
-    PersonCombo::fill(m_whoCombo, DocumentManager::instance()->document(), m_familyId);
+    PersonCombo::fill(m_whoCombo, DocumentManager::instance()->document(), m_family.id());
     layout->addWidget(m_whoCombo);
 
     // Outcome: none, or the status the contact found
@@ -127,6 +127,9 @@ void ContactAttemptDialog::onAccepted()
         outcome = ContactOutcome::UnableToReach;
     }
 
-    m_result = ContactAttempt::create(m_familyId, method, PersonCombo::chosen(m_whoCombo), outcome, notes);
+    // Who as the ward holds them now
+    std::optional<PersonId> whoId = PersonCombo::chosen(m_whoCombo);
+    std::optional<Person> who = whoId ? DocumentManager::instance()->document().findPersonById(*whoId) : std::nullopt;
+    m_result = ContactAttempt::create(m_family, method, who, outcome, notes);
     accept();
 }

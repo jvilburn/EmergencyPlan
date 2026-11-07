@@ -11,6 +11,8 @@
 
 #include "Family.h"
 #include "Id.h"
+#include "Person.h"
+#include "Team.h"
 
 // === Enums ===
 
@@ -52,9 +54,9 @@ class ContactAttempt;
 
 /// The attempt's parts in the order every view shows them: time, method, who, outcome and
 /// notes, leaving out the ones it lacks. The outcome of an attempt with no method reads as
-/// its mark. timeText and whoName are the time and the person as the caller names them, and
-/// whoName is empty when the attempt names no one.
-QStringList contactAttemptParts(const ContactAttempt& attempt, const QString& timeText, const QString& whoName);
+/// its mark, and who is the name the attempt recorded. timeText is the time as the caller
+/// writes it.
+QStringList contactAttemptParts(const ContactAttempt& attempt, const QString& timeText);
 
 // === TaskNotification ===
 
@@ -86,23 +88,29 @@ private:
 // === ContactAttempt ===
 
 /// One try at reaching a family. The OK and Unable to Reach buttons give only an outcome;
-/// the contact dialog gives a method and who made the contact.
+/// the contact dialog gives a method and who made the contact. It names the family and the
+/// person by id and by name as they stood when it was made.
 class ContactAttempt
 {
 public:
     ContactAttempt() = default;
 
-    /// An attempt on that family made now, with a fresh id.
-    static ContactAttempt create(const FamilyId& familyId,
+    /// An attempt on family made now, with a fresh id, recording the family's and who's
+    /// names as they stand.
+    static ContactAttempt create(const Family& family,
                                  std::optional<ContactMethod> method,
-                                 const std::optional<PersonId>& who,
+                                 const std::optional<Person>& who,
                                  std::optional<ContactOutcome> outcome,
                                  const QString& notes);
 
     const ContactAttemptId& id() const { return m_id; }
     const FamilyId& familyId() const { return m_familyId; }
+    const QString& familyName() const { return m_familyName; }
     std::optional<ContactMethod> method() const { return m_method; }
     const std::optional<PersonId>& who() const { return m_who; }
+
+    /// Who's name as it stood when the attempt was made; empty when it names no one.
+    const QString& whoName() const { return m_whoName; }
     std::optional<ContactOutcome> outcome() const { return m_outcome; }
     const QDateTime& timestamp() const { return m_timestamp; }
     const QString& notes() const { return m_notes; }
@@ -116,8 +124,10 @@ public:
 private:
     ContactAttemptId m_id;
     FamilyId m_familyId;
+    QString m_familyName;
     std::optional<ContactMethod> m_method;
     std::optional<PersonId> m_who;
+    QString m_whoName;
     std::optional<ContactOutcome> m_outcome;
     QDateTime m_timestamp;
     QString m_notes;
@@ -125,7 +135,8 @@ private:
 
 // === TaskAssignment ===
 
-/// Who a task is given to - one team or one person - and whether they have been told. A new
+/// Who a task is given to - one team or one person - and whether they have been told. It
+/// names the assignee by id and by name as they stood when the task was given. A new
 /// assignment has no notification, so giving a task to someone else leaves it untold until
 /// it is notified again.
 class TaskAssignment
@@ -133,12 +144,13 @@ class TaskAssignment
 public:
     TaskAssignment() = default;
 
-    static TaskAssignment toTeam(const TeamId& teamId);
-    static TaskAssignment toPerson(const PersonId& personId);
+    static TaskAssignment toTeam(const Team& team);
+    static TaskAssignment toPerson(const Person& person);
 
     /// Exactly one of teamId and personId is set.
     const std::optional<TeamId>& teamId() const { return m_teamId; }
     const std::optional<PersonId>& personId() const { return m_personId; }
+    const QString& assigneeName() const { return m_assigneeName; }
     const std::optional<TaskNotification>& notification() const { return m_notification; }
 
     void setNotification(const TaskNotification& notification) { m_notification = notification; }
@@ -152,6 +164,7 @@ public:
 private:
     std::optional<TeamId> m_teamId;
     std::optional<PersonId> m_personId;
+    QString m_assigneeName;
     std::optional<TaskNotification> m_notification;
 };
 
@@ -183,17 +196,20 @@ private:
 // === ResponseTask ===
 
 /// Something a family needs done. It is resolved while it holds a resolution, and assigned
-/// while it holds an assignment.
+/// while it holds an assignment. It names its family by id and by name as it stood when the
+/// task was created.
 class ResponseTask
 {
 public:
     ResponseTask() = default;
 
-    /// A task for that family created now, with a fresh id, unassigned and unresolved.
-    static ResponseTask create(const FamilyId& familyId, const QString& category, const QString& description);
+    /// A task for family created now, with a fresh id, unassigned and unresolved, recording
+    /// the family's name as it stands.
+    static ResponseTask create(const Family& family, const QString& category, const QString& description);
 
     const TaskId& id() const { return m_id; }
     const FamilyId& familyId() const { return m_familyId; }
+    const QString& familyName() const { return m_familyName; }
     const QString& category() const { return m_category; }
     const QString& description() const { return m_description; }
     const QDateTime& createdAt() const { return m_createdAt; }
@@ -218,6 +234,7 @@ public:
 private:
     TaskId m_id;
     FamilyId m_familyId;
+    QString m_familyName;
     QString m_category;
     QString m_description;
     QDateTime m_createdAt;

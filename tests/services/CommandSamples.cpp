@@ -227,13 +227,13 @@ Document withResponse(const EmergencyResponse& response)
 /// Bob phoned the Smiths and found them well.
 ContactAttempt phonedSmiths()
 {
-    return TestWard::attempt("attempt-phoned", TestWard::smithId(), TestWard::octoberFirst(10, 0), ContactMethod::Phone,
-                             TestWard::bobId(), ContactOutcome::OK, "All well");
+    return TestWard::attempt("attempt-phoned", TestWard::smith(), TestWard::octoberFirst(10, 0), ContactMethod::Phone,
+                             TestWard::bob(), ContactOutcome::OK, "All well");
 }
 
 ResponseTask floodedBasement()
 {
-    return TestWard::task("task-basement", TestWard::smithId(), TestWard::octoberFirst(10, 30), "Flooding",
+    return TestWard::task("task-basement", TestWard::smith(), TestWard::octoberFirst(10, 30), "Flooding",
                           "Water in the basement");
 }
 
@@ -283,7 +283,7 @@ QList<CommandSample> restoreEmergencySamples()
 
 QList<CommandSample> addContactAttemptSamples()
 {
-    CommandPtr add = AddContactAttemptCommand::fromNew(phonedSmiths(), TestWard::document());
+    CommandPtr add = AddContactAttemptCommand::fromNew(phonedSmiths());
 
     QList<CommandSample> samples;
     samples.append(CommandSample{SampleCase::StartHolds, withResponse(TestWard::storm()), add});
@@ -296,7 +296,7 @@ QList<CommandSample> addContactAttemptSamples()
 
 QList<CommandSample> deleteContactAttemptSamples()
 {
-    CommandPtr remove = AddContactAttemptCommand::fromNew(phonedSmiths(), TestWard::document())->inverse();
+    CommandPtr remove = AddContactAttemptCommand::fromNew(phonedSmiths())->inverse();
 
     QList<CommandSample> samples;
     samples.append(CommandSample{SampleCase::StartHolds,
@@ -307,14 +307,18 @@ QList<CommandSample> deleteContactAttemptSamples()
     return samples;
 }
 
-/// The conflicts are the Setup team missing, since a task's assignee must exist, and no
-/// emergency in progress.
+/// The conflicts are the Setup team missing, since an open task's assignee must exist, and
+/// no emergency in progress. A resolved task's assignee is part of the log, so adding one
+/// assigned to the missing Setup team applies.
 QList<CommandSample> addTaskSamples()
 {
     ResponseTask task = floodedBasement();
-    task.setAssignment(TaskAssignment::toTeam(TestWard::setupTeamId()));
+    task.setAssignment(TaskAssignment::toTeam(TestWard::setupTeam()));
     Document withTeam = TestWard::withTeam(TestWard::document(), TestWard::setupTeam());
-    CommandPtr add = AddTaskCommand::fromNew(task, withTeam);
+    CommandPtr add = AddTaskCommand::fromNew(task);
+    ResponseTask resolved = task;
+    resolved.setResolution(TestWard::resolution("Pumped out", TestWard::octoberFirst(12, 0)));
+    CommandPtr addResolved = AddTaskCommand::fromNew(resolved);
 
     QList<CommandSample> samples;
     samples.append(CommandSample{SampleCase::StartHolds, TestWard::withResponse(withTeam, TestWard::storm()), add});
@@ -323,6 +327,7 @@ QList<CommandSample> addTaskSamples()
                                  add});
     samples.append(CommandSample{SampleCase::Conflicts, withResponse(TestWard::storm()), add});
     samples.append(CommandSample{SampleCase::Conflicts, withTeam, add});
+    samples.append(CommandSample{SampleCase::StartHolds, withResponse(TestWard::storm()), addResolved});
     return samples;
 }
 
@@ -332,11 +337,11 @@ QList<CommandSample> updateTaskSamples()
     ResponseTask saved = opened;
     saved.setCategory("Shelter");
     saved.setDescription("Water in the basement and the garage");
-    saved.setAssignment(TaskAssignment::toPerson(TestWard::carolId()));
+    saved.setAssignment(TaskAssignment::toPerson(TestWard::carol()));
     saved.setResolution(TestWard::resolution("Pumped out", TestWard::octoberFirst(12, 0)));
     ResponseTask moved = opened;
     moved.setDescription("Water in the garage");
-    CommandPtr edit = UpdateTaskCommand::fromEdit(opened, saved, TestWard::document());
+    CommandPtr edit = UpdateTaskCommand::fromEdit(opened, saved);
 
     QList<CommandSample> samples;
     samples.append(CommandSample{SampleCase::StartHolds, withResponse(TestWard::stormWith({}, {opened})), edit});
@@ -350,7 +355,7 @@ QList<CommandSample> deleteTaskSamples()
     ResponseTask seen = floodedBasement();
     ResponseTask resolved = seen;
     resolved.setResolution(TestWard::resolution("Pumped out", TestWard::octoberFirst(12, 0)));
-    CommandPtr remove = DeleteTaskCommand::fromSeen(seen, TestWard::document());
+    CommandPtr remove = DeleteTaskCommand::fromSeen(seen);
 
     QList<CommandSample> samples;
     samples.append(CommandSample{SampleCase::StartHolds, withResponse(TestWard::stormWith({}, {seen})), remove});

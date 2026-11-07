@@ -664,12 +664,13 @@ void TeamsView::assignTaskToTeam(const TaskId& taskId)
     std::sort(choices.begin(), choices.end(), &byName);
 
     std::optional<QString> teamId = ChoiceDialog::choose(this, tr("Assign Task"), tr("Select team:"), choices);
-    if (!teamId)
+    std::optional<Team> team = teamId ? DocumentManager::instance()->document().findTeamById(TeamId::fromString(*teamId))
+                                      : std::nullopt;
+    if (!team)
     {
         return;
     }
     ResponseTask saved = opened;
-    saved.setAssignment(TaskAssignment::toTeam(TeamId::fromString(*teamId)));
-    DocumentManager::instance()->executeCommand(
-        UpdateTaskCommand::fromEdit(opened, saved, DocumentManager::instance()->document()));
+    saved.setAssignment(TaskAssignment::toTeam(*team));
+    DocumentManager::instance()->executeCommand(UpdateTaskCommand::fromEdit(opened, saved));
 }

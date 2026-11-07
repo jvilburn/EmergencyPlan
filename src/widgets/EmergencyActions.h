@@ -6,9 +6,10 @@ class QWidget;
 
 /// The user's actions on the emergency in progress, each a whole flow: its dialogs, then the
 /// command it builds and commits through DocumentManager. Every view that offers an action
-/// calls the one here, so it behaves the same wherever it starts. An action on a task takes
-/// the task as the document holds it when the action starts, before any dialog, and does
-/// nothing when no emergency is in progress or the task is gone.
+/// calls the one here, so it behaves the same wherever it starts. An action on a family or a
+/// task takes it as the document holds it when the action starts, before any dialog, and
+/// does nothing when the family is gone, or when no emergency is in progress or the task is
+/// gone.
 namespace EmergencyActions
 {
 

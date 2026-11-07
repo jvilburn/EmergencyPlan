@@ -175,7 +175,7 @@ ReferenceCleanup ReferenceCleanup::of(const Document& document, const QSet<Perso
     {
         for (const ResponseTask& task : document.emergencyResponse()->tasks())
         {
-            if (cleanup.namesRemoved(task.assignment()))
+            if (cleanup.unassigns(task))
             {
                 cleanup.m_heldTasks.insert(task.id(), task);
             }
@@ -192,7 +192,7 @@ ReferenceCleanup ReferenceCleanup::ofTeam(const Document& document, const TeamId
     {
         for (const ResponseTask& task : document.emergencyResponse()->tasks())
         {
-            if (cleanup.namesRemoved(task.assignment()))
+            if (cleanup.unassigns(task))
             {
                 cleanup.m_heldTasks.insert(task.id(), task);
             }
@@ -266,7 +266,7 @@ void ReferenceCleanup::apply(Document& document) const
         bool changed = false;
         for (const ResponseTask& task : document.emergencyResponse()->tasks())
         {
-            if (namesRemoved(task.assignment()))
+            if (unassigns(task))
             {
                 ResponseTask unassigned = task;
                 unassigned.setAssignment(std::nullopt);
@@ -420,9 +420,10 @@ bool ReferenceCleanup::namesRemoved(const std::optional<PersonId>& id) const
         && m_people.contains(*id);
 }
 
-bool ReferenceCleanup::namesRemoved(const std::optional<TaskAssignment>& assignment) const
+bool ReferenceCleanup::unassigns(const ResponseTask& task) const
 {
-    if (!assignment.has_value())
+    const std::optional<TaskAssignment>& assignment = task.assignment();
+    if (task.isResolved() || !assignment.has_value())
     {
         return false;
     }

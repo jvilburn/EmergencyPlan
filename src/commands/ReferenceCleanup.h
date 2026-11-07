@@ -19,9 +19,11 @@ class Document;
 ///
 /// It removes people and families, or a team. The places that refer to a person are team
 /// memberships and leaders, assets, ministering groups (ministers, the people ministered to
-/// and the presidency member) and districts (the presidency member), and task assignments;
-/// to a family, ministering groups' families; to a team, task assignments. The places are
-/// held as the team, asset, group, district or task stood when the cleanup was built.
+/// and the presidency member) and districts (the presidency member), and open tasks'
+/// assignments; to a family, ministering groups' families; to a team, open tasks'
+/// assignments. A resolved task keeps its assignee, as part of the emergency's log. The
+/// places are held as the team, asset, group, district or task stood when the cleanup was
+/// built.
 class ReferenceCleanup
 {
 public:
@@ -29,13 +31,13 @@ public:
     /// refers to one of them.
     static ReferenceCleanup of(const Document& document, const QSet<PersonId>& people, const QSet<FamilyId>& families);
 
-    /// The cleanup that removes team, holding each task in document assigned to it.
+    /// The cleanup that removes team, holding each open task in document assigned to it.
     static ReferenceCleanup ofTeam(const Document& document, const TeamId& team);
 
     /// Takes the removed ids out of every place in document that holds them now, whatever
     /// the places it holds: each removed person leaves every team, asset and group, and every
     /// leader and presidency role they fill is cleared; each removed family leaves every
-    /// group; every task assigned to a removed person or team is unassigned.
+    /// group; every open task assigned to a removed person or team is unassigned.
     void apply(Document& document) const;
 
     /// Puts the removed ids back into each held place that still stands as apply left it:
@@ -64,7 +66,9 @@ private:
     QStringList restoreInto(Document& document) const;
 
     bool namesRemoved(const std::optional<PersonId>& id) const;
-    bool namesRemoved(const std::optional<TaskAssignment>& assignment) const;
+
+    /// True when task is open and assigned to a removed person or team.
+    bool unassigns(const ResponseTask& task) const;
 
     QSet<PersonId> m_people;
     QSet<FamilyId> m_families;

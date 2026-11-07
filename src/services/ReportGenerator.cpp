@@ -111,49 +111,34 @@ QString joined(const QStringList& parts)
     return present.join(" - ");
 }
 
-QString removed()
+/// The family's name as the newest of response's attempts and tasks for it recorded it, or
+/// its display name as document holds it when response has none for it.
+QString familyNameIn(const FamilyId& id, const EmergencyResponse& response, const Document& document)
 {
-    return QObject::tr("(removed)");
-}
-
-/// The person's display name as document holds them, "(removed)" when document lacks them,
-/// or empty when there is no id.
-QString personNameIn(const std::optional<PersonId>& id, const Document& document)
-{
-    if (!id.has_value())
+    // Both lists are newest first
+    QList<ContactAttempt> attempts = response.contactAttemptsFor(id);
+    QList<ResponseTask> tasks = response.tasksFor(id);
+    if (!attempts.isEmpty() && (tasks.isEmpty() || attempts.first().timestamp() >= tasks.first().createdAt()))
     {
-        return QString();
+        return attempts.first().familyName();
     }
-    std::optional<Person> person = document.findPersonById(*id);
-    return person.has_value() ? person->displayName() : removed();
-}
-
-/// The family's display name as document holds it, or "(removed)" when document lacks it.
-QString familyNameIn(const FamilyId& id, const Document& document)
-{
+    if (!tasks.isEmpty())
+    {
+        return tasks.first().familyName();
+    }
     std::optional<Family> family = document.findFamilyById(id);
-    return family.has_value() ? family->displayName() : removed();
+    return family.has_value() ? family->displayName() : QString();
 }
 
 /// One attempt: its time, method, who, outcome and notes, whichever it has.
-QString attemptLine(const ContactAttempt& attempt, const Document& document)
+QString attemptLine(const ContactAttempt& attempt)
 {
-    return contactAttemptParts(attempt, timeText(attempt.timestamp()), personNameIn(attempt.who(), document)).join(" - ");
+    return contactAttemptParts(attempt, timeText(attempt.timestamp())).join(" - ");
 }
 
-QString assigneeLine(const TaskAssignment& assignment, const Document& document)
+QString assigneeLine(const TaskAssignment& assignment)
 {
-    QString assignee;
-    if (assignment.teamId().has_value())
-    {
-        std::optional<Team> team = document.findTeamById(*assignment.teamId());
-        assignee = team.has_value() ? team->name() : removed();
-    }
-    else
-    {
-        assignee = personNameIn(assignment.personId(), document);
-    }
-    return QObject::tr("Assigned to: %1").arg(assignee);
+    return QObject::tr("Assigned to: %1").arg(assignment.assigneeName());
 }
 
 QString notificationLine(const TaskNotification& notification)
@@ -173,13 +158,13 @@ QString resolutionLine(const std::optional<TaskResolution>& resolution)
 }
 
 /// The task's line, then its assignment, notification and resolution as a list under it.
-QString taskItem(const ResponseTask& task, const Document& document)
+QString taskItem(const ResponseTask& task)
 {
     QStringList details;
     const std::optional<TaskAssignment>& assignment = task.assignment();
     if (assignment.has_value())
     {
-        details.append(assigneeLine(*assignment, document));
+        details.append(assigneeLine(*assignment));
         if (assignment->notification().has_value())
         {
             details.append(notificationLine(*assignment->notification()));
@@ -192,11 +177,11 @@ QString taskItem(const ResponseTask& task, const Document& document)
     return html + "</li>";
 }
 
-/// The family's name and address as document holds them, then its attempts and its tasks
-/// in response, each oldest first.
+/// The family's name as familyNameIn gives it, and its address as document holds it, then
+/// its attempts and its tasks in response, each oldest first.
 void addFamily(QString& html, const EmergencyResponse& response, const FamilyId& familyId, const Document& document)
 {
-    addHeading(html, familyNameIn(familyId, document), 3);
+    addHeading(html, familyNameIn(familyId, response, document), 3);
     std::optional<Family> family = document.findFamilyById(familyId);
     if (family.has_value())
     {
@@ -209,7 +194,7 @@ void addFamily(QString& html, const EmergencyResponse& response, const FamilyId&
         QStringList lines;
         for (auto it = attempts.crbegin(); it != attempts.crend(); ++it)
         {
-            lines.append(attemptLine(*it, document));
+            lines.append(attemptLine(*it));
         }
         addBoldParagraph(html, QObject::tr("Contact attempts"));
         addList(html, lines);
@@ -222,7 +207,7 @@ void addFamily(QString& html, const EmergencyResponse& response, const FamilyId&
         html += "<ul>";
         for (auto it = tasks.crbegin(); it != tasks.crend(); ++it)
         {
-            html += taskItem(*it, document);
+            html += taskItem(*it);
         }
         html += "</ul>";
     }
@@ -341,11 +326,11 @@ QString reportHtml(const EmergencyResponse& response, const Document& document, 
         EffectiveContactStatus status = statuses.value(familyId, EffectiveContactStatus::NotContacted);
         if (status == EffectiveContactStatus::NeedsHelp)
         {
-            needsHelpFamilies.append(familyNameIn(familyId, document));
+            needsHelpFamilies.append(familyNameIn(familyId, response, document));
         }
         else if (status == EffectiveContactStatus::NotContacted)
         {
-            notContactedFamilies.append(familyNameIn(familyId, document));
+            notContactedFamilies.append(familyNameIn(familyId, response, document));
         }
     }
     needsHelpFamilies.sort();
@@ -369,7 +354,7 @@ QString reportHtml(const EmergencyResponse& response, const Document& document, 
     // === 7. By Family ===
     QList<FamilyId> logged = response.familyIds().values();
     std::sort(logged.begin(), logged.end(),
-              [&document](const FamilyId& a, const FamilyId& b) { return familyNameIn(a, document) < familyNameIn(b, document); });
+              [&response, &document](const FamilyId& a, const FamilyId& b) { return familyNameIn(a, response, document) < familyNameIn(b, response, document); });
     if (!logged.isEmpty())
     {
         addHeading(html, QObject::tr("By Family"), 2);
