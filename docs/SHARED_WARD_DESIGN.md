@@ -868,21 +868,23 @@ added and the ids removed: an addition is
 done if the id is present, a removal if it is absent, so two users adding different
 members to one team both apply.
 
-**References stay whole.** Teams, assets, ministering groups and districts, and task
-assignments refer to people, families and teams by id, and replay keeps every such id
-pointing at something that exists:
+**References stay whole.** Teams, assets, ministering groups and districts, and open
+tasks' assignments refer to people, families and teams by id, and replay keeps every such
+id pointing at something that exists:
 
 - **Any value a command writes that names a person, family or team includes in its start
   condition that the id exists**, whether a set addition, a leader or an assignee. Adding
   Bob to a team, or assigning him a task, replayed after Bob was removed, conflicts. A
-  response's contact attempts and the family a task is for are the exception: they are its
-  log, keep the ids they were made with, and take no such condition (see below).
+  response's contact attempts, the family a task is for, and a resolved task's assignee are
+  the exception: they are its log, keep the ids and names they were made with, and take no
+  such condition (see below).
 - **A removal takes what it removes out of every place that holds it when it runs.**
   Removing a member, deleting a family, and an import's removals all use one cleanup
   routine. It takes each removed person out of every team, asset and ministering group
   that holds them, clears any leader or presidency role they hold, and unassigns every
-  task assigned to them; a removed family it also takes out of every ministering group
-  that holds it. Deleting a team unassigns every task assigned to that team the same way.
+  open task assigned to them, since that work still needs someone; a removed family it
+  also takes out of every ministering group that holds it. Deleting a team unassigns every
+  open task assigned to that team the same way. A resolved task keeps its assignee.
   The cleanup works from the removed ids against the version in front of it, so it ends
   the same whatever has landed in between, and it leaves no reference behind.
 - **Undoing a removal restores the places the user saw.** The command also holds the
@@ -904,9 +906,13 @@ A removal replayed after someone added the person to another team or assigned th
 task takes them out of that place too, and its undo does not put them back there, since
 the remover never saw it.
 
-A response's contact attempts and tasks are the log of what happened during it, and keep
-the ids they were made with. The report names families, people and teams from the
-directory when it is written, and one the document no longer holds reads *(removed)*. The
+A response's contact attempts and tasks are the log of what happened during it. Each
+names what it involves by id and by name as it stood when the entry was written: an
+attempt its family and the person reached, a task its family, and an assignment its
+assignee, person or team. The views and the report show those names, so the log reads as
+it happened, and a family, person or team removed later is still named. A rename during
+the emergency shows only in entries written after it. The ids are for the live views:
+notify reads the assignee's contact details, and the map's status is per family. The
 log leaves the document when the emergency ends, as its summary report (see *The record of
 an emergency*).
 
@@ -1889,7 +1895,7 @@ The journal and replay, in `tests/services`:
 - an end whose report cannot be written leaves the response in progress and adds nothing
   to the journal
 - an attempt on a family replays onto a version where an import removed that family, lands,
-  and the report names that family *(removed)*
+  and the report names that family as the attempt recorded it
 - an import replayed onto a version where someone else added a family applies, and that
   family is still there afterwards, asserted by its id; an import replayed onto a version
   where someone else edited a family the import changes is a conflict
@@ -1906,8 +1912,11 @@ The journal and replay, in `tests/services`:
   ministering and task assignments, removes the
   family and its people from every one of them, and undoing the delete restores each;
   removing one member through the edit panel does the same for that person
-- deleting a team unassigns the tasks assigned to it, and undoing the delete assigns them
-  again
+- deleting a team unassigns the open tasks assigned to it, and undoing the delete assigns
+  them again
+- removing a person who holds an open task and a resolved one unassigns the open task and
+  leaves the resolved one assigned to them; the task list and the report name them as the
+  assignment recorded them, and an attempt they made names them the same way
 - an offline addition of a person to a team, and an offline task assignment to a person,
   each replayed after that person was removed, conflict; an offline removal of a person,
   replayed after someone added them to another team, takes them off that team too, and one
