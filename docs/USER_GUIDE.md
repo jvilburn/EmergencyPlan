@@ -185,7 +185,7 @@ If someone else ended the emergency while you were choosing, the app says so and
 
 ### Reports
 
-**Emergency > Generate Report** creates a PDF summary of the emergency in progress, without ending it: contact status breakdown, task assignments, resolution statistics, and each family's contact attempts and tasks. Its header shows the time the emergency started and the time the report was written. Families, people and teams are named as they stood when each attempt, task or assignment was recorded.
+**Emergency > Generate Report** creates a PDF summary of the emergency in progress, without ending it: contact status breakdown, task assignments, resolution statistics, and each family's contact attempts and tasks. Its header shows the time the emergency started and the time the report was written. People and teams are named as they stood when each attempt or assignment was recorded. A family is named as it is in the ward, or, once it has left the ward, as its attempts and tasks recorded it.
 
 ---
 

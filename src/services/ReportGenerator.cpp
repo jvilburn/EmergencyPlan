@@ -111,23 +111,22 @@ QString joined(const QStringList& parts)
     return present.join(" - ");
 }
 
-/// The family's name as the newest of response's attempts and tasks for it recorded it, or
-/// its display name as document holds it when response has none for it.
+/// The family's display name as document holds it, or, for a family document no longer
+/// holds, the name an attempt or task in response recorded for it. The report names only
+/// directory families and families an attempt or task names.
 QString familyNameIn(const FamilyId& id, const EmergencyResponse& response, const Document& document)
 {
-    // Both lists are newest first
+    std::optional<Family> family = document.findFamilyById(id);
+    if (family.has_value())
+    {
+        return family->displayName();
+    }
     QList<ContactAttempt> attempts = response.contactAttemptsFor(id);
-    QList<ResponseTask> tasks = response.tasksFor(id);
-    if (!attempts.isEmpty() && (tasks.isEmpty() || attempts.first().timestamp() >= tasks.first().createdAt()))
+    if (!attempts.isEmpty())
     {
         return attempts.first().familyName();
     }
-    if (!tasks.isEmpty())
-    {
-        return tasks.first().familyName();
-    }
-    std::optional<Family> family = document.findFamilyById(id);
-    return family.has_value() ? family->displayName() : QString();
+    return response.tasksFor(id).first().familyName();
 }
 
 /// One attempt: its time, method, who, outcome and notes, whichever it has.

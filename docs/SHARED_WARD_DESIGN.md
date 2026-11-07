@@ -911,7 +911,8 @@ A response's contact attempts and tasks are the log of what happened during it. 
 names what it involves by id and by name as it stood when the entry was written: an
 attempt its family and the person reached, a task its family, and an assignment its
 assignee, person or team. The views and the report show those names, so the log reads as
-it happened, and a family, person or team removed later is still named. A rename during
+it happened, and a family, person or team removed later is still named; the report heads
+each family still in the ward by its name there, over its address. A rename during
 the emergency shows only in entries written after it. The ids are for the live views:
 notify reads the assignee's contact details, and the map's status is per family. The
 log leaves the document when the emergency ends, as its summary report (see *The record of

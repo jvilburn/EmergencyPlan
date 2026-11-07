@@ -13,9 +13,9 @@ class ReportGenerator
 public:
     /// Writes the summary report of response, which is what remains of the emergency once it
     /// ends: its statistics, counting every directory family, and each family's attempts
-    /// and tasks, oldest first. Families, people and teams are named as the attempts, tasks
-    /// and assignments recorded them, a family as its newest attempt or task did; a family
-    /// with none is named as document holds it. Returns false when the file cannot be
+    /// and tasks, oldest first. People and teams are named as the attempts and assignments
+    /// recorded them; a family is named as document holds it, or as its attempts or tasks
+    /// recorded it once document no longer holds it. Returns false when the file cannot be
     /// written.
     /// @param writtenAt When the report is written; the header's date range ends here
     static bool generateReport(const EmergencyResponse& response,
