@@ -662,16 +662,15 @@ header they are not in.
 
 A WebSocket at `/documents/{id}/channel` that the client opens when it opens a ward and
 holds while the ward is open. The upgrade request carries `Ward-Signer` and
-`Ward-Signature`, signed over the `channel` line. The server sends JSON text messages, each
-fingerprint in base64url:
-
-- `{"present":[...],"version":n}` when the channel opens: the fingerprints already there,
-  and the current version;
-- `{"arrived":fp}` and `{"departed":fp}` as others come and go;
-- `{"version":n}` for each version it stores.
+`Ward-Signature`, signed over the `channel` line. The server sends one kind of message, a
+JSON text message `{"present":[...],"version":n}`: every fingerprint with a channel open to
+the ward, the receiver's own among them, in base64url, and the current version. It sends it
+to a channel when the channel opens, and to every channel when who is here changes and when
+it stores a version. Each message is the whole state, so a client takes the list as who is
+here and looks when the version is above its base.
 
 - **Opening it answers with the current version.** The ward's object adds the socket and
-  sends `present` in one step, so a version that landed while the client was away is
+  sends it the message in one step, so a version that landed while the client was away is
   fetched as for a notice, and every later version reaches it as a notice.
 - **The client keeps it alive with a WebSocket ping frame every 30 seconds**, and treats a
   pong that does not arrive within 30 seconds as a closed channel. The platform answers
@@ -691,9 +690,8 @@ fingerprint in base64url:
 
 ## Who is here
 
-A client opens the live channel when it opens a ward. The server tells it which
-fingerprints are already there, and tells everyone already there about the newcomer. A
-closed channel says they left.
+A client opens the live channel when it opens a ward, and the server's messages on it list
+everyone there (see *The live channel*). A closed channel says they left.
 
 Each client turns fingerprints into names through its own access list, so the display reads
 "Alice Smith is also here" above the ward. A fingerprint the access list does not know shows as
@@ -860,7 +858,8 @@ changed by two users*): a member, a
 family (by a delete or an import), a team, an asset, a task and a contact attempt
 are each held as last seen, which is the removal's start condition, so a change to the
 thing since makes the removal conflict, it being gone already means the result holds, and
-the undo re-adds exactly what was removed. Members are matched by `PersonId`, and their order is not part of
+the undo re-adds exactly what was removed, with the places that held it restored as
+*References stay whole* says. Members are matched by `PersonId`, and their order is not part of
 any start condition.
 
 Every update command takes this shape, not only the family's. Single values - a name, a
@@ -878,15 +877,22 @@ pointing at something that exists:
   Bob to a team, or assigning him a task, replayed after Bob was removed, conflicts. A
   response's contact attempts and the family a task is for are the exception: they are its
   log, keep the ids they were made with, and take no such condition (see below).
-- **A removal carries its cleanup and where it saw the removed thing.** Removing a member,
-  deleting a family, and an import's removals all use one cleanup routine. It takes each
-  removed person out of every team, asset and ministering group that
-  holds them, clears any leader or presidency role they held, and unassigns every task
-  assigned to them; a removed family it also takes out of every ministering group that
-  holds it. Deleting a team unassigns every task assigned to that
-  team the same way. The command holds that list of places as the user saw it, and its
-  start condition includes it: if what it removes has been added or assigned somewhere
-  since, the removal conflicts rather than leave that reference behind.
+- **A removal takes what it removes out of every place that holds it when it runs.**
+  Removing a member, deleting a family, and an import's removals all use one cleanup
+  routine. It takes each removed person out of every team, asset and ministering group
+  that holds them, clears any leader or presidency role they hold, and unassigns every
+  task assigned to them; a removed family it also takes out of every ministering group
+  that holds it. Deleting a team unassigns every task assigned to that team the same way.
+  The cleanup works from the removed ids against the version in front of it, so it ends
+  the same whatever has landed in between, and it leaves no reference behind.
+- **Undoing a removal restores the places the user saw.** The command also holds the
+  places the cleanup found when the user made it, for its undo only. The undo puts the
+  removed thing back, then restores each of those places that still stands as the
+  removal left it: the team, asset, group or district is still there, the leader or
+  presidency role is still empty, the task is still there and unassigned. It skips the
+  rest, and the message names each place it skipped so the user can redo those by hand.
+  An undo replayed from the journal skips the same way, and a place skipped only on
+  replay goes unnamed, as a replay that applies shows no message.
 - **A leader is a member.** A team edit conflicts when the team it would leave has a leader
   who is not one of its members. So a leader change to someone off the team conflicts, and
   so does a removal replayed after someone made that person leader, which is handed back as
@@ -894,9 +900,9 @@ pointing at something that exists:
   also clears the leader, holding the leader's before value, worked out at construction, so
   that edit applies.
 
-A removal therefore conflicts with a concurrent membership change or task assignment for
-the same person, which is two users disagreeing about that person and is handed back as
-such.
+A removal replayed after someone added the person to another team or assigned them a
+task takes them out of that place too, and its undo does not put them back there, since
+the remover never saw it.
 
 A response's contact attempts and tasks are the log of what happened during it, and keep
 the ids they were made with. The report names families, people and teams from the
@@ -930,8 +936,7 @@ a fault, retried, and never overwrites the file.
 that is not a command cannot replay. That covers the directory's edits and imports,
 ministering, the emergency response and the access list. In particular:
 
-- **Deleting a family** is a command, carrying the same cleanup as an import's removal,
-  worked out at construction.
+- **Deleting a family** is a command, carrying the same cleanup as an import's removal.
 - **A ward holds at most one emergency in progress.** Starting one while one is in progress
   does nothing. Ending saves the summary report and then removes it (see *The record of an
   emergency*).
@@ -1220,7 +1225,7 @@ and which no PDF carries.
 Both imports work all of this out at construction. An import then conflicts only with an edit to something it also changes. A
 family someone else added in the meantime is not among the ones it removes, so it survives.
 The inverse is the same changes swapped, so undoing an import restores the memberships its
-cleanup removed.
+cleanup removed that still stand, as for any removal (see *References stay whole*).
 
 Its journal entry is the largest the journal holds, which is why **what the user reads is
 one line, not the entry.** The command carries the name of the file it read, so that line
@@ -1512,7 +1517,9 @@ closed, opened or switched, and its redo side by any new command. It holds at mo
 entries, with the oldest dropped.
 
 - **An undo whose inverse conflicts or is refused** changes nothing, so the original stays
-  on the undo stack and the user is told why, as with any command that fails.
+  on the undo stack and the user is told why, as with any command that fails. The undo of
+  a removal is the one that can apply in part: it restores the removed thing and skips
+  the places that no longer stand, naming them (see *References stay whole*).
 - **A command that conflicts or is refused on its first run** never enters the undo stack.
 - **Access-list commands are not undoable**: each derives from `Command` and not
   `UndoableCommand`, so it has no inverse and never enters the undo stack. Undoing a
@@ -1902,9 +1909,13 @@ The journal and replay, in `tests/services`:
 - deleting a team unassigns the tasks assigned to it, and undoing the delete assigns them
   again
 - an offline addition of a person to a team, and an offline task assignment to a person,
-  each replayed after that person was removed, conflict; an offline removal of a person, replayed after someone added them to another
-  team, conflicts, and so does one replayed after someone assigned them a task; in each, no
-  team or task is left holding a missing id
+  each replayed after that person was removed, conflict; an offline removal of a person,
+  replayed after someone added them to another team, takes them off that team too, and one
+  replayed after someone assigned them a task unassigns it; in each, no team or task is
+  left holding a missing id
+- deleting a family whose people are on two teams, then deleting one of those teams and
+  undoing the family's delete, restores the family and its people's place on the other
+  team, and the undo's message names the deleted team as skipped
 - a local save that removed someone still accepts the pre-removal version from the
   server, and the journal replays onto it: the save did not rotate, so the one key this
   device trusts is the one the server's version is under

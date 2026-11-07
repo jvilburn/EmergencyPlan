@@ -4158,7 +4158,7 @@ answering when the test says, and `FakeUnitLookup` likewise):
 ## Task 4: Teams and emergency assets take the update shape, and notes replace tags
 
 *The journal* (every update command takes this shape; *References stay whole*, first and
-third bullets).
+fourth bullets).
 
 **Files:**
 - Create: `src/commands/TeamCommands.h/.cpp`, `src/commands/EmergencyAssetCommands.h/.cpp`
@@ -4538,53 +4538,77 @@ emergencies holding attempts and tasks from `TestWard::stormWith`):
   `src/models/EmergencyAsset.h`, `src/models/MinisteringGroup.h`, `src/models/MinisteringDistrict.h`
   (the `Document` updates for groups and districts, and the setters on each, that
   `ReferenceCleanup::apply` and `restore` call)
-- Modify: `src/widgets/MainWindow.cpp` (`onDeleteFamilyRequested`, `onSaveFamily`)
+- Modify: `src/commands/Command.h/.cpp` (`skippedOn`)
+- Modify: `src/services/WardSession.h/.cpp` (`CommitResult::skipped`, filled by `undo`)
+- Modify: `src/services/DocumentManager.h/.cpp` (an applied undo with skipped places reaches the
+  window)
+- Modify: `src/widgets/MainWindow.h/.cpp` (`onDeleteFamilyRequested`, `onSaveFamily`, the
+  skipped-places message)
 - Modify: `tests/...` (CMake, main, samples)
 - Create: `tests/services/ReferenceCleanupTest.h/.cpp`
 
-**`ReferenceCleanup`** holds, for a set of removed people and families, every place that holds
-them, as seen at construction: team memberships and leaders, assets, ministering groups
-(ministers, ministered people, presidency) and districts (presidency), and task assignments
-(response, family, task, and the assignment before); for families, groups' families. API:
+**`ReferenceCleanup`** holds a set of removed people and families, or a removed team, and
+the places that held them when the command was built: team memberships and leaders, assets,
+ministering groups (ministers, ministered people, presidency) and districts (presidency), and
+task assignments (family, task); for families, groups' families; for a team, the tasks
+assigned to it. API:
 - `static ReferenceCleanup of(const Document& document, const QSet<PersonId>& people, const QSet<FamilyId>& families)`
-- `static ReferenceCleanup ofTeam(const Document& document, const TeamId& team)` (task assignments
-  to that team)
-- `bool holds(const Document& current) const`: the places holding them now equal these, or none do
-- `void apply(Document& document) const`; `bool restoreHolds(const Document& current) const`;
-  `void restore(Document& document) const`
+- `static ReferenceCleanup ofTeam(const Document& document, const TeamId& team)`
+- `void apply(Document& document) const`: takes the removed ids out of every place in
+  `document` that holds them now, whatever the places it was built with
+- `void restore(Document& document) const`: puts the removed ids back into each held place
+  that still stands as `apply` left it (the team, asset, group or district is there; a leader
+  or presidency role is empty; the task is there and unassigned), and leaves the rest
+- `QStringList skippedOn(const Document& document) const`: a line per held place `restore`
+  would leave on `document`, naming it as `document` holds it, or as last seen when it is gone
 - `toJson`, `fromJson`, `operator==`
 
-A command that carries a cleanup reports `DocumentChange::full()`, since the cleanup touches
-several collections.
+The cleanup is in no start condition. A command that carries one reports
+`DocumentChange::full()`, since the cleanup touches several collections.
+
+**Skipped places reach the user.** `Command` gains `virtual QStringList skippedOn(const Document&) const`,
+empty by default; each inverse that restores a cleanup answers its cleanup's. `WardSession::undo`
+asks the inverse for it against the document before running it, and an applied undo carries
+the lines in `CommitResult::skipped`. `DocumentManager::afterCommit` passes an applied result
+with skipped lines to the window, which shows them under the undo's heading. Replay asks
+nothing.
 
 **Users.**
 - `FamilyChange` holds a `ReferenceCleanup` for its removed members; `FamilyChange::between` and
-  `UpdateFamilyCommand::fromEdit` take the current `const Document&` to work it out at
-  construction; `holds` includes it; the inverse restores it.
+  `UpdateFamilyCommand::fromEdit` take the current `const Document&` to build it; execute
+  applies it; the inverse restores it.
 - `DeleteFamilyCommand(family as last seen, cleanup)` (`TypeName = "deleteFamily"`) and its
-  inverse `RestoreFamilyCommand` (result holds when the family is present). The Delete Family
-  action (`MainWindow::onDeleteFamilyRequested`) captures the family before its confirmation box
-  and commits `DeleteFamilyCommand`; its "Delete not yet implemented" message goes.
-- `DeleteTeamCommand` holds `ReferenceCleanup::ofTeam`, unassigning tasks assigned to the team;
-  its inverse assigns them again.
-- `ImportWardDirectoryCommand` holds a `ReferenceCleanup` for the families it removes, worked
-  out at construction; its start condition includes it, and its inverse restores it.
+  inverse `RestoreFamilyCommand` (result holds when the family is present; restores the
+  cleanup). The Delete Family action (`MainWindow::onDeleteFamilyRequested`) captures the
+  family before its confirmation box and commits `DeleteFamilyCommand`; its "Delete not yet
+  implemented" message goes.
+- `DeleteTeamCommand` holds `ReferenceCleanup::ofTeam`, unassigning every task assigned to the
+  team when it runs; its inverse assigns the held ones again where they still stand.
+- `ImportWardDirectoryCommand` holds a `ReferenceCleanup` for the families it removes; execute
+  applies it, and its inverse restores it.
 
 **Tests:**
 - `deletingAFamilyRemovesItAndItsPeopleFromEveryPlaceAndUndoRestoresEach` (group families; its
   people in teams, assets, ministering, task assignments)
 - `removingAMemberThroughTheEditPanelCleansUpThatPerson`
 - `deletingATeamUnassignsItsTasksAndUndoAssignsThemAgain`
-- `removalReplayedAfterThePersonJoinedAnotherTeamConflicts` and
-  `removalReplayedAfterThePersonWasAssignedATaskConflicts`; in each, no team or task is left
-  holding a missing id
+- `removalReplayedAfterThePersonJoinedAnotherTeamTakesThemOffItToo` and
+  `removalReplayedAfterThePersonWasAssignedATaskUnassignsIt`; in each, the removal applies,
+  no team or task is left holding a missing id, and the undo leaves the later place as the
+  removal left it
+- `undoingARemovalSkipsATeamDeletedSinceAndNamesIt`: a family's people on two teams; delete the
+  family, delete one team, undo the family's delete through `WardSession`; the family is back,
+  its people are on the other team, and `CommitResult::skipped` names the deleted team
+- `undoingARemovalLeavesALeaderSetSince`: the removed person led a team; someone else is made
+  leader; the undo restores the person as a member, leaves the new leader, and names the role
+  as skipped
 - `undoingADirectoryImportRestoresTheRemovedPeoplesMemberships` (team, asset, ministering)
 - `ministeringImportReplayedAfterACleanupChangedAGroupConflicts` (the group keeps the cleanup's
   result)
 - Samples for `deleteFamily`, `restoreFamily`, and the changed `updateFamily`, `deleteTeam` and
   `importWardDirectory`.
 
-**Commit:** `git commit -m "Removals carry their cleanup as a start condition, and Delete Family is a command"`
+**Commit:** `git commit -m "Removals clean up every place that holds what they remove, and Delete Family is a command"`
 
 ---
 
