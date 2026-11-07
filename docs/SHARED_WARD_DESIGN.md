@@ -891,10 +891,10 @@ id pointing at something that exists:
   places the cleanup found when the user made it, for its undo only. The undo puts the
   removed thing back, then restores each of those places that still stands as the
   removal left it: the team, asset, group or district is still there, the leader or
-  presidency role is still empty, the task is still there and unassigned. It skips the
-  rest, and the message names each place it skipped so the user can redo those by hand.
-  An undo replayed from the journal skips the same way, and a place skipped only on
-  replay goes unnamed, as a replay that applies shows no message.
+  presidency role is still empty, the task is still there and unassigned. It leaves the
+  rest as they stand, and it puts back only people the document still holds. Each command
+  holds one cleanup for everything it removes and one for everything its undo restores,
+  and runs them once, after its own changes to families have landed.
 - **A leader is a member.** A team edit conflicts when the team it would leave has a leader
   who is not one of its members. So a leader change to someone off the team conflicts, and
   so does a removal replayed after someone made that person leader, which is handed back as
@@ -1524,8 +1524,8 @@ entries, with the oldest dropped.
 
 - **An undo whose inverse conflicts or is refused** changes nothing, so the original stays
   on the undo stack and the user is told why, as with any command that fails. The undo of
-  a removal is the one that can apply in part: it restores the removed thing and skips
-  the places that no longer stand, naming them (see *References stay whole*).
+  a removal is the one that can apply in part: it restores the removed thing and leaves
+  the places that no longer stand (see *References stay whole*).
 - **A command that conflicts or is refused on its first run** never enters the undo stack.
 - **Access-list commands are not undoable**: each derives from `Command` and not
   `UndoableCommand`, so it has no inverse and never enters the undo stack. Undoing a
@@ -1924,7 +1924,11 @@ The journal and replay, in `tests/services`:
   left holding a missing id
 - deleting a family whose people are on two teams, then deleting one of those teams and
   undoing the family's delete, restores the family and its people's place on the other
-  team, and the undo's message names the deleted team as skipped
+  team; an undo after someone else changed each kind of place the removal held (an asset
+  deleted, a group replaced, a presidency role or a task given to someone else, a task
+  deleted) restores the family and leaves each of those places with the other user's value
+- two users delete the same family; one undoes, someone removes a member from the family,
+  then the other undoes: the removed member is put back in no team, asset, group or task
 - a local save that removed someone still accepts the pre-removal version from the
   server, and the journal replays onto it: the save did not rotate, so the one key this
   device trusts is the one the server's version is under
