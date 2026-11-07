@@ -55,6 +55,11 @@ public:
     void setDistricts(MinisteringOrg org, const QHash<MinisteringDistrictId, MinisteringDistrict>& districts);
     void setGroups(MinisteringOrg org, const QHash<MinisteringGroupId, MinisteringGroup>& groups);
 
+    /// Sets the organization's district, or group, with that one's id to it, adding it when
+    /// there is none.
+    void setDistrict(MinisteringOrg org, const MinisteringDistrict& district);
+    void setGroup(MinisteringOrg org, const MinisteringGroup& group);
+
     // ========================================================================
     // Import date tracking
     // ========================================================================

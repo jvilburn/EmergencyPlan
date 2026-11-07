@@ -92,14 +92,14 @@ CommitResult commitAddress(WardSession& session, const FamilyId& familyId, const
     Family opened = TestWard::family(session.document(), familyId);
     Family saved = opened;
     saved.setAddress(address);
-    return session.commit(UpdateFamilyCommand::fromEdit(opened, saved));
+    return session.commit(UpdateFamilyCommand::fromEdit(opened, saved, session.document()));
 }
 
 /// Commits a phone edit to the member, opened on the session's current family.
 CommitResult commitPhone(WardSession& session, const FamilyId& familyId, const PersonId& personId, const QString& phone)
 {
     Family opened = TestWard::family(session.document(), familyId);
-    return session.commit(UpdateFamilyCommand::fromEdit(opened, TestWard::withPhone(opened, personId, phone)));
+    return session.commit(UpdateFamilyCommand::fromEdit(opened, TestWard::withPhone(opened, personId, phone), session.document()));
 }
 
 /// Commits coordinates typed for the address, against the session's current entry.

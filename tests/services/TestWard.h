@@ -23,6 +23,11 @@ public:
     static PersonId danId() { return PersonId::fromString("person-dan"); }
     static TeamId setupTeamId() { return TeamId::fromString("team-setup"); }
     static EmergencyAssetId generatorId() { return EmergencyAssetId::fromString("asset-generator"); }
+    static MinisteringGroupId eqGroupId() { return MinisteringGroupId::fromString("group-eq"); }
+    static MinisteringGroupId rsGroupId() { return MinisteringGroupId::fromString("group-rs"); }
+    static MinisteringDistrictId districtId() { return MinisteringDistrictId::fromString("district-1"); }
+    static TaskId shinglesTaskId() { return TaskId::fromString("task-shingles"); }
+    static TaskId basementTaskId() { return TaskId::fromString("task-basement"); }
 
     static Person bob();
     static Person alice();
@@ -59,6 +64,24 @@ public:
 
     /// The Generator asset in the recovery area, which is not in document(): Bob and Alice.
     static EmergencyAsset generator();
+
+    /// The elders quorum group, which is not in document(): Bob ministers to the Smith and
+    /// Jones families, and Alice is its presidency member.
+    static MinisteringGroup eqGroup();
+
+    /// The Relief Society group, which is not in document(): Carol ministers to Alice.
+    static MinisteringGroup rsGroup();
+
+    /// District 1 of the elders quorum, which is not in document(): the elders quorum group,
+    /// with Bob as its presidency member.
+    static MinisteringDistrict district();
+
+    /// The ward with the Smith and Jones families' people in every kind of place that refers
+    /// to a person, a family or a team: the Setup team led by Bob, the Generator, eqGroup,
+    /// rsGroup and district, and the Storm emergency holding two tasks - the Repairs task for
+    /// the Jones family assigned to Alice, and the Flooding task for the Smith family
+    /// assigned to the Setup team.
+    static Document documentWithPlaces();
 
     /// document with team added, or put in place of the team with the same id.
     static Document withTeam(const Document& document, const Team& team);

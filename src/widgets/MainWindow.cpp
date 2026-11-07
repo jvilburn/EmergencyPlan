@@ -188,6 +188,8 @@ void MainWindow::setupConnections()
             this, &MainWindow::updateUndoRedoActions);
     connect(DocumentManager::instance(), &DocumentManager::commandNotApplied,
             this, &MainWindow::onCommandNotApplied);
+    connect(DocumentManager::instance(), &DocumentManager::placesSkipped,
+            this, &MainWindow::onPlacesSkipped);
 
     // Emergency lifecycle
     connect(EmergencyManager::instance(), &EmergencyManager::emergencyStarted,
@@ -407,6 +409,19 @@ void MainWindow::onCommandNotApplied(const CommitResult& result)
     QMessageBox::warning(this, tr("Change Not Applied"), text.join("\n"));
 }
 
+void MainWindow::onPlacesSkipped(const CommitResult& result)
+{
+    QStringList text;
+    text.append(result.description.heading());
+    text.append(QString());
+    text.append(tr("These places changed since, so they were left as they are. Put them back by hand if they are still wanted:"));
+    for (const QString& line : result.skipped)
+    {
+        text.append(QString("- %1").arg(line));
+    }
+    QMessageBox::information(this, tr("Undo"), text.join("\n"));
+}
+
 void MainWindow::onGeocodingProgress(int completed, int total)
 {
     if (total > 0)
@@ -562,7 +577,8 @@ void MainWindow::onDeleteFamilyRequested(const FamilyId& familyId)
         return;
     }
 
-    const Family& family = it.value();
+    // The family as the user sees it when asked, which is what the deletion removes.
+    Family family = it.value();
     QMessageBox::StandardButton result = QMessageBox::question(
         this,
         tr("Delete Family"),
@@ -577,8 +593,8 @@ void MainWindow::onDeleteFamilyRequested(const FamilyId& familyId)
             closeEditPanelInternal();
         }
 
-        // TODO: Implement DeleteFamilyCommand
-        statusBar()->showMessage(tr("Delete not yet implemented"), 3000);
+        DocumentManager::instance()->executeCommand(
+            DeleteFamilyCommand::fromSeen(family, DocumentManager::instance()->document()));
     }
 }
 
@@ -594,7 +610,7 @@ void MainWindow::onSaveFamily()
     // to the family edit.
     Family saved = m_editPanel->family();
     DocumentManager::instance()->executeCommand(
-        UpdateFamilyCommand::fromEdit(m_editPanel->openedFamily(), saved));
+        UpdateFamilyCommand::fromEdit(m_editPanel->openedFamily(), saved, DocumentManager::instance()->document()));
     std::optional<Coordinates> typed = m_editPanel->typedCoordinates();
     if (typed.has_value())
     {

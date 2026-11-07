@@ -122,6 +122,56 @@ EmergencyAsset TestWard::generator()
     return EmergencyAsset::fromJson(json);
 }
 
+MinisteringGroup TestWard::eqGroup()
+{
+    QJsonObject json;
+    json["id"] = eqGroupId().toString();
+    json["isRSFormat"] = false;
+    json["ministerIds"] = QJsonArray({bobId().toString()});
+    json["familyIds"] = QJsonArray({jonesId().toString(), smithId().toString()});
+    json["presidencyMemberId"] = aliceId().toString();
+    return MinisteringGroup::fromJson(json);
+}
+
+MinisteringGroup TestWard::rsGroup()
+{
+    QJsonObject json;
+    json["id"] = rsGroupId().toString();
+    json["isRSFormat"] = true;
+    json["ministerIds"] = QJsonArray({carolId().toString()});
+    json["ministeredPersonIds"] = QJsonArray({aliceId().toString()});
+    return MinisteringGroup::fromJson(json);
+}
+
+MinisteringDistrict TestWard::district()
+{
+    QJsonObject json;
+    json["id"] = districtId().toString();
+    json["name"] = "District 1";
+    json["presidencyMemberId"] = bobId().toString();
+    json["groupIds"] = QJsonArray({eqGroupId().toString()});
+    return MinisteringDistrict::fromJson(json);
+}
+
+Document TestWard::documentWithPlaces()
+{
+    Team setup = setupTeam();
+    setup.setLeaderId(bobId());
+
+    ResponseTask shingles = task(shinglesTaskId().toString(), jonesId(), octoberFirst(10, 0), "Repairs",
+                                 "Shingles off the roof");
+    shingles.setAssignment(TaskAssignment::toPerson(aliceId()));
+    ResponseTask basement = task(basementTaskId().toString(), smithId(), octoberFirst(10, 30), "Flooding",
+                                 "Water in the basement");
+    basement.setAssignment(TaskAssignment::toTeam(setupTeamId()));
+
+    Document document = withAsset(withTeam(TestWard::document(), setup), generator());
+    document.setGroups(MinisteringOrg::EldersQuorum, {{eqGroupId(), eqGroup()}});
+    document.setDistricts(MinisteringOrg::EldersQuorum, {{districtId(), district()}});
+    document.setGroups(MinisteringOrg::ReliefSociety, {{rsGroupId(), rsGroup()}});
+    return withResponse(document, stormWith({}, {shingles, basement}));
+}
+
 Document TestWard::withTeam(const Document& document, const Team& team)
 {
     Document updated = document;

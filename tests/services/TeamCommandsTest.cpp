@@ -143,7 +143,7 @@ void TeamCommandsTest::additionOfAPersonReplayedAfterTheyWereRemovedConflicts()
     Family smith = TestWard::smith();
     Family withoutAlice = smith;
     withoutAlice.setMembers({TestWard::bob()});
-    QVERIFY(theirs.commit(UpdateFamilyCommand::fromEdit(smith, withoutAlice)).status == CommitStatus::Applied);
+    QVERIFY(theirs.commit(UpdateFamilyCommand::fromEdit(smith, withoutAlice, theirs.document())).status == CommitStatus::Applied);
     QVERIFY(commitTeamEdit(mine, bobOnly, withMembers(bobOnly, {TestWard::bobId(), TestWard::aliceId()})).status
             == CommitStatus::Applied);
 

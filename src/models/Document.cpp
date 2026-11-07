@@ -152,6 +152,30 @@ void Document::setGroups(MinisteringOrg org, const QHash<MinisteringGroupId, Min
     }
 }
 
+void Document::setDistrict(MinisteringOrg org, const MinisteringDistrict& district)
+{
+    if (org == MinisteringOrg::EldersQuorum)
+    {
+        m_eqDistricts.insert(district.id(), district);
+    }
+    else
+    {
+        m_rsDistricts.insert(district.id(), district);
+    }
+}
+
+void Document::setGroup(MinisteringOrg org, const MinisteringGroup& group)
+{
+    if (org == MinisteringOrg::EldersQuorum)
+    {
+        m_eqGroups.insert(group.id(), group);
+    }
+    else
+    {
+        m_rsGroups.insert(group.id(), group);
+    }
+}
+
 // ============================================================================
 // Lookup helpers
 // ============================================================================

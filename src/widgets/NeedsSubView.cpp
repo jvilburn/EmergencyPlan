@@ -245,7 +245,7 @@ void NeedsSubView::showNeedDialog(const std::optional<PersonId>& personId)
     {
         return;
     }
-    DocumentManager::instance()->executeCommand(UpdateFamilyCommand::fromEdit(edit->opened, edit->saved));
+    DocumentManager::instance()->executeCommand(UpdateFamilyCommand::fromEdit(edit->opened, edit->saved, DocumentManager::instance()->document()));
 }
 
 void NeedsSubView::deleteNeed(const PersonId& personId, const FamilyId& familyId)
@@ -279,5 +279,5 @@ void NeedsSubView::deleteNeed(const PersonId& personId, const FamilyId& familyId
     members[index].setSpecialNeedNote(QString());
     Family saved = *opened;
     saved.setMembers(members);
-    DocumentManager::instance()->executeCommand(UpdateFamilyCommand::fromEdit(*opened, saved));
+    DocumentManager::instance()->executeCommand(UpdateFamilyCommand::fromEdit(*opened, saved, DocumentManager::instance()->document()));
 }

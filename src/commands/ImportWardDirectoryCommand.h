@@ -12,10 +12,11 @@
 #include <optional>
 
 /// A ward directory import, worked out at construction: the families it adds, changes and
-/// removes, the directory PDF date, the coordinates the PDF gives for addresses the table
-/// lacks, the ward record, and the ministering PDF date the import read when deciding which
-/// families to remove. It conflicts with an edit to something it changes, and when the
-/// ministering PDF date is no longer the one it read.
+/// removes, with the cleanup of the families and members it removes; the directory PDF
+/// date; the coordinates the PDF gives for addresses the table lacks; the ward record; and
+/// the ministering PDF date the import read when deciding which families to remove. It
+/// conflicts with an edit to something it changes, and when the ministering PDF date is no
+/// longer the one it read.
 class ImportWardDirectoryCommand : public UndoableCommand
 {
 public:
@@ -51,6 +52,8 @@ public:
 
     /// The unit of the ward record it creates or keeps.
     QStringList unitsGiven() const override;
+
+    QStringList skippedOn(const Document& document) const override;
 
     static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
 

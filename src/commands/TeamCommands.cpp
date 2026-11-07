@@ -12,49 +12,62 @@ UndoableCommandPtr AddTeamCommand::fromNew(const Team& team, const Document& doc
 {
     CommandDescription description(QObject::tr("New team: %1").arg(team.name()),
                                    describePeopleChange(IdSetChange<PersonId>(team.memberIds(), {}), document));
-    return std::make_shared<AddTeamCommand>(team, description);
+    return std::make_shared<AddTeamCommand>(team, ReferenceCleanup::ofTeam(document, team.id()), description);
 }
 
-AddTeamCommand::AddTeamCommand(const Team& team, const CommandDescription& description)
+AddTeamCommand::AddTeamCommand(const Team& team, const ReferenceCleanup& cleanup, const CommandDescription& description)
     : UndoableCommand(description)
     , m_team(team)
+    , m_cleanup(cleanup)
 {
 }
 
 CommandOutcome AddTeamCommand::execute(Document& document) const
 {
-    if (document.findTeamById(m_team.id()).has_value())
+    if (!document.findTeamById(m_team.id()).has_value())
     {
-        return CommandOutcome::Applied;
+        if (!everyPersonExists(m_team.memberIds(), document))
+        {
+            return CommandOutcome::Conflicted;
+        }
+        document.setTeam(m_team);
     }
-    if (!everyPersonExists(m_team.memberIds(), document))
-    {
-        return CommandOutcome::Conflicted;
-    }
-    document.setTeam(m_team);
+    m_cleanup.restore(document);
     return CommandOutcome::Applied;
 }
 
 UndoableCommandPtr AddTeamCommand::inverse() const
 {
-    return std::make_shared<DeleteTeamCommand>(m_team, description().undone());
+    return std::make_shared<DeleteTeamCommand>(m_team, m_cleanup, description().undone());
 }
 
 QJsonObject AddTeamCommand::toJson() const
 {
     QJsonObject json;
     json["team"] = m_team.toJson();
+    json["cleanup"] = m_cleanup.toJson();
     return json;
 }
 
 DocumentChange AddTeamCommand::documentChange() const
 {
+    if (m_cleanup.holdsPlaces())
+    {
+        return DocumentChange::full();
+    }
     return DocumentChange::team().updated(m_team.id());
+}
+
+QStringList AddTeamCommand::skippedOn(const Document& document) const
+{
+    return m_cleanup.skippedOn(document);
 }
 
 CommandPtr AddTeamCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
 {
-    return std::make_shared<AddTeamCommand>(Team::fromJson(json["team"].toObject()), description);
+    return std::make_shared<AddTeamCommand>(Team::fromJson(json["team"].toObject()),
+                                            ReferenceCleanup::fromJson(json["cleanup"].toObject()),
+                                            description);
 }
 
 // ----------------------------------------------------------------------------
@@ -167,48 +180,49 @@ UndoableCommandPtr DeleteTeamCommand::fromSeen(const Team& team, const Document&
 {
     CommandDescription description(QObject::tr("Delete team: %1").arg(team.name()),
                                    describePeopleChange(IdSetChange<PersonId>({}, team.memberIds()), document));
-    return std::make_shared<DeleteTeamCommand>(team, description);
+    return std::make_shared<DeleteTeamCommand>(team, ReferenceCleanup::ofTeam(document, team.id()), description);
 }
 
-DeleteTeamCommand::DeleteTeamCommand(const Team& team, const CommandDescription& description)
+DeleteTeamCommand::DeleteTeamCommand(const Team& team, const ReferenceCleanup& cleanup, const CommandDescription& description)
     : UndoableCommand(description)
     , m_team(team)
+    , m_cleanup(cleanup)
 {
 }
 
 CommandOutcome DeleteTeamCommand::execute(Document& document) const
 {
     std::optional<Team> team = document.findTeamById(m_team.id());
-    if (!team.has_value())
-    {
-        return CommandOutcome::Applied;
-    }
-    if (*team != m_team)
+    if (team.has_value() && *team != m_team)
     {
         return CommandOutcome::Conflicted;
     }
     document.removeTeam(m_team.id());
+    m_cleanup.apply(document);
     return CommandOutcome::Applied;
 }
 
 UndoableCommandPtr DeleteTeamCommand::inverse() const
 {
-    return std::make_shared<AddTeamCommand>(m_team, description().undone());
+    return std::make_shared<AddTeamCommand>(m_team, m_cleanup, description().undone());
 }
 
 QJsonObject DeleteTeamCommand::toJson() const
 {
     QJsonObject json;
     json["team"] = m_team.toJson();
+    json["cleanup"] = m_cleanup.toJson();
     return json;
 }
 
 DocumentChange DeleteTeamCommand::documentChange() const
 {
-    return DocumentChange::team().updated(m_team.id());
+    return DocumentChange::full();
 }
 
 CommandPtr DeleteTeamCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
 {
-    return std::make_shared<DeleteTeamCommand>(Team::fromJson(json["team"].toObject()), description);
+    return std::make_shared<DeleteTeamCommand>(Team::fromJson(json["team"].toObject()),
+                                               ReferenceCleanup::fromJson(json["cleanup"].toObject()),
+                                               description);
 }

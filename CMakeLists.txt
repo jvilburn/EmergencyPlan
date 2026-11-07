@@ -138,6 +138,7 @@ set(COMMAND_SOURCES
     src/commands/EmergencyCommands.cpp
     src/commands/ImportWardDirectoryCommand.cpp
     src/commands/ImportMinisteringCommand.cpp
+    src/commands/ReferenceCleanup.cpp
 )
 
 set(COMMAND_HEADERS
@@ -153,6 +154,7 @@ set(COMMAND_HEADERS
     src/commands/EmergencyCommands.h
     src/commands/ImportWardDirectoryCommand.h
     src/commands/ImportMinisteringCommand.h
+    src/commands/ReferenceCleanup.h
 )
 
 set(SERVICE_SOURCES

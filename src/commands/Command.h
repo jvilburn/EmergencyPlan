@@ -98,6 +98,11 @@ public:
     /// applies.
     virtual QStringList unitsGiven() const;
 
+    /// A line per place this command would leave unrestored on document, for a command
+    /// that puts back what a removal took out of the places that held it: the places that
+    /// no longer stand as the removal left them. Empty for every other command.
+    virtual QStringList skippedOn(const Document& document) const;
+
     const CommandDescription& description() const { return m_description; }
 
 protected:

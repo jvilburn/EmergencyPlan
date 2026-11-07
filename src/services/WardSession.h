@@ -27,6 +27,7 @@ struct CommitResult
     CommitStatus status;
     QString refusal;  ///< the rule's wording, when status is Refused
     CommandDescription description;  ///< the description of the command that ran
+    QStringList skipped;  ///< for an undo that applied, the places it left, one line each
 };
 
 /// How a replay onto a version ended.
@@ -80,8 +81,9 @@ public:
     CommitResult commit(CommandPtr command);
 
     /// Builds the inverse of the command on top of the undo stack and runs it through the
-    /// commit step. When the inverse applies, the command moves to the redo stack;
-    /// otherwise it stays on the undo stack.
+    /// commit step. When the inverse applies, the command moves to the redo stack, and the
+    /// result's skipped holds the lines the inverse's skippedOn gave on the document before
+    /// it ran; otherwise the command stays on the undo stack.
     CommitResult undo();
 
     /// Runs the command on top of the redo stack again through the commit step. When it

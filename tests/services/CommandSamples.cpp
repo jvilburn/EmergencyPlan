@@ -19,22 +19,65 @@ Document withoutAlice()
     return TestWard::withFamily(TestWard::document(), smith);
 }
 
+/// document after command ran on it.
+Document runOn(const Document& document, const CommandPtr& command)
+{
+    Document applied = document;
+    command->execute(applied);
+    return applied;
+}
+
+/// The Smith family with Bob's phone moved to a third value.
+Family movedSmith()
+{
+    return TestWard::withPhone(TestWard::smith(), TestWard::bobId(), "555-9999");
+}
+
+/// The every-field edit, which removes Alice, on the ward where she is in every kind of
+/// place, and its inverse, which restores her to them.
 QList<CommandSample> updateFamilySamples()
 {
-    Family opened = TestWard::smith();
-    Family saved = TestWard::smithWithEveryFieldChanged();
-    Family moved = TestWard::withPhone(opened, TestWard::bobId(), "555-9999");
+    Document ward = TestWard::documentWithPlaces();
+    UndoableCommandPtr edit = UpdateFamilyCommand::fromEdit(TestWard::smith(), TestWard::smithWithEveryFieldChanged(), ward);
+    CommandPtr undo = edit->inverse();
+    Document edited = runOn(ward, edit);
 
     QList<CommandSample> samples;
-    samples.append(CommandSample{SampleCase::StartHolds,
-                                 TestWard::document(),
-                                 UpdateFamilyCommand::fromEdit(opened, saved)});
-    samples.append(CommandSample{SampleCase::ResultHolds,
-                                 TestWard::withFamily(TestWard::document(), saved),
-                                 UpdateFamilyCommand::fromEdit(opened, saved)});
+    samples.append(CommandSample{SampleCase::StartHolds, ward, edit});
+    samples.append(CommandSample{SampleCase::ResultHolds, edited, edit});
+    samples.append(CommandSample{SampleCase::Conflicts, TestWard::withFamily(ward, movedSmith()), edit});
+    samples.append(CommandSample{SampleCase::StartHolds, edited, undo});
+    samples.append(CommandSample{SampleCase::ResultHolds, ward, undo});
     samples.append(CommandSample{SampleCase::Conflicts,
-                                 TestWard::withFamily(TestWard::document(), moved),
-                                 UpdateFamilyCommand::fromEdit(opened, saved)});
+                                 TestWard::withFamily(edited, TestWard::withPhone(TestWard::family(edited, TestWard::smithId()),
+                                                                                  TestWard::bobId(), "555-9999")),
+                                 undo});
+    return samples;
+}
+
+/// The Smith family deleted from the ward where its people are in every kind of place.
+QList<CommandSample> deleteFamilySamples()
+{
+    Document ward = TestWard::documentWithPlaces();
+    CommandPtr remove = DeleteFamilyCommand::fromSeen(TestWard::smith(), ward);
+
+    QList<CommandSample> samples;
+    samples.append(CommandSample{SampleCase::StartHolds, ward, remove});
+    samples.append(CommandSample{SampleCase::ResultHolds, runOn(ward, remove), remove});
+    samples.append(CommandSample{SampleCase::Conflicts, TestWard::withFamily(ward, movedSmith()), remove});
+    return samples;
+}
+
+/// Restore never conflicts, so it has no Conflicts sample.
+QList<CommandSample> restoreFamilySamples()
+{
+    Document ward = TestWard::documentWithPlaces();
+    UndoableCommandPtr remove = DeleteFamilyCommand::fromSeen(TestWard::smith(), ward);
+    CommandPtr restore = remove->inverse();
+
+    QList<CommandSample> samples;
+    samples.append(CommandSample{SampleCase::StartHolds, runOn(ward, remove), restore});
+    samples.append(CommandSample{SampleCase::ResultHolds, ward, restore});
     return samples;
 }
 
@@ -75,16 +118,26 @@ QList<CommandSample> revertAddressCoordinatesSamples()
     return samples;
 }
 
-/// The conflict is Alice gone, since an add needs every person it names.
+/// The conflict is Alice gone, since an add needs every person it names. The team put back
+/// by undoing its deletion also assigns it the task the deletion unassigned.
 QList<CommandSample> addTeamSamples()
 {
     Team team = TestWard::setupTeam();
     CommandPtr add = AddTeamCommand::fromNew(team, TestWard::document());
+    Document ward = TestWard::documentWithPlaces();
+    UndoableCommandPtr remove = DeleteTeamCommand::fromSeen(ward.findTeamById(TestWard::setupTeamId()).value(), ward);
+    CommandPtr putBack = remove->inverse();
+    Document removed = runOn(ward, remove);
+    Family bobOnly = TestWard::smith();
+    bobOnly.setMembers({TestWard::bob()});
 
     QList<CommandSample> samples;
     samples.append(CommandSample{SampleCase::StartHolds, TestWard::document(), add});
     samples.append(CommandSample{SampleCase::ResultHolds, TestWard::withTeam(TestWard::document(), team), add});
     samples.append(CommandSample{SampleCase::Conflicts, withoutAlice(), add});
+    samples.append(CommandSample{SampleCase::StartHolds, removed, putBack});
+    samples.append(CommandSample{SampleCase::ResultHolds, ward, putBack});
+    samples.append(CommandSample{SampleCase::Conflicts, TestWard::withFamily(removed, bobOnly), putBack});
     return samples;
 }
 
@@ -106,17 +159,19 @@ QList<CommandSample> updateTeamSamples()
     return samples;
 }
 
+/// The Setup team deleted from the ward where a task is assigned to it.
 QList<CommandSample> deleteTeamSamples()
 {
-    Team seen = TestWard::setupTeam();
+    Document ward = TestWard::documentWithPlaces();
+    Team seen = ward.findTeamById(TestWard::setupTeamId()).value();
     Team grown = seen;
     grown.setMemberIds({TestWard::bobId(), TestWard::aliceId(), TestWard::carolId()});
-    CommandPtr remove = DeleteTeamCommand::fromSeen(seen, TestWard::document());
+    CommandPtr remove = DeleteTeamCommand::fromSeen(seen, ward);
 
     QList<CommandSample> samples;
-    samples.append(CommandSample{SampleCase::StartHolds, TestWard::withTeam(TestWard::document(), seen), remove});
-    samples.append(CommandSample{SampleCase::ResultHolds, TestWard::document(), remove});
-    samples.append(CommandSample{SampleCase::Conflicts, TestWard::withTeam(TestWard::document(), grown), remove});
+    samples.append(CommandSample{SampleCase::StartHolds, ward, remove});
+    samples.append(CommandSample{SampleCase::ResultHolds, runOn(ward, remove), remove});
+    samples.append(CommandSample{SampleCase::Conflicts, TestWard::withTeam(ward, grown), remove});
     return samples;
 }
 
@@ -317,17 +372,9 @@ QList<CommandSample> addTaskCategorySamples()
     return samples;
 }
 
-/// document after command ran on it.
-Document runOn(const Document& document, const CommandPtr& command)
-{
-    Document applied = document;
-    command->execute(applied);
-    return applied;
-}
-
-/// A directory import onto the test ward: Bob's phone changed, the Jones family gone, the
-/// Lee family added with the coordinates the PDF prints for its address, and the
-/// Tanglewood ward record.
+/// A directory import onto the ward where its people are in every kind of place: Bob's
+/// phone changed, the Jones family gone, the Lee family added with the coordinates the PDF
+/// prints for its address, and the Tanglewood ward record.
 QList<CommandSample> importWardDirectorySamples()
 {
     Family smith = TestWard::withPhone(TestWard::smith(), TestWard::bobId(), "555-2222");
@@ -341,13 +388,13 @@ QList<CommandSample> importWardDirectorySamples()
     result.wardName = "Tanglewood";
     result.wardUnitNumber = "123456";
     result.pdfDate = QDate(2026, 10, 15);
-    CommandPtr import = ImportWardDirectoryCommand::fromImport(TestWard::document(), result, "Tanglewood.pdf");
-    Family moved = TestWard::withPhone(TestWard::smith(), TestWard::bobId(), "555-9999");
+    Document ward = TestWard::documentWithPlaces();
+    CommandPtr import = ImportWardDirectoryCommand::fromImport(ward, result, "Tanglewood.pdf");
 
     QList<CommandSample> samples;
-    samples.append(CommandSample{SampleCase::StartHolds, TestWard::document(), import});
-    samples.append(CommandSample{SampleCase::ResultHolds, runOn(TestWard::document(), import), import});
-    samples.append(CommandSample{SampleCase::Conflicts, TestWard::withFamily(TestWard::document(), moved), import});
+    samples.append(CommandSample{SampleCase::StartHolds, ward, import});
+    samples.append(CommandSample{SampleCase::ResultHolds, runOn(ward, import), import});
+    samples.append(CommandSample{SampleCase::Conflicts, TestWard::withFamily(ward, movedSmith()), import});
     return samples;
 }
 
@@ -392,6 +439,14 @@ QList<CommandSample> CommandSamples::forType(const QString& type)
     if (type == UpdateFamilyCommand::TypeName)
     {
         return updateFamilySamples();
+    }
+    if (type == DeleteFamilyCommand::TypeName)
+    {
+        return deleteFamilySamples();
+    }
+    if (type == RestoreFamilyCommand::TypeName)
+    {
+        return restoreFamilySamples();
     }
     if (type == SetAddressCoordinatesCommand::TypeName)
     {

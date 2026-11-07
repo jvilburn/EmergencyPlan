@@ -14,7 +14,7 @@ namespace
 
 CommitResult commitEdit(WardSession& session, const Family& opened, const Family& saved)
 {
-    return session.commit(UpdateFamilyCommand::fromEdit(opened, saved));
+    return session.commit(UpdateFamilyCommand::fromEdit(opened, saved, session.document()));
 }
 
 Family familyIn(const WardSession& session, const FamilyId& id)
@@ -102,7 +102,7 @@ void WardSessionTest::commitAppliesAndJournalsTheSerialisedCommand()
     TestSession session;
     session.open(TestWard::document());
     Family opened = familyIn(session, TestWard::smithId());
-    CommandPtr command = UpdateFamilyCommand::fromEdit(opened, TestWard::withPhone(opened, TestWard::bobId(), "555-2222"));
+    CommandPtr command = UpdateFamilyCommand::fromEdit(opened, TestWard::withPhone(opened, TestWard::bobId(), "555-2222"), session.document());
     QJsonObject expected = CommandRegistry::toJson(*command);
 
     CommitResult result = session.commit(command);

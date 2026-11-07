@@ -90,7 +90,7 @@ CommitResult removeAlice(WardSession& session)
     Family smith = TestWard::smith();
     Family withoutAlice = smith;
     withoutAlice.setMembers({TestWard::bob()});
-    return session.commit(UpdateFamilyCommand::fromEdit(smith, withoutAlice));
+    return session.commit(UpdateFamilyCommand::fromEdit(smith, withoutAlice, session.document()));
 }
 
 void openBoth(WardSession& mine, WardSession& theirs, const Document& document)
@@ -313,8 +313,9 @@ void EmergencyCommandsTest::endingWritesAReportHoldingEveryAttemptAndTaskThenRem
     session.open(TestWard::withResponse(ward, TestWard::storm()));
 
     // Smith: two phone attempts, the later with a note long enough to wrap, and a task for
-    // the Setup team. Jones: a button mark, and a task given to Alice, notified and
-    // resolved. Lee: nothing, so not contacted.
+    // the Setup team. Jones: a button mark, a phone attempt by Alice, who is removed before
+    // the end, and a task given to Carol, notified and resolved. Lee: nothing, so not
+    // contacted.
     QString longNote = "Answered at eleven. Everyone is safe, the roof lost a few shingles over the porch, the "
                        "basement has standing water a few inches deep, and they asked that anyone coming by use "
                        "the side entrance because the front steps are blocked by a fallen limb near the gatepost";
@@ -324,14 +325,17 @@ void EmergencyCommandsTest::endingWritesAReportHoldingEveryAttemptAndTaskThenRem
             == CommitStatus::Applied);
     QVERIFY(addAttempt(session, marked("attempt-marked", TestWard::jonesId(), 9, 30, ContactOutcome::OK)).status
             == CommitStatus::Applied);
+    ContactAttempt byAlice = TestWard::attempt("attempt-alice", TestWard::jonesId(), TestWard::octoberFirst(9, 45),
+                                               ContactMethod::Phone, TestWard::aliceId(), std::nullopt, "Left a message");
+    QVERIFY(addAttempt(session, byAlice).status == CommitStatus::Applied);
     ResponseTask basement = floodedBasement();
     basement.setAssignment(TaskAssignment::toTeam(TestWard::setupTeamId()));
     QVERIFY(session.commit(AddTaskCommand::fromNew(basement, session.document())).status == CommitStatus::Applied);
     ResponseTask tree = TestWard::task("task-tree", TestWard::jonesId(), TestWard::octoberFirst(10, 45), "Tree removal",
                                        "Oak across the driveway");
-    TaskAssignment toAlice = TaskAssignment::toPerson(TestWard::aliceId());
-    toAlice.setNotification(TestWard::notification(ContactMethod::Text, "Sent the address", TestWard::octoberFirst(10, 50)));
-    tree.setAssignment(toAlice);
+    TaskAssignment toCarol = TaskAssignment::toPerson(TestWard::carolId());
+    toCarol.setNotification(TestWard::notification(ContactMethod::Text, "Sent the address", TestWard::octoberFirst(10, 50)));
+    tree.setAssignment(toCarol);
     tree.setResolution(TestWard::resolution("Cut and cleared", TestWard::octoberFirst(12, 0)));
     QVERIFY(session.commit(AddTaskCommand::fromNew(tree, session.document())).status == CommitStatus::Applied);
     QVERIFY(removeAlice(session).status == CommitStatus::Applied);
@@ -351,9 +355,10 @@ void EmergencyCommandsTest::endingWritesAReportHoldingEveryAttemptAndTaskThenRem
     QVERIFY(text.contains("Water in the basement"));
     QVERIFY(text.contains("Assigned to: Setup"));
     QVERIFY(text.contains("Oak across the driveway"));
+    QVERIFY(text.contains("Assigned to: Jones, Carol"));
     QVERIFY(text.contains("Sent the address"));
     QVERIFY(text.contains("Cut and cleared"));
-    QVERIFY(text.contains("Assigned to: (removed)"));
+    QVERIFY2(text.contains("Phone - (removed) - Left a message"), qPrintable(text));
     QVERIFY(text.contains("Families Not Contacted (1)"));
     QVERIFY(text.contains("Lee, Ken & Mia"));
 }

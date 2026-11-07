@@ -89,7 +89,7 @@ void EmergencyAssetCommandsTest::additionOfAPersonReplayedAfterTheyWereRemovedCo
     Family smith = TestWard::smith();
     Family withoutAlice = smith;
     withoutAlice.setMembers({TestWard::bob()});
-    QVERIFY(theirs.commit(UpdateFamilyCommand::fromEdit(smith, withoutAlice)).status == CommitStatus::Applied);
+    QVERIFY(theirs.commit(UpdateFamilyCommand::fromEdit(smith, withoutAlice, theirs.document())).status == CommitStatus::Applied);
     QVERIFY(commitAssetEdit(mine, bobOnly, withPeople(bobOnly, {TestWard::bobId(), TestWard::aliceId()})).status
             == CommitStatus::Applied);
 

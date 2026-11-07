@@ -84,7 +84,7 @@ void CommandRoundTripTest::sampleRebuiltFromItsEntryBehavesAsTheOriginal()
 void CommandRoundTripTest::runningACommandDoesNotChangeIt()
 {
     Family opened = TestWard::smith();
-    CommandPtr command = UpdateFamilyCommand::fromEdit(opened, TestWard::withPhone(opened, TestWard::bobId(), "555-2222"));
+    CommandPtr command = UpdateFamilyCommand::fromEdit(opened, TestWard::withPhone(opened, TestWard::bobId(), "555-2222"), TestWard::document());
     QJsonObject before = CommandRegistry::toJson(*command);
 
     Document applied = TestWard::document();

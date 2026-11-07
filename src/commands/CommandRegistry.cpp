@@ -11,6 +11,8 @@ const QList<CommandType>& CommandRegistry::types()
 {
     static const QList<CommandType> types = {
         {UpdateFamilyCommand::TypeName, &UpdateFamilyCommand::fromJson},
+        {DeleteFamilyCommand::TypeName, &DeleteFamilyCommand::fromJson},
+        {RestoreFamilyCommand::TypeName, &RestoreFamilyCommand::fromJson},
         {SetAddressCoordinatesCommand::TypeName, &SetAddressCoordinatesCommand::fromJson},
         {RevertAddressCoordinatesCommand::TypeName, &RevertAddressCoordinatesCommand::fromJson},
         {AddTeamCommand::TypeName, &AddTeamCommand::fromJson},

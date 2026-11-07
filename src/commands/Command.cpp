@@ -113,6 +113,12 @@ QStringList Command::unitsGiven() const
     return {};
 }
 
+QStringList Command::skippedOn(const Document& document) const
+{
+    Q_UNUSED(document);
+    return {};
+}
+
 UndoableCommand::UndoableCommand(const CommandDescription& description)
     : Command(description)
 {

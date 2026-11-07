@@ -78,6 +78,43 @@ QHash<FamilyId, Family> familiesFromJson(const QJsonObject& json)
     return families;
 }
 
+QSet<PersonId> idsOf(const QList<PlacedMember>& placed)
+{
+    QSet<PersonId> ids;
+    for (const PlacedMember& member : placed)
+    {
+        ids.insert(member.person.id());
+    }
+    return ids;
+}
+
+/// The cleanup of the families and their members, holding the places in document that
+/// refer to them.
+ReferenceCleanup cleanupOf(const Document& document, const QHash<FamilyId, Family>& families)
+{
+    QSet<PersonId> people;
+    QSet<FamilyId> familyIds;
+    for (const Family& family : families)
+    {
+        familyIds.insert(family.id());
+        for (const Person& member : family.members())
+        {
+            people.insert(member.id());
+        }
+    }
+    return ReferenceCleanup::of(document, people, familyIds);
+}
+
+/// Writes the cleanup under key, or nothing when it removes nothing and holds no place.
+void writeCleanup(QJsonObject& json, const QString& key, const ReferenceCleanup& cleanup)
+{
+    QJsonObject written = cleanup.toJson();
+    if (!written.isEmpty())
+    {
+        json[key] = written;
+    }
+}
+
 // ----------------------------------------------------------------------------
 // Description text
 // ----------------------------------------------------------------------------
@@ -309,7 +346,7 @@ bool MemberChange::isEmpty() const
 // FamilyChange
 // ============================================================================
 
-std::optional<FamilyChange> FamilyChange::between(const Family& opened, const Family& saved)
+std::optional<FamilyChange> FamilyChange::between(const Family& opened, const Family& saved, const Document& document)
 {
     QHash<PersonId, MemberChange> members;
     QList<PlacedMember> removed;
@@ -345,19 +382,25 @@ std::optional<FamilyChange> FamilyChange::between(const Family& opened, const Fa
     {
         return std::nullopt;
     }
-    return FamilyChange(address, note, members, added, removed);
+    return FamilyChange(address, note, members, added, removed,
+                        ReferenceCleanup::of(document, idsOf(added), {}),
+                        ReferenceCleanup::of(document, idsOf(removed), {}));
 }
 
 FamilyChange::FamilyChange(const std::optional<FieldChange<Address>>& address,
                            const std::optional<FieldChange<QString>>& note,
                            const QHash<PersonId, MemberChange>& members,
                            const QList<PlacedMember>& added,
-                           const QList<PlacedMember>& removed)
+                           const QList<PlacedMember>& removed,
+                           const ReferenceCleanup& addedCleanup,
+                           const ReferenceCleanup& removedCleanup)
     : m_address(address)
     , m_note(note)
     , m_members(members)
     , m_added(added)
     , m_removed(removed)
+    , m_addedCleanup(addedCleanup)
+    , m_removedCleanup(removedCleanup)
 {
 }
 
@@ -420,6 +463,13 @@ Family FamilyChange::appliedTo(const Family& current) const
     return updated;
 }
 
+void FamilyChange::applyTo(Document& document, const Family& current) const
+{
+    document.setFamily(appliedTo(current));
+    m_removedCleanup.apply(document);
+    m_addedCleanup.restore(document);
+}
+
 FamilyChange FamilyChange::swapped() const
 {
     QHash<PersonId, MemberChange> members;
@@ -427,7 +477,19 @@ FamilyChange FamilyChange::swapped() const
     {
         members.insert(it.key(), it.value().swapped());
     }
-    return FamilyChange(changeSwapped(m_address), changeSwapped(m_note), members, m_removed, m_added);
+    return FamilyChange(changeSwapped(m_address), changeSwapped(m_note), members, m_removed, m_added,
+                        m_removedCleanup, m_addedCleanup);
+}
+
+bool FamilyChange::reachesOtherPlaces() const
+{
+    return !m_removed.isEmpty()
+        || m_addedCleanup.holdsPlaces();
+}
+
+QStringList FamilyChange::skippedOn(const Document& document) const
+{
+    return m_addedCleanup.skippedOn(document);
 }
 
 QStringList FamilyChange::describe(const Family& opened) const
@@ -482,6 +544,8 @@ QJsonObject FamilyChange::toJson() const
     {
         json["removed"] = placedToJson(m_removed);
     }
+    writeCleanup(json, "addedCleanup", m_addedCleanup);
+    writeCleanup(json, "removedCleanup", m_removedCleanup);
     return json;
 }
 
@@ -497,7 +561,9 @@ FamilyChange FamilyChange::fromJson(const QJsonObject& json)
                         readChange<QString>(json, "note"),
                         members,
                         placedFromJson(json["added"].toArray()),
-                        placedFromJson(json["removed"].toArray()));
+                        placedFromJson(json["removed"].toArray()),
+                        ReferenceCleanup::fromJson(json["addedCleanup"].toObject()),
+                        ReferenceCleanup::fromJson(json["removedCleanup"].toObject()));
 }
 
 // ============================================================================
@@ -518,7 +584,7 @@ FamilyCollectionChange FamilyCollectionChange::between(const Document& document,
             added.insert(family.id(), family);
             continue;
         }
-        std::optional<FamilyChange> change = FamilyChange::between(*existing, family);
+        std::optional<FamilyChange> change = FamilyChange::between(*existing, family, document);
         if (change.has_value())
         {
             changed.insert(family.id(), *change);
@@ -534,15 +600,19 @@ FamilyCollectionChange FamilyCollectionChange::between(const Document& document,
             lastSeen.insert(id, *existing);
         }
     }
-    return FamilyCollectionChange(added, changed, lastSeen);
+    return FamilyCollectionChange(added, changed, lastSeen, cleanupOf(document, added), cleanupOf(document, lastSeen));
 }
 
 FamilyCollectionChange::FamilyCollectionChange(const QHash<FamilyId, Family>& added,
                                                const QHash<FamilyId, FamilyChange>& changed,
-                                               const QHash<FamilyId, Family>& removed)
+                                               const QHash<FamilyId, Family>& removed,
+                                               const ReferenceCleanup& addedCleanup,
+                                               const ReferenceCleanup& removedCleanup)
     : m_added(added)
     , m_changed(changed)
     , m_removed(removed)
+    , m_addedCleanup(addedCleanup)
+    , m_removedCleanup(removedCleanup)
 {
 }
 
@@ -585,12 +655,14 @@ void FamilyCollectionChange::applyTo(Document& document) const
     }
     for (auto it = m_changed.constBegin(); it != m_changed.constEnd(); ++it)
     {
-        document.setFamily(it.value().appliedTo(document.findFamilyById(it.key()).value()));
+        it.value().applyTo(document, document.findFamilyById(it.key()).value());
     }
     for (const Family& removed : m_removed)
     {
         document.removeFamily(removed.id());
     }
+    m_removedCleanup.apply(document);
+    m_addedCleanup.restore(document);
 }
 
 FamilyCollectionChange FamilyCollectionChange::swapped() const
@@ -600,7 +672,18 @@ FamilyCollectionChange FamilyCollectionChange::swapped() const
     {
         changed.insert(it.key(), it.value().swapped());
     }
-    return FamilyCollectionChange(m_removed, changed, m_added);
+    return FamilyCollectionChange(m_removed, changed, m_added, m_removedCleanup, m_addedCleanup);
+}
+
+QStringList FamilyCollectionChange::skippedOn(const Document& document) const
+{
+    QStringList skipped = m_addedCleanup.skippedOn(document);
+    for (const FamilyChange& change : m_changed)
+    {
+        skipped.append(change.skippedOn(document));
+    }
+    skipped.sort();
+    return skipped;
 }
 
 QList<Address> FamilyCollectionChange::addressesGiven() const
@@ -643,6 +726,8 @@ QJsonObject FamilyCollectionChange::toJson() const
     {
         json["removed"] = familiesToJson(m_removed);
     }
+    writeCleanup(json, "addedCleanup", m_addedCleanup);
+    writeCleanup(json, "removedCleanup", m_removedCleanup);
     return json;
 }
 
@@ -656,5 +741,7 @@ FamilyCollectionChange FamilyCollectionChange::fromJson(const QJsonObject& json)
     }
     return FamilyCollectionChange(familiesFromJson(json["added"].toObject()),
                                   changed,
-                                  familiesFromJson(json["removed"].toObject()));
+                                  familiesFromJson(json["removed"].toObject()),
+                                  ReferenceCleanup::fromJson(json["addedCleanup"].toObject()),
+                                  ReferenceCleanup::fromJson(json["removedCleanup"].toObject()));
 }
