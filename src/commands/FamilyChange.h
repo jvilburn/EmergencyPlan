@@ -99,28 +99,21 @@ struct PlacedMember
 /// PersonId, the members it adds, and the members it removes as last seen. Members are
 /// matched by PersonId. A family's member order is the order it was given, and a change
 /// keeps it: it inserts each addition at its index and moves no one else. Order is not part
-/// of any start condition.
-///
-/// It also holds a ReferenceCleanup for the members it removes, which it applies, and one
-/// for the members it adds, whose held places it restores; swapping exchanges the two, so
-/// the change that takes a removal back restores the places the removal held. Neither is
-/// part of its start condition.
+/// of any start condition. It changes only the family; the command that holds it cleans up
+/// the places that refer to the members it adds and removes.
 class FamilyChange
 {
 public:
     /// The difference between the family as opened and as saved, or none when nothing
     /// differs. A member the saved family has and the opened one lacks is added at its index
-    /// in the saved family. Each cleanup holds the places in document that refer to the
-    /// members it names.
-    static std::optional<FamilyChange> between(const Family& opened, const Family& saved, const Document& document);
+    /// in the saved family.
+    static std::optional<FamilyChange> between(const Family& opened, const Family& saved);
 
     FamilyChange(const std::optional<FieldChange<Address>>& address,
                  const std::optional<FieldChange<QString>>& note,
                  const QHash<PersonId, MemberChange>& members,
                  const QList<PlacedMember>& added,
-                 const QList<PlacedMember>& removed,
-                 const ReferenceCleanup& addedCleanup,
-                 const ReferenceCleanup& removedCleanup);
+                 const QList<PlacedMember>& removed);
 
     /// The start condition or the result holds: the address, the note and every changed
     /// member are at before or after, and every removed member is gone or exactly as last
@@ -133,21 +126,13 @@ public:
     /// member count at that point.
     Family appliedTo(const Family& current) const;
 
-    /// Puts appliedTo(current) in document, takes the removed members out of every place
-    /// that holds them, and restores the places the added members' cleanup holds.
-    void applyTo(Document& document, const Family& current) const;
-
     /// The change that takes this one back: the address, note and member changes swapped,
-    /// the removed members added again at the indices they were seen at, the added ones
-    /// removed, and the two cleanups exchanged.
+    /// the removed members added again at the indices they were seen at, and the added ones
+    /// removed.
     FamilyChange swapped() const;
 
-    /// True when running it can change a place outside the family: it removes a member, or
-    /// restores a held place.
-    bool reachesOtherPlaces() const;
-
-    /// The held places the added members' cleanup would leave on document.
-    QStringList skippedOn(const Document& document) const;
+    QSet<PersonId> addedIds() const;
+    QSet<PersonId> removedIds() const;
 
     /// The lines of what to do again: member lines in the opened family's member order,
     /// then additions, removals, the address and the note.
@@ -164,14 +149,14 @@ private:
     QHash<PersonId, MemberChange> m_members;
     QList<PlacedMember> m_added;
     QList<PlacedMember> m_removed;
-    ReferenceCleanup m_addedCleanup;
-    ReferenceCleanup m_removedCleanup;
 };
 
 /// What an import changes in the ward's families: the families it adds, a FamilyChange per
-/// family that differs, and the families it removes as last seen, with a ReferenceCleanup
-/// for the families it removes and their people, which it applies, and one for the families
-/// it adds and their people, whose held places it restores.
+/// family that differs, and the families it removes as last seen. It holds one
+/// ReferenceCleanup for everything it removes - the removed families, their people, and the
+/// members its changes remove - which it applies, and one for everything it adds, whose held
+/// places it restores. Swapping exchanges the two, so the change that takes an import back
+/// restores the places the import's removals held.
 class FamilyCollectionChange
 {
 public:
@@ -198,19 +183,14 @@ public:
     bool holds(const Document& current) const;
 
     /// Adds each added family that is not there, makes each change, removes each removed
-    /// family, takes the removed families and their people out of every place that holds
-    /// them, and restores the places the added families' cleanup holds. Called when holds is
-    /// true.
+    /// family, and then, once every family has landed, applies the removal cleanup and
+    /// restores the places the addition cleanup holds. Called when holds is true.
     void applyTo(Document& document) const;
 
     /// The change that takes this one back: the added families removed as they were added,
     /// the changes swapped, the removed families added again, and the two cleanups
     /// exchanged.
     FamilyCollectionChange swapped() const;
-
-    /// The held places the added families' cleanup, and each change's, would leave on
-    /// document.
-    QStringList skippedOn(const Document& document) const;
 
     /// The non-empty addresses of the families it adds, and of the changes that set one.
     QList<Address> addressesGiven() const;

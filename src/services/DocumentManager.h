@@ -27,8 +27,7 @@ public:
     CommitResult executeCommand(CommandPtr command);
 
     /// Undo and redo through the session's commit step. One that conflicted or was refused
-    /// emits commandNotApplied, and an undo that applied but left places emits
-    /// placesSkipped.
+    /// emits commandNotApplied.
     void undo();
     void redo();
     bool canUndo() const { return m_session.canUndo(); }
@@ -47,16 +46,13 @@ signals:
     void undoStackChanged();
     void commandNotApplied(const CommitResult& result);
 
-    /// An undo applied, and left the places in result.skipped as they were.
-    void placesSkipped(const CommitResult& result);
-
     /// The session's geocoding batch: its progress, and its last request answering.
     void geocodingProgressChanged(int completed, int total);
     void geocodingFinished();
 
 private:
     /// After the commit step: a command that conflicted or was refused emits
-    /// commandNotApplied, and one that applied with skipped places emits placesSkipped.
+    /// commandNotApplied.
     void afterCommit(const CommitResult& result);
 
     WardSession m_session;

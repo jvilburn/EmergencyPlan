@@ -10,7 +10,6 @@
 #include <QHash>
 #include <QJsonObject>
 #include <QSet>
-#include <QStringList>
 
 class Document;
 
@@ -43,12 +42,8 @@ public:
     /// Puts the removed ids back into each held place that still stands as apply left it:
     /// the team, asset, group or district is there; the leader or presidency role is empty
     /// or already theirs; the task is there and unassigned or already assigned as held. It
-    /// leaves the rest.
+    /// leaves the rest, and puts back only the removed people document holds.
     void restore(Document& document) const;
-
-    /// A line per held place restore would leave on document, naming it as document holds
-    /// it, or as last seen when it is gone, in sorted order.
-    QStringList skippedOn(const Document& document) const;
 
     /// True when it holds at least one place.
     bool holdsPlaces() const;
@@ -61,9 +56,6 @@ public:
 
 private:
     ReferenceCleanup() = default;
-
-    /// Restores as restore does, and answers the lines skippedOn gives.
-    QStringList restoreInto(Document& document) const;
 
     bool namesRemoved(const std::optional<PersonId>& id) const;
 
@@ -80,3 +72,6 @@ private:
     QHash<MinisteringDistrictId, MinisteringDistrict> m_heldDistricts;
     QHash<TaskId, ResponseTask> m_heldTasks;
 };
+
+/// Writes cleanup under key, or nothing when it removes nothing and holds no place.
+void writeCleanup(QJsonObject& json, const QString& key, const ReferenceCleanup& cleanup);

@@ -40,7 +40,6 @@ private slots:
     void updateWindowTitle();
     void updateUndoRedoActions();
     void onCommandNotApplied(const CommitResult& result);
-    void onPlacesSkipped(const CommitResult& result);
 
     // Geocoding
     void onGeocodingProgress(int completed, int total);

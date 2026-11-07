@@ -9,21 +9,28 @@
 
 UndoableCommandPtr UpdateFamilyCommand::fromEdit(const Family& opened, const Family& saved, const Document& document)
 {
-    std::optional<FamilyChange> change = FamilyChange::between(opened, saved, document);
+    std::optional<FamilyChange> change = FamilyChange::between(opened, saved);
     if (!change.has_value())
     {
         return nullptr;
     }
     CommandDescription description(QObject::tr("%1 family").arg(opened.surname()), change->describe(opened));
-    return std::make_shared<UpdateFamilyCommand>(opened.id(), *change, description);
+    return std::make_shared<UpdateFamilyCommand>(opened.id(), *change,
+                                                 ReferenceCleanup::of(document, change->addedIds(), {}),
+                                                 ReferenceCleanup::of(document, change->removedIds(), {}),
+                                                 description);
 }
 
 UpdateFamilyCommand::UpdateFamilyCommand(const FamilyId& familyId,
                                          const FamilyChange& change,
+                                         const ReferenceCleanup& addedCleanup,
+                                         const ReferenceCleanup& removedCleanup,
                                          const CommandDescription& description)
     : UndoableCommand(description)
     , m_familyId(familyId)
     , m_change(change)
+    , m_addedCleanup(addedCleanup)
+    , m_removedCleanup(removedCleanup)
 {
 }
 
@@ -34,13 +41,16 @@ CommandOutcome UpdateFamilyCommand::execute(Document& document) const
     {
         return CommandOutcome::Conflicted;
     }
-    m_change.applyTo(document, *family);
+    document.setFamily(m_change.appliedTo(*family));
+    m_removedCleanup.apply(document);
+    m_addedCleanup.restore(document);
     return CommandOutcome::Applied;
 }
 
 UndoableCommandPtr UpdateFamilyCommand::inverse() const
 {
-    return std::make_shared<UpdateFamilyCommand>(m_familyId, m_change.swapped(), description().undone());
+    return std::make_shared<UpdateFamilyCommand>(m_familyId, m_change.swapped(), m_removedCleanup, m_addedCleanup,
+                                                 description().undone());
 }
 
 QJsonObject UpdateFamilyCommand::toJson() const
@@ -48,12 +58,14 @@ QJsonObject UpdateFamilyCommand::toJson() const
     QJsonObject json;
     json["familyId"] = m_familyId.toString();
     json["change"] = m_change.toJson();
+    writeCleanup(json, "addedCleanup", m_addedCleanup);
+    writeCleanup(json, "removedCleanup", m_removedCleanup);
     return json;
 }
 
 DocumentChange UpdateFamilyCommand::documentChange() const
 {
-    if (m_change.reachesOtherPlaces())
+    if (!m_change.removedIds().isEmpty() || m_addedCleanup.holdsPlaces())
     {
         return DocumentChange::full();
     }
@@ -70,15 +82,12 @@ QList<Address> UpdateFamilyCommand::addressesGiven() const
     return {address->after()};
 }
 
-QStringList UpdateFamilyCommand::skippedOn(const Document& document) const
-{
-    return m_change.skippedOn(document);
-}
-
 CommandPtr UpdateFamilyCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
 {
     return std::make_shared<UpdateFamilyCommand>(FamilyId::fromString(json["familyId"].toString()),
                                                  FamilyChange::fromJson(json["change"].toObject()),
+                                                 ReferenceCleanup::fromJson(json["addedCleanup"].toObject()),
+                                                 ReferenceCleanup::fromJson(json["removedCleanup"].toObject()),
                                                  description);
 }
 
@@ -192,11 +201,6 @@ QList<Address> RestoreFamilyCommand::addressesGiven() const
         return {};
     }
     return {m_family.address()};
-}
-
-QStringList RestoreFamilyCommand::skippedOn(const Document& document) const
-{
-    return m_cleanup.skippedOn(document);
 }
 
 CommandPtr RestoreFamilyCommand::fromJson(const QJsonObject& json, const CommandDescription& description)

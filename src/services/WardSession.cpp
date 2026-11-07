@@ -17,14 +17,14 @@ CommitResult attempt(const Command& command, Document& document)
     QString refusal = command.refusal(document);
     if (!refusal.isEmpty())
     {
-        return CommitResult{CommitStatus::Refused, refusal, command.description(), QStringList()};
+        return CommitResult{CommitStatus::Refused, refusal, command.description()};
     }
     if (command.execute(document) == CommandOutcome::Conflicted)
     {
-        return CommitResult{CommitStatus::Conflicted, QString(), command.description(), QStringList()};
+        return CommitResult{CommitStatus::Conflicted, QString(), command.description()};
     }
     document.onDocumentChanged(command.documentChange());
-    return CommitResult{CommitStatus::Applied, QString(), command.description(), QStringList()};
+    return CommitResult{CommitStatus::Applied, QString(), command.description()};
 }
 
 }  // namespace
@@ -49,7 +49,7 @@ CommitResult WardSession::commit(CommandPtr command)
 {
     if (!command)
     {
-        return CommitResult{CommitStatus::NothingToDo, QString(), CommandDescription(), QStringList()};
+        return CommitResult{CommitStatus::NothingToDo, QString(), CommandDescription()};
     }
     CommitResult result = run(*command);
     if (result.status != CommitStatus::Applied)
@@ -74,12 +74,9 @@ CommitResult WardSession::commit(CommandPtr command)
 CommitResult WardSession::undo()
 {
     Q_ASSERT(canUndo());
-    UndoableCommandPtr inverse = m_undoStack.last()->inverse();
-    QStringList skipped = inverse->skippedOn(m_document);
-    CommitResult result = run(*inverse);
+    CommitResult result = run(*m_undoStack.last()->inverse());
     if (result.status == CommitStatus::Applied)
     {
-        result.skipped = skipped;
         m_redoStack.append(m_undoStack.takeLast());
         emit undoStackChanged();
     }

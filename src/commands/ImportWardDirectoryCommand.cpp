@@ -119,11 +119,6 @@ QStringList ImportWardDirectoryCommand::unitsGiven() const
     return {m_ward.unitNumber()};
 }
 
-QStringList ImportWardDirectoryCommand::skippedOn(const Document& document) const
-{
-    return m_families.skippedOn(document);
-}
-
 CommandPtr ImportWardDirectoryCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
 {
     QHash<QString, Coordinates> coordinates;

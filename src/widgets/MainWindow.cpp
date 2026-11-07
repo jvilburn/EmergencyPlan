@@ -188,8 +188,6 @@ void MainWindow::setupConnections()
             this, &MainWindow::updateUndoRedoActions);
     connect(DocumentManager::instance(), &DocumentManager::commandNotApplied,
             this, &MainWindow::onCommandNotApplied);
-    connect(DocumentManager::instance(), &DocumentManager::placesSkipped,
-            this, &MainWindow::onPlacesSkipped);
 
     // Emergency lifecycle
     connect(EmergencyManager::instance(), &EmergencyManager::emergencyStarted,
@@ -407,19 +405,6 @@ void MainWindow::onCommandNotApplied(const CommitResult& result)
         text.append(QString("- %1").arg(line));
     }
     QMessageBox::warning(this, tr("Change Not Applied"), text.join("\n"));
-}
-
-void MainWindow::onPlacesSkipped(const CommitResult& result)
-{
-    QStringList text;
-    text.append(result.description.heading());
-    text.append(QString());
-    text.append(tr("These places changed since, so they were left as they are. Put them back by hand if they are still wanted:"));
-    for (const QString& line : result.skipped)
-    {
-        text.append(QString("- %1").arg(line));
-    }
-    QMessageBox::information(this, tr("Undo"), text.join("\n"));
 }
 
 void MainWindow::onGeocodingProgress(int completed, int total)

@@ -58,11 +58,6 @@ void DocumentManager::afterCommit(const CommitResult& result)
         emit commandNotApplied(result);
         break;
     case CommitStatus::Applied:
-        if (!result.skipped.isEmpty())
-        {
-            emit placesSkipped(result);
-        }
-        break;
     case CommitStatus::NothingToDo:
         break;
     }

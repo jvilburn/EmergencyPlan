@@ -58,11 +58,6 @@ DocumentChange AddTeamCommand::documentChange() const
     return DocumentChange::team().updated(m_team.id());
 }
 
-QStringList AddTeamCommand::skippedOn(const Document& document) const
-{
-    return m_cleanup.skippedOn(document);
-}
-
 CommandPtr AddTeamCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
 {
     return std::make_shared<AddTeamCommand>(Team::fromJson(json["team"].toObject()),

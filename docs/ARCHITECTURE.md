@@ -255,10 +255,6 @@ public:
     // The ward units this command gives the document, known at construction; empty by default
     virtual QStringList unitsGiven() const;
 
-    // For a command that puts back what a removal took out of the places that held it, a line
-    // per place it would leave on this document; empty by default
-    virtual QStringList skippedOn(const Document& document) const;
-
     // A heading and a line per value set, fixed when the command is built
     const CommandDescription& description() const;
 };
@@ -320,7 +316,7 @@ signals:
 - **The commit step** asks the command's rule, then runs `execute`. It answers `Applied`, `Conflicted`, or `Refused` with the rule's wording, and `NothingToDo` for an empty command, which is what an edit that changed nothing builds. A command that applies is appended to the journal, empties the redo stack, and enters the undo stack when it is an `UndoableCommand`; the undo stack holds at most 100 commands, with the oldest dropped. A command that conflicts or is refused changes nothing.
 - **The journal** (`Journal`) holds each applied command's serialised form under the next sequence number, in the order the commands were made.
 - **Replay** rebuilds each journal entry with `CommandRegistry` and puts it through the rule and `execute` on a copy of the version, in order. When every entry applies, the copy becomes the document. The first entry that conflicts or is refused abandons the replay: the version becomes the document as it stands, the journal and the undo and redo stacks are emptied, and the result holds the abandoned changes as plain text, which the app writes to a file for the user to redo.
-- **Undo** builds the inverse of the command on top of the undo stack and runs it through the commit step; when it applies, the command moves to the redo stack, and the result's `skipped` holds the lines the inverse's `skippedOn` gave on the document before it ran. **Redo** runs that command again through the commit step and moves it back. An undo whose inverse conflicts or is refused leaves the command where it was.
+- **Undo** builds the inverse of the command on top of the undo stack and runs it through the commit step; when it applies, the command moves to the redo stack. **Redo** runs that command again through the commit step and moves it back. An undo whose inverse conflicts or is refused leaves the command where it was.
 - **Automatic updates** (`AutomaticUpdates`: geocoding and ward and stake lookup) change the document outside the journal, since their results are derived data that is computed again whenever it is missing. They start when a ward opens (`run()`), and after a command (or an undo or redo) applies that gives a family an address the table of address coordinates lacks, or gives the document a ward unit that lacks its details or names a stake the document lacks; the session hands each applied command to `commandApplied()`, and a replay starts none. A batch requests each address some family has that the table lacks, once, skipping addresses with no street and those on the failed list, and maps the families at each address as its result arrives, adding the entry and never replacing one already there. When its last request answers, the batch adds again every held result the document lacks, so a document replaced mid-batch loses none, then drops every entry no family's address uses, and emits `applied` once if the batch changed the table. Ward and stake lookups run one at a time and apply as each completes. Addresses and unit numbers that fail, and wards a lookup finds without a chapel, go on the failed list, and are not tried again until their text changes; the list belongs to the open ward and starts empty when a ward opens. A lookup that changes the document emits `documentChanged` and `applied` once; a batch emits `documentChanged` for each family it maps and `applied` once at its end; one that changes nothing emits neither.
 - **Typed coordinates** are a journalled command on the address's entry, `SetAddressCoordinatesCommand`, which sets the entry whatever it holds; its inverse, `RevertAddressCoordinatesCommand`, puts back what the entry held when the command was built, provided the entry still holds the typed value.
 
@@ -331,8 +327,8 @@ signals:
 class UpdateFamilyCommand : public UndoableCommand
 {
 public:
-    // Empty when nothing differs; the cleanups hold the places in document that refer to
-    // the members it removes
+    // Empty when nothing differs; each cleanup holds the places in document that refer to
+    // the members it names
     static UndoableCommandPtr fromEdit(const Family& opened, const Family& saved, const Document& document);
 
     CommandOutcome execute(Document& document) const override
@@ -342,28 +338,35 @@ public:
         {
             return CommandOutcome::Conflicted;
         }
-        m_change.applyTo(document, *family);
+        document.setFamily(m_change.appliedTo(*family));
+        m_removedCleanup.apply(document);
+        m_addedCleanup.restore(document);
         return CommandOutcome::Applied;
     }
 
     UndoableCommandPtr inverse() const override
     {
-        return std::make_shared<UpdateFamilyCommand>(m_familyId, m_change.swapped(), description().undone());
+        return std::make_shared<UpdateFamilyCommand>(m_familyId, m_change.swapped(), m_removedCleanup, m_addedCleanup,
+                                                     description().undone());
     }
 
 private:
     FamilyId m_familyId;
     FamilyChange m_change;
+    ReferenceCleanup m_addedCleanup;
+    ReferenceCleanup m_removedCleanup;
 };
 ```
 
-`FamilyChange` holds the address change, a `MemberChange` per changed member, the members added with the index each has in the saved family, and the members removed as last seen with the index each was at. Member order is not part of the start condition: a change inserts each addition at its index and moves no one else, and the inverse of a removal puts the member back where they were.
+`FamilyChange` holds the address change, a `MemberChange` per changed member, the members added with the index each has in the saved family, and the members removed as last seen with the index each was at. It changes only the family. Member order is not part of the start condition: a change inserts each addition at its index and moves no one else, and the inverse of a removal puts the member back where they were.
 
 ### References stay whole
 
-`ReferenceCleanup` is how every removal keeps teams, assets, ministering groups and districts, and open tasks' assignments pointing at people, families and teams that exist. A resolved task keeps its assignee, as part of the emergency's log. It holds the people and families a removal takes out, or the team, and the places that referred to them when the command was built, each as that team, asset, group, district or task stood then. `apply` takes the removed ids out of every place that holds them when it runs, whatever it holds; `restore` puts them back into each held place that still stands as `apply` left it, and `skippedOn` names the held places `restore` would leave. A cleanup is in no start condition.
+`ReferenceCleanup` is how every removal keeps teams, assets, ministering groups and districts, and open tasks' assignments pointing at people, families and teams that exist. A resolved task keeps its assignee, as part of the emergency's log. It holds the people and families a removal takes out, or the team, and the places that referred to them when the command was built, each as that team, asset, group, district or task stood then. `apply` takes the removed ids out of every place that holds them when it runs, whatever it holds; `restore` puts them back into each held place that still stands as `apply` left it, and leaves the rest as they stand; it puts back only the removed people the document holds. A cleanup is in no start condition.
 
-- `FamilyChange` holds one cleanup for the members it removes, which it applies, and one for the members it adds, whose held places it restores; swapping exchanges them, so the inverse of a removal restores the places it held. `FamilyCollectionChange`, which both imports hold, does the same for the families it removes and adds and their people.
+A command that both removes and adds people holds one cleanup for everything it removes and one for everything it adds, and runs them once, after all its changes to families have landed: it applies the removal cleanup, then restores the other. Its inverse exchanges the two, so the inverse of a removal restores the places the removal held.
+
+- `UpdateFamilyCommand` holds the pair for the members its `FamilyChange` removes and adds. `FamilyCollectionChange`, which both imports hold, holds the pair for the families it removes and adds, their people, and the members each of its `FamilyChange`s removes and adds.
 - `DeleteFamilyCommand` removes a family as last seen and applies its cleanup; its inverse, `RestoreFamilyCommand`, puts the family back and restores the cleanup, and never conflicts.
 - `DeleteTeamCommand` unassigns every open task assigned to the team; `AddTeamCommand`, its inverse, assigns the held tasks again where they still stand.
 - A command that can change places outside the one thing it names reports `DocumentChange::full()`.
@@ -400,13 +403,12 @@ signals:
     void documentChanged(const DocumentChange& change);       // forwarded from the session
     void undoStackChanged();                                  // forwarded from the session
     void commandNotApplied(const CommitResult& result);
-    void placesSkipped(const CommitResult& result);           // an undo applied and left places
     void geocodingProgressChanged(int completed, int total);  // forwarded from the session
     void geocodingFinished();                                 // forwarded from the session
 };
 ```
 
-`executeCommand` hands the command to `WardSession::commit` and returns its `CommitResult`. When it is `Conflicted` or `Refused`, it emits `commandNotApplied`, and `MainWindow` tells the user what needs doing again, from the result's description, or which rule refused it; `NothingToDo`, from an edit that changed nothing, does neither. `undo` and `redo` run the session's `undo` and `redo` the same way; an undo's result carries its inverse's description, *Undo: heading* over the original's lines. An undo that applies with skipped places emits `placesSkipped`, and `MainWindow` lists them under the undo's heading for the user to redo by hand. The app starts each launch with `Document::empty()` open in the session, and `newDocument` opens a fresh one; either way the session starts its journal and undo stack empty. The window title is the document's `wardName()`, from the names of its wards.
+`executeCommand` hands the command to `WardSession::commit` and returns its `CommitResult`. When it is `Conflicted` or `Refused`, it emits `commandNotApplied`, and `MainWindow` tells the user what needs doing again, from the result's description, or which rule refused it; `NothingToDo`, from an edit that changed nothing, does neither. `undo` and `redo` run the session's `undo` and `redo` the same way; an undo's result carries its inverse's description, *Undo: heading* over the original's lines. The app starts each launch with `Document::empty()` open in the session, and `newDocument` opens a fresh one; either way the session starts its journal and undo stack empty. The window title is the document's `wardName()`, from the names of its wards.
 
 ### Geocoder and UnitLookup
 

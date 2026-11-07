@@ -53,8 +53,6 @@ public:
     /// The unit of the ward record it creates or keeps.
     QStringList unitsGiven() const override;
 
-    QStringList skippedOn(const Document& document) const override;
-
     static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
 
 private:

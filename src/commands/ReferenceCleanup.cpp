@@ -3,7 +3,6 @@
 #include "ItemType.h"
 
 #include <QJsonArray>
-#include <QObject>
 
 namespace
 {
@@ -63,11 +62,17 @@ std::optional<MinisteringOrg> orgOfDistrict(const Document& document, const Mini
     return std::nullopt;
 }
 
-/// A role that restoring may fill: it is empty, or already holds the id restored to it.
-bool roleOpenTo(const std::optional<PersonId>& current, const std::optional<PersonId>& restored)
+/// A role as restoring leaves it: held, when the role is empty and held names one of
+/// present; otherwise as it is.
+std::optional<PersonId> restoredRole(const std::optional<PersonId>& current,
+                                     const std::optional<PersonId>& held,
+                                     const QSet<PersonId>& present)
 {
-    return !current.has_value()
-        || current == restored;
+    if (!current.has_value() && held.has_value() && present.contains(*held))
+    {
+        return held;
+    }
+    return current;
 }
 
 template<typename Id, typename T>
@@ -122,11 +127,6 @@ void writeObjects(QJsonObject& json, const QString& key, const QHash<Id, T>& obj
     {
         json[key] = objectsToJson(objects);
     }
-}
-
-QString taskName(const ResponseTask& task)
-{
-    return QObject::tr("the %1 task: %2").arg(task.category(), task.description());
 }
 
 }  // namespace
@@ -283,13 +283,86 @@ void ReferenceCleanup::apply(Document& document) const
 
 void ReferenceCleanup::restore(Document& document) const
 {
-    restoreInto(document);
-}
+    QSet<PersonId> present;
+    for (const PersonId& id : m_people)
+    {
+        if (document.findPersonById(id).has_value())
+        {
+            present.insert(id);
+        }
+    }
 
-QStringList ReferenceCleanup::skippedOn(const Document& document) const
-{
-    Document restored = document;
-    return restoreInto(restored);
+    for (const Team& held : m_heldTeams)
+    {
+        std::optional<Team> current = document.findTeamById(held.id());
+        if (!current.has_value())
+        {
+            continue;
+        }
+        Team restored = *current;
+        restored.setMemberIds(with(current->memberIds(), among(held.memberIds(), present)));
+        restored.setLeaderId(restoredRole(current->leaderId(), held.leaderId(), present));
+        document.setTeam(restored);
+    }
+
+    for (const EmergencyAsset& held : m_heldAssets)
+    {
+        std::optional<EmergencyAsset> current = document.findEmergencyAssetById(held.id());
+        if (!current.has_value())
+        {
+            continue;
+        }
+        EmergencyAsset restored = *current;
+        restored.setPersonIds(with(current->personIds(), among(held.personIds(), present)));
+        document.setEmergencyAsset(restored);
+    }
+
+    for (const MinisteringGroup& held : m_heldGroups)
+    {
+        std::optional<MinisteringOrg> org = orgOfGroup(document, held.id());
+        if (!org.has_value())
+        {
+            continue;
+        }
+        MinisteringGroup current = document.groups(*org).value(held.id());
+        MinisteringGroup restored = current;
+        restored.setMinisterIds(with(current.ministerIds(), among(held.ministerIds(), present)));
+        restored.setMinisteredPersonIds(with(current.ministeredPersonIds(), among(held.ministeredPersonIds(), present)));
+        restored.setFamilyIds(with(current.familyIds(), among(held.familyIds(), m_families)));
+        restored.setPresidencyMemberId(restoredRole(current.presidencyMemberId(), held.presidencyMemberId(), present));
+        document.setGroup(*org, restored);
+    }
+
+    for (const MinisteringDistrict& held : m_heldDistricts)
+    {
+        std::optional<MinisteringOrg> org = orgOfDistrict(document, held.id());
+        if (!org.has_value())
+        {
+            continue;
+        }
+        MinisteringDistrict restored = document.districts(*org).value(held.id());
+        restored.setPresidencyMemberId(restoredRole(restored.presidencyMemberId(), held.presidencyMemberId(), present));
+        document.setDistrict(*org, restored);
+    }
+
+    for (const ResponseTask& held : m_heldTasks)
+    {
+        const ResponseTask* current = document.emergencyResponse().has_value()
+            ? document.emergencyResponse()->findTask(held.id())
+            : nullptr;
+        std::optional<PersonId> person = held.assignment()->personId();
+        if (current == nullptr
+            || current->assignment().has_value()
+            || (person.has_value() && !present.contains(*person)))
+        {
+            continue;
+        }
+        ResponseTask restored = *current;
+        restored.setAssignment(held.assignment());
+        EmergencyResponse response = *document.emergencyResponse();
+        response.setTask(restored);
+        document.setEmergencyResponse(response);
+    }
 }
 
 bool ReferenceCleanup::holdsPlaces() const
@@ -299,119 +372,6 @@ bool ReferenceCleanup::holdsPlaces() const
         || !m_heldGroups.isEmpty()
         || !m_heldDistricts.isEmpty()
         || !m_heldTasks.isEmpty();
-}
-
-QStringList ReferenceCleanup::restoreInto(Document& document) const
-{
-    QStringList skipped;
-
-    for (const Team& held : m_heldTeams)
-    {
-        std::optional<Team> current = document.findTeamById(held.id());
-        if (!current.has_value())
-        {
-            skipped.append(QObject::tr("the %1 team").arg(held.name()));
-            continue;
-        }
-        Team restored = *current;
-        restored.setMemberIds(with(current->memberIds(), among(held.memberIds(), m_people)));
-        if (namesRemoved(held.leaderId()))
-        {
-            if (roleOpenTo(current->leaderId(), held.leaderId()))
-            {
-                restored.setLeaderId(held.leaderId());
-            }
-            else
-            {
-                skipped.append(QObject::tr("leader of the %1 team").arg(current->name()));
-            }
-        }
-        document.setTeam(restored);
-    }
-
-    for (const EmergencyAsset& held : m_heldAssets)
-    {
-        std::optional<EmergencyAsset> current = document.findEmergencyAssetById(held.id());
-        if (!current.has_value())
-        {
-            skipped.append(QObject::tr("the %1 asset").arg(held.name()));
-            continue;
-        }
-        EmergencyAsset restored = *current;
-        restored.setPersonIds(with(current->personIds(), among(held.personIds(), m_people)));
-        document.setEmergencyAsset(restored);
-    }
-
-    for (const MinisteringGroup& held : m_heldGroups)
-    {
-        std::optional<MinisteringOrg> org = orgOfGroup(document, held.id());
-        if (!org.has_value())
-        {
-            skipped.append(QObject::tr("a ministering group"));
-            continue;
-        }
-        MinisteringGroup current = document.groups(*org).value(held.id());
-        MinisteringGroup restored = current;
-        restored.setMinisterIds(with(current.ministerIds(), among(held.ministerIds(), m_people)));
-        restored.setMinisteredPersonIds(with(current.ministeredPersonIds(), among(held.ministeredPersonIds(), m_people)));
-        restored.setFamilyIds(with(current.familyIds(), among(held.familyIds(), m_families)));
-        if (namesRemoved(held.presidencyMemberId()))
-        {
-            if (roleOpenTo(current.presidencyMemberId(), held.presidencyMemberId()))
-            {
-                restored.setPresidencyMemberId(held.presidencyMemberId());
-            }
-            else
-            {
-                skipped.append(QObject::tr("presidency member over a ministering group"));
-            }
-        }
-        document.setGroup(*org, restored);
-    }
-
-    for (const MinisteringDistrict& held : m_heldDistricts)
-    {
-        std::optional<MinisteringOrg> org = orgOfDistrict(document, held.id());
-        if (!org.has_value())
-        {
-            skipped.append(QObject::tr("the ministering district %1").arg(held.name()));
-            continue;
-        }
-        MinisteringDistrict current = document.districts(*org).value(held.id());
-        if (!roleOpenTo(current.presidencyMemberId(), held.presidencyMemberId()))
-        {
-            skipped.append(QObject::tr("presidency member over the ministering district %1").arg(current.name()));
-            continue;
-        }
-        MinisteringDistrict restored = current;
-        restored.setPresidencyMemberId(held.presidencyMemberId());
-        document.setDistrict(*org, restored);
-    }
-
-    for (const ResponseTask& held : m_heldTasks)
-    {
-        const ResponseTask* current = document.emergencyResponse().has_value()
-            ? document.emergencyResponse()->findTask(held.id())
-            : nullptr;
-        if (current == nullptr)
-        {
-            skipped.append(taskName(held));
-            continue;
-        }
-        if (current->assignment().has_value() && current->assignment() != held.assignment())
-        {
-            skipped.append(taskName(*current));
-            continue;
-        }
-        ResponseTask restored = *current;
-        restored.setAssignment(held.assignment());
-        EmergencyResponse response = *document.emergencyResponse();
-        response.setTask(restored);
-        document.setEmergencyResponse(response);
-    }
-
-    skipped.sort();
-    return skipped;
 }
 
 bool ReferenceCleanup::namesRemoved(const std::optional<PersonId>& id) const
@@ -469,4 +429,13 @@ bool ReferenceCleanup::operator==(const ReferenceCleanup& other) const
         && m_heldGroups == other.m_heldGroups
         && m_heldDistricts == other.m_heldDistricts
         && m_heldTasks == other.m_heldTasks;
+}
+
+void writeCleanup(QJsonObject& json, const QString& key, const ReferenceCleanup& cleanup)
+{
+    QJsonObject written = cleanup.toJson();
+    if (!written.isEmpty())
+    {
+        json[key] = written;
+    }
 }

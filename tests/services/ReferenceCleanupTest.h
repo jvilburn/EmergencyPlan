@@ -4,7 +4,7 @@
 
 /// References stay whole: a removal takes what it removes out of every place that holds it
 /// when it runs, and its undo restores the places it held that still stand as it left them,
-/// naming the rest.
+/// leaving the rest as they stand, and puts back only people the document still holds.
 class ReferenceCleanupTest : public QObject
 {
     Q_OBJECT
@@ -19,8 +19,13 @@ private slots:
     void removalReplayedAfterThePersonJoinedAnotherTeamTakesThemOffItToo();
     void removalReplayedAfterThePersonWasAssignedATaskUnassignsIt();
     void removingAPersonUnassignsTheirOpenTaskAndLeavesTheirResolvedOneAssigned();
-    void undoingARemovalSkipsATeamDeletedSinceAndNamesIt();
+    void undoingARemovalLeavesATeamDeletedSince();
     void undoingARemovalLeavesALeaderSetSince();
     void undoingADirectoryImportRestoresTheRemovedPeoplesMemberships();
     void ministeringImportReplayedAfterACleanupChangedAGroupConflicts();
+    void undoingAFamilyDeleteLeavesEachPlaceSomeoneElseChanged();
+    void undoingAnImportRestoresTheMemberItRemovedFromAFamily();
+    void secondUndoOfOneFamilyDeletePutsBackOnlyTheMembersItStillHolds();
+    void undoingAnImportRestoresALeaderWhateverTheFamilyOrder_data();
+    void undoingAnImportRestoresALeaderWhateverTheFamilyOrder();
 };

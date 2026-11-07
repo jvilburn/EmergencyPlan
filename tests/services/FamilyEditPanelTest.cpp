@@ -192,7 +192,7 @@ void FamilyEditPanelTest::addedChildMovesIntoPlaceWhenItsBirthYearIsTyped()
     Family saved = panel.family();
     QCOMPARE(idsOf(saved), expected);
 
-    std::optional<FamilyChange> change = FamilyChange::between(opened, saved, Document());
+    std::optional<FamilyChange> change = FamilyChange::between(opened, saved);
     QVERIFY(change.has_value());
     QCOMPARE(idsOf(change->appliedTo(opened)), expected);
 }

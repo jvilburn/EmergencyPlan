@@ -5,39 +5,46 @@
 #include "ReferenceCleanup.h"
 
 /// An edit to one family, built from the difference between what the edit opened with and
-/// what it saved. Holds the before and after of the changed fields only, and the cleanups of
-/// the members it removes and adds.
+/// what it saved. Holds the before and after of the changed fields only, a ReferenceCleanup
+/// for the members it removes, which it applies, and one for the members it adds, whose
+/// held places it restores. Its inverse exchanges the two, so the edit that takes a removal
+/// back restores the places the removal held. Neither cleanup is part of its start
+/// condition.
 class UpdateFamilyCommand : public UndoableCommand
 {
 public:
     static constexpr const char* TypeName = "updateFamily";
 
     /// The edit from the family as opened to the family as saved, or an empty pointer when
-    /// nothing differs, which WardSession::commit takes as nothing to do. The cleanups hold
-    /// the places in document that refer to the members it removes.
+    /// nothing differs, which WardSession::commit takes as nothing to do. Each cleanup holds
+    /// the places in document that refer to the members it names.
     static UndoableCommandPtr fromEdit(const Family& opened, const Family& saved, const Document& document);
 
-    UpdateFamilyCommand(const FamilyId& familyId, const FamilyChange& change, const CommandDescription& description);
+    UpdateFamilyCommand(const FamilyId& familyId,
+                        const FamilyChange& change,
+                        const ReferenceCleanup& addedCleanup,
+                        const ReferenceCleanup& removedCleanup,
+                        const CommandDescription& description);
 
     QString type() const override { return TypeName; }
     CommandOutcome execute(Document& document) const override;
     UndoableCommandPtr inverse() const override;
     QJsonObject toJson() const override;
 
-    /// The whole document when the change reaches places outside the family, otherwise the
-    /// family.
+    /// The whole document when it can change a place outside the family: it removes a
+    /// member, or restores a held place. Otherwise the family.
     DocumentChange documentChange() const override;
 
     /// The address after, when the change sets a non-empty address.
     QList<Address> addressesGiven() const override;
-
-    QStringList skippedOn(const Document& document) const override;
 
     static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
 
 private:
     FamilyId m_familyId;
     FamilyChange m_change;
+    ReferenceCleanup m_addedCleanup;
+    ReferenceCleanup m_removedCleanup;
 };
 
 /// A family deleted, held as last seen: a change to the family since makes the deletion
@@ -85,8 +92,6 @@ public:
 
     /// The family's address, when it is not empty.
     QList<Address> addressesGiven() const override;
-
-    QStringList skippedOn(const Document& document) const override;
 
     static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
 

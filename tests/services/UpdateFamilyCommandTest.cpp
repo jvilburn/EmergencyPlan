@@ -138,7 +138,9 @@ UpdateFamilyCommandTest::UpdateFamilyCommandTest(QObject* parent)
 
 void UpdateFamilyCommandTest::editHoldsOnlyTheFieldsThatDiffer()
 {
-    QJsonObject change = bobPhoneEdit("555-2222")->toJson()["change"].toObject();
+    QJsonObject json = bobPhoneEdit("555-2222")->toJson();
+    QCOMPARE(json.keys(), QStringList({"change", "familyId"}));
+    QJsonObject change = json["change"].toObject();
 
     QCOMPARE(change.keys(), QStringList({"members"}));
     QJsonObject members = change["members"].toObject();

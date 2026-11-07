@@ -28,8 +28,6 @@ public:
     /// The whole document when it restores tasks, otherwise the team.
     DocumentChange documentChange() const override;
 
-    QStringList skippedOn(const Document& document) const override;
-
     static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
 
 private:
