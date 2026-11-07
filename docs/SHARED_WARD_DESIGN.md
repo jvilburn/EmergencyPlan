@@ -893,8 +893,9 @@ id pointing at something that exists:
   removal left it: the team, asset, group or district is still there, the leader or
   presidency role is still empty, the task is still there and unassigned. It leaves the
   rest as they stand, and it puts back only people the document still holds. Each command
-  holds one cleanup for everything it removes and one for everything its undo restores,
-  and runs them once, after its own changes to families have landed.
+  holds one cleanup for the people it removes and one for the people it adds, applies the
+  first and restores the second once, after its own changes to families have landed, and
+  its undo swaps the two.
 - **A leader is a member.** A team edit conflicts when the team it would leave has a leader
   who is not one of its members. So a leader change to someone off the team conflicts, and
   so does a removal replayed after someone made that person leader, which is handed back as
