@@ -17,12 +17,12 @@ private slots:
     void undoOfTypedCoordinatesRestoresThePreviousEntry();
     void typedCoordinatesReplayedAfterAGeocodeOfThatAddressApply();
     void batchDropsEntriesNoFamilyUsesAndKeepsEveryEntryInUse();
-    void batchOfSeveralAddressesAppliesOnce();
+    void batchOfSeveralAddressesSavesOnce();
     void failedAddressIsNotRequestedAgainUntilItsTextChanges();
     void twoFamiliesAtOneAddressShareOneRequestAndOneEntry();
     void commandThatGivesNoAddressStartsNoGeocoding();
-    void batchThatChangesNothingEmitsNothing();
-    void lookupThatChangesNothingEmitsNothing();
+    void batchThatChangesNothingSavesNothing();
+    void lookupThatChangesNothingSavesNothing();
     void failedWardLookupContinuesToTheNextWard();
     void wardFoundNamingAMissingStakeLooksUpTheStakeBeforeTheNextWard();
     void undoOfAnAddressEditRequestsTheRestoredAddress();

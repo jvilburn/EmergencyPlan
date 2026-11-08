@@ -26,6 +26,8 @@
 #include "MinisteringImportService.h"
 #include "GeoLocation.h"
 
+#include <QCloseEvent>
+#include <QGuiApplication>
 #include <QMenuBar>
 #include <QStatusBar>
 #include <QVBoxLayout>
@@ -37,6 +39,7 @@
 #include <QLabel>
 #include <QProgressBar>
 #include <QStandardPaths>
+#include <QSysInfo>
 #include <QFile>
 #include <QFileInfo>
 #include <QDir>
@@ -144,8 +147,8 @@ void MainWindow::setupMenus()
     // File menu
     QMenu* fileMenu = menuBar()->addMenu(tr("&File"));
 
-    m_newAction = fileMenu->addAction(tr("&New"), this, &MainWindow::onNewDocument);
-    m_newAction->setShortcut(QKeySequence::New);
+    m_newWardAction = fileMenu->addAction(tr("&New Ward..."), this, &MainWindow::onNewWard);
+    m_newWardAction->setShortcut(QKeySequence::New);
 
     fileMenu->addSeparator();
 
@@ -188,6 +191,10 @@ void MainWindow::setupConnections()
             this, &MainWindow::updateUndoRedoActions);
     connect(DocumentManager::instance(), &DocumentManager::commandNotApplied,
             this, &MainWindow::onCommandNotApplied);
+    connect(DocumentManager::instance(), &DocumentManager::saveFailed,
+            this, &MainWindow::onSaveFailed);
+    connect(qApp, &QGuiApplication::applicationStateChanged,
+            this, &MainWindow::onApplicationStateChanged);
 
     // Emergency lifecycle
     connect(EmergencyManager::instance(), &EmergencyManager::emergencyStarted,
@@ -225,10 +232,113 @@ void MainWindow::setupConnections()
             this, &MainWindow::onGeocodingFinished);
 }
 
-void MainWindow::onNewDocument()
+bool MainWindow::openStartingWard()
 {
-    DocumentManager::instance()->newDocument();
-    statusBar()->showMessage(tr("New document created"), 3000);
+    if (loadSetting("deviceName").isEmpty())
+    {
+        bool ok = false;
+        QString deviceName = QInputDialog::getText(this, tr("Ward Planning"), tr("Name this device"),
+                                                   QLineEdit::Normal, QSysInfo::machineHostName(), &ok)
+                                 .trimmed();
+        if (!ok || deviceName.isEmpty())
+        {
+            return false;
+        }
+        saveSetting("deviceName", deviceName);
+    }
+
+    QString lastWardId = loadSetting("lastWardId");
+    if (!lastWardId.isEmpty())
+    {
+        OpenResult result = DocumentManager::instance()->openWard(DocumentId::fromString(lastWardId));
+        if (result.status == OpenStatus::Opened)
+        {
+            return true;
+        }
+        qWarning("The last ward did not open: %s", qPrintable(result.problem));
+        QMessageBox::warning(this, tr("Ward Not Opened"), openFailureMessage(result.status));
+    }
+    return createWard();
+}
+
+bool MainWindow::createWard()
+{
+    bool ok = false;
+    QString userName = QInputDialog::getText(this, tr("New Ward"), tr("Your name"), QLineEdit::Normal,
+                                             loadSetting("userName"), &ok)
+                           .trimmed();
+    if (!ok || userName.isEmpty())
+    {
+        return false;
+    }
+    saveSetting("userName", userName);
+    DocumentManager::instance()->createWard(userName, loadSetting("deviceName"));
+    saveSetting("lastWardId", DocumentManager::instance()->documentId().toString());
+    return true;
+}
+
+void MainWindow::onNewWard()
+{
+    if (unsavedChangesMayBeLost())
+    {
+        createWard();
+    }
+}
+
+bool MainWindow::unsavedChangesMayBeLost()
+{
+    if (DocumentManager::instance()->retryPendingSave())
+    {
+        return true;
+    }
+    QMessageBox::StandardButton answer = QMessageBox::question(
+        this, tr("Changes Not Saved"), tr("Your latest changes could not be saved and will be lost. Close anyway?"),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    return answer == QMessageBox::Yes;
+}
+
+void MainWindow::closeEvent(QCloseEvent* event)
+{
+    if (!unsavedChangesMayBeLost())
+    {
+        event->ignore();
+        return;
+    }
+    QMainWindow::closeEvent(event);
+}
+
+void MainWindow::onSaveFailed(const QString& problem)
+{
+    QMessageBox::warning(this, tr("Change Not Saved"),
+                         tr("Your change could not be saved: %1. It is kept while the app stays open and saved as "
+                            "soon as saving works again; closing asks first.")
+                             .arg(problem));
+}
+
+void MainWindow::onApplicationStateChanged(Qt::ApplicationState state)
+{
+    if (state == Qt::ApplicationActive)
+    {
+        DocumentManager::instance()->retryPendingSave();
+    }
+}
+
+QString MainWindow::openFailureMessage(OpenStatus status)
+{
+    switch (status)
+    {
+    case OpenStatus::Opened:
+        return QString();
+    case OpenStatus::Missing:
+        return tr("This ward is no longer on this device.");
+    case OpenStatus::CannotRead:
+        return tr("This ward's file on this device could not be opened.");
+    case OpenStatus::Newer:
+        return tr("This ward was saved by a newer version of Ward Planning. Update to open it.");
+    case OpenStatus::Fault:
+        return tr("This ward's file could not be read just now. Try again.");
+    }
+    return QString();
 }
 
 void MainWindow::onImportPdf()
@@ -456,6 +566,18 @@ QString MainWindow::settingsFilePath()
 {
     QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
     return cacheDir + "/settings.json";
+}
+
+QString MainWindow::loadSetting(const QString& key)
+{
+    return loadSettingsJson(settingsFilePath())[key].toString();
+}
+
+void MainWindow::saveSetting(const QString& key, const QString& value)
+{
+    QJsonObject json = loadSettingsJson(settingsFilePath());
+    json[key] = value;
+    saveSettingsJson(settingsFilePath(), json);
 }
 
 bool MainWindow::loadDefaultLocation(double& lat, double& lng)

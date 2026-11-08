@@ -27,6 +27,11 @@ public:
     /// Creates a ward holding content under the user Alice Smith, on this device.
     void createWard(const Document& content);
 
+    /// Gives this device the ward other has open as it stands, access list included: a ward
+    /// created here takes other's document as a version, so the two hold one ward. Its local
+    /// file is sealed to that access list, which names other's device and not this one.
+    void takeWardOf(TestClient& other);
+
     /// Closes the app and starts it again: a new session on the same identity and store,
     /// opening the ward the old session had open.
     OpenResult reopen();

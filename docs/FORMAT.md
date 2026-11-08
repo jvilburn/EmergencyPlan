@@ -44,7 +44,8 @@ treats anything else as unreadable. A release that changes any field raises the 
 
 ## The key file
 
-One compact JSON object:
+The key file is `keys/device.key` in app data (`QStandardPaths::AppLocalDataLocation`), one
+compact JSON object:
 
 | Key | Type | Holds |
 |---|---|---|

@@ -4,7 +4,7 @@
 #include "ImportWardDirectoryCommand.h"
 #include "MinisteringImportService.h"
 #include "PdfText.h"
-#include "TestSession.h"
+#include "TestClient.h"
 #include "TestWard.h"
 #include "WardDirectoryImportService.h"
 
@@ -94,48 +94,48 @@ ImportCommandsTest::ImportCommandsTest(QObject* parent)
 
 void ImportCommandsTest::importReplayedAfterSomeoneAddedAFamilyKeepsThatFamily()
 {
-    TestSession mine;
+    TestClient mine("Laptop");
     mine.createWard(TestWard::document());
-    WardDirectoryImportResult result = mergeDirectory(directoryListing({TestWard::smith()}), mine.document(),
+    WardDirectoryImportResult result = mergeDirectory(directoryListing({TestWard::smith()}), mine.session().document(),
                                                       octoberFifteenth());
     QCOMPARE(result.removedFamilyIds, QSet<FamilyId>({TestWard::jonesId()}));
-    QVERIFY(mine.commit(ImportWardDirectoryCommand::fromImport(mine.document(), result, "Tanglewood.pdf")).status
+    QVERIFY(mine.session().commit(ImportWardDirectoryCommand::fromImport(mine.session().document(), result, "Tanglewood.pdf")).status
             == CommitStatus::Applied);
     Family lee = TestWard::lee(2010);
     Document theirs = TestWard::withFamily(TestWard::document(), lee);
 
-    ReplayResult replay = mine.replayOnto(theirs);
+    ReplayResult replay = mine.session().replayOnto(theirs);
 
     QVERIFY(replay.status == ReplayStatus::Replayed);
-    QVERIFY(mine.document().findFamilyById(lee.id()) == lee);
-    QVERIFY(mine.document().findFamilyById(TestWard::smithId()) == TestWard::smith());
-    QVERIFY(!mine.document().findFamilyById(TestWard::jonesId()).has_value());
+    QVERIFY(mine.session().document().findFamilyById(lee.id()) == lee);
+    QVERIFY(mine.session().document().findFamilyById(TestWard::smithId()) == TestWard::smith());
+    QVERIFY(!mine.session().document().findFamilyById(TestWard::jonesId()).has_value());
 
-    QVERIFY(mine.undo().status == CommitStatus::Applied);
+    QVERIFY(mine.session().undo().status == CommitStatus::Applied);
 
-    QVERIFY(mine.document().findFamilyById(TestWard::jonesId()) == TestWard::jones());
-    QVERIFY(mine.document().findFamilyById(lee.id()) == lee);
+    QVERIFY(mine.session().document().findFamilyById(TestWard::jonesId()) == TestWard::jones());
+    QVERIFY(mine.session().document().findFamilyById(lee.id()) == lee);
 }
 
 void ImportCommandsTest::importReplayedAfterAnEditToAFamilyItChangesConflicts()
 {
-    TestSession mine;
+    TestClient mine("Laptop");
     mine.createWard(TestWard::document());
     Family listedSmith = TestWard::withPhone(TestWard::smith(), TestWard::bobId(), "555-2222");
     WardDirectoryImportResult result = mergeDirectory(directoryListing({listedSmith, TestWard::jones()}),
-                                                      mine.document(), octoberFifteenth());
-    QVERIFY(mine.commit(ImportWardDirectoryCommand::fromImport(mine.document(), result, "Tanglewood.pdf")).status
+                                                      mine.session().document(), octoberFifteenth());
+    QVERIFY(mine.session().commit(ImportWardDirectoryCommand::fromImport(mine.session().document(), result, "Tanglewood.pdf")).status
             == CommitStatus::Applied);
-    QCOMPARE(QString(TestWard::person(mine.document(), TestWard::bobId()).phone()), QString("555-2222"));
+    QCOMPARE(QString(TestWard::person(mine.session().document(), TestWard::bobId()).phone()), QString("555-2222"));
     Document theirs = TestWard::withFamily(TestWard::document(),
                                            TestWard::withPhone(TestWard::smith(), TestWard::bobId(), "555-9999"));
 
-    ReplayResult replay = mine.replayOnto(theirs);
+    ReplayResult replay = mine.session().replayOnto(theirs);
 
     QVERIFY(replay.status == ReplayStatus::Abandoned);
     QVERIFY(replay.toRedo.contains("Import the ward directory from Tanglewood.pdf. (stopped here)"));
-    QCOMPARE(QString(TestWard::person(mine.document(), TestWard::bobId()).phone()), QString("555-9999"));
-    QVERIFY(mine.document() == theirs);
+    QCOMPARE(QString(TestWard::person(mine.session().document(), TestWard::bobId()).phone()), QString("555-9999"));
+    QVERIFY(mine.session().document() == theirs);
 }
 
 void ImportCommandsTest::reimportingTheSameDirectoryKeepsNotesAndCoordinatesAndHoldsNoChange()
@@ -212,54 +212,54 @@ void ImportCommandsTest::olderMinisteringPdfAddsNoUnknownFamilyOrMemberAndNoGrou
     QVERIFY(!result.districts.value(district.id()).presidencyMemberId().has_value());
     QCOMPARE(result.districts.value(district.id()).groupIds(), QSet<MinisteringGroupId>({group.id()}));
 
-    TestSession session;
-    session.createWard(document);
-    QVERIFY(session.commit(ImportMinisteringCommand::fromImport(session.document(), result, "Tanglewood EQ.pdf")).status
+    TestClient client("Laptop");
+    client.createWard(document);
+    QVERIFY(client.session().commit(ImportMinisteringCommand::fromImport(client.session().document(), result, "Tanglewood EQ.pdf")).status
             == CommitStatus::Applied);
-    QVERIFY(session.document().groups(MinisteringOrg::EldersQuorum) == result.groups);
-    QVERIFY(session.document().families() == document.families());
-    QVERIFY(session.document().ministeringPdfDate() == QDate(2026, 9, 1));
+    QVERIFY(client.session().document().groups(MinisteringOrg::EldersQuorum) == result.groups);
+    QVERIFY(client.session().document().families() == document.families());
+    QVERIFY(client.session().document().ministeringPdfDate() == QDate(2026, 9, 1));
 
     // An import whose group names people and families the ward lacks conflicts and changes
     // nothing.
     MinisteringImportResult naming = result;
     naming.groups.insert(group.id(), group);
-    Document before = session.document();
-    QVERIFY(session.commit(ImportMinisteringCommand::fromImport(session.document(), naming, "Tanglewood EQ.pdf")).status
+    Document before = client.session().document();
+    QVERIFY(client.session().commit(ImportMinisteringCommand::fromImport(client.session().document(), naming, "Tanglewood EQ.pdf")).status
             == CommitStatus::Conflicted);
-    QVERIFY(session.document() == before);
+    QVERIFY(client.session().document() == before);
 }
 
 void ImportCommandsTest::attemptOnAFamilyLandsAfterAnImportRemovedItAndTheReportNamesItAsRecorded()
 {
     Document document = TestWard::withResponse(TestWard::document(), TestWard::storm());
-    TestSession theirs;
-    theirs.createWard(document);
+    TestClient mine("Laptop");
+    TestClient theirs("Phone");
+    mine.createWard(document);
+    theirs.takeWardOf(mine);
     WardDirectoryImportResult result = mergeDirectory(directoryListing({TestWard::smith()}), document,
                                                       octoberFifteenth());
-    QVERIFY(theirs.commit(ImportWardDirectoryCommand::fromImport(theirs.document(), result, "Tanglewood.pdf")).status
+    QVERIFY(theirs.session().commit(ImportWardDirectoryCommand::fromImport(theirs.session().document(), result, "Tanglewood.pdf")).status
             == CommitStatus::Applied);
-    QVERIFY(!theirs.document().findFamilyById(TestWard::jonesId()).has_value());
+    QVERIFY(!theirs.session().document().findFamilyById(TestWard::jonesId()).has_value());
 
-    TestSession mine;
-    mine.createWard(document);
     ContactAttempt attempt = TestWard::attempt("attempt-jones", TestWard::jones(), TestWard::octoberFirst(10, 0),
                                                ContactMethod::Phone, TestWard::bob(), ContactOutcome::OK,
                                                "All well");
-    QVERIFY(mine.commit(AddContactAttemptCommand::fromNew(attempt)).status == CommitStatus::Applied);
+    QVERIFY(mine.session().commit(AddContactAttemptCommand::fromNew(attempt)).status == CommitStatus::Applied);
 
-    ReplayResult replay = mine.replayOnto(theirs.document());
+    ReplayResult replay = mine.session().replayOnto(theirs.session().document());
 
     QVERIFY(replay.status == ReplayStatus::Replayed);
-    QVERIFY(!mine.document().findFamilyById(TestWard::jonesId()).has_value());
-    EmergencyResponse response = mine.document().emergencyResponse().value();
+    QVERIFY(!mine.session().document().findFamilyById(TestWard::jonesId()).has_value());
+    EmergencyResponse response = mine.session().document().emergencyResponse().value();
     const ContactAttempt* landed = response.findContactAttempt(attempt.id());
     QVERIFY(landed != nullptr);
     QVERIFY(*landed == attempt);
 
     // The report names the family as the attempt recorded it, though the ward no longer
     // holds it
-    QString text = reportText(mine.document());
+    QString text = reportText(mine.session().document());
     QVERIFY2(text.contains("Phone - Smith, Bob - OK - All well"), qPrintable(text));
     QVERIFY2(text.contains("Jones, Carol"), qPrintable(text));
 }
@@ -363,20 +363,20 @@ void ImportCommandsTest::undoOfADirectoryImportLeavesTheSeededCoordinatesAndTheW
                                                                    TestWard::lee(2010)});
     Coordinates listedLee(40.2400, -111.6600);
     parsed.addressCoordinates.insert(TestWard::lee(2010).address().full(), listedLee);
-    TestSession session;
-    session.createWard(document);
-    QVERIFY(session.commit(ImportWardDirectoryCommand::fromImport(
+    TestClient client("Laptop");
+    client.createWard(document);
+    QVERIFY(client.session().commit(ImportWardDirectoryCommand::fromImport(
                                document, mergeDirectory(parsed, document, octoberFifteenth()), "Tanglewood.pdf"))
                 .status
             == CommitStatus::Applied);
-    QVERIFY(session.document().findFamilyById(FamilyId::fromString("pdf-family-lee")).has_value());
+    QVERIFY(client.session().document().findFamilyById(FamilyId::fromString("pdf-family-lee")).has_value());
 
-    QVERIFY(session.undo().status == CommitStatus::Applied);
+    QVERIFY(client.session().undo().status == CommitStatus::Applied);
 
-    QVERIFY(!session.document().findFamilyById(FamilyId::fromString("pdf-family-lee")).has_value());
-    QVERIFY(!session.document().wardDirectoryPdfDate().has_value());
-    QVERIFY(session.document().coordinatesFor(TestWard::lee(2010).address()) == listedLee);
-    std::optional<Ward> ward = session.document().metadata().findWardByUnit("123456");
+    QVERIFY(!client.session().document().findFamilyById(FamilyId::fromString("pdf-family-lee")).has_value());
+    QVERIFY(!client.session().document().wardDirectoryPdfDate().has_value());
+    QVERIFY(client.session().document().coordinatesFor(TestWard::lee(2010).address()) == listedLee);
+    std::optional<Ward> ward = client.session().document().metadata().findWardByUnit("123456");
     QVERIFY(ward.has_value());
     QCOMPARE(ward->name(), QString("Tanglewood"));
 }
@@ -423,40 +423,40 @@ void ImportCommandsTest::membersSharingAFirstGivenNameKeepTheirOwnIdsInEitherOrd
 void ImportCommandsTest::eachImportReplayedAfterTheOtherImportChangedTheDateItReadConflicts()
 {
     // A directory import, replayed after someone imported a newer ministering PDF.
-    TestSession directoryImporter;
+    TestClient directoryImporter("Laptop");
     directoryImporter.createWard(TestWard::document());
     WardDirectoryImportResult directory = mergeDirectory(directoryListing({TestWard::smith()}),
-                                                         directoryImporter.document(), octoberFifteenth());
-    QVERIFY(directoryImporter.commit(ImportWardDirectoryCommand::fromImport(directoryImporter.document(), directory,
+                                                         directoryImporter.session().document(), octoberFifteenth());
+    QVERIFY(directoryImporter.session().commit(ImportWardDirectoryCommand::fromImport(directoryImporter.session().document(), directory,
                                                                             "Tanglewood.pdf"))
                 .status
             == CommitStatus::Applied);
-    QVERIFY(!directoryImporter.document().findFamilyById(TestWard::jonesId()).has_value());
+    QVERIFY(!directoryImporter.session().document().findFamilyById(TestWard::jonesId()).has_value());
     Document newerMinistering = TestWard::document();
     newerMinistering.setMinisteringPdfDate(QDate(2026, 10, 20));
 
-    ReplayResult directoryReplay = directoryImporter.replayOnto(newerMinistering);
+    ReplayResult directoryReplay = directoryImporter.session().replayOnto(newerMinistering);
 
     QVERIFY(directoryReplay.status == ReplayStatus::Abandoned);
     QVERIFY(directoryReplay.toRedo.contains("Import the ward directory from Tanglewood.pdf. (stopped here)"));
-    QVERIFY(directoryImporter.document() == newerMinistering);
+    QVERIFY(directoryImporter.session().document() == newerMinistering);
 
     // A ministering import, replayed after someone imported a newer ward directory.
     Document read = TestWard::document();
     read.setWardDirectoryPdfDate(octoberFifteenth());
-    TestSession ministeringImporter;
+    TestClient ministeringImporter("Laptop");
     ministeringImporter.createWard(read);
     MinisteringImportResult ministering = bobMinistersToTheJoneses(read);
-    QVERIFY(ministeringImporter.commit(ImportMinisteringCommand::fromImport(read, ministering, "Tanglewood EQ.pdf"))
+    QVERIFY(ministeringImporter.session().commit(ImportMinisteringCommand::fromImport(read, ministering, "Tanglewood EQ.pdf"))
                 .status
             == CommitStatus::Applied);
-    QVERIFY(ministeringImporter.document().groups(MinisteringOrg::EldersQuorum) == ministering.groups);
+    QVERIFY(ministeringImporter.session().document().groups(MinisteringOrg::EldersQuorum) == ministering.groups);
     Document newerDirectory = read;
     newerDirectory.setWardDirectoryPdfDate(QDate(2026, 10, 20));
 
-    ReplayResult ministeringReplay = ministeringImporter.replayOnto(newerDirectory);
+    ReplayResult ministeringReplay = ministeringImporter.session().replayOnto(newerDirectory);
 
     QVERIFY(ministeringReplay.status == ReplayStatus::Abandoned);
     QVERIFY(ministeringReplay.toRedo.contains("Import the ministering assignments from Tanglewood EQ.pdf. (stopped here)"));
-    QVERIFY(ministeringImporter.document() == newerDirectory);
+    QVERIFY(ministeringImporter.session().document() == newerDirectory);
 }

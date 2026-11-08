@@ -12,8 +12,6 @@ add_executable(WardPlanningTests
     services/FakeGeocoder.cpp
     services/FakeUnitLookup.h
     services/FakeUnitLookup.cpp
-    services/TestSession.h
-    services/TestSession.cpp
     services/FakeWardStore.h
     services/FakeWardStore.cpp
     services/TestClient.h
@@ -70,6 +68,8 @@ add_executable(WardPlanningTests
     services/WardSessionSavingTest.cpp
     services/StrictReadersTest.h
     services/StrictReadersTest.cpp
+    services/AppDataTest.h
+    services/AppDataTest.cpp
 )
 
 target_include_directories(WardPlanningTests PRIVATE

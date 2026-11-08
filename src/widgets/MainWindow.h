@@ -30,8 +30,19 @@ public:
     explicit MainWindow(QWidget* parent);
     ~MainWindow();
 
+    /// Opens the ward the app starts on: on the first start, asks this device's name; then
+    /// opens the last ward, or, when there is none or it does not open, tells why and creates
+    /// a ward. False when the user cancels, which quits the app.
+    bool openStartingWard();
+
+protected:
+    /// Tries a pending save once more, and when it still fails asks before closing.
+    void closeEvent(QCloseEvent* event) override;
+
 private slots:
-    void onNewDocument();
+    void onNewWard();
+    void onSaveFailed(const QString& problem);
+    void onApplicationStateChanged(Qt::ApplicationState state);
     void onImportPdf();
     void onImportMinisteringPdf();
     void onUndo();
@@ -75,10 +86,25 @@ private:
     void openEditPanel(const FamilyId& familyId);
     void closeEditPanelInternal();
 
+    /// Asks the user's name, kept for the next new ward, and creates a ward under it on this
+    /// device, which becomes the last ward. False when the user cancels.
+    bool createWard();
+
+    /// True when nothing is left unsaved after one more try at saving, or when the user
+    /// agrees to lose what is.
+    bool unsavedChangesMayBeLost();
+
+    /// What the user is told when a ward does not open, for each way it can fail.
+    static QString openFailureMessage(OpenStatus status);
+
     // Settings helpers
     /// The report's suggested path: the emergency's name and start date in Documents.
     static QString defaultReportPath(const EmergencyResponse& response);
     static QString settingsFilePath();
+
+    /// The text setting under key in the settings file, empty when it has none.
+    static QString loadSetting(const QString& key);
+    static void saveSetting(const QString& key, const QString& value);
     static bool loadDefaultLocation(double& lat, double& lng);
     static void saveDefaultLocation(double lat, double lng);
 
@@ -99,7 +125,7 @@ private:
     MapWidget* m_mapWidget;
 
     // Actions
-    QAction* m_newAction;
+    QAction* m_newWardAction;
     QAction* m_importPdfAction;
     QAction* m_importMinisteringPdfAction;
     QAction* m_startEmergencyAction;

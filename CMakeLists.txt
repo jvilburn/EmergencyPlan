@@ -198,6 +198,7 @@ set(SERVICE_SOURCES
     src/services/WardHeader.cpp
     src/services/WardFile.cpp
     src/services/FileWardStore.cpp
+    src/services/AppData.cpp
     # src/services/StatisticsService.cpp
     # src/services/ResourceService.cpp
     # src/services/SearchService.cpp
@@ -239,6 +240,7 @@ set(SERVICE_HEADERS
     src/services/WardFile.h
     src/services/WardStore.h
     src/services/FileWardStore.h
+    src/services/AppData.h
     # src/services/StatisticsService.h
     # src/services/ResourceService.h
     # src/services/SearchService.h

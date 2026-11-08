@@ -1,7 +1,7 @@
 #include "TeamCommandsTest.h"
 #include "FamilyCommands.h"
 #include "TeamCommands.h"
-#include "TestSession.h"
+#include "TestClient.h"
 #include "TestWard.h"
 
 #include <QTest>
@@ -33,14 +33,11 @@ Team withLeader(const Team& team, const std::optional<PersonId>& leader)
     return updated;
 }
 
-/// Creates a ward from the test ward holding team in mine, and in theirs, which then takes
-/// mine's ward as a version, so both hold one ward, access list included.
-void openBoth(TestSession& mine, TestSession& theirs, const Team& team)
+/// Creates a ward from the test ward holding team in mine, and gives theirs the same ward.
+void openBoth(TestClient& mine, TestClient& theirs, const Team& team)
 {
-    Document document = TestWard::withTeam(TestWard::document(), team);
-    mine.createWard(document);
-    theirs.createWard(document);
-    theirs.replayOnto(mine.document());
+    mine.createWard(TestWard::withTeam(TestWard::document(), team));
+    theirs.takeWardOf(mine);
 }
 
 }  // namespace
@@ -52,60 +49,60 @@ TeamCommandsTest::TeamCommandsTest(QObject* parent)
 
 void TeamCommandsTest::twoUsersAddingDifferentMembersToOneTeamBothLand()
 {
-    TestSession mine;
-    TestSession theirs;
+    TestClient mine("Laptop");
+    TestClient theirs("Phone");
     Team bobOnly = withMembers(TestWard::setupTeam(), {TestWard::bobId()});
     openBoth(mine, theirs, bobOnly);
 
-    QVERIFY(commitTeamEdit(theirs, bobOnly, withMembers(bobOnly, {TestWard::bobId(), TestWard::carolId()})).status
+    QVERIFY(commitTeamEdit(theirs.session(), bobOnly, withMembers(bobOnly, {TestWard::bobId(), TestWard::carolId()})).status
             == CommitStatus::Applied);
-    QVERIFY(commitTeamEdit(mine, bobOnly, withMembers(bobOnly, {TestWard::bobId(), TestWard::aliceId()})).status
+    QVERIFY(commitTeamEdit(mine.session(), bobOnly, withMembers(bobOnly, {TestWard::bobId(), TestWard::aliceId()})).status
             == CommitStatus::Applied);
 
-    ReplayResult result = mine.replayOnto(theirs.document());
+    ReplayResult result = mine.session().replayOnto(theirs.session().document());
 
     QVERIFY(result.status == ReplayStatus::Replayed);
-    QCOMPARE(teamIn(mine).memberIds(), QSet<PersonId>({TestWard::bobId(), TestWard::aliceId(), TestWard::carolId()}));
+    QCOMPARE(teamIn(mine.session()).memberIds(), QSet<PersonId>({TestWard::bobId(), TestWard::aliceId(), TestWard::carolId()}));
 }
 
 void TeamCommandsTest::memberRemovalReplayedAfterTheyBecameLeaderConflictsAndLeavesThemMemberAndLeader()
 {
-    TestSession mine;
-    TestSession theirs;
+    TestClient mine("Laptop");
+    TestClient theirs("Phone");
     Team opened = TestWard::setupTeam();
     openBoth(mine, theirs, opened);
 
-    QVERIFY(commitTeamEdit(theirs, opened, withLeader(opened, TestWard::aliceId())).status == CommitStatus::Applied);
-    QVERIFY(commitTeamEdit(mine, opened, withMembers(opened, {TestWard::bobId()})).status == CommitStatus::Applied);
-    QCOMPARE(teamIn(mine).memberIds(), QSet<PersonId>({TestWard::bobId()}));
+    QVERIFY(commitTeamEdit(theirs.session(), opened, withLeader(opened, TestWard::aliceId())).status == CommitStatus::Applied);
+    QVERIFY(commitTeamEdit(mine.session(), opened, withMembers(opened, {TestWard::bobId()})).status == CommitStatus::Applied);
+    QCOMPARE(teamIn(mine.session()).memberIds(), QSet<PersonId>({TestWard::bobId()}));
 
-    ReplayResult result = mine.replayOnto(theirs.document());
+    ReplayResult result = mine.session().replayOnto(theirs.session().document());
 
     QVERIFY(result.status == ReplayStatus::Abandoned);
     QVERIFY(result.toRedo.contains("Setup team"));
     QVERIFY(result.toRedo.contains("removed: Smith, Alice"));
-    QCOMPARE(teamIn(mine).memberIds(), QSet<PersonId>({TestWard::bobId(), TestWard::aliceId()}));
-    QVERIFY(teamIn(mine).leaderId() == TestWard::aliceId());
+    QCOMPARE(teamIn(mine.session()).memberIds(), QSet<PersonId>({TestWard::bobId(), TestWard::aliceId()}));
+    QVERIFY(teamIn(mine.session()).leaderId() == TestWard::aliceId());
 }
 
 void TeamCommandsTest::removingTheLeaderClearsTheLeaderAndUndoRestoresBoth()
 {
-    TestSession session;
+    TestClient client("Laptop");
     Team opened = withLeader(TestWard::setupTeam(), TestWard::aliceId());
-    session.createWard(TestWard::withTeam(TestWard::document(), opened));
+    client.createWard(TestWard::withTeam(TestWard::document(), opened));
     Team saved = withMembers(opened, {TestWard::bobId()});
     QVERIFY(!saved.leaderId().has_value());
 
-    CommitResult result = commitTeamEdit(session, opened, saved);
+    CommitResult result = commitTeamEdit(client.session(), opened, saved);
 
     QVERIFY(result.status == CommitStatus::Applied);
     QCOMPARE(result.description, CommandDescription("Setup team", QStringList{"leader: (none)", "removed: Smith, Alice"}));
-    QCOMPARE(teamIn(session).memberIds(), QSet<PersonId>({TestWard::bobId()}));
-    QVERIFY(!teamIn(session).leaderId().has_value());
+    QCOMPARE(teamIn(client.session()).memberIds(), QSet<PersonId>({TestWard::bobId()}));
+    QVERIFY(!teamIn(client.session()).leaderId().has_value());
 
-    QVERIFY(session.undo().status == CommitStatus::Applied);
+    QVERIFY(client.session().undo().status == CommitStatus::Applied);
 
-    QVERIFY(teamIn(session) == opened);
+    QVERIFY(teamIn(client.session()) == opened);
 }
 
 void TeamCommandsTest::leaderChangeNeedsTheNewLeaderOnTheTeam()
@@ -122,81 +119,81 @@ void TeamCommandsTest::leaderChangeNeedsTheNewLeaderOnTheTeam()
     QVERIFY(TestWard::withTeam(TestWard::document(), withLeader(team, TestWard::bobId())) == document);
 
     // A member made leader, replayed after someone removed them from the team.
-    TestSession mine;
-    TestSession theirs;
+    TestClient mine("Laptop");
+    TestClient theirs("Phone");
     openBoth(mine, theirs, team);
-    QVERIFY(commitTeamEdit(theirs, team, withMembers(team, {TestWard::bobId()})).status == CommitStatus::Applied);
-    QVERIFY(commitTeamEdit(mine, team, withLeader(team, TestWard::aliceId())).status == CommitStatus::Applied);
+    QVERIFY(commitTeamEdit(theirs.session(), team, withMembers(team, {TestWard::bobId()})).status == CommitStatus::Applied);
+    QVERIFY(commitTeamEdit(mine.session(), team, withLeader(team, TestWard::aliceId())).status == CommitStatus::Applied);
 
-    ReplayResult result = mine.replayOnto(theirs.document());
+    ReplayResult result = mine.session().replayOnto(theirs.session().document());
 
     QVERIFY(result.status == ReplayStatus::Abandoned);
-    QCOMPARE(teamIn(mine).memberIds(), QSet<PersonId>({TestWard::bobId()}));
-    QVERIFY(!teamIn(mine).leaderId().has_value());
+    QCOMPARE(teamIn(mine.session()).memberIds(), QSet<PersonId>({TestWard::bobId()}));
+    QVERIFY(!teamIn(mine.session()).leaderId().has_value());
 }
 
 void TeamCommandsTest::additionOfAPersonReplayedAfterTheyWereRemovedConflicts()
 {
-    TestSession mine;
-    TestSession theirs;
+    TestClient mine("Laptop");
+    TestClient theirs("Phone");
     Team bobOnly = withMembers(TestWard::setupTeam(), {TestWard::bobId()});
     openBoth(mine, theirs, bobOnly);
 
     Family smith = TestWard::smith();
     Family withoutAlice = smith;
     withoutAlice.setMembers({TestWard::bob()});
-    QVERIFY(theirs.commit(UpdateFamilyCommand::fromEdit(smith, withoutAlice, theirs.document())).status == CommitStatus::Applied);
-    QVERIFY(commitTeamEdit(mine, bobOnly, withMembers(bobOnly, {TestWard::bobId(), TestWard::aliceId()})).status
+    QVERIFY(theirs.session().commit(UpdateFamilyCommand::fromEdit(smith, withoutAlice, theirs.session().document())).status == CommitStatus::Applied);
+    QVERIFY(commitTeamEdit(mine.session(), bobOnly, withMembers(bobOnly, {TestWard::bobId(), TestWard::aliceId()})).status
             == CommitStatus::Applied);
 
-    ReplayResult result = mine.replayOnto(theirs.document());
+    ReplayResult result = mine.session().replayOnto(theirs.session().document());
 
     QVERIFY(result.status == ReplayStatus::Abandoned);
-    QVERIFY(!mine.document().findPersonById(TestWard::aliceId()).has_value());
-    QCOMPARE(teamIn(mine).memberIds(), QSet<PersonId>({TestWard::bobId()}));
-    for (const Team& team : mine.document().teams())
+    QVERIFY(!mine.session().document().findPersonById(TestWard::aliceId()).has_value());
+    QCOMPARE(teamIn(mine.session()).memberIds(), QSet<PersonId>({TestWard::bobId()}));
+    for (const Team& team : mine.session().document().teams())
     {
         for (const PersonId& member : team.memberIds())
         {
-            QVERIFY(mine.document().findPersonById(member).has_value());
+            QVERIFY(mine.session().document().findPersonById(member).has_value());
         }
     }
 }
 
 void TeamCommandsTest::teamDeletionReplayedAfterSomeoneAddedAMemberConflictsAndLeavesTheTeam()
 {
-    TestSession mine;
-    TestSession theirs;
+    TestClient mine("Laptop");
+    TestClient theirs("Phone");
     Team seen = TestWard::setupTeam();
     openBoth(mine, theirs, seen);
     Team grown = withMembers(seen, {TestWard::bobId(), TestWard::aliceId(), TestWard::carolId()});
 
-    QVERIFY(commitTeamEdit(theirs, seen, grown).status == CommitStatus::Applied);
-    QVERIFY(mine.commit(DeleteTeamCommand::fromSeen(seen, mine.document())).status == CommitStatus::Applied);
-    QVERIFY(!mine.document().findTeamById(TestWard::setupTeamId()).has_value());
+    QVERIFY(commitTeamEdit(theirs.session(), seen, grown).status == CommitStatus::Applied);
+    QVERIFY(mine.session().commit(DeleteTeamCommand::fromSeen(seen, mine.session().document())).status == CommitStatus::Applied);
+    QVERIFY(!mine.session().document().findTeamById(TestWard::setupTeamId()).has_value());
 
-    ReplayResult result = mine.replayOnto(theirs.document());
+    ReplayResult result = mine.session().replayOnto(theirs.session().document());
 
     QVERIFY(result.status == ReplayStatus::Abandoned);
     QVERIFY(result.toRedo.contains("Delete team: Setup"));
-    QVERIFY(teamIn(mine) == grown);
+    QVERIFY(teamIn(mine.session()) == grown);
 }
 
 void TeamCommandsTest::undoTakesBackAnAddAndADeletion()
 {
-    TestSession session;
-    session.createWard(TestWard::document());
+    TestClient client("Laptop");
+    client.createWard(TestWard::document());
     Team team = TestWard::setupTeam();
 
-    QVERIFY(session.commit(AddTeamCommand::fromNew(team, session.document())).status == CommitStatus::Applied);
-    QVERIFY(teamIn(session) == team);
-    QVERIFY(session.undo().status == CommitStatus::Applied);
-    QVERIFY(!session.document().findTeamById(TestWard::setupTeamId()).has_value());
-    QVERIFY(session.redo().status == CommitStatus::Applied);
-    QVERIFY(teamIn(session) == team);
+    QVERIFY(client.session().commit(AddTeamCommand::fromNew(team, client.session().document())).status == CommitStatus::Applied);
+    QVERIFY(teamIn(client.session()) == team);
+    QVERIFY(client.session().undo().status == CommitStatus::Applied);
+    QVERIFY(!client.session().document().findTeamById(TestWard::setupTeamId()).has_value());
+    QVERIFY(client.session().redo().status == CommitStatus::Applied);
+    QVERIFY(teamIn(client.session()) == team);
 
-    QVERIFY(session.commit(DeleteTeamCommand::fromSeen(team, session.document())).status == CommitStatus::Applied);
-    QVERIFY(!session.document().findTeamById(TestWard::setupTeamId()).has_value());
-    QVERIFY(session.undo().status == CommitStatus::Applied);
-    QVERIFY(teamIn(session) == team);
+    QVERIFY(client.session().commit(DeleteTeamCommand::fromSeen(team, client.session().document())).status == CommitStatus::Applied);
+    QVERIFY(!client.session().document().findTeamById(TestWard::setupTeamId()).has_value());
+    QVERIFY(client.session().undo().status == CommitStatus::Applied);
+    QVERIFY(teamIn(client.session()) == team);
 }

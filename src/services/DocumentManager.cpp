@@ -4,15 +4,16 @@
 
 DocumentManager* DocumentManager::s_instance = nullptr;
 
-DocumentManager::DocumentManager(QObject* parent)
+DocumentManager::DocumentManager(const Identity* identity, WardStore* store, QObject* parent)
     : QObject(parent)
-    , m_session(nullptr, nullptr, new NominatimGeocoder(this), new UnitLookupService(this), this)
+    , m_session(identity, store, new NominatimGeocoder(this), new UnitLookupService(this), this)
 {
     Q_ASSERT(!s_instance);
     s_instance = this;
 
     connect(&m_session, &WardSession::documentChanged, this, &DocumentManager::documentChanged);
     connect(&m_session, &WardSession::undoStackChanged, this, &DocumentManager::undoStackChanged);
+    connect(&m_session, &WardSession::saveFailed, this, &DocumentManager::saveFailed);
     connect(&m_session.automaticUpdates(), &AutomaticUpdates::geocodingProgress, this, &DocumentManager::geocodingProgressChanged);
     connect(&m_session.automaticUpdates(), &AutomaticUpdates::geocodingFinished, this, &DocumentManager::geocodingFinished);
 }
@@ -66,8 +67,18 @@ EndResult DocumentManager::endEmergency(const QString& reportPath)
     return m_session.endEmergency(reportPath);
 }
 
-void DocumentManager::newDocument()
+void DocumentManager::createWard(const QString& userName, const QString& deviceName)
 {
-    m_session.createWard(Document::empty(), tr("Me"), tr("This device"));
+    m_session.createWard(Document::empty(), userName, deviceName);
     m_session.automaticUpdates().run();
+}
+
+OpenResult DocumentManager::openWard(const DocumentId& document)
+{
+    OpenResult result = m_session.openWard(document);
+    if (result.status == OpenStatus::Opened)
+    {
+        m_session.automaticUpdates().run();
+    }
+    return result;
 }

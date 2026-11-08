@@ -14,6 +14,12 @@ void TestClient::createWard(const Document& content)
     m_session->createWard(content, "Alice Smith", m_deviceName);
 }
 
+void TestClient::takeWardOf(TestClient& other)
+{
+    createWard(other.session().document());
+    m_session->replayOnto(other.session().document());
+}
+
 OpenResult TestClient::reopen()
 {
     DocumentId document = m_session->documentId();

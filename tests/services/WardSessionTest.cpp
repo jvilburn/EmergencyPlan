@@ -2,7 +2,7 @@
 #include "CommandRegistry.h"
 #include "FamilyCommands.h"
 #include "TestCommands.h"
-#include "TestSession.h"
+#include "TestClient.h"
 #include "TestWard.h"
 #include "WardSession.h"
 
@@ -52,25 +52,26 @@ CommitResult commitAliceEmail(WardSession& session, const QString& email)
     return commitEdit(session, opened, TestWard::withMember(opened, alice));
 }
 
-/// Creates a ward in both sessions from the test ward, then commits three edits to mine -
-/// Carol's phone, Bob's phone, the Smith address - and moves Bob's phone to 555-9999 in theirs.
-void makeThreeEditsAgainstAMovedPhone(TestSession& mine, TestSession& theirs)
+/// Creates a ward from the test ward in mine and gives theirs the same ward, then commits
+/// three edits to mine - Carol's phone, Bob's phone, the Smith address - and moves Bob's
+/// phone to 555-9999 in theirs.
+void makeThreeEditsAgainstAMovedPhone(TestClient& mine, TestClient& theirs)
 {
     mine.createWard(TestWard::document());
-    theirs.createWard(TestWard::document());
-    commitPhone(mine, TestWard::jonesId(), TestWard::carolId(), "555-5555");
-    commitPhone(mine, TestWard::smithId(), TestWard::bobId(), "555-2222");
-    commitAddress(mine, TestWard::smithId(), TestWard::address("14 Elm St", "Provo, UT"));
-    commitPhone(theirs, TestWard::smithId(), TestWard::bobId(), "555-9999");
+    theirs.takeWardOf(mine);
+    commitPhone(mine.session(), TestWard::jonesId(), TestWard::carolId(), "555-5555");
+    commitPhone(mine.session(), TestWard::smithId(), TestWard::bobId(), "555-2222");
+    commitAddress(mine.session(), TestWard::smithId(), TestWard::address("14 Elm St", "Provo, UT"));
+    commitPhone(theirs.session(), TestWard::smithId(), TestWard::bobId(), "555-9999");
 }
 
-/// A session with three entries in its journal abandoned onto a version where Bob's phone
+/// A client with three entries in its journal abandoned onto a version where Bob's phone
 /// moved; true when the replay was abandoned.
-bool abandonThreeEdits(TestSession& mine)
+bool abandonThreeEdits(TestClient& mine)
 {
-    TestSession theirs;
+    TestClient theirs("Phone");
     makeThreeEditsAgainstAMovedPhone(mine, theirs);
-    return mine.replayOnto(theirs.document()).status == ReplayStatus::Abandoned;
+    return mine.session().replayOnto(theirs.session().document()).status == ReplayStatus::Abandoned;
 }
 
 DocumentChange changeAt(const QSignalSpy& spy, int index)
@@ -99,90 +100,90 @@ WardSessionTest::WardSessionTest(QObject* parent)
 
 void WardSessionTest::commitAppliesAndJournalsTheSerialisedCommand()
 {
-    TestSession session;
-    session.createWard(TestWard::document());
-    Family opened = familyIn(session, TestWard::smithId());
-    CommandPtr command = UpdateFamilyCommand::fromEdit(opened, TestWard::withPhone(opened, TestWard::bobId(), "555-2222"), session.document());
+    TestClient client("Laptop");
+    client.createWard(TestWard::document());
+    Family opened = familyIn(client.session(), TestWard::smithId());
+    CommandPtr command = UpdateFamilyCommand::fromEdit(opened, TestWard::withPhone(opened, TestWard::bobId(), "555-2222"), client.session().document());
     QJsonObject expected = CommandRegistry::toJson(*command);
 
-    CommitResult result = session.commit(command);
+    CommitResult result = client.session().commit(command);
 
     QVERIFY(result.status == CommitStatus::Applied);
-    QCOMPARE(phoneOf(session.document(), TestWard::bobId()), QString("555-2222"));
-    QCOMPARE(session.journal().entries().size(), qsizetype(1));
-    QCOMPARE(session.journal().entries()[0].sequence, qint64(1));
-    QVERIFY(session.journal().entries()[0].command == expected);
-    QVERIFY(session.canUndo());
-    QCOMPARE(session.undoHeading(), QString("Smith family"));
+    QCOMPARE(phoneOf(client.session().document(), TestWard::bobId()), QString("555-2222"));
+    QCOMPARE(client.session().journal().entries().size(), qsizetype(1));
+    QCOMPARE(client.session().journal().entries()[0].sequence, qint64(1));
+    QVERIFY(client.session().journal().entries()[0].command == expected);
+    QVERIFY(client.session().canUndo());
+    QCOMPARE(client.session().undoHeading(), QString("Smith family"));
 }
 
 void WardSessionTest::editThatChangesNothingIsNothingToDo()
 {
-    TestSession session;
-    session.createWard(TestWard::document());
-    Document created = session.document();
-    QSignalSpy documentSpy(&session, &WardSession::documentChanged);
-    QSignalSpy undoSpy(&session, &WardSession::undoStackChanged);
+    TestClient client("Laptop");
+    client.createWard(TestWard::document());
+    Document created = client.session().document();
+    QSignalSpy documentSpy(&client.session(), &WardSession::documentChanged);
+    QSignalSpy undoSpy(&client.session(), &WardSession::undoStackChanged);
 
-    CommitResult result = commitEdit(session, TestWard::smith(), TestWard::smith());
+    CommitResult result = commitEdit(client.session(), TestWard::smith(), TestWard::smith());
 
     QVERIFY(result.status == CommitStatus::NothingToDo);
-    QVERIFY(session.document() == created);
-    QVERIFY(session.journal().isEmpty());
-    QVERIFY(!session.canUndo());
+    QVERIFY(client.session().document() == created);
+    QVERIFY(client.session().journal().isEmpty());
+    QVERIFY(!client.session().canUndo());
     QCOMPARE(documentSpy.count(), 0);
     QCOMPARE(undoSpy.count(), 0);
 }
 
 void WardSessionTest::editConfirmedAfterARemoteChangeToItsFamilyConflicts()
 {
-    TestSession mine;
-    TestSession theirs;
+    TestClient mine("Laptop");
+    TestClient theirs("Phone");
     mine.createWard(TestWard::document());
-    theirs.createWard(TestWard::document());
+    theirs.takeWardOf(mine);
 
-    Family opened = familyIn(mine, TestWard::smithId());
-    QVERIFY(commitPhone(theirs, TestWard::smithId(), TestWard::bobId(), "555-9999").status == CommitStatus::Applied);
-    QVERIFY(mine.replayOnto(theirs.document()).status == ReplayStatus::FastForwarded);
+    Family opened = familyIn(mine.session(), TestWard::smithId());
+    QVERIFY(commitPhone(theirs.session(), TestWard::smithId(), TestWard::bobId(), "555-9999").status == CommitStatus::Applied);
+    QVERIFY(mine.session().replayOnto(theirs.session().document()).status == ReplayStatus::FastForwarded);
 
-    CommitResult result = commitEdit(mine, opened, TestWard::withPhone(opened, TestWard::bobId(), "555-2222"));
+    CommitResult result = commitEdit(mine.session(), opened, TestWard::withPhone(opened, TestWard::bobId(), "555-2222"));
 
     QVERIFY(result.status == CommitStatus::Conflicted);
     QCOMPARE(result.description, CommandDescription("Smith family", QStringList{"Bob, phone: 555-2222"}));
-    QCOMPARE(phoneOf(mine.document(), TestWard::bobId()), QString("555-9999"));
-    QVERIFY(mine.journal().isEmpty());
-    QVERIFY(!mine.canUndo());
+    QCOMPARE(phoneOf(mine.session().document(), TestWard::bobId()), QString("555-9999"));
+    QVERIFY(mine.session().journal().isEmpty());
+    QVERIFY(!mine.session().canUndo());
 }
 
 void WardSessionTest::refusedCommandChangesNothingAndJournalsNothing()
 {
-    TestSession session;
-    session.createWard(TestWard::document());
-    Document created = session.document();
+    TestClient client("Laptop");
+    client.createWard(TestWard::document());
+    Document created = client.session().document();
 
-    CommitResult refused = session.commit(std::make_shared<ForcePhoneCommand>(TestWard::bobId(), "555-2222", "You are the only admin."));
+    CommitResult refused = client.session().commit(std::make_shared<ForcePhoneCommand>(TestWard::bobId(), "555-2222", "You are the only admin."));
 
     QVERIFY(refused.status == CommitStatus::Refused);
     QCOMPARE(refused.refusal, QString("You are the only admin."));
-    QVERIFY(session.document() == created);
-    QVERIFY(session.journal().isEmpty());
+    QVERIFY(client.session().document() == created);
+    QVERIFY(client.session().journal().isEmpty());
 
-    CommitResult allowed = session.commit(std::make_shared<ForcePhoneCommand>(TestWard::bobId(), "555-2222", QString()));
+    CommitResult allowed = client.session().commit(std::make_shared<ForcePhoneCommand>(TestWard::bobId(), "555-2222", QString()));
 
     QVERIFY(allowed.status == CommitStatus::Applied);
-    QCOMPARE(phoneOf(session.document(), TestWard::bobId()), QString("555-2222"));
-    QCOMPARE(session.journal().entries().size(), qsizetype(1));
+    QCOMPARE(phoneOf(client.session().document(), TestWard::bobId()), QString("555-2222"));
+    QCOMPARE(client.session().journal().entries().size(), qsizetype(1));
 }
 
 void WardSessionTest::appliedCommitSignalsOneFamilyChangeAndOneUndoStackChange()
 {
-    TestSession session;
-    session.createWard(TestWard::document());
-    QSignalSpy documentSpy(&session, &WardSession::documentChanged);
-    QSignalSpy undoSpy(&session, &WardSession::undoStackChanged);
+    TestClient client("Laptop");
+    client.createWard(TestWard::document());
+    QSignalSpy documentSpy(&client.session(), &WardSession::documentChanged);
+    QSignalSpy undoSpy(&client.session(), &WardSession::undoStackChanged);
     QVERIFY(documentSpy.isValid());
 
-    QVERIFY(commitPhone(session, TestWard::smithId(), TestWard::bobId(), "555-2222").status == CommitStatus::Applied);
+    QVERIFY(commitPhone(client.session(), TestWard::smithId(), TestWard::bobId(), "555-2222").status == CommitStatus::Applied);
 
     QCOMPARE(documentSpy.count(), 1);
     QVERIFY(isSmithUpdate(changeAt(documentSpy, 0)));
@@ -191,15 +192,15 @@ void WardSessionTest::appliedCommitSignalsOneFamilyChangeAndOneUndoStackChange()
 
 void WardSessionTest::conflictedOrRefusedCommitSignalsNothing()
 {
-    TestSession session;
-    session.createWard(TestWard::document());
-    Family opened = familyIn(session, TestWard::smithId());
-    QVERIFY(commitPhone(session, TestWard::smithId(), TestWard::bobId(), "555-9999").status == CommitStatus::Applied);
-    QSignalSpy documentSpy(&session, &WardSession::documentChanged);
-    QSignalSpy undoSpy(&session, &WardSession::undoStackChanged);
+    TestClient client("Laptop");
+    client.createWard(TestWard::document());
+    Family opened = familyIn(client.session(), TestWard::smithId());
+    QVERIFY(commitPhone(client.session(), TestWard::smithId(), TestWard::bobId(), "555-9999").status == CommitStatus::Applied);
+    QSignalSpy documentSpy(&client.session(), &WardSession::documentChanged);
+    QSignalSpy undoSpy(&client.session(), &WardSession::undoStackChanged);
 
-    CommitResult conflicted = commitEdit(session, opened, TestWard::withPhone(opened, TestWard::bobId(), "555-2222"));
-    CommitResult refused = session.commit(std::make_shared<ForcePhoneCommand>(TestWard::bobId(), "555-2222", "You are the only admin."));
+    CommitResult conflicted = commitEdit(client.session(), opened, TestWard::withPhone(opened, TestWard::bobId(), "555-2222"));
+    CommitResult refused = client.session().commit(std::make_shared<ForcePhoneCommand>(TestWard::bobId(), "555-2222", "You are the only admin."));
 
     QVERIFY(conflicted.status == CommitStatus::Conflicted);
     QVERIFY(refused.status == CommitStatus::Refused);
@@ -209,94 +210,94 @@ void WardSessionTest::conflictedOrRefusedCommitSignalsNothing()
 
 void WardSessionTest::emptyJournalFastForwards()
 {
-    TestSession mine;
-    TestSession theirs;
+    TestClient mine("Laptop");
+    TestClient theirs("Phone");
     mine.createWard(TestWard::document());
-    theirs.createWard(TestWard::document());
-    commitPhone(theirs, TestWard::jonesId(), TestWard::carolId(), "555-5555");
+    theirs.takeWardOf(mine);
+    commitPhone(theirs.session(), TestWard::jonesId(), TestWard::carolId(), "555-5555");
 
-    ReplayResult result = mine.replayOnto(theirs.document());
+    ReplayResult result = mine.session().replayOnto(theirs.session().document());
 
     QVERIFY(result.status == ReplayStatus::FastForwarded);
     QVERIFY(result.toRedo.isEmpty());
-    QVERIFY(mine.document() == theirs.document());
-    QCOMPARE(phoneOf(mine.document(), TestWard::carolId()), QString("555-5555"));
-    QVERIFY(mine.journal().isEmpty());
+    QVERIFY(mine.session().document() == theirs.session().document());
+    QCOMPARE(phoneOf(mine.session().document(), TestWard::carolId()), QString("555-5555"));
+    QVERIFY(mine.session().journal().isEmpty());
 }
 
 void WardSessionTest::offlineEditsToDifferentMembersBothApply()
 {
-    TestSession mine;
-    TestSession theirs;
+    TestClient mine("Laptop");
+    TestClient theirs("Phone");
     mine.createWard(TestWard::document());
-    theirs.createWard(TestWard::document());
-    commitPhone(mine, TestWard::smithId(), TestWard::bobId(), "555-2222");
-    commitAliceEmail(theirs, "alice@new.example.com");
+    theirs.takeWardOf(mine);
+    commitPhone(mine.session(), TestWard::smithId(), TestWard::bobId(), "555-2222");
+    commitAliceEmail(theirs.session(), "alice@new.example.com");
 
-    ReplayResult result = mine.replayOnto(theirs.document());
+    ReplayResult result = mine.session().replayOnto(theirs.session().document());
 
     QVERIFY(result.status == ReplayStatus::Replayed);
     QVERIFY(result.toRedo.isEmpty());
-    QCOMPARE(phoneOf(mine.document(), TestWard::bobId()), QString("555-2222"));
-    QCOMPARE(TestWard::person(mine.document(), TestWard::aliceId()).email(), QString("alice@new.example.com"));
-    QCOMPARE(mine.journal().entries().size(), qsizetype(1));
+    QCOMPARE(phoneOf(mine.session().document(), TestWard::bobId()), QString("555-2222"));
+    QCOMPARE(TestWard::person(mine.session().document(), TestWard::aliceId()).email(), QString("alice@new.example.com"));
+    QCOMPARE(mine.session().journal().entries().size(), qsizetype(1));
 }
 
 void WardSessionTest::noteAndPhoneEditsToOnePersonBothApply()
 {
-    TestSession mine;
-    TestSession theirs;
+    TestClient mine("Laptop");
+    TestClient theirs("Phone");
     mine.createWard(TestWard::document());
-    theirs.createWard(TestWard::document());
-    commitPhone(mine, TestWard::smithId(), TestWard::bobId(), "555-2222");
-    Family opened = familyIn(theirs, TestWard::smithId());
+    theirs.takeWardOf(mine);
+    commitPhone(mine.session(), TestWard::smithId(), TestWard::bobId(), "555-2222");
+    Family opened = familyIn(theirs.session(), TestWard::smithId());
     Person bob = TestWard::bob();
     bob.setSpecialNeedNote("Oxygen at night");
-    commitEdit(theirs, opened, TestWard::withMember(opened, bob));
+    commitEdit(theirs.session(), opened, TestWard::withMember(opened, bob));
 
-    QVERIFY(mine.replayOnto(theirs.document()).status == ReplayStatus::Replayed);
+    QVERIFY(mine.session().replayOnto(theirs.session().document()).status == ReplayStatus::Replayed);
 
-    Person replayed = TestWard::person(mine.document(), TestWard::bobId());
+    Person replayed = TestWard::person(mine.session().document(), TestWard::bobId());
     QCOMPARE(QString(replayed.phone()), QString("555-2222"));
     QCOMPARE(replayed.specialNeedNote(), QString("Oxygen at night"));
 }
 
 void WardSessionTest::journalThatFitsReplaysInFull()
 {
-    TestSession mine;
-    TestSession theirs;
+    TestClient mine("Laptop");
+    TestClient theirs("Phone");
     mine.createWard(TestWard::document());
-    theirs.createWard(TestWard::document());
-    commitPhone(mine, TestWard::smithId(), TestWard::bobId(), "555-2222");
-    commitPhone(mine, TestWard::jonesId(), TestWard::carolId(), "555-5555");
-    commitAddress(mine, TestWard::smithId(), TestWard::address("14 Elm St", "Provo, UT"));
-    commitAliceEmail(theirs, "alice@new.example.com");
+    theirs.takeWardOf(mine);
+    commitPhone(mine.session(), TestWard::smithId(), TestWard::bobId(), "555-2222");
+    commitPhone(mine.session(), TestWard::jonesId(), TestWard::carolId(), "555-5555");
+    commitAddress(mine.session(), TestWard::smithId(), TestWard::address("14 Elm St", "Provo, UT"));
+    commitAliceEmail(theirs.session(), "alice@new.example.com");
 
-    QVERIFY(mine.replayOnto(theirs.document()).status == ReplayStatus::Replayed);
+    QVERIFY(mine.session().replayOnto(theirs.session().document()).status == ReplayStatus::Replayed);
 
-    QCOMPARE(phoneOf(mine.document(), TestWard::bobId()), QString("555-2222"));
-    QCOMPARE(phoneOf(mine.document(), TestWard::carolId()), QString("555-5555"));
-    QCOMPARE(familyIn(mine, TestWard::smithId()).address().full(), QString("14 Elm St, Provo, UT"));
-    QCOMPARE(TestWard::person(mine.document(), TestWard::aliceId()).email(), QString("alice@new.example.com"));
-    QCOMPARE(mine.journal().entries().size(), qsizetype(3));
+    QCOMPARE(phoneOf(mine.session().document(), TestWard::bobId()), QString("555-2222"));
+    QCOMPARE(phoneOf(mine.session().document(), TestWard::carolId()), QString("555-5555"));
+    QCOMPARE(familyIn(mine.session(), TestWard::smithId()).address().full(), QString("14 Elm St, Provo, UT"));
+    QCOMPARE(TestWard::person(mine.session().document(), TestWard::aliceId()).email(), QString("alice@new.example.com"));
+    QCOMPARE(mine.session().journal().entries().size(), qsizetype(3));
 }
 
 void WardSessionTest::oneConflictAbandonsTheWholeReplay()
 {
-    TestSession mine;
-    TestSession theirs;
+    TestClient mine("Laptop");
+    TestClient theirs("Phone");
     makeThreeEditsAgainstAMovedPhone(mine, theirs);
-    QVERIFY(mine.canUndo());
+    QVERIFY(mine.session().canUndo());
 
-    ReplayResult result = mine.replayOnto(theirs.document());
+    ReplayResult result = mine.session().replayOnto(theirs.session().document());
 
     QVERIFY(result.status == ReplayStatus::Abandoned);
-    QVERIFY(mine.document() == theirs.document());
-    QCOMPARE(phoneOf(mine.document(), TestWard::carolId()), QString("555-4444"));
-    QCOMPARE(familyIn(mine, TestWard::smithId()).address().full(), QString("12 Elm St, Provo, UT"));
-    QVERIFY(mine.journal().isEmpty());
-    QVERIFY(!mine.canUndo());
-    QVERIFY(!mine.canRedo());
+    QVERIFY(mine.session().document() == theirs.session().document());
+    QCOMPARE(phoneOf(mine.session().document(), TestWard::carolId()), QString("555-4444"));
+    QCOMPARE(familyIn(mine.session(), TestWard::smithId()).address().full(), QString("12 Elm St, Provo, UT"));
+    QVERIFY(mine.session().journal().isEmpty());
+    QVERIFY(!mine.session().canUndo());
+    QVERIFY(!mine.session().canRedo());
     QCOMPARE(result.toRedo,
              QString("Your changes could not be applied, because the ward changed first.\n"
                      "These need doing again:\n"
@@ -313,12 +314,12 @@ void WardSessionTest::oneConflictAbandonsTheWholeReplay()
 
 void WardSessionTest::abandonedReplaySignalsOneFullDocumentChange()
 {
-    TestSession mine;
-    TestSession theirs;
+    TestClient mine("Laptop");
+    TestClient theirs("Phone");
     makeThreeEditsAgainstAMovedPhone(mine, theirs);
-    QSignalSpy documentSpy(&mine, &WardSession::documentChanged);
+    QSignalSpy documentSpy(&mine.session(), &WardSession::documentChanged);
 
-    QVERIFY(mine.replayOnto(theirs.document()).status == ReplayStatus::Abandoned);
+    QVERIFY(mine.session().replayOnto(theirs.session().document()).status == ReplayStatus::Abandoned);
 
     QCOMPARE(documentSpy.count(), 1);
     QVERIFY(isFullChange(changeAt(documentSpy, 0)));
@@ -326,16 +327,16 @@ void WardSessionTest::abandonedReplaySignalsOneFullDocumentChange()
 
 void WardSessionTest::commandWhoseTargetWasDeletedConflicts()
 {
-    TestSession mine;
+    TestClient mine("Laptop");
     mine.createWard(TestWard::document());
-    commitPhone(mine, TestWard::jonesId(), TestWard::carolId(), "555-5555");
+    commitPhone(mine.session(), TestWard::jonesId(), TestWard::carolId(), "555-5555");
     Document version = TestWard::document();
     version.removeFamily(TestWard::jonesId());
 
-    ReplayResult result = mine.replayOnto(version);
+    ReplayResult result = mine.session().replayOnto(version);
 
     QVERIFY(result.status == ReplayStatus::Abandoned);
-    QVERIFY(!mine.document().findFamilyById(TestWard::jonesId()).has_value());
+    QVERIFY(!mine.session().document().findFamilyById(TestWard::jonesId()).has_value());
     QCOMPARE(result.toRedo,
              QString("Your changes could not be applied, because the ward changed first.\n"
                      "These need doing again:\n"
@@ -346,9 +347,9 @@ void WardSessionTest::commandWhoseTargetWasDeletedConflicts()
 
 void WardSessionTest::toRedoTextStaysAsWrittenAfterARename()
 {
-    TestSession mine;
+    TestClient mine("Laptop");
     mine.createWard(TestWard::document());
-    commitPhone(mine, TestWard::smithId(), TestWard::bobId(), "555-2222");
+    commitPhone(mine.session(), TestWard::smithId(), TestWard::bobId(), "555-2222");
     Person bob = TestWard::bob();
     bob.setName(Name("Smyth", "Bob"));
     bob.setPhone(Phone("555-9999"));
@@ -357,10 +358,10 @@ void WardSessionTest::toRedoTextStaysAsWrittenAfterARename()
     Family renamed = TestWard::smith();
     renamed.setMembers({bob, alice});
 
-    ReplayResult result = mine.replayOnto(TestWard::withFamily(TestWard::document(), renamed));
+    ReplayResult result = mine.session().replayOnto(TestWard::withFamily(TestWard::document(), renamed));
 
     QVERIFY(result.status == ReplayStatus::Abandoned);
-    QCOMPARE(familyIn(mine, TestWard::smithId()).surname(), QString("Smyth"));
+    QCOMPARE(familyIn(mine.session(), TestWard::smithId()).surname(), QString("Smyth"));
     QCOMPARE(result.toRedo,
              QString("Your changes could not be applied, because the ward changed first.\n"
                      "These need doing again:\n"
@@ -371,13 +372,13 @@ void WardSessionTest::toRedoTextStaysAsWrittenAfterARename()
 
 void WardSessionTest::eachAbandonmentGivesItsOwnText()
 {
-    TestSession mine;
+    TestClient mine("Laptop");
     QVERIFY(abandonThreeEdits(mine));
-    commitPhone(mine, TestWard::jonesId(), TestWard::carolId(), "555-6666");
-    Document version = mine.document();
+    commitPhone(mine.session(), TestWard::jonesId(), TestWard::carolId(), "555-6666");
+    Document version = mine.session().document();
     version.removeFamily(TestWard::jonesId());
 
-    ReplayResult result = mine.replayOnto(version);
+    ReplayResult result = mine.session().replayOnto(version);
 
     QVERIFY(result.status == ReplayStatus::Abandoned);
     QCOMPARE(result.toRedo,
@@ -390,77 +391,77 @@ void WardSessionTest::eachAbandonmentGivesItsOwnText()
 
 void WardSessionTest::newCommandAfterAnAbandonedReplayJournalsAfresh()
 {
-    TestSession mine;
+    TestClient mine("Laptop");
     QVERIFY(abandonThreeEdits(mine));
-    QVERIFY(mine.journal().isEmpty());
+    QVERIFY(mine.session().journal().isEmpty());
 
-    QVERIFY(commitAliceEmail(mine, "alice@new.example.com").status == CommitStatus::Applied);
+    QVERIFY(commitAliceEmail(mine.session(), "alice@new.example.com").status == CommitStatus::Applied);
 
-    QCOMPARE(mine.journal().entries().size(), qsizetype(1));
-    QCOMPARE(mine.journal().entries()[0].sequence, qint64(4));
-    QVERIFY(mine.canUndo());
+    QCOMPARE(mine.session().journal().entries().size(), qsizetype(1));
+    QCOMPARE(mine.session().journal().entries()[0].sequence, qint64(4));
+    QVERIFY(mine.session().canUndo());
 }
 
 void WardSessionTest::openEmptiesTheJournalAndTheUndoStack()
 {
-    TestSession session;
-    session.createWard(TestWard::document());
-    commitPhone(session, TestWard::smithId(), TestWard::bobId(), "555-2222");
-    commitPhone(session, TestWard::jonesId(), TestWard::carolId(), "555-5555");
-    QVERIFY(session.undo().status == CommitStatus::Applied);
-    QVERIFY(!session.journal().isEmpty());
-    QVERIFY(session.canUndo());
-    QVERIFY(session.canRedo());
+    TestClient client("Laptop");
+    client.createWard(TestWard::document());
+    commitPhone(client.session(), TestWard::smithId(), TestWard::bobId(), "555-2222");
+    commitPhone(client.session(), TestWard::jonesId(), TestWard::carolId(), "555-5555");
+    QVERIFY(client.session().undo().status == CommitStatus::Applied);
+    QVERIFY(!client.session().journal().isEmpty());
+    QVERIFY(client.session().canUndo());
+    QVERIFY(client.session().canRedo());
 
-    session.createWard(TestWard::document());
+    client.createWard(TestWard::document());
 
-    QVERIFY(session.journal().isEmpty());
-    QVERIFY(!session.canUndo());
-    QVERIFY(!session.canRedo());
+    QVERIFY(client.session().journal().isEmpty());
+    QVERIFY(!client.session().canUndo());
+    QVERIFY(!client.session().canRedo());
     Document expected = TestWard::document();
-    expected.setAccess(session.document().access());
-    QVERIFY(session.document() == expected);
+    expected.setAccess(client.session().document().access());
+    QVERIFY(client.session().document() == expected);
 }
 
 void WardSessionTest::undoRunsTheInverseThroughTheCommitStep()
 {
-    TestSession session;
-    session.createWard(TestWard::document());
-    Document created = session.document();
-    commitPhone(session, TestWard::smithId(), TestWard::bobId(), "555-2222");
+    TestClient client("Laptop");
+    client.createWard(TestWard::document());
+    Document created = client.session().document();
+    commitPhone(client.session(), TestWard::smithId(), TestWard::bobId(), "555-2222");
 
-    CommitResult undone = session.undo();
+    CommitResult undone = client.session().undo();
 
     QVERIFY(undone.status == CommitStatus::Applied);
-    QVERIFY(session.document() == created);
-    QCOMPARE(session.journal().entries().size(), qsizetype(2));
-    CommandDescription inverse = CommandRegistry::descriptionOf(session.journal().entries()[1].command);
+    QVERIFY(client.session().document() == created);
+    QCOMPARE(client.session().journal().entries().size(), qsizetype(2));
+    CommandDescription inverse = CommandRegistry::descriptionOf(client.session().journal().entries()[1].command);
     QCOMPARE(inverse.heading(), QString("Undo: Smith family"));
     QCOMPARE(inverse.lines(), QStringList({"Bob, phone: 555-2222"}));
-    QVERIFY(!session.canUndo());
-    QVERIFY(session.canRedo());
-    QCOMPARE(session.redoHeading(), QString("Smith family"));
+    QVERIFY(!client.session().canUndo());
+    QVERIFY(client.session().canRedo());
+    QCOMPARE(client.session().redoHeading(), QString("Smith family"));
 
-    CommitResult redone = session.redo();
+    CommitResult redone = client.session().redo();
 
     QVERIFY(redone.status == CommitStatus::Applied);
-    QCOMPARE(phoneOf(session.document(), TestWard::bobId()), QString("555-2222"));
-    QCOMPARE(session.journal().entries().size(), qsizetype(3));
-    QVERIFY(session.journal().entries()[2].command == session.journal().entries()[0].command);
-    QCOMPARE(session.journal().entries()[2].sequence, qint64(3));
-    QVERIFY(session.canUndo());
-    QVERIFY(!session.canRedo());
+    QCOMPARE(phoneOf(client.session().document(), TestWard::bobId()), QString("555-2222"));
+    QCOMPARE(client.session().journal().entries().size(), qsizetype(3));
+    QVERIFY(client.session().journal().entries()[2].command == client.session().journal().entries()[0].command);
+    QCOMPARE(client.session().journal().entries()[2].sequence, qint64(3));
+    QVERIFY(client.session().canUndo());
+    QVERIFY(!client.session().canRedo());
 }
 
 void WardSessionTest::appliedUndoSignalsADocumentChangeAndAnUndoStackChange()
 {
-    TestSession session;
-    session.createWard(TestWard::document());
-    commitPhone(session, TestWard::smithId(), TestWard::bobId(), "555-2222");
-    QSignalSpy documentSpy(&session, &WardSession::documentChanged);
-    QSignalSpy undoSpy(&session, &WardSession::undoStackChanged);
+    TestClient client("Laptop");
+    client.createWard(TestWard::document());
+    commitPhone(client.session(), TestWard::smithId(), TestWard::bobId(), "555-2222");
+    QSignalSpy documentSpy(&client.session(), &WardSession::documentChanged);
+    QSignalSpy undoSpy(&client.session(), &WardSession::undoStackChanged);
 
-    QVERIFY(session.undo().status == CommitStatus::Applied);
+    QVERIFY(client.session().undo().status == CommitStatus::Applied);
 
     QCOMPARE(documentSpy.count(), 1);
     QVERIFY(isSmithUpdate(changeAt(documentSpy, 0)));
@@ -469,116 +470,116 @@ void WardSessionTest::appliedUndoSignalsADocumentChangeAndAnUndoStackChange()
 
 void WardSessionTest::removingTheFirstMemberAndUndoingRestoresTheFamilyExactly()
 {
-    TestSession session;
-    session.createWard(TestWard::document());
-    Family opened = familyIn(session, TestWard::smithId());
+    TestClient client("Laptop");
+    client.createWard(TestWard::document());
+    Family opened = familyIn(client.session(), TestWard::smithId());
     Family saved = opened;
     saved.setMembers({TestWard::alice()});
-    QVERIFY(commitEdit(session, opened, saved).status == CommitStatus::Applied);
-    QVERIFY(familyIn(session, TestWard::smithId()) == saved);
+    QVERIFY(commitEdit(client.session(), opened, saved).status == CommitStatus::Applied);
+    QVERIFY(familyIn(client.session(), TestWard::smithId()) == saved);
 
-    QVERIFY(session.undo().status == CommitStatus::Applied);
+    QVERIFY(client.session().undo().status == CommitStatus::Applied);
 
-    QVERIFY(familyIn(session, TestWard::smithId()) == TestWard::smith());
+    QVERIFY(familyIn(client.session(), TestWard::smithId()) == TestWard::smith());
 }
 
 void WardSessionTest::undoAfterARemoteEditToAnotherFamilyApplies()
 {
-    TestSession mine;
-    TestSession theirs;
+    TestClient mine("Laptop");
+    TestClient theirs("Phone");
     mine.createWard(TestWard::document());
-    theirs.createWard(TestWard::document());
-    commitPhone(mine, TestWard::smithId(), TestWard::bobId(), "555-2222");
-    commitAddress(theirs, TestWard::jonesId(), TestWard::address("6 Oak Ave", "Provo, UT"));
-    QVERIFY(mine.replayOnto(theirs.document()).status == ReplayStatus::Replayed);
+    theirs.takeWardOf(mine);
+    commitPhone(mine.session(), TestWard::smithId(), TestWard::bobId(), "555-2222");
+    commitAddress(theirs.session(), TestWard::jonesId(), TestWard::address("6 Oak Ave", "Provo, UT"));
+    QVERIFY(mine.session().replayOnto(theirs.session().document()).status == ReplayStatus::Replayed);
 
-    QVERIFY(mine.undo().status == CommitStatus::Applied);
+    QVERIFY(mine.session().undo().status == CommitStatus::Applied);
 
-    QCOMPARE(phoneOf(mine.document(), TestWard::bobId()), QString("555-1111"));
-    QCOMPARE(familyIn(mine, TestWard::jonesId()).address().full(), QString("6 Oak Ave, Provo, UT"));
+    QCOMPARE(phoneOf(mine.session().document(), TestWard::bobId()), QString("555-1111"));
+    QCOMPARE(familyIn(mine.session(), TestWard::jonesId()).address().full(), QString("6 Oak Ave, Provo, UT"));
 }
 
 void WardSessionTest::undoWhoseInverseConflictsLeavesTheCommandOnTheUndoStack()
 {
-    TestSession session;
-    session.createWard(TestWard::document());
-    commitPhone(session, TestWard::smithId(), TestWard::bobId(), "555-2222");
-    QVERIFY(session.commit(std::make_shared<ForcePhoneCommand>(TestWard::bobId(), "555-9999", QString())).status
+    TestClient client("Laptop");
+    client.createWard(TestWard::document());
+    commitPhone(client.session(), TestWard::smithId(), TestWard::bobId(), "555-2222");
+    QVERIFY(client.session().commit(std::make_shared<ForcePhoneCommand>(TestWard::bobId(), "555-9999", QString())).status
             == CommitStatus::Applied);
-    QCOMPARE(session.journal().entries().size(), qsizetype(2));
+    QCOMPARE(client.session().journal().entries().size(), qsizetype(2));
 
-    CommitResult result = session.undo();
+    CommitResult result = client.session().undo();
 
     QVERIFY(result.status == CommitStatus::Conflicted);
     QCOMPARE(result.description, CommandDescription("Undo: Smith family", QStringList{"Bob, phone: 555-2222"}));
-    QCOMPARE(phoneOf(session.document(), TestWard::bobId()), QString("555-9999"));
-    QVERIFY(session.canUndo());
-    QCOMPARE(session.undoHeading(), QString("Smith family"));
-    QVERIFY(!session.canRedo());
-    QCOMPARE(session.journal().entries().size(), qsizetype(2));
+    QCOMPARE(phoneOf(client.session().document(), TestWard::bobId()), QString("555-9999"));
+    QVERIFY(client.session().canUndo());
+    QCOMPARE(client.session().undoHeading(), QString("Smith family"));
+    QVERIFY(!client.session().canRedo());
+    QCOMPARE(client.session().journal().entries().size(), qsizetype(2));
 }
 
 void WardSessionTest::commandThatIsNotUndoableNeverEntersTheUndoStack()
 {
-    TestSession session;
-    session.createWard(TestWard::document());
+    TestClient client("Laptop");
+    client.createWard(TestWard::document());
 
-    QVERIFY(session.commit(std::make_shared<ForcePhoneCommand>(TestWard::bobId(), "555-9999", QString())).status
+    QVERIFY(client.session().commit(std::make_shared<ForcePhoneCommand>(TestWard::bobId(), "555-9999", QString())).status
             == CommitStatus::Applied);
 
-    QCOMPARE(phoneOf(session.document(), TestWard::bobId()), QString("555-9999"));
-    QCOMPARE(session.journal().entries().size(), qsizetype(1));
-    QVERIFY(!session.canUndo());
+    QCOMPARE(phoneOf(client.session().document(), TestWard::bobId()), QString("555-9999"));
+    QCOMPARE(client.session().journal().entries().size(), qsizetype(1));
+    QVERIFY(!client.session().canUndo());
 }
 
 void WardSessionTest::newCommandClearsTheRedoSide()
 {
-    TestSession session;
-    session.createWard(TestWard::document());
-    commitPhone(session, TestWard::smithId(), TestWard::bobId(), "555-2222");
-    session.undo();
-    QVERIFY(session.canRedo());
+    TestClient client("Laptop");
+    client.createWard(TestWard::document());
+    commitPhone(client.session(), TestWard::smithId(), TestWard::bobId(), "555-2222");
+    client.session().undo();
+    QVERIFY(client.session().canRedo());
 
-    commitPhone(session, TestWard::jonesId(), TestWard::carolId(), "555-5555");
+    commitPhone(client.session(), TestWard::jonesId(), TestWard::carolId(), "555-5555");
 
-    QVERIFY(!session.canRedo());
-    QCOMPARE(session.undoHeading(), QString("Jones family"));
+    QVERIFY(!client.session().canRedo());
+    QCOMPARE(client.session().undoHeading(), QString("Jones family"));
 }
 
 void WardSessionTest::undoBeforeAnAbandonedReplayLeavesNothingToRedo()
 {
-    TestSession mine;
-    TestSession theirs;
+    TestClient mine("Laptop");
+    TestClient theirs("Phone");
     mine.createWard(TestWard::document());
-    theirs.createWard(TestWard::document());
-    commitPhone(mine, TestWard::smithId(), TestWard::bobId(), "555-2222");
-    QVERIFY(mine.undo().status == CommitStatus::Applied);
-    QVERIFY(mine.canRedo());
-    commitPhone(theirs, TestWard::smithId(), TestWard::bobId(), "555-9999");
+    theirs.takeWardOf(mine);
+    commitPhone(mine.session(), TestWard::smithId(), TestWard::bobId(), "555-2222");
+    QVERIFY(mine.session().undo().status == CommitStatus::Applied);
+    QVERIFY(mine.session().canRedo());
+    commitPhone(theirs.session(), TestWard::smithId(), TestWard::bobId(), "555-9999");
 
-    QVERIFY(mine.replayOnto(theirs.document()).status == ReplayStatus::Abandoned);
+    QVERIFY(mine.session().replayOnto(theirs.session().document()).status == ReplayStatus::Abandoned);
 
-    QVERIFY(!mine.canRedo());
-    QVERIFY(!mine.canUndo());
-    QCOMPARE(phoneOf(mine.document(), TestWard::bobId()), QString("555-9999"));
+    QVERIFY(!mine.session().canRedo());
+    QVERIFY(!mine.session().canUndo());
+    QCOMPARE(phoneOf(mine.session().document(), TestWard::bobId()), QString("555-9999"));
 }
 
 void WardSessionTest::undoStackHoldsAtMostOneHundred()
 {
-    TestSession session;
-    session.createWard(TestWard::document());
+    TestClient client("Laptop");
+    client.createWard(TestWard::document());
     for (int i = 1; i <= 101; ++i)
     {
-        QVERIFY(commitPhone(session, TestWard::smithId(), TestWard::bobId(), QString("555-%1").arg(1000 + i)).status
+        QVERIFY(commitPhone(client.session(), TestWard::smithId(), TestWard::bobId(), QString("555-%1").arg(1000 + i)).status
                 == CommitStatus::Applied);
     }
 
     for (int i = 0; i < 100; ++i)
     {
-        QVERIFY(session.canUndo());
-        QVERIFY(session.undo().status == CommitStatus::Applied);
+        QVERIFY(client.session().canUndo());
+        QVERIFY(client.session().undo().status == CommitStatus::Applied);
     }
 
-    QVERIFY(!session.canUndo());
-    QCOMPARE(phoneOf(session.document(), TestWard::bobId()), QString("555-1001"));
+    QVERIFY(!client.session().canUndo());
+    QCOMPARE(phoneOf(client.session().document(), TestWard::bobId()), QString("555-1001"));
 }

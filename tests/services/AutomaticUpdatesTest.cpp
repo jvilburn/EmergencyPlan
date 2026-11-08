@@ -1,7 +1,7 @@
 #include "AutomaticUpdatesTest.h"
 #include "AddressCoordinatesCommands.h"
 #include "FamilyCommands.h"
-#include "TestSession.h"
+#include "TestClient.h"
 #include "TestWard.h"
 
 #include <QSignalSpy>
@@ -144,39 +144,39 @@ AutomaticUpdatesTest::AutomaticUpdatesTest(QObject* parent)
 
 void AutomaticUpdatesTest::geocodeResultAppliesOutsideTheJournal()
 {
-    TestSession session;
-    session.createWard(TestWard::document());
-    session.automaticUpdates().run();
-    QCOMPARE(session.geocoder().requests(), QStringList({smithAddress().full(), jonesAddress().full()}));
+    TestClient client("Laptop");
+    client.createWard(TestWard::document());
+    client.session().automaticUpdates().run();
+    QCOMPARE(client.geocoder().requests(), QStringList({smithAddress().full(), jonesAddress().full()}));
 
-    session.geocoder().resolve(smithAddress().full(), ElmPosition);
-    session.geocoder().resolve(jonesAddress().full(), OakPosition);
+    client.geocoder().resolve(smithAddress().full(), ElmPosition);
+    client.geocoder().resolve(jonesAddress().full(), OakPosition);
 
-    QVERIFY(positionOf(session, TestWard::smithId()) == ElmPosition);
-    QVERIFY(session.journal().isEmpty());
-    QVERIFY(!session.canUndo());
+    QVERIFY(positionOf(client.session(), TestWard::smithId()) == ElmPosition);
+    QVERIFY(client.session().journal().isEmpty());
+    QVERIFY(!client.session().canUndo());
 
-    ReplayResult result = session.replayOnto(TestWard::document());
+    ReplayResult result = client.session().replayOnto(TestWard::document());
 
     QVERIFY(result.status == ReplayStatus::FastForwarded);
-    QVERIFY(!positionOf(session, TestWard::smithId()).has_value());
-    QVERIFY(session.journal().isEmpty());
+    QVERIFY(!positionOf(client.session(), TestWard::smithId()).has_value());
+    QVERIFY(client.session().journal().isEmpty());
 }
 
 void AutomaticUpdatesTest::geocodeBetweenAnOfflinePhoneEditAndItsReplayKeepsBoth()
 {
-    TestSession mine;
+    TestClient mine("Laptop");
     mine.createWard(TestWard::document());
-    QVERIFY(commitPhone(mine, TestWard::smithId(), TestWard::bobId(), "555-2222").status == CommitStatus::Applied);
-    QVERIFY(!positionOf(mine, TestWard::smithId()).has_value());
+    QVERIFY(commitPhone(mine.session(), TestWard::smithId(), TestWard::bobId(), "555-2222").status == CommitStatus::Applied);
+    QVERIFY(!positionOf(mine.session(), TestWard::smithId()).has_value());
 
     // Another device's geocode of the Smith address landed in the version.
-    ReplayResult result = mine.replayOnto(TestWard::withCoordinates(TestWard::document(), smithAddress(), ElmPosition));
+    ReplayResult result = mine.session().replayOnto(TestWard::withCoordinates(TestWard::document(), smithAddress(), ElmPosition));
 
     QVERIFY(result.status == ReplayStatus::Replayed);
-    QCOMPARE(QString(TestWard::person(mine.document(), TestWard::bobId()).phone()), QString("555-2222"));
-    QVERIFY(positionOf(mine, TestWard::smithId()) == ElmPosition);
-    QCOMPARE(mine.journal().entries().size(), qsizetype(1));
+    QCOMPARE(QString(TestWard::person(mine.session().document(), TestWard::bobId()).phone()), QString("555-2222"));
+    QVERIFY(positionOf(mine.session(), TestWard::smithId()) == ElmPosition);
+    QCOMPARE(mine.session().journal().entries().size(), qsizetype(1));
     QVERIFY(mine.geocoder().requests().isEmpty());
 }
 
@@ -185,248 +185,248 @@ void AutomaticUpdatesTest::addressEditPlacesTheFamilyAtTheNewAddressEntry()
     Address newAddress = TestWard::address("14 Elm St", "Provo, UT");
 
     // The old address's geocode lands before the edit.
-    TestSession before;
+    TestClient before("Laptop");
     before.createWard(TestWard::document());
-    before.automaticUpdates().run();
+    before.session().automaticUpdates().run();
     before.geocoder().resolve(smithAddress().full(), ElmPosition);
     before.geocoder().resolve(jonesAddress().full(), OakPosition);
-    QVERIFY(positionOf(before, TestWard::smithId()) == ElmPosition);
+    QVERIFY(positionOf(before.session(), TestWard::smithId()) == ElmPosition);
 
-    QVERIFY(commitAddress(before, TestWard::smithId(), newAddress).status == CommitStatus::Applied);
-    QVERIFY(!positionOf(before, TestWard::smithId()).has_value());
+    QVERIFY(commitAddress(before.session(), TestWard::smithId(), newAddress).status == CommitStatus::Applied);
+    QVERIFY(!positionOf(before.session(), TestWard::smithId()).has_value());
     QCOMPARE(before.geocoder().requests().last(), newAddress.full());
 
     before.geocoder().resolve(newAddress.full(), NewElmPosition);
-    QVERIFY(positionOf(before, TestWard::smithId()) == NewElmPosition);
-    QVERIFY(!before.document().addressCoordinates().contains(smithAddress().full()));
-    QCOMPARE(before.document().addressCoordinates().size(), qsizetype(2));
+    QVERIFY(positionOf(before.session(), TestWard::smithId()) == NewElmPosition);
+    QVERIFY(!before.session().document().addressCoordinates().contains(smithAddress().full()));
+    QCOMPARE(before.session().document().addressCoordinates().size(), qsizetype(2));
 
     // The old address's geocode lands after the edit.
-    TestSession after;
+    TestClient after("Laptop");
     after.createWard(TestWard::document());
-    after.automaticUpdates().run();
-    QVERIFY(commitAddress(after, TestWard::smithId(), newAddress).status == CommitStatus::Applied);
+    after.session().automaticUpdates().run();
+    QVERIFY(commitAddress(after.session(), TestWard::smithId(), newAddress).status == CommitStatus::Applied);
     QCOMPARE(after.geocoder().requests(),
              QStringList({smithAddress().full(), jonesAddress().full(), newAddress.full()}));
 
     after.geocoder().resolve(smithAddress().full(), ElmPosition);
     after.geocoder().resolve(jonesAddress().full(), OakPosition);
-    QVERIFY(!positionOf(after, TestWard::smithId()).has_value());
+    QVERIFY(!positionOf(after.session(), TestWard::smithId()).has_value());
 
     after.geocoder().resolve(newAddress.full(), NewElmPosition);
-    QVERIFY(positionOf(after, TestWard::smithId()) == NewElmPosition);
-    QVERIFY(!after.document().addressCoordinates().contains(smithAddress().full()));
-    QCOMPARE(after.document().addressCoordinates().size(), qsizetype(2));
+    QVERIFY(positionOf(after.session(), TestWard::smithId()) == NewElmPosition);
+    QVERIFY(!after.session().document().addressCoordinates().contains(smithAddress().full()));
+    QCOMPARE(after.session().document().addressCoordinates().size(), qsizetype(2));
 }
 
 void AutomaticUpdatesTest::typedCoordinatesSetTheEntryAndAGeocodeNeverReplacesThem()
 {
-    TestSession session;
-    session.createWard(TestWard::document());
-    session.automaticUpdates().run();
+    TestClient client("Laptop");
+    client.createWard(TestWard::document());
+    client.session().automaticUpdates().run();
 
-    QVERIFY(commitTyped(session, smithAddress(), TypedPosition).status == CommitStatus::Applied);
-    QVERIFY(positionOf(session, TestWard::smithId()) == TypedPosition);
-    QCOMPARE(session.undoHeading(), QString("Map position for 12 Elm St, Provo, UT"));
+    QVERIFY(commitTyped(client.session(), smithAddress(), TypedPosition).status == CommitStatus::Applied);
+    QVERIFY(positionOf(client.session(), TestWard::smithId()) == TypedPosition);
+    QCOMPARE(client.session().undoHeading(), QString("Map position for 12 Elm St, Provo, UT"));
 
-    session.geocoder().resolve(smithAddress().full(), ElmPosition);
-    session.geocoder().resolve(jonesAddress().full(), OakPosition);
+    client.geocoder().resolve(smithAddress().full(), ElmPosition);
+    client.geocoder().resolve(jonesAddress().full(), OakPosition);
 
-    QVERIFY(positionOf(session, TestWard::smithId()) == TypedPosition);
-    QVERIFY(positionOf(session, TestWard::jonesId()) == OakPosition);
-    QCOMPARE(session.journal().entries().size(), qsizetype(1));
+    QVERIFY(positionOf(client.session(), TestWard::smithId()) == TypedPosition);
+    QVERIFY(positionOf(client.session(), TestWard::jonesId()) == OakPosition);
+    QCOMPARE(client.session().journal().entries().size(), qsizetype(1));
 }
 
 void AutomaticUpdatesTest::undoOfTypedCoordinatesRestoresThePreviousEntry()
 {
-    TestSession session;
-    session.createWard(mappedWard());
-    QVERIFY(commitTyped(session, smithAddress(), TypedPosition).status == CommitStatus::Applied);
-    QVERIFY(positionOf(session, TestWard::smithId()) == TypedPosition);
+    TestClient client("Laptop");
+    client.createWard(mappedWard());
+    QVERIFY(commitTyped(client.session(), smithAddress(), TypedPosition).status == CommitStatus::Applied);
+    QVERIFY(positionOf(client.session(), TestWard::smithId()) == TypedPosition);
 
-    CommitResult undone = session.undo();
+    CommitResult undone = client.session().undo();
 
     QVERIFY(undone.status == CommitStatus::Applied);
     QCOMPARE(undone.description.heading(), QString("Undo: Map position for 12 Elm St, Provo, UT"));
-    QVERIFY(positionOf(session, TestWard::smithId()) == ElmPosition);
-    QVERIFY(session.canRedo());
+    QVERIFY(positionOf(client.session(), TestWard::smithId()) == ElmPosition);
+    QVERIFY(client.session().canRedo());
 
     // An entry typed where there was none is removed by its undo.
-    TestSession unmapped;
+    TestClient unmapped("Laptop");
     unmapped.createWard(TestWard::document());
-    QVERIFY(commitTyped(unmapped, jonesAddress(), TypedPosition).status == CommitStatus::Applied);
-    QVERIFY(positionOf(unmapped, TestWard::jonesId()) == TypedPosition);
+    QVERIFY(commitTyped(unmapped.session(), jonesAddress(), TypedPosition).status == CommitStatus::Applied);
+    QVERIFY(positionOf(unmapped.session(), TestWard::jonesId()) == TypedPosition);
 
-    QVERIFY(unmapped.undo().status == CommitStatus::Applied);
-    QVERIFY(!positionOf(unmapped, TestWard::jonesId()).has_value());
+    QVERIFY(unmapped.session().undo().status == CommitStatus::Applied);
+    QVERIFY(!positionOf(unmapped.session(), TestWard::jonesId()).has_value());
 }
 
 void AutomaticUpdatesTest::typedCoordinatesReplayedAfterAGeocodeOfThatAddressApply()
 {
-    TestSession mine;
+    TestClient mine("Laptop");
     mine.createWard(TestWard::document());
-    QVERIFY(commitTyped(mine, smithAddress(), TypedPosition).status == CommitStatus::Applied);
+    QVERIFY(commitTyped(mine.session(), smithAddress(), TypedPosition).status == CommitStatus::Applied);
 
-    ReplayResult result = mine.replayOnto(mappedWard());
+    ReplayResult result = mine.session().replayOnto(mappedWard());
 
     QVERIFY(result.status == ReplayStatus::Replayed);
-    QVERIFY(positionOf(mine, TestWard::smithId()) == TypedPosition);
-    QVERIFY(positionOf(mine, TestWard::jonesId()) == OakPosition);
-    QCOMPARE(mine.journal().entries().size(), qsizetype(1));
+    QVERIFY(positionOf(mine.session(), TestWard::smithId()) == TypedPosition);
+    QVERIFY(positionOf(mine.session(), TestWard::jonesId()) == OakPosition);
+    QCOMPARE(mine.session().journal().entries().size(), qsizetype(1));
 }
 
 void AutomaticUpdatesTest::batchDropsEntriesNoFamilyUsesAndKeepsEveryEntryInUse()
 {
     Address gone = TestWard::address("99 Gone St", "Provo, UT");
-    TestSession session;
-    session.createWard(TestWard::withCoordinates(mappedWard(), gone, NewElmPosition));
-    QSignalSpy appliedSpy(&session.automaticUpdates(), &AutomaticUpdates::applied);
+    TestClient client("Laptop");
+    client.createWard(TestWard::withCoordinates(mappedWard(), gone, NewElmPosition));
+    int writesBefore = client.store().writes();
 
-    session.automaticUpdates().run();
+    client.session().automaticUpdates().run();
 
-    QVERIFY(session.geocoder().requests().isEmpty());
-    QCOMPARE(appliedSpy.count(), 1);
-    QCOMPARE(session.document().addressCoordinates().size(), qsizetype(2));
-    QVERIFY(positionOf(session, TestWard::smithId()) == ElmPosition);
-    QVERIFY(positionOf(session, TestWard::jonesId()) == OakPosition);
-    QVERIFY(!session.document().addressCoordinates().contains(gone.full()));
+    QVERIFY(client.geocoder().requests().isEmpty());
+    QCOMPARE(client.store().writes(), writesBefore + 1);
+    QCOMPARE(client.session().document().addressCoordinates().size(), qsizetype(2));
+    QVERIFY(positionOf(client.session(), TestWard::smithId()) == ElmPosition);
+    QVERIFY(positionOf(client.session(), TestWard::jonesId()) == OakPosition);
+    QVERIFY(!client.session().document().addressCoordinates().contains(gone.full()));
 }
 
-void AutomaticUpdatesTest::batchOfSeveralAddressesAppliesOnce()
+void AutomaticUpdatesTest::batchOfSeveralAddressesSavesOnce()
 {
     Family lee = TestWard::lee(2010);
     Document document = TestWard::document();
     document.setFamily(lee);
     document.onDocumentChanged(DocumentChange::full());
-    TestSession session;
-    session.createWard(document);
-    QSignalSpy appliedSpy(&session.automaticUpdates(), &AutomaticUpdates::applied);
+    TestClient client("Laptop");
+    client.createWard(document);
+    int writesBefore = client.store().writes();
 
-    session.automaticUpdates().run();
-    QCOMPARE(session.geocoder().requests().size(), qsizetype(3));
-    session.geocoder().resolve(smithAddress().full(), ElmPosition);
-    session.geocoder().resolve(jonesAddress().full(), OakPosition);
-    QCOMPARE(appliedSpy.count(), 0);
-    session.geocoder().resolve(lee.address().full(), NewElmPosition);
+    client.session().automaticUpdates().run();
+    QCOMPARE(client.geocoder().requests().size(), qsizetype(3));
+    client.geocoder().resolve(smithAddress().full(), ElmPosition);
+    client.geocoder().resolve(jonesAddress().full(), OakPosition);
+    QCOMPARE(client.store().writes(), writesBefore);
+    client.geocoder().resolve(lee.address().full(), NewElmPosition);
 
-    QCOMPARE(appliedSpy.count(), 1);
-    QVERIFY(positionOf(session, TestWard::smithId()) == ElmPosition);
-    QVERIFY(positionOf(session, TestWard::jonesId()) == OakPosition);
-    QVERIFY(positionOf(session, lee.id()) == NewElmPosition);
+    QCOMPARE(client.store().writes(), writesBefore + 1);
+    QVERIFY(positionOf(client.session(), TestWard::smithId()) == ElmPosition);
+    QVERIFY(positionOf(client.session(), TestWard::jonesId()) == OakPosition);
+    QVERIFY(positionOf(client.session(), lee.id()) == NewElmPosition);
 }
 
 void AutomaticUpdatesTest::failedAddressIsNotRequestedAgainUntilItsTextChanges()
 {
-    TestSession session;
-    session.createWard(TestWard::document());
-    session.automaticUpdates().run();
-    session.geocoder().fail(smithAddress().full());
-    session.geocoder().resolve(jonesAddress().full(), OakPosition);
-    QVERIFY(!positionOf(session, TestWard::smithId()).has_value());
+    TestClient client("Laptop");
+    client.createWard(TestWard::document());
+    client.session().automaticUpdates().run();
+    client.geocoder().fail(smithAddress().full());
+    client.geocoder().resolve(jonesAddress().full(), OakPosition);
+    QVERIFY(!positionOf(client.session(), TestWard::smithId()).has_value());
 
     // Not after a replay: the run that follows requests the Jones address the replay dropped,
     // and not the Smith address.
-    session.replayOnto(TestWard::document());
-    session.automaticUpdates().run();
-    QCOMPARE(session.geocoder().requests(),
+    client.session().replayOnto(TestWard::document());
+    client.session().automaticUpdates().run();
+    QCOMPARE(client.geocoder().requests(),
              QStringList({smithAddress().full(), jonesAddress().full(), jonesAddress().full()}));
-    session.geocoder().resolve(jonesAddress().full(), OakPosition);
+    client.geocoder().resolve(jonesAddress().full(), OakPosition);
 
     // Not after another family is given a new address.
     Address newOak = TestWard::address("6 Oak Ave", "Provo, UT");
-    QVERIFY(commitAddress(session, TestWard::jonesId(), newOak).status == CommitStatus::Applied);
-    QCOMPARE(session.geocoder().requests().last(), newOak.full());
-    QCOMPARE(session.geocoder().requests().count(smithAddress().full()), qsizetype(1));
-    session.geocoder().resolve(newOak.full(), OakPosition);
+    QVERIFY(commitAddress(client.session(), TestWard::jonesId(), newOak).status == CommitStatus::Applied);
+    QCOMPARE(client.geocoder().requests().last(), newOak.full());
+    QCOMPARE(client.geocoder().requests().count(smithAddress().full()), qsizetype(1));
+    client.geocoder().resolve(newOak.full(), OakPosition);
 
     // Requested again once its text changes.
     Address corrected = TestWard::address("12 Elm Street", "Provo, UT");
-    QVERIFY(commitAddress(session, TestWard::smithId(), corrected).status == CommitStatus::Applied);
-    QCOMPARE(session.geocoder().requests().last(), corrected.full());
+    QVERIFY(commitAddress(client.session(), TestWard::smithId(), corrected).status == CommitStatus::Applied);
+    QCOMPARE(client.geocoder().requests().last(), corrected.full());
 }
 
 void AutomaticUpdatesTest::twoFamiliesAtOneAddressShareOneRequestAndOneEntry()
 {
     Family jones = TestWard::jones();
     jones.setAddress(smithAddress());
-    TestSession session;
-    session.createWard(TestWard::withFamily(TestWard::document(), jones));
-    QSignalSpy finishedSpy(&session.automaticUpdates(), &AutomaticUpdates::geocodingFinished);
+    TestClient client("Laptop");
+    client.createWard(TestWard::withFamily(TestWard::document(), jones));
+    QSignalSpy finishedSpy(&client.session().automaticUpdates(), &AutomaticUpdates::geocodingFinished);
 
-    session.automaticUpdates().run();
-    QCOMPARE(session.geocoder().requests(), QStringList({smithAddress().full()}));
-    session.geocoder().resolve(smithAddress().full(), ElmPosition);
+    client.session().automaticUpdates().run();
+    QCOMPARE(client.geocoder().requests(), QStringList({smithAddress().full()}));
+    client.geocoder().resolve(smithAddress().full(), ElmPosition);
 
     QCOMPARE(finishedSpy.count(), 1);
-    QVERIFY(positionOf(session, TestWard::smithId()) == ElmPosition);
-    QVERIFY(positionOf(session, TestWard::jonesId()) == ElmPosition);
-    QCOMPARE(session.document().addressCoordinates().size(), qsizetype(1));
+    QVERIFY(positionOf(client.session(), TestWard::smithId()) == ElmPosition);
+    QVERIFY(positionOf(client.session(), TestWard::jonesId()) == ElmPosition);
+    QCOMPARE(client.session().document().addressCoordinates().size(), qsizetype(1));
 }
 
 void AutomaticUpdatesTest::commandThatGivesNoAddressStartsNoGeocoding()
 {
-    TestSession mine;
+    TestClient mine("Laptop");
+    TestClient theirs("Phone");
     mine.createWard(TestWard::document());
-    QVERIFY(commitPhone(mine, TestWard::smithId(), TestWard::bobId(), "555-2222").status == CommitStatus::Applied);
+    theirs.takeWardOf(mine);
+    QVERIFY(commitPhone(mine.session(), TestWard::smithId(), TestWard::bobId(), "555-2222").status == CommitStatus::Applied);
     QVERIFY(mine.geocoder().requests().isEmpty());
 
-    TestSession theirs;
-    theirs.createWard(TestWard::document());
-    QVERIFY(commitAddress(theirs, TestWard::jonesId(), TestWard::address("6 Oak Ave", "Provo, UT")).status
+    QVERIFY(commitAddress(theirs.session(), TestWard::jonesId(), TestWard::address("6 Oak Ave", "Provo, UT")).status
             == CommitStatus::Applied);
     QVERIFY(!theirs.geocoder().requests().isEmpty());
 
-    QVERIFY(mine.replayOnto(theirs.document()).status == ReplayStatus::Replayed);
+    QVERIFY(mine.session().replayOnto(theirs.session().document()).status == ReplayStatus::Replayed);
     QVERIFY(mine.geocoder().requests().isEmpty());
 }
 
-void AutomaticUpdatesTest::batchThatChangesNothingEmitsNothing()
+void AutomaticUpdatesTest::batchThatChangesNothingSavesNothing()
 {
-    TestSession mapped;
+    TestClient mapped("Laptop");
     mapped.createWard(mappedWard());
-    QSignalSpy mappedApplied(&mapped.automaticUpdates(), &AutomaticUpdates::applied);
-    QSignalSpy mappedChanged(&mapped, &WardSession::documentChanged);
-    mapped.automaticUpdates().run();
+    int mappedWritesBefore = mapped.store().writes();
+    QSignalSpy mappedChanged(&mapped.session(), &WardSession::documentChanged);
+    mapped.session().automaticUpdates().run();
     QVERIFY(mapped.geocoder().requests().isEmpty());
-    QCOMPARE(mappedApplied.count(), 0);
+    QCOMPARE(mapped.store().writes(), mappedWritesBefore);
     QCOMPARE(mappedChanged.count(), 0);
 
     // A batch whose every request fails.
-    TestSession failing;
+    TestClient failing("Laptop");
     failing.createWard(TestWard::document());
-    QSignalSpy failingApplied(&failing.automaticUpdates(), &AutomaticUpdates::applied);
-    QSignalSpy failingChanged(&failing, &WardSession::documentChanged);
-    QSignalSpy failingFinished(&failing.automaticUpdates(), &AutomaticUpdates::geocodingFinished);
-    failing.automaticUpdates().run();
+    int failingWritesBefore = failing.store().writes();
+    QSignalSpy failingChanged(&failing.session(), &WardSession::documentChanged);
+    QSignalSpy failingFinished(&failing.session().automaticUpdates(), &AutomaticUpdates::geocodingFinished);
+    failing.session().automaticUpdates().run();
     QCOMPARE(failing.geocoder().requests().size(), qsizetype(2));
     failing.geocoder().fail(smithAddress().full());
     failing.geocoder().fail(jonesAddress().full());
     QCOMPARE(failingFinished.count(), 1);
-    QCOMPARE(failingApplied.count(), 0);
+    QCOMPARE(failing.store().writes(), failingWritesBefore);
     QCOMPARE(failingChanged.count(), 0);
 }
 
-void AutomaticUpdatesTest::lookupThatChangesNothingEmitsNothing()
+void AutomaticUpdatesTest::lookupThatChangesNothingSavesNothing()
 {
     Document document = mappedWard();
     document.metadata().updateWard(wardWithoutDetails("111111"));
-    TestSession session;
-    session.createWard(document);
-    Document created = session.document();
-    QSignalSpy appliedSpy(&session.automaticUpdates(), &AutomaticUpdates::applied);
-    QSignalSpy changedSpy(&session, &WardSession::documentChanged);
+    TestClient client("Laptop");
+    client.createWard(document);
+    Document created = client.session().document();
+    int writesBefore = client.store().writes();
+    QSignalSpy changedSpy(&client.session(), &WardSession::documentChanged);
 
-    session.automaticUpdates().run();
-    QCOMPARE(session.unitLookup().requests(), QStringList({"ward 111111"}));
-    session.unitLookup().findWard("111111", wardWithoutDetails("111111"));
+    client.session().automaticUpdates().run();
+    QCOMPARE(client.unitLookup().requests(), QStringList({"ward 111111"}));
+    client.unitLookup().findWard("111111", wardWithoutDetails("111111"));
 
-    QCOMPARE(appliedSpy.count(), 0);
+    QCOMPARE(client.store().writes(), writesBefore);
     QCOMPARE(changedSpy.count(), 0);
-    QVERIFY(session.document() == created);
+    QVERIFY(client.session().document() == created);
 
     // A lookup that found no details puts the unit on the failed list.
-    session.automaticUpdates().run();
-    QCOMPARE(session.unitLookup().requests(), QStringList({"ward 111111"}));
+    client.session().automaticUpdates().run();
+    QCOMPARE(client.unitLookup().requests(), QStringList({"ward 111111"}));
 }
 
 void AutomaticUpdatesTest::failedWardLookupContinuesToTheNextWard()
@@ -434,14 +434,14 @@ void AutomaticUpdatesTest::failedWardLookupContinuesToTheNextWard()
     Document document = mappedWard();
     document.metadata().updateWard(wardWithoutDetails("222222"));
     document.metadata().updateWard(wardWithoutDetails("111111"));
-    TestSession session;
-    session.createWard(document);
+    TestClient client("Laptop");
+    client.createWard(document);
 
-    session.automaticUpdates().run();
-    QCOMPARE(session.unitLookup().requests(), QStringList({"ward 111111"}));
-    session.unitLookup().fail("111111");
+    client.session().automaticUpdates().run();
+    QCOMPARE(client.unitLookup().requests(), QStringList({"ward 111111"}));
+    client.unitLookup().fail("111111");
 
-    QCOMPARE(session.unitLookup().requests(), QStringList({"ward 111111", "ward 222222"}));
+    QCOMPARE(client.unitLookup().requests(), QStringList({"ward 111111", "ward 222222"}));
 }
 
 void AutomaticUpdatesTest::wardFoundNamingAMissingStakeLooksUpTheStakeBeforeTheNextWard()
@@ -449,40 +449,40 @@ void AutomaticUpdatesTest::wardFoundNamingAMissingStakeLooksUpTheStakeBeforeTheN
     Document document = mappedWard();
     document.metadata().updateWard(wardWithoutDetails("222222"));
     document.metadata().updateWard(wardWithoutDetails("111111"));
-    TestSession session;
-    session.createWard(document);
-    QSignalSpy appliedSpy(&session.automaticUpdates(), &AutomaticUpdates::applied);
+    TestClient client("Laptop");
+    client.createWard(document);
+    int writesBefore = client.store().writes();
 
-    session.automaticUpdates().run();
-    QCOMPARE(session.unitLookup().requests(), QStringList({"ward 111111"}));
+    client.session().automaticUpdates().run();
+    QCOMPARE(client.unitLookup().requests(), QStringList({"ward 111111"}));
 
-    session.unitLookup().findWard("111111", wardWithChapel("111111", "900000"));
-    QCOMPARE(session.unitLookup().requests(), QStringList({"ward 111111", "stake 900000"}));
-    QVERIFY(!session.document().stakes().contains("900000"));
+    client.unitLookup().findWard("111111", wardWithChapel("111111", "900000"));
+    QCOMPARE(client.unitLookup().requests(), QStringList({"ward 111111", "stake 900000"}));
+    QVERIFY(!client.session().document().stakes().contains("900000"));
 
-    session.unitLookup().findStake("900000", namedStake("900000"));
+    client.unitLookup().findStake("900000", namedStake("900000"));
 
-    QVERIFY(session.document().metadata().findStakeByUnit("900000") == namedStake("900000"));
-    QCOMPARE(session.unitLookup().requests(), QStringList({"ward 111111", "stake 900000", "ward 222222"}));
-    QCOMPARE(appliedSpy.count(), 2);
+    QVERIFY(client.session().document().metadata().findStakeByUnit("900000") == namedStake("900000"));
+    QCOMPARE(client.unitLookup().requests(), QStringList({"ward 111111", "stake 900000", "ward 222222"}));
+    QCOMPARE(client.store().writes(), writesBefore + 2);
 }
 
 void AutomaticUpdatesTest::undoOfAnAddressEditRequestsTheRestoredAddress()
 {
     Address newAddress = TestWard::address("14 Elm St", "Provo, UT");
-    TestSession session;
-    session.createWard(mappedWard());
+    TestClient client("Laptop");
+    client.createWard(mappedWard());
 
-    QVERIFY(commitAddress(session, TestWard::smithId(), newAddress).status == CommitStatus::Applied);
-    QCOMPARE(session.geocoder().requests(), QStringList({newAddress.full()}));
-    session.geocoder().resolve(newAddress.full(), NewElmPosition);
-    QVERIFY(positionOf(session, TestWard::smithId()) == NewElmPosition);
-    QVERIFY(!session.document().addressCoordinates().contains(smithAddress().full()));
+    QVERIFY(commitAddress(client.session(), TestWard::smithId(), newAddress).status == CommitStatus::Applied);
+    QCOMPARE(client.geocoder().requests(), QStringList({newAddress.full()}));
+    client.geocoder().resolve(newAddress.full(), NewElmPosition);
+    QVERIFY(positionOf(client.session(), TestWard::smithId()) == NewElmPosition);
+    QVERIFY(!client.session().document().addressCoordinates().contains(smithAddress().full()));
 
-    QVERIFY(session.undo().status == CommitStatus::Applied);
+    QVERIFY(client.session().undo().status == CommitStatus::Applied);
 
-    QCOMPARE(TestWard::family(session.document(), TestWard::smithId()).address().full(), smithAddress().full());
-    QCOMPARE(session.geocoder().requests(), QStringList({newAddress.full(), smithAddress().full()}));
+    QCOMPARE(TestWard::family(client.session().document(), TestWard::smithId()).address().full(), smithAddress().full());
+    QCOMPARE(client.geocoder().requests(), QStringList({newAddress.full(), smithAddress().full()}));
 }
 
 void AutomaticUpdatesTest::lateAnswersChangeNothing()
@@ -492,51 +492,51 @@ void AutomaticUpdatesTest::lateAnswersChangeNothing()
     Document document = TestWard::document();
     document.metadata().updateWard(wardWithoutDetails("222222"));
     document.metadata().updateWard(wardWithoutDetails("111111"));
-    TestSession session;
-    session.createWard(document);
-    Document created = session.document();
-    session.automaticUpdates().run();
-    QCOMPARE(session.geocoder().requests(), QStringList({smithAddress().full(), jonesAddress().full()}));
-    QCOMPARE(session.unitLookup().requests(), QStringList({"ward 111111"}));
-    QSignalSpy changedSpy(&session, &WardSession::documentChanged);
-    QSignalSpy appliedSpy(&session.automaticUpdates(), &AutomaticUpdates::applied);
-    QSignalSpy progressSpy(&session.automaticUpdates(), &AutomaticUpdates::geocodingProgress);
+    TestClient client("Laptop");
+    client.createWard(document);
+    Document created = client.session().document();
+    client.session().automaticUpdates().run();
+    QCOMPARE(client.geocoder().requests(), QStringList({smithAddress().full(), jonesAddress().full()}));
+    QCOMPARE(client.unitLookup().requests(), QStringList({"ward 111111"}));
+    QSignalSpy changedSpy(&client.session(), &WardSession::documentChanged);
+    int writesBefore = client.store().writes();
+    QSignalSpy progressSpy(&client.session().automaticUpdates(), &AutomaticUpdates::geocodingProgress);
 
     // Answers for addresses the batch is not waiting on, and for units not being looked up.
-    session.geocoder().resolve(gone.full(), NewElmPosition);
-    session.geocoder().fail(newAddress.full());
-    session.unitLookup().findWard("222222", wardWithChapel("222222", "900000"));
-    session.unitLookup().findStake("900000", namedStake("900000"));
-    session.unitLookup().fail("222222");
+    client.geocoder().resolve(gone.full(), NewElmPosition);
+    client.geocoder().fail(newAddress.full());
+    client.unitLookup().findWard("222222", wardWithChapel("222222", "900000"));
+    client.unitLookup().findStake("900000", namedStake("900000"));
+    client.unitLookup().fail("222222");
 
-    QVERIFY(session.document() == created);
+    QVERIFY(client.session().document() == created);
     QCOMPARE(changedSpy.count(), 0);
-    QCOMPARE(appliedSpy.count(), 0);
+    QCOMPARE(client.store().writes(), writesBefore);
     QCOMPARE(progressSpy.count(), 0);
-    QCOMPARE(session.unitLookup().requests(), QStringList({"ward 111111"}));
+    QCOMPARE(client.unitLookup().requests(), QStringList({"ward 111111"}));
 
     // An answer the batch is waiting on maps the family; the same address answered again
     // later changes nothing.
-    session.geocoder().resolve(smithAddress().full(), ElmPosition);
+    client.geocoder().resolve(smithAddress().full(), ElmPosition);
     QCOMPARE(changedSpy.count(), 1);
     QCOMPARE(progressSpy.count(), 1);
-    QVERIFY(positionOf(session, TestWard::smithId()) == ElmPosition);
-    session.geocoder().resolve(smithAddress().full(), NewElmPosition);
+    QVERIFY(positionOf(client.session(), TestWard::smithId()) == ElmPosition);
+    client.geocoder().resolve(smithAddress().full(), NewElmPosition);
     QCOMPARE(changedSpy.count(), 1);
     QCOMPARE(progressSpy.count(), 1);
-    QVERIFY(positionOf(session, TestWard::smithId()) == ElmPosition);
+    QVERIFY(positionOf(client.session(), TestWard::smithId()) == ElmPosition);
 
     // The answer for the unit being looked up applies; the late failure of the other ward
     // left it off the failed list, so it is looked up next.
-    session.unitLookup().findWard("111111", wardWithChapel("111111", QString()));
-    QCOMPARE(appliedSpy.count(), 1);
+    client.unitLookup().findWard("111111", wardWithChapel("111111", QString()));
+    QCOMPARE(client.store().writes(), writesBefore + 1);
     QCOMPARE(changedSpy.count(), 2);
-    QVERIFY(!session.document().metadata().findWardByUnit("111111")->chapelAddress().isEmpty());
-    QCOMPARE(session.unitLookup().requests(), QStringList({"ward 111111", "ward 222222"}));
+    QVERIFY(!client.session().document().metadata().findWardByUnit("111111")->chapelAddress().isEmpty());
+    QCOMPARE(client.unitLookup().requests(), QStringList({"ward 111111", "ward 222222"}));
 
     // The late failure of the new address left it off the failed list too.
-    QVERIFY(commitAddress(session, TestWard::jonesId(), newAddress).status == CommitStatus::Applied);
-    QCOMPARE(session.geocoder().requests(),
+    QVERIFY(commitAddress(client.session(), TestWard::jonesId(), newAddress).status == CommitStatus::Applied);
+    QCOMPARE(client.geocoder().requests(),
              QStringList({smithAddress().full(), jonesAddress().full(), newAddress.full()}));
 }
 
@@ -544,125 +544,125 @@ void AutomaticUpdatesTest::wardFoundWithoutAChapelIsNotLookedUpAgain()
 {
     Document document = mappedWard();
     document.metadata().updateWard(wardWithoutDetails("111111"));
-    TestSession session;
-    session.createWard(document);
-    QSignalSpy appliedSpy(&session.automaticUpdates(), &AutomaticUpdates::applied);
-    session.automaticUpdates().run();
-    QCOMPARE(session.unitLookup().requests(), QStringList({"ward 111111"}));
+    TestClient client("Laptop");
+    client.createWard(document);
+    int writesBefore = client.store().writes();
+    client.session().automaticUpdates().run();
+    QCOMPARE(client.unitLookup().requests(), QStringList({"ward 111111"}));
 
     Ward found = wardWithoutDetails("111111");
     found.setMeetingTime(QString("Sunday 9:00 AM"));
-    session.unitLookup().findWard("111111", found);
-    QCOMPARE(appliedSpy.count(), 1);
-    QVERIFY(session.document().metadata().findWardByUnit("111111")->meetingTime() == QString("Sunday 9:00 AM"));
+    client.unitLookup().findWard("111111", found);
+    QCOMPARE(client.store().writes(), writesBefore + 1);
+    QVERIFY(client.session().document().metadata().findWardByUnit("111111")->meetingTime() == QString("Sunday 9:00 AM"));
 
     // A version taken as it stands brings another ward lacking its details; the next run
     // looks up that ward and not the one found without a chapel.
-    Document version = session.document();
+    Document version = client.session().document();
     version.metadata().updateWard(wardWithoutDetails("222222"));
-    QVERIFY(session.replayOnto(version).status == ReplayStatus::FastForwarded);
-    session.automaticUpdates().run();
+    QVERIFY(client.session().replayOnto(version).status == ReplayStatus::FastForwarded);
+    client.session().automaticUpdates().run();
 
-    QCOMPARE(session.unitLookup().requests(), QStringList({"ward 111111", "ward 222222"}));
+    QCOMPARE(client.unitLookup().requests(), QStringList({"ward 111111", "ward 222222"}));
 }
 
 void AutomaticUpdatesTest::failedListStartsEmptyWhenAWardIsOpenedOrCreated()
 {
     Document document = TestWard::withCoordinates(TestWard::document(), jonesAddress(), OakPosition);
     document.metadata().updateWard(wardWithoutDetails("111111"));
-    TestSession session;
-    session.createWard(document);
-    session.automaticUpdates().run();
-    QCOMPARE(session.geocoder().requests(), QStringList({smithAddress().full()}));
-    QCOMPARE(session.unitLookup().requests(), QStringList({"ward 111111"}));
-    session.geocoder().fail(smithAddress().full());
-    session.unitLookup().fail("111111");
+    TestClient client("Laptop");
+    client.createWard(document);
+    client.session().automaticUpdates().run();
+    QCOMPARE(client.geocoder().requests(), QStringList({smithAddress().full()}));
+    QCOMPARE(client.unitLookup().requests(), QStringList({"ward 111111"}));
+    client.geocoder().fail(smithAddress().full());
+    client.unitLookup().fail("111111");
 
     // On the failed list, neither is requested again.
-    session.automaticUpdates().run();
-    QCOMPARE(session.geocoder().requests(), QStringList({smithAddress().full()}));
-    QCOMPARE(session.unitLookup().requests(), QStringList({"ward 111111"}));
+    client.session().automaticUpdates().run();
+    QCOMPARE(client.geocoder().requests(), QStringList({smithAddress().full()}));
+    QCOMPARE(client.unitLookup().requests(), QStringList({"ward 111111"}));
 
-    QVERIFY(session.openWard(session.documentId()).status == OpenStatus::Opened);
-    session.automaticUpdates().run();
+    QVERIFY(client.session().openWard(client.session().documentId()).status == OpenStatus::Opened);
+    client.session().automaticUpdates().run();
 
-    QCOMPARE(session.geocoder().requests(), QStringList({smithAddress().full(), smithAddress().full()}));
-    QCOMPARE(session.unitLookup().requests(), QStringList({"ward 111111", "ward 111111"}));
-    session.geocoder().fail(smithAddress().full());
-    session.unitLookup().fail("111111");
+    QCOMPARE(client.geocoder().requests(), QStringList({smithAddress().full(), smithAddress().full()}));
+    QCOMPARE(client.unitLookup().requests(), QStringList({"ward 111111", "ward 111111"}));
+    client.geocoder().fail(smithAddress().full());
+    client.unitLookup().fail("111111");
 
-    session.createWard(document);
-    session.automaticUpdates().run();
+    client.createWard(document);
+    client.session().automaticUpdates().run();
 
-    QCOMPARE(session.geocoder().requests(),
+    QCOMPARE(client.geocoder().requests(),
              QStringList({smithAddress().full(), smithAddress().full(), smithAddress().full()}));
-    QCOMPARE(session.unitLookup().requests(), QStringList({"ward 111111", "ward 111111", "ward 111111"}));
+    QCOMPARE(client.unitLookup().requests(), QStringList({"ward 111111", "ward 111111", "ward 111111"}));
 }
 
 void AutomaticUpdatesTest::resultsMapFamiliesAsTheyArrive()
 {
-    TestSession session;
-    session.createWard(TestWard::document());
-    QSignalSpy changedSpy(&session.automaticUpdates(), &AutomaticUpdates::documentChanged);
-    QSignalSpy appliedSpy(&session.automaticUpdates(), &AutomaticUpdates::applied);
-    session.automaticUpdates().run();
-    QCOMPARE(session.geocoder().requests(), QStringList({smithAddress().full(), jonesAddress().full()}));
+    TestClient client("Laptop");
+    client.createWard(TestWard::document());
+    QSignalSpy changedSpy(&client.session().automaticUpdates(), &AutomaticUpdates::documentChanged);
+    int writesBefore = client.store().writes();
+    client.session().automaticUpdates().run();
+    QCOMPARE(client.geocoder().requests(), QStringList({smithAddress().full(), jonesAddress().full()}));
 
-    session.geocoder().resolve(smithAddress().full(), ElmPosition);
+    client.geocoder().resolve(smithAddress().full(), ElmPosition);
 
-    QVERIFY(positionOf(session, TestWard::smithId()) == ElmPosition);
-    QVERIFY(!positionOf(session, TestWard::jonesId()).has_value());
+    QVERIFY(positionOf(client.session(), TestWard::smithId()) == ElmPosition);
+    QVERIFY(!positionOf(client.session(), TestWard::jonesId()).has_value());
     QCOMPARE(changedSpy.count(), 1);
     DocumentChange first = qvariant_cast<DocumentChange>(changedSpy.at(0).at(0));
     QVERIFY(first.action == ChangeAction::Updated);
     QVERIFY(first.familyId == TestWard::smithId());
-    QCOMPARE(appliedSpy.count(), 0);
+    QCOMPARE(client.store().writes(), writesBefore);
 
-    session.geocoder().resolve(jonesAddress().full(), OakPosition);
+    client.geocoder().resolve(jonesAddress().full(), OakPosition);
 
-    QVERIFY(positionOf(session, TestWard::jonesId()) == OakPosition);
+    QVERIFY(positionOf(client.session(), TestWard::jonesId()) == OakPosition);
     QCOMPARE(changedSpy.count(), 2);
     DocumentChange second = qvariant_cast<DocumentChange>(changedSpy.at(1).at(0));
     QVERIFY(second.action == ChangeAction::Updated);
     QVERIFY(second.familyId == TestWard::jonesId());
-    QCOMPARE(appliedSpy.count(), 1);
+    QCOMPARE(client.store().writes(), writesBefore + 1);
 }
 
 void AutomaticUpdatesTest::documentReplacedMidBatchLosesNoResults()
 {
-    TestSession session;
-    session.createWard(TestWard::document());
-    QSignalSpy appliedSpy(&session.automaticUpdates(), &AutomaticUpdates::applied);
-    session.automaticUpdates().run();
-    session.geocoder().resolve(smithAddress().full(), ElmPosition);
-    QVERIFY(positionOf(session, TestWard::smithId()) == ElmPosition);
+    TestClient client("Laptop");
+    client.createWard(TestWard::document());
+    client.session().automaticUpdates().run();
+    client.geocoder().resolve(smithAddress().full(), ElmPosition);
+    QVERIFY(positionOf(client.session(), TestWard::smithId()) == ElmPosition);
 
-    QVERIFY(session.replayOnto(TestWard::document()).status == ReplayStatus::FastForwarded);
-    QVERIFY(!positionOf(session, TestWard::smithId()).has_value());
+    QVERIFY(client.session().replayOnto(TestWard::document()).status == ReplayStatus::FastForwarded);
+    QVERIFY(!positionOf(client.session(), TestWard::smithId()).has_value());
+    int writesBefore = client.store().writes();
 
-    session.geocoder().resolve(jonesAddress().full(), OakPosition);
+    client.geocoder().resolve(jonesAddress().full(), OakPosition);
 
-    QVERIFY(positionOf(session, TestWard::smithId()) == ElmPosition);
-    QVERIFY(positionOf(session, TestWard::jonesId()) == OakPosition);
-    QCOMPARE(session.document().addressCoordinates().size(), qsizetype(2));
-    QCOMPARE(session.geocoder().requests(), QStringList({smithAddress().full(), jonesAddress().full()}));
-    QCOMPARE(appliedSpy.count(), 1);
+    QVERIFY(positionOf(client.session(), TestWard::smithId()) == ElmPosition);
+    QVERIFY(positionOf(client.session(), TestWard::jonesId()) == OakPosition);
+    QCOMPARE(client.session().document().addressCoordinates().size(), qsizetype(2));
+    QCOMPARE(client.geocoder().requests(), QStringList({smithAddress().full(), jonesAddress().full()}));
+    QCOMPARE(client.store().writes(), writesBefore + 1);
 }
 
 void AutomaticUpdatesTest::commandThatGivesAWardNeedingALookupStartsOne()
 {
     // A ward lacking its details, from a command that gives no address.
-    TestSession lacking;
+    TestClient lacking("Laptop");
     lacking.createWard(mappedWard());
-    QVERIFY(lacking.commit(std::make_shared<GiveWardCommand>(wardWithoutDetails("111111"))).status
+    QVERIFY(lacking.session().commit(std::make_shared<GiveWardCommand>(wardWithoutDetails("111111"))).status
             == CommitStatus::Applied);
     QCOMPARE(lacking.unitLookup().requests(), QStringList({"ward 111111"}));
     QVERIFY(lacking.geocoder().requests().isEmpty());
 
     // A ward with its details, naming a stake the document lacks.
-    TestSession stakeMissing;
+    TestClient stakeMissing("Laptop");
     stakeMissing.createWard(mappedWard());
-    QVERIFY(stakeMissing.commit(std::make_shared<GiveWardCommand>(wardWithChapel("111111", "900000"))).status
+    QVERIFY(stakeMissing.session().commit(std::make_shared<GiveWardCommand>(wardWithChapel("111111", "900000"))).status
             == CommitStatus::Applied);
     QCOMPARE(stakeMissing.unitLookup().requests(), QStringList({"stake 900000"}));
 
@@ -671,15 +671,15 @@ void AutomaticUpdatesTest::commandThatGivesAWardNeedingALookupStartsOne()
     Document document = TestWard::document();
     document.metadata().updateStake(namedStake("900000"));
     document.metadata().updateWard(wardWithoutDetails("222222"));
-    TestSession complete;
+    TestClient complete("Laptop");
     complete.createWard(document);
-    QVERIFY(complete.commit(std::make_shared<GiveWardCommand>(wardWithChapel("111111", "900000"))).status
+    QVERIFY(complete.session().commit(std::make_shared<GiveWardCommand>(wardWithChapel("111111", "900000"))).status
             == CommitStatus::Applied);
-    QVERIFY(complete.document().metadata().findWardByUnit("111111").has_value());
+    QVERIFY(complete.session().document().metadata().findWardByUnit("111111").has_value());
     QVERIFY(complete.unitLookup().requests().isEmpty());
     QVERIFY(complete.geocoder().requests().isEmpty());
 
-    complete.automaticUpdates().run();
+    complete.session().automaticUpdates().run();
     QCOMPARE(complete.unitLookup().requests(), QStringList({"ward 222222"}));
     QCOMPARE(complete.geocoder().requests(), QStringList({smithAddress().full(), jonesAddress().full()}));
 }
@@ -687,20 +687,20 @@ void AutomaticUpdatesTest::commandThatGivesAWardNeedingALookupStartsOne()
 void AutomaticUpdatesTest::addressEditFromAnotherDeviceLeavesTheFamilyUnmappedAndRequestsNothing()
 {
     Address newAddress = TestWard::address("14 Elm St", "Provo, UT");
-    TestSession theirs;
-    theirs.createWard(mappedWard());
-    QVERIFY(commitAddress(theirs, TestWard::smithId(), newAddress).status == CommitStatus::Applied);
+    TestClient mine("Laptop");
+    TestClient theirs("Phone");
+    mine.createWard(mappedWard());
+    theirs.takeWardOf(mine);
+    QVERIFY(commitAddress(theirs.session(), TestWard::smithId(), newAddress).status == CommitStatus::Applied);
     QCOMPARE(theirs.geocoder().requests(), QStringList({newAddress.full()}));
 
-    TestSession mine;
-    mine.createWard(mappedWard());
-    QVERIFY(mine.replayOnto(theirs.document()).status == ReplayStatus::FastForwarded);
+    QVERIFY(mine.session().replayOnto(theirs.session().document()).status == ReplayStatus::FastForwarded);
 
-    QCOMPARE(TestWard::family(mine.document(), TestWard::smithId()).address().full(), newAddress.full());
-    QVERIFY(!positionOf(mine, TestWard::smithId()).has_value());
-    QVERIFY(positionOf(mine, TestWard::jonesId()) == OakPosition);
-    QVERIFY(mine.document().coordinatesFor(smithAddress()) == ElmPosition);
-    for (const Family& family : mine.document().families())
+    QCOMPARE(TestWard::family(mine.session().document(), TestWard::smithId()).address().full(), newAddress.full());
+    QVERIFY(!positionOf(mine.session(), TestWard::smithId()).has_value());
+    QVERIFY(positionOf(mine.session(), TestWard::jonesId()) == OakPosition);
+    QVERIFY(mine.session().document().coordinatesFor(smithAddress()) == ElmPosition);
+    for (const Family& family : mine.session().document().families())
     {
         QVERIFY(family.address().full() != smithAddress().full());
     }

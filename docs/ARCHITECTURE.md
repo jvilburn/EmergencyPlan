@@ -90,6 +90,10 @@ For list and tree displays:
 
 A command that conflicts or is refused changes nothing, and the result says which, so the app can tell the user.
 
+### Saving
+
+Every change `WardSession` makes - a command, an undo or redo, a replay, a new ward, an automatic batch or lookup that changed the document - is saved at once: the document and this device's state together, in one write of the ward's local file, sealed to the ward's access list. The session writes through a `WardStore`; the app's is `FileWardStore`, over the `wards` folder in app data (`AppData`, under `QStandardPaths::AppLocalDataLocation`), a sibling of the `keys` folder that holds this device's key file. A save that fails keeps the change in memory and emits `saveFailed`; the next save that succeeds writes it, `MainWindow` tries again when the app becomes active, and closing asks first while a save is still failing.
+
 ---
 
 ## Model Layer
@@ -298,6 +302,9 @@ public:
     // The ward this device holds under document, from its local file
     OpenResult openWard(const DocumentId& document);
 
+    // Saves again when a save is pending; true when nothing is left unsaved
+    bool retryPendingSave();
+
     // The commit step: the rule, execute, the journal
     CommitResult commit(CommandPtr command);
 
@@ -318,6 +325,7 @@ public:
 signals:
     void documentChanged(const DocumentChange& change);
     void undoStackChanged();
+    void saveFailed(const QString& problem);  // once, until a save succeeds again
 };
 ```
 
@@ -387,7 +395,7 @@ A command that both removes and adds people holds one cleanup for everything it 
 
 ### DocumentManager
 
-A thin wrapper over the app's one `WardSession`, which holds the ward in memory while the app runs:
+A thin wrapper over the app's one `WardSession`, which holds the ward in memory while the app runs and saves every change:
 
 ```cpp
 class DocumentManager : public QObject
@@ -395,6 +403,9 @@ class DocumentManager : public QObject
     Q_OBJECT
 
 public:
+    // This device's identity and the store of its ward files; it owns neither
+    DocumentManager(const Identity* identity, WardStore* store, QObject* parent);
+
     const Document& document() const;  // the session's document
 
     // The session's commit step, undo and redo
@@ -406,19 +417,25 @@ public:
     QString undoHeading() const;
     QString redoHeading() const;
 
-    // Creates a ward of Document::empty() in the session and starts its automatic updates
-    void newDocument();
+    // A ward of Document::empty() for userName, on this device named deviceName; and the
+    // ward this device holds under document. Each starts the ward's automatic updates.
+    void createWard(const QString& userName, const QString& deviceName);
+    OpenResult openWard(const DocumentId& document);
+
+    const DocumentId& documentId() const;
+    bool retryPendingSave();
 
 signals:
     void documentChanged(const DocumentChange& change);       // forwarded from the session
     void undoStackChanged();                                  // forwarded from the session
+    void saveFailed(const QString& problem);                  // forwarded from the session
     void commandNotApplied(const CommitResult& result);
     void geocodingProgressChanged(int completed, int total);  // forwarded from the session
     void geocodingFinished();                                 // forwarded from the session
 };
 ```
 
-`executeCommand` hands the command to `WardSession::commit` and returns its `CommitResult`. When it is `Conflicted` or `Refused`, it emits `commandNotApplied`, and `MainWindow` tells the user what needs doing again, from the result's description, or which rule refused it; `NothingToDo`, from an edit that changed nothing, does neither. `undo` and `redo` run the session's `undo` and `redo` the same way; an undo's result carries its inverse's description, *Undo: heading* over the original's lines. `newDocument` creates a ward of `Document::empty()`, whose access list the session founds with this device alone; the session starts its journal, undo stack and failed list empty. The window title is the document's `wardName()`, from the names of its wards.
+`executeCommand` hands the command to `WardSession::commit` and returns its `CommitResult`. When it is `Conflicted` or `Refused`, it emits `commandNotApplied`, and `MainWindow` tells the user what needs doing again, from the result's description, or which rule refused it; `NothingToDo`, from an edit that changed nothing, does neither. `undo` and `redo` run the session's `undo` and `redo` the same way; an undo's result carries its inverse's description, *Undo: heading* over the original's lines. `main` builds it on this device's identity, which `KeyFile` reads from app data's `keys` folder, and on a `FileWardStore` over its `wards` folder. `createWard` creates a ward of `Document::empty()`, whose access list the session founds with the user and this device alone, and `openWard` opens one from its local file; the session starts its undo stack and failed list empty, and a new ward's journal too. `MainWindow` asks for this device's name on the first start and for the user's name when it creates a ward, keeps both and the last ward's id in its settings file, and at startup opens the last ward, creating a ward when there is none or it does not open. The window title is the document's `wardName()`, from the names of its wards.
 
 ### Geocoder and UnitLookup
 

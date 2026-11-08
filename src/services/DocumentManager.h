@@ -6,7 +6,8 @@
 #include "DocumentChange.h"
 #include "WardSession.h"
 
-/// The app's one open ward: a thin wrapper over its WardSession.
+/// The app's one open ward: a thin wrapper over its WardSession, which saves every change
+/// through this device's identity into the store of ward files.
 class DocumentManager : public QObject
 {
     Q_OBJECT
@@ -14,7 +15,8 @@ class DocumentManager : public QObject
     Q_PROPERTY(bool canRedo READ canRedo NOTIFY undoStackChanged)
 
 public:
-    explicit DocumentManager(QObject* parent);
+    /// identity is this device's, and store holds its ward files; it owns neither.
+    DocumentManager(const Identity* identity, WardStore* store, QObject* parent);
 
     /// Global accessor. Valid after construction.
     static DocumentManager* instance();
@@ -38,11 +40,23 @@ public:
     /// Writes the report of the emergency in progress and ends it, through the session.
     EndResult endEmergency(const QString& reportPath);
 
-    /// Creates a ward of Document::empty() in the session, under the user Me on the device
-    /// This device, and starts its automatic updates.
-    void newDocument();
+    /// Creates a ward of Document::empty(), whose access list names userName with this
+    /// device alone, named deviceName, and starts its automatic updates.
+    void createWard(const QString& userName, const QString& deviceName);
+
+    /// Opens the ward this device holds under document, and when it opens starts its
+    /// automatic updates; otherwise the ward open before stays open.
+    OpenResult openWard(const DocumentId& document);
+
+    const DocumentId& documentId() const { return m_session.documentId(); }
+
+    /// Saves again when a save is pending; true when nothing is left unsaved.
+    bool retryPendingSave() { return m_session.retryPendingSave(); }
 
 signals:
+    /// A save failed after the one before it succeeded; told once until a save succeeds again.
+    void saveFailed(const QString& problem);
+
     void documentChanged(const DocumentChange& change);
     void undoStackChanged();
     void commandNotApplied(const CommitResult& result);

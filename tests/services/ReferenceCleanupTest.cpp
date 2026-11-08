@@ -8,7 +8,7 @@
 #include "MemberEditor.h"
 #include "PdfText.h"
 #include "TeamCommands.h"
-#include "TestSession.h"
+#include "TestClient.h"
 #include "TestWard.h"
 
 #include <QJsonArray>
@@ -310,15 +310,15 @@ void ReferenceCleanupTest::deletingAFamilyRemovesItAndItsPeopleFromEveryPlaceAnd
     Document dangling = ward;
     dangling.removeFamily(TestWard::smithId());
     QVERIFY(!referencesAreWhole(dangling));
-    TestSession session;
-    session.createWard(ward);
-    Document created = session.document();
+    TestClient client("Laptop");
+    client.createWard(ward);
+    Document created = client.session().document();
 
-    CommitResult result = session.commit(DeleteFamilyCommand::fromSeen(TestWard::smith(), session.document()));
+    CommitResult result = client.session().commit(DeleteFamilyCommand::fromSeen(TestWard::smith(), client.session().document()));
 
     QVERIFY(result.status == CommitStatus::Applied);
     QCOMPARE(result.description, CommandDescription("Delete family: Smith, Bob & Alice", {}));
-    const Document& deleted = session.document();
+    const Document& deleted = client.session().document();
     QVERIFY(!deleted.findFamilyById(TestWard::smithId()).has_value());
     QVERIFY(setupIn(deleted) == withMembers(TestWard::setupTeam(), {}));
     EmergencyAsset generator = TestWard::generator();
@@ -340,34 +340,34 @@ void ReferenceCleanupTest::deletingAFamilyRemovesItAndItsPeopleFromEveryPlaceAnd
     QVERIFY(referencesAreWhole(deleted));
     Document afterDelete = deleted;
 
-    CommitResult undone = session.undo();
+    CommitResult undone = client.session().undo();
 
     QVERIFY(undone.status == CommitStatus::Applied);
-    QVERIFY(session.document() == created);
+    QVERIFY(client.session().document() == created);
 
-    QVERIFY(session.redo().status == CommitStatus::Applied);
-    QVERIFY(session.document() == afterDelete);
+    QVERIFY(client.session().redo().status == CommitStatus::Applied);
+    QVERIFY(client.session().document() == afterDelete);
 }
 
 void ReferenceCleanupTest::removingAMemberThroughTheEditPanelCleansUpThatPerson()
 {
     Document ward = TestWard::documentWithPlaces();
-    TestSession session;
-    session.createWard(ward);
-    Document created = session.document();
-    QSignalSpy documentSpy(&session, &WardSession::documentChanged);
+    TestClient client("Laptop");
+    client.createWard(ward);
+    Document created = client.session().document();
+    QSignalSpy documentSpy(&client.session(), &WardSession::documentChanged);
     FamilyEditPanel panel(nullptr);
-    panel.setFamily(TestWard::smith(), session.document());
+    panel.setFamily(TestWard::smith(), client.session().document());
 
     QVERIFY(clickRemoveMember(panel, TestWard::aliceId()));
     QCOMPARE(idsOf(panel.family()), QList<PersonId>({TestWard::bobId()}));
-    CommitResult result = session.commit(UpdateFamilyCommand::fromEdit(panel.openedFamily(), panel.family(),
-                                                                       session.document()));
+    CommitResult result = client.session().commit(UpdateFamilyCommand::fromEdit(panel.openedFamily(), panel.family(),
+                                                                       client.session().document()));
 
     QVERIFY(result.status == CommitStatus::Applied);
     QCOMPARE(documentSpy.count(), 1);
     QVERIFY(documentSpy.at(0).at(0).value<DocumentChange>().action == ChangeAction::Full);
-    const Document& removed = session.document();
+    const Document& removed = client.session().document();
     QVERIFY(TestWard::family(removed, TestWard::smithId()) == smithWithout(TestWard::aliceId()));
     Team setup = withMembers(TestWard::setupTeam(), {TestWard::bobId()});
     setup.setLeaderId(TestWard::bobId());
@@ -386,10 +386,10 @@ void ReferenceCleanupTest::removingAMemberThroughTheEditPanelCleansUpThatPerson(
     QVERIFY(taskIn(removed, TestWard::basementTaskId()) == taskIn(ward, TestWard::basementTaskId()));
     QVERIFY(referencesAreWhole(removed));
 
-    CommitResult undone = session.undo();
+    CommitResult undone = client.session().undo();
 
     QVERIFY(undone.status == CommitStatus::Applied);
-    QVERIFY(session.document() == created);
+    QVERIFY(client.session().document() == created);
 }
 
 void ReferenceCleanupTest::deletingATeamUnassignsItsOpenTasksAndUndoAssignsThemAgain()
@@ -397,54 +397,54 @@ void ReferenceCleanupTest::deletingATeamUnassignsItsOpenTasksAndUndoAssignsThemA
     Document places = TestWard::documentWithPlaces();
     ResponseTask fence = resolvedFence(TaskAssignment::toTeam(setupIn(places)));
     Document ward = withTask(places, fence);
-    TestSession session;
-    session.createWard(ward);
-    Document created = session.document();
+    TestClient client("Laptop");
+    client.createWard(ward);
+    Document created = client.session().document();
 
-    QVERIFY(session.commit(DeleteTeamCommand::fromSeen(setupIn(ward), session.document())).status == CommitStatus::Applied);
+    QVERIFY(client.session().commit(DeleteTeamCommand::fromSeen(setupIn(ward), client.session().document())).status == CommitStatus::Applied);
 
-    QVERIFY(!session.document().findTeamById(TestWard::setupTeamId()).has_value());
-    QVERIFY(taskIn(session.document(), TestWard::basementTaskId()) == unassigned(taskIn(ward, TestWard::basementTaskId())));
-    QVERIFY(taskIn(session.document(), TestWard::shinglesTaskId()) == taskIn(ward, TestWard::shinglesTaskId()));
-    ResponseTask fenceAfter = taskIn(session.document(), fence.id());
+    QVERIFY(!client.session().document().findTeamById(TestWard::setupTeamId()).has_value());
+    QVERIFY(taskIn(client.session().document(), TestWard::basementTaskId()) == unassigned(taskIn(ward, TestWard::basementTaskId())));
+    QVERIFY(taskIn(client.session().document(), TestWard::shinglesTaskId()) == taskIn(ward, TestWard::shinglesTaskId()));
+    ResponseTask fenceAfter = taskIn(client.session().document(), fence.id());
     QVERIFY(fenceAfter == fence);
     QVERIFY(fenceAfter.assignment()->teamId() == TestWard::setupTeamId());
     QCOMPARE(fenceAfter.assignment()->assigneeName(), QString("Setup"));
-    QVERIFY(referencesAreWhole(session.document()));
+    QVERIFY(referencesAreWhole(client.session().document()));
 
-    CommitResult undone = session.undo();
+    CommitResult undone = client.session().undo();
 
     QVERIFY(undone.status == CommitStatus::Applied);
-    QVERIFY(session.document() == created);
+    QVERIFY(client.session().document() == created);
 }
 
 void ReferenceCleanupTest::removalReplayedAfterThePersonJoinedAnotherTeamTakesThemOffItToo()
 {
     Team cleanup = newTeam("Cleanup", {TestWard::carolId()});
     Document ward = TestWard::withTeam(TestWard::documentWithPlaces(), cleanup);
-    TestSession mine;
-    TestSession theirs;
+    TestClient mine("Laptop");
+    TestClient theirs("Phone");
     mine.createWard(ward);
-    theirs.createWard(ward);
+    theirs.takeWardOf(mine);
 
     Team joined = withMembers(cleanup, {TestWard::carolId(), TestWard::aliceId()});
-    QVERIFY(theirs.commit(UpdateTeamCommand::fromEdit(cleanup, joined, theirs.document())).status == CommitStatus::Applied);
-    QVERIFY(removeFromSmiths(mine, TestWard::aliceId()).status == CommitStatus::Applied);
+    QVERIFY(theirs.session().commit(UpdateTeamCommand::fromEdit(cleanup, joined, theirs.session().document())).status == CommitStatus::Applied);
+    QVERIFY(removeFromSmiths(mine.session(), TestWard::aliceId()).status == CommitStatus::Applied);
 
-    ReplayResult replay = mine.replayOnto(theirs.document());
+    ReplayResult replay = mine.session().replayOnto(theirs.session().document());
 
     QVERIFY(replay.status == ReplayStatus::Replayed);
-    QVERIFY(!mine.document().findPersonById(TestWard::aliceId()).has_value());
-    QVERIFY(teamIn(mine.document(), cleanup.id()) == cleanup);
-    QCOMPARE(setupIn(mine.document()).memberIds(), QSet<PersonId>({TestWard::bobId()}));
-    QVERIFY(referencesAreWhole(mine.document()));
+    QVERIFY(!mine.session().document().findPersonById(TestWard::aliceId()).has_value());
+    QVERIFY(teamIn(mine.session().document(), cleanup.id()) == cleanup);
+    QCOMPARE(setupIn(mine.session().document()).memberIds(), QSet<PersonId>({TestWard::bobId()}));
+    QVERIFY(referencesAreWhole(mine.session().document()));
 
-    CommitResult undone = mine.undo();
+    CommitResult undone = mine.session().undo();
 
     QVERIFY(undone.status == CommitStatus::Applied);
-    QVERIFY(TestWard::person(mine.document(), TestWard::aliceId()) == TestWard::alice());
-    QVERIFY(setupIn(mine.document()) == setupIn(ward));
-    QVERIFY(teamIn(mine.document(), cleanup.id()) == cleanup);
+    QVERIFY(TestWard::person(mine.session().document(), TestWard::aliceId()) == TestWard::alice());
+    QVERIFY(setupIn(mine.session().document()) == setupIn(ward));
+    QVERIFY(teamIn(mine.session().document(), cleanup.id()) == cleanup);
 }
 
 void ReferenceCleanupTest::removalReplayedAfterThePersonWasAssignedATaskUnassignsIt()
@@ -453,29 +453,29 @@ void ReferenceCleanupTest::removalReplayedAfterThePersonWasAssignedATaskUnassign
     ResponseTask gutter = TestWard::task("task-gutter", TestWard::jones(), TestWard::octoberFirst(11, 0), "Repairs",
                                          "Gutter hanging loose");
     ward = withTask(ward, gutter);
-    TestSession mine;
-    TestSession theirs;
+    TestClient mine("Laptop");
+    TestClient theirs("Phone");
     mine.createWard(ward);
-    theirs.createWard(ward);
+    theirs.takeWardOf(mine);
 
     ResponseTask assigned = gutter;
     assigned.setAssignment(TaskAssignment::toPerson(TestWard::alice()));
-    QVERIFY(theirs.commit(UpdateTaskCommand::fromEdit(gutter, assigned)).status == CommitStatus::Applied);
-    QVERIFY(taskIn(theirs.document(), gutter.id()) == assigned);
-    QVERIFY(removeFromSmiths(mine, TestWard::aliceId()).status == CommitStatus::Applied);
+    QVERIFY(theirs.session().commit(UpdateTaskCommand::fromEdit(gutter, assigned)).status == CommitStatus::Applied);
+    QVERIFY(taskIn(theirs.session().document(), gutter.id()) == assigned);
+    QVERIFY(removeFromSmiths(mine.session(), TestWard::aliceId()).status == CommitStatus::Applied);
 
-    ReplayResult replay = mine.replayOnto(theirs.document());
+    ReplayResult replay = mine.session().replayOnto(theirs.session().document());
 
     QVERIFY(replay.status == ReplayStatus::Replayed);
-    QVERIFY(taskIn(mine.document(), gutter.id()) == gutter);
-    QVERIFY(taskIn(mine.document(), TestWard::shinglesTaskId()) == unassigned(taskIn(ward, TestWard::shinglesTaskId())));
-    QVERIFY(referencesAreWhole(mine.document()));
+    QVERIFY(taskIn(mine.session().document(), gutter.id()) == gutter);
+    QVERIFY(taskIn(mine.session().document(), TestWard::shinglesTaskId()) == unassigned(taskIn(ward, TestWard::shinglesTaskId())));
+    QVERIFY(referencesAreWhole(mine.session().document()));
 
-    CommitResult undone = mine.undo();
+    CommitResult undone = mine.session().undo();
 
     QVERIFY(undone.status == CommitStatus::Applied);
-    QVERIFY(taskIn(mine.document(), gutter.id()) == gutter);
-    QVERIFY(taskIn(mine.document(), TestWard::shinglesTaskId()) == taskIn(ward, TestWard::shinglesTaskId()));
+    QVERIFY(taskIn(mine.session().document(), gutter.id()) == gutter);
+    QVERIFY(taskIn(mine.session().document(), TestWard::shinglesTaskId()) == taskIn(ward, TestWard::shinglesTaskId()));
 }
 
 void ReferenceCleanupTest::removingAPersonUnassignsTheirOpenTaskAndLeavesTheirResolvedOneAssigned()
@@ -488,13 +488,13 @@ void ReferenceCleanupTest::removingAPersonUnassignsTheirOpenTaskAndLeavesTheirRe
                                                     ContactMethod::Phone, TestWard::alice(), std::nullopt,
                                                     "Left a message"));
     Document ward = TestWard::withResponse(places, response);
-    TestSession session;
-    session.createWard(ward);
-    Document created = session.document();
+    TestClient client("Laptop");
+    client.createWard(ward);
+    Document created = client.session().document();
 
-    QVERIFY(removeFromSmiths(session, TestWard::aliceId()).status == CommitStatus::Applied);
+    QVERIFY(removeFromSmiths(client.session(), TestWard::aliceId()).status == CommitStatus::Applied);
 
-    const Document& removed = session.document();
+    const Document& removed = client.session().document();
     QVERIFY(!removed.findPersonById(TestWard::aliceId()).has_value());
     QVERIFY(taskIn(removed, TestWard::shinglesTaskId()) == unassigned(taskIn(ward, TestWard::shinglesTaskId())));
     ResponseTask fenceAfter = taskIn(removed, fence.id());
@@ -511,103 +511,103 @@ void ReferenceCleanupTest::removingAPersonUnassignsTheirOpenTaskAndLeavesTheirRe
     QVERIFY2(text.contains("Phone - Smith, Alice - Left a message"), qPrintable(text));
     QVERIFY2(text.contains("Assigned to: Setup"), qPrintable(text));
 
-    CommitResult undone = session.undo();
+    CommitResult undone = client.session().undo();
 
     QVERIFY(undone.status == CommitStatus::Applied);
-    QVERIFY(session.document() == created);
+    QVERIFY(client.session().document() == created);
 }
 
 void ReferenceCleanupTest::reopeningATaskWhoseAssigneeWasRemovedReopensItUnassigned()
 {
     // Alice resolved the Fence task, then left the ward
     ResponseTask fence = resolvedFence(TaskAssignment::toPerson(TestWard::alice()));
-    TestSession session;
-    session.createWard(withTask(TestWard::documentWithPlaces(), fence));
-    QVERIFY(removeFromSmiths(session, TestWard::aliceId()).status == CommitStatus::Applied);
-    QVERIFY(taskIn(session.document(), fence.id()) == fence);
+    TestClient client("Laptop");
+    client.createWard(withTask(TestWard::documentWithPlaces(), fence));
+    QVERIFY(removeFromSmiths(client.session(), TestWard::aliceId()).status == CommitStatus::Applied);
+    QVERIFY(taskIn(client.session().document(), fence.id()) == fence);
 
-    CommitResult reopened = session.commit(UpdateTaskCommand::reopening(fence, session.document()));
+    CommitResult reopened = client.session().commit(UpdateTaskCommand::reopening(fence, client.session().document()));
 
     QVERIFY(reopened.status == CommitStatus::Applied);
     ResponseTask expected = unassigned(fence);
     expected.setResolution(std::nullopt);
-    QVERIFY(taskIn(session.document(), fence.id()) == expected);
-    QVERIFY(referencesAreWhole(session.document()));
+    QVERIFY(taskIn(client.session().document(), fence.id()) == expected);
+    QVERIFY(referencesAreWhole(client.session().document()));
 }
 
 void ReferenceCleanupTest::reopeningReplayedAfterTheAssigneeWasRemovedConflicts()
 {
     ResponseTask fence = resolvedFence(TaskAssignment::toPerson(TestWard::alice()));
     Document ward = withTask(TestWard::documentWithPlaces(), fence);
-    TestSession mine;
-    TestSession theirs;
+    TestClient mine("Laptop");
+    TestClient theirs("Phone");
     mine.createWard(ward);
-    theirs.createWard(ward);
+    theirs.takeWardOf(mine);
 
     // Reopened while the ward still holds Alice, the task keeps her
-    QVERIFY(mine.commit(UpdateTaskCommand::reopening(fence, mine.document())).status == CommitStatus::Applied);
+    QVERIFY(mine.session().commit(UpdateTaskCommand::reopening(fence, mine.session().document())).status == CommitStatus::Applied);
     ResponseTask reopened = fence;
     reopened.setResolution(std::nullopt);
-    QVERIFY(taskIn(mine.document(), fence.id()) == reopened);
+    QVERIFY(taskIn(mine.session().document(), fence.id()) == reopened);
 
-    QVERIFY(removeFromSmiths(theirs, TestWard::aliceId()).status == CommitStatus::Applied);
-    ReplayResult replay = mine.replayOnto(theirs.document());
+    QVERIFY(removeFromSmiths(theirs.session(), TestWard::aliceId()).status == CommitStatus::Applied);
+    ReplayResult replay = mine.session().replayOnto(theirs.session().document());
 
     QVERIFY(replay.status == ReplayStatus::Abandoned);
-    QVERIFY(mine.document() == theirs.document());
-    QVERIFY(taskIn(mine.document(), fence.id()) == fence);
-    QVERIFY(referencesAreWhole(mine.document()));
+    QVERIFY(mine.session().document() == theirs.session().document());
+    QVERIFY(taskIn(mine.session().document(), fence.id()) == fence);
+    QVERIFY(referencesAreWhole(mine.session().document()));
 }
 
 void ReferenceCleanupTest::undoingARemovalLeavesATeamDeletedSince()
 {
     Team cleanup = newTeam("Cleanup", {TestWard::aliceId(), TestWard::carolId()});
     Document ward = TestWard::withTeam(TestWard::documentWithPlaces(), cleanup);
-    TestSession mine;
-    TestSession theirs;
+    TestClient mine("Laptop");
+    TestClient theirs("Phone");
     mine.createWard(ward);
-    theirs.createWard(ward);
+    theirs.takeWardOf(mine);
 
-    QVERIFY(theirs.commit(DeleteTeamCommand::fromSeen(cleanup, theirs.document())).status == CommitStatus::Applied);
-    QVERIFY(mine.commit(DeleteFamilyCommand::fromSeen(TestWard::smith(), mine.document())).status == CommitStatus::Applied);
-    QVERIFY(mine.replayOnto(theirs.document()).status == ReplayStatus::Replayed);
+    QVERIFY(theirs.session().commit(DeleteTeamCommand::fromSeen(cleanup, theirs.session().document())).status == CommitStatus::Applied);
+    QVERIFY(mine.session().commit(DeleteFamilyCommand::fromSeen(TestWard::smith(), mine.session().document())).status == CommitStatus::Applied);
+    QVERIFY(mine.session().replayOnto(theirs.session().document()).status == ReplayStatus::Replayed);
 
-    CommitResult undone = mine.undo();
+    CommitResult undone = mine.session().undo();
 
     QVERIFY(undone.status == CommitStatus::Applied);
     QCOMPARE(undone.description.heading(), QString("Undo: Delete family: Smith, Bob & Alice"));
-    QVERIFY(TestWard::family(mine.document(), TestWard::smithId()) == TestWard::smith());
-    QVERIFY(setupIn(mine.document()) == setupIn(ward));
-    QVERIFY(!mine.document().findTeamById(cleanup.id()).has_value());
-    QVERIFY(referencesAreWhole(mine.document()));
+    QVERIFY(TestWard::family(mine.session().document(), TestWard::smithId()) == TestWard::smith());
+    QVERIFY(setupIn(mine.session().document()) == setupIn(ward));
+    QVERIFY(!mine.session().document().findTeamById(cleanup.id()).has_value());
+    QVERIFY(referencesAreWhole(mine.session().document()));
 }
 
 void ReferenceCleanupTest::undoingARemovalLeavesALeaderSetSince()
 {
     Document ward = TestWard::documentWithPlaces();
-    TestSession mine;
-    TestSession theirs;
+    TestClient mine("Laptop");
+    TestClient theirs("Phone");
     mine.createWard(ward);
-    theirs.createWard(ward);
+    theirs.takeWardOf(mine);
     Team setup = setupIn(ward);
     QVERIFY(setup.leaderId() == TestWard::bobId());
 
     Team aliceLeads = setup;
     aliceLeads.setLeaderId(TestWard::aliceId());
-    QVERIFY(theirs.commit(UpdateTeamCommand::fromEdit(setup, aliceLeads, theirs.document())).status == CommitStatus::Applied);
-    QVERIFY(removeFromSmiths(mine, TestWard::bobId()).status == CommitStatus::Applied);
-    QVERIFY(mine.replayOnto(theirs.document()).status == ReplayStatus::Replayed);
+    QVERIFY(theirs.session().commit(UpdateTeamCommand::fromEdit(setup, aliceLeads, theirs.session().document())).status == CommitStatus::Applied);
+    QVERIFY(removeFromSmiths(mine.session(), TestWard::bobId()).status == CommitStatus::Applied);
+    QVERIFY(mine.session().replayOnto(theirs.session().document()).status == ReplayStatus::Replayed);
     Team aliceOnly = withMembers(aliceLeads, {TestWard::aliceId()});
     QVERIFY(aliceOnly.leaderId() == TestWard::aliceId());
-    QVERIFY(setupIn(mine.document()) == aliceOnly);
+    QVERIFY(setupIn(mine.session().document()) == aliceOnly);
 
-    CommitResult undone = mine.undo();
+    CommitResult undone = mine.session().undo();
 
     QVERIFY(undone.status == CommitStatus::Applied);
-    QVERIFY(setupIn(mine.document()) == aliceLeads);
-    QVERIFY(generatorIn(mine.document()) == TestWard::generator());
-    QVERIFY(groupIn(mine.document(), EQ, TestWard::eqGroupId()) == TestWard::eqGroup());
-    QVERIFY(districtIn(mine.document()) == TestWard::district());
+    QVERIFY(setupIn(mine.session().document()) == aliceLeads);
+    QVERIFY(generatorIn(mine.session().document()) == TestWard::generator());
+    QVERIFY(groupIn(mine.session().document(), EQ, TestWard::eqGroupId()) == TestWard::eqGroup());
+    QVERIFY(districtIn(mine.session().document()) == TestWard::district());
 }
 
 void ReferenceCleanupTest::undoingADirectoryImportRestoresTheRemovedPeoplesMemberships()
@@ -619,8 +619,8 @@ void ReferenceCleanupTest::undoingADirectoryImportRestoresTheRemovedPeoplesMembe
                                                                                                    TestWard::aliceId(),
                                                                                                    TestWard::carolId()})),
                                         generator);
-    TestSession session;
-    session.createWard(ward);
+    TestClient client("Laptop");
+    client.createWard(ward);
     WardDirectoryImportResult result;
     result.success = true;
     result.families.insert(TestWard::smithId(), TestWard::smith());
@@ -629,10 +629,10 @@ void ReferenceCleanupTest::undoingADirectoryImportRestoresTheRemovedPeoplesMembe
     result.wardUnitNumber = "123456";
     result.pdfDate = QDate(2026, 10, 15);
 
-    QVERIFY(session.commit(ImportWardDirectoryCommand::fromImport(session.document(), result, "Tanglewood.pdf")).status
+    QVERIFY(client.session().commit(ImportWardDirectoryCommand::fromImport(client.session().document(), result, "Tanglewood.pdf")).status
             == CommitStatus::Applied);
 
-    const Document& imported = session.document();
+    const Document& imported = client.session().document();
     QVERIFY(!imported.findFamilyById(TestWard::jonesId()).has_value());
     QVERIFY(setupIn(imported) == setupIn(places));
     QVERIFY(generatorIn(imported) == TestWard::generator());
@@ -644,46 +644,46 @@ void ReferenceCleanupTest::undoingADirectoryImportRestoresTheRemovedPeoplesMembe
     QVERIFY(groupIn(imported, EQ, TestWard::eqGroupId()) == eqGroup);
     QVERIFY(referencesAreWhole(imported));
 
-    CommitResult undone = session.undo();
+    CommitResult undone = client.session().undo();
 
     QVERIFY(undone.status == CommitStatus::Applied);
-    QVERIFY(TestWard::family(session.document(), TestWard::jonesId()) == TestWard::jones());
-    QVERIFY(session.document().teams() == ward.teams());
-    QVERIFY(session.document().emergencyAssets() == ward.emergencyAssets());
-    QVERIFY(session.document().groups(EQ) == ward.groups(EQ));
-    QVERIFY(session.document().groups(RS) == ward.groups(RS));
-    QVERIFY(session.document().districts(EQ) == ward.districts(EQ));
+    QVERIFY(TestWard::family(client.session().document(), TestWard::jonesId()) == TestWard::jones());
+    QVERIFY(client.session().document().teams() == ward.teams());
+    QVERIFY(client.session().document().emergencyAssets() == ward.emergencyAssets());
+    QVERIFY(client.session().document().groups(EQ) == ward.groups(EQ));
+    QVERIFY(client.session().document().groups(RS) == ward.groups(RS));
+    QVERIFY(client.session().document().districts(EQ) == ward.districts(EQ));
 }
 
 void ReferenceCleanupTest::ministeringImportReplayedAfterACleanupChangedAGroupConflicts()
 {
     Document ward = TestWard::documentWithPlaces();
-    TestSession mine;
-    TestSession theirs;
+    TestClient mine("Laptop");
+    TestClient theirs("Phone");
     mine.createWard(ward);
-    theirs.createWard(ward);
+    theirs.takeWardOf(mine);
 
-    QVERIFY(removeFromSmiths(theirs, TestWard::aliceId()).status == CommitStatus::Applied);
+    QVERIFY(removeFromSmiths(theirs.session(), TestWard::aliceId()).status == CommitStatus::Applied);
     MinisteringGroup cleaned = TestWard::eqGroup();
     cleaned.setPresidencyMemberId(std::nullopt);
-    QVERIFY(groupIn(theirs.document(), EQ, TestWard::eqGroupId()) == cleaned);
+    QVERIFY(groupIn(theirs.session().document(), EQ, TestWard::eqGroupId()) == cleaned);
 
     MinisteringImportResult result;
     result.success = true;
-    result.families = mine.document().families();
+    result.families = mine.session().document().families();
     MinisteringGroup imported = MinisteringGroup::createEQ({TestWard::bobId()}, {TestWard::jonesId()});
     result.groups.insert(imported.id(), imported);
     result.pdfDate = QDate(2026, 9, 1);
-    QVERIFY(mine.commit(ImportMinisteringCommand::fromImport(mine.document(), result, "Tanglewood EQ.pdf")).status
+    QVERIFY(mine.session().commit(ImportMinisteringCommand::fromImport(mine.session().document(), result, "Tanglewood EQ.pdf")).status
             == CommitStatus::Applied);
-    QVERIFY(mine.document().groups(EQ) == (QHash<MinisteringGroupId, MinisteringGroup>{{imported.id(), imported}}));
+    QVERIFY(mine.session().document().groups(EQ) == (QHash<MinisteringGroupId, MinisteringGroup>{{imported.id(), imported}}));
 
-    ReplayResult replay = mine.replayOnto(theirs.document());
+    ReplayResult replay = mine.session().replayOnto(theirs.session().document());
 
     QVERIFY(replay.status == ReplayStatus::Abandoned);
     QVERIFY(replay.toRedo.contains("Import the ministering assignments from Tanglewood EQ.pdf. (stopped here)"));
-    QVERIFY(mine.document().groups(EQ) == (QHash<MinisteringGroupId, MinisteringGroup>{{TestWard::eqGroupId(), cleaned}}));
-    QVERIFY(mine.document() == theirs.document());
+    QVERIFY(mine.session().document().groups(EQ) == (QHash<MinisteringGroupId, MinisteringGroup>{{TestWard::eqGroupId(), cleaned}}));
+    QVERIFY(mine.session().document() == theirs.session().document());
 }
 
 void ReferenceCleanupTest::undoingAFamilyDeleteLeavesEachPlaceSomeoneElseChanged()
@@ -694,49 +694,49 @@ void ReferenceCleanupTest::undoingAFamilyDeleteLeavesEachPlaceSomeoneElseChanged
                                          "Gutter hanging loose");
     gutter.setAssignment(TaskAssignment::toPerson(TestWard::bob()));
     Document ward = withTask(TestWard::documentWithPlaces(), gutter);
-    TestSession mine;
+    TestClient mine("Laptop");
     mine.createWard(ward);
-    QVERIFY(mine.commit(DeleteFamilyCommand::fromSeen(TestWard::smith(), mine.document())).status == CommitStatus::Applied);
+    QVERIFY(mine.session().commit(DeleteFamilyCommand::fromSeen(TestWard::smith(), mine.session().document())).status == CommitStatus::Applied);
 
     // Someone else, on the version after the deletion: deletes the Generator, replaces the
     // elders quorum groups and gives the district's presidency role to Carol, puts Carol on
     // Setup as its leader, gives Shingles to Carol, and deletes Gutter
-    TestSession theirs;
-    theirs.createWard(mine.document());
-    QVERIFY(theirs.commit(DeleteEmergencyAssetCommand::fromSeen(generatorIn(theirs.document()), theirs.document())).status
+    TestClient theirs("Phone");
+    theirs.takeWardOf(mine);
+    QVERIFY(theirs.session().commit(DeleteEmergencyAssetCommand::fromSeen(generatorIn(theirs.session().document()), theirs.session().document())).status
             == CommitStatus::Applied);
     MinisteringGroup replacement = MinisteringGroup::createEQ({TestWard::carolId()}, {TestWard::jonesId()});
-    QJsonObject district = districtIn(theirs.document()).toJson();
+    QJsonObject district = districtIn(theirs.session().document()).toJson();
     district["presidencyMemberId"] = TestWard::carolId().toString();
     district["groupIds"] = QJsonArray({replacement.id().toString()});
     MinisteringDistrict carolPresides = MinisteringDistrict::fromJson(JsonReader(district));
     MinisteringImportResult ministering;
     ministering.success = true;
-    ministering.families = theirs.document().families();
+    ministering.families = theirs.session().document().families();
     ministering.groups.insert(replacement.id(), replacement);
     ministering.districts.insert(carolPresides.id(), carolPresides);
     ministering.pdfDate = QDate(2026, 9, 1);
-    QVERIFY(theirs.commit(ImportMinisteringCommand::fromImport(theirs.document(), ministering, "Tanglewood EQ.pdf")).status
+    QVERIFY(theirs.session().commit(ImportMinisteringCommand::fromImport(theirs.session().document(), ministering, "Tanglewood EQ.pdf")).status
             == CommitStatus::Applied);
-    Team carolLeads = withMembers(setupIn(theirs.document()), {TestWard::carolId()});
+    Team carolLeads = withMembers(setupIn(theirs.session().document()), {TestWard::carolId()});
     carolLeads.setLeaderId(TestWard::carolId());
-    QVERIFY(theirs.commit(UpdateTeamCommand::fromEdit(setupIn(theirs.document()), carolLeads, theirs.document())).status
+    QVERIFY(theirs.session().commit(UpdateTeamCommand::fromEdit(setupIn(theirs.session().document()), carolLeads, theirs.session().document())).status
             == CommitStatus::Applied);
-    ResponseTask carolShingles = taskIn(theirs.document(), TestWard::shinglesTaskId());
+    ResponseTask carolShingles = taskIn(theirs.session().document(), TestWard::shinglesTaskId());
     QVERIFY(!carolShingles.assignment().has_value());
     carolShingles.setAssignment(TaskAssignment::toPerson(TestWard::carol()));
-    QVERIFY(theirs.commit(UpdateTaskCommand::fromEdit(taskIn(theirs.document(), TestWard::shinglesTaskId()), carolShingles))
+    QVERIFY(theirs.session().commit(UpdateTaskCommand::fromEdit(taskIn(theirs.session().document(), TestWard::shinglesTaskId()), carolShingles))
             .status == CommitStatus::Applied);
-    QVERIFY(theirs.commit(DeleteTaskCommand::fromSeen(taskIn(theirs.document(), gutter.id()))).status
+    QVERIFY(theirs.session().commit(DeleteTaskCommand::fromSeen(taskIn(theirs.session().document(), gutter.id()))).status
             == CommitStatus::Applied);
 
-    QVERIFY(mine.replayOnto(theirs.document()).status == ReplayStatus::Replayed);
-    QVERIFY(mine.document() == theirs.document());
+    QVERIFY(mine.session().replayOnto(theirs.session().document()).status == ReplayStatus::Replayed);
+    QVERIFY(mine.session().document() == theirs.session().document());
 
-    CommitResult undone = mine.undo();
+    CommitResult undone = mine.session().undo();
 
     QVERIFY(undone.status == CommitStatus::Applied);
-    const Document& restored = mine.document();
+    const Document& restored = mine.session().document();
     QVERIFY(TestWard::family(restored, TestWard::smithId()) == TestWard::smith());
     QVERIFY(!restored.findEmergencyAssetById(TestWard::generatorId()).has_value());
     QVERIFY(restored.groups(EQ) == (QHash<MinisteringGroupId, MinisteringGroup>{{replacement.id(), replacement}}));
@@ -753,7 +753,7 @@ void ReferenceCleanupTest::undoingAFamilyDeleteLeavesEachPlaceSomeoneElseChanged
     QVERIFY(groupIn(restored, RS, TestWard::rsGroupId()) == TestWard::rsGroup());
     QVERIFY(taskIn(restored, TestWard::basementTaskId()) == taskIn(ward, TestWard::basementTaskId()));
 
-    Document expected = theirs.document();
+    Document expected = theirs.session().document();
     expected.setFamily(TestWard::smith());
     expected.setTeam(setup);
     expected.setGroups(RS, ward.groups(RS));
@@ -764,14 +764,14 @@ void ReferenceCleanupTest::undoingAFamilyDeleteLeavesEachPlaceSomeoneElseChanged
 void ReferenceCleanupTest::undoingAnImportRestoresTheMemberItRemovedFromAFamily()
 {
     Document ward = TestWard::documentWithPlaces();
-    TestSession session;
-    session.createWard(ward);
+    TestClient client("Laptop");
+    client.createWard(ward);
     WardDirectoryImportResult result = directoryImport({smithWithout(TestWard::aliceId()), TestWard::jones()});
 
-    QVERIFY(session.commit(ImportWardDirectoryCommand::fromImport(session.document(), result, "Tanglewood.pdf")).status
+    QVERIFY(client.session().commit(ImportWardDirectoryCommand::fromImport(client.session().document(), result, "Tanglewood.pdf")).status
             == CommitStatus::Applied);
 
-    const Document& imported = session.document();
+    const Document& imported = client.session().document();
     QVERIFY(TestWard::family(imported, TestWard::smithId()) == smithWithout(TestWard::aliceId()));
     QVERIFY(TestWard::family(imported, TestWard::jonesId()) == TestWard::jones());
     Team setup = withMembers(setupIn(ward), {TestWard::bobId()});
@@ -790,10 +790,10 @@ void ReferenceCleanupTest::undoingAnImportRestoresTheMemberItRemovedFromAFamily(
     QVERIFY(inNoPlace(imported, TestWard::aliceId()));
     QVERIFY(referencesAreWhole(imported));
 
-    CommitResult undone = session.undo();
+    CommitResult undone = client.session().undo();
 
     QVERIFY(undone.status == CommitStatus::Applied);
-    const Document& restored = session.document();
+    const Document& restored = client.session().document();
     QVERIFY(restored.families() == ward.families());
     QVERIFY(restored.teams() == ward.teams());
     QVERIFY(restored.emergencyAssets() == ward.emergencyAssets());
@@ -806,27 +806,27 @@ void ReferenceCleanupTest::undoingAnImportRestoresTheMemberItRemovedFromAFamily(
 void ReferenceCleanupTest::secondUndoOfOneFamilyDeletePutsBackOnlyTheMembersItStillHolds()
 {
     Document ward = TestWard::documentWithPlaces();
-    TestSession session;
-    session.createWard(ward);
-    Document created = session.document();
+    TestClient client("Laptop");
+    client.createWard(ward);
+    Document created = client.session().document();
 
     // Two users delete the Smith family from the same version; both deletions land, the
     // second with its result already holding
     UndoableCommandPtr first = DeleteFamilyCommand::fromSeen(TestWard::smith(), ward);
     UndoableCommandPtr second = DeleteFamilyCommand::fromSeen(TestWard::smith(), ward);
-    QVERIFY(session.commit(first).status == CommitStatus::Applied);
-    QVERIFY(session.commit(second).status == CommitStatus::Applied);
+    QVERIFY(client.session().commit(first).status == CommitStatus::Applied);
+    QVERIFY(client.session().commit(second).status == CommitStatus::Applied);
 
     // The second user undoes, and someone removes Alice from the family
-    QVERIFY(session.undo().status == CommitStatus::Applied);
-    QVERIFY(session.document() == created);
-    QVERIFY(removeFromSmiths(session, TestWard::aliceId()).status == CommitStatus::Applied);
-    QVERIFY(inNoPlace(session.document(), TestWard::aliceId()));
+    QVERIFY(client.session().undo().status == CommitStatus::Applied);
+    QVERIFY(client.session().document() == created);
+    QVERIFY(removeFromSmiths(client.session(), TestWard::aliceId()).status == CommitStatus::Applied);
+    QVERIFY(inNoPlace(client.session().document(), TestWard::aliceId()));
 
     // The first user's undo lands on that version
-    QVERIFY(session.commit(first->inverse()).status == CommitStatus::Applied);
+    QVERIFY(client.session().commit(first->inverse()).status == CommitStatus::Applied);
 
-    const Document& restored = session.document();
+    const Document& restored = client.session().document();
     QVERIFY(TestWard::family(restored, TestWard::smithId()) == smithWithout(TestWard::aliceId()));
     QVERIFY(!restored.findPersonById(TestWard::aliceId()).has_value());
     QVERIFY(inNoPlace(restored, TestWard::aliceId()));
@@ -873,30 +873,30 @@ void ReferenceCleanupTest::undoingAnImportRestoresALeaderWhateverTheFamilyOrder(
     Family gainingFamily = TestWard::family(ward, FamilyId::fromString(gaining));
 
     // The import takes the leader out of one family and adds Dan to the other
-    TestSession mine;
+    TestClient mine("Laptop");
     mine.createWard(ward);
     WardDirectoryImportResult result = directoryImport({withoutMember(losingFamily, leaderId),
                                                         withAddedMember(gainingFamily, TestWard::dan())});
-    QVERIFY(mine.commit(ImportWardDirectoryCommand::fromImport(mine.document(), result, "Tanglewood.pdf")).status
+    QVERIFY(mine.session().commit(ImportWardDirectoryCommand::fromImport(mine.session().document(), result, "Tanglewood.pdf")).status
             == CommitStatus::Applied);
     Team aliceOnly = withMembers(setup, {TestWard::aliceId()});
     aliceOnly.setLeaderId(std::nullopt);
-    QVERIFY(setupIn(mine.document()) == aliceOnly);
+    QVERIFY(setupIn(mine.session().document()) == aliceOnly);
 
     // Someone else then puts Dan on Setup as its leader
-    TestSession theirs;
-    theirs.createWard(mine.document());
+    TestClient theirs("Phone");
+    theirs.takeWardOf(mine);
     Team danLeads = withMembers(aliceOnly, {TestWard::aliceId(), TestWard::danId()});
     danLeads.setLeaderId(TestWard::danId());
-    QVERIFY(theirs.commit(UpdateTeamCommand::fromEdit(aliceOnly, danLeads, theirs.document())).status
+    QVERIFY(theirs.session().commit(UpdateTeamCommand::fromEdit(aliceOnly, danLeads, theirs.session().document())).status
             == CommitStatus::Applied);
-    QVERIFY(mine.replayOnto(theirs.document()).status == ReplayStatus::Replayed);
-    QVERIFY(setupIn(mine.document()) == danLeads);
+    QVERIFY(mine.session().replayOnto(theirs.session().document()).status == ReplayStatus::Replayed);
+    QVERIFY(setupIn(mine.session().document()) == danLeads);
 
-    CommitResult undone = mine.undo();
+    CommitResult undone = mine.session().undo();
 
     QVERIFY(undone.status == CommitStatus::Applied);
-    const Document& restored = mine.document();
+    const Document& restored = mine.session().document();
     QVERIFY(TestWard::family(restored, losingFamily.id()) == losingFamily);
     QVERIFY(TestWard::family(restored, gainingFamily.id()) == gainingFamily);
     QVERIFY(setupIn(restored) == setup);

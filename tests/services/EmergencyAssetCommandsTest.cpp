@@ -1,7 +1,7 @@
 #include "EmergencyAssetCommandsTest.h"
 #include "EmergencyAssetCommands.h"
 #include "FamilyCommands.h"
-#include "TestSession.h"
+#include "TestClient.h"
 #include "TestWard.h"
 
 #include <QTest>
@@ -26,14 +26,11 @@ EmergencyAsset withPeople(const EmergencyAsset& asset, const QSet<PersonId>& peo
     return updated;
 }
 
-/// Creates a ward from the test ward holding asset in mine, and in theirs, which then takes
-/// mine's ward as a version, so both hold one ward, access list included.
-void openBoth(TestSession& mine, TestSession& theirs, const EmergencyAsset& asset)
+/// Creates a ward from the test ward holding asset in mine, and gives theirs the same ward.
+void openBoth(TestClient& mine, TestClient& theirs, const EmergencyAsset& asset)
 {
-    Document document = TestWard::withAsset(TestWard::document(), asset);
-    mine.createWard(document);
-    theirs.createWard(document);
-    theirs.replayOnto(mine.document());
+    mine.createWard(TestWard::withAsset(TestWard::document(), asset));
+    theirs.takeWardOf(mine);
 }
 
 }  // namespace
@@ -45,86 +42,86 @@ EmergencyAssetCommandsTest::EmergencyAssetCommandsTest(QObject* parent)
 
 void EmergencyAssetCommandsTest::assetEditsAddingDifferentPeopleBothLand()
 {
-    TestSession mine;
-    TestSession theirs;
+    TestClient mine("Laptop");
+    TestClient theirs("Phone");
     EmergencyAsset bobOnly = withPeople(TestWard::generator(), {TestWard::bobId()});
     openBoth(mine, theirs, bobOnly);
 
-    QVERIFY(commitAssetEdit(theirs, bobOnly, withPeople(bobOnly, {TestWard::bobId(), TestWard::carolId()})).status
+    QVERIFY(commitAssetEdit(theirs.session(), bobOnly, withPeople(bobOnly, {TestWard::bobId(), TestWard::carolId()})).status
             == CommitStatus::Applied);
-    QVERIFY(commitAssetEdit(mine, bobOnly, withPeople(bobOnly, {TestWard::bobId(), TestWard::aliceId()})).status
+    QVERIFY(commitAssetEdit(mine.session(), bobOnly, withPeople(bobOnly, {TestWard::bobId(), TestWard::aliceId()})).status
             == CommitStatus::Applied);
 
-    ReplayResult result = mine.replayOnto(theirs.document());
+    ReplayResult result = mine.session().replayOnto(theirs.session().document());
 
     QVERIFY(result.status == ReplayStatus::Replayed);
-    QCOMPARE(assetIn(mine).personIds(), QSet<PersonId>({TestWard::bobId(), TestWard::aliceId(), TestWard::carolId()}));
-    QCOMPARE(mine.document().personResponseAreas(TestWard::carolId()), QSet<ResponseArea>({ResponseArea::Recovery}));
+    QCOMPARE(assetIn(mine.session()).personIds(), QSet<PersonId>({TestWard::bobId(), TestWard::aliceId(), TestWard::carolId()}));
+    QCOMPARE(mine.session().document().personResponseAreas(TestWard::carolId()), QSet<ResponseArea>({ResponseArea::Recovery}));
 }
 
 void EmergencyAssetCommandsTest::removalOfAPersonAlreadyRemovedIsDone()
 {
-    TestSession mine;
-    TestSession theirs;
+    TestClient mine("Laptop");
+    TestClient theirs("Phone");
     EmergencyAsset opened = TestWard::generator();
     openBoth(mine, theirs, opened);
 
-    QVERIFY(commitAssetEdit(theirs, opened, withPeople(opened, {TestWard::bobId()})).status == CommitStatus::Applied);
+    QVERIFY(commitAssetEdit(theirs.session(), opened, withPeople(opened, {TestWard::bobId()})).status == CommitStatus::Applied);
     EmergencyAsset saved = withPeople(opened, {TestWard::bobId()});
     saved.setName("Generator, 5 kW");
-    QVERIFY(commitAssetEdit(mine, opened, saved).status == CommitStatus::Applied);
+    QVERIFY(commitAssetEdit(mine.session(), opened, saved).status == CommitStatus::Applied);
 
-    ReplayResult result = mine.replayOnto(theirs.document());
+    ReplayResult result = mine.session().replayOnto(theirs.session().document());
 
     QVERIFY(result.status == ReplayStatus::Replayed);
-    QCOMPARE(assetIn(mine).personIds(), QSet<PersonId>({TestWard::bobId()}));
-    QCOMPARE(assetIn(mine).name(), QString("Generator, 5 kW"));
+    QCOMPARE(assetIn(mine.session()).personIds(), QSet<PersonId>({TestWard::bobId()}));
+    QCOMPARE(assetIn(mine.session()).name(), QString("Generator, 5 kW"));
 }
 
 void EmergencyAssetCommandsTest::additionOfAPersonReplayedAfterTheyWereRemovedConflicts()
 {
-    TestSession mine;
-    TestSession theirs;
+    TestClient mine("Laptop");
+    TestClient theirs("Phone");
     EmergencyAsset bobOnly = withPeople(TestWard::generator(), {TestWard::bobId()});
     openBoth(mine, theirs, bobOnly);
 
     Family smith = TestWard::smith();
     Family withoutAlice = smith;
     withoutAlice.setMembers({TestWard::bob()});
-    QVERIFY(theirs.commit(UpdateFamilyCommand::fromEdit(smith, withoutAlice, theirs.document())).status == CommitStatus::Applied);
-    QVERIFY(commitAssetEdit(mine, bobOnly, withPeople(bobOnly, {TestWard::bobId(), TestWard::aliceId()})).status
+    QVERIFY(theirs.session().commit(UpdateFamilyCommand::fromEdit(smith, withoutAlice, theirs.session().document())).status == CommitStatus::Applied);
+    QVERIFY(commitAssetEdit(mine.session(), bobOnly, withPeople(bobOnly, {TestWard::bobId(), TestWard::aliceId()})).status
             == CommitStatus::Applied);
 
-    ReplayResult result = mine.replayOnto(theirs.document());
+    ReplayResult result = mine.session().replayOnto(theirs.session().document());
 
     QVERIFY(result.status == ReplayStatus::Abandoned);
-    QVERIFY(!mine.document().findPersonById(TestWard::aliceId()).has_value());
-    QCOMPARE(assetIn(mine).personIds(), QSet<PersonId>({TestWard::bobId()}));
+    QVERIFY(!mine.session().document().findPersonById(TestWard::aliceId()).has_value());
+    QCOMPARE(assetIn(mine.session()).personIds(), QSet<PersonId>({TestWard::bobId()}));
 }
 
 void EmergencyAssetCommandsTest::undoTakesBackAnAddAnEditAndADeletion()
 {
-    TestSession session;
-    session.createWard(TestWard::document());
+    TestClient client("Laptop");
+    client.createWard(TestWard::document());
     EmergencyAsset asset = TestWard::generator();
 
-    QVERIFY(session.commit(AddEmergencyAssetCommand::fromNew(asset, session.document())).status == CommitStatus::Applied);
-    QVERIFY(assetIn(session) == asset);
-    QVERIFY(session.undo().status == CommitStatus::Applied);
-    QVERIFY(!session.document().findEmergencyAssetById(TestWard::generatorId()).has_value());
-    QVERIFY(session.redo().status == CommitStatus::Applied);
-    QVERIFY(assetIn(session) == asset);
+    QVERIFY(client.session().commit(AddEmergencyAssetCommand::fromNew(asset, client.session().document())).status == CommitStatus::Applied);
+    QVERIFY(assetIn(client.session()) == asset);
+    QVERIFY(client.session().undo().status == CommitStatus::Applied);
+    QVERIFY(!client.session().document().findEmergencyAssetById(TestWard::generatorId()).has_value());
+    QVERIFY(client.session().redo().status == CommitStatus::Applied);
+    QVERIFY(assetIn(client.session()) == asset);
 
     EmergencyAsset saved = withPeople(asset, {TestWard::bobId(), TestWard::carolId()});
     saved.setName("Generator, 5 kW");
-    QVERIFY(commitAssetEdit(session, asset, saved).status == CommitStatus::Applied);
-    QVERIFY(assetIn(session) == saved);
-    QVERIFY(session.undo().status == CommitStatus::Applied);
-    QVERIFY(assetIn(session) == asset);
+    QVERIFY(commitAssetEdit(client.session(), asset, saved).status == CommitStatus::Applied);
+    QVERIFY(assetIn(client.session()) == saved);
+    QVERIFY(client.session().undo().status == CommitStatus::Applied);
+    QVERIFY(assetIn(client.session()) == asset);
 
-    QVERIFY(session.commit(DeleteEmergencyAssetCommand::fromSeen(asset, session.document())).status
+    QVERIFY(client.session().commit(DeleteEmergencyAssetCommand::fromSeen(asset, client.session().document())).status
             == CommitStatus::Applied);
-    QVERIFY(!session.document().findEmergencyAssetById(TestWard::generatorId()).has_value());
-    QVERIFY(session.undo().status == CommitStatus::Applied);
-    QVERIFY(assetIn(session) == asset);
+    QVERIFY(!client.session().document().findEmergencyAssetById(TestWard::generatorId()).has_value());
+    QVERIFY(client.session().undo().status == CommitStatus::Applied);
+    QVERIFY(assetIn(client.session()) == asset);
 }
