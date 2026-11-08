@@ -473,6 +473,17 @@ UndoableCommandPtr UpdateTaskCommand::fromEdit(const ResponseTask& opened, const
                                                category, taskDescription, assignment, resolution, description);
 }
 
+UndoableCommandPtr UpdateTaskCommand::reopening(const ResponseTask& task, const Document& document)
+{
+    ResponseTask reopened = task;
+    reopened.setResolution(std::nullopt);
+    if (!assigneeExists(reopened.assignment(), document))
+    {
+        reopened.setAssignment(std::nullopt);
+    }
+    return fromEdit(task, reopened);
+}
+
 UpdateTaskCommand::UpdateTaskCommand(const FamilyId& familyId,
                                      const TaskId& taskId,
                                      const std::optional<FieldChange<QString>>& category,
@@ -508,7 +519,7 @@ CommandOutcome UpdateTaskCommand::execute(Document& document) const
     updated.setDescription(changedValue(m_taskDescription, task->description()));
     updated.setAssignment(changedValue(m_assignment, task->assignment()));
     updated.setResolution(changedValue(m_resolution, task->resolution()));
-    if (m_assignment.has_value() && !updated.isResolved() && !assigneeExists(updated.assignment(), document))
+    if (!updated.isResolved() && !assigneeExists(updated.assignment(), document))
     {
         return CommandOutcome::Conflicted;
     }

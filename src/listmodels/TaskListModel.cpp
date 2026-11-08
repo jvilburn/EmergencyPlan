@@ -139,17 +139,19 @@ bool TaskListModel::setData(const QModelIndex& index, const QVariant& value, int
     }
 
     // Resolving from the check box records no notes; clearing it reopens the task
-    ResponseTask opened = *task;
-    ResponseTask saved = opened;
+    DocumentManager* documents = DocumentManager::instance();
+    UndoableCommandPtr command;
     if (value.toInt() == Qt::Checked)
     {
-        saved.setResolution(TaskResolution::create(QString()));
+        ResponseTask resolved = *task;
+        resolved.setResolution(TaskResolution::create(QString()));
+        command = UpdateTaskCommand::fromEdit(*task, resolved);
     }
     else
     {
-        saved.setResolution(std::nullopt);
+        command = UpdateTaskCommand::reopening(*task, documents->document());
     }
-    CommitResult result = DocumentManager::instance()->executeCommand(UpdateTaskCommand::fromEdit(opened, saved));
+    CommitResult result = documents->executeCommand(command);
     return result.status == CommitStatus::Applied;
 }
 

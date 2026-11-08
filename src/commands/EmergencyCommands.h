@@ -155,8 +155,8 @@ private:
 
 /// An edit to one task, built from the difference between the task as opened and as saved:
 /// its category, description, assignment and resolution, each judged on its own. It
-/// conflicts when no emergency is in progress, the task is gone, a value moved, or the
-/// assignment it sets on a task it leaves open names a team or person the document lacks.
+/// conflicts when no emergency is in progress, the task is gone, a value moved, or the task
+/// it leaves open is assigned to a team or person the document lacks.
 /// It holds the task's family for its document change.
 class UpdateTaskCommand : public UndoableCommand
 {
@@ -167,6 +167,10 @@ public:
     /// assignee as the tasks recorded them, or an empty pointer when nothing differs, which
     /// WardSession::commit takes as nothing to do.
     static UndoableCommandPtr fromEdit(const ResponseTask& opened, const ResponseTask& saved);
+
+    /// The edit that reopens task, unassigning it when document no longer holds its
+    /// assignee, since an open task names only someone who can do it.
+    static UndoableCommandPtr reopening(const ResponseTask& task, const Document& document);
 
     UpdateTaskCommand(const FamilyId& familyId,
                       const TaskId& taskId,

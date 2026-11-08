@@ -874,7 +874,9 @@ id pointing at something that exists:
 
 - **Any value a command writes that names a person, family or team includes in its start
   condition that the id exists**, whether a set addition, a leader or an assignee. Adding
-  Bob to a team, or assigning him a task, replayed after Bob was removed, conflicts. A
+  Bob to a team, or assigning him a task, replayed after Bob was removed, conflicts, and so
+  does any task edit that leaves the task open with Bob still its assignee. Reopening a task
+  whose assignee the ward no longer holds reopens it unassigned. A
   response's contact attempts, the family a task is for, and a resolved task's assignee are
   the exception: they are its log, keep the ids and names they were made with, and take no
   such condition (see below).
@@ -1918,7 +1920,9 @@ The journal and replay, in `tests/services`:
   them again
 - removing a person who holds an open task and a resolved one unassigns the open task and
   leaves the resolved one assigned to them; the task list and the report name them as the
-  assignment recorded them, and an attempt they made names them the same way
+  assignment recorded them, and an attempt they made names them the same way; reopening the
+  resolved task then reopens it unassigned, and a reopen made before the removal, replayed
+  after it, conflicts and leaves the task resolved and assigned to them
 - an offline addition of a person to a team, and an offline task assignment to a person,
   each replayed after that person was removed, conflict; an offline removal of a person,
   replayed after someone added them to another team, takes them off that team too, and one

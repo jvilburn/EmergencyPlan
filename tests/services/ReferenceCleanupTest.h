@@ -19,6 +19,8 @@ private slots:
     void removalReplayedAfterThePersonJoinedAnotherTeamTakesThemOffItToo();
     void removalReplayedAfterThePersonWasAssignedATaskUnassignsIt();
     void removingAPersonUnassignsTheirOpenTaskAndLeavesTheirResolvedOneAssigned();
+    void reopeningATaskWhoseAssigneeWasRemovedReopensItUnassigned();
+    void reopeningReplayedAfterTheAssigneeWasRemovedConflicts();
     void undoingARemovalLeavesATeamDeletedSince();
     void undoingARemovalLeavesALeaderSetSince();
     void undoingADirectoryImportRestoresTheRemovedPeoplesMemberships();

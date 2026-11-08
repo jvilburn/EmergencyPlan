@@ -513,6 +513,48 @@ void ReferenceCleanupTest::removingAPersonUnassignsTheirOpenTaskAndLeavesTheirRe
     QVERIFY(session.document() == ward);
 }
 
+void ReferenceCleanupTest::reopeningATaskWhoseAssigneeWasRemovedReopensItUnassigned()
+{
+    // Alice resolved the Fence task, then left the ward
+    ResponseTask fence = resolvedFence(TaskAssignment::toPerson(TestWard::alice()));
+    TestSession session;
+    session.open(withTask(TestWard::documentWithPlaces(), fence));
+    QVERIFY(removeFromSmiths(session, TestWard::aliceId()).status == CommitStatus::Applied);
+    QVERIFY(taskIn(session.document(), fence.id()) == fence);
+
+    CommitResult reopened = session.commit(UpdateTaskCommand::reopening(fence, session.document()));
+
+    QVERIFY(reopened.status == CommitStatus::Applied);
+    ResponseTask expected = unassigned(fence);
+    expected.setResolution(std::nullopt);
+    QVERIFY(taskIn(session.document(), fence.id()) == expected);
+    QVERIFY(referencesAreWhole(session.document()));
+}
+
+void ReferenceCleanupTest::reopeningReplayedAfterTheAssigneeWasRemovedConflicts()
+{
+    ResponseTask fence = resolvedFence(TaskAssignment::toPerson(TestWard::alice()));
+    Document ward = withTask(TestWard::documentWithPlaces(), fence);
+    TestSession mine;
+    TestSession theirs;
+    mine.open(ward);
+    theirs.open(ward);
+
+    // Reopened while the ward still holds Alice, the task keeps her
+    QVERIFY(mine.commit(UpdateTaskCommand::reopening(fence, mine.document())).status == CommitStatus::Applied);
+    ResponseTask reopened = fence;
+    reopened.setResolution(std::nullopt);
+    QVERIFY(taskIn(mine.document(), fence.id()) == reopened);
+
+    QVERIFY(removeFromSmiths(theirs, TestWard::aliceId()).status == CommitStatus::Applied);
+    ReplayResult replay = mine.replayOnto(theirs.document());
+
+    QVERIFY(replay.status == ReplayStatus::Abandoned);
+    QVERIFY(mine.document() == theirs.document());
+    QVERIFY(taskIn(mine.document(), fence.id()) == fence);
+    QVERIFY(referencesAreWhole(mine.document()));
+}
+
 void ReferenceCleanupTest::undoingARemovalLeavesATeamDeletedSince()
 {
     Team cleanup = newTeam("Cleanup", {TestWard::aliceId(), TestWard::carolId()});
