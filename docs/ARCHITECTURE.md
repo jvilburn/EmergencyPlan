@@ -92,7 +92,7 @@ A command that conflicts or is refused changes nothing, and the result says whic
 
 ### Saving
 
-Every change `WardSession` makes - a command, an undo or redo, a replay, a new ward, an automatic batch or lookup that changed the document - is saved at once: the document and this device's state together, in one write of the ward's local file, sealed to the ward's access list. The session writes through a `WardStore`; the app's is `FileWardStore`, over the `wards` folder in app data (`AppData`, under `QStandardPaths::AppLocalDataLocation`), a sibling of the `keys` folder that holds this device's key file. A save that fails keeps the change in memory and emits `saveFailed`; the next save that succeeds writes it, `MainWindow` tries again when the app becomes active, and closing asks first while a save is still failing.
+Every change `WardSession` makes - a command, an undo or redo, a replay, a new ward, an automatic batch or lookup that changed the document - is saved at once: the document and this device's state together, in one write of the ward's local file, sealed to the ward's access list. The session writes through a `WardStore`; the app's is `FileWardStore`, over the `wards` folder in app data (`AppData`, under `QStandardPaths::AppLocalDataLocation`), a sibling of the `keys` folder that holds this device's key file. A save that fails keeps the change in memory and emits `saveFailed`; the next save that succeeds writes it, `MainWindow` tries again when the app becomes active, and closing or switching to another ward asks first while a save is still failing.
 
 ---
 

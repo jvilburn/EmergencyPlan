@@ -16,7 +16,7 @@ struct StoreRead
 {
     StoreReadStatus status;
     QByteArray bytes;  ///< when Read
-    QString problem;   ///< when Fault
+    QString problem;   ///< when Fault, a clause with no final period
 };
 
 /// Where this device keeps each ward's file, by document id, as bytes. The app keeps them in
@@ -27,7 +27,8 @@ public:
     virtual ~WardStore() = default;
 
     /// Replaces the ward's file with bytes in one write: afterwards the file is the old one or
-    /// the new one, never part of either. A failure says why in problem.
+    /// the new one, never part of either. A failure says why in problem, as a clause with no
+    /// final period.
     virtual bool write(const DocumentId& document, const QByteArray& bytes, QString* problem) = 0;
 
     virtual StoreRead read(const DocumentId& document) const = 0;

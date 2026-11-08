@@ -61,7 +61,7 @@ int main(int argc, char *argv[])
     TileService::setInstance(&tileService);
     tileService.initialize();
 
-    MainWindow window(nullptr);
+    MainWindow window(appData.settingsFilePath(), nullptr);
     if (!window.openStartingWard())
     {
         return 0;

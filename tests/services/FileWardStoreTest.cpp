@@ -32,3 +32,29 @@ void FileWardStoreTest::eachWardIsOneFileNamedByItsDocumentId()
     QCOMPARE(read.bytes, QByteArray("second\r\nbytes\n"));
     QVERIFY(store.read(DocumentId::generate()).status == StoreReadStatus::Missing);
 }
+
+void FileWardStoreTest::writeFailuresSayWhyAsAClause()
+{
+    QTemporaryDir root;
+    QFile blocker(root.path() + "/blocker");
+    QVERIFY(blocker.open(QIODevice::WriteOnly));
+    blocker.close();
+    QString unmadeDirectory = root.path() + "/blocker/wards";
+    FileWardStore unmade(unmadeDirectory);
+    QString problem;
+
+    QVERIFY(!unmade.write(DocumentId::generate(), QByteArray("bytes"), &problem));
+    QCOMPARE(problem, QString("the folder %1 could not be made").arg(QDir::toNativeSeparators(unmadeDirectory)));
+
+    // The ward's file held open, so the system refuses to replace it and says why.
+    FileWardStore store(root.path() + "/wards");
+    DocumentId document = DocumentId::generate();
+    QVERIFY(store.write(document, QByteArray("first"), &problem));
+    QFile held(store.pathOf(document));
+    QVERIFY(held.open(QIODevice::ReadOnly));
+    problem.clear();
+
+    QVERIFY(!store.write(document, QByteArray("second"), &problem));
+    QVERIFY(!problem.isEmpty());
+    QVERIFY2(!problem.endsWith('.'), qPrintable(problem));
+}

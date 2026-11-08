@@ -2,9 +2,9 @@
 
 #include <QString>
 
-/// Where Ward Planning keeps its files: the ward files and the device keys, in local,
-/// non-roaming app data. The ward files and the keys are sibling folders, so the folder that
-/// holds the ward files holds no key.
+/// Where Ward Planning keeps its files: the ward files, the device keys and the settings, in
+/// local, non-roaming app data. The ward files and the keys are sibling folders, so the folder
+/// that holds the ward files holds no key.
 class AppData
 {
 public:
@@ -13,10 +13,10 @@ public:
     /// The app's own: QStandardPaths::AppLocalDataLocation.
     static AppData standard();
 
-    const QString& root() const { return m_root; }
     QString wardsDirectory() const { return m_root + "/wards"; }
     QString keysDirectory() const { return m_root + "/keys"; }
     QString keyFilePath() const { return keysDirectory() + "/device.key"; }
+    QString settingsFilePath() const { return m_root + "/settings.json"; }
 
 private:
     QString m_root;

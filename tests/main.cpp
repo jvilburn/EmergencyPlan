@@ -1,3 +1,4 @@
+#include "AppDataTest.h"
 #include "AutomaticUpdatesTest.h"
 #include "BirthdayTest.h"
 #include "Crypto.h"
@@ -55,6 +56,7 @@ int main(int argc, char* argv[])
     FileWardStoreTest fileWardStoreTest(nullptr);
     WardSessionSavingTest wardSessionSavingTest(nullptr);
     StrictReadersTest strictReadersTest(nullptr);
+    AppDataTest appDataTest(nullptr);
 
     int failures = 0;
     failures += QTest::qExec(&personJsonTest, argc, argv);
@@ -79,5 +81,6 @@ int main(int argc, char* argv[])
     failures += QTest::qExec(&fileWardStoreTest, argc, argv);
     failures += QTest::qExec(&wardSessionSavingTest, argc, argv);
     failures += QTest::qExec(&strictReadersTest, argc, argv);
+    failures += QTest::qExec(&appDataTest, argc, argv);
     return failures;
 }

@@ -93,8 +93,8 @@ CommitResult removeAlice(WardSession& session)
     return session.commit(UpdateFamilyCommand::fromEdit(smith, withoutAlice, session.document()));
 }
 
-/// Creates a ward from document in mine, and gives theirs the same ward.
-void openBoth(TestClient& mine, TestClient& theirs, const Document& document)
+/// Creates a ward from document in mine, and theirs takes it as it stands.
+void shareWard(TestClient& mine, TestClient& theirs, const Document& document)
 {
     mine.createWard(document);
     theirs.takeWardOf(mine);
@@ -111,7 +111,7 @@ void EmergencyCommandsTest::twoRespondersOfflineLandEveryAttempt()
 {
     TestClient mine("Laptop");
     TestClient theirs("Phone");
-    openBoth(mine, theirs, TestWard::withResponse(TestWard::document(), TestWard::storm()));
+    shareWard(mine, theirs, TestWard::withResponse(TestWard::document(), TestWard::storm()));
 
     QVERIFY(addAttempt(theirs.session(), phoned("attempt-their-smith", TestWard::smith(), 10, 0, ContactOutcome::UnableToReach, "No answer"))
                 .status == CommitStatus::Applied);
@@ -135,7 +135,7 @@ void EmergencyCommandsTest::twoRespondersFirstAttemptsOnOneFamilyBothLand()
 {
     TestClient mine("Laptop");
     TestClient theirs("Phone");
-    openBoth(mine, theirs, TestWard::withResponse(TestWard::document(), TestWard::storm()));
+    shareWard(mine, theirs, TestWard::withResponse(TestWard::document(), TestWard::storm()));
     QVERIFY(emergencyIn(mine.session()).contactAttempts().isEmpty());
 
     QVERIFY(addAttempt(theirs.session(), phoned("attempt-theirs", TestWard::jones(), 10, 0, ContactOutcome::UnableToReach, "Phoned Carol"))
@@ -158,7 +158,7 @@ void EmergencyCommandsTest::differentOutcomesOnOneFamilyShowTheLaterTimestampWhi
 {
     TestClient mine("Laptop");
     TestClient theirs("Phone");
-    openBoth(mine, theirs, TestWard::withResponse(TestWard::document(), TestWard::storm()));
+    shareWard(mine, theirs, TestWard::withResponse(TestWard::document(), TestWard::storm()));
     QVERIFY(addAttempt(theirs.session(), phoned("attempt-ok", TestWard::smith(), 10, 0, ContactOutcome::OK, "Fine at ten"))
                 .status == CommitStatus::Applied);
     QVERIFY(addAttempt(mine.session(), phoned("attempt-unreachable", TestWard::smith(), 10, 5, ContactOutcome::UnableToReach,
@@ -182,7 +182,7 @@ void EmergencyCommandsTest::attemptsAtOneTimeAreOrderedByIdWhicheverReplaysFirst
     // Same timestamp, so the greater id comes first: "attempt-b" before "attempt-a".
     TestClient mine("Laptop");
     TestClient theirs("Phone");
-    openBoth(mine, theirs, TestWard::withResponse(TestWard::document(), TestWard::storm()));
+    shareWard(mine, theirs, TestWard::withResponse(TestWard::document(), TestWard::storm()));
     QVERIFY(addAttempt(theirs.session(), phoned("attempt-a", TestWard::smith(), 10, 0, ContactOutcome::OK, "Fine"))
                 .status == CommitStatus::Applied);
     QVERIFY(addAttempt(mine.session(), phoned("attempt-b", TestWard::smith(), 10, 0, ContactOutcome::UnableToReach, "No answer"))
@@ -229,7 +229,7 @@ void EmergencyCommandsTest::twoOfflineStartsBecomeOneEmergency()
     // attempt lands in their emergency.
     TestClient mine("Laptop");
     TestClient theirs("Phone");
-    openBoth(mine, theirs, TestWard::document());
+    shareWard(mine, theirs, TestWard::document());
     ContactAttempt dry = phoned("attempt-flood", TestWard::smith(), 10, 0, ContactOutcome::OK, "Dry");
     ContactAttempt roof = phoned("attempt-storm", TestWard::smith(), 10, 5, ContactOutcome::OK, "Roof intact");
 
@@ -350,7 +350,7 @@ void EmergencyCommandsTest::attemptsReplayedOntoAnEndedEmergencyAreInTheToRedoTe
 {
     TestClient mine("Laptop");
     TestClient theirs("Phone");
-    openBoth(mine, theirs, TestWard::withResponse(TestWard::document(), TestWard::storm()));
+    shareWard(mine, theirs, TestWard::withResponse(TestWard::document(), TestWard::storm()));
     QVERIFY(theirs.session().commit(EndEmergencyCommand::fromReported(emergencyIn(theirs.session()))).status == CommitStatus::Applied);
     QVERIFY(addAttempt(mine.session(), phoned("attempt-smith", TestWard::smith(), 10, 0, ContactOutcome::OK, "All safe")).status
             == CommitStatus::Applied);
@@ -378,7 +378,7 @@ void EmergencyCommandsTest::endReplayedAfterAnotherAttemptConflictsAndLeavesTheE
 {
     TestClient mine("Laptop");
     TestClient theirs("Phone");
-    openBoth(mine, theirs, TestWard::withResponse(TestWard::document(), TestWard::storm()));
+    shareWard(mine, theirs, TestWard::withResponse(TestWard::document(), TestWard::storm()));
     QVERIFY(addAttempt(theirs.session(), phoned("attempt-theirs", TestWard::smith(), 10, 0, ContactOutcome::OK, "Phoned the Smiths"))
                 .status == CommitStatus::Applied);
     QVERIFY(mine.session().commit(EndEmergencyCommand::fromReported(emergencyIn(mine.session()))).status == CommitStatus::Applied);
@@ -478,7 +478,7 @@ void EmergencyCommandsTest::taskDeletionReplayedAfterAnotherResolvedItConflicts(
     TestClient mine("Laptop");
     TestClient theirs("Phone");
     ResponseTask task = floodedBasement();
-    openBoth(mine, theirs, TestWard::withResponse(TestWard::document(), TestWard::stormWith({}, {task})));
+    shareWard(mine, theirs, TestWard::withResponse(TestWard::document(), TestWard::stormWith({}, {task})));
     ResponseTask resolved = task;
     resolved.setResolution(TestWard::resolution("Pumped out", TestWard::octoberFirst(12, 0)));
 
@@ -501,7 +501,7 @@ void EmergencyCommandsTest::taskEditReplayedAfterTheTaskWasDeletedConflicts()
     TestClient mine("Laptop");
     TestClient theirs("Phone");
     ResponseTask task = floodedBasement();
-    openBoth(mine, theirs, TestWard::withResponse(TestWard::document(), TestWard::stormWith({}, {task})));
+    shareWard(mine, theirs, TestWard::withResponse(TestWard::document(), TestWard::stormWith({}, {task})));
     ResponseTask described = task;
     described.setDescription("Water in the basement and the garage");
 
@@ -524,7 +524,7 @@ void EmergencyCommandsTest::taskEditsToDifferentValuesBothApply()
     TestClient theirs("Phone");
     ResponseTask task = floodedBasement();
     Document withTeam = TestWard::withTeam(TestWard::document(), TestWard::setupTeam());
-    openBoth(mine, theirs, TestWard::withResponse(withTeam, TestWard::stormWith({}, {task})));
+    shareWard(mine, theirs, TestWard::withResponse(withTeam, TestWard::stormWith({}, {task})));
     ResponseTask described = task;
     described.setDescription("Water in the basement and the garage");
     ResponseTask assigned = task;
@@ -550,7 +550,7 @@ void EmergencyCommandsTest::oneTaskValueSetDifferentlyConflicts()
     TestClient mine("Laptop");
     TestClient theirs("Phone");
     ResponseTask task = floodedBasement();
-    openBoth(mine, theirs, TestWard::withResponse(TestWard::document(), TestWard::stormWith({}, {task})));
+    shareWard(mine, theirs, TestWard::withResponse(TestWard::document(), TestWard::stormWith({}, {task})));
     ResponseTask garage = task;
     garage.setDescription("Water in the garage");
     ResponseTask cellar = task;
@@ -574,7 +574,7 @@ void EmergencyCommandsTest::assignmentToAPersonReplayedAfterTheyWereRemovedConfl
     TestClient mine("Laptop");
     TestClient theirs("Phone");
     ResponseTask task = floodedBasement();
-    openBoth(mine, theirs, TestWard::withResponse(TestWard::document(), TestWard::stormWith({}, {task})));
+    shareWard(mine, theirs, TestWard::withResponse(TestWard::document(), TestWard::stormWith({}, {task})));
     ResponseTask assigned = task;
     assigned.setAssignment(TaskAssignment::toPerson(TestWard::alice()));
 

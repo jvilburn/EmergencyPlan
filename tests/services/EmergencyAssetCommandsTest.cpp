@@ -26,8 +26,8 @@ EmergencyAsset withPeople(const EmergencyAsset& asset, const QSet<PersonId>& peo
     return updated;
 }
 
-/// Creates a ward from the test ward holding asset in mine, and gives theirs the same ward.
-void openBoth(TestClient& mine, TestClient& theirs, const EmergencyAsset& asset)
+/// Creates a ward from the test ward holding asset in mine, and theirs takes it as it stands.
+void shareWard(TestClient& mine, TestClient& theirs, const EmergencyAsset& asset)
 {
     mine.createWard(TestWard::withAsset(TestWard::document(), asset));
     theirs.takeWardOf(mine);
@@ -45,7 +45,7 @@ void EmergencyAssetCommandsTest::assetEditsAddingDifferentPeopleBothLand()
     TestClient mine("Laptop");
     TestClient theirs("Phone");
     EmergencyAsset bobOnly = withPeople(TestWard::generator(), {TestWard::bobId()});
-    openBoth(mine, theirs, bobOnly);
+    shareWard(mine, theirs, bobOnly);
 
     QVERIFY(commitAssetEdit(theirs.session(), bobOnly, withPeople(bobOnly, {TestWard::bobId(), TestWard::carolId()})).status
             == CommitStatus::Applied);
@@ -64,7 +64,7 @@ void EmergencyAssetCommandsTest::removalOfAPersonAlreadyRemovedIsDone()
     TestClient mine("Laptop");
     TestClient theirs("Phone");
     EmergencyAsset opened = TestWard::generator();
-    openBoth(mine, theirs, opened);
+    shareWard(mine, theirs, opened);
 
     QVERIFY(commitAssetEdit(theirs.session(), opened, withPeople(opened, {TestWard::bobId()})).status == CommitStatus::Applied);
     EmergencyAsset saved = withPeople(opened, {TestWard::bobId()});
@@ -83,7 +83,7 @@ void EmergencyAssetCommandsTest::additionOfAPersonReplayedAfterTheyWereRemovedCo
     TestClient mine("Laptop");
     TestClient theirs("Phone");
     EmergencyAsset bobOnly = withPeople(TestWard::generator(), {TestWard::bobId()});
-    openBoth(mine, theirs, bobOnly);
+    shareWard(mine, theirs, bobOnly);
 
     Family smith = TestWard::smith();
     Family withoutAlice = smith;

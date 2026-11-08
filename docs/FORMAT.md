@@ -42,10 +42,15 @@ one-line JSON header whose `format` key is an integer. A reader treats a `format
 version it knows as a newer format, reads a version it knows with that version's reader, and
 treats anything else as unreadable. A release that changes any field raises the version.
 
+## Where the files live
+
+The key file is `keys/device.key` in app data (`QStandardPaths::AppLocalDataLocation`). A ward
+file is `wards/<document id>.wardplanning` in the same app data, named by its header's
+`document`; a reader opening a ward by its id refuses a file whose header names a different id.
+
 ## The key file
 
-The key file is `keys/device.key` in app data (`QStandardPaths::AppLocalDataLocation`), one
-compact JSON object:
+The key file is one compact JSON object:
 
 | Key | Type | Holds |
 |---|---|---|

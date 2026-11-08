@@ -1480,9 +1480,10 @@ disagrees with itself. Every push carries only what this device has already save
 a join (see *Invites*) and Leave and *Remove this device* (below), and memory runs ahead of
 the file only while saves are failing and while an automatic batch's results wait for its
 save. **Whatever is pending - a failed save first, then a push - is retried on the
-next command, when the window regains focus, on reconnecting, and on closing.** If a save
-still fails at closing, closing asks first: *Your latest changes could not be saved and will be lost. Close anyway?* A
-crash or power loss while saves are failing loses the unsaved changes.
+next command, when the window regains focus, on reconnecting, on closing, and before another
+ward is created or opened.** If a save still fails then, the app asks first: *Your latest
+changes could not be saved and will be lost. Continue anyway?* A crash or power loss while
+saves are failing loses the unsaved changes.
 
 **Leave and *Remove this device* never touch the open document.** They are the two
 commands that take this device out of the access list, and a local save seals to exactly

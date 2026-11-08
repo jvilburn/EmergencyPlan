@@ -17,3 +17,10 @@ void AppDataTest::wardsAndKeysAreSiblingFoldersOfTheRoot()
     QCOMPARE(appData.keyFilePath(), QString("C:/data/Ward Planning/keys/device.key"));
     QVERIFY(!appData.keyFilePath().startsWith(appData.wardsDirectory() + "/"));
 }
+
+void AppDataTest::settingsAreAFileInTheRoot()
+{
+    AppData appData("C:/data/Ward Planning");
+
+    QCOMPARE(appData.settingsFilePath(), QString("C:/data/Ward Planning/settings.json"));
+}

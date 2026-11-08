@@ -33,8 +33,8 @@ Team withLeader(const Team& team, const std::optional<PersonId>& leader)
     return updated;
 }
 
-/// Creates a ward from the test ward holding team in mine, and gives theirs the same ward.
-void openBoth(TestClient& mine, TestClient& theirs, const Team& team)
+/// Creates a ward from the test ward holding team in mine, and theirs takes it as it stands.
+void shareWard(TestClient& mine, TestClient& theirs, const Team& team)
 {
     mine.createWard(TestWard::withTeam(TestWard::document(), team));
     theirs.takeWardOf(mine);
@@ -52,7 +52,7 @@ void TeamCommandsTest::twoUsersAddingDifferentMembersToOneTeamBothLand()
     TestClient mine("Laptop");
     TestClient theirs("Phone");
     Team bobOnly = withMembers(TestWard::setupTeam(), {TestWard::bobId()});
-    openBoth(mine, theirs, bobOnly);
+    shareWard(mine, theirs, bobOnly);
 
     QVERIFY(commitTeamEdit(theirs.session(), bobOnly, withMembers(bobOnly, {TestWard::bobId(), TestWard::carolId()})).status
             == CommitStatus::Applied);
@@ -70,7 +70,7 @@ void TeamCommandsTest::memberRemovalReplayedAfterTheyBecameLeaderConflictsAndLea
     TestClient mine("Laptop");
     TestClient theirs("Phone");
     Team opened = TestWard::setupTeam();
-    openBoth(mine, theirs, opened);
+    shareWard(mine, theirs, opened);
 
     QVERIFY(commitTeamEdit(theirs.session(), opened, withLeader(opened, TestWard::aliceId())).status == CommitStatus::Applied);
     QVERIFY(commitTeamEdit(mine.session(), opened, withMembers(opened, {TestWard::bobId()})).status == CommitStatus::Applied);
@@ -121,7 +121,7 @@ void TeamCommandsTest::leaderChangeNeedsTheNewLeaderOnTheTeam()
     // A member made leader, replayed after someone removed them from the team.
     TestClient mine("Laptop");
     TestClient theirs("Phone");
-    openBoth(mine, theirs, team);
+    shareWard(mine, theirs, team);
     QVERIFY(commitTeamEdit(theirs.session(), team, withMembers(team, {TestWard::bobId()})).status == CommitStatus::Applied);
     QVERIFY(commitTeamEdit(mine.session(), team, withLeader(team, TestWard::aliceId())).status == CommitStatus::Applied);
 
@@ -137,7 +137,7 @@ void TeamCommandsTest::additionOfAPersonReplayedAfterTheyWereRemovedConflicts()
     TestClient mine("Laptop");
     TestClient theirs("Phone");
     Team bobOnly = withMembers(TestWard::setupTeam(), {TestWard::bobId()});
-    openBoth(mine, theirs, bobOnly);
+    shareWard(mine, theirs, bobOnly);
 
     Family smith = TestWard::smith();
     Family withoutAlice = smith;
@@ -165,7 +165,7 @@ void TeamCommandsTest::teamDeletionReplayedAfterSomeoneAddedAMemberConflictsAndL
     TestClient mine("Laptop");
     TestClient theirs("Phone");
     Team seen = TestWard::setupTeam();
-    openBoth(mine, theirs, seen);
+    shareWard(mine, theirs, seen);
     Team grown = withMembers(seen, {TestWard::bobId(), TestWard::aliceId(), TestWard::carolId()});
 
     QVERIFY(commitTeamEdit(theirs.session(), seen, grown).status == CommitStatus::Applied);

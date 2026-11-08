@@ -1,7 +1,9 @@
 #pragma once
 
+#include <QJsonObject>
 #include <QMainWindow>
 #include <QSplitter>
+#include <QString>
 
 #include "DocumentChange.h"
 #include "Id.h"
@@ -27,7 +29,8 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    explicit MainWindow(QWidget* parent);
+    /// settingsFilePath is the file that holds this device's settings.
+    MainWindow(const QString& settingsFilePath, QWidget* parent);
     ~MainWindow();
 
     /// Opens the ward the app starts on: on the first start, asks this device's name; then
@@ -76,7 +79,10 @@ private slots:
     void onDeleteFamilyRequested(const FamilyId& familyId);
     void onSaveFamily();
     void onCancelEdit();
-    void onCloseEditPanel();
+
+    /// Closes the family edit panel, first asking to save its changes when it has any. False
+    /// when the user cancels, which leaves the panel open.
+    bool closeEditPanel();
 
 private:
     void setupUi();
@@ -94,19 +100,31 @@ private:
     /// agrees to lose what is.
     bool unsavedChangesMayBeLost();
 
+    /// Whether the window may move to another ward: the family edit panel closes, as its own
+    /// close button closes it, and then unsavedChangesMayBeLost. False when the user cancels
+    /// either.
+    bool mayLeaveWard();
+
     /// What the user is told when a ward does not open, for each way it can fail.
     static QString openFailureMessage(OpenStatus status);
 
     // Settings helpers
     /// The report's suggested path: the emergency's name and start date in Documents.
     static QString defaultReportPath(const EmergencyResponse& response);
-    static QString settingsFilePath();
+
+    /// The settings file as an object, empty when it is missing or does not read.
+    QJsonObject loadSettings() const;
+
+    /// Replaces the settings file with json in one write.
+    void saveSettings(const QJsonObject& json) const;
 
     /// The text setting under key in the settings file, empty when it has none.
-    static QString loadSetting(const QString& key);
-    static void saveSetting(const QString& key, const QString& value);
-    static bool loadDefaultLocation(double& lat, double& lng);
-    static void saveDefaultLocation(double lat, double lng);
+    QString loadSetting(const QString& key) const;
+    void saveSetting(const QString& key, const QString& value) const;
+    bool loadDefaultLocation(double& lat, double& lng) const;
+    void saveDefaultLocation(double lat, double lng) const;
+
+    QString m_settingsFilePath;
 
     // Widgets
     QSplitter* m_splitter;

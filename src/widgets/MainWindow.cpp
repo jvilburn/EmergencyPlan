@@ -42,12 +42,13 @@
 #include <QSysInfo>
 #include <QFile>
 #include <QFileInfo>
-#include <QDir>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSaveFile>
 
-MainWindow::MainWindow(QWidget* parent)
+MainWindow::MainWindow(const QString& settingsFilePath, QWidget* parent)
     : QMainWindow(parent)
+    , m_settingsFilePath(settingsFilePath)
 {
     setupUi();
     setupMenus();
@@ -223,7 +224,7 @@ void MainWindow::setupConnections()
     connect(m_editPanel, &FamilyEditPanel::cancelRequested,
             this, &MainWindow::onCancelEdit);
     connect(m_editPanel, &FamilyEditPanel::closeRequested,
-            this, &MainWindow::onCloseEditPanel);
+            this, &MainWindow::closeEditPanel);
 
     // Geocoding progress
     connect(DocumentManager::instance(), &DocumentManager::geocodingProgressChanged,
@@ -279,10 +280,15 @@ bool MainWindow::createWard()
 
 void MainWindow::onNewWard()
 {
-    if (unsavedChangesMayBeLost())
+    if (mayLeaveWard())
     {
         createWard();
     }
+}
+
+bool MainWindow::mayLeaveWard()
+{
+    return closeEditPanel() && unsavedChangesMayBeLost();
 }
 
 bool MainWindow::unsavedChangesMayBeLost()
@@ -292,7 +298,7 @@ bool MainWindow::unsavedChangesMayBeLost()
         return true;
     }
     QMessageBox::StandardButton answer = QMessageBox::question(
-        this, tr("Changes Not Saved"), tr("Your latest changes could not be saved and will be lost. Close anyway?"),
+        this, tr("Changes Not Saved"), tr("Your latest changes could not be saved and will be lost. Continue anyway?"),
         QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
     return answer == QMessageBox::Yes;
 }
@@ -539,50 +545,42 @@ void MainWindow::onGeocodingFinished()
 // Default Location / Settings
 // ============================================================================
 
-static QJsonObject loadSettingsJson(const QString& path)
+QJsonObject MainWindow::loadSettings() const
 {
-    QFile file(path);
+    QFile file(m_settingsFilePath);
     if (!file.open(QIODevice::ReadOnly))
     {
-        return {};
+        return QJsonObject();
     }
-    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-    return doc.isObject() ? doc.object() : QJsonObject{};
+    QJsonDocument document = QJsonDocument::fromJson(file.readAll());
+    return document.isObject() ? document.object() : QJsonObject();
 }
 
-static void saveSettingsJson(const QString& path, const QJsonObject& json)
+void MainWindow::saveSettings(const QJsonObject& json) const
 {
-    QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
-    QDir().mkpath(cacheDir);
-
-    QFile file(path);
+    QSaveFile file(m_settingsFilePath);
     if (file.open(QIODevice::WriteOnly))
     {
         file.write(QJsonDocument(json).toJson());
+        file.commit();
     }
 }
 
-QString MainWindow::settingsFilePath()
+QString MainWindow::loadSetting(const QString& key) const
 {
-    QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
-    return cacheDir + "/settings.json";
+    return loadSettings()[key].toString();
 }
 
-QString MainWindow::loadSetting(const QString& key)
+void MainWindow::saveSetting(const QString& key, const QString& value) const
 {
-    return loadSettingsJson(settingsFilePath())[key].toString();
-}
-
-void MainWindow::saveSetting(const QString& key, const QString& value)
-{
-    QJsonObject json = loadSettingsJson(settingsFilePath());
+    QJsonObject json = loadSettings();
     json[key] = value;
-    saveSettingsJson(settingsFilePath(), json);
+    saveSettings(json);
 }
 
-bool MainWindow::loadDefaultLocation(double& lat, double& lng)
+bool MainWindow::loadDefaultLocation(double& lat, double& lng) const
 {
-    QJsonObject json = loadSettingsJson(settingsFilePath());
+    QJsonObject json = loadSettings();
     if (!json.contains("defaultLat") || !json.contains("defaultLng"))
     {
         return false;
@@ -593,12 +591,12 @@ bool MainWindow::loadDefaultLocation(double& lat, double& lng)
     return true;
 }
 
-void MainWindow::saveDefaultLocation(double lat, double lng)
+void MainWindow::saveDefaultLocation(double lat, double lng) const
 {
-    QJsonObject json = loadSettingsJson(settingsFilePath());
+    QJsonObject json = loadSettings();
     json["defaultLat"] = lat;
     json["defaultLng"] = lng;
-    saveSettingsJson(settingsFilePath(), json);
+    saveSettings(json);
 }
 
 void MainWindow::initializeDefaultLocation()
@@ -752,11 +750,11 @@ void MainWindow::onCancelEdit()
     closeEditPanelInternal();
 }
 
-void MainWindow::onCloseEditPanel()
+bool MainWindow::closeEditPanel()
 {
     if (!m_editPanel->isVisible())
     {
-        return;
+        return true;
     }
 
     if (m_editPanel->isDirty())
@@ -770,15 +768,16 @@ void MainWindow::onCloseEditPanel()
         if (result == QMessageBox::Save)
         {
             onSaveFamily();
-            return;
+            return true;
         }
         else if (result == QMessageBox::Cancel)
         {
-            return;
+            return false;
         }
     }
 
     closeEditPanelInternal();
+    return true;
 }
 
 void MainWindow::openEditPanel(const FamilyId& familyId)
