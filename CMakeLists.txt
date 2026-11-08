@@ -18,10 +18,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # ============================================================================
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
-set(CMAKE_AUTOUIC ON)
-
-# Find Qt6 - adjust path if needed for your installation
-# set(CMAKE_PREFIX_PATH "C:/Qt/6.6.0/msvc2019_64" CACHE PATH "Qt installation path")
 
 find_package(Qt6 REQUIRED COMPONENTS
     Core
@@ -32,7 +28,6 @@ find_package(Qt6 REQUIRED COMPONENTS
     Pdf
     Concurrent
     PrintSupport
-    Test
 )
 
 # ============================================================================
@@ -65,8 +60,6 @@ find_package(unofficial-sodium CONFIG REQUIRED)
 # ============================================================================
 if(MSVC)
     add_compile_options(/W4 /WX-)
-    # Disable specific warnings if needed:
-    # add_compile_options(/wd4100)  # unreferenced formal parameter
 else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
@@ -202,11 +195,6 @@ set(SERVICE_SOURCES
     src/services/WardList.cpp
     src/services/ShowInFolder.cpp
     src/services/InstanceLock.cpp
-    # src/services/StatisticsService.cpp
-    # src/services/ResourceService.cpp
-    # src/services/SearchService.cpp
-    # src/services/PreferencesService.cpp
-    # src/services/PdfReportService.cpp
 )
 
 set(SERVICE_HEADERS
@@ -247,11 +235,6 @@ set(SERVICE_HEADERS
     src/services/WardList.h
     src/services/ShowInFolder.h
     src/services/InstanceLock.h
-    # src/services/StatisticsService.h
-    # src/services/ResourceService.h
-    # src/services/SearchService.h
-    # src/services/PreferencesService.h
-    # src/services/PdfReportService.h
 )
 
 set(VIEWMODEL_SOURCES
@@ -298,21 +281,7 @@ set(WIDGET_SOURCES
     src/widgets/MinisteringTreeView.cpp
     src/widgets/UnassignedTreeView.cpp
     src/widgets/MinisteringTabView.cpp
-    # src/widgets/Sidebar.cpp
-    # src/widgets/MinisteringSidebar.cpp
-    # src/widgets/ResourceView.cpp
     src/widgets/TeamsView.cpp
-    # src/widgets/SelectionView.cpp
-    # src/widgets/shared/FilterChips.cpp
-    # src/widgets/shared/FamilyTile.cpp
-    # src/widgets/shared/PersonTile.cpp
-    # src/widgets/shared/BadgeWidget.cpp
-    # src/widgets/dialogs/FamilyDialog.cpp
-    # src/widgets/dialogs/PersonForm.cpp
-    # src/widgets/dialogs/VisitDialog.cpp
-    # src/widgets/dialogs/ImportDialog.cpp
-    # src/widgets/dialogs/StatisticsDialog.cpp
-    # src/widgets/dialogs/ResourceDialog.cpp
 )
 
 set(WIDGET_HEADERS
@@ -349,21 +318,7 @@ set(WIDGET_HEADERS
     src/widgets/EmergencyBanner.h
     src/widgets/EmergencyProgressBar.h
     src/widgets/SidebarWidget.h
-    # src/widgets/Sidebar.h
-    # src/widgets/MinisteringSidebar.h
-    # src/widgets/ResourceView.h
     src/widgets/TeamsView.h
-    # src/widgets/SelectionView.h
-    # src/widgets/shared/FilterChips.h
-    # src/widgets/shared/FamilyTile.h
-    # src/widgets/shared/PersonTile.h
-    # src/widgets/shared/BadgeWidget.h
-    # src/widgets/dialogs/FamilyDialog.h
-    # src/widgets/dialogs/PersonForm.h
-    # src/widgets/dialogs/VisitDialog.h
-    # src/widgets/dialogs/ImportDialog.h
-    # src/widgets/dialogs/StatisticsDialog.h
-    # src/widgets/dialogs/ResourceDialog.h
 )
 
 set(LISTMODEL_SOURCES
@@ -379,8 +334,6 @@ set(LISTMODEL_SOURCES
     src/listmodels/UnassignedMinisteringModel.cpp
     src/listmodels/TaskListModel.cpp
     src/listmodels/TeamsTreeModel.cpp
-    # src/listmodels/DistrictTreeModel.cpp
-    # src/listmodels/ResourceTreeModel.cpp
 )
 
 set(LISTMODEL_HEADERS
@@ -395,8 +348,6 @@ set(LISTMODEL_HEADERS
     src/listmodels/TaskListModel.h
     src/listmodels/UnassignedMinisteringModel.h
     src/listmodels/TeamsTreeModel.h
-    # src/listmodels/DistrictTreeModel.h
-    # src/listmodels/ResourceTreeModel.h
 )
 
 # ============================================================================
@@ -431,7 +382,6 @@ target_include_directories(WardPlanningLib PUBLIC
 
 # Mark third-party includes as SYSTEM to suppress warnings from their headers
 target_include_directories(WardPlanningLib SYSTEM PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/3rdparty
     ${MUPDF_INCLUDE_DIR}
 )
 
@@ -471,8 +421,6 @@ endif()
 if(BROTLICOMMON_LIBRARY)
     target_link_libraries(WardPlanningLib PUBLIC ${BROTLICOMMON_LIBRARY})
 endif()
-
-target_compile_definitions(WardPlanningLib PUBLIC HAVE_MUPDF)
 
 
 # ============================================================================
@@ -560,10 +508,6 @@ if(WIN32)
         WIN32_EXECUTABLE TRUE
     )
 
-    # Windows-specific: Include skeuomorphic stylesheet in resources
-    # The stylesheet is loaded at runtime on Windows only
-    message(STATUS "Windows build: Skeuomorphic styling enabled")
-
     # The installer's version, from the project's
     configure_file(packaging/windows/version.iss.in ${CMAKE_BINARY_DIR}/version.iss @ONLY)
 endif()
@@ -578,18 +522,11 @@ if(APPLE)
         MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION}
         MACOSX_BUNDLE_BUNDLE_NAME "Ward Planning"
     )
-
-    # macOS-specific: Use native styling (no custom stylesheet)
-    # Qt automatically uses native Aqua controls
-    message(STATUS "macOS build: Native Aqua styling enabled")
 endif()
 
 # --- Cross-platform definitions ---
 target_compile_definitions(WardPlanning PRIVATE
     WARD_PLANNING_VERSION="${PROJECT_VERSION}"
-    $<$<PLATFORM_ID:Windows>:PLATFORM_WINDOWS>
-    $<$<PLATFORM_ID:Darwin>:PLATFORM_MACOS>
-    $<$<PLATFORM_ID:Linux>:PLATFORM_LINUX>
 )
 
 # ============================================================================
@@ -615,24 +552,6 @@ option(BUILD_TESTS "Build test suite" ON)
 if(BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
-endif()
-
-# ============================================================================
-# Installation
-# ============================================================================
-install(TARGETS WardPlanning
-    BUNDLE DESTINATION .
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-)
-
-# Install Qt runtime (Windows)
-if(WIN32)
-    # qt_generate_deploy_app_script(
-    #     TARGET WardPlanning
-    #     OUTPUT_SCRIPT deploy_script
-    #     NO_UNSUPPORTED_PLATFORM_ERROR
-    # )
-    # install(SCRIPT ${deploy_script})
 endif()
 
 # ============================================================================

@@ -10,7 +10,8 @@ class InstanceLock
 public:
     explicit InstanceLock(const QString& path);
 
-    /// Takes the lock, making its folder when there is none, unless a live process holds it.
+    /// Takes the lock, making its folder when there is none. Answers false when another process
+    /// holds the lock or the lock cannot be taken.
     bool take();
 
 private:

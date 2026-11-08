@@ -7,7 +7,7 @@ A C++/Qt desktop application for managing ward/stake family data, emergency resp
 | Platform | UI Style | Status |
 |----------|----------|--------|
 | **Windows** | Windows 7 | Primary target |
-| **macOS** | Native Aqua | Secondary |
+| **macOS** | Windows 7 | Secondary |
 
 ## Features
 
