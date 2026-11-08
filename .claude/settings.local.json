@@ -2,6 +2,7 @@
   "env": {
     "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "100"
   },
+  "disabledMcpjsonServers": ["serena"],
   "permissions": {
     "allow": [
       "Bash(cmd //c build.bat)",
@@ -23,7 +24,9 @@
       "Skill(superpowers:subagent-driven-development:*)",
       "Bash(git show:*)",
       "Read(//c/Users/johnv/.claude/skills/executing-with-review/**)",
-      "Bash(git mv:*)"
+      "Bash(git mv:*)",
+      "Bash(claude --bg:*)",
+      "Bash(claude agents:*)"
     ]
   },
   "hooks": {
