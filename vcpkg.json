@@ -7,6 +7,8 @@
         {
             "name": "libsodium",
             "version>=": "1.0.22"
-        }
+        },
+        "nlohmann-json",
+        "zlib"
     ]
 }

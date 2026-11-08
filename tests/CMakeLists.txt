@@ -2,6 +2,8 @@
 
 find_package(Qt6 REQUIRED COMPONENTS Test)
 
+add_subdirectory(spec)
+
 add_executable(WardPlanningTests
     main.cpp
     services/TestWard.h
@@ -74,6 +76,8 @@ add_executable(WardPlanningTests
     services/WardListTest.cpp
     services/DocumentMetadataTest.h
     services/DocumentMetadataTest.cpp
+    services/SpecReaderTest.h
+    services/SpecReaderTest.cpp
 )
 
 target_include_directories(WardPlanningTests PRIVATE
@@ -83,6 +87,11 @@ target_include_directories(WardPlanningTests PRIVATE
 target_link_libraries(WardPlanningTests PRIVATE
     EmergencyPlanLib
     Qt6::Test
+)
+
+add_dependencies(WardPlanningTests WardPlanningSpecReader)
+target_compile_definitions(WardPlanningTests PRIVATE
+    WARD_PLANNING_SPEC_READER="$<TARGET_FILE:WardPlanningSpecReader>"
 )
 
 add_test(NAME WardPlanningTests COMMAND WardPlanningTests)

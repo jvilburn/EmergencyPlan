@@ -2,7 +2,8 @@
 
 The specification of a Ward Planning ward file and of the device key file, format version 1.
 A reader built from this document and `docs/SHARED_WARD_DESIGN.md` alone reads every file the
-app writes.
+app writes. `tests/spec` is such a reader, built without Qt or any of the app's code, and the
+test suite checks it against a file holding a value in every field the app writes.
 
 ## Conventions
 
@@ -11,8 +12,8 @@ app writes.
   (22), a key, seed or former-key hash 32 (43), a sealed key 80 (107). A value of another length,
   with padding, with characters outside the base64url alphabet, or with non-zero unused trailing
   bits is malformed.
-- **JSON** is UTF-8. An integer is a JSON number with no fractional part and a magnitude of at
-  most 2^53; a number is any JSON number.
+- **JSON** is UTF-8. An integer is a JSON number whose value is whole (`3`, `3.0` and `3e0` are
+  all the integer 3) with a magnitude of at most 2^53; a number is any JSON number.
 - **An id** in the ward part (of a person, family, team, emergency asset, ministering group or
   district, contact attempt or task) is a non-empty string. The app makes each one a UUID in its
   hyphenated form without braces; a reader takes any non-empty string.
@@ -139,8 +140,8 @@ An invite:
 |---|---|---|
 | `for` | word: `device` or `user` | what it joins as |
 | `maker` | 16 bytes | the id of the user who made it |
-| `role` | word: `admin` or `member` | the role its joiner takes; user invites only, and refused on a device invite |
-| `label` | string | who it is for; user invites only, and refused on a device invite |
+| `role` | word: `admin` or `member` | the role its joiner takes; required on a user invite, and refused on a device invite |
+| `label` | string | who it is for; required on a user invite, and refused on a device invite |
 | `publicKey` | 32 bytes | the invite's X25519 public key |
 | `verifyKey` | 32 bytes | the invite's Ed25519 verify key |
 
@@ -350,7 +351,7 @@ A task:
 | `assignment` | assignment object | who it is given to; omitted when unassigned |
 | `resolution` | resolution object | how it was done; omitted when unresolved |
 
-An assignment. The app writes exactly one of `teamId` and `personId`:
+An assignment, given to a team or to a person:
 
 | Key | Type | Holds |
 |---|---|---|

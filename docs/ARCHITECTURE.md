@@ -566,3 +566,4 @@ signals:
 ### Integration Tests
 - The commit step, replay and undo (`WardSession`)
 - PDF import
+- The format: `WardPlanningSpecReader` in `tests/spec`, built from `docs/FORMAT.md` with no Qt and none of the app's code, reads a ward file of every field the app writes, and `SpecReaderTest` runs it

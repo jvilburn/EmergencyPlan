@@ -17,6 +17,7 @@
 #include "MemberEditorTest.h"
 #include "PersonJsonTest.h"
 #include "ReferenceCleanupTest.h"
+#include "SpecReaderTest.h"
 #include "StrictReadersTest.h"
 #include "TeamCommandsTest.h"
 #include "UpdateFamilyCommandTest.h"
@@ -61,6 +62,7 @@ int main(int argc, char* argv[])
     AppDataTest appDataTest(nullptr);
     WardListTest wardListTest(nullptr);
     DocumentMetadataTest documentMetadataTest(nullptr);
+    SpecReaderTest specReaderTest(nullptr);
 
     int failures = 0;
     failures += QTest::qExec(&personJsonTest, argc, argv);
@@ -88,5 +90,6 @@ int main(int argc, char* argv[])
     failures += QTest::qExec(&appDataTest, argc, argv);
     failures += QTest::qExec(&wardListTest, argc, argv);
     failures += QTest::qExec(&documentMetadataTest, argc, argv);
+    failures += QTest::qExec(&specReaderTest, argc, argv);
     return failures;
 }
