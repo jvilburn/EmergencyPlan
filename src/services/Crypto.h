@@ -12,6 +12,8 @@ public:
     static constexpr int SealedKeyBytes = 80;    ///< a data key sealed with crypto_box_seal
     static constexpr int FingerprintBytes = 16;
     static constexpr int IdBytes = 16;           ///< a document id or a user id
+    static constexpr int HashBytes = 32;         ///< a BLAKE2b-256 hash
+    static constexpr int SignatureBytes = 64;    ///< an Ed25519 signature
 
     /// Initializes libsodium. Nothing else here may run until it has answered true.
     static bool initialize();
@@ -45,4 +47,10 @@ public:
 
     /// The Ed25519 verify key of a seed: the public half of crypto_sign_seed_keypair.
     static QByteArray verifyKey(const QByteArray& seed);
+
+    /// The Ed25519 signature of message, crypto_sign_detached under the keypair seed gives.
+    static QByteArray sign(const QByteArray& message, const QByteArray& seed);
+
+    /// True when signature is verifyKey's signature of message: crypto_sign_verify_detached.
+    static bool verify(const QByteArray& signature, const QByteArray& message, const QByteArray& verifyKey);
 };

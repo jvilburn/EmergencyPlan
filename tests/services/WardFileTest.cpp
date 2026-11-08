@@ -33,13 +33,14 @@ WardFileTest::WardFileTest(QObject* parent)
 void WardFileTest::init()
 {
     m_document = DocumentId::generate();
+    m_version = VersionRank{4, m_phone.fingerprint()};
     m_dataKey = Crypto::randomBytes(Crypto::KeyBytes);
     m_payload = EveryField::payload(m_laptop, m_phone);
 }
 
 QByteArray WardFileTest::written() const
 {
-    return WardFile::write(m_document, m_dataKey, m_payload);
+    return WardFile::write(m_document, m_version, m_dataKey, m_payload);
 }
 
 WardRead WardFileTest::readSealedTo(const QList<RecipientKeys>& recipients) const
@@ -56,6 +57,8 @@ void WardFileTest::roundTripRecoversThePayloadAndTheDataKey()
 
     QVERIFY2(read.status == WardReadStatus::Read, qPrintable(read.problem));
     QVERIFY(read.header->document() == m_document);
+    QCOMPARE(read.header->version().number, qint64(4));
+    QCOMPARE(read.header->version().writer, m_phone.fingerprint());
     QCOMPARE(read.dataKey, m_dataKey);
     QVERIFY(read.payload.value() == m_payload);
     QCOMPARE(read.header->recipients().size(), qsizetype(5));
@@ -96,6 +99,29 @@ void WardFileTest::headerIsBoundAsAssociatedData()
 
     QVERIFY(read.status == WardReadStatus::Unreadable);
     QCOMPARE(read.problem, QString("the payload does not decrypt"));
+}
+
+void WardFileTest::versionIsBoundAsAssociatedData()
+{
+    QByteArray file = written();
+    QJsonObject header = WardFileEdits::headerOf(file);
+    QCOMPARE(header["number"].toInteger(), qint64(4));
+    QCOMPARE(header["writer"].toString(), Base64Url::encode(m_phone.fingerprint()));
+
+    const QList<QJsonObject> relabeled = {
+        WardFileEdits::edited(header, {"number"}, 5),
+        WardFileEdits::edited(header, {"writer"}, Base64Url::encode(m_laptop.fingerprint())),
+    };
+    for (const QJsonObject& changed : relabeled)
+    {
+        QByteArray tampered = WardFileEdits::withHeader(file, changed);
+        QVERIFY(WardHeader::parse(tampered.left(tampered.indexOf('\n'))).status == HeaderStatus::Read);
+
+        WardRead read = WardFile::read(tampered, m_laptop, PayloadKind::LocalFile);
+
+        QVERIFY(read.status == WardReadStatus::Unreadable);
+        QCOMPARE(read.problem, QString("the payload does not decrypt"));
+    }
 }
 
 void WardFileTest::formatAboveEveryKnownVersionIsNewer()
@@ -150,6 +176,18 @@ void WardFileTest::headerWithAMissingOrMalformedFieldIsUnreadable_data()
                                      << QString("document: is not base64url of 16 bytes");
     QTest::newRow("document of 15 bytes") << QStringList({"document"}) << QJsonValue(encodedBytes(15))
                                           << QString("document: is not base64url of 16 bytes");
+    QTest::newRow("number missing") << QStringList({"number"}) << removed()
+                                    << QString("number: missing");
+    QTest::newRow("number zero") << QStringList({"number"}) << QJsonValue(0)
+                                 << QString("number: is below 1");
+    QTest::newRow("number a fraction") << QStringList({"number"}) << QJsonValue(4.5)
+                                       << QString("number: is not an integer");
+    QTest::newRow("number a string") << QStringList({"number"}) << QJsonValue(QString("4"))
+                                     << QString("number: is not an integer");
+    QTest::newRow("writer missing") << QStringList({"writer"}) << removed()
+                                    << QString("writer: missing");
+    QTest::newRow("writer of 15 bytes") << QStringList({"writer"}) << QJsonValue(encodedBytes(15))
+                                        << QString("writer: is not base64url of 16 bytes");
     QTest::newRow("nonce of 23 bytes") << QStringList({"nonce"}) << QJsonValue(encodedBytes(23))
                                        << QString("nonce: is not base64url of 24 bytes");
     QTest::newRow("recipients not an array") << QStringList({"recipients"}) << QJsonValue(QJsonObject())
@@ -257,7 +295,7 @@ void WardFileTest::versionCarriesNoDeviceStateAndALocalFileMust()
     version.device = std::nullopt;
     QVERIFY(!version.toJson().contains("device"));
     QVERIFY(m_payload.toJson().contains("device"));
-    QByteArray versionFile = WardFile::write(m_document, m_dataKey, version);
+    QByteArray versionFile = WardFile::write(m_document, m_version, m_dataKey, version);
     QByteArray localFile = written();
 
     WardRead versionAsVersion = WardFile::read(versionFile, m_laptop, PayloadKind::Version);

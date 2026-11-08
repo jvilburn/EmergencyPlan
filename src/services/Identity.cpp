@@ -29,3 +29,8 @@ std::optional<QByteArray> Identity::unseal(const QByteArray& sealedKey) const
 {
     return Crypto::unseal(sealedKey, m_publicKey, m_sealingSecret);
 }
+
+QByteArray Identity::sign(const QByteArray& message) const
+{
+    return Crypto::sign(message, m_signingSeed);
+}

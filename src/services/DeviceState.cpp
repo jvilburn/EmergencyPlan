@@ -8,10 +8,6 @@ QJsonObject DeviceState::toJson() const
 {
     QJsonObject json;
     json["journal"] = journal.toJson();
-    if (baseVersion.has_value())
-    {
-        json["baseVersion"] = *baseVersion;
-    }
     if (dismissedAccess.has_value())
     {
         json["dismissedAccess"] = dismissedAccess->toJson();
@@ -44,7 +40,6 @@ DeviceState DeviceState::fromJson(JsonReader json)
 {
     DeviceState device;
     device.journal = Journal::fromJson(json.object("journal"));
-    device.baseVersion = json.optionalInteger("baseVersion");
     std::optional<JsonReader> dismissedAccess = json.optionalObject("dismissedAccess");
     if (dismissedAccess.has_value())
     {
@@ -61,7 +56,6 @@ DeviceState DeviceState::fromJson(JsonReader json)
 bool DeviceState::operator==(const DeviceState& other) const
 {
     return journal == other.journal
-        && baseVersion == other.baseVersion
         && dismissedAccess == other.dismissedAccess
         && singleHolderNoticeDismissed == other.singleHolderNoticeDismissed
         && singleAdminNoticeDismissed == other.singleAdminNoticeDismissed

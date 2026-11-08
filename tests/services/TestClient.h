@@ -6,6 +6,8 @@
 #include "Identity.h"
 #include "WardSession.h"
 
+#include <QByteArray>
+#include <QList>
 #include <QString>
 #include <memory>
 
@@ -32,6 +34,14 @@ public:
     /// Its local file is sealed to that access list, which names other's device and not this
     /// one.
     void takeWardOf(TestClient& other);
+
+    /// Gives each of holders a local file of one ward and opens it: document under dataKey,
+    /// holding content with an access list of one admin user per client of listed, named for
+    /// its device and holding that device alone, in listed's order, as version 1 written by
+    /// listed's first client, with no landed marks and an empty journal. Every holder is
+    /// listed, so each can open its file, and every holder of one call holds an equal ward.
+    static void holdWard(const QList<TestClient*>& holders, const QList<TestClient*>& listed,
+                         const DocumentId& document, const QByteArray& dataKey, const Document& content);
 
     /// Closes the app and starts it again: a new session on the same identity and store,
     /// opening the ward the old session had open.

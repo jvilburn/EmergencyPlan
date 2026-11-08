@@ -39,14 +39,26 @@ public:
     /// False when the user cancels, which quits the app.
     bool openStartingWard();
 
+public slots:
+    /// Takes the update file at path, opening its ward first when another is open, and tells
+    /// the user how it went; when this device's own changes went on top, asks to send an
+    /// update.
+    void openUpdateFile(const QString& path);
+
 protected:
     /// Closes only when mayLeaveWard agrees.
     void closeEvent(QCloseEvent* event) override;
+
+    /// Accepts a dragged update file, which a drop opens.
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
 
 private slots:
     void onNewWard();
     void onOpenWard();
     void onShowInFolder();
+    void onSendUpdate();
+    void onOpenUpdate();
     void onExportDecryptedJson();
     void onSaveFailed(const QString& problem);
     void onApplicationStateChanged(Qt::ApplicationState state);
@@ -115,6 +127,10 @@ private:
     /// Shows the ward list until a ward opens or is created from it, or the user closes it.
     /// Choosing the ward already open leaves it open as it is. False when the user closes it.
     bool chooseWard();
+
+    /// Writes the to-redo file of an abandoned replay and tells the user where it is, with an
+    /// offer to open it.
+    void showChangesToRedo(const QString& toRedo);
 
     /// True when nothing is left unsaved after one more try at saving, or when the user
     /// agrees to lose what is.

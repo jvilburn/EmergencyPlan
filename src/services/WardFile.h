@@ -32,10 +32,11 @@ struct WardRead
 class WardFile
 {
 public:
-    /// The bytes of a write of payload: a fresh header sealing dataKey to exactly the devices
-    /// and open invites the ward's access list holds, then the payload encrypted against that
-    /// header.
-    static QByteArray write(const DocumentId& document, const QByteArray& dataKey, const WardPayload& payload);
+    /// The bytes of a write of payload as version of document: a fresh header sealing dataKey
+    /// to exactly the devices and open invites the ward's access list holds, then the payload
+    /// encrypted against that header.
+    static QByteArray write(const DocumentId& document, const VersionRank& version, const QByteArray& dataKey,
+                            const WardPayload& payload);
 
     /// bytes read as reader reads them, as kind, in this order: the format; whether the header
     /// names anyone, and the reader; the data key unseals; the payload decrypts against the

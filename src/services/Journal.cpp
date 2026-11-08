@@ -20,6 +20,12 @@ void Journal::clear()
     m_entries.clear();
 }
 
+void Journal::dropLanded(qint64 mark)
+{
+    m_entries.removeIf([mark](const JournalEntry& entry) { return entry.sequence <= mark; });
+    m_lastSequence = qMax(m_lastSequence, mark);
+}
+
 QList<CommandDescription> Journal::descriptions() const
 {
     QList<CommandDescription> descriptions;

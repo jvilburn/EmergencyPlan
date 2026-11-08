@@ -79,6 +79,10 @@ add_executable(WardPlanningTests
     services/DocumentMetadataTest.cpp
     services/SpecReaderTest.h
     services/SpecReaderTest.cpp
+    services/UpdateFileTest.h
+    services/UpdateFileTest.cpp
+    services/UserFolderTest.h
+    services/UserFolderTest.cpp
 )
 
 target_include_directories(WardPlanningTests PRIVATE

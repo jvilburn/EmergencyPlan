@@ -27,6 +27,9 @@ public:
     /// The data key sealedKey holds, or none when it was not sealed to this identity.
     std::optional<QByteArray> unseal(const QByteArray& sealedKey) const;
 
+    /// This device's Ed25519 signature of message, which verifyKey verifies.
+    QByteArray sign(const QByteArray& message) const;
+
 private:
     Identity(const QByteArray& sealingSecret, const QByteArray& signingSeed);
 

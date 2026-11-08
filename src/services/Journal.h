@@ -30,6 +30,14 @@ public:
     /// number above every entry made before.
     void clear();
 
+    /// Drops the entries numbered at or below mark, this device's landed mark in a version it
+    /// takes, and raises the counter to mark when it is below, so the next entry numbers above
+    /// everything that landed.
+    void dropLanded(qint64 mark);
+
+    /// The last sequence number given to an entry.
+    qint64 lastSequence() const { return m_lastSequence; }
+
     bool isEmpty() const { return m_entries.isEmpty(); }
     const QList<JournalEntry>& entries() const { return m_entries; }
 

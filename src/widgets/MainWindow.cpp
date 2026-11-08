@@ -27,9 +27,16 @@
 #include "GeoLocation.h"
 #include "OpenWardDialog.h"
 #include "ShowInFolder.h"
+#include "UpdateFile.h"
+#include "UserFolder.h"
 
 #include <QCloseEvent>
+#include <QDesktopServices>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include <QGuiApplication>
+#include <QMimeData>
+#include <QUrl>
 #include <QMenuBar>
 #include <QStatusBar>
 #include <QVBoxLayout>
@@ -56,6 +63,7 @@ MainWindow::MainWindow(const QString& settingsFilePath, bool developer, QWidget*
     setupUi();
     setupMenus(developer);
     setupConnections();
+    setAcceptDrops(true);
 
     initializeDefaultLocation();
     updateWindowTitle();
@@ -158,6 +166,11 @@ void MainWindow::setupMenus(bool developer)
     openWardAction->setShortcut(QKeySequence::Open);
 
     fileMenu->addAction(tr("Show in &Folder"), this, &MainWindow::onShowInFolder);
+
+    fileMenu->addSeparator();
+
+    fileMenu->addAction(tr("&Send Update"), this, &MainWindow::onSendUpdate);
+    fileMenu->addAction(tr("Open &Update..."), this, &MainWindow::onOpenUpdate);
 
     fileMenu->addSeparator();
 
@@ -344,6 +357,178 @@ void MainWindow::onOpenWard()
 void MainWindow::onShowInFolder()
 {
     ShowInFolder::reveal(DocumentManager::instance()->filePath());
+}
+
+void MainWindow::onSendUpdate()
+{
+    if (!settleUnsavedEdit())
+    {
+        return;
+    }
+    QString wardName = DocumentManager::instance()->document().wardName();
+    QString name = UpdateFile::fileName(wardName, QDate::currentDate());
+    QByteArray bytes = DocumentManager::instance()->writeUpdate();
+    QString problem;
+    QString path = UserFolder::standard().write(name, bytes, &problem);
+    if (path.isEmpty())
+    {
+        QMessageBox::warning(this, tr("Send Update"), tr("The update could not be saved: %1.").arg(problem));
+        return;
+    }
+    ShowInFolder::reveal(path);
+    statusBar()->showMessage(tr("Send %1 to every other member of %2.").arg(name, wardName));
+}
+
+void MainWindow::onOpenUpdate()
+{
+    QString path = QFileDialog::getOpenFileName(this, tr("Open Update"), UserFolder::standard().path(),
+                                                tr("Ward Planning updates (*.wardupdate)"));
+    if (!path.isEmpty())
+    {
+        openUpdateFile(path);
+    }
+}
+
+void MainWindow::openUpdateFile(const QString& path)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        QMessageBox::warning(this, tr("Open Update"),
+                             tr("The file %1 could not be read.").arg(QDir::toNativeSeparators(path)));
+        return;
+    }
+    QByteArray bytes = file.readAll();
+    UpdateRead update = UpdateFile::read(bytes);
+    switch (update.status)
+    {
+    case UpdateReadStatus::Read:
+        break;
+    case UpdateReadStatus::Newer:
+        QMessageBox::warning(this, tr("Open Update"),
+                             tr("This ward was saved by a newer version of Ward Planning. Update to see the latest "
+                                "changes and share your work."));
+        return;
+    case UpdateReadStatus::Unreadable:
+        qWarning("An update did not read: %s", qPrintable(update.problem));
+        QMessageBox::warning(this, tr("Open Update"), tr("This file is not a Ward Planning update."));
+        return;
+    }
+
+    DocumentId document = update.header->document();
+    if (document != DocumentManager::instance()->documentId())
+    {
+        if (!DocumentManager::instance()->holdsWard(document))
+        {
+            QMessageBox::warning(this, tr("Open Update"), tr("This update is for a ward this device does not have."));
+            return;
+        }
+        if (!mayLeaveWard() || !openWard(document))
+        {
+            return;
+        }
+    }
+
+    TakeResult result = DocumentManager::instance()->takeUpdate(bytes);
+    QString wardName = DocumentManager::instance()->document().wardName();
+    switch (result.status)
+    {
+    case TakeStatus::Taken:
+        break;
+    case TakeStatus::NotNewer:
+        QMessageBox::information(this, tr("Open Update"), tr("You already have a newer update."));
+        return;
+    case TakeStatus::OtherWard:
+        QMessageBox::warning(this, tr("Open Update"), tr("This update is for a ward this device does not have."));
+        return;
+    case TakeStatus::UnknownWriter:
+        QMessageBox::warning(this, tr("Open Update"),
+                             tr("This update is from a device this copy of the ward does not list yet. Open the "
+                                "update from whoever added it first."));
+        return;
+    case TakeStatus::NotNamed:
+        QMessageBox::warning(this, tr("Open Update"), tr("This ward is no longer shared with this device."));
+        return;
+    case TakeStatus::Newer:
+        QMessageBox::warning(this, tr("Open Update"),
+                             tr("This ward was saved by a newer version of Ward Planning. Update to see the latest "
+                                "changes and share your work."));
+        return;
+    case TakeStatus::Unreadable:
+        qWarning("An update was not taken: %s", qPrintable(result.problem));
+        QMessageBox::warning(this, tr("Open Update"), tr("This update could not be read. Nothing was changed."));
+        return;
+    }
+
+    switch (result.replay.status)
+    {
+    case ReplayStatus::FastForwarded:
+        QMessageBox::information(this, tr("Open Update"), tr("The update has been added to %1.").arg(wardName));
+        break;
+    case ReplayStatus::Replayed:
+    {
+        QMessageBox::StandardButton answer = QMessageBox::question(
+            this, tr("Open Update"),
+            tr("The update has been added to %1, with your own changes on top. Send an update so the others get "
+               "your changes?")
+                .arg(wardName),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+        if (answer == QMessageBox::Yes)
+        {
+            onSendUpdate();
+        }
+        break;
+    }
+    case ReplayStatus::Abandoned:
+        showChangesToRedo(result.replay.toRedo);
+        break;
+    }
+}
+
+void MainWindow::showChangesToRedo(const QString& toRedo)
+{
+    QString wardName = DocumentManager::instance()->document().wardName();
+    QString baseName = tr("To redo - %1 - %2")
+                           .arg(wardName, QDateTime::currentDateTime().toString("yyyy-MM-dd HH.mm"));
+    QString problem;
+    QString path = UserFolder::standard().writeNew(baseName, ".txt", toRedo.toUtf8(), &problem);
+    QString stopped = toRedo.section('\n', 0, 0);
+
+    QMessageBox message(QMessageBox::Warning, tr("Changes Not Applied"), QString(), QMessageBox::Ok, this);
+    if (path.isEmpty())
+    {
+        message.setText(tr("%1 The list of what needs doing again could not be saved: %2. It is shown below.")
+                            .arg(stopped, problem));
+        message.setDetailedText(toRedo);
+        message.exec();
+        return;
+    }
+    message.setText(tr("%1 What needs doing again is in %2, in the Ward Planning folder in Documents.")
+                        .arg(stopped, QFileInfo(path).fileName()));
+    QPushButton* open = message.addButton(tr("Open"), QMessageBox::ActionRole);
+    message.exec();
+    if (message.clickedButton() == open)
+    {
+        QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+    }
+}
+
+void MainWindow::dragEnterEvent(QDragEnterEvent* event)
+{
+    const QList<QUrl> urls = event->mimeData()->urls();
+    if (urls.size() == 1 && urls.first().isLocalFile() && urls.first().toLocalFile().endsWith(".wardupdate"))
+    {
+        event->acceptProposedAction();
+    }
+}
+
+void MainWindow::dropEvent(QDropEvent* event)
+{
+    // The update opens once the drop has finished, so the window it was dragged from is not
+    // held while the user answers what opening it asks.
+    QString path = event->mimeData()->urls().first().toLocalFile();
+    event->acceptProposedAction();
+    QMetaObject::invokeMethod(this, "openUpdateFile", Qt::QueuedConnection, Q_ARG(QString, path));
 }
 
 void MainWindow::onExportDecryptedJson()

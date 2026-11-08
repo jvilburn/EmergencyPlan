@@ -33,6 +33,8 @@ struct Header
 {
     std::string line;
     Bytes document;
+    std::int64_t number = 0;
+    Bytes writer;
     Bytes nonce;
     std::vector<RecipientEntry> recipients;
 };
@@ -42,6 +44,9 @@ DeviceKeys readKeyFile(const std::string& text);
 
 /// The fingerprint of a device or invite: docs/FORMAT.md's *Fingerprint*.
 Bytes fingerprintOf(const Bytes& sealingPublic, const Bytes& verifyKey);
+
+/// Unkeyed BLAKE2b-256 of text, with a zero salt and no personalization.
+Bytes hashOf(const std::string& text);
 
 /// The header line of file, read strictly, and the payload bytes after its newline. Throws
 /// NewerFormat for a format above 1.

@@ -18,6 +18,7 @@ private slots:
     void roundTripRecoversThePayloadAndTheDataKey();
     void writesOfAnUnchangedPayloadUseFreshNonces();
     void headerIsBoundAsAssociatedData();
+    void versionIsBoundAsAssociatedData();
     void formatAboveEveryKnownVersionIsNewer();
     void formatThisAppDoesNotReadIsUnreadable_data();
     void formatThisAppDoesNotReadIsUnreadable();
@@ -41,6 +42,7 @@ private:
     Identity m_laptop;
     Identity m_phone;
     DocumentId m_document;
+    VersionRank m_version;
     QByteArray m_dataKey;
     WardPayload m_payload;
 };

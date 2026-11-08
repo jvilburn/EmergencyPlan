@@ -85,6 +85,13 @@ Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
+; An update file opens in Ward Planning, which takes it into its ward
+[Registry]
+Root: HKA; Subkey: "Software\Classes\.wardupdate"; ValueType: string; ValueName: ""; ValueData: "WardPlanning.Update"; Flags: uninsdeletevalue
+Root: HKA; Subkey: "Software\Classes\WardPlanning.Update"; ValueType: string; ValueName: ""; ValueData: "Ward Planning update"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\WardPlanning.Update\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"
+Root: HKA; Subkey: "Software\Classes\WardPlanning.Update\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
+
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 

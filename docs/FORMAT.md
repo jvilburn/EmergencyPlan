@@ -80,10 +80,13 @@ compact JSON, which escapes every newline inside it, so the first `\n` is the bo
 |---|---|---|
 | `format` | integer | 1 |
 | `document` | 16 bytes | the document id |
-| `number` | integer | the version's number, at least 1; a ward's first version is 1, and each later one is one above the version its writer held |
+| `number` | integer | the version's number, at least 1; a ward's first version is 1, written when the ward is created, and each later one is one above the version its writer held |
 | `writer` | 16 bytes | the fingerprint of the device or open invite that wrote the version |
 | `nonce` | 24 bytes | the payload's nonce, drawn from `randombytes_buf` on every write |
 | `recipients` | array of objects | one per device and one per open invite |
+
+In a local file, `number` and `writer` name the version this device holds: the one it last took
+or wrote.
 
 Each recipient:
 

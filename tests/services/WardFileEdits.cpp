@@ -53,6 +53,11 @@ QJsonObject WardFileEdits::edited(const QJsonObject& json, const QStringList& pa
     return editedValue(json, path, value).toObject();
 }
 
+VersionRank WardFileEdits::version()
+{
+    return VersionRank{1, QByteArray(Crypto::FingerprintBytes, 'w')};
+}
+
 QByteArray WardFileEdits::sealedFile(const DocumentId& document, const QByteArray& dataKey,
                                      const QList<RecipientKeys>& recipients, const QJsonObject& payload)
 {
@@ -63,6 +68,6 @@ QByteArray WardFileEdits::sealedFile(const DocumentId& document, const QByteArra
 QByteArray WardFileEdits::sealedPlaintext(const DocumentId& document, const QByteArray& dataKey,
                                           const QList<RecipientKeys>& recipients, const QByteArray& plaintext)
 {
-    WardHeader header = WardHeader::build(document, dataKey, recipients);
+    WardHeader header = WardHeader::build(document, version(), dataKey, recipients);
     return header.line() + '\n' + Crypto::encrypt(plaintext, header.line(), header.nonce(), dataKey);
 }

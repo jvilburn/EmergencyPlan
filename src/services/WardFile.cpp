@@ -37,9 +37,10 @@ bool headerMatches(const WardHeader& header, const AccessList& access)
 
 }  // namespace
 
-QByteArray WardFile::write(const DocumentId& document, const QByteArray& dataKey, const WardPayload& payload)
+QByteArray WardFile::write(const DocumentId& document, const VersionRank& version, const QByteArray& dataKey,
+                           const WardPayload& payload)
 {
-    WardHeader header = WardHeader::build(document, dataKey, payload.ward.access().recipients());
+    WardHeader header = WardHeader::build(document, version, dataKey, payload.ward.access().recipients());
     QByteArray json = QJsonDocument(payload.toJson()).toJson(QJsonDocument::Compact);
     return header.line() + '\n' + Crypto::encrypt(qCompress(json), header.line(), header.nonce(), dataKey);
 }

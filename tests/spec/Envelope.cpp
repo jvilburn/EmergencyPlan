@@ -55,6 +55,14 @@ Bytes fingerprintOf(const Bytes& sealingPublic, const Bytes& verifyKey)
     return fingerprint;
 }
 
+Bytes hashOf(const std::string& text)
+{
+    Bytes hash(HashBytes);
+    crypto_generichash(hash.data(), hash.size(), reinterpret_cast<const unsigned char*>(text.data()), text.size(),
+                       nullptr, 0);
+    return hash;
+}
+
 Header readHeader(const std::string& file, std::string* payloadBytes)
 {
     std::size_t boundary = file.find('\n');
@@ -82,6 +90,12 @@ Header readHeader(const std::string& file, std::string* payloadBytes)
         throw Refusal("header.format is not a version this reader knows");
     }
     header.document = fields.bytes("document", IdBytes);
+    header.number = fields.integer("number");
+    if (header.number < 1)
+    {
+        throw Refusal(fields.pathOf("number") + " is below 1");
+    }
+    header.writer = fields.bytes("writer", FingerprintBytes);
     header.nonce = fields.bytes("nonce", NonceBytes);
     for (Fields& recipient : fields.objects("recipients"))
     {

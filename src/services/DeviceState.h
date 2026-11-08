@@ -15,7 +15,6 @@
 struct DeviceState
 {
     Journal journal;                            ///< with its sequence counter
-    std::optional<qint64> baseVersion;          ///< the version this device holds, once it has had one from or given one to the server
     std::optional<AccessList> dismissedAccess;  ///< the access list as of the last dismissed access notice
     bool singleHolderNoticeDismissed = false;
     bool singleAdminNoticeDismissed = false;

@@ -62,8 +62,17 @@ public:
     /// Every ward the store holds, as this device reads it.
     QList<WardListEntry> wards() const { return WardList::read(*m_identity, *m_store); }
 
+    /// True when the store holds a file for the ward document.
+    bool holdsWard(const DocumentId& document) const { return m_store->documents().contains(document); }
+
     /// Saves again when a save is pending; true when nothing is left unsaved.
     bool retryPendingSave() { return m_session.retryPendingSave(); }
+
+    /// The open ward's next version as an update file, through the session, which then holds it.
+    QByteArray writeUpdate() { return m_session.writeUpdate(); }
+
+    /// Takes an update file of the open ward through the session.
+    TakeResult takeUpdate(const QByteArray& file) { return m_session.takeUpdate(file); }
 
 signals:
     /// A save failed after the one before it succeeded; told once until a save succeeds again.

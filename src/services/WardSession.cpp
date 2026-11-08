@@ -3,6 +3,7 @@
 #include "Crypto.h"
 #include "EmergencyCommands.h"
 #include "ReportGenerator.h"
+#include "UpdateFile.h"
 #include "WardFile.h"
 
 #include <QDateTime>
@@ -30,7 +31,22 @@ CommitResult attempt(const Command& command, Document& document)
 
 LocalRead notOpened(OpenStatus status, const QString& problem)
 {
-    return LocalRead{OpenResult{status, problem}, std::nullopt, QByteArray()};
+    return LocalRead{OpenResult{status, problem}, std::nullopt, QByteArray(), VersionRank()};
+}
+
+TakeResult notTaken(TakeStatus status, const QString& problem)
+{
+    return TakeResult{status, problem, ReplayResult{ReplayStatus::FastForwarded, QString()}};
+}
+
+/// True when a version read under its data key descends from the version this device holds
+/// under heldKey: it is under that key, or its access list names that key among its former
+/// keys.
+bool descends(const WardRead& version, const QByteArray& heldKey)
+{
+    QByteArray heldKeyHash = Crypto::hash(heldKey, Crypto::HashBytes, "wp-former-key");
+    return version.dataKey == heldKey
+        || version.payload->ward.access().formerKeys().contains(heldKeyHash);
 }
 
 }  // namespace
@@ -52,6 +68,7 @@ void WardSession::createWard(const Document& content, const QString& userName, c
     Document ward = content;
     ward.setAccess(AccessList::founding(UserId::generate(), userName, deviceName, *m_identity));
     m_documentId = DocumentId::generate();
+    m_version = VersionRank{1, m_identity->fingerprint()};
     m_dataKey = Crypto::randomBytes(Crypto::KeyBytes);
     m_landed.clear();
     m_device = DeviceState();
@@ -70,6 +87,7 @@ OpenResult WardSession::openWard(const DocumentId& document)
         return local.result;
     }
     m_documentId = document;
+    m_version = local.version;
     m_dataKey = local.dataKey;
     m_landed = local.payload->landed;
     m_device = local.payload->device.value();
@@ -111,7 +129,7 @@ LocalRead WardSession::readLocal(const WardStore& store, const Identity& identit
     {
         return notOpened(OpenStatus::CannotRead, "the file holds another ward");
     }
-    return LocalRead{OpenResult{OpenStatus::Opened, QString()}, read.payload, read.dataKey};
+    return LocalRead{OpenResult{OpenStatus::Opened, QString()}, read.payload, read.dataKey, read.header->version()};
 }
 
 bool WardSession::retryPendingSave()
@@ -213,6 +231,86 @@ ReplayResult WardSession::replayOnto(const Document& version)
     return result;
 }
 
+QByteArray WardSession::writeUpdate()
+{
+    VersionRank next{m_version.number + 1, m_identity->fingerprint()};
+    QHash<QByteArray, qint64> landed;
+    const QList<RecipientKeys> recipients = m_document.access().recipients();
+    for (const RecipientKeys& keys : recipients)
+    {
+        QByteArray fingerprint = Identity::fingerprintOf(keys.publicKey, keys.verifyKey);
+        if (m_landed.contains(fingerprint))
+        {
+            landed.insert(fingerprint, m_landed.value(fingerprint));
+        }
+    }
+    landed.insert(m_identity->fingerprint(), m_device.journal.lastSequence());
+
+    QByteArray version = WardFile::write(m_documentId, next, m_dataKey, WardPayload{m_document, landed, std::nullopt});
+    m_version = next;
+    m_landed = landed;
+    save();
+    return UpdateFile::write(m_documentId, version, *m_identity);
+}
+
+TakeResult WardSession::takeUpdate(const QByteArray& file)
+{
+    UpdateRead update = UpdateFile::read(file);
+    switch (update.status)
+    {
+    case UpdateReadStatus::Read:
+        break;
+    case UpdateReadStatus::Newer:
+        return notTaken(TakeStatus::Newer, QString());
+    case UpdateReadStatus::Unreadable:
+        return notTaken(TakeStatus::Unreadable, update.problem);
+    }
+    const WardHeader& header = *update.header;
+    if (header.document() != m_documentId)
+    {
+        return notTaken(TakeStatus::OtherWard, QString());
+    }
+    std::optional<QByteArray> verifyKey = m_document.access().verifyKeyOf(header.version().writer);
+    if (!verifyKey.has_value())
+    {
+        return notTaken(TakeStatus::UnknownWriter, QString());
+    }
+    if (!UpdateFile::verifies(update, *verifyKey))
+    {
+        return notTaken(TakeStatus::Unreadable, "the signature does not verify");
+    }
+    if (!header.version().ranksAbove(m_version))
+    {
+        return notTaken(TakeStatus::NotNewer, QString());
+    }
+
+    WardRead read = WardFile::read(update.version, *m_identity, PayloadKind::Version);
+    switch (read.status)
+    {
+    case WardReadStatus::Read:
+        break;
+    case WardReadStatus::Newer:
+        return notTaken(TakeStatus::Newer, QString());
+    case WardReadStatus::Unreadable:
+        return notTaken(TakeStatus::Unreadable, read.problem);
+    case WardReadStatus::Deleted:
+    case WardReadStatus::NotNamed:
+        return notTaken(TakeStatus::NotNamed, QString());
+    }
+    if (!descends(read, m_dataKey))
+    {
+        return notTaken(TakeStatus::Unreadable, "the version does not descend from the one this device holds");
+    }
+
+    m_device.journal.dropLanded(read.payload->landed.value(m_identity->fingerprint()));
+    ReplayResult replayed = replay(read.payload->ward);
+    m_version = header.version();
+    m_dataKey = read.dataKey;
+    m_landed = read.payload->landed;
+    save();
+    return TakeResult{TakeStatus::Taken, QString(), replayed};
+}
+
 ReplayResult WardSession::replay(const Document& version)
 {
     if (m_device.journal.isEmpty())
@@ -290,7 +388,7 @@ QString WardSession::toRedoText(int stopped, const CommitResult& stop) const
 
 void WardSession::save()
 {
-    QByteArray bytes = WardFile::write(m_documentId, m_dataKey, payload());
+    QByteArray bytes = WardFile::write(m_documentId, m_version, m_dataKey, payload());
     QString problem;
     if (m_store->write(m_documentId, bytes, &problem))
     {

@@ -134,6 +134,10 @@ public:
     /// the data key to.
     QList<RecipientKeys> recipients() const;
 
+    /// The verify key of the device or open invite whose fingerprint is fingerprint, or none
+    /// when the list holds neither.
+    std::optional<QByteArray> verifyKeyOf(const QByteArray& fingerprint) const;
+
     QJsonObject toJson() const;
     static AccessList fromJson(JsonReader json);
 

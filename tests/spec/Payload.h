@@ -17,3 +17,7 @@ struct PublicKeys
 /// *Payload* states, and answers the public keys of every device and open invite its access
 /// list holds. Throws a Refusal for anything the format does not accept.
 std::vector<PublicKeys> readLocalPayload(const nlohmann::json& payload);
+
+/// Reads payload strictly as a version's, which carries no device part, as readLocalPayload
+/// reads the rest.
+std::vector<PublicKeys> readVersionPayload(const nlohmann::json& payload);

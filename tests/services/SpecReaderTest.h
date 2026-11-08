@@ -6,6 +6,7 @@
 #include <QByteArray>
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QTemporaryDir>
 #include <optional>
 
@@ -26,6 +27,9 @@ private slots:
     void specReaderRefusesAHeaderThatDiffersFromTheAccessList();
     void specReaderRefusesAFileNamedForAnotherWard();
     void specReaderReportsANewerFormat();
+    void specReaderRefusesAHeaderWithoutAVersion();
+    void specReaderReadsAnUpdateFileTheAppWrites();
+    void specReaderRefusesAnUpdateWhoseSignatureOrWriterFails();
 
 private:
     /// What one run of the reader gave.
@@ -41,6 +45,16 @@ private:
 
     /// Runs the reader on the app data folder's ward of document.
     Run read(const DocumentId& document) const;
+
+    /// Runs the reader on the update file holding update, against the app data folder's
+    /// ward of document.
+    Run readUpdate(const DocumentId& document, const QByteArray& update) const;
+
+    /// The every-field payload without its device part, as version 5 written by the phone.
+    QByteArray phoneVersion() const;
+
+    /// Runs the reader with arguments.
+    static Run runReader(const QStringList& arguments);
 
     /// The file of the every-field payload sealed to recipients, built as the app builds one.
     QByteArray sealedTo(const QList<RecipientKeys>& recipients, const QJsonObject& payload) const;

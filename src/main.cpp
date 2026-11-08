@@ -25,6 +25,7 @@ int main(int argc, char *argv[])
     QCommandLineParser parser;
     QCommandLineOption developerOption("developer", QObject::tr("Adds the Debugging menu."));
     parser.addOption(developerOption);
+    parser.addPositionalArgument("update", QObject::tr("An update file to open."));
     parser.process(app);
 
     // App data is named after the application, so it is found after the name is set. A launch
@@ -83,6 +84,10 @@ int main(int argc, char *argv[])
         return 0;
     }
     window.show();
+    if (!parser.positionalArguments().isEmpty())
+    {
+        window.openUpdateFile(parser.positionalArguments().first());
+    }
 
     return app.exec();
 }

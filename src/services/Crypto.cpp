@@ -10,6 +10,7 @@ static_assert(static_cast<int>(crypto_aead_xchacha20poly1305_ietf_KEYBYTES) == C
 static_assert(static_cast<int>(crypto_aead_xchacha20poly1305_ietf_NPUBBYTES) == Crypto::NonceBytes);
 static_assert(static_cast<int>(crypto_box_SEALBYTES) + Crypto::KeyBytes == Crypto::SealedKeyBytes);
 static_assert(static_cast<int>(crypto_generichash_blake2b_PERSONALBYTES) == 16);
+static_assert(static_cast<int>(crypto_sign_BYTES) == Crypto::SignatureBytes);
 
 namespace
 {
@@ -122,4 +123,26 @@ QByteArray Crypto::verifyKey(const QByteArray& seed)
     QByteArray signingKey(crypto_sign_SECRETKEYBYTES, '\0');
     crypto_sign_seed_keypair(bytesOf(verifyKey), bytesOf(signingKey), bytesOf(seed));
     return verifyKey;
+}
+
+QByteArray Crypto::sign(const QByteArray& message, const QByteArray& seed)
+{
+    QByteArray verifyKey(crypto_sign_PUBLICKEYBYTES, '\0');
+    QByteArray signingKey(crypto_sign_SECRETKEYBYTES, '\0');
+    crypto_sign_seed_keypair(bytesOf(verifyKey), bytesOf(signingKey), bytesOf(seed));
+    QByteArray signature(crypto_sign_BYTES, '\0');
+    crypto_sign_detached(bytesOf(signature), nullptr, bytesOf(message), static_cast<unsigned long long>(message.size()),
+                         bytesOf(signingKey));
+    return signature;
+}
+
+bool Crypto::verify(const QByteArray& signature, const QByteArray& message, const QByteArray& verifyKey)
+{
+    if (signature.size() != SignatureBytes || verifyKey.size() != KeyBytes)
+    {
+        return false;
+    }
+    return crypto_sign_verify_detached(bytesOf(signature), bytesOf(message),
+                                       static_cast<unsigned long long>(message.size()), bytesOf(verifyKey))
+        == 0;
 }

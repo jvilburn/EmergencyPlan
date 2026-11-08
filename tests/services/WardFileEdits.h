@@ -2,6 +2,7 @@
 
 #include "AccessList.h"
 #include "Id.h"
+#include "WardHeader.h"
 
 #include <QByteArray>
 #include <QJsonObject>
@@ -22,6 +23,10 @@ public:
     /// json with the value at path set to value, or removed when value is undefined. A step of
     /// path that is a number indexes an array.
     static QJsonObject edited(const QJsonObject& json, const QStringList& path, const QJsonValue& value);
+
+    /// The version sealedFile and sealedPlaintext write: version 1, written by sixteen 0x77
+    /// bytes.
+    static VersionRank version();
 
     /// A file of document under dataKey, sealed to recipients and holding payload, built the
     /// way WardFile::write builds one, so a test can seal any payload or recipient list.

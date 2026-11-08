@@ -5,9 +5,11 @@
 #include "EveryField.h"
 #include "FileWardStore.h"
 #include "KeyFile.h"
+#include "UpdateFile.h"
 #include "WardFile.h"
 #include "WardFileEdits.h"
 
+#include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QProcess>
@@ -83,8 +85,32 @@ bool SpecReaderTest::putWard(const DocumentId& document, const QByteArray& file)
 
 SpecReaderTest::Run SpecReaderTest::read(const DocumentId& document) const
 {
+    return runReader({m_appData.path(), document.toString()});
+}
+
+SpecReaderTest::Run SpecReaderTest::readUpdate(const DocumentId& document, const QByteArray& update) const
+{
+    QString path = m_appData.filePath("received.wardupdate");
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly) || file.write(update) != update.size())
+    {
+        return Run{-1, QByteArray(), "the update file could not be written"};
+    }
+    file.close();
+    return runReader({m_appData.path(), document.toString(), path});
+}
+
+QByteArray SpecReaderTest::phoneVersion() const
+{
+    WardPayload version = m_payload;
+    version.device = std::nullopt;
+    return WardFile::write(m_document, VersionRank{5, m_phone.fingerprint()}, m_dataKey, version);
+}
+
+SpecReaderTest::Run SpecReaderTest::runReader(const QStringList& arguments)
+{
     QProcess reader;
-    reader.start(WARD_PLANNING_SPEC_READER, {m_appData.path(), document.toString()});
+    reader.start(WARD_PLANNING_SPEC_READER, arguments);
     if (!reader.waitForFinished(60000) || reader.exitStatus() != QProcess::NormalExit)
     {
         return Run{-1, QByteArray(), "the reader did not finish"};
@@ -99,7 +125,7 @@ QByteArray SpecReaderTest::sealedTo(const QList<RecipientKeys>& recipients, cons
 
 void SpecReaderTest::specReaderRecoversEveryFieldTheAppWrites()
 {
-    QVERIFY(putWard(m_document, WardFile::write(m_document, m_dataKey, m_payload)));
+    QVERIFY(putWard(m_document, WardFile::write(m_document, WardFileEdits::version(), m_dataKey, m_payload)));
 
     Run run = read(m_document);
 
@@ -206,7 +232,7 @@ void SpecReaderTest::specReaderRefusesAHeaderThatDiffersFromTheAccessList()
 
 void SpecReaderTest::specReaderRefusesAFileNamedForAnotherWard()
 {
-    QByteArray file = WardFile::write(m_document, m_dataKey, m_payload);
+    QByteArray file = WardFile::write(m_document, WardFileEdits::version(), m_dataKey, m_payload);
     DocumentId other = DocumentId::generate();
     QVERIFY(putWard(m_document, file));
     QVERIFY(putWard(other, file));
@@ -221,7 +247,7 @@ void SpecReaderTest::specReaderRefusesAFileNamedForAnotherWard()
 
 void SpecReaderTest::specReaderReportsANewerFormat()
 {
-    QByteArray file = WardFile::write(m_document, m_dataKey, m_payload);
+    QByteArray file = WardFile::write(m_document, WardFileEdits::version(), m_dataKey, m_payload);
     QJsonObject header = WardFileEdits::headerOf(file);
 
     QVERIFY(putWard(m_document, WardFileEdits::withHeader(file, QJsonObject{{"format", 2}})));
@@ -238,4 +264,66 @@ void SpecReaderTest::specReaderReportsANewerFormat()
     Run fractional = read(m_document);
     QCOMPARE(fractional.exitCode, 1);
     QVERIFY2(fractional.problem.contains("header.format"), qPrintable(fractional.problem));
+}
+
+void SpecReaderTest::specReaderRefusesAHeaderWithoutAVersion()
+{
+    QByteArray file = WardFile::write(m_document, WardFileEdits::version(), m_dataKey, m_payload);
+    QJsonObject header = WardFileEdits::headerOf(file);
+    QVERIFY(putWard(m_document, file));
+    Run unmutated = read(m_document);
+    QVERIFY2(unmutated.exitCode == 0, qPrintable(unmutated.problem));
+
+    const QList<QPair<QJsonObject, QString>> refused = {
+        {WardFileEdits::edited(header, {"number"}, QJsonValue(QJsonValue::Undefined)), "header.number"},
+        {WardFileEdits::edited(header, {"number"}, 0), "header.number is below 1"},
+        {WardFileEdits::edited(header, {"writer"}, QJsonValue(QJsonValue::Undefined)), "header.writer"},
+    };
+    for (const QPair<QJsonObject, QString>& each : refused)
+    {
+        QVERIFY(putWard(m_document, WardFileEdits::withHeader(file, each.first)));
+
+        Run run = read(m_document);
+
+        QCOMPARE(run.exitCode, 1);
+        QVERIFY2(run.problem.contains(each.second), qPrintable(run.problem));
+    }
+}
+
+void SpecReaderTest::specReaderReadsAnUpdateFileTheAppWrites()
+{
+    QVERIFY(putWard(m_document, WardFile::write(m_document, WardFileEdits::version(), m_dataKey, m_payload)));
+    WardPayload version = m_payload;
+    version.device = std::nullopt;
+
+    Run run = readUpdate(m_document, UpdateFile::write(m_document, phoneVersion(), m_phone));
+
+    QVERIFY2(run.exitCode == 0, qPrintable(run.problem));
+    QJsonParseError error;
+    QJsonDocument output = QJsonDocument::fromJson(run.output, &error);
+    QVERIFY2(error.error == QJsonParseError::NoError, qPrintable(error.errorString()));
+    QCOMPARE(output.object(), version.toJson());
+    QVERIFY(!output.object().contains("device"));
+}
+
+void SpecReaderTest::specReaderRefusesAnUpdateWhoseSignatureOrWriterFails()
+{
+    QVERIFY(putWard(m_document, WardFile::write(m_document, WardFileEdits::version(), m_dataKey, m_payload)));
+    QByteArray version = phoneVersion();
+    Run control = readUpdate(m_document, UpdateFile::write(m_document, version, m_phone));
+    QVERIFY2(control.exitCode == 0, qPrintable(control.problem));
+
+    // The phone's version, signed by this device rather than its writer.
+    Run resigned = readUpdate(m_document, UpdateFile::write(m_document, version, *m_laptop));
+    QCOMPARE(resigned.exitCode, 1);
+    QVERIFY2(resigned.problem.contains("signature does not verify"), qPrintable(resigned.problem));
+
+    // A version written and signed by a device the held access list does not name.
+    Identity stranger = Identity::generate();
+    WardPayload payload = m_payload;
+    payload.device = std::nullopt;
+    QByteArray strangers = WardFile::write(m_document, VersionRank{5, stranger.fingerprint()}, m_dataKey, payload);
+    Run unlisted = readUpdate(m_document, UpdateFile::write(m_document, strangers, stranger));
+    QCOMPARE(unlisted.exitCode, 1);
+    QVERIFY2(unlisted.problem.contains("writer is not on the access list"), qPrintable(unlisted.problem));
 }

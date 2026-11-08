@@ -103,7 +103,6 @@ DeviceState everyDeviceField(const AccessList& access)
         }
         device.journal.append(*samples.front().command);
     }
-    device.baseVersion = 7;
     device.dismissedAccess = access;
     device.singleHolderNoticeDismissed = true;
     device.singleAdminNoticeDismissed = true;

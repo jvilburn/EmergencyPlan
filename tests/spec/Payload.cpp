@@ -687,7 +687,6 @@ void readLanded(Fields fields)
 void readDeviceState(Fields fields)
 {
     readJournal(fields.object("journal"));
-    fields.optionalInteger("baseVersion");
     std::optional<Fields> dismissedAccess = fields.optionalObject("dismissedAccess");
     if (dismissedAccess.has_value())
     {
@@ -711,6 +710,17 @@ std::vector<PublicKeys> readLocalPayload(const nlohmann::json& payload)
     readAccess(fields.object("access"), &keys);
     readLanded(fields.object("landed"));
     readDeviceState(fields.object("device"));
+    fields.done();
+    return keys;
+}
+
+std::vector<PublicKeys> readVersionPayload(const nlohmann::json& payload)
+{
+    Fields fields(payload, "payload");
+    readWard(fields.object("ward"));
+    std::vector<PublicKeys> keys;
+    readAccess(fields.object("access"), &keys);
+    readLanded(fields.object("landed"));
     fields.done();
     return keys;
 }

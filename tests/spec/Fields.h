@@ -17,6 +17,8 @@ constexpr std::size_t NonceBytes = 24;
 constexpr std::size_t FingerprintBytes = 16;
 constexpr std::size_t KeyBytes = 32;          ///< a key, seed or former-key hash
 constexpr std::size_t SealedKeyBytes = 80;
+constexpr std::size_t HashBytes = 32;         ///< a BLAKE2b-256 hash
+constexpr std::size_t SignatureBytes = 64;    ///< an Ed25519 signature
 
 /// What a reader refuses a file for, with the path of the field that fails.
 class Refusal : public std::runtime_error

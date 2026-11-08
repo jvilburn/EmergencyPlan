@@ -216,6 +216,19 @@ QList<RecipientKeys> AccessList::recipients() const
     return recipients;
 }
 
+std::optional<QByteArray> AccessList::verifyKeyOf(const QByteArray& fingerprint) const
+{
+    const QList<RecipientKeys> keys = recipients();
+    for (const RecipientKeys& recipient : keys)
+    {
+        if (Identity::fingerprintOf(recipient.publicKey, recipient.verifyKey) == fingerprint)
+        {
+            return recipient.verifyKey;
+        }
+    }
+    return std::nullopt;
+}
+
 QJsonObject AccessList::toJson() const
 {
     QJsonObject json;

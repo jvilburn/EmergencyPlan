@@ -7,6 +7,7 @@
 #include "DocumentChange.h"
 #include "Identity.h"
 #include "Journal.h"
+#include "WardHeader.h"
 #include "WardPayload.h"
 #include "WardStore.h"
 
@@ -50,6 +51,27 @@ struct ReplayResult
     QString toRedo;  ///< when status is Abandoned, the abandoned changes as plain text
 };
 
+/// Whether an update file was taken. Anything but Taken changes nothing.
+enum class TakeStatus
+{
+    Taken,          ///< its version is now the one this device holds, with the journal replayed on it
+    NotNewer,       ///< it does not rank above the version this device holds
+    OtherWard,      ///< it is a version of a ward other than the open one
+    UnknownWriter,  ///< the access list this device holds names no device or invite as its writer
+    NotNamed,       ///< it names no recipient, or others and not this device
+    Newer,          ///< a newer Ward Planning wrote it
+    Unreadable      ///< it fails another check; problem says which
+};
+
+/// How taking an update file ended. When it was taken, a replay that is Replayed put this
+/// device's own changes on top, which the other devices lack until it sends an update.
+struct TakeResult
+{
+    TakeStatus status;
+    QString problem;      ///< what went wrong, for the log, when Unreadable
+    ReplayResult replay;  ///< when Taken
+};
+
 /// How ending an emergency went.
 enum class EndResult
 {
@@ -79,6 +101,7 @@ struct LocalRead
     OpenResult result;
     std::optional<WardPayload> payload;  ///< when result is Opened
     QByteArray dataKey;                  ///< when result is Opened
+    VersionRank version;                 ///< when result is Opened: the version its header names
 };
 
 /// One open ward: its document, journal and undo stack, and the commit step and replay
@@ -99,20 +122,25 @@ public:
     const Document& document() const { return m_document; }
     const Journal& journal() const { return m_device.journal; }
 
+    /// The version this device holds: the one it last took or wrote, which its local file's
+    /// header names.
+    const VersionRank& version() const { return m_version; }
+
     /// The ward, its landed marks and this device's state, as a save writes them.
     WardPayload payload() const { return WardPayload{m_document, m_landed, m_device}; }
     AutomaticUpdates& automaticUpdates() { return m_automaticUpdates; }
 
-    /// Creates a ward holding content under a fresh document id and data key, and saves it.
-    /// Its access list, whatever content held, names one user: userName, an admin under a new
-    /// user id, with this device alone, named deviceName. The journal, the undo and redo
-    /// stacks, the rest of this device's state and the failed list start empty.
+    /// Creates a ward holding content under a fresh document id and data key, and saves it as
+    /// its version 1, written by this device. Its access list, whatever content held, names
+    /// one user: userName, an admin under a new user id, with this device alone, named
+    /// deviceName. The journal, the undo and redo stacks, the rest of this device's state and
+    /// the failed list start empty.
     void createWard(const Document& content, const QString& userName, const QString& deviceName);
 
     /// Opens the ward this device holds under document: its document with its access list,
-    /// its landed marks and this device's state come from its local file, and the undo stack
-    /// and the failed list start empty. Anything but Opened leaves the session as it was and
-    /// writes nothing.
+    /// the version it holds, its landed marks and this device's state come from its local
+    /// file, and the undo stack and the failed list start empty. Anything but Opened leaves
+    /// the session as it was and writes nothing.
     OpenResult openWard(const DocumentId& document);
 
     /// How document's local file in store reads for identity: opened, or why not.
@@ -163,6 +191,26 @@ public:
     /// A replay starts no automatic update.
     ReplayResult replayOnto(const Document& version);
 
+    /// Writes the next version as an update file: one above the version this device holds,
+    /// written by this device, holding the document, its access list and the landed marks
+    /// with this device's set to its journal's last sequence number and those of devices the
+    /// access list no longer holds dropped, sealed to the access list and signed by this
+    /// device. That version becomes the one this device holds, and is saved; the journal
+    /// keeps its entries until a version this device takes carries them.
+    QByteArray writeUpdate();
+
+    /// Takes the version an update file carries, checked in this order: its format; that it
+    /// is a version of the open ward; that its signature verifies under the verify key the
+    /// access list this device holds gives its writer; that it ranks above the version this
+    /// device holds; that it names this device; that the data key unseals and the payload
+    /// reads as a version whose access list the header matches; and that it is under the data
+    /// key this device holds, or names that key among its former keys. Taking it drops the
+    /// journal entries its landed mark for this device covers, raising the counter to that
+    /// mark, replays the rest onto it as replayOnto does, and makes it the version this
+    /// device holds, under its data key and with its landed marks, then saves. The next
+    /// update this device writes is numbered one above it.
+    TakeResult takeUpdate(const QByteArray& file);
+
 signals:
     /// The document changed, through a command, a replay, an open or an automatic update.
     void documentChanged(const DocumentChange& change);
@@ -179,7 +227,7 @@ private:
 
     /// One write of the document and this device's state together, so a crash cannot leave
     /// one without the other. The file is sealed to exactly the access list, under the data
-    /// key the ward already has.
+    /// key the ward already has, and its header names the version this device holds.
     void save();
 
     /// The journal's changes as text for the user to redo: what stopped the replay, then
@@ -192,6 +240,7 @@ private:
     const Identity* m_identity;
     WardStore* m_store;
     DocumentId m_documentId;
+    VersionRank m_version;
     QByteArray m_dataKey;
     Document m_document;
     QHash<QByteArray, qint64> m_landed;

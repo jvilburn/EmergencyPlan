@@ -587,7 +587,7 @@ The server keeps no counter of its own.
 
 | Call | Who may | What |
 |---|---|---|
-| `POST /documents` | anyone | Stores version 1 of a new document under its client-made id, and refuses an id that already exists. Rate-limited by address. |
+| `POST /documents` | anyone | Stores the first version of a new document sent to it, under its client-made id, and refuses an id that already exists. Rate-limited by address. |
 | `GET /documents/{id}/head` | anyone with the id | The header, and when it was published. |
 | `GET /documents/{id}` | anyone with the id | The current version: header and blob. Ciphertext; unreadable without a key. |
 | `PUT /documents/{id}` | a key holder | Kept only when the header's number is above the current one. Signed. |
@@ -787,7 +787,8 @@ change without the payload failing to decrypt. **A version ranks above another w
 number is higher, or when the numbers are equal and its writer's fingerprint is higher**,
 compared byte by byte. A device writes its next version at one above the number of the
 version it holds, and takes a version only when it ranks above that one. The local file's
-header names the version this device holds: the one it last took or wrote.
+header names the version this device holds: the one it last took or wrote. Creating a ward
+writes its version 1, by the creating device, so the first version that device sends is 2.
 
 Two devices that write from the same version write the same number. The server keeps a push
 only when its number is above the one it holds, so the first one kept wins there; the other
@@ -812,19 +813,22 @@ over its `update` line (see *What the server is*). It is named for the ward and 
 as `Tanglewood Ward 2026-11-08.wardupdate`. The server and update files carry the same
 versions, ranked the same way, so a ward can use either or both.
 
-- **Sending.** *Send Update* writes the next version as an update file and opens the
-  platform's share sheet with it, or on a desktop the folder holding it with the file
-  selected. Each member sends to every other member; a device learns of others' changes only
-  from versions that reach it. The written version becomes the one this device holds. Its
-  journal entries stay until a version this device takes carries them, since a version
-  written at the same time elsewhere can outrank it.
+- **Sending.** *Send Update* writes the next version as an update file in the `Ward
+  Planning` folder in the user's Documents, where to-redo files go, in place of an update of
+  that ward written the same day, and opens the platform's share sheet with it, or on a
+  desktop the folder holding it with the file selected. Each member sends to every other
+  member; a device learns of others' changes only from versions that reach it. The written
+  version becomes the one this device holds. Its journal entries stay until a version this
+  device takes carries them, since a version written at the same time elsewhere can outrank
+  it.
 - **Receiving.** Opening an update file - double-clicking it, *Open in* on a phone, or
-  dropping it on the window - takes it as a fetch would. The ward must be one this device
-  holds, and the signature must verify against the verify key the access list of the
-  version this device holds gives the writer; a file from a device that list does not name
-  is refused with *This update is from a device this copy of the ward does not list yet.
-  Open the update from whoever added it first.* The checks under *Every edit is a version*
-  then apply, the journal is trimmed by this device's landed mark, and the rest replays on
+  dropping it on the window, or *Open Update...* in the File menu - takes it as a fetch
+  would, opening its ward first when another is open. The ward must be one this device holds,
+  or the file is refused with *This update is for a ward this device does not have*, and the
+  signature must verify against the verify key the access list of the version this device
+  holds gives the writer; a file from a device that list does not name is refused with
+  *This update is from a device this copy of the ward does not list yet. Open the update
+  from whoever added it first.* The checks under *Every edit is a version* then apply, the journal is trimmed by this device's landed mark, and the rest replays on
   top. A file that does not rank above the version held is set aside with *You already have
   a newer update*. When the replay carried changes of this device's own, the app asks the
   user to send an update, so those changes reach the others.
@@ -993,7 +997,8 @@ disconnected work no different from a second of it.
 **The ward records what each device has landed.** Each journal entry takes this device's
 next sequence number, from a counter kept with the journal. The ward's payload carries a
 map from device fingerprint to the highest sequence number that version includes, and a
-push sets this device's entry to the last one it carries. On any fetch, whoever published
+push or an update file sets this device's entry to the last sequence number its journal
+has given an entry. On any fetch, whoever published
 it, the device drops the journal entries at or below its own mark and replays the rest.
 One rule covers a push that succeeds, a push whose answer never arrived, one followed by
 someone else's push before this device hears of it, and the app closed in between. One
@@ -1749,6 +1754,10 @@ once the service returns.
 | An invitation opened on a device the ward already names | This device already has access to Tanglewood Ward. |
 | An invitation for a ward the server does not have | The server has no such ward. Ask the sender for a new invitation. |
 | A file opened that is not an invitation | This file is not a Ward Planning invitation. |
+| A file opened that is not an update | This file is not a Ward Planning update. |
+| An update of a ward this device does not hold | This update is for a ward this device does not have. |
+| An update from a device this copy does not list | This update is from a device this copy of the ward does not list yet. Open the update from whoever added it first. |
+| An update that does not rank above the version held | You already have a newer update. |
 | An invitation opened while offline | Connect to the internet, then open the invitation again. |
 | Leave or Remove this device while offline | Connect to the internet to leave this ward. / Connect to the internet to remove this device. |
 | Add a user or Add a device while offline | Connect to the internet to invite someone. |
