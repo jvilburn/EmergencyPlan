@@ -75,15 +75,12 @@ QJsonObject CommandDescription::toJson() const
     return json;
 }
 
-CommandDescription CommandDescription::fromJson(const QJsonObject& json)
+CommandDescription CommandDescription::fromJson(JsonReader json)
 {
-    QStringList lines;
-    QJsonArray linesArray = json["lines"].toArray();
-    for (const QJsonValue& value : linesArray)
-    {
-        lines.append(value.toString());
-    }
-    return CommandDescription(json["heading"].toString(), lines);
+    QString heading = json.string("heading");
+    QStringList lines = json.optionalStrings("lines");
+    json.finish();
+    return CommandDescription(heading, lines);
 }
 
 bool CommandDescription::operator==(const CommandDescription& other) const

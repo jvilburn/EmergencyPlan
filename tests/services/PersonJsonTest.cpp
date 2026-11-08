@@ -29,21 +29,21 @@ void PersonJsonTest::yearOnlyBirthdayRoundTrips()
     QJsonObject birthday = json["birthday"].toObject();
     QCOMPARE(birthday["year"].toInt(), 1980);
     QVERIFY(!birthday.contains("month"));
-    QVERIFY(Person::fromJson(json) == bob);
+    QVERIFY(Person::fromJson(JsonReader(json)) == bob);
 }
 
 void PersonJsonTest::monthAndDayBirthdayRoundTrips()
 {
     Person bob = bobBornOn(Birthday::create(std::nullopt, 7, 4));
 
-    QVERIFY(Person::fromJson(bob.toJson()) == bob);
+    QVERIFY(Person::fromJson(JsonReader(bob.toJson())) == bob);
 }
 
 void PersonJsonTest::fullBirthdayRoundTrips()
 {
     Person bob = bobBornOn(Birthday::create(1980, 7, 4));
 
-    QVERIFY(Person::fromJson(bob.toJson()) == bob);
+    QVERIFY(Person::fromJson(JsonReader(bob.toJson())) == bob);
 }
 
 void PersonJsonTest::emptyBirthdayRoundTrips()
@@ -53,5 +53,5 @@ void PersonJsonTest::emptyBirthdayRoundTrips()
     QJsonObject json = bob.toJson();
 
     QVERIFY(!json.contains("birthday"));
-    QVERIFY(Person::fromJson(json) == bob);
+    QVERIFY(Person::fromJson(JsonReader(json)) == bob);
 }

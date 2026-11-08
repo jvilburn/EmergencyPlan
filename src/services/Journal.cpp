@@ -57,9 +57,10 @@ Journal Journal::fromJson(JsonReader json)
     for (JsonReader entry : entryReaders)
     {
         qint64 sequence = entry.integer("sequence");
-        QJsonObject command = entry.object("command").source();
+        JsonReader command = entry.object("command");
+        CommandRegistry::fromJson(command);
         entry.finish();
-        journal.m_entries.append(JournalEntry{sequence, command});
+        journal.m_entries.append(JournalEntry{sequence, command.source()});
     }
     json.finish();
     return journal;

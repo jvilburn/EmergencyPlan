@@ -32,30 +32,14 @@ QJsonObject MinisteringDistrict::toJson() const
     return json;
 }
 
-MinisteringDistrict MinisteringDistrict::fromJson(const QJsonObject& json)
+MinisteringDistrict MinisteringDistrict::fromJson(JsonReader json)
 {
     MinisteringDistrict district;
-    district.m_id = MinisteringDistrictId::fromString(json["id"].toString());
-    district.m_name = json["name"].toString();
-
-    if (json.contains("presidencyMemberId") && !json["presidencyMemberId"].isNull())
-    {
-        QString pmStr = json["presidencyMemberId"].toString();
-        if (!pmStr.isEmpty())
-        {
-            district.m_presidencyMemberId = PersonId::fromString(pmStr);
-        }
-    }
-
-    if (json.contains("groupIds"))
-    {
-        QJsonArray groupIdsArray = json["groupIds"].toArray();
-        for (const QJsonValue& value : groupIdsArray)
-        {
-            district.m_groupIds.insert(MinisteringGroupId::fromString(value.toString()));
-        }
-    }
-
+    district.m_id = json.id<MinisteringDistrictId>("id");
+    district.m_name = json.string("name");
+    district.m_presidencyMemberId = json.optionalId<PersonId>("presidencyMemberId");
+    district.m_groupIds = json.optionalIds<MinisteringGroupId>("groupIds");
+    json.finish();
     return district;
 }
 

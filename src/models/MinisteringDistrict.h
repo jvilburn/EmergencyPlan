@@ -7,6 +7,7 @@
 #include <optional>
 
 #include "Id.h"
+#include "JsonReader.h"
 
 class MinisteringDistrict
 {
@@ -34,7 +35,7 @@ public:
 
     // JSON serialization
     QJsonObject toJson() const;
-    static MinisteringDistrict fromJson(const QJsonObject& json);
+    static MinisteringDistrict fromJson(JsonReader json);
 
     // Value-based equality
     bool operator==(const MinisteringDistrict& other) const;

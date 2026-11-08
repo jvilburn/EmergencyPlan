@@ -1,7 +1,23 @@
 #include "TestWard.h"
 #include "DocumentChange.h"
+#include "JsonReader.h"
 
 #include <QTimeZone>
+
+namespace
+{
+
+/// The T json holds, which the test ward builds well formed.
+template<typename T>
+T readWellFormed(const QJsonObject& json)
+{
+    JsonReader reader(json);
+    T value = T::fromJson(reader);
+    Q_ASSERT_X(!reader.failed(), "TestWard", qPrintable(reader.problem()));
+    return value;
+}
+
+}  // namespace
 
 Person TestWard::bob()
 {
@@ -109,7 +125,7 @@ Team TestWard::setupTeam()
     json["id"] = setupTeamId().toString();
     json["name"] = "Setup";
     json["memberIds"] = QJsonArray({bobId().toString(), aliceId().toString()});
-    return Team::fromJson(json);
+    return readWellFormed<Team>(json);
 }
 
 EmergencyAsset TestWard::generator()
@@ -119,7 +135,7 @@ EmergencyAsset TestWard::generator()
     json["name"] = "Generator";
     json["responseArea"] = responseAreaToString(ResponseArea::Recovery);
     json["personIds"] = QJsonArray({bobId().toString(), aliceId().toString()});
-    return EmergencyAsset::fromJson(json);
+    return readWellFormed<EmergencyAsset>(json);
 }
 
 MinisteringGroup TestWard::eqGroup()
@@ -130,7 +146,7 @@ MinisteringGroup TestWard::eqGroup()
     json["ministerIds"] = QJsonArray({bobId().toString()});
     json["familyIds"] = QJsonArray({jonesId().toString(), smithId().toString()});
     json["presidencyMemberId"] = aliceId().toString();
-    return MinisteringGroup::fromJson(json);
+    return readWellFormed<MinisteringGroup>(json);
 }
 
 MinisteringGroup TestWard::rsGroup()
@@ -140,7 +156,7 @@ MinisteringGroup TestWard::rsGroup()
     json["isRSFormat"] = true;
     json["ministerIds"] = QJsonArray({carolId().toString()});
     json["ministeredPersonIds"] = QJsonArray({aliceId().toString()});
-    return MinisteringGroup::fromJson(json);
+    return readWellFormed<MinisteringGroup>(json);
 }
 
 MinisteringDistrict TestWard::district()
@@ -150,7 +166,7 @@ MinisteringDistrict TestWard::district()
     json["name"] = "District 1";
     json["presidencyMemberId"] = bobId().toString();
     json["groupIds"] = QJsonArray({eqGroupId().toString()});
-    return MinisteringDistrict::fromJson(json);
+    return readWellFormed<MinisteringDistrict>(json);
 }
 
 Document TestWard::documentWithPlaces()
@@ -196,14 +212,14 @@ EmergencyResponse TestWard::storm()
 {
     QJsonObject json = EmergencyResponse::create("Storm").toJson();
     json["startedAt"] = octoberFirst(8, 0).toString(Qt::ISODateWithMs);
-    return EmergencyResponse::fromJson(json);
+    return readWellFormed<EmergencyResponse>(json);
 }
 
 EmergencyResponse TestWard::flood()
 {
     QJsonObject json = EmergencyResponse::create("Flood").toJson();
     json["startedAt"] = octoberFirst(9, 0).toString(Qt::ISODateWithMs);
-    return EmergencyResponse::fromJson(json);
+    return readWellFormed<EmergencyResponse>(json);
 }
 
 ContactAttempt TestWard::attempt(const QString& id, const Family& family, const QDateTime& timestamp,
@@ -214,7 +230,7 @@ ContactAttempt TestWard::attempt(const QString& id, const Family& family, const 
     QJsonObject json = ContactAttempt::create(family, method, who, outcome, notes).toJson();
     json["id"] = id;
     json["timestamp"] = timestamp.toString(Qt::ISODateWithMs);
-    return ContactAttempt::fromJson(json);
+    return readWellFormed<ContactAttempt>(json);
 }
 
 ResponseTask TestWard::task(const QString& id, const Family& family, const QDateTime& createdAt,
@@ -223,21 +239,21 @@ ResponseTask TestWard::task(const QString& id, const Family& family, const QDate
     QJsonObject json = ResponseTask::create(family, category, description).toJson();
     json["id"] = id;
     json["createdAt"] = createdAt.toString(Qt::ISODateWithMs);
-    return ResponseTask::fromJson(json);
+    return readWellFormed<ResponseTask>(json);
 }
 
 TaskResolution TestWard::resolution(const QString& notes, const QDateTime& resolvedAt)
 {
     QJsonObject json = TaskResolution::create(notes).toJson();
     json["resolvedAt"] = resolvedAt.toString(Qt::ISODateWithMs);
-    return TaskResolution::fromJson(json);
+    return readWellFormed<TaskResolution>(json);
 }
 
 TaskNotification TestWard::notification(ContactMethod method, const QString& notes, const QDateTime& timestamp)
 {
     QJsonObject json = TaskNotification::create(method, notes).toJson();
     json["timestamp"] = timestamp.toString(Qt::ISODateWithMs);
-    return TaskNotification::fromJson(json);
+    return readWellFormed<TaskNotification>(json);
 }
 
 EmergencyResponse TestWard::stormWith(const QList<ContactAttempt>& attempts, const QList<ResponseTask>& tasks)

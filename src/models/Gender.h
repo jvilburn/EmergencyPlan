@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QList>
 #include <QString>
 #include <QJsonValue>
 #include <QMetaType>
@@ -24,7 +25,9 @@ public:
     /// Returns true if text is "Male" or "Female".
     static bool isGender(const QString& text);
     static std::optional<Gender> fromString(const QString& str);
-    static std::optional<Gender> fromJson(const QJsonValue& value);
+
+    /// Every gender, for a reader that takes one by its word.
+    static QList<Gender> values() { return {Male, Female}; }
 
 private:
     int m_value;

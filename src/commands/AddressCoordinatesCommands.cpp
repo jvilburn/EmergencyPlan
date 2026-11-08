@@ -30,13 +30,26 @@ QJsonObject entryChangeToJson(const QString& address, const std::optional<Coordi
     return json;
 }
 
-std::optional<Coordinates> beforeFromJson(const QJsonObject& json)
+/// The fields entryChangeToJson wrote, which both commands read the same way.
+struct EntryChange
 {
-    if (!json.contains("before"))
+    QString address;
+    std::optional<Coordinates> before;
+    Coordinates typed;
+};
+
+EntryChange entryChangeFromJson(JsonReader json)
+{
+    QString address = json.string("address");
+    std::optional<Coordinates> before;
+    std::optional<JsonReader> beforeJson = json.optionalObject("before");
+    if (beforeJson.has_value())
     {
-        return std::nullopt;
+        before = Coordinates::fromJson(*beforeJson);
     }
-    return Coordinates::fromJson(json["before"].toObject());
+    Coordinates typed = Coordinates::fromJson(json.object("typed"));
+    json.finish();
+    return EntryChange{address, before, typed};
 }
 
 }  // namespace
@@ -88,12 +101,10 @@ DocumentChange SetAddressCoordinatesCommand::documentChange() const
     return DocumentChange::full();
 }
 
-CommandPtr SetAddressCoordinatesCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
+CommandPtr SetAddressCoordinatesCommand::fromJson(JsonReader json, const CommandDescription& description)
 {
-    return std::make_shared<SetAddressCoordinatesCommand>(json["address"].toString(),
-                                                          beforeFromJson(json),
-                                                          Coordinates::fromJson(json["typed"].toObject()),
-                                                          description);
+    EntryChange change = entryChangeFromJson(json);
+    return std::make_shared<SetAddressCoordinatesCommand>(change.address, change.before, change.typed, description);
 }
 
 RevertAddressCoordinatesCommand::RevertAddressCoordinatesCommand(const QString& address,
@@ -137,10 +148,8 @@ DocumentChange RevertAddressCoordinatesCommand::documentChange() const
     return DocumentChange::full();
 }
 
-CommandPtr RevertAddressCoordinatesCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
+CommandPtr RevertAddressCoordinatesCommand::fromJson(JsonReader json, const CommandDescription& description)
 {
-    return std::make_shared<RevertAddressCoordinatesCommand>(json["address"].toString(),
-                                                             beforeFromJson(json),
-                                                             Coordinates::fromJson(json["typed"].toObject()),
-                                                             description);
+    EntryChange change = entryChangeFromJson(json);
+    return std::make_shared<RevertAddressCoordinatesCommand>(change.address, change.before, change.typed, description);
 }

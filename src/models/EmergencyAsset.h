@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Id.h"
+#include "JsonReader.h"
 #include "ResponseArea.h"
 
 #include <QString>
@@ -30,7 +31,7 @@ public:
 
     // JSON serialization
     QJsonObject toJson() const;
-    static EmergencyAsset fromJson(const QJsonObject& json);
+    static EmergencyAsset fromJson(JsonReader json);
 
     // Value-based equality
     bool operator==(const EmergencyAsset& other) const;

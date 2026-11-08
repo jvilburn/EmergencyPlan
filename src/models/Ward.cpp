@@ -28,9 +28,9 @@ QJsonObject Ward::toJson() const
     {
         json["stakeUnitNumber"] = m_stakeUnitNumber;
     }
-    if (m_chapelAddress)
+    if (!m_chapelAddress.isEmpty())
     {
-        json["chapelAddress"] = *m_chapelAddress;
+        json["chapelAddress"] = m_chapelAddress;
     }
     if (m_chapelLat)
     {
@@ -40,47 +40,30 @@ QJsonObject Ward::toJson() const
     {
         json["chapelLng"] = *m_chapelLng;
     }
-    if (m_chapelPhone)
+    if (!m_chapelPhone.isEmpty())
     {
-        json["chapelPhone"] = *m_chapelPhone;
+        json["chapelPhone"] = m_chapelPhone;
     }
-    if (m_meetingTime)
+    if (!m_meetingTime.isEmpty())
     {
-        json["meetingTime"] = *m_meetingTime;
+        json["meetingTime"] = m_meetingTime;
     }
 
     return json;
 }
 
-Ward Ward::fromJson(const QJsonObject& json)
+Ward Ward::fromJson(JsonReader json)
 {
     Ward ward;
-
-    ward.m_name = json["name"].toString();
-    ward.m_unitNumber = json["unitNumber"].toString();
-    ward.m_stakeUnitNumber = json["stakeUnitNumber"].toString();
-
-    if (json.contains("chapelAddress"))
-    {
-        ward.m_chapelAddress = json["chapelAddress"].toString();
-    }
-    if (json.contains("chapelLat"))
-    {
-        ward.m_chapelLat = json["chapelLat"].toDouble();
-    }
-    if (json.contains("chapelLng"))
-    {
-        ward.m_chapelLng = json["chapelLng"].toDouble();
-    }
-    if (json.contains("chapelPhone"))
-    {
-        ward.m_chapelPhone = json["chapelPhone"].toString();
-    }
-    if (json.contains("meetingTime"))
-    {
-        ward.m_meetingTime = json["meetingTime"].toString();
-    }
-
+    ward.m_name = json.optionalString("name");
+    ward.m_unitNumber = json.optionalString("unitNumber");
+    ward.m_stakeUnitNumber = json.optionalString("stakeUnitNumber");
+    ward.m_chapelAddress = json.optionalString("chapelAddress");
+    ward.m_chapelLat = json.optionalNumber("chapelLat");
+    ward.m_chapelLng = json.optionalNumber("chapelLng");
+    ward.m_chapelPhone = json.optionalString("chapelPhone");
+    ward.m_meetingTime = json.optionalString("meetingTime");
+    json.finish();
     return ward;
 }
 

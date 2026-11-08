@@ -53,7 +53,7 @@ public:
     /// The unit of the ward record it creates or keeps.
     QStringList unitsGiven() const override;
 
-    static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
+    static CommandPtr fromJson(JsonReader json, const CommandDescription& description);
 
 private:
     FamilyCollectionChange m_families;

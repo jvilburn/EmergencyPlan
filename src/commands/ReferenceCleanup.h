@@ -3,6 +3,7 @@
 #include "EmergencyAsset.h"
 #include "EmergencyResponse.h"
 #include "Id.h"
+#include "JsonReader.h"
 #include "MinisteringDistrict.h"
 #include "MinisteringGroup.h"
 #include "Team.h"
@@ -49,12 +50,14 @@ public:
     bool holdsPlaces() const;
 
     QJsonObject toJson() const;
-    static ReferenceCleanup fromJson(const QJsonObject& json);
+    static ReferenceCleanup fromJson(JsonReader json);
 
     bool operator==(const ReferenceCleanup& other) const;
     bool operator!=(const ReferenceCleanup& other) const { return !(*this == other); }
 
 private:
+    friend ReferenceCleanup readCleanup(JsonReader& json, const QString& key);
+
     ReferenceCleanup() = default;
 
     bool namesRemoved(const std::optional<PersonId>& id) const;
@@ -75,3 +78,6 @@ private:
 
 /// Writes cleanup under key, or nothing when it removes nothing and holds no place.
 void writeCleanup(QJsonObject& json, const QString& key, const ReferenceCleanup& cleanup);
+
+/// The cleanup under key, or one that removes nothing and holds no place when key is absent.
+ReferenceCleanup readCleanup(JsonReader& json, const QString& key);

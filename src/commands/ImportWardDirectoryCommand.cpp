@@ -90,15 +90,7 @@ QJsonObject ImportWardDirectoryCommand::toJson() const
     QJsonObject json;
     json["families"] = m_families.toJson();
     writeChange(json, "pdfDate", m_pdfDate);
-    if (!m_coordinates.isEmpty())
-    {
-        QJsonObject coordinates;
-        for (auto it = m_coordinates.constBegin(); it != m_coordinates.constEnd(); ++it)
-        {
-            coordinates[it.key()] = it.value().toJson();
-        }
-        json["coordinates"] = coordinates;
-    }
+    writeAddressCoordinates(json, "coordinates", m_coordinates);
     json["ward"] = m_ward.toJson();
     json["ministeringPdfDate"] = toJsonValue(m_ministeringPdfDate);
     return json;
@@ -119,19 +111,14 @@ QStringList ImportWardDirectoryCommand::unitsGiven() const
     return {m_ward.unitNumber()};
 }
 
-CommandPtr ImportWardDirectoryCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
+CommandPtr ImportWardDirectoryCommand::fromJson(JsonReader json, const CommandDescription& description)
 {
-    QHash<QString, Coordinates> coordinates;
-    QJsonObject coordinatesJson = json["coordinates"].toObject();
-    for (auto it = coordinatesJson.constBegin(); it != coordinatesJson.constEnd(); ++it)
-    {
-        coordinates.insert(it.key(), Coordinates::fromJson(it.value().toObject()));
-    }
-
-    return std::make_shared<ImportWardDirectoryCommand>(FamilyCollectionChange::fromJson(json["families"].toObject()),
-                                                        readChange<std::optional<QDate>>(json, "pdfDate"),
-                                                        coordinates,
-                                                        Ward::fromJson(json["ward"].toObject()),
-                                                        fromJsonValue<std::optional<QDate>>(json["ministeringPdfDate"]),
+    FamilyCollectionChange families = FamilyCollectionChange::fromJson(json.object("families"));
+    std::optional<FieldChange<std::optional<QDate>>> pdfDate = readChange<std::optional<QDate>>(json, "pdfDate");
+    QHash<QString, Coordinates> coordinates = readAddressCoordinates(json, "coordinates");
+    Ward ward = Ward::fromJson(json.object("ward"));
+    std::optional<QDate> ministeringPdfDate = readValue<std::optional<QDate>>(json, "ministeringPdfDate");
+    json.finish();
+    return std::make_shared<ImportWardDirectoryCommand>(families, pdfDate, coordinates, ward, ministeringPdfDate,
                                                         description);
 }

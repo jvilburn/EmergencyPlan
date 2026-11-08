@@ -2,7 +2,6 @@
 #include "Base64Url.h"
 #include "Crypto.h"
 #include "EveryField.h"
-#include "TestWard.h"
 #include "WardFileEdits.h"
 
 #include <QJsonArray>
@@ -35,11 +34,7 @@ void WardFileTest::init()
 {
     m_document = DocumentId::generate();
     m_dataKey = Crypto::randomBytes(Crypto::KeyBytes);
-    Document ward = TestWard::document();
-    ward.setAccess(EveryField::access(m_laptop, m_phone));
-    m_payload = WardPayload{ward,
-                            {{m_laptop.fingerprint(), 3}, {m_phone.fingerprint(), 5}},
-                            EveryField::deviceState(ward.access())};
+    m_payload = EveryField::payload(m_laptop, m_phone);
 }
 
 QByteArray WardFileTest::written() const
@@ -204,7 +199,7 @@ void WardFileTest::payloadWithAMissingOrMalformedFieldIsUnreadable_data()
     QTest::newRow("unexpected part") << QStringList({"history"}) << QJsonValue(QJsonArray())
                                      << QString("history: is not expected");
     QTest::newRow("role neither admin nor member") << QStringList({"access", "users", "0", "role"}) << QJsonValue(QString("owner"))
-                                                   << QString("access.users[0].role: is not admin or member");
+                                                   << QString("access.users[0].role: is not one of admin, member");
     QTest::newRow("verify key of 31 bytes") << QStringList({"access", "users", "0", "devices", "1", "verifyKey"})
                                             << QJsonValue(encodedBytes(31))
                                             << QString("access.users[0].devices[1].verifyKey: is not base64url of 32 bytes");
@@ -228,6 +223,11 @@ void WardFileTest::payloadWithAMissingOrMalformedFieldIsUnreadable_data()
                                      << QString("device.journal: missing");
     QTest::newRow("sequence counter a fraction") << QStringList({"device", "journal", "lastSequence"}) << QJsonValue(1.5)
                                                  << QString("device.journal.lastSequence: is not an integer");
+    QTest::newRow("journal entry of an unknown command") << QStringList({"device", "journal", "entries", "0", "command", "type"})
+                                                         << QJsonValue(QString("noSuchCommand"))
+                                                         << QString("device.journal.entries[0].command.type: is not a command this app knows");
+    QTest::newRow("unexpected ward field") << QStringList({"ward", "comment"}) << QJsonValue(QString("hello"))
+                                           << QString("ward.comment: is not expected");
 }
 
 void WardFileTest::payloadWithAMissingOrMalformedFieldIsUnreadable()

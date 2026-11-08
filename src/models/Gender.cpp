@@ -35,12 +35,3 @@ QJsonValue Gender::toJson() const
 {
     return QJsonValue(toString());
 }
-
-std::optional<Gender> Gender::fromJson(const QJsonValue& value)
-{
-    if (value.isNull() || !value.isString())
-    {
-        return std::nullopt;
-    }
-    return fromString(value.toString());
-}

@@ -10,6 +10,7 @@
 
 #include "Address.h"
 #include "Id.h"
+#include "JsonReader.h"
 #include "Person.h"
 
 class Family
@@ -54,7 +55,7 @@ public:
 
     // JSON serialization
     QJsonObject toJson() const;
-    static Family fromJson(const QJsonObject& json);
+    static Family fromJson(JsonReader json);
 
     // Value-based equality
     bool operator==(const Family& other) const;

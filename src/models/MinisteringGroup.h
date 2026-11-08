@@ -2,12 +2,12 @@
 
 #include <QString>
 #include <QSet>
-#include <QDate>
 #include <QJsonObject>
 #include <QJsonArray>
 #include <optional>
 
 #include "Id.h"
+#include "JsonReader.h"
 
 /// Unified ministering group for both EQ and RS.
 /// EQ groups: minister families (familyIds)
@@ -32,7 +32,6 @@ public:
     const QSet<PersonId>& ministerIds() const { return m_ministerIds; }
     const QSet<FamilyId>& familyIds() const { return m_familyIds; }
     const QSet<PersonId>& ministeredPersonIds() const { return m_ministeredPersonIds; }
-    std::optional<QDate> interviewedDate() const { return m_interviewedDate; }
     std::optional<PersonId> presidencyMemberId() const { return m_presidencyMemberId; }
 
     // Setters
@@ -47,7 +46,7 @@ public:
 
     // JSON serialization
     QJsonObject toJson() const;
-    static MinisteringGroup fromJson(const QJsonObject& json);
+    static MinisteringGroup fromJson(JsonReader json);
 
     // Value-based equality
     bool operator==(const MinisteringGroup& other) const;
@@ -59,6 +58,5 @@ private:
     QSet<PersonId> m_ministerIds;
     QSet<FamilyId> m_familyIds;             // EQ: populated
     QSet<PersonId> m_ministeredPersonIds;   // RS: populated
-    std::optional<QDate> m_interviewedDate;
     std::optional<PersonId> m_presidencyMemberId;
 };

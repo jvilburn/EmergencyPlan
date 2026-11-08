@@ -26,12 +26,14 @@ EmergencyAsset withPeople(const EmergencyAsset& asset, const QSet<PersonId>& peo
     return updated;
 }
 
-/// Creates a ward in both sessions from the test ward holding asset.
+/// Creates a ward from the test ward holding asset in mine, and in theirs, which then takes
+/// mine's ward as a version, so both hold one ward, access list included.
 void openBoth(TestSession& mine, TestSession& theirs, const EmergencyAsset& asset)
 {
     Document document = TestWard::withAsset(TestWard::document(), asset);
     mine.createWard(document);
     theirs.createWard(document);
+    theirs.replayOnto(mine.document());
 }
 
 }  // namespace

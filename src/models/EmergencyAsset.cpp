@@ -28,19 +28,14 @@ QJsonObject EmergencyAsset::toJson() const
     return json;
 }
 
-EmergencyAsset EmergencyAsset::fromJson(const QJsonObject& json)
+EmergencyAsset EmergencyAsset::fromJson(JsonReader json)
 {
     EmergencyAsset asset;
-    asset.m_id = EmergencyAssetId::fromString(json["id"].toString());
-    asset.m_name = json["name"].toString();
-    asset.m_responseArea = responseAreaFromString(json["responseArea"].toString());
-
-    const QJsonArray personArray = json["personIds"].toArray();
-    for (const QJsonValue& val : personArray)
-    {
-        asset.m_personIds.insert(PersonId::fromString(val.toString()));
-    }
-
+    asset.m_id = json.id<EmergencyAssetId>("id");
+    asset.m_name = json.string("name");
+    asset.m_responseArea = json.word("responseArea", assetAreas(), &responseAreaToString);
+    asset.m_personIds = json.ids<PersonId>("personIds");
+    json.finish();
     return asset;
 }
 

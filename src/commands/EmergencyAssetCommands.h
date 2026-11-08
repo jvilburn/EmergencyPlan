@@ -24,7 +24,7 @@ public:
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
-    static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
+    static CommandPtr fromJson(JsonReader json, const CommandDescription& description);
 
 private:
     EmergencyAsset m_asset;
@@ -54,7 +54,7 @@ public:
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
-    static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
+    static CommandPtr fromJson(JsonReader json, const CommandDescription& description);
 
 private:
     EmergencyAssetId m_assetId;
@@ -81,7 +81,7 @@ public:
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
-    static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
+    static CommandPtr fromJson(JsonReader json, const CommandDescription& description);
 
 private:
     EmergencyAsset m_asset;

@@ -59,14 +59,7 @@ QString orgToJson(MinisteringOrg org)
     return QString();
 }
 
-MinisteringOrg orgFromJson(const QJsonValue& value)
-{
-    if (value.toString() == "reliefSociety")
-    {
-        return MinisteringOrg::ReliefSociety;
-    }
-    return MinisteringOrg::EldersQuorum;
-}
+const QList<MinisteringOrg> AllOrgs = {MinisteringOrg::EldersQuorum, MinisteringOrg::ReliefSociety};
 
 }  // namespace
 
@@ -87,39 +80,20 @@ bool MinisteringCollection::operator==(const MinisteringCollection& other) const
 
 QJsonValue toJsonValue(const MinisteringCollection& value)
 {
-    QJsonObject districts;
-    for (const MinisteringDistrict& district : value.districts)
-    {
-        districts[district.id().toString()] = district.toJson();
-    }
-    QJsonObject groups;
-    for (const MinisteringGroup& group : value.groups)
-    {
-        groups[group.id().toString()] = group.toJson();
-    }
     QJsonObject json;
-    json["districts"] = districts;
-    json["groups"] = groups;
+    json["districts"] = sortedObjectArray(value.districts);
+    json["groups"] = sortedObjectArray(value.groups);
     return json;
 }
 
 template<>
-MinisteringCollection fromJsonValue<MinisteringCollection>(const QJsonValue& value)
+MinisteringCollection readValue<MinisteringCollection>(JsonReader& json, const QString& key)
 {
-    QJsonObject json = value.toObject();
+    JsonReader value = json.object(key);
     MinisteringCollection collection;
-    QJsonObject districts = json["districts"].toObject();
-    for (auto it = districts.constBegin(); it != districts.constEnd(); ++it)
-    {
-        MinisteringDistrict district = MinisteringDistrict::fromJson(it.value().toObject());
-        collection.districts.insert(district.id(), district);
-    }
-    QJsonObject groups = json["groups"].toObject();
-    for (auto it = groups.constBegin(); it != groups.constEnd(); ++it)
-    {
-        MinisteringGroup group = MinisteringGroup::fromJson(it.value().toObject());
-        collection.groups.insert(group.id(), group);
-    }
+    collection.districts = value.hash<MinisteringDistrictId, MinisteringDistrict>("districts");
+    collection.groups = value.hash<MinisteringGroupId, MinisteringGroup>("groups");
+    value.finish();
     return collection;
 }
 
@@ -216,12 +190,14 @@ QList<Address> ImportMinisteringCommand::addressesGiven() const
     return m_families.addressesGiven();
 }
 
-CommandPtr ImportMinisteringCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
+CommandPtr ImportMinisteringCommand::fromJson(JsonReader json, const CommandDescription& description)
 {
-    return std::make_shared<ImportMinisteringCommand>(orgFromJson(json["org"]),
-                                                      changeFromJson<MinisteringCollection>(json["collection"].toObject()),
-                                                      FamilyCollectionChange::fromJson(json["families"].toObject()),
-                                                      readChange<std::optional<QDate>>(json, "pdfDate"),
-                                                      fromJsonValue<std::optional<QDate>>(json["wardDirectoryPdfDate"]),
+    MinisteringOrg org = json.word("org", AllOrgs, &orgToJson);
+    FieldChange<MinisteringCollection> collection = changeFromJson<MinisteringCollection>(json.object("collection"));
+    FamilyCollectionChange families = FamilyCollectionChange::fromJson(json.object("families"));
+    std::optional<FieldChange<std::optional<QDate>>> pdfDate = readChange<std::optional<QDate>>(json, "pdfDate");
+    std::optional<QDate> wardDirectoryPdfDate = readValue<std::optional<QDate>>(json, "wardDirectoryPdfDate");
+    json.finish();
+    return std::make_shared<ImportMinisteringCommand>(org, collection, families, pdfDate, wardDirectoryPdfDate,
                                                       description);
 }

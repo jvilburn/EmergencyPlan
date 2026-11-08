@@ -4,6 +4,7 @@
 
 #include <QJsonArray>
 #include <QObject>
+#include <algorithm>
 
 namespace
 {
@@ -45,37 +46,54 @@ QJsonArray placedToJson(const QList<PlacedMember>& placed)
     return array;
 }
 
-QList<PlacedMember> placedFromJson(const QJsonArray& array)
+/// The placed members under key, which its writer leaves out when there are none.
+QList<PlacedMember> readPlaced(JsonReader& json, const QString& key)
 {
     QList<PlacedMember> placed;
-    for (const QJsonValue& value : array)
+    const QList<JsonReader> entries = json.optionalObjects(key);
+    for (JsonReader entry : entries)
     {
-        QJsonObject json = value.toObject();
-        placed.append(PlacedMember{Person::fromJson(json["person"].toObject()), json["index"].toInteger()});
+        Person person = Person::fromJson(entry.object("person"));
+        qsizetype index = entry.integer("index");
+        entry.finish();
+        placed.append(PlacedMember{person, index});
     }
     return placed;
 }
 
-/// The families as an object keyed by family id.
-QJsonObject familiesToJson(const QHash<FamilyId, Family>& families)
+/// Writes each change under key as an array in id order, each change's object carrying the
+/// id it is keyed by under "id", or nothing when there are none.
+template<typename Id, typename Change>
+void writeKeyedChanges(QJsonObject& json, const QString& key, const QHash<Id, Change>& changes)
 {
-    QJsonObject json;
-    for (const Family& family : families)
+    if (changes.isEmpty())
     {
-        json[family.id().toString()] = family.toJson();
+        return;
     }
-    return json;
+    QList<Id> ids = changes.keys();
+    std::sort(ids.begin(), ids.end());
+    QJsonArray array;
+    for (const Id& id : ids)
+    {
+        QJsonObject entry = changes.constFind(id)->toJson();
+        entry["id"] = id.toString();
+        array.append(entry);
+    }
+    json[key] = array;
 }
 
-QHash<FamilyId, Family> familiesFromJson(const QJsonObject& json)
+/// The changes writeKeyedChanges wrote under key, each keyed by its id.
+template<typename Id, typename Change>
+QHash<Id, Change> readKeyedChanges(JsonReader& json, const QString& key)
 {
-    QHash<FamilyId, Family> families;
-    for (auto it = json.constBegin(); it != json.constEnd(); ++it)
+    QHash<Id, Change> changes;
+    const QList<JsonReader> entries = json.optionalObjects(key);
+    for (JsonReader entry : entries)
     {
-        Family family = Family::fromJson(it.value().toObject());
-        families.insert(family.id(), family);
+        Id id = entry.id<Id>("id");
+        changes.insert(id, Change::fromJson(entry));
     }
-    return families;
+    return changes;
 }
 
 QSet<PersonId> idsOf(const QList<PlacedMember>& placed)
@@ -253,7 +271,7 @@ struct WriteChanges
 /// Reads each field's change from under its key.
 struct ReadChanges
 {
-    const QJsonObject& json;
+    JsonReader& json;
 
     template<typename Getter, typename Setter, typename T>
     void operator()(const char* key, const char*, Getter, Setter, std::optional<FieldChange<T>>& field)
@@ -319,11 +337,12 @@ QJsonObject MemberChange::toJson() const
     return json;
 }
 
-MemberChange MemberChange::fromJson(const QJsonObject& json)
+MemberChange MemberChange::fromJson(JsonReader json)
 {
     MemberChange change;
     ReadChanges visitor{json};
     forEachField(change, visitor);
+    json.finish();
     return change;
 }
 
@@ -504,15 +523,7 @@ QJsonObject FamilyChange::toJson() const
     QJsonObject json;
     writeChange(json, "address", m_address);
     writeChange(json, "note", m_note);
-    if (!m_members.isEmpty())
-    {
-        QJsonObject members;
-        for (auto it = m_members.constBegin(); it != m_members.constEnd(); ++it)
-        {
-            members[it.key().toString()] = it.value().toJson();
-        }
-        json["members"] = members;
-    }
+    writeKeyedChanges(json, "members", m_members);
     if (!m_added.isEmpty())
     {
         json["added"] = placedToJson(m_added);
@@ -524,19 +535,15 @@ QJsonObject FamilyChange::toJson() const
     return json;
 }
 
-FamilyChange FamilyChange::fromJson(const QJsonObject& json)
+FamilyChange FamilyChange::fromJson(JsonReader json)
 {
-    QHash<PersonId, MemberChange> members;
-    QJsonObject membersJson = json["members"].toObject();
-    for (auto it = membersJson.constBegin(); it != membersJson.constEnd(); ++it)
-    {
-        members.insert(PersonId::fromString(it.key()), MemberChange::fromJson(it.value().toObject()));
-    }
-    return FamilyChange(readChange<Address>(json, "address"),
-                        readChange<QString>(json, "note"),
-                        members,
-                        placedFromJson(json["added"].toArray()),
-                        placedFromJson(json["removed"].toArray()));
+    std::optional<FieldChange<Address>> address = readChange<Address>(json, "address");
+    std::optional<FieldChange<QString>> note = readChange<QString>(json, "note");
+    QHash<PersonId, MemberChange> members = readKeyedChanges<PersonId, MemberChange>(json, "members");
+    QList<PlacedMember> added = readPlaced(json, "added");
+    QList<PlacedMember> removed = readPlaced(json, "removed");
+    json.finish();
+    return FamilyChange(address, note, members, added, removed);
 }
 
 // ============================================================================
@@ -680,39 +687,21 @@ QList<Address> FamilyCollectionChange::addressesGiven() const
 QJsonObject FamilyCollectionChange::toJson() const
 {
     QJsonObject json;
-    if (!m_added.isEmpty())
-    {
-        json["added"] = familiesToJson(m_added);
-    }
-    if (!m_changed.isEmpty())
-    {
-        QJsonObject changed;
-        for (auto it = m_changed.constBegin(); it != m_changed.constEnd(); ++it)
-        {
-            changed[it.key().toString()] = it.value().toJson();
-        }
-        json["changed"] = changed;
-    }
-    if (!m_removed.isEmpty())
-    {
-        json["removed"] = familiesToJson(m_removed);
-    }
+    writeObjects(json, "added", m_added);
+    writeKeyedChanges(json, "changed", m_changed);
+    writeObjects(json, "removed", m_removed);
     writeCleanup(json, "addedCleanup", m_addedCleanup);
     writeCleanup(json, "removedCleanup", m_removedCleanup);
     return json;
 }
 
-FamilyCollectionChange FamilyCollectionChange::fromJson(const QJsonObject& json)
+FamilyCollectionChange FamilyCollectionChange::fromJson(JsonReader json)
 {
-    QHash<FamilyId, FamilyChange> changed;
-    QJsonObject changedJson = json["changed"].toObject();
-    for (auto it = changedJson.constBegin(); it != changedJson.constEnd(); ++it)
-    {
-        changed.insert(FamilyId::fromString(it.key()), FamilyChange::fromJson(it.value().toObject()));
-    }
-    return FamilyCollectionChange(familiesFromJson(json["added"].toObject()),
-                                  changed,
-                                  familiesFromJson(json["removed"].toObject()),
-                                  ReferenceCleanup::fromJson(json["addedCleanup"].toObject()),
-                                  ReferenceCleanup::fromJson(json["removedCleanup"].toObject()));
+    QHash<FamilyId, Family> added = json.optionalHash<FamilyId, Family>("added");
+    QHash<FamilyId, FamilyChange> changed = readKeyedChanges<FamilyId, FamilyChange>(json, "changed");
+    QHash<FamilyId, Family> removed = json.optionalHash<FamilyId, Family>("removed");
+    ReferenceCleanup addedCleanup = readCleanup(json, "addedCleanup");
+    ReferenceCleanup removedCleanup = readCleanup(json, "removedCleanup");
+    json.finish();
+    return FamilyCollectionChange(added, changed, removed, addedCleanup, removedCleanup);
 }

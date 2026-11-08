@@ -45,7 +45,7 @@ QJsonObject AddTeamCommand::toJson() const
 {
     QJsonObject json;
     json["team"] = m_team.toJson();
-    json["cleanup"] = m_cleanup.toJson();
+    writeCleanup(json, "cleanup", m_cleanup);
     return json;
 }
 
@@ -58,11 +58,12 @@ DocumentChange AddTeamCommand::documentChange() const
     return DocumentChange::team().updated(m_team.id());
 }
 
-CommandPtr AddTeamCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
+CommandPtr AddTeamCommand::fromJson(JsonReader json, const CommandDescription& description)
 {
-    return std::make_shared<AddTeamCommand>(Team::fromJson(json["team"].toObject()),
-                                            ReferenceCleanup::fromJson(json["cleanup"].toObject()),
-                                            description);
+    Team team = Team::fromJson(json.object("team"));
+    ReferenceCleanup cleanup = readCleanup(json, "cleanup");
+    json.finish();
+    return std::make_shared<AddTeamCommand>(team, cleanup, description);
 }
 
 // ----------------------------------------------------------------------------
@@ -158,13 +159,14 @@ DocumentChange UpdateTeamCommand::documentChange() const
     return DocumentChange::team().updated(m_teamId);
 }
 
-CommandPtr UpdateTeamCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
+CommandPtr UpdateTeamCommand::fromJson(JsonReader json, const CommandDescription& description)
 {
-    return std::make_shared<UpdateTeamCommand>(TeamId::fromString(json["teamId"].toString()),
-                                               readChange<QString>(json, "name"),
-                                               readChange<std::optional<PersonId>>(json, "leader"),
-                                               peopleChangeFromJson(json["members"].toObject()),
-                                               description);
+    TeamId teamId = json.id<TeamId>("teamId");
+    std::optional<FieldChange<QString>> name = readChange<QString>(json, "name");
+    std::optional<FieldChange<std::optional<PersonId>>> leader = readChange<std::optional<PersonId>>(json, "leader");
+    IdSetChange<PersonId> members = peopleChangeFromJson(json.object("members"));
+    json.finish();
+    return std::make_shared<UpdateTeamCommand>(teamId, name, leader, members, description);
 }
 
 // ----------------------------------------------------------------------------
@@ -206,7 +208,7 @@ QJsonObject DeleteTeamCommand::toJson() const
 {
     QJsonObject json;
     json["team"] = m_team.toJson();
-    json["cleanup"] = m_cleanup.toJson();
+    writeCleanup(json, "cleanup", m_cleanup);
     return json;
 }
 
@@ -215,9 +217,10 @@ DocumentChange DeleteTeamCommand::documentChange() const
     return DocumentChange::full();
 }
 
-CommandPtr DeleteTeamCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
+CommandPtr DeleteTeamCommand::fromJson(JsonReader json, const CommandDescription& description)
 {
-    return std::make_shared<DeleteTeamCommand>(Team::fromJson(json["team"].toObject()),
-                                               ReferenceCleanup::fromJson(json["cleanup"].toObject()),
-                                               description);
+    Team team = Team::fromJson(json.object("team"));
+    ReferenceCleanup cleanup = readCleanup(json, "cleanup");
+    json.finish();
+    return std::make_shared<DeleteTeamCommand>(team, cleanup, description);
 }

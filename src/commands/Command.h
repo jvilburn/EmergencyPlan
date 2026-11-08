@@ -10,6 +10,7 @@
 #include "DocumentChange.h"
 #include "FieldChange.h"
 #include "Id.h"
+#include "JsonReader.h"
 
 class Document;
 
@@ -37,7 +38,7 @@ public:
     CommandDescription undone() const;
 
     QJsonObject toJson() const;
-    static CommandDescription fromJson(const QJsonObject& json);
+    static CommandDescription fromJson(JsonReader json);
 
     bool operator==(const CommandDescription& other) const;
     bool operator!=(const CommandDescription& other) const { return !(*this == other); }

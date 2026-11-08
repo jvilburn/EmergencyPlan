@@ -2,6 +2,7 @@
 
 #include "FieldChange.h"
 #include "Family.h"
+#include "JsonReader.h"
 #include "ReferenceCleanup.h"
 
 #include <QHash>
@@ -34,7 +35,7 @@ public:
     QStringList describe(const QString& firstName) const;
 
     QJsonObject toJson() const;
-    static MemberChange fromJson(const QJsonObject& json);
+    static MemberChange fromJson(JsonReader json);
 
 private:
     bool isEmpty() const;
@@ -141,7 +142,7 @@ public:
     const std::optional<FieldChange<Address>>& address() const { return m_address; }
 
     QJsonObject toJson() const;
-    static FamilyChange fromJson(const QJsonObject& json);
+    static FamilyChange fromJson(JsonReader json);
 
 private:
     std::optional<FieldChange<Address>> m_address;
@@ -196,7 +197,7 @@ public:
     QList<Address> addressesGiven() const;
 
     QJsonObject toJson() const;
-    static FamilyCollectionChange fromJson(const QJsonObject& json);
+    static FamilyCollectionChange fromJson(JsonReader json);
 
 private:
     QHash<FamilyId, Family> m_added;

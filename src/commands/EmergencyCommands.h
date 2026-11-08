@@ -24,7 +24,7 @@ public:
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
-    static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
+    static CommandPtr fromJson(JsonReader json, const CommandDescription& description);
 
 private:
     EmergencyResponse m_response;
@@ -49,7 +49,7 @@ public:
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
-    static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
+    static CommandPtr fromJson(JsonReader json, const CommandDescription& description);
 
 private:
     EmergencyResponse m_response;
@@ -71,7 +71,7 @@ public:
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
-    static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
+    static CommandPtr fromJson(JsonReader json, const CommandDescription& description);
 
 private:
     EmergencyResponse m_response;
@@ -99,7 +99,7 @@ public:
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
-    static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
+    static CommandPtr fromJson(JsonReader json, const CommandDescription& description);
 
 private:
     ContactAttempt m_attempt;
@@ -121,7 +121,7 @@ public:
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
-    static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
+    static CommandPtr fromJson(JsonReader json, const CommandDescription& description);
 
 private:
     ContactAttempt m_attempt;
@@ -147,7 +147,7 @@ public:
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
-    static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
+    static CommandPtr fromJson(JsonReader json, const CommandDescription& description);
 
 private:
     ResponseTask m_task;
@@ -186,7 +186,7 @@ public:
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
-    static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
+    static CommandPtr fromJson(JsonReader json, const CommandDescription& description);
 
 private:
     FamilyId m_familyId;
@@ -217,7 +217,7 @@ public:
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
-    static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
+    static CommandPtr fromJson(JsonReader json, const CommandDescription& description);
 
 private:
     ResponseTask m_task;
@@ -240,7 +240,7 @@ public:
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
-    static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
+    static CommandPtr fromJson(JsonReader json, const CommandDescription& description);
 
 private:
     QString m_category;

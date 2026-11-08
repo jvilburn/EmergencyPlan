@@ -75,60 +75,6 @@ std::optional<PersonId> restoredRole(const std::optional<PersonId>& current,
     return current;
 }
 
-template<typename Id, typename T>
-QJsonObject objectsToJson(const QHash<Id, T>& objects)
-{
-    QJsonObject json;
-    for (auto it = objects.constBegin(); it != objects.constEnd(); ++it)
-    {
-        json[it.key().toString()] = it.value().toJson();
-    }
-    return json;
-}
-
-template<typename Id, typename T>
-QHash<Id, T> objectsFromJson(const QJsonObject& json)
-{
-    QHash<Id, T> objects;
-    for (auto it = json.constBegin(); it != json.constEnd(); ++it)
-    {
-        T object = T::fromJson(it.value().toObject());
-        objects.insert(object.id(), object);
-    }
-    return objects;
-}
-
-template<typename Id>
-QSet<Id> idsFromJson(const QJsonValue& value)
-{
-    QSet<Id> ids;
-    for (const QJsonValue& id : value.toArray())
-    {
-        ids.insert(Id::fromString(id.toString()));
-    }
-    return ids;
-}
-
-/// Writes the ids under key, or nothing when there are none.
-template<typename Id>
-void writeIds(QJsonObject& json, const QString& key, const QSet<Id>& ids)
-{
-    if (!ids.isEmpty())
-    {
-        json[key] = sortedIdArray(ids);
-    }
-}
-
-/// Writes the objects under key, or nothing when there are none.
-template<typename Id, typename T>
-void writeObjects(QJsonObject& json, const QString& key, const QHash<Id, T>& objects)
-{
-    if (!objects.isEmpty())
-    {
-        json[key] = objectsToJson(objects);
-    }
-}
-
 }  // namespace
 
 ReferenceCleanup ReferenceCleanup::of(const Document& document, const QSet<PersonId>& people, const QSet<FamilyId>& families)
@@ -405,17 +351,18 @@ QJsonObject ReferenceCleanup::toJson() const
     return json;
 }
 
-ReferenceCleanup ReferenceCleanup::fromJson(const QJsonObject& json)
+ReferenceCleanup ReferenceCleanup::fromJson(JsonReader json)
 {
     ReferenceCleanup cleanup;
-    cleanup.m_people = idsFromJson<PersonId>(json["people"]);
-    cleanup.m_families = idsFromJson<FamilyId>(json["families"]);
-    cleanup.m_teams = idsFromJson<TeamId>(json["teams"]);
-    cleanup.m_heldTeams = objectsFromJson<TeamId, Team>(json["heldTeams"].toObject());
-    cleanup.m_heldAssets = objectsFromJson<EmergencyAssetId, EmergencyAsset>(json["heldAssets"].toObject());
-    cleanup.m_heldGroups = objectsFromJson<MinisteringGroupId, MinisteringGroup>(json["heldGroups"].toObject());
-    cleanup.m_heldDistricts = objectsFromJson<MinisteringDistrictId, MinisteringDistrict>(json["heldDistricts"].toObject());
-    cleanup.m_heldTasks = objectsFromJson<TaskId, ResponseTask>(json["heldTasks"].toObject());
+    cleanup.m_people = json.optionalIds<PersonId>("people");
+    cleanup.m_families = json.optionalIds<FamilyId>("families");
+    cleanup.m_teams = json.optionalIds<TeamId>("teams");
+    cleanup.m_heldTeams = json.optionalHash<TeamId, Team>("heldTeams");
+    cleanup.m_heldAssets = json.optionalHash<EmergencyAssetId, EmergencyAsset>("heldAssets");
+    cleanup.m_heldGroups = json.optionalHash<MinisteringGroupId, MinisteringGroup>("heldGroups");
+    cleanup.m_heldDistricts = json.optionalHash<MinisteringDistrictId, MinisteringDistrict>("heldDistricts");
+    cleanup.m_heldTasks = json.optionalHash<TaskId, ResponseTask>("heldTasks");
+    json.finish();
     return cleanup;
 }
 
@@ -438,4 +385,14 @@ void writeCleanup(QJsonObject& json, const QString& key, const ReferenceCleanup&
     {
         json[key] = written;
     }
+}
+
+ReferenceCleanup readCleanup(JsonReader& json, const QString& key)
+{
+    std::optional<JsonReader> cleanup = json.optionalObject(key);
+    if (!cleanup.has_value())
+    {
+        return ReferenceCleanup();
+    }
+    return ReferenceCleanup::fromJson(*cleanup);
 }

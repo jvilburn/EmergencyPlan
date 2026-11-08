@@ -45,11 +45,6 @@ QJsonObject MinisteringGroup::toJson() const
         json["ministeredPersonIds"] = sortedIdArray(m_ministeredPersonIds);
     }
 
-    if (m_interviewedDate.has_value())
-    {
-        json["interviewedDate"] = m_interviewedDate->toString(Qt::ISODate);
-    }
-
     if (m_presidencyMemberId.has_value())
     {
         json["presidencyMemberId"] = m_presidencyMemberId->toString();
@@ -58,53 +53,16 @@ QJsonObject MinisteringGroup::toJson() const
     return json;
 }
 
-MinisteringGroup MinisteringGroup::fromJson(const QJsonObject& json)
+MinisteringGroup MinisteringGroup::fromJson(JsonReader json)
 {
     MinisteringGroup group;
-    group.m_id = MinisteringGroupId::fromString(json["id"].toString());
-    group.m_isRSFormat = json["isRSFormat"].toBool();
-
-    if (json.contains("ministerIds"))
-    {
-        QJsonArray ministerIdsArray = json["ministerIds"].toArray();
-        for (const QJsonValue& value : ministerIdsArray)
-        {
-            group.m_ministerIds.insert(PersonId::fromString(value.toString()));
-        }
-    }
-
-    if (json.contains("familyIds"))
-    {
-        QJsonArray familyIdsArray = json["familyIds"].toArray();
-        for (const QJsonValue& value : familyIdsArray)
-        {
-            group.m_familyIds.insert(FamilyId::fromString(value.toString()));
-        }
-    }
-
-    if (json.contains("ministeredPersonIds"))
-    {
-        QJsonArray ministeredPersonIdsArray = json["ministeredPersonIds"].toArray();
-        for (const QJsonValue& value : ministeredPersonIdsArray)
-        {
-            group.m_ministeredPersonIds.insert(PersonId::fromString(value.toString()));
-        }
-    }
-
-    if (json.contains("interviewedDate") && !json["interviewedDate"].isNull())
-    {
-        group.m_interviewedDate = QDate::fromString(json["interviewedDate"].toString(), Qt::ISODate);
-    }
-
-    if (json.contains("presidencyMemberId") && !json["presidencyMemberId"].isNull())
-    {
-        QString pmStr = json["presidencyMemberId"].toString();
-        if (!pmStr.isEmpty())
-        {
-            group.m_presidencyMemberId = PersonId::fromString(pmStr);
-        }
-    }
-
+    group.m_id = json.id<MinisteringGroupId>("id");
+    group.m_isRSFormat = json.boolean("isRSFormat");
+    group.m_ministerIds = json.optionalIds<PersonId>("ministerIds");
+    group.m_familyIds = json.optionalIds<FamilyId>("familyIds");
+    group.m_ministeredPersonIds = json.optionalIds<PersonId>("ministeredPersonIds");
+    group.m_presidencyMemberId = json.optionalId<PersonId>("presidencyMemberId");
+    json.finish();
     return group;
 }
 
@@ -115,6 +73,5 @@ bool MinisteringGroup::operator==(const MinisteringGroup& other) const
         && m_ministerIds == other.m_ministerIds
         && m_familyIds == other.m_familyIds
         && m_ministeredPersonIds == other.m_ministeredPersonIds
-        && m_interviewedDate == other.m_interviewedDate
         && m_presidencyMemberId == other.m_presidencyMemberId;
 }

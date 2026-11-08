@@ -56,7 +56,9 @@ void CommandRoundTripTest::sampleRebuiltFromItsEntryBehavesAsTheOriginal()
     const CommandSample& sample = samples[index];
 
     QJsonObject entry = CommandRegistry::toJson(*sample.command);
-    CommandPtr rebuilt = CommandRegistry::fromJson(entry);
+    JsonReader reader(entry);
+    CommandPtr rebuilt = CommandRegistry::fromJson(reader);
+    QVERIFY2(!reader.failed(), qPrintable(reader.problem()));
     QVERIFY(rebuilt != nullptr);
     QCOMPARE(rebuilt->type(), type);
     QVERIFY(CommandRegistry::toJson(*rebuilt) == entry);

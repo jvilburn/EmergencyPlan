@@ -1,4 +1,5 @@
 #include "DocumentMetadata.h"
+#include "Id.h"
 
 #include <QJsonArray>
 #include <QObject>
@@ -74,48 +75,14 @@ QString DocumentMetadata::wardName() const
 
 void DocumentMetadata::writeToJson(QJsonObject& json) const
 {
-    if (!m_stakes.isEmpty())
-    {
-        QJsonArray array;
-        for (const Stake& stake : m_stakes)
-        {
-            array.append(stake.toJson());
-        }
-        json["stakes"] = array;
-    }
-
-    if (!m_wards.isEmpty())
-    {
-        QJsonArray array;
-        for (const Ward& ward : m_wards)
-        {
-            array.append(ward.toJson());
-        }
-        json["wards"] = array;
-    }
+    writeObjects(json, "stakes", m_stakes);
+    writeObjects(json, "wards", m_wards);
 }
 
-void DocumentMetadata::readFromJson(const QJsonObject& json)
+void DocumentMetadata::readFromJson(JsonReader& json)
 {
-    if (json.contains("stakes"))
-    {
-        QJsonArray array = json["stakes"].toArray();
-        for (const QJsonValue& value : array)
-        {
-            Stake stake = Stake::fromJson(value.toObject());
-            m_stakes.insert(stake.unitNumber(), stake);
-        }
-    }
-
-    if (json.contains("wards"))
-    {
-        QJsonArray array = json["wards"].toArray();
-        for (const QJsonValue& value : array)
-        {
-            Ward ward = Ward::fromJson(value.toObject());
-            m_wards.insert(ward.unitNumber(), ward);
-        }
-    }
+    m_stakes = json.optionalHash<QString, Stake>("stakes");
+    m_wards = json.optionalHash<QString, Ward>("wards");
 }
 
 // ============================================================================

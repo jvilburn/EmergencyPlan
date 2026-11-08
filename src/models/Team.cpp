@@ -36,27 +36,14 @@ QJsonObject Team::toJson() const
     return json;
 }
 
-Team Team::fromJson(const QJsonObject& json)
+Team Team::fromJson(JsonReader json)
 {
     Team team;
-    team.m_id = TeamId::fromString(json["id"].toString());
-    team.m_name = json["name"].toString();
-
-    QString leaderStr = json["leaderId"].toString();
-    if (!leaderStr.isEmpty())
-    {
-        team.m_leaderId = PersonId::fromString(leaderStr);
-    }
-
-    if (json.contains("memberIds"))
-    {
-        QJsonArray memberIdsArray = json["memberIds"].toArray();
-        for (const QJsonValue& value : memberIdsArray)
-        {
-            team.m_memberIds.insert(PersonId::fromString(value.toString()));
-        }
-    }
-
+    team.m_id = json.id<TeamId>("id");
+    team.m_name = json.string("name");
+    team.m_leaderId = json.optionalId<PersonId>("leaderId");
+    team.m_memberIds = json.optionalIds<PersonId>("memberIds");
+    json.finish();
     return team;
 }
 

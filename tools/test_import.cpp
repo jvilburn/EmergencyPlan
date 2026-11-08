@@ -236,10 +236,6 @@ int importEQMinistering(const QString& pdfPath, QTextStream& out, QTextStream& e
             const MinisteringGroup& group = *groupIt;
             out << "  ========================================\n";
             out << "  " << orgType << " GROUP ID: " << group.id().toString() << "\n";
-            if (group.interviewedDate().has_value())
-            {
-                out << "  Interviewed: " << group.interviewedDate()->toString("yyyy-MM-dd") << "\n";
-            }
             out << "  ========================================\n";
 
             out << "  MINISTERS (" << group.ministerIds().size() << "):\n";

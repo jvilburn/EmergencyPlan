@@ -38,7 +38,7 @@ public:
     /// The address after, when the change sets a non-empty address.
     QList<Address> addressesGiven() const override;
 
-    static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
+    static CommandPtr fromJson(JsonReader json, const CommandDescription& description);
 
 private:
     FamilyId m_familyId;
@@ -67,7 +67,7 @@ public:
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
-    static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
+    static CommandPtr fromJson(JsonReader json, const CommandDescription& description);
 
 private:
     Family m_family;
@@ -93,7 +93,7 @@ public:
     /// The family's address, when it is not empty.
     QList<Address> addressesGiven() const override;
 
-    static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
+    static CommandPtr fromJson(JsonReader json, const CommandDescription& description);
 
 private:
     Family m_family;

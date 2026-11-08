@@ -13,6 +13,7 @@
 #include "Email.h"
 #include "Gender.h"
 #include "Id.h"
+#include "JsonReader.h"
 #include "Name.h"
 #include "Phone.h"
 
@@ -91,7 +92,7 @@ public:
 
     // JSON serialization
     QJsonObject toJson() const;
-    static Person fromJson(const QJsonObject& json);
+    static Person fromJson(JsonReader json);
 
     // Value-based equality
     bool operator==(const Person& other) const;

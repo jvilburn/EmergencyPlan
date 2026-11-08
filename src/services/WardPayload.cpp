@@ -25,7 +25,7 @@ QJsonObject WardPayload::toJson() const
 WardPayload WardPayload::fromJson(JsonReader json, PayloadKind kind)
 {
     WardPayload payload;
-    payload.ward = Document::fromJson(json.object("ward").source());
+    payload.ward = Document::fromJson(json.object("ward"));
     payload.ward.setAccess(AccessList::fromJson(json.object("access")));
     JsonReader landed = json.object("landed");
     const QStringList fingerprints = landed.keys();

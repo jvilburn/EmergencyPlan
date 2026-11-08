@@ -28,7 +28,7 @@ public:
     /// The whole document when it restores tasks, otherwise the team.
     DocumentChange documentChange() const override;
 
-    static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
+    static CommandPtr fromJson(JsonReader json, const CommandDescription& description);
 
 private:
     Team m_team;
@@ -61,7 +61,7 @@ public:
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
-    static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
+    static CommandPtr fromJson(JsonReader json, const CommandDescription& description);
 
 private:
     TeamId m_teamId;
@@ -90,7 +90,7 @@ public:
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
-    static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
+    static CommandPtr fromJson(JsonReader json, const CommandDescription& description);
 
 private:
     Team m_team;

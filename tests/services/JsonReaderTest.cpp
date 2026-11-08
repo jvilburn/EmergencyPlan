@@ -1,5 +1,6 @@
 #include "JsonReaderTest.h"
 #include "Base64Url.h"
+#include "Id.h"
 #include "JsonReader.h"
 
 #include <QJsonArray>
@@ -14,6 +15,12 @@ QJsonObject objectOf(const char* text)
     return QJsonDocument::fromJson(QByteArray(text)).object();
 }
 
+/// 1 is small and 2 large.
+QString sizeWord(int size)
+{
+    return size == 1 ? "small" : "large";
+}
+
 }  // namespace
 
 JsonReaderTest::JsonReaderTest(QObject* parent)
@@ -24,7 +31,7 @@ JsonReaderTest::JsonReaderTest(QObject* parent)
 void JsonReaderTest::everyFieldTakenByItsTypeReads()
 {
     JsonReader json(objectOf(R"({"name":"Bob","count":3,"ratio":1.5,"on":true,"key":"AAAAAAAAAAAAAAAAAAAAAA",)"
-                             R"("inner":{"x":"y"},"list":[{"a":1}],"words":["a","b"],"raw":[1,2]})"));
+                             R"("inner":{"x":"y"},"list":[{"a":1}],"words":["a","b"]})"));
 
     QCOMPARE(json.string("name"), QString("Bob"));
     QCOMPARE(json.integer("count"), qint64(3));
@@ -39,7 +46,6 @@ void JsonReaderTest::everyFieldTakenByItsTypeReads()
     QCOMPARE(list[0].integer("a"), qint64(1));
     list[0].finish();
     QCOMPARE(json.strings("words"), QStringList({"a", "b"}));
-    QCOMPARE(json.value("raw"), QJsonValue(QJsonArray({1, 2})));
     json.finish();
 
     QVERIFY(!json.failed());
@@ -131,6 +137,16 @@ void JsonReaderTest::optionalFieldReadsItsAbsenceAsEmptyAndRefusesEmptyWrittenOu
     JsonReader emptyList(objectOf(R"({"list":[]})"));
     emptyList.optionalObjects("list");
     QCOMPARE(emptyList.problem(), QString("list: is written out empty"));
+
+    JsonReader emptyObject(objectOf(R"({"inner":{}})"));
+    QVERIFY(!emptyObject.optionalObject("inner").has_value());
+    QCOMPARE(emptyObject.problem(), QString("inner: is written out empty"));
+
+    JsonReader presentObject(objectOf(R"({"inner":{"x":"y"}})"));
+    std::optional<JsonReader> inner = presentObject.optionalObject("inner");
+    QVERIFY(inner.has_value());
+    QCOMPARE(inner->string("x"), QString("y"));
+    QVERIFY(!presentObject.failed());
 }
 
 void JsonReaderTest::firstFailureIsKeptWithItsPath()
@@ -146,6 +162,113 @@ void JsonReaderTest::firstFailureIsKeptWithItsPath()
     QVERIFY(json.failed());
     QVERIFY(users[0].failed());
     QCOMPARE(json.problem(), QString("users[1].name: is not a string"));
+}
+
+void JsonReaderTest::wordIsOneOfItsWords()
+{
+    JsonReader json(objectOf(R"({"shade":"dark","size":"large"})"));
+    QCOMPARE(json.word("shade", {"light", "dark"}), QString("dark"));
+    QVERIFY(json.optionalWord("size", QList<int>{1, 2}, &sizeWord) == std::optional<int>(2));
+    QVERIFY(!json.optionalWord("fit", QList<int>{1, 2}, &sizeWord).has_value());
+    QCOMPARE(json.optionalWord("tone", {"warm", "cool"}), QString());
+    json.finish();
+    QVERIFY(!json.failed());
+
+    JsonReader other(objectOf(R"({"size":"Large"})"));
+    QCOMPARE(other.word("size", QList<int>{1, 2}, &sizeWord), 1);
+    QCOMPARE(other.problem(), QString("size: is not one of small, large"));
+
+    JsonReader missing(objectOf("{}"));
+    missing.word("size", {"small", "large"});
+    QCOMPARE(missing.problem(), QString("size: missing"));
+}
+
+void JsonReaderTest::datesAndTimesReadBackAsWritten_data()
+{
+    QTest::addColumn<QString>("kind");
+    QTest::addColumn<QString>("text");
+    QTest::addColumn<bool>("accepted");
+
+    QTest::newRow("date") << "date" << "2026-10-01" << true;
+    QTest::newRow("date out of range") << "date" << "2024-13-45" << false;
+    QTest::newRow("date without leading zeros") << "date" << "2026-1-5" << false;
+    QTest::newRow("date with a time") << "date" << "2026-10-01T08:00:00" << false;
+    QTest::newRow("time") << "time" << "2026-10-01T08:00:00.000Z" << true;
+    QTest::newRow("time without milliseconds") << "time" << "2026-10-01T08:00:00Z" << false;
+    QTest::newRow("time of a date alone") << "time" << "2026-10-01" << false;
+    QTest::newRow("time in words") << "time" << "yesterday" << false;
+}
+
+void JsonReaderTest::datesAndTimesReadBackAsWritten()
+{
+    QFETCH(QString, kind);
+    QFETCH(QString, text);
+    QFETCH(bool, accepted);
+    QJsonObject object;
+    object["when"] = text;
+    JsonReader json(object);
+
+    if (kind == "date")
+    {
+        QDate date = json.date("when");
+        QCOMPARE(date.isValid(), accepted);
+        if (accepted)
+        {
+            QCOMPARE(date.toString(Qt::ISODate), text);
+        }
+    }
+    else
+    {
+        QDateTime time = json.time("when");
+        QCOMPARE(time.isValid(), accepted);
+        if (accepted)
+        {
+            QCOMPARE(time.toString(Qt::ISODateWithMs), text);
+        }
+    }
+
+    QCOMPARE(json.failed(), !accepted);
+    if (!accepted)
+    {
+        QCOMPARE(json.problem(), QString("when: is not a %1").arg(kind));
+    }
+}
+
+void JsonReaderTest::idsAreNonEmptyStrings()
+{
+    JsonReader json(objectOf(R"({"id":"family-smith","leader":"person-bob","members":["person-bob","person-alice"]})"));
+    QVERIFY(json.id<FamilyId>("id") == FamilyId::fromString("family-smith"));
+    QVERIFY(json.optionalId<PersonId>("leader") == std::optional<PersonId>(PersonId::fromString("person-bob")));
+    QVERIFY(!json.optionalId<PersonId>("deputy").has_value());
+    QVERIFY(json.ids<PersonId>("members")
+            == QSet<PersonId>({PersonId::fromString("person-bob"), PersonId::fromString("person-alice")}));
+    QVERIFY(json.optionalIds<PersonId>("helpers").isEmpty());
+    json.finish();
+    QVERIFY(!json.failed());
+
+    JsonReader emptyId(objectOf(R"({"id":""})"));
+    emptyId.id<FamilyId>("id");
+    QCOMPARE(emptyId.problem(), QString("id: is an empty id"));
+
+    JsonReader emptyMember(objectOf(R"({"members":["person-bob",""]})"));
+    QVERIFY(emptyMember.ids<PersonId>("members").isEmpty());
+    QCOMPARE(emptyMember.problem(), QString("members[1]: is an empty id"));
+}
+
+void JsonReaderTest::nullIsTakenOnlyWhereWritten()
+{
+    JsonReader json(objectOf(R"({"before":null,"after":"Bob"})"));
+    QVERIFY(json.readNull("before"));
+    QVERIFY(!json.readNull("after"));
+    QVERIFY(!json.readNull("missing"));
+    json.finish();
+    QCOMPARE(json.problem(), QString("after: is not expected"));
+
+    JsonReader read(objectOf(R"({"after":"Bob"})"));
+    QVERIFY(!read.readNull("after"));
+    QCOMPARE(read.string("after"), QString("Bob"));
+    read.finish();
+    QVERIFY(!read.failed());
 }
 
 void JsonReaderTest::bytesAreUnpaddedBase64UrlOfTheirExactLength_data()

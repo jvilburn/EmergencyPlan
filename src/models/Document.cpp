@@ -316,79 +316,22 @@ EffectiveContactStatus Document::emergencyStatus(const FamilyId& familyId) const
 // JSON serialization
 // ============================================================================
 
-namespace
-{
-
-template<typename K, typename T>
-void serializeHashToJson(QJsonObject& json, const QString& key, const QHash<K, T>& hash)
-{
-    if (!hash.isEmpty())
-    {
-        QJsonArray array;
-        for (const T& item : hash)
-        {
-            array.append(item.toJson());
-        }
-        json[key] = array;
-    }
-}
-
-template<typename K, typename T>
-void deserializeJsonToHash(const QJsonObject& json, const QString& key, QHash<K, T>& hash)
-{
-    if (json.contains(key))
-    {
-        QJsonArray array = json[key].toArray();
-        for (const QJsonValue& value : array)
-        {
-            T item = T::fromJson(value.toObject());
-            hash.insert(item.id(), item);
-        }
-    }
-}
-
-} // anonymous namespace
-
 QJsonObject Document::toJson() const
 {
     QJsonObject json;
-
-    // Metadata (wards/stakes)
     m_metadata.writeToJson(json);
-
-    // Core collections
-    serializeHashToJson(json, "families", m_families);
-    serializeHashToJson(json, "teams", m_teams);
-
-    // Address coordinates
-    if (!m_addressCoordinates.isEmpty())
-    {
-        QJsonArray array;
-        for (auto it = m_addressCoordinates.constBegin(); it != m_addressCoordinates.constEnd(); ++it)
-        {
-            QJsonObject entry = it.value().toJson();
-            entry["address"] = it.key();
-            array.append(entry);
-        }
-        json["addressCoordinates"] = array;
-    }
-
-    // Emergency assets
-    serializeHashToJson(json, "emergencyResources", m_emergencyAssets);
-
-    // The emergency in progress
+    writeObjects(json, "families", m_families);
+    writeObjects(json, "teams", m_teams);
+    writeAddressCoordinates(json, "addressCoordinates", m_addressCoordinates);
+    writeObjects(json, "emergencyResources", m_emergencyAssets);
     if (m_emergencyResponse.has_value())
     {
         json["emergencyResponse"] = m_emergencyResponse->toJson();
     }
-
-    // Ministering
-    serializeHashToJson(json, "eqDistricts", m_eqDistricts);
-    serializeHashToJson(json, "eqGroups", m_eqGroups);
-    serializeHashToJson(json, "rsDistricts", m_rsDistricts);
-    serializeHashToJson(json, "rsGroups", m_rsGroups);
-
-    // Import dates
+    writeObjects(json, "eqDistricts", m_eqDistricts);
+    writeObjects(json, "eqGroups", m_eqGroups);
+    writeObjects(json, "rsDistricts", m_rsDistricts);
+    writeObjects(json, "rsGroups", m_rsGroups);
     if (m_wardDirectoryPdfDate.has_value())
     {
         json["wardDirectoryPdfDate"] = m_wardDirectoryPdfDate->toString(Qt::ISODate);
@@ -397,63 +340,29 @@ QJsonObject Document::toJson() const
     {
         json["ministeringPdfDate"] = m_ministeringPdfDate->toString(Qt::ISODate);
     }
-
     return json;
 }
 
-Document Document::fromJson(const QJsonObject& json)
+Document Document::fromJson(JsonReader json)
 {
     Document document;
-
-    // Metadata (wards/stakes)
     document.m_metadata.readFromJson(json);
-
-    // Core collections
-    deserializeJsonToHash(json, "families", document.m_families);
-    deserializeJsonToHash(json, "teams", document.m_teams);
-
-    // Address coordinates
-    QJsonArray addressCoordinates = json["addressCoordinates"].toArray();
-    for (const QJsonValue& value : addressCoordinates)
+    document.m_families = json.optionalHash<FamilyId, Family>("families");
+    document.m_teams = json.optionalHash<TeamId, Team>("teams");
+    document.m_addressCoordinates = readAddressCoordinates(json, "addressCoordinates");
+    document.m_emergencyAssets = json.optionalHash<EmergencyAssetId, EmergencyAsset>("emergencyResources");
+    std::optional<JsonReader> response = json.optionalObject("emergencyResponse");
+    if (response.has_value())
     {
-        QJsonObject entry = value.toObject();
-        document.m_addressCoordinates.insert(entry["address"].toString(), Coordinates::fromJson(entry));
+        document.m_emergencyResponse = EmergencyResponse::fromJson(*response);
     }
-
-    // Emergency assets
-    deserializeJsonToHash(json, "emergencyResources", document.m_emergencyAssets);
-
-    // The emergency in progress
-    if (json.contains("emergencyResponse"))
-    {
-        document.m_emergencyResponse = EmergencyResponse::fromJson(json["emergencyResponse"].toObject());
-    }
-
-    // Ministering
-    deserializeJsonToHash(json, "eqDistricts", document.m_eqDistricts);
-    deserializeJsonToHash(json, "eqGroups", document.m_eqGroups);
-    deserializeJsonToHash(json, "rsDistricts", document.m_rsDistricts);
-    deserializeJsonToHash(json, "rsGroups", document.m_rsGroups);
-
-    // Import dates
-    if (json.contains("wardDirectoryPdfDate"))
-    {
-        QDate date = QDate::fromString(
-            json["wardDirectoryPdfDate"].toString(), Qt::ISODate);
-        if (date.isValid())
-        {
-            document.m_wardDirectoryPdfDate = date;
-        }
-    }
-    if (json.contains("ministeringPdfDate"))
-    {
-        QDate date = QDate::fromString(
-            json["ministeringPdfDate"].toString(), Qt::ISODate);
-        if (date.isValid())
-        {
-            document.m_ministeringPdfDate = date;
-        }
-    }
+    document.m_eqDistricts = json.optionalHash<MinisteringDistrictId, MinisteringDistrict>("eqDistricts");
+    document.m_eqGroups = json.optionalHash<MinisteringGroupId, MinisteringGroup>("eqGroups");
+    document.m_rsDistricts = json.optionalHash<MinisteringDistrictId, MinisteringDistrict>("rsDistricts");
+    document.m_rsGroups = json.optionalHash<MinisteringGroupId, MinisteringGroup>("rsGroups");
+    document.m_wardDirectoryPdfDate = json.optionalDate("wardDirectoryPdfDate");
+    document.m_ministeringPdfDate = json.optionalDate("ministeringPdfDate");
+    json.finish();
 
     // Lookup caches are built by WardSession, through onDocumentChanged(), when it takes the document
 

@@ -11,11 +11,6 @@ QString timeToJson(const QDateTime& time)
     return time.toString(Qt::ISODateWithMs);
 }
 
-QDateTime timeFromJson(const QJsonValue& value)
-{
-    return QDateTime::fromString(value.toString(), Qt::ISODateWithMs);
-}
-
 QString methodToJson(ContactMethod method)
 {
     switch (method)
@@ -34,20 +29,8 @@ QString methodToJson(ContactMethod method)
     return QString();
 }
 
-/// The method named by value, or none when value names none.
-std::optional<ContactMethod> methodFromJson(const QJsonValue& value)
-{
-    QString name = value.toString();
-    for (ContactMethod method : {ContactMethod::Phone, ContactMethod::Text, ContactMethod::Email,
-                                 ContactMethod::Visit, ContactMethod::Other})
-    {
-        if (methodToJson(method) == name)
-        {
-            return method;
-        }
-    }
-    return std::nullopt;
-}
+const QList<ContactMethod> AllMethods = {ContactMethod::Phone, ContactMethod::Text, ContactMethod::Email,
+                                         ContactMethod::Visit, ContactMethod::Other};
 
 QString outcomeToJson(ContactOutcome outcome)
 {
@@ -61,19 +44,7 @@ QString outcomeToJson(ContactOutcome outcome)
     return QString();
 }
 
-/// The outcome named by value, or none when value names none.
-std::optional<ContactOutcome> outcomeFromJson(const QJsonValue& value)
-{
-    QString name = value.toString();
-    for (ContactOutcome outcome : {ContactOutcome::OK, ContactOutcome::UnableToReach})
-    {
-        if (outcomeToJson(outcome) == name)
-        {
-            return outcome;
-        }
-    }
-    return std::nullopt;
-}
+const QList<ContactOutcome> AllOutcomes = {ContactOutcome::OK, ContactOutcome::UnableToReach};
 
 /// Writes notes under "notes" when there are any.
 void writeNotes(QJsonObject& json, const QString& notes)
@@ -156,18 +127,6 @@ QJsonArray arrayOf(const QList<T>& items)
         array.append(item.toJson());
     }
     return array;
-}
-
-template<typename T>
-QList<T> listFrom(const QJsonValue& value)
-{
-    QList<T> items;
-    QJsonArray array = value.toArray();
-    for (const QJsonValue& item : array)
-    {
-        items.append(T::fromJson(item.toObject()));
-    }
-    return items;
 }
 
 }  // namespace
@@ -258,12 +217,13 @@ QJsonObject TaskNotification::toJson() const
     return json;
 }
 
-TaskNotification TaskNotification::fromJson(const QJsonObject& json)
+TaskNotification TaskNotification::fromJson(JsonReader json)
 {
     TaskNotification notification;
-    notification.m_method = methodFromJson(json["method"]).value_or(ContactMethod::Phone);
-    notification.m_timestamp = timeFromJson(json["timestamp"]);
-    notification.m_notes = json["notes"].toString();
+    notification.m_method = json.word("method", AllMethods, &methodToJson);
+    notification.m_timestamp = json.time("timestamp");
+    notification.m_notes = json.optionalString("notes");
+    json.finish();
     return notification;
 }
 
@@ -311,6 +271,9 @@ QJsonObject ContactAttempt::toJson() const
     if (m_who.has_value())
     {
         json["who"] = m_who->toString();
+    }
+    if (!m_whoName.isEmpty())
+    {
         json["whoName"] = m_whoName;
     }
     if (m_outcome.has_value())
@@ -322,21 +285,19 @@ QJsonObject ContactAttempt::toJson() const
     return json;
 }
 
-ContactAttempt ContactAttempt::fromJson(const QJsonObject& json)
+ContactAttempt ContactAttempt::fromJson(JsonReader json)
 {
     ContactAttempt attempt;
-    attempt.m_id = ContactAttemptId::fromString(json["id"].toString());
-    attempt.m_familyId = FamilyId::fromString(json["familyId"].toString());
-    attempt.m_familyName = json["familyName"].toString();
-    attempt.m_method = methodFromJson(json["method"]);
-    if (json.contains("who"))
-    {
-        attempt.m_who = PersonId::fromString(json["who"].toString());
-        attempt.m_whoName = json["whoName"].toString();
-    }
-    attempt.m_outcome = outcomeFromJson(json["outcome"]);
-    attempt.m_timestamp = timeFromJson(json["timestamp"]);
-    attempt.m_notes = json["notes"].toString();
+    attempt.m_id = json.id<ContactAttemptId>("id");
+    attempt.m_familyId = json.id<FamilyId>("familyId");
+    attempt.m_familyName = json.string("familyName");
+    attempt.m_method = json.optionalWord("method", AllMethods, &methodToJson);
+    attempt.m_who = json.optionalId<PersonId>("who");
+    attempt.m_whoName = json.optionalString("whoName");
+    attempt.m_outcome = json.optionalWord("outcome", AllOutcomes, &outcomeToJson);
+    attempt.m_timestamp = json.time("timestamp");
+    attempt.m_notes = json.optionalString("notes");
+    json.finish();
     return attempt;
 }
 
@@ -390,22 +351,18 @@ QJsonObject TaskAssignment::toJson() const
     return json;
 }
 
-TaskAssignment TaskAssignment::fromJson(const QJsonObject& json)
+TaskAssignment TaskAssignment::fromJson(JsonReader json)
 {
     TaskAssignment assignment;
-    if (json.contains("teamId"))
+    assignment.m_teamId = json.optionalId<TeamId>("teamId");
+    assignment.m_personId = json.optionalId<PersonId>("personId");
+    assignment.m_assigneeName = json.string("assigneeName");
+    std::optional<JsonReader> notification = json.optionalObject("notification");
+    if (notification.has_value())
     {
-        assignment.m_teamId = TeamId::fromString(json["teamId"].toString());
+        assignment.m_notification = TaskNotification::fromJson(*notification);
     }
-    if (json.contains("personId"))
-    {
-        assignment.m_personId = PersonId::fromString(json["personId"].toString());
-    }
-    assignment.m_assigneeName = json["assigneeName"].toString();
-    if (json.contains("notification"))
-    {
-        assignment.m_notification = TaskNotification::fromJson(json["notification"].toObject());
-    }
+    json.finish();
     return assignment;
 }
 
@@ -435,11 +392,12 @@ QJsonObject TaskResolution::toJson() const
     return json;
 }
 
-TaskResolution TaskResolution::fromJson(const QJsonObject& json)
+TaskResolution TaskResolution::fromJson(JsonReader json)
 {
     TaskResolution resolution;
-    resolution.m_notes = json["notes"].toString();
-    resolution.m_resolvedAt = timeFromJson(json["resolvedAt"]);
+    resolution.m_notes = json.optionalString("notes");
+    resolution.m_resolvedAt = json.time("resolvedAt");
+    json.finish();
     return resolution;
 }
 
@@ -483,23 +441,26 @@ QJsonObject ResponseTask::toJson() const
     return json;
 }
 
-ResponseTask ResponseTask::fromJson(const QJsonObject& json)
+ResponseTask ResponseTask::fromJson(JsonReader json)
 {
     ResponseTask task;
-    task.m_id = TaskId::fromString(json["id"].toString());
-    task.m_familyId = FamilyId::fromString(json["familyId"].toString());
-    task.m_familyName = json["familyName"].toString();
-    task.m_category = json["category"].toString();
-    task.m_description = json["description"].toString();
-    task.m_createdAt = timeFromJson(json["createdAt"]);
-    if (json.contains("assignment"))
+    task.m_id = json.id<TaskId>("id");
+    task.m_familyId = json.id<FamilyId>("familyId");
+    task.m_familyName = json.string("familyName");
+    task.m_category = json.string("category");
+    task.m_description = json.string("description");
+    task.m_createdAt = json.time("createdAt");
+    std::optional<JsonReader> assignment = json.optionalObject("assignment");
+    if (assignment.has_value())
     {
-        task.m_assignment = TaskAssignment::fromJson(json["assignment"].toObject());
+        task.m_assignment = TaskAssignment::fromJson(*assignment);
     }
-    if (json.contains("resolution"))
+    std::optional<JsonReader> resolution = json.optionalObject("resolution");
+    if (resolution.has_value())
     {
-        task.m_resolution = TaskResolution::fromJson(json["resolution"].toObject());
+        task.m_resolution = TaskResolution::fromJson(*resolution);
     }
+    json.finish();
     return task;
 }
 
@@ -699,18 +660,23 @@ QJsonObject EmergencyResponse::toJson() const
     return json;
 }
 
-EmergencyResponse EmergencyResponse::fromJson(const QJsonObject& json)
+EmergencyResponse EmergencyResponse::fromJson(JsonReader json)
 {
     EmergencyResponse response;
-    response.m_name = json["name"].toString();
-    response.m_startedAt = timeFromJson(json["startedAt"]);
-    QJsonArray categories = json["taskCategories"].toArray();
-    for (const QJsonValue& category : categories)
+    response.m_name = json.string("name");
+    response.m_startedAt = json.time("startedAt");
+    response.m_taskCategories = json.strings("taskCategories");
+    const QList<JsonReader> attempts = json.optionalObjects("contactAttempts");
+    for (const JsonReader& attempt : attempts)
     {
-        response.m_taskCategories.append(category.toString());
+        response.insertContactAttempt(ContactAttempt::fromJson(attempt));
     }
-    response.m_contactAttempts = listFrom<ContactAttempt>(json["contactAttempts"]);
-    response.m_tasks = listFrom<ResponseTask>(json["tasks"]);
+    const QList<JsonReader> tasks = json.optionalObjects("tasks");
+    for (const JsonReader& task : tasks)
+    {
+        response.insertTask(ResponseTask::fromJson(task));
+    }
+    json.finish();
     return response;
 }
 

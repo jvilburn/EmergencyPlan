@@ -28,14 +28,6 @@ QJsonObject Stake::toJson() const
     {
         json["unitNumber"] = m_unitNumber;
     }
-    if (!m_phone.isEmpty())
-    {
-        json["phone"] = m_phone;
-    }
-    if (!m_email.isEmpty())
-    {
-        json["email"] = m_email;
-    }
     if (!m_stakeCenterAddress.isEmpty())
     {
         json["stakeCenterAddress"] = m_stakeCenterAddress;
@@ -49,49 +41,27 @@ QJsonObject Stake::toJson() const
         json["stakeCenterLng"] = *m_stakeCenterLng;
     }
 
-    // Serialize ward unit numbers
     if (!m_wardUnitNumbers.isEmpty())
     {
-        QJsonArray wardUnitsArray;
-        for (const QString& wardUnit : m_wardUnitNumbers)
-        {
-            wardUnitsArray.append(wardUnit);
-        }
-        json["wardUnitNumbers"] = wardUnitsArray;
+        QStringList wardUnits = m_wardUnitNumbers.values();
+        wardUnits.sort();
+        json["wardUnitNumbers"] = QJsonArray::fromStringList(wardUnits);
     }
 
     return json;
 }
 
-Stake Stake::fromJson(const QJsonObject& json)
+Stake Stake::fromJson(JsonReader json)
 {
     Stake stake;
-
-    stake.m_unitNumber = json["unitNumber"].toString();
-    stake.m_name = json["name"].toString();
-    stake.m_phone = json["phone"].toString();
-    stake.m_email = json["email"].toString();
-    stake.m_stakeCenterAddress = json["stakeCenterAddress"].toString();
-
-    if (json.contains("stakeCenterLat"))
-    {
-        stake.m_stakeCenterLat = json["stakeCenterLat"].toDouble();
-    }
-    if (json.contains("stakeCenterLng"))
-    {
-        stake.m_stakeCenterLng = json["stakeCenterLng"].toDouble();
-    }
-
-    // Deserialize ward unit numbers
-    if (json.contains("wardUnitNumbers"))
-    {
-        QJsonArray wardUnitsArray = json["wardUnitNumbers"].toArray();
-        for (const QJsonValue& value : wardUnitsArray)
-        {
-            stake.m_wardUnitNumbers.insert(value.toString());
-        }
-    }
-
+    stake.m_name = json.optionalString("name");
+    stake.m_unitNumber = json.optionalString("unitNumber");
+    stake.m_stakeCenterAddress = json.optionalString("stakeCenterAddress");
+    stake.m_stakeCenterLat = json.optionalNumber("stakeCenterLat");
+    stake.m_stakeCenterLng = json.optionalNumber("stakeCenterLng");
+    const QStringList wardUnits = json.optionalStrings("wardUnitNumbers");
+    stake.m_wardUnitNumbers = QSet<QString>(wardUnits.begin(), wardUnits.end());
+    json.finish();
     return stake;
 }
 
@@ -103,8 +73,6 @@ bool Stake::operator==(const Stake& other) const
 {
     return m_name == other.m_name
         && m_unitNumber == other.m_unitNumber
-        && m_phone == other.m_phone
-        && m_email == other.m_email
         && m_stakeCenterAddress == other.m_stakeCenterAddress
         && m_stakeCenterLat == other.m_stakeCenterLat
         && m_stakeCenterLng == other.m_stakeCenterLng

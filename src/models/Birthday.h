@@ -1,5 +1,7 @@
 #pragma once
 
+#include "JsonReader.h"
+
 #include <QString>
 #include <QJsonObject>
 #include <optional>
@@ -40,7 +42,7 @@ public:
 
     // JSON serialization
     QJsonObject toJson() const;
-    static Birthday fromJson(const QJsonObject& json);
+    static Birthday fromJson(JsonReader json);
 
     // Value-based equality
     bool operator==(const Birthday& other) const;

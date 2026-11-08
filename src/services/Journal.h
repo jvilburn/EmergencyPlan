@@ -38,7 +38,9 @@ public:
 
     QJsonObject toJson() const;
 
-    /// The journal a local file holds, each entry's command kept as it was written.
+    /// The journal a local file holds, each entry's command kept as it was written. Each
+    /// entry's command is read as the command it names, so an entry this app cannot rebuild
+    /// refuses the file.
     static Journal fromJson(JsonReader json);
 
     bool operator==(const Journal& other) const;

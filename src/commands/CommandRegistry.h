@@ -10,7 +10,7 @@
 struct CommandType
 {
     QString name;
-    CommandPtr (*fromJson)(const QJsonObject& json, const CommandDescription& description);
+    CommandPtr (*fromJson)(JsonReader json, const CommandDescription& description);
 };
 
 /// The command types, and the serialised form a command takes in the journal.
@@ -23,9 +23,11 @@ public:
     /// A command as the journal holds it: its type, its description and its fields.
     static QJsonObject toJson(const Command& command);
 
-    /// The command a journal entry holds, rebuilt as the command it was.
-    static CommandPtr fromJson(const QJsonObject& json);
+    /// The command a journal entry holds, rebuilt as the command it was. For a type this
+    /// app lacks, it fails json and answers an empty pointer.
+    static CommandPtr fromJson(JsonReader json);
 
-    /// The description a journal entry holds, read without rebuilding the command.
+    /// The description a journal entry holds, read without rebuilding the command. The entry
+    /// was read strictly or made by this app.
     static CommandDescription descriptionOf(const QJsonObject& json);
 };

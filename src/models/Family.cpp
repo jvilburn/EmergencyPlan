@@ -226,31 +226,22 @@ QJsonObject Family::toJson() const
     return json;
 }
 
-Family Family::fromJson(const QJsonObject& json)
+Family Family::fromJson(JsonReader json)
 {
     Family family;
-    family.m_id = FamilyId::fromString(json["id"].toString());
-
-    if (json.contains("address"))
+    family.m_id = json.id<FamilyId>("id");
+    const QStringList lines = json.optionalStrings("address");
+    for (const QString& line : lines)
     {
-        QJsonArray addressArray = json["address"].toArray();
-        for (const QJsonValue& value : addressArray)
-        {
-            family.m_address.addLine(value.toString());
-        }
+        family.m_address.addLine(line);
     }
-
-    if (json.contains("members"))
+    const QList<JsonReader> members = json.optionalObjects("members");
+    for (const JsonReader& member : members)
     {
-        QJsonArray membersArray = json["members"].toArray();
-        for (const QJsonValue& value : membersArray)
-        {
-            family.m_members.append(Person::fromJson(value.toObject()));
-        }
+        family.m_members.append(Person::fromJson(member));
     }
-
-    family.m_note = json["note"].toString();  // empty if missing
-
+    family.m_note = json.optionalString("note");
+    json.finish();
     return family;
 }
 

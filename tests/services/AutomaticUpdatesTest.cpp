@@ -531,7 +531,7 @@ void AutomaticUpdatesTest::lateAnswersChangeNothing()
     session.unitLookup().findWard("111111", wardWithChapel("111111", QString()));
     QCOMPARE(appliedSpy.count(), 1);
     QCOMPARE(changedSpy.count(), 2);
-    QVERIFY(session.document().metadata().findWardByUnit("111111")->chapelAddress().has_value());
+    QVERIFY(!session.document().metadata().findWardByUnit("111111")->chapelAddress().isEmpty());
     QCOMPARE(session.unitLookup().requests(), QStringList({"ward 111111", "ward 222222"}));
 
     // The late failure of the new address left it off the failed list too.

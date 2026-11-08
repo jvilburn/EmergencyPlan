@@ -21,7 +21,7 @@ QList<Ward> wardsByUnit(const Document& document)
 Ward withLookedUpDetails(const Ward& ward, const Ward& found)
 {
     Ward updated = ward;
-    if (found.chapelAddress().has_value())
+    if (!found.chapelAddress().isEmpty())
     {
         updated.setChapelAddress(found.chapelAddress());
     }
@@ -33,11 +33,11 @@ Ward withLookedUpDetails(const Ward& ward, const Ward& found)
     {
         updated.setChapelLng(found.chapelLng());
     }
-    if (found.chapelPhone().has_value())
+    if (!found.chapelPhone().isEmpty())
     {
         updated.setChapelPhone(found.chapelPhone());
     }
-    if (found.meetingTime().has_value())
+    if (!found.meetingTime().isEmpty())
     {
         updated.setMeetingTime(found.meetingTime());
     }
@@ -270,7 +270,7 @@ QString AutomaticUpdates::nextWardToLookUp() const
 bool AutomaticUpdates::wardNeedsDetails(const Ward& ward) const
 {
     return !ward.unitNumber().isEmpty()
-        && !ward.chapelAddress().has_value()
+        && ward.chapelAddress().isEmpty()
         && !m_failed.contains(ward.unitNumber());
 }
 
@@ -307,7 +307,7 @@ void AutomaticUpdates::onWardFound(const QString& wardUnitNumber, const Ward& wa
             emit applied();
         }
         // A lookup that found no chapel did not resolve the unit.
-        if (!updated.chapelAddress().has_value())
+        if (updated.chapelAddress().isEmpty())
         {
             m_failed.insert(wardUnitNumber);
         }

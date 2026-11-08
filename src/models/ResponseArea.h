@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QList>
 #include <QString>
 
 enum class ResponseArea
@@ -29,19 +30,8 @@ inline QString responseAreaToString(ResponseArea area)
     return QString();
 }
 
-inline ResponseArea responseAreaFromString(const QString& str)
+/// The areas an emergency asset belongs to.
+inline QList<ResponseArea> assetAreas()
 {
-    if (str == "med")
-    {
-        return ResponseArea::Medical;
-    }
-    if (str == "rec")
-    {
-        return ResponseArea::Recovery;
-    }
-    if (str == "com")
-    {
-        return ResponseArea::Communications;
-    }
-    return ResponseArea::None;
+    return {ResponseArea::Medical, ResponseArea::Recovery, ResponseArea::Communications};
 }

@@ -7,6 +7,7 @@
 #include <optional>
 
 #include "Id.h"
+#include "JsonReader.h"
 
 class Team
 {
@@ -38,7 +39,7 @@ public:
 
     // JSON serialization
     QJsonObject toJson() const;
-    static Team fromJson(const QJsonObject& json);
+    static Team fromJson(JsonReader json);
 
     // Value-based equality
     bool operator==(const Team& other) const;

@@ -15,6 +15,7 @@
 #include "MemberEditorTest.h"
 #include "PersonJsonTest.h"
 #include "ReferenceCleanupTest.h"
+#include "StrictReadersTest.h"
 #include "TeamCommandsTest.h"
 #include "UpdateFamilyCommandTest.h"
 #include "WardFileTest.h"
@@ -53,6 +54,7 @@ int main(int argc, char* argv[])
     WardFileTest wardFileTest(nullptr);
     FileWardStoreTest fileWardStoreTest(nullptr);
     WardSessionSavingTest wardSessionSavingTest(nullptr);
+    StrictReadersTest strictReadersTest(nullptr);
 
     int failures = 0;
     failures += QTest::qExec(&personJsonTest, argc, argv);
@@ -76,5 +78,6 @@ int main(int argc, char* argv[])
     failures += QTest::qExec(&wardFileTest, argc, argv);
     failures += QTest::qExec(&fileWardStoreTest, argc, argv);
     failures += QTest::qExec(&wardSessionSavingTest, argc, argv);
+    failures += QTest::qExec(&strictReadersTest, argc, argv);
     return failures;
 }

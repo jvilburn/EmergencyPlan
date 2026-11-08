@@ -226,7 +226,7 @@ ReplayResult WardSession::replay(const Document& version)
     const QList<JournalEntry>& entries = m_device.journal.entries();
     for (int i = 0; i < entries.size(); ++i)
     {
-        CommandPtr command = CommandRegistry::fromJson(entries[i].command);
+        CommandPtr command = CommandRegistry::fromJson(JsonReader(entries[i].command));
         CommitResult result = attempt(*command, replayed);
         if (result.status != CommitStatus::Applied)
         {

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <QByteArray>
+#include <QHash>
+#include <QJsonObject>
 #include <QString>
 #include <QStringList>
 #include <QUuid>
@@ -8,6 +10,8 @@
 #include <QJsonArray>
 #include <QMetaType>
 #include <QSet>
+
+#include <algorithm>
 
 template<typename Derived>
 class IdBase
@@ -198,4 +202,40 @@ QJsonArray sortedIdArray(const QSet<Id>& ids)
     }
     strings.sort();
     return QJsonArray::fromStringList(strings);
+}
+
+/// Writes the ids under key as sortedIdArray writes them, or nothing when there are none.
+template<typename Id>
+void writeIds(QJsonObject& json, const QString& key, const QSet<Id>& ids)
+{
+    if (!ids.isEmpty())
+    {
+        json[key] = sortedIdArray(ids);
+    }
+}
+
+/// The objects as a JSON array of their toJson in key order, so equal hashes write equal
+/// JSON.
+template<typename Key, typename T>
+QJsonArray sortedObjectArray(const QHash<Key, T>& objects)
+{
+    QList<Key> keys = objects.keys();
+    std::sort(keys.begin(), keys.end());
+    QJsonArray array;
+    for (const Key& key : keys)
+    {
+        array.append(objects.constFind(key)->toJson());
+    }
+    return array;
+}
+
+/// Writes the objects under key as sortedObjectArray writes them, or nothing when there are
+/// none.
+template<typename Key, typename T>
+void writeObjects(QJsonObject& json, const QString& key, const QHash<Key, T>& objects)
+{
+    if (!objects.isEmpty())
+    {
+        json[key] = sortedObjectArray(objects);
+    }
 }

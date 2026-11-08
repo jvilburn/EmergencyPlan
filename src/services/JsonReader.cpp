@@ -165,6 +165,65 @@ bool JsonReader::optionalFlag(const QString& key)
     return value.toBool();
 }
 
+bool JsonReader::readNull(const QString& key)
+{
+    if (!m_object.value(key).isNull())
+    {
+        return false;
+    }
+    m_taken.insert(key);
+    return true;
+}
+
+QString JsonReader::word(const QString& key, const QStringList& words)
+{
+    return checkedWord(key, string(key), words);
+}
+
+QString JsonReader::optionalWord(const QString& key, const QStringList& words)
+{
+    QString text = optionalString(key);
+    if (text.isEmpty())
+    {
+        return QString();
+    }
+    return checkedWord(key, text, words);
+}
+
+QDate JsonReader::date(const QString& key)
+{
+    QString text = string(key);
+    QDate date = QDate::fromString(text, Qt::ISODate);
+    if (!date.isValid() || date.toString(Qt::ISODate) != text)
+    {
+        fail(key, "is not a date");
+        return QDate();
+    }
+    return date;
+}
+
+std::optional<QDate> JsonReader::optionalDate(const QString& key)
+{
+    if (!m_object.contains(key))
+    {
+        m_taken.insert(key);
+        return std::nullopt;
+    }
+    return date(key);
+}
+
+QDateTime JsonReader::time(const QString& key)
+{
+    QString text = string(key);
+    QDateTime time = QDateTime::fromString(text, Qt::ISODateWithMs);
+    if (!time.isValid() || time.toString(Qt::ISODateWithMs) != text)
+    {
+        fail(key, "is not a time");
+        return QDateTime();
+    }
+    return time;
+}
+
 QByteArray JsonReader::bytes(const QString& key, int length)
 {
     QJsonValue value = take(key);
@@ -205,6 +264,11 @@ std::optional<JsonReader> JsonReader::optionalObject(const QString& key)
     if (!value.isObject())
     {
         fail(key, "is not an object");
+        return std::nullopt;
+    }
+    if (value.toObject().isEmpty())
+    {
+        fail(key, "is written out empty");
         return std::nullopt;
     }
     return JsonReader(value.toObject(), pathOf(key), m_status);
@@ -297,11 +361,6 @@ QList<QByteArray> JsonReader::optionalBytesList(const QString& key, int length)
     return values;
 }
 
-QJsonValue JsonReader::value(const QString& key)
-{
-    return take(key);
-}
-
 void JsonReader::fail(const QString& key, const QString& what)
 {
     if (m_status->problem.isEmpty())
@@ -376,4 +435,36 @@ QStringList JsonReader::readStrings(const QString& key, const QJsonArray& array)
         strings.append(array[i].toString());
     }
     return strings;
+}
+
+QString JsonReader::checkedWord(const QString& key, const QString& text, const QStringList& words)
+{
+    if (!words.contains(text))
+    {
+        fail(key, "is not one of " + words.join(", "));
+        return QString();
+    }
+    return text;
+}
+
+QString JsonReader::idText(const QString& key, const QString& text)
+{
+    if (text.isEmpty())
+    {
+        fail(key, "is an empty id");
+    }
+    return text;
+}
+
+QStringList JsonReader::idTexts(const QString& key, const QStringList& texts)
+{
+    for (int i = 0; i < texts.size(); ++i)
+    {
+        if (texts[i].isEmpty())
+        {
+            fail(elementOf(key, i), "is an empty id");
+            return {};
+        }
+    }
+    return texts;
 }

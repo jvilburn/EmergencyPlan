@@ -52,9 +52,11 @@ DocumentChange AddEmergencyAssetCommand::documentChange() const
     return DocumentChange::emergencyAsset().updated(m_asset.id());
 }
 
-CommandPtr AddEmergencyAssetCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
+CommandPtr AddEmergencyAssetCommand::fromJson(JsonReader json, const CommandDescription& description)
 {
-    return std::make_shared<AddEmergencyAssetCommand>(EmergencyAsset::fromJson(json["asset"].toObject()), description);
+    EmergencyAsset asset = EmergencyAsset::fromJson(json.object("asset"));
+    json.finish();
+    return std::make_shared<AddEmergencyAssetCommand>(asset, description);
 }
 
 // ----------------------------------------------------------------------------
@@ -132,12 +134,13 @@ DocumentChange UpdateEmergencyAssetCommand::documentChange() const
     return DocumentChange::emergencyAsset().updated(m_assetId);
 }
 
-CommandPtr UpdateEmergencyAssetCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
+CommandPtr UpdateEmergencyAssetCommand::fromJson(JsonReader json, const CommandDescription& description)
 {
-    return std::make_shared<UpdateEmergencyAssetCommand>(EmergencyAssetId::fromString(json["assetId"].toString()),
-                                                         readChange<QString>(json, "name"),
-                                                         peopleChangeFromJson(json["people"].toObject()),
-                                                         description);
+    EmergencyAssetId assetId = json.id<EmergencyAssetId>("assetId");
+    std::optional<FieldChange<QString>> name = readChange<QString>(json, "name");
+    IdSetChange<PersonId> people = peopleChangeFromJson(json.object("people"));
+    json.finish();
+    return std::make_shared<UpdateEmergencyAssetCommand>(assetId, name, people, description);
 }
 
 // ----------------------------------------------------------------------------
@@ -189,7 +192,9 @@ DocumentChange DeleteEmergencyAssetCommand::documentChange() const
     return DocumentChange::emergencyAsset().updated(m_asset.id());
 }
 
-CommandPtr DeleteEmergencyAssetCommand::fromJson(const QJsonObject& json, const CommandDescription& description)
+CommandPtr DeleteEmergencyAssetCommand::fromJson(JsonReader json, const CommandDescription& description)
 {
-    return std::make_shared<DeleteEmergencyAssetCommand>(EmergencyAsset::fromJson(json["asset"].toObject()), description);
+    EmergencyAsset asset = EmergencyAsset::fromJson(json.object("asset"));
+    json.finish();
+    return std::make_shared<DeleteEmergencyAssetCommand>(asset, description);
 }

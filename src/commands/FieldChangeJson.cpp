@@ -55,100 +55,82 @@ QJsonValue toJsonValue(const std::optional<QDate>& value)
 }
 
 template<>
-QString fromJsonValue<QString>(const QJsonValue& value)
+QString readValue<QString>(JsonReader& json, const QString& key)
 {
-    return value.toString();
+    return json.string(key);
 }
 
 template<>
-Name fromJsonValue<Name>(const QJsonValue& value)
+Name readValue<Name>(JsonReader& json, const QString& key)
 {
-    return Name(value.toString());
+    return Name(json.string(key));
 }
 
 template<>
-Phone fromJsonValue<Phone>(const QJsonValue& value)
+Phone readValue<Phone>(JsonReader& json, const QString& key)
 {
-    return Phone(value.toString());
+    return Phone(json.string(key));
 }
 
 template<>
-bool fromJsonValue<bool>(const QJsonValue& value)
+bool readValue<bool>(JsonReader& json, const QString& key)
 {
-    return value.toBool();
+    return json.boolean(key);
 }
 
 template<>
-QStringList fromJsonValue<QStringList>(const QJsonValue& value)
+QStringList readValue<QStringList>(JsonReader& json, const QString& key)
 {
-    QStringList strings;
-    QJsonArray array = value.toArray();
-    for (const QJsonValue& item : array)
-    {
-        strings.append(item.toString());
-    }
-    return strings;
+    return json.strings(key);
 }
 
 template<>
-Address fromJsonValue<Address>(const QJsonValue& value)
+Address readValue<Address>(JsonReader& json, const QString& key)
 {
     Address address;
-    QJsonArray lines = value.toArray();
-    for (const QJsonValue& line : lines)
+    const QStringList lines = json.strings(key);
+    for (const QString& line : lines)
     {
-        address.addLine(line.toString());
+        address.addLine(line);
     }
     return address;
 }
 
 template<>
-Birthday fromJsonValue<Birthday>(const QJsonValue& value)
+Birthday readValue<Birthday>(JsonReader& json, const QString& key)
 {
-    return Birthday::fromJson(value.toObject());
+    return Birthday::fromJson(json.object(key));
 }
 
 template<>
-std::optional<Gender> fromJsonValue<std::optional<Gender>>(const QJsonValue& value)
+std::optional<Gender> readValue<std::optional<Gender>>(JsonReader& json, const QString& key)
 {
-    return Gender::fromJson(value);
-}
-
-template<>
-std::optional<PersonId> fromJsonValue<std::optional<PersonId>>(const QJsonValue& value)
-{
-    if (!value.isString())
+    if (json.readNull(key))
     {
         return std::nullopt;
     }
-    return PersonId::fromString(value.toString());
+    return json.word(key, Gender::values(), &Gender::toString);
 }
 
 template<>
-std::optional<QDate> fromJsonValue<std::optional<QDate>>(const QJsonValue& value)
+std::optional<PersonId> readValue<std::optional<PersonId>>(JsonReader& json, const QString& key)
 {
-    if (!value.isString())
+    if (json.readNull(key))
     {
         return std::nullopt;
     }
-    return QDate::fromString(value.toString(), Qt::ISODate);
+    return json.id<PersonId>(key);
 }
 
-namespace
+template<>
+std::optional<QDate> readValue<std::optional<QDate>>(JsonReader& json, const QString& key)
 {
-
-QSet<PersonId> idsFromJson(const QJsonValue& value)
-{
-    QSet<PersonId> ids;
-    QJsonArray array = value.toArray();
-    for (const QJsonValue& item : array)
+    if (json.readNull(key))
     {
-        ids.insert(PersonId::fromString(item.toString()));
+        return std::nullopt;
     }
-    return ids;
+    return json.date(key);
 }
-
-}  // namespace
 
 QJsonObject peopleChangeToJson(const IdSetChange<PersonId>& change)
 {
@@ -158,7 +140,10 @@ QJsonObject peopleChangeToJson(const IdSetChange<PersonId>& change)
     return json;
 }
 
-IdSetChange<PersonId> peopleChangeFromJson(const QJsonObject& json)
+IdSetChange<PersonId> peopleChangeFromJson(JsonReader json)
 {
-    return IdSetChange<PersonId>(idsFromJson(json["added"]), idsFromJson(json["removed"]));
+    QSet<PersonId> added = json.ids<PersonId>("added");
+    QSet<PersonId> removed = json.ids<PersonId>("removed");
+    json.finish();
+    return IdSetChange<PersonId>(added, removed);
 }

@@ -17,6 +17,7 @@
 #include "ItemType.h"
 #include "EmergencyAsset.h"
 #include "EmergencyResponse.h"
+#include "JsonReader.h"
 #include "ResponseArea.h"
 #include <QSet>
 
@@ -142,7 +143,7 @@ public:
 
     // JSON serialization
     QJsonObject toJson() const;
-    static Document fromJson(const QJsonObject& json);
+    static Document fromJson(JsonReader json);
 
     // Value-based equality
     bool operator==(const Document& other) const;

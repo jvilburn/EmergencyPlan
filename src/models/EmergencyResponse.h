@@ -11,6 +11,7 @@
 
 #include "Family.h"
 #include "Id.h"
+#include "JsonReader.h"
 #include "Person.h"
 #include "Team.h"
 
@@ -74,7 +75,7 @@ public:
     const QString& notes() const { return m_notes; }
 
     QJsonObject toJson() const;
-    static TaskNotification fromJson(const QJsonObject& json);
+    static TaskNotification fromJson(JsonReader json);
 
     bool operator==(const TaskNotification& other) const;
     bool operator!=(const TaskNotification& other) const { return !(*this == other); }
@@ -116,7 +117,7 @@ public:
     const QString& notes() const { return m_notes; }
 
     QJsonObject toJson() const;
-    static ContactAttempt fromJson(const QJsonObject& json);
+    static ContactAttempt fromJson(JsonReader json);
 
     bool operator==(const ContactAttempt& other) const;
     bool operator!=(const ContactAttempt& other) const { return !(*this == other); }
@@ -156,7 +157,7 @@ public:
     void setNotification(const TaskNotification& notification) { m_notification = notification; }
 
     QJsonObject toJson() const;
-    static TaskAssignment fromJson(const QJsonObject& json);
+    static TaskAssignment fromJson(JsonReader json);
 
     bool operator==(const TaskAssignment& other) const;
     bool operator!=(const TaskAssignment& other) const { return !(*this == other); }
@@ -183,7 +184,7 @@ public:
     const QDateTime& resolvedAt() const { return m_resolvedAt; }
 
     QJsonObject toJson() const;
-    static TaskResolution fromJson(const QJsonObject& json);
+    static TaskResolution fromJson(JsonReader json);
 
     bool operator==(const TaskResolution& other) const;
     bool operator!=(const TaskResolution& other) const { return !(*this == other); }
@@ -226,7 +227,7 @@ public:
     bool isResolved() const { return m_resolution.has_value(); }
 
     QJsonObject toJson() const;
-    static ResponseTask fromJson(const QJsonObject& json);
+    static ResponseTask fromJson(JsonReader json);
 
     bool operator==(const ResponseTask& other) const;
     bool operator!=(const ResponseTask& other) const { return !(*this == other); }
@@ -310,7 +311,7 @@ public:
     int countByStatus(EffectiveContactStatus status, const QHash<FamilyId, Family>& families) const;
 
     QJsonObject toJson() const;
-    static EmergencyResponse fromJson(const QJsonObject& json);
+    static EmergencyResponse fromJson(JsonReader json);
 
     bool operator==(const EmergencyResponse& other) const;
     bool operator!=(const EmergencyResponse& other) const { return !(*this == other); }

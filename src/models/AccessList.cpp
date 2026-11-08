@@ -22,16 +22,7 @@ QString roleName(AccessRole role)
 
 AccessRole readRole(JsonReader& json, const QString& key)
 {
-    QString role = json.string(key);
-    if (role == "member")
-    {
-        return AccessRole::Member;
-    }
-    if (role != "admin")
-    {
-        json.fail(key, "is not admin or member");
-    }
-    return AccessRole::Admin;
+    return json.word(key, QList<AccessRole>{AccessRole::Admin, AccessRole::Member}, &roleName);
 }
 
 }  // namespace
@@ -167,7 +158,7 @@ QJsonObject AccessInvite::toJson() const
 
 AccessInvite AccessInvite::fromJson(JsonReader json)
 {
-    QString kind = json.string("for");
+    QString kind = json.word("for", {"device", "user"});
     UserId maker = UserId::fromBytes(json.bytes("maker", Crypto::IdBytes));
     QByteArray publicKey = json.bytes("publicKey", Crypto::KeyBytes);
     QByteArray verifyKey = json.bytes("verifyKey", Crypto::KeyBytes);
@@ -177,10 +168,6 @@ AccessInvite AccessInvite::fromJson(JsonReader json)
         QString label = json.string("label");
         json.finish();
         return forUser(maker, role, label, publicKey, verifyKey);
-    }
-    if (kind != "device")
-    {
-        json.fail("for", "is not device or user");
     }
     json.finish();
     return forDevice(maker, publicKey, verifyKey);

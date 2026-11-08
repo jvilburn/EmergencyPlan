@@ -143,10 +143,11 @@ void UpdateFamilyCommandTest::editHoldsOnlyTheFieldsThatDiffer()
     QJsonObject change = json["change"].toObject();
 
     QCOMPARE(change.keys(), QStringList({"members"}));
-    QJsonObject members = change["members"].toObject();
-    QCOMPARE(members.keys(), QStringList({TestWard::bobId().toString()}));
-    QJsonObject bob = members[TestWard::bobId().toString()].toObject();
-    QCOMPARE(bob.keys(), QStringList({"phone"}));
+    QJsonArray members = change["members"].toArray();
+    QCOMPARE(members.size(), qsizetype(1));
+    QJsonObject bob = members[0].toObject();
+    QCOMPARE(bob.keys(), QStringList({"id", "phone"}));
+    QCOMPARE(bob["id"].toString(), TestWard::bobId().toString());
     QCOMPARE(bob["phone"].toObject()["before"].toString(), QString("555-1111"));
     QCOMPARE(bob["phone"].toObject()["after"].toString(), QString("555-2222"));
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "JsonReader.h"
 #include "Ward.h"
 #include "Stake.h"
 
@@ -43,8 +44,12 @@ public:
     // ========================================================================
     // JSON serialization
     // ========================================================================
+    /// Writes the wards and stakes into the document's own object.
     void writeToJson(QJsonObject& json) const;
-    void readFromJson(const QJsonObject& json);
+
+    /// Reads the wards and stakes from the document's own reader, which the document
+    /// finishes.
+    void readFromJson(JsonReader& json);
 
     // ========================================================================
     // Equality

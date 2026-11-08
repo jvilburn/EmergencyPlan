@@ -45,21 +45,24 @@ QJsonObject CommandRegistry::toJson(const Command& command)
     return json;
 }
 
-CommandPtr CommandRegistry::fromJson(const QJsonObject& json)
+CommandPtr CommandRegistry::fromJson(JsonReader json)
 {
-    QString name = json["type"].toString();
+    QString name = json.string("type");
+    CommandDescription description = CommandDescription::fromJson(json.object("description"));
+    JsonReader fields = json.object("fields");
+    json.finish();
     for (const CommandType& type : types())
     {
         if (type.name == name)
         {
-            return type.fromJson(json["fields"].toObject(), descriptionOf(json));
+            return type.fromJson(fields, description);
         }
     }
-    Q_ASSERT_X(false, "CommandRegistry::fromJson", "a journal entry names a type the registry lacks");
+    json.fail("type", "is not a command this app knows");
     return nullptr;
 }
 
 CommandDescription CommandRegistry::descriptionOf(const QJsonObject& json)
 {
-    return CommandDescription::fromJson(json["description"].toObject());
+    return CommandDescription::fromJson(JsonReader(json["description"].toObject()));
 }

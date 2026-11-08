@@ -118,39 +118,27 @@ QJsonObject Person::toJson() const
     return json;
 }
 
-Person Person::fromJson(const QJsonObject& json)
+Person Person::fromJson(JsonReader json)
 {
     Person person;
-    person.m_id = PersonId::fromString(json["id"].toString());
-    person.m_name = Name(json["name"].toString());
-    person.m_phone = Phone(json["phone"].toString());
-    person.m_altPhone = Phone(json["altPhone"].toString());
-    person.m_email = json["email"].toString();
-
-    if (json.contains("gender"))
+    person.m_id = json.id<PersonId>("id");
+    person.m_name = Name(json.string("name"));
+    person.m_phone = Phone(json.optionalString("phone"));
+    person.m_altPhone = Phone(json.optionalString("altPhone"));
+    person.m_email = json.optionalString("email");
+    person.m_gender = json.optionalWord("gender", Gender::values(), &Gender::toString);
+    std::optional<JsonReader> birthday = json.optionalObject("birthday");
+    if (birthday.has_value())
     {
-        person.m_gender = Gender::fromString(json["gender"].toString());
+        person.m_birthday = Birthday::fromJson(*birthday);
     }
-    if (json.contains("birthday"))
-    {
-        person.m_birthday = Birthday::fromJson(json["birthday"].toObject());
-    }
-
-    if (json.contains("callings"))
-    {
-        QJsonArray callingsArray = json["callings"].toArray();
-        for (const QJsonValue& value : callingsArray)
-        {
-            person.m_callings.append(value.toString());
-        }
-    }
-
-    person.m_stakeUnitNumber = json["stakeUnitNumber"].toString();
-    person.m_wardUnitNumber = json["wardUnitNumber"].toString();
-    person.m_isParent = json["isParent"].toBool();  // false if missing
-    person.m_specialNeedNote = json["specialNeedNote"].toString();  // empty if missing
-    person.m_note = json["note"].toString();  // empty if missing
-
+    person.m_callings = json.optionalStrings("callings");
+    person.m_stakeUnitNumber = json.optionalString("stakeUnitNumber");
+    person.m_wardUnitNumber = json.optionalString("wardUnitNumber");
+    person.m_isParent = json.optionalFlag("isParent");
+    person.m_specialNeedNote = json.optionalString("specialNeedNote");
+    person.m_note = json.optionalString("note");
+    json.finish();
     return person;
 }
 

@@ -33,12 +33,14 @@ Team withLeader(const Team& team, const std::optional<PersonId>& leader)
     return updated;
 }
 
-/// Creates a ward in both sessions from the test ward holding team.
+/// Creates a ward from the test ward holding team in mine, and in theirs, which then takes
+/// mine's ward as a version, so both hold one ward, access list included.
 void openBoth(TestSession& mine, TestSession& theirs, const Team& team)
 {
     Document document = TestWard::withTeam(TestWard::document(), team);
     mine.createWard(document);
     theirs.createWard(document);
+    theirs.replayOnto(mine.document());
 }
 
 }  // namespace

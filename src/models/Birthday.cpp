@@ -10,6 +10,17 @@ namespace
     // Matches "7 Oct", "23 May", "7 Oct (16)", "23 May (8)"
     const QRegularExpression BIRTHDAY_PATTERN(
         R"(^\d{1,2}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(\s+\(\d+\))?$)");
+
+    /// The part under key, or none when its writer left it out.
+    std::optional<int> readPart(JsonReader& json, const QString& key)
+    {
+        std::optional<qint64> part = json.optionalInteger(key);
+        if (!part.has_value())
+        {
+            return std::nullopt;
+        }
+        return static_cast<int>(*part);
+    }
 }
 
 Birthday Birthday::create(std::optional<int> year,
@@ -150,21 +161,13 @@ QJsonObject Birthday::toJson() const
     return json;
 }
 
-Birthday Birthday::fromJson(const QJsonObject& json)
+Birthday Birthday::fromJson(JsonReader json)
 {
     Birthday birthday;
-    if (json.contains("year"))
-    {
-        birthday.m_year = json["year"].toInt();
-    }
-    if (json.contains("month"))
-    {
-        birthday.m_month = json["month"].toInt();
-    }
-    if (json.contains("day"))
-    {
-        birthday.m_day = json["day"].toInt();
-    }
+    birthday.m_year = readPart(json, "year");
+    birthday.m_month = readPart(json, "month");
+    birthday.m_day = readPart(json, "day");
+    json.finish();
     return birthday;
 }
 

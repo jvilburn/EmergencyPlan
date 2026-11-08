@@ -148,12 +148,16 @@ public:
 
     // Serialization
     QJsonObject toJson() const;
-    static Family fromJson(const QJsonObject& json);
+    static Family fromJson(JsonReader json);
 
     // Value-based equality (all fields)
     bool operator==(const Family& other) const;
 };
 ```
+
+### File Format
+
+[FORMAT.md](FORMAT.md) specifies every field of a ward file and of the device key file. Every reader is strict through `JsonReader`: a `fromJson` takes each field its `toJson` writes by its type, takes a field `toJson` leaves out when empty with an `optional...` call, and ends with `finish()`, which fails the read for any field left untaken. The first problem is kept with the path of the field it names, and a file with one reads nothing. Every `toJson` writes a collection held by key in key order and a set in sorted order, so one value always writes the same JSON.
 
 ### Qt Model Adapters
 
@@ -268,7 +272,7 @@ public:
 };
 ```
 
-`CommandRegistry` lists every command type once by its type name. It writes a command as its type, its description and its fields, and rebuilds it from that form with the type's `fromJson`.
+`CommandRegistry` lists every command type once by its type name. It writes a command as its type, its description and its fields, and rebuilds it from that form with the type's `fromJson`. A journal entry naming a type it lacks refuses the file that holds it.
 
 An update command holds a `FieldChange<T>` (before and after) for each field it changes, and nothing for the fields it leaves alone. A field holds for the command at either end: at before, the command sets it; at after, its result is already there. Any other value is a conflict.
 

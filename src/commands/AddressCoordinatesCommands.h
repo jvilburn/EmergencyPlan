@@ -29,7 +29,7 @@ public:
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
-    static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
+    static CommandPtr fromJson(JsonReader json, const CommandDescription& description);
 
 private:
     QString m_address;
@@ -56,7 +56,7 @@ public:
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
-    static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
+    static CommandPtr fromJson(JsonReader json, const CommandDescription& description);
 
 private:
     QString m_address;

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "JsonReader.h"
+
 #include <QString>
 #include <QSet>
 #include <QJsonObject>
@@ -24,10 +26,6 @@ public:
     // Ward unit numbers in this stake (from stake API)
     const QSet<QString>& wardUnitNumbers() const { return m_wardUnitNumbers; }
 
-    // Stake contact info
-    const QString& phone() const { return m_phone; }
-    const QString& email() const { return m_email; }
-
     // Stake center location (from stake lookup API)
     const QString& stakeCenterAddress() const { return m_stakeCenterAddress; }
     std::optional<double> stakeCenterLat() const { return m_stakeCenterLat; }
@@ -47,7 +45,7 @@ public:
     // JSON serialization
     // ========================================================================
     QJsonObject toJson() const;
-    static Stake fromJson(const QJsonObject& json);
+    static Stake fromJson(JsonReader json);
 
     // ========================================================================
     // Equality
@@ -61,10 +59,6 @@ private:
 
     // Ward unit numbers in this stake (from stake API, reference data)
     QSet<QString> m_wardUnitNumbers;
-
-    // Stake contact info
-    QString m_phone;                   // Stake phone number
-    QString m_email;                   // Stake email address
 
     // Stake center location (from stake lookup API)
     QString m_stakeCenterAddress;      // Stake center building address

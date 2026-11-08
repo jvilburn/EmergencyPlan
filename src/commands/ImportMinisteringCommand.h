@@ -29,7 +29,7 @@ struct MinisteringCollection
 
 QJsonValue toJsonValue(const MinisteringCollection& value);
 template<>
-MinisteringCollection fromJsonValue<MinisteringCollection>(const QJsonValue& value);
+MinisteringCollection readValue<MinisteringCollection>(JsonReader& json, const QString& key);
 
 /// A ministering import, worked out at construction: its organization's districts and
 /// groups, the families it adds or changes, the ministering PDF date, and the ward directory
@@ -62,7 +62,7 @@ public:
     DocumentChange documentChange() const override;
     QList<Address> addressesGiven() const override;
 
-    static CommandPtr fromJson(const QJsonObject& json, const CommandDescription& description);
+    static CommandPtr fromJson(JsonReader json, const CommandDescription& description);
 
 private:
     MinisteringOrg m_org;

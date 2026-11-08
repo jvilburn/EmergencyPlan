@@ -709,7 +709,7 @@ void ReferenceCleanupTest::undoingAFamilyDeleteLeavesEachPlaceSomeoneElseChanged
     QJsonObject district = districtIn(theirs.document()).toJson();
     district["presidencyMemberId"] = TestWard::carolId().toString();
     district["groupIds"] = QJsonArray({replacement.id().toString()});
-    MinisteringDistrict carolPresides = MinisteringDistrict::fromJson(district);
+    MinisteringDistrict carolPresides = MinisteringDistrict::fromJson(JsonReader(district));
     MinisteringImportResult ministering;
     ministering.success = true;
     ministering.families = theirs.document().families();
