@@ -201,6 +201,7 @@ set(SERVICE_SOURCES
     src/services/AppData.cpp
     src/services/WardList.cpp
     src/services/ShowInFolder.cpp
+    src/services/InstanceLock.cpp
     # src/services/StatisticsService.cpp
     # src/services/ResourceService.cpp
     # src/services/SearchService.cpp
@@ -245,6 +246,7 @@ set(SERVICE_HEADERS
     src/services/AppData.h
     src/services/WardList.h
     src/services/ShowInFolder.h
+    src/services/InstanceLock.h
     # src/services/StatisticsService.h
     # src/services/ResourceService.h
     # src/services/SearchService.h

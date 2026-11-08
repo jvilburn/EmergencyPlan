@@ -11,5 +11,5 @@ public:
 
 private slots:
     void wardsAndKeysAreSiblingFoldersOfTheRoot();
-    void settingsAreAFileInTheRoot();
+    void settingsAndTheLockAreFilesInTheRoot();
 };

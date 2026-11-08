@@ -18,9 +18,10 @@ void AppDataTest::wardsAndKeysAreSiblingFoldersOfTheRoot()
     QVERIFY(!appData.keyFilePath().startsWith(appData.wardsDirectory() + "/"));
 }
 
-void AppDataTest::settingsAreAFileInTheRoot()
+void AppDataTest::settingsAndTheLockAreFilesInTheRoot()
 {
     AppData appData("C:/data/Ward Planning");
 
     QCOMPARE(appData.settingsFilePath(), QString("C:/data/Ward Planning/settings.json"));
+    QCOMPARE(appData.lockFilePath(), QString("C:/data/Ward Planning/instance.lock"));
 }

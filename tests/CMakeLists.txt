@@ -3,6 +3,7 @@
 find_package(Qt6 REQUIRED COMPONENTS Test)
 
 add_subdirectory(spec)
+add_subdirectory(lock)
 
 add_executable(WardPlanningTests
     main.cpp

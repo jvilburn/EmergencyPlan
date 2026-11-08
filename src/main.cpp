@@ -10,6 +10,7 @@
 #include "DocumentManager.h"
 #include "EmergencyManager.h"
 #include "FileWardStore.h"
+#include "InstanceLock.h"
 #include "KeyFile.h"
 #include "MainWindow.h"
 #include "TileService.h"
@@ -27,6 +28,16 @@ int main(int argc, char *argv[])
     parser.addOption(developerOption);
     parser.process(app);
 
+    // App data is named after the application, so it is found after the name is set. A launch
+    // that cannot take the instance lock exits, and the lock is taken before the key file is
+    // read, so two first starts never both make keys.
+    AppData appData = AppData::standard();
+    InstanceLock lock(appData.lockFilePath());
+    if (!lock.take())
+    {
+        return 0;
+    }
+
     // Load Windows 7 Aero stylesheet
     QFile styleFile(":/styles/windows7.qss");
     if (styleFile.open(QFile::ReadOnly | QFile::Text))
@@ -42,8 +53,6 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    // App data is named after the application, so it is found after the name is set
-    AppData appData = AppData::standard();
     KeyFileResult keys = KeyFile::loadOrCreate(appData.keyFilePath());
     switch (keys.status)
     {
