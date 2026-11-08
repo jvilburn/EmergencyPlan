@@ -25,6 +25,8 @@
 #include "WardDirectoryImportService.h"
 #include "MinisteringImportService.h"
 #include "GeoLocation.h"
+#include "OpenWardDialog.h"
+#include "ShowInFolder.h"
 
 #include <QCloseEvent>
 #include <QGuiApplication>
@@ -42,16 +44,17 @@
 #include <QSysInfo>
 #include <QFile>
 #include <QFileInfo>
+#include <QDir>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSaveFile>
 
-MainWindow::MainWindow(const QString& settingsFilePath, QWidget* parent)
+MainWindow::MainWindow(const QString& settingsFilePath, bool developer, QWidget* parent)
     : QMainWindow(parent)
     , m_settingsFilePath(settingsFilePath)
 {
     setupUi();
-    setupMenus();
+    setupMenus(developer);
     setupConnections();
 
     initializeDefaultLocation();
@@ -143,13 +146,18 @@ void MainWindow::setupUi()
     m_geocodingProgress->hide();
 }
 
-void MainWindow::setupMenus()
+void MainWindow::setupMenus(bool developer)
 {
     // File menu
     QMenu* fileMenu = menuBar()->addMenu(tr("&File"));
 
     m_newWardAction = fileMenu->addAction(tr("&New Ward..."), this, &MainWindow::onNewWard);
     m_newWardAction->setShortcut(QKeySequence::New);
+
+    QAction* openWardAction = fileMenu->addAction(tr("&Open Ward..."), this, &MainWindow::onOpenWard);
+    openWardAction->setShortcut(QKeySequence::Open);
+
+    fileMenu->addAction(tr("Show in &Folder"), this, &MainWindow::onShowInFolder);
 
     fileMenu->addSeparator();
 
@@ -182,6 +190,12 @@ void MainWindow::setupMenus()
 
     m_generateReportAction = emergencyMenu->addAction(tr("&Generate Report..."), this, &MainWindow::generateEmergencyReport);
     m_generateReportAction->setEnabled(false);
+
+    if (developer)
+    {
+        QMenu* debuggingMenu = menuBar()->addMenu(tr("&Debugging"));
+        debuggingMenu->addAction(tr("&Export Decrypted JSON..."), this, &MainWindow::onExportDecryptedJson);
+    }
 }
 
 void MainWindow::setupConnections()
@@ -249,17 +263,11 @@ bool MainWindow::openStartingWard()
     }
 
     QString lastWardId = loadSetting("lastWardId");
-    if (!lastWardId.isEmpty())
+    if (!lastWardId.isEmpty() && openWard(DocumentId::fromString(lastWardId)))
     {
-        OpenResult result = DocumentManager::instance()->openWard(DocumentId::fromString(lastWardId));
-        if (result.status == OpenStatus::Opened)
-        {
-            return true;
-        }
-        qWarning("The last ward did not open: %s", qPrintable(result.problem));
-        QMessageBox::warning(this, tr("Ward Not Opened"), openFailureMessage(result.status));
+        return true;
     }
-    return createWard();
+    return chooseWard();
 }
 
 bool MainWindow::createWard()
@@ -278,11 +286,89 @@ bool MainWindow::createWard()
     return true;
 }
 
+bool MainWindow::openWard(const DocumentId& document)
+{
+    OpenResult result = DocumentManager::instance()->openWard(document);
+    if (result.status != OpenStatus::Opened)
+    {
+        qWarning("A ward did not open: %s", qPrintable(result.problem));
+        QMessageBox::warning(this, tr("Ward Not Opened"), OpenWardDialog::openFailureMessage(result.status));
+        return false;
+    }
+    saveSetting("lastWardId", document.toString());
+    return true;
+}
+
+bool MainWindow::chooseWard()
+{
+    while (true)
+    {
+        OpenWardDialog dialog(DocumentManager::instance()->wards(), this);
+        switch (dialog.choose())
+        {
+        case WardListChoice::Open:
+            if (openWard(dialog.chosenWard()))
+            {
+                return true;
+            }
+            break;
+        case WardListChoice::NewWard:
+            if (createWard())
+            {
+                return true;
+            }
+            break;
+        case WardListChoice::Close:
+            return false;
+        }
+    }
+}
+
 void MainWindow::onNewWard()
 {
     if (mayLeaveWard())
     {
         createWard();
+    }
+}
+
+void MainWindow::onOpenWard()
+{
+    if (mayLeaveWard())
+    {
+        chooseWard();
+    }
+}
+
+void MainWindow::onShowInFolder()
+{
+    ShowInFolder::reveal(DocumentManager::instance()->filePath());
+}
+
+void MainWindow::onExportDecryptedJson()
+{
+    QMessageBox::StandardButton answer = QMessageBox::warning(
+        this, tr("Export Decrypted JSON"), tr("This writes the ward's member data unencrypted to a file. Continue?"),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (answer != QMessageBox::Yes)
+    {
+        return;
+    }
+    QString path = QFileDialog::getSaveFileName(this, tr("Export Decrypted JSON"), QString(),
+                                                tr("JSON Files (*.json)"));
+    if (path.isEmpty())
+    {
+        return;
+    }
+
+    QByteArray bytes = QJsonDocument(DocumentManager::instance()->payload().toJson()).toJson(QJsonDocument::Indented);
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly)
+        || file.write(bytes) != bytes.size()
+        || !file.commit())
+    {
+        QMessageBox::warning(this, tr("Export Decrypted JSON"),
+                             tr("The file %1 could not be written.").arg(QDir::toNativeSeparators(path)));
     }
 }
 
@@ -327,24 +413,6 @@ void MainWindow::onApplicationStateChanged(Qt::ApplicationState state)
     {
         DocumentManager::instance()->retryPendingSave();
     }
-}
-
-QString MainWindow::openFailureMessage(OpenStatus status)
-{
-    switch (status)
-    {
-    case OpenStatus::Opened:
-        return QString();
-    case OpenStatus::Missing:
-        return tr("This ward is no longer on this device.");
-    case OpenStatus::CannotRead:
-        return tr("This ward's file on this device could not be opened.");
-    case OpenStatus::Newer:
-        return tr("This ward was saved by a newer version of Ward Planning. Update to open it.");
-    case OpenStatus::Fault:
-        return tr("This ward's file could not be read just now. Try again.");
-    }
-    return QString();
 }
 
 void MainWindow::onImportPdf()

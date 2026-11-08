@@ -12,4 +12,5 @@ public:
 private slots:
     void eachWardIsOneFileNamedByItsDocumentId();
     void writeFailuresSayWhyAsAClause();
+    void documentsAreTheFilesNamedByADocumentId();
 };

@@ -4,8 +4,10 @@
 
 DocumentManager* DocumentManager::s_instance = nullptr;
 
-DocumentManager::DocumentManager(const Identity* identity, WardStore* store, QObject* parent)
+DocumentManager::DocumentManager(const Identity* identity, FileWardStore* store, QObject* parent)
     : QObject(parent)
+    , m_identity(identity)
+    , m_store(store)
     , m_session(identity, store, new NominatimGeocoder(this), new UnitLookupService(this), this)
 {
     Q_ASSERT(!s_instance);

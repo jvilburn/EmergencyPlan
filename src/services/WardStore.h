@@ -3,6 +3,7 @@
 #include "Id.h"
 
 #include <QByteArray>
+#include <QList>
 #include <QString>
 
 enum class StoreReadStatus
@@ -32,4 +33,7 @@ public:
     virtual bool write(const DocumentId& document, const QByteArray& bytes, QString* problem) = 0;
 
     virtual StoreRead read(const DocumentId& document) const = 0;
+
+    /// The id of every ward this device holds a file for, in no particular order.
+    virtual QList<DocumentId> documents() const = 0;
 };

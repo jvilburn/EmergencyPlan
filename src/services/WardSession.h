@@ -98,6 +98,9 @@ public:
 
     const Document& document() const { return m_document; }
     const Journal& journal() const { return m_device.journal; }
+
+    /// The ward, its landed marks and this device's state, as a save writes them.
+    WardPayload payload() const { return WardPayload{m_document, m_landed, m_device}; }
     AutomaticUpdates& automaticUpdates() { return m_automaticUpdates; }
 
     /// Creates a ward holding content under a fresh document id and data key, and saves it.

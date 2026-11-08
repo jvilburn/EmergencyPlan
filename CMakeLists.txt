@@ -199,6 +199,8 @@ set(SERVICE_SOURCES
     src/services/WardFile.cpp
     src/services/FileWardStore.cpp
     src/services/AppData.cpp
+    src/services/WardList.cpp
+    src/services/ShowInFolder.cpp
     # src/services/StatisticsService.cpp
     # src/services/ResourceService.cpp
     # src/services/SearchService.cpp
@@ -241,6 +243,8 @@ set(SERVICE_HEADERS
     src/services/WardStore.h
     src/services/FileWardStore.h
     src/services/AppData.h
+    src/services/WardList.h
+    src/services/ShowInFolder.h
     # src/services/StatisticsService.h
     # src/services/ResourceService.h
     # src/services/SearchService.h
@@ -275,6 +279,7 @@ set(WIDGET_SOURCES
     src/widgets/SlippyMapMath.cpp
     src/widgets/UnmappedPanel.cpp
     src/widgets/WardListDialog.cpp
+    src/widgets/OpenWardDialog.cpp
     src/widgets/WardListView.cpp
     src/widgets/shared/FilterBar.cpp
     src/widgets/shared/FlowLayout.cpp
@@ -328,6 +333,7 @@ set(WIDGET_HEADERS
     src/widgets/SlippyMapMath.h
     src/widgets/UnmappedPanel.h
     src/widgets/WardListDialog.h
+    src/widgets/OpenWardDialog.h
     src/widgets/WardListView.h
     src/widgets/shared/FilterBar.h
     src/widgets/shared/FlowLayout.h

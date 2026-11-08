@@ -29,13 +29,14 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    /// settingsFilePath is the file that holds this device's settings.
-    MainWindow(const QString& settingsFilePath, QWidget* parent);
+    /// settingsFilePath is the file that holds this device's settings. developer adds the
+    /// Debugging menu.
+    MainWindow(const QString& settingsFilePath, bool developer, QWidget* parent);
     ~MainWindow();
 
     /// Opens the ward the app starts on: on the first start, asks this device's name; then
-    /// opens the last ward, or, when there is none or it does not open, tells why and creates
-    /// a ward. False when the user cancels, which quits the app.
+    /// opens the last ward, or, when there is none or it does not open, shows the ward list.
+    /// False when the user cancels, which quits the app.
     bool openStartingWard();
 
 protected:
@@ -44,6 +45,9 @@ protected:
 
 private slots:
     void onNewWard();
+    void onOpenWard();
+    void onShowInFolder();
+    void onExportDecryptedJson();
     void onSaveFailed(const QString& problem);
     void onApplicationStateChanged(Qt::ApplicationState state);
     void onImportPdf();
@@ -86,7 +90,7 @@ private slots:
 
 private:
     void setupUi();
-    void setupMenus();
+    void setupMenus(bool developer);
     void setupConnections();
     void initializeDefaultLocation();
     void openEditPanel(const FamilyId& familyId);
@@ -96,6 +100,14 @@ private:
     /// device, which becomes the last ward. False when the user cancels.
     bool createWard();
 
+    /// Opens the ward, which becomes the last ward; when it does not open, tells why. False
+    /// when it does not open.
+    bool openWard(const DocumentId& document);
+
+    /// Shows the ward list until a ward opens or is created from it, or the user closes it.
+    /// False when the user closes it.
+    bool chooseWard();
+
     /// True when nothing is left unsaved after one more try at saving, or when the user
     /// agrees to lose what is.
     bool unsavedChangesMayBeLost();
@@ -104,9 +116,6 @@ private:
     /// close button closes it, and then unsavedChangesMayBeLost. False when the user cancels
     /// either.
     bool mayLeaveWard();
-
-    /// What the user is told when a ward does not open, for each way it can fail.
-    static QString openFailureMessage(OpenStatus status);
 
     // Settings helpers
     /// The report's suggested path: the emergency's name and start date in Documents.

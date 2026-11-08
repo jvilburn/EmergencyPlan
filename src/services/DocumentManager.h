@@ -4,10 +4,13 @@
 #include <QString>
 #include "Document.h"
 #include "DocumentChange.h"
+#include "FileWardStore.h"
+#include "WardList.h"
 #include "WardSession.h"
 
 /// The app's one open ward: a thin wrapper over its WardSession, which saves every change
-/// through this device's identity into the store of ward files.
+/// through this device's identity into the store of ward files, and the list of the wards
+/// that store holds.
 class DocumentManager : public QObject
 {
     Q_OBJECT
@@ -16,7 +19,7 @@ class DocumentManager : public QObject
 
 public:
     /// identity is this device's, and store holds its ward files; it owns neither.
-    DocumentManager(const Identity* identity, WardStore* store, QObject* parent);
+    DocumentManager(const Identity* identity, FileWardStore* store, QObject* parent);
 
     /// Global accessor. Valid after construction.
     static DocumentManager* instance();
@@ -50,6 +53,15 @@ public:
 
     const DocumentId& documentId() const { return m_session.documentId(); }
 
+    /// The open ward's file.
+    QString filePath() const { return m_store->pathOf(documentId()); }
+
+    /// The open ward as a save writes it.
+    WardPayload payload() const { return m_session.payload(); }
+
+    /// Every ward the store holds, as this device reads it.
+    QList<WardListEntry> wards() const { return WardList::read(*m_identity, *m_store); }
+
     /// Saves again when a save is pending; true when nothing is left unsaved.
     bool retryPendingSave() { return m_session.retryPendingSave(); }
 
@@ -70,6 +82,8 @@ private:
     /// commandNotApplied.
     void afterCommit(const CommitResult& result);
 
+    const Identity* m_identity;
+    FileWardStore* m_store;
     WardSession m_session;
 
     static DocumentManager* s_instance;

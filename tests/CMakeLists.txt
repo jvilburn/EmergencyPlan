@@ -70,6 +70,8 @@ add_executable(WardPlanningTests
     services/StrictReadersTest.cpp
     services/AppDataTest.h
     services/AppDataTest.cpp
+    services/WardListTest.h
+    services/WardListTest.cpp
 )
 
 target_include_directories(WardPlanningTests PRIVATE

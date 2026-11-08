@@ -13,6 +13,7 @@ public:
 
     bool write(const DocumentId& document, const QByteArray& bytes, QString* problem) override;
     StoreRead read(const DocumentId& document) const override;
+    QList<DocumentId> documents() const override { return m_files.keys(); }
 
     /// While set, every write fails with "the disk is full" and leaves the file as it was.
     void setFailWrites(bool fail) { m_failWrites = fail; }

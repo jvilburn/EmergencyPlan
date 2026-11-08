@@ -8,10 +8,13 @@ Ward Emergency Plan is a desktop application for managing ward family data, mini
 
 ## Getting Started
 
-### Starting a Document
+### Wards
 
-- The app starts each launch with an empty document
-- **File > New** (Ctrl+N) - Start again with an empty document
+- The first launch asks for a name for this device
+- **File > New Ward** (Ctrl+N) - Asks your name and creates a ward on this device
+- **File > Open Ward** (Ctrl+O) - Lists the wards on this device by name; a ward whose changes have not yet gone out is marked *changes waiting*
+- **File > Show in Folder** - Opens the folder that holds the ward's file, with the file selected; only this ward's devices can open it
+- Each launch reopens the last ward; when there is none, or it does not open, the ward list shows instead
 
 ### Importing Data
 
@@ -144,7 +147,7 @@ Everyone who has the ward open sees the emergency once their copy is up to date,
 
 A ward has one emergency in progress at a time. Two people who each start one while they are offline end up with one emergency: the first to reach the ward is the one in progress, under its name, and the other person's checks and tasks go into it. In the same way, if an emergency ends and a new one starts while someone is offline, the checks and new tasks they recorded go into the new one.
 
-Opening a ward, or **File > New**, shows that ward's own emergency, if it has one in progress.
+Opening a ward, or **File > New Ward**, shows that ward's own emergency, if it has one in progress.
 
 ### Welfare Checks
 
@@ -193,7 +196,8 @@ If someone else ended the emergency while you were choosing, the app says so and
 
 | Action | Shortcut |
 |--------|----------|
-| New | Ctrl+N |
+| New Ward | Ctrl+N |
+| Open Ward | Ctrl+O |
 | Undo | Ctrl+Z |
 | Redo | Ctrl+Y |
 | Quit | Ctrl+Q |
@@ -208,7 +212,8 @@ Contact attempts and task changes can be undone too. Starting an emergency and a
 
 ---
 
-## Your Document
+## Saving
 
-- The app holds the document in memory while it runs, and the next launch starts with an empty one
+- Every change is saved as it is made
+- If saving fails, the app says why, keeps the change while it stays open, and saves it as soon as saving works again; closing, or moving to another ward, asks first
 - The title bar shows the ward's name, from the wards in the document

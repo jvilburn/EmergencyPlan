@@ -1,7 +1,10 @@
 #include "FileWardStore.h"
+#include "Base64Url.h"
+#include "Crypto.h"
 
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QSaveFile>
 
 namespace
@@ -61,6 +64,20 @@ StoreRead FileWardStore::read(const DocumentId& document) const
         return StoreRead{StoreReadStatus::Fault, QByteArray(), asClause(file.errorString())};
     }
     return StoreRead{StoreReadStatus::Read, bytes, QString()};
+}
+
+QList<DocumentId> FileWardStore::documents() const
+{
+    QList<DocumentId> documents;
+    for (const QString& name : QDir(m_directory).entryList(QStringList({"*.wardplanning"}), QDir::Files))
+    {
+        std::optional<QByteArray> id = Base64Url::decode(QFileInfo(name).completeBaseName(), Crypto::IdBytes);
+        if (id)
+        {
+            documents.append(DocumentId::fromBytes(*id));
+        }
+    }
+    return documents;
 }
 
 QString FileWardStore::pathOf(const DocumentId& document) const

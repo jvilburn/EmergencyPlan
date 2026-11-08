@@ -290,7 +290,7 @@ QString WardSession::toRedoText(int stopped, const CommitResult& stop) const
 
 void WardSession::save()
 {
-    QByteArray bytes = WardFile::write(m_documentId, m_dataKey, WardPayload{m_document, m_landed, m_device});
+    QByteArray bytes = WardFile::write(m_documentId, m_dataKey, payload());
     QString problem;
     if (m_store->write(m_documentId, bytes, &problem))
     {

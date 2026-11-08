@@ -296,11 +296,17 @@ public:
     const Document& document() const;
     const Journal& journal() const;
 
+    // The ward, its landed marks and this device's state, as a save writes them
+    WardPayload payload() const;
+
     // A new ward holding content, its access list founded for userName on this device
     void createWard(const Document& content, const QString& userName, const QString& deviceName);
 
     // The ward this device holds under document, from its local file
     OpenResult openWard(const DocumentId& document);
+
+    // How document's local file in store reads for identity: opened, or why not
+    static LocalRead readLocal(const WardStore& store, const Identity& identity, const DocumentId& document);
 
     // Saves again when a save is pending; true when nothing is left unsaved
     bool retryPendingSave();
@@ -395,7 +401,7 @@ A command that both removes and adds people holds one cleanup for everything it 
 
 ### DocumentManager
 
-A thin wrapper over the app's one `WardSession`, which holds the ward in memory while the app runs and saves every change:
+A thin wrapper over the app's one `WardSession`, which holds the ward in memory while the app runs and saves every change, and the list of the wards this device holds:
 
 ```cpp
 class DocumentManager : public QObject
@@ -404,7 +410,7 @@ class DocumentManager : public QObject
 
 public:
     // This device's identity and the store of its ward files; it owns neither
-    DocumentManager(const Identity* identity, WardStore* store, QObject* parent);
+    DocumentManager(const Identity* identity, FileWardStore* store, QObject* parent);
 
     const Document& document() const;  // the session's document
 
@@ -425,6 +431,10 @@ public:
     const DocumentId& documentId() const;
     bool retryPendingSave();
 
+    QString filePath() const;             // the open ward's file
+    WardPayload payload() const;          // the open ward as a save writes it
+    QList<WardListEntry> wards() const;   // every ward the store holds, read on this device
+
 signals:
     void documentChanged(const DocumentChange& change);       // forwarded from the session
     void undoStackChanged();                                  // forwarded from the session
@@ -435,7 +445,7 @@ signals:
 };
 ```
 
-`executeCommand` hands the command to `WardSession::commit` and returns its `CommitResult`. When it is `Conflicted` or `Refused`, it emits `commandNotApplied`, and `MainWindow` tells the user what needs doing again, from the result's description, or which rule refused it; `NothingToDo`, from an edit that changed nothing, does neither. `undo` and `redo` run the session's `undo` and `redo` the same way; an undo's result carries its inverse's description, *Undo: heading* over the original's lines. `main` builds it on this device's identity, which `KeyFile` reads from app data's `keys` folder, and on a `FileWardStore` over its `wards` folder. `createWard` creates a ward of `Document::empty()`, whose access list the session founds with the user and this device alone, and `openWard` opens one from its local file; the session starts its undo stack and failed list empty, and a new ward's journal too. `MainWindow` asks for this device's name on the first start and for the user's name when it creates a ward, keeps both and the last ward's id in its settings file, and at startup opens the last ward, creating a ward when there is none or it does not open. The window title is the document's `wardName()`, from the names of its wards.
+`executeCommand` hands the command to `WardSession::commit` and returns its `CommitResult`. When it is `Conflicted` or `Refused`, it emits `commandNotApplied`, and `MainWindow` tells the user what needs doing again, from the result's description, or which rule refused it; `NothingToDo`, from an edit that changed nothing, does neither. `undo` and `redo` run the session's `undo` and `redo` the same way; an undo's result carries its inverse's description, *Undo: heading* over the original's lines. `main` builds it on this device's identity, which `KeyFile` reads from app data's `keys` folder, and on a `FileWardStore` over its `wards` folder. `createWard` creates a ward of `Document::empty()`, whose access list the session founds with the user and this device alone, and `openWard` opens one from its local file; the session starts its undo stack and failed list empty, and a new ward's journal too. `MainWindow` asks for this device's name on the first start and for the user's name when it creates a ward, keeps both and the last ward's id in `settings.json` in app data, and at startup opens the last ward, showing the ward list (`OpenWardDialog`) when there is none or it does not open. The ward list is `WardList::read` over the store's `documents()`, each ward read through `WardSession::readLocal`; `filePath()` is the open ward's file, which *Show in Folder* reveals through `ShowInFolder`. Started with `--developer`, the window adds a *Debugging* menu whose *Export Decrypted JSON...* writes `payload()`, the open ward as a save writes it. The window title is the document's `wardName()`, from the names of its wards.
 
 ### Geocoder and UnitLookup
 

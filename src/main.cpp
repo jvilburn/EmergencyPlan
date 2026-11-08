@@ -1,4 +1,6 @@
 #include <QApplication>
+#include <QCommandLineOption>
+#include <QCommandLineParser>
 #include <QDir>
 #include <QFile>
 #include <QIcon>
@@ -18,6 +20,11 @@ int main(int argc, char *argv[])
     app.setApplicationName("Emergency Plan");
     app.setOrganizationName("");
     app.setWindowIcon(QIcon(":/markers/marker_chapel.svg"));
+
+    QCommandLineParser parser;
+    QCommandLineOption developerOption("developer", QObject::tr("Adds the Debugging menu."));
+    parser.addOption(developerOption);
+    parser.process(app);
 
     // Load Windows 7 Aero stylesheet
     QFile styleFile(":/styles/windows7.qss");
@@ -61,7 +68,7 @@ int main(int argc, char *argv[])
     TileService::setInstance(&tileService);
     tileService.initialize();
 
-    MainWindow window(appData.settingsFilePath(), nullptr);
+    MainWindow window(appData.settingsFilePath(), parser.isSet(developerOption), nullptr);
     if (!window.openStartingWard())
     {
         return 0;

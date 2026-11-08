@@ -58,3 +58,29 @@ void FileWardStoreTest::writeFailuresSayWhyAsAClause()
     QVERIFY(!problem.isEmpty());
     QVERIFY2(!problem.endsWith('.'), qPrintable(problem));
 }
+
+void FileWardStoreTest::documentsAreTheFilesNamedByADocumentId()
+{
+    QTemporaryDir root;
+    QString directory = root.path() + "/wards";
+    FileWardStore store(directory);
+    DocumentId first = DocumentId::generate();
+    DocumentId second = DocumentId::generate();
+    QString problem;
+    QVERIFY(store.write(first, QByteArray("first"), &problem));
+    QVERIFY(store.write(second, QByteArray("second"), &problem));
+    for (const QString& name : {QString("notes.txt"), QString("copy of a ward.wardplanning"),
+                                first.toString() + ".wardplanning.bak"})
+    {
+        QFile other(directory + "/" + name);
+        QVERIFY(other.open(QIODevice::WriteOnly));
+    }
+    QVERIFY(QDir().mkpath(directory + "/" + DocumentId::generate().toString() + ".wardplanning"));
+
+    QList<DocumentId> documents = store.documents();
+
+    QCOMPARE(documents.size(), 2);
+    QVERIFY(documents.contains(first));
+    QVERIFY(documents.contains(second));
+    QVERIFY(FileWardStore(root.path() + "/none").documents().isEmpty());
+}
