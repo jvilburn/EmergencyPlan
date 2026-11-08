@@ -1,9 +1,9 @@
 # The .wardplanning Format
 
 The specification of a Ward Planning ward file and of the device key file, format version 1.
-A reader built from this document and `docs/SHARED_WARD_DESIGN.md` alone reads every file the
-app writes. `tests/spec` is such a reader, built without Qt or any of the app's code, and the
-test suite checks it against a file holding a value in every field the app writes.
+A reader built from this document alone reads every file the app writes. `tests/spec` is such
+a reader, built without Qt or any of the app's code, and the test suite checks it against a
+file holding a value in every field the app writes.
 
 ## Conventions
 
@@ -20,9 +20,10 @@ test suite checks it against a file holding a value in every field the app write
 - **A date** is a string `yyyy-MM-dd`. **A time** is a UTC string `yyyy-MM-ddTHH:mm:ss.zzzZ`,
   milliseconds included. A value that does not read back as the same string is malformed.
 - **A word** is one of the strings its field lists, spelled exactly as listed.
-- **Every field is required**, except one marked *omitted when empty*: its writer leaves it out
-  when it is empty (an empty string, array or object, `false`, or no value), and a reader reads
-  its absence as empty. Such a field written out empty is malformed.
+- **Every field is required**, except one marked *omitted when ...* or *omitted until ...*: its
+  writer leaves it out when it has no value (an empty string, array or object, `false`, no
+  value, or, for a change, an unchanged field), and a reader reads its absence as no value. Such
+  a field written out empty is malformed.
 - **Null** is written only where a field says *or null*, for a value that has none. Such a field
   is required.
 - **Nothing else is accepted.** A reader refuses a file with a field missing, malformed, of the
@@ -398,7 +399,8 @@ Each command type's `fields`, by its `type`. They use these shapes:
   | `heldDistricts` | array of district objects | in id order; omitted when empty |
   | `heldTasks` | array of task objects | in id order; omitted when empty |
 
-  A field that holds a cleanup is omitted when the cleanup holds none of these.
+  A field that holds a cleanup is omitted when the cleanup holds none of these, unless the
+  type says it is always written.
 
 `updateFamily`:
 
@@ -449,7 +451,7 @@ A placed member:
 | Key | Type | Holds |
 |---|---|---|
 | `family` | family object | the family as seen |
-| `cleanup` | cleanup | the places that refer to the family and its members; omitted when empty |
+| `cleanup` | cleanup | the family under `families`, its members under `people`, and the places that refer to them; always written, since it holds the family |
 
 `setAddressCoordinates` and `revertAddressCoordinates`:
 
@@ -466,7 +468,7 @@ A coordinates object is `{latitude, longitude}`, two numbers.
 | Key | Type | Holds |
 |---|---|---|
 | `team` | team object | the team |
-| `cleanup` | cleanup | the open tasks assigned to it; omitted when empty |
+| `cleanup` | cleanup | the team under `teams`, and the open tasks assigned to it under `heldTasks`; always written, since it holds the team |
 
 `updateTeam`:
 

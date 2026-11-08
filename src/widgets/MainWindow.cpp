@@ -719,7 +719,7 @@ void MainWindow::onEditFamilyRequested(const FamilyId& familyId)
 {
     if (m_editPanel->isVisible()
         && m_editPanel->familyId() != familyId
-        && !closeEditPanel())
+        && !settleUnsavedEdit())
     {
         return;
     }
@@ -762,10 +762,14 @@ void MainWindow::onSaveFamily()
     {
         return;
     }
+    saveEdit();
+    closeEditPanelInternal();
+}
 
-    // The family edit, then the map position typed for the saved address, each its own
-    // undo entry. The position belongs to the address, so it is committed whatever happens
-    // to the family edit.
+void MainWindow::saveEdit()
+{
+    // The position belongs to the address, so it is committed whatever happens to the
+    // family edit.
     Family saved = m_editPanel->family();
     DocumentManager::instance()->executeCommand(
         UpdateFamilyCommand::fromEdit(m_editPanel->openedFamily(), saved, DocumentManager::instance()->document()));
@@ -775,8 +779,6 @@ void MainWindow::onSaveFamily()
         DocumentManager::instance()->executeCommand(SetAddressCoordinatesCommand::fromTyped(
             DocumentManager::instance()->document(), saved.address().full(), *typed));
     }
-
-    closeEditPanelInternal();
 }
 
 void MainWindow::onCancelEdit()
@@ -809,27 +811,33 @@ bool MainWindow::closeEditPanel()
     {
         return true;
     }
-
-    if (m_editPanel->isDirty())
+    if (!settleUnsavedEdit())
     {
-        QMessageBox::StandardButton result = QMessageBox::question(
-            this,
-            tr("Unsaved Changes"),
-            tr("Save changes to %1?").arg(m_editPanel->family().displayName()),
-            QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
-
-        if (result == QMessageBox::Save)
-        {
-            onSaveFamily();
-            return true;
-        }
-        else if (result == QMessageBox::Cancel)
-        {
-            return false;
-        }
+        return false;
     }
-
     closeEditPanelInternal();
+    return true;
+}
+
+bool MainWindow::settleUnsavedEdit()
+{
+    if (!m_editPanel->isDirty())
+    {
+        return true;
+    }
+    QMessageBox::StandardButton result = QMessageBox::question(
+        this,
+        tr("Unsaved Changes"),
+        tr("Save changes to %1?").arg(m_editPanel->family().displayName()),
+        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
+    if (result == QMessageBox::Cancel)
+    {
+        return false;
+    }
+    if (result == QMessageBox::Save)
+    {
+        saveEdit();
+    }
     return true;
 }
 

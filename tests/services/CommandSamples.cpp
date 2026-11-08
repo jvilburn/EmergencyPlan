@@ -27,6 +27,14 @@ Document runOn(const Document& document, const CommandPtr& command)
     return applied;
 }
 
+/// document with a date for each PDF it was last imported from, so an import records both.
+Document withPdfDates(Document document)
+{
+    document.setWardDirectoryPdfDate(QDate(2026, 4, 1));
+    document.setMinisteringPdfDate(QDate(2026, 3, 1));
+    return document;
+}
+
 /// The Smith family with Bob's phone moved to a third value.
 Family movedSmith()
 {
@@ -377,9 +385,10 @@ QList<CommandSample> addTaskCategorySamples()
     return samples;
 }
 
-/// A directory import onto the ward where its people are in every kind of place: Bob's
-/// phone changed, the Jones family gone, the Lee family added with the coordinates the PDF
-/// prints for its address, and the Tanglewood ward record.
+/// A directory import onto the ward where its people are in every kind of place, which holds
+/// both PDF dates: Bob's phone changed, the Jones family gone, the Lee family added with the
+/// coordinates the PDF prints for its address, the Tanglewood ward record, and a newer PDF
+/// date.
 QList<CommandSample> importWardDirectorySamples()
 {
     Family smith = TestWard::withPhone(TestWard::smith(), TestWard::bobId(), "555-2222");
@@ -393,7 +402,7 @@ QList<CommandSample> importWardDirectorySamples()
     result.wardName = "Tanglewood";
     result.wardUnitNumber = "123456";
     result.pdfDate = QDate(2026, 10, 15);
-    Document ward = TestWard::documentWithPlaces();
+    Document ward = withPdfDates(TestWard::documentWithPlaces());
     CommandPtr import = ImportWardDirectoryCommand::fromImport(ward, result, "Tanglewood.pdf");
 
     QList<CommandSample> samples;
@@ -403,9 +412,10 @@ QList<CommandSample> importWardDirectorySamples()
     return samples;
 }
 
-/// A ministering import onto the test ward: one group, Bob ministering to the Jones and Lee
-/// families, in a district Alice oversees; Carol's birthday filled in, and the Lee family
-/// added. The conflict is another group in place since the import was worked out.
+/// A ministering import onto the test ward holding both PDF dates: one group, Bob ministering
+/// to the Jones and Lee families, in a district Alice oversees; Carol's birthday filled in, the
+/// Lee family added, and a newer PDF date. The conflict is another group in place since the
+/// import was worked out.
 QList<CommandSample> importMinisteringSamples()
 {
     Family jones = TestWard::jones();
@@ -424,15 +434,16 @@ QList<CommandSample> importMinisteringSamples()
     result.groups.insert(group.id(), group);
     result.districts.insert(district.id(), district);
     result.pdfDate = QDate(2026, 9, 1);
-    CommandPtr import = ImportMinisteringCommand::fromImport(TestWard::document(), result, "Tanglewood EQ.pdf");
+    Document ward = withPdfDates(TestWard::document());
+    CommandPtr import = ImportMinisteringCommand::fromImport(ward, result, "Tanglewood EQ.pdf");
 
-    Document regrouped = TestWard::document();
+    Document regrouped = ward;
     MinisteringGroup other = MinisteringGroup::createEQ({TestWard::carolId()}, {TestWard::smithId()});
     regrouped.setGroups(MinisteringOrg::EldersQuorum, {{other.id(), other}});
 
     QList<CommandSample> samples;
-    samples.append(CommandSample{SampleCase::StartHolds, TestWard::document(), import});
-    samples.append(CommandSample{SampleCase::ResultHolds, runOn(TestWard::document(), import), import});
+    samples.append(CommandSample{SampleCase::StartHolds, ward, import});
+    samples.append(CommandSample{SampleCase::ResultHolds, runOn(ward, import), import});
     samples.append(CommandSample{SampleCase::Conflicts, regrouped, import});
     return samples;
 }

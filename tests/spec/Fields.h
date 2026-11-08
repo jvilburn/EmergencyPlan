@@ -9,6 +9,15 @@
 #include <string>
 #include <vector>
 
+using Bytes = std::vector<unsigned char>;
+
+/// The lengths of docs/FORMAT.md's binary values.
+constexpr std::size_t IdBytes = 16;           ///< a document id or user id
+constexpr std::size_t NonceBytes = 24;
+constexpr std::size_t FingerprintBytes = 16;
+constexpr std::size_t KeyBytes = 32;          ///< a key, seed or former-key hash
+constexpr std::size_t SealedKeyBytes = 80;
+
 /// What a reader refuses a file for, with the path of the field that fails.
 class Refusal : public std::runtime_error
 {
@@ -62,8 +71,8 @@ public:
     std::string time(const std::string& key);
 
     /// Base64url without padding of exactly length bytes, returned as the bytes.
-    std::vector<unsigned char> bytes(const std::string& key, std::size_t length);
-    std::vector<std::vector<unsigned char>> optionalBytesList(const std::string& key, std::size_t length);
+    Bytes bytes(const std::string& key, std::size_t length);
+    std::vector<Bytes> optionalBytesList(const std::string& key, std::size_t length);
 
     Fields object(const std::string& key);
     std::optional<Fields> optionalObject(const std::string& key);
@@ -88,6 +97,11 @@ private:
     const nlohmann::json* takeOptional(const std::string& key);
     std::string textOf(const nlohmann::json& value, const std::string& path) const;
     std::vector<std::string> textsOf(const nlohmann::json& value, const std::string& path, bool nonEmpty) const;
+    std::int64_t integerOf(const nlohmann::json& value, const std::string& path) const;
+    double numberOf(const nlohmann::json& value, const std::string& path) const;
+    std::string wordOf(const nlohmann::json& value, const std::string& path, const std::vector<std::string>& words) const;
+    std::string dateOf(const nlohmann::json& value, const std::string& path) const;
+    std::vector<Fields> objectsOf(const nlohmann::json& value, const std::string& path) const;
 
     nlohmann::json m_object;
     std::string m_path;
@@ -98,8 +112,8 @@ private:
 bool isInteger(const nlohmann::json& value);
 
 /// Base64url without padding.
-std::string encode(const std::vector<unsigned char>& bytes);
+std::string encode(const Bytes& bytes);
 
 /// The length bytes text encodes as base64url without padding, or none when it is of another
 /// length, padded, outside the alphabet, or has non-zero unused trailing bits.
-std::optional<std::vector<unsigned char>> decode(const std::string& text, std::size_t length);
+std::optional<Bytes> decode(const std::string& text, std::size_t length);

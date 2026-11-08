@@ -7,10 +7,6 @@
 namespace
 {
 
-constexpr std::size_t IdBytes = 16;
-constexpr std::size_t KeyBytes = 32;
-constexpr std::size_t FingerprintBytes = 16;
-
 const std::vector<std::string> Roles = {"admin", "member"};
 const std::vector<std::string> InviteKinds = {"device", "user"};
 const std::vector<std::string> Genders = {"male", "female"};
@@ -448,7 +444,7 @@ void readUpdateFamilyFields(Fields fields)
 void readFamilyRemovalFields(Fields fields)
 {
     readFamily(fields.object("family"));
-    readOptionalCleanup(fields, "cleanup");
+    readCleanup(fields.object("cleanup"));
     fields.done();
 }
 
@@ -467,7 +463,7 @@ void readAddressCoordinatesFields(Fields fields)
 void readTeamFields(Fields fields)
 {
     readTeam(fields.object("team"));
-    readOptionalCleanup(fields, "cleanup");
+    readCleanup(fields.object("cleanup"));
     fields.done();
 }
 

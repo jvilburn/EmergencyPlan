@@ -96,6 +96,14 @@ private:
     void openEditPanel(const FamilyId& familyId);
     void closeEditPanelInternal();
 
+    /// Commits the edit panel's family edit and the map position typed for its address, each
+    /// its own undo entry, and leaves the panel shown.
+    void saveEdit();
+
+    /// When the edit panel has changes, asks whether to save them, and saves them on Save.
+    /// False when the user cancels, which leaves the panel as it is.
+    bool settleUnsavedEdit();
+
     /// Asks the user's name, kept for the next new ward, and creates a ward under it on this
     /// device, which becomes the last ward. False when the user cancels.
     bool createWard();

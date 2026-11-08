@@ -1,12 +1,10 @@
 #pragma once
 
-#include <nlohmann/json.hpp>
+#include "Fields.h"
 
 #include <stdexcept>
 #include <string>
 #include <vector>
-
-using Bytes = std::vector<unsigned char>;
 
 /// A header whose format is above every version this reader knows.
 class NewerFormat : public std::runtime_error

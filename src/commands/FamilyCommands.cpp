@@ -138,7 +138,7 @@ QJsonObject DeleteFamilyCommand::toJson() const
 {
     QJsonObject json;
     json["family"] = m_family.toJson();
-    writeCleanup(json, "cleanup", m_cleanup);
+    json["cleanup"] = m_cleanup.toJson();
     return json;
 }
 
@@ -150,7 +150,7 @@ DocumentChange DeleteFamilyCommand::documentChange() const
 CommandPtr DeleteFamilyCommand::fromJson(JsonReader json, const CommandDescription& description)
 {
     Family family = Family::fromJson(json.object("family"));
-    ReferenceCleanup cleanup = readCleanup(json, "cleanup");
+    ReferenceCleanup cleanup = ReferenceCleanup::fromJson(json.object("cleanup"));
     json.finish();
     return std::make_shared<DeleteFamilyCommand>(family, cleanup, description);
 }
@@ -187,7 +187,7 @@ QJsonObject RestoreFamilyCommand::toJson() const
 {
     QJsonObject json;
     json["family"] = m_family.toJson();
-    writeCleanup(json, "cleanup", m_cleanup);
+    json["cleanup"] = m_cleanup.toJson();
     return json;
 }
 
@@ -208,7 +208,7 @@ QList<Address> RestoreFamilyCommand::addressesGiven() const
 CommandPtr RestoreFamilyCommand::fromJson(JsonReader json, const CommandDescription& description)
 {
     Family family = Family::fromJson(json.object("family"));
-    ReferenceCleanup cleanup = readCleanup(json, "cleanup");
+    ReferenceCleanup cleanup = ReferenceCleanup::fromJson(json.object("cleanup"));
     json.finish();
     return std::make_shared<RestoreFamilyCommand>(family, cleanup, description);
 }

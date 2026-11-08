@@ -9,12 +9,6 @@
 namespace
 {
 
-constexpr std::size_t IdBytes = 16;
-constexpr std::size_t KeyBytes = 32;
-constexpr std::size_t NonceBytes = 24;
-constexpr std::size_t FingerprintBytes = 16;
-constexpr std::size_t SealedKeyBytes = 80;
-
 nlohmann::json parse(const std::string& text, const std::string& what)
 {
     nlohmann::json value = nlohmann::json::parse(text, nullptr, false);
@@ -40,9 +34,9 @@ DeviceKeys readKeyFile(const std::string& text)
 
     DeviceKeys keys;
     keys.sealingSecret = sealingSecret;
-    keys.sealingPublic = Bytes(crypto_scalarmult_BYTES);
+    keys.sealingPublic = Bytes(KeyBytes);
     crypto_scalarmult_base(keys.sealingPublic.data(), sealingSecret.data());
-    keys.verifyKey = Bytes(crypto_sign_PUBLICKEYBYTES);
+    keys.verifyKey = Bytes(KeyBytes);
     Bytes signingSecret(crypto_sign_SECRETKEYBYTES);
     crypto_sign_seed_keypair(keys.verifyKey.data(), signingSecret.data(), signingSeed.data());
     return keys;

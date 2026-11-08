@@ -1752,7 +1752,7 @@ Format and crypto, in `tests/services`:
 - the known-answer vectors for the fingerprint, the former-key hash, the invite keypairs
   derived from a fixed seed, and the signed line for each of `create`, `push` and `channel`
 - a local file holding a value in every field of every part, written by the app when the
-  test runs, is read back by the reader in `tests/spec`, written only from this section and
+  test runs, is read back by the reader in `tests/spec`, written only from
   `docs/FORMAT.md`, which parses every field strictly and recovers each of those values, so
   a `toJson` change that writes a field `docs/FORMAT.md` lacks fails it
 - a header whose `format` is above every known version is refused whole and reported as

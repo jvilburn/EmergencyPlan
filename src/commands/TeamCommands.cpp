@@ -45,7 +45,7 @@ QJsonObject AddTeamCommand::toJson() const
 {
     QJsonObject json;
     json["team"] = m_team.toJson();
-    writeCleanup(json, "cleanup", m_cleanup);
+    json["cleanup"] = m_cleanup.toJson();
     return json;
 }
 
@@ -61,7 +61,7 @@ DocumentChange AddTeamCommand::documentChange() const
 CommandPtr AddTeamCommand::fromJson(JsonReader json, const CommandDescription& description)
 {
     Team team = Team::fromJson(json.object("team"));
-    ReferenceCleanup cleanup = readCleanup(json, "cleanup");
+    ReferenceCleanup cleanup = ReferenceCleanup::fromJson(json.object("cleanup"));
     json.finish();
     return std::make_shared<AddTeamCommand>(team, cleanup, description);
 }
@@ -208,7 +208,7 @@ QJsonObject DeleteTeamCommand::toJson() const
 {
     QJsonObject json;
     json["team"] = m_team.toJson();
-    writeCleanup(json, "cleanup", m_cleanup);
+    json["cleanup"] = m_cleanup.toJson();
     return json;
 }
 
@@ -220,7 +220,7 @@ DocumentChange DeleteTeamCommand::documentChange() const
 CommandPtr DeleteTeamCommand::fromJson(JsonReader json, const CommandDescription& description)
 {
     Team team = Team::fromJson(json.object("team"));
-    ReferenceCleanup cleanup = readCleanup(json, "cleanup");
+    ReferenceCleanup cleanup = ReferenceCleanup::fromJson(json.object("cleanup"));
     json.finish();
     return std::make_shared<DeleteTeamCommand>(team, cleanup, description);
 }

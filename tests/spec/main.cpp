@@ -1,10 +1,10 @@
 // WardPlanningSpecReader <app data folder> <document id>
 //
 // Reads the ward file of that id, where docs/FORMAT.md's *Where the files live* puts it, with
-// the device key file beside it, as docs/FORMAT.md and docs/SHARED_WARD_DESIGN.md state the
-// format, and with nothing of the app's own. It prints the payload it read as compact JSON on
-// standard output and exits 0; it exits 2 for a newer format, and 1, with the problem on
-// standard error, for anything else.
+// the device key file beside it, as docs/FORMAT.md alone states the format, and with nothing
+// of the app's own. It prints the payload it read as compact JSON on standard output and exits
+// 0; it exits 2 for a newer format, and 1, with the problem on standard error, for anything
+// else.
 
 #include "Envelope.h"
 #include "Fields.h"
@@ -12,6 +12,7 @@
 
 #include <sodium.h>
 
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <iterator>
@@ -19,8 +20,6 @@
 
 namespace
 {
-
-constexpr std::size_t IdBytes = 16;
 
 std::string readFile(const std::string& path)
 {
@@ -30,20 +29,6 @@ std::string readFile(const std::string& path)
         throw Refusal("the file " + path + " could not be opened");
     }
     return std::string(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
-}
-
-/// How many of fingerprints equal fingerprint.
-std::size_t countOf(const std::vector<Bytes>& fingerprints, const Bytes& fingerprint)
-{
-    std::size_t count = 0;
-    for (const Bytes& each : fingerprints)
-    {
-        if (each == fingerprint)
-        {
-            ++count;
-        }
-    }
-    return count;
 }
 
 /// docs/FORMAT.md's *Header and access list agree*.
@@ -59,19 +44,11 @@ void checkAgreement(const Header& header, const std::vector<PublicKeys>& keys)
     {
         named.push_back(entry.fingerprint);
     }
-    for (const Bytes& fingerprint : named)
+    std::sort(computed.begin(), computed.end());
+    std::sort(named.begin(), named.end());
+    if (named != computed || std::adjacent_find(named.begin(), named.end()) != named.end())
     {
-        if (countOf(computed, fingerprint) != 1 || countOf(named, fingerprint) != 1)
-        {
-            throw Refusal("a header recipient is not exactly one device or open invite of the access list");
-        }
-    }
-    for (const Bytes& fingerprint : computed)
-    {
-        if (countOf(named, fingerprint) != 1)
-        {
-            throw Refusal("a device or open invite of the access list is not exactly one header recipient");
-        }
+        throw Refusal("the header's recipients are not one each for the devices and open invites of the access list");
     }
 }
 

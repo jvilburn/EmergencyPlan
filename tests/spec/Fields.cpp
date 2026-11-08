@@ -112,17 +112,7 @@ std::string Fields::id(const std::string& key)
 
 std::string Fields::optionalId(const std::string& key)
 {
-    const nlohmann::json* value = takeOptional(key);
-    if (value == nullptr)
-    {
-        return std::string();
-    }
-    std::string text = textOf(*value, pathOf(key));
-    if (text.empty())
-    {
-        throw Refusal(pathOf(key) + " is written out empty");
-    }
-    return text;
+    return optionalText(key);
 }
 
 std::vector<std::string> Fields::ids(const std::string& key)
@@ -167,46 +157,32 @@ std::vector<std::string> Fields::optionalTexts(const std::string& key)
 
 std::int64_t Fields::integer(const std::string& key)
 {
-    const nlohmann::json& value = take(key);
-    if (!isInteger(value))
-    {
-        throw Refusal(pathOf(key) + " is not an integer");
-    }
-    if (value.is_number_float())
-    {
-        return static_cast<std::int64_t>(value.get<double>());
-    }
-    return value.get<std::int64_t>();
+    return integerOf(take(key), pathOf(key));
 }
 
 std::optional<std::int64_t> Fields::optionalInteger(const std::string& key)
 {
-    if (m_object.find(key) == m_object.end())
+    const nlohmann::json* value = takeOptional(key);
+    if (value == nullptr)
     {
-        m_taken.insert(key);
         return std::nullopt;
     }
-    return integer(key);
+    return integerOf(*value, pathOf(key));
 }
 
 double Fields::number(const std::string& key)
 {
-    const nlohmann::json& value = take(key);
-    if (!value.is_number())
-    {
-        throw Refusal(pathOf(key) + " is not a number");
-    }
-    return value.get<double>();
+    return numberOf(take(key), pathOf(key));
 }
 
 std::optional<double> Fields::optionalNumber(const std::string& key)
 {
-    if (m_object.find(key) == m_object.end())
+    const nlohmann::json* value = takeOptional(key);
+    if (value == nullptr)
     {
-        m_taken.insert(key);
         return std::nullopt;
     }
-    return number(key);
+    return numberOf(*value, pathOf(key));
 }
 
 bool Fields::boolean(const std::string& key)
@@ -235,42 +211,32 @@ bool Fields::optionalTrue(const std::string& key)
 
 std::string Fields::word(const std::string& key, const std::vector<std::string>& words)
 {
-    std::string text = textOf(take(key), pathOf(key));
-    if (std::find(words.begin(), words.end(), text) == words.end())
-    {
-        throw Refusal(pathOf(key) + " is not one of its words");
-    }
-    return text;
+    return wordOf(take(key), pathOf(key), words);
 }
 
 std::string Fields::optionalWord(const std::string& key, const std::vector<std::string>& words)
 {
-    if (m_object.find(key) == m_object.end())
+    const nlohmann::json* value = takeOptional(key);
+    if (value == nullptr)
     {
-        m_taken.insert(key);
         return std::string();
     }
-    return word(key, words);
+    return wordOf(*value, pathOf(key), words);
 }
 
 std::string Fields::date(const std::string& key)
 {
-    std::string text = textOf(take(key), pathOf(key));
-    if (!isDate(text))
-    {
-        throw Refusal(pathOf(key) + " is not a date");
-    }
-    return text;
+    return dateOf(take(key), pathOf(key));
 }
 
 std::string Fields::optionalDate(const std::string& key)
 {
-    if (m_object.find(key) == m_object.end())
+    const nlohmann::json* value = takeOptional(key);
+    if (value == nullptr)
     {
-        m_taken.insert(key);
         return std::string();
     }
-    return date(key);
+    return dateOf(*value, pathOf(key));
 }
 
 std::string Fields::time(const std::string& key)
@@ -283,9 +249,9 @@ std::string Fields::time(const std::string& key)
     return text;
 }
 
-std::vector<unsigned char> Fields::bytes(const std::string& key, std::size_t length)
+Bytes Fields::bytes(const std::string& key, std::size_t length)
 {
-    std::optional<std::vector<unsigned char>> bytes = decode(textOf(take(key), pathOf(key)), length);
+    std::optional<Bytes> bytes = decode(textOf(take(key), pathOf(key)), length);
     if (!bytes.has_value())
     {
         throw Refusal(pathOf(key) + " is not base64url of " + std::to_string(length) + " bytes");
@@ -293,9 +259,9 @@ std::vector<unsigned char> Fields::bytes(const std::string& key, std::size_t len
     return *bytes;
 }
 
-std::vector<std::vector<unsigned char>> Fields::optionalBytesList(const std::string& key, std::size_t length)
+std::vector<Bytes> Fields::optionalBytesList(const std::string& key, std::size_t length)
 {
-    std::vector<std::vector<unsigned char>> list;
+    std::vector<Bytes> list;
     const nlohmann::json* value = takeOptional(key);
     if (value == nullptr)
     {
@@ -308,7 +274,7 @@ std::vector<std::vector<unsigned char>> Fields::optionalBytesList(const std::str
     }
     for (std::size_t i = 0; i < texts.size(); ++i)
     {
-        std::optional<std::vector<unsigned char>> bytes = decode(texts[i], length);
+        std::optional<Bytes> bytes = decode(texts[i], length);
         if (!bytes.has_value())
         {
             throw Refusal(pathOf(key) + "[" + std::to_string(i) + "] is not base64url of "
@@ -340,27 +306,17 @@ std::optional<Fields> Fields::optionalObject(const std::string& key)
 
 std::vector<Fields> Fields::objects(const std::string& key)
 {
-    const nlohmann::json& value = take(key);
-    if (!value.is_array())
-    {
-        throw Refusal(pathOf(key) + " is not an array");
-    }
-    std::vector<Fields> objects;
-    for (std::size_t i = 0; i < value.size(); ++i)
-    {
-        objects.push_back(Fields(value[i], pathOf(key) + "[" + std::to_string(i) + "]"));
-    }
-    return objects;
+    return objectsOf(take(key), pathOf(key));
 }
 
 std::vector<Fields> Fields::optionalObjects(const std::string& key)
 {
-    if (m_object.find(key) == m_object.end())
+    const nlohmann::json* value = takeOptional(key);
+    if (value == nullptr)
     {
-        m_taken.insert(key);
         return std::vector<Fields>();
     }
-    std::vector<Fields> objects = this->objects(key);
+    std::vector<Fields> objects = objectsOf(*value, pathOf(key));
     if (objects.empty())
     {
         throw Refusal(pathOf(key) + " is written out empty");
@@ -456,6 +412,63 @@ std::vector<std::string> Fields::textsOf(const nlohmann::json& value, const std:
     return texts;
 }
 
+std::int64_t Fields::integerOf(const nlohmann::json& value, const std::string& path) const
+{
+    if (!isInteger(value))
+    {
+        throw Refusal(path + " is not an integer");
+    }
+    if (value.is_number_float())
+    {
+        return static_cast<std::int64_t>(value.get<double>());
+    }
+    return value.get<std::int64_t>();
+}
+
+double Fields::numberOf(const nlohmann::json& value, const std::string& path) const
+{
+    if (!value.is_number())
+    {
+        throw Refusal(path + " is not a number");
+    }
+    return value.get<double>();
+}
+
+std::string Fields::wordOf(const nlohmann::json& value, const std::string& path,
+                           const std::vector<std::string>& words) const
+{
+    std::string text = textOf(value, path);
+    if (std::find(words.begin(), words.end(), text) == words.end())
+    {
+        throw Refusal(path + " is not one of its words");
+    }
+    return text;
+}
+
+std::string Fields::dateOf(const nlohmann::json& value, const std::string& path) const
+{
+    std::string text = textOf(value, path);
+    if (!isDate(text))
+    {
+        throw Refusal(path + " is not a date");
+    }
+    return text;
+}
+
+std::vector<Fields> Fields::objectsOf(const nlohmann::json& value, const std::string& path) const
+{
+    if (!value.is_array())
+    {
+        throw Refusal(path + " is not an array");
+    }
+    std::vector<Fields> objects;
+    for (std::size_t i = 0; i < value.size(); ++i)
+    {
+        objects.push_back(Fields(value[i], path + "[" + std::to_string(i) + "]"));
+    }
+    return objects;
+}
+
 bool isInteger(const nlohmann::json& value)
 {
     if (value.is_number_unsigned())
@@ -475,7 +488,7 @@ bool isInteger(const nlohmann::json& value)
     return false;
 }
 
-std::string encode(const std::vector<unsigned char>& bytes)
+std::string encode(const Bytes& bytes)
 {
     const int variant = sodium_base64_VARIANT_URLSAFE_NO_PADDING;
     std::string text(sodium_base64_encoded_len(bytes.size(), variant), '\0');
@@ -484,9 +497,9 @@ std::string encode(const std::vector<unsigned char>& bytes)
     return text;
 }
 
-std::optional<std::vector<unsigned char>> decode(const std::string& text, std::size_t length)
+std::optional<Bytes> decode(const std::string& text, std::size_t length)
 {
-    std::vector<unsigned char> bytes(length);
+    Bytes bytes(length);
     std::size_t decoded = 0;
     const char* end = nullptr;
     if (sodium_base642bin(bytes.data(), bytes.size(), text.data(), text.size(), nullptr, &decoded, &end,

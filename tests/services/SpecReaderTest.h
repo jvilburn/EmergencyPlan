@@ -22,7 +22,7 @@ private slots:
     void init();
 
     void specReaderRecoversEveryFieldTheAppWrites();
-    void specReaderRefusesAFieldTheSpecLacks();
+    void specReaderRefusesAFieldTheSpecLacksInEveryTable();
     void specReaderRefusesAHeaderThatDiffersFromTheAccessList();
     void specReaderRefusesAFileNamedForAnotherWard();
     void specReaderReportsANewerFormat();
