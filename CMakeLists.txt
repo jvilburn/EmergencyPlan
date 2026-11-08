@@ -54,6 +54,11 @@ find_library(BROTLIDEC_LIBRARY NAMES brotlidec)
 find_library(BROTLICOMMON_LIBRARY NAMES brotlicommon)
 message(STATUS "MuPDF library: ${MUPDF_LIBRARY}")
 
+# ============================================================================
+# libsodium for the ward file's encryption and the device keys (from vcpkg)
+# ============================================================================
+find_package(unofficial-sodium CONFIG REQUIRED)
+
 
 # ============================================================================
 # Compiler Warnings
@@ -99,6 +104,8 @@ set(MODEL_SOURCES
     src/models/EmergencyAsset.cpp
     src/models/DocumentChange.cpp
     src/models/EmergencyResponse.cpp
+    src/models/Id.cpp
+    src/models/AccessList.cpp
 )
 
 set(MODEL_HEADERS
@@ -124,6 +131,7 @@ set(MODEL_HEADERS
     src/models/DocumentChange.h
     src/models/Id.h
     src/models/EmergencyResponse.h
+    src/models/AccessList.h
 )
 
 set(COMMAND_SOURCES
@@ -180,6 +188,16 @@ set(SERVICE_SOURCES
     src/services/Journal.cpp
     src/services/WardSession.cpp
     src/services/AutomaticUpdates.cpp
+    src/services/Base64Url.cpp
+    src/services/Crypto.cpp
+    src/services/JsonReader.cpp
+    src/services/Identity.cpp
+    src/services/KeyFile.cpp
+    src/services/DeviceState.cpp
+    src/services/WardPayload.cpp
+    src/services/WardHeader.cpp
+    src/services/WardFile.cpp
+    src/services/FileWardStore.cpp
     # src/services/StatisticsService.cpp
     # src/services/ResourceService.cpp
     # src/services/SearchService.cpp
@@ -210,6 +228,17 @@ set(SERVICE_HEADERS
     src/services/Journal.h
     src/services/WardSession.h
     src/services/AutomaticUpdates.h
+    src/services/Base64Url.h
+    src/services/Crypto.h
+    src/services/JsonReader.h
+    src/services/Identity.h
+    src/services/KeyFile.h
+    src/services/DeviceState.h
+    src/services/WardPayload.h
+    src/services/WardHeader.h
+    src/services/WardFile.h
+    src/services/WardStore.h
+    src/services/FileWardStore.h
     # src/services/StatisticsService.h
     # src/services/ResourceService.h
     # src/services/SearchService.h
@@ -411,6 +440,7 @@ target_link_libraries(EmergencyPlanLib PUBLIC
     ${ZLIB_LIBRARY}
     ${OPENJP2_LIBRARY}
     ${GUMBO_LIBRARY}
+    unofficial-sodium::sodium
 )
 
 if(HARFBUZZ_LIBRARY)

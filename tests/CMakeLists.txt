@@ -14,6 +14,14 @@ add_executable(WardPlanningTests
     services/FakeUnitLookup.cpp
     services/TestSession.h
     services/TestSession.cpp
+    services/FakeWardStore.h
+    services/FakeWardStore.cpp
+    services/TestClient.h
+    services/TestClient.cpp
+    services/EveryField.h
+    services/EveryField.cpp
+    services/WardFileEdits.h
+    services/WardFileEdits.cpp
     services/PdfText.h
     services/PdfText.cpp
     services/CommandSamples.h
@@ -50,6 +58,16 @@ add_executable(WardPlanningTests
     services/MemberEditorTest.cpp
     services/FamilyEditPanelTest.h
     services/FamilyEditPanelTest.cpp
+    services/JsonReaderTest.h
+    services/JsonReaderTest.cpp
+    services/IdentityTest.h
+    services/IdentityTest.cpp
+    services/WardFileTest.h
+    services/WardFileTest.cpp
+    services/FileWardStoreTest.h
+    services/FileWardStoreTest.cpp
+    services/WardSessionSavingTest.h
+    services/WardSessionSavingTest.cpp
 )
 
 target_include_directories(WardPlanningTests PRIVATE

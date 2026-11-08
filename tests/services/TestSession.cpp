@@ -1,13 +1,14 @@
 #include "TestSession.h"
 
 TestSessionFakes::TestSessionFakes()
-    : m_fakeGeocoder(nullptr)
+    : m_deviceIdentity(Identity::generate())
+    , m_fakeGeocoder(nullptr)
     , m_fakeUnitLookup(nullptr)
 {
 }
 
 TestSession::TestSession()
     : TestSessionFakes()
-    , WardSession(&m_fakeGeocoder, &m_fakeUnitLookup, nullptr)
+    , WardSession(&m_deviceIdentity, &m_fakeStore, &m_fakeGeocoder, &m_fakeUnitLookup, nullptr)
 {
 }

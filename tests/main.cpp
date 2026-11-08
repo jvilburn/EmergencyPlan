@@ -1,10 +1,14 @@
 #include "AutomaticUpdatesTest.h"
 #include "BirthdayTest.h"
+#include "Crypto.h"
 #include "FamilyEditPanelTest.h"
 #include "FamilyOrderTest.h"
 #include "FieldChangeTest.h"
+#include "FileWardStoreTest.h"
 #include "FilterTest.h"
+#include "IdentityTest.h"
 #include "ImportCommandsTest.h"
+#include "JsonReaderTest.h"
 #include "CommandRoundTripTest.h"
 #include "EmergencyAssetCommandsTest.h"
 #include "EmergencyCommandsTest.h"
@@ -13,6 +17,8 @@
 #include "ReferenceCleanupTest.h"
 #include "TeamCommandsTest.h"
 #include "UpdateFamilyCommandTest.h"
+#include "WardFileTest.h"
+#include "WardSessionSavingTest.h"
 #include "WardSessionTest.h"
 
 #include <QApplication>
@@ -21,6 +27,10 @@
 int main(int argc, char* argv[])
 {
     QApplication app(argc, argv);
+    if (!Crypto::initialize())
+    {
+        return 1;
+    }
 
     PersonJsonTest personJsonTest(nullptr);
     BirthdayTest birthdayTest(nullptr);
@@ -38,6 +48,11 @@ int main(int argc, char* argv[])
     FilterTest filterTest(nullptr);
     MemberEditorTest memberEditorTest(nullptr);
     FamilyEditPanelTest familyEditPanelTest(nullptr);
+    JsonReaderTest jsonReaderTest(nullptr);
+    IdentityTest identityTest(nullptr);
+    WardFileTest wardFileTest(nullptr);
+    FileWardStoreTest fileWardStoreTest(nullptr);
+    WardSessionSavingTest wardSessionSavingTest(nullptr);
 
     int failures = 0;
     failures += QTest::qExec(&personJsonTest, argc, argv);
@@ -56,5 +71,10 @@ int main(int argc, char* argv[])
     failures += QTest::qExec(&filterTest, argc, argv);
     failures += QTest::qExec(&memberEditorTest, argc, argv);
     failures += QTest::qExec(&familyEditPanelTest, argc, argv);
+    failures += QTest::qExec(&jsonReaderTest, argc, argv);
+    failures += QTest::qExec(&identityTest, argc, argv);
+    failures += QTest::qExec(&wardFileTest, argc, argv);
+    failures += QTest::qExec(&fileWardStoreTest, argc, argv);
+    failures += QTest::qExec(&wardSessionSavingTest, argc, argv);
     return failures;
 }

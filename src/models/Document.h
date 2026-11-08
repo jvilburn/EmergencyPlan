@@ -7,6 +7,7 @@
 #include <QJsonArray>
 #include <QDate>
 
+#include "AccessList.h"
 #include "Coordinates.h"
 #include "DocumentMetadata.h"
 #include "Family.h"
@@ -113,6 +114,14 @@ public:
     void setEmergencyResponse(const std::optional<EmergencyResponse>& response) { m_emergencyResponse = response; }
 
     // ========================================================================
+    // Who may read the ward
+    // ========================================================================
+    /// A command reaches the access list through the Document it runs on. The payload writes
+    /// it as its access part, beside the ward part toJson writes.
+    const AccessList& access() const { return m_access; }
+    void setAccess(const AccessList& access) { m_access = access; }
+
+    // ========================================================================
     // Lookup helpers
     // ========================================================================
     std::optional<Family> findFamilyById(const FamilyId& id) const;
@@ -176,6 +185,9 @@ private:
     // Import dates (for conflict resolution)
     std::optional<QDate> m_wardDirectoryPdfDate;
     std::optional<QDate> m_ministeringPdfDate;
+
+    // Who may read the ward, which toJson and fromJson leave to the payload
+    AccessList m_access;
 
     // Decoration cache: personId -> set of response areas (rebuilt when emergency assets change)
     QHash<PersonId, QSet<ResponseArea>> m_personResponseAreas;

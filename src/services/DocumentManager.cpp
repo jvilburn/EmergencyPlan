@@ -6,12 +6,10 @@ DocumentManager* DocumentManager::s_instance = nullptr;
 
 DocumentManager::DocumentManager(QObject* parent)
     : QObject(parent)
-    , m_session(new NominatimGeocoder(this), new UnitLookupService(this), this)
+    , m_session(nullptr, nullptr, new NominatimGeocoder(this), new UnitLookupService(this), this)
 {
     Q_ASSERT(!s_instance);
     s_instance = this;
-
-    m_session.open(Document::empty());
 
     connect(&m_session, &WardSession::documentChanged, this, &DocumentManager::documentChanged);
     connect(&m_session, &WardSession::undoStackChanged, this, &DocumentManager::undoStackChanged);
@@ -70,6 +68,6 @@ EndResult DocumentManager::endEmergency(const QString& reportPath)
 
 void DocumentManager::newDocument()
 {
-    m_session.open(Document::empty());
+    m_session.createWard(Document::empty());
     m_session.automaticUpdates().run();
 }

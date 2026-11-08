@@ -145,7 +145,7 @@ AutomaticUpdatesTest::AutomaticUpdatesTest(QObject* parent)
 void AutomaticUpdatesTest::geocodeResultAppliesOutsideTheJournal()
 {
     TestSession session;
-    session.open(TestWard::document());
+    session.createWard(TestWard::document());
     session.automaticUpdates().run();
     QCOMPARE(session.geocoder().requests(), QStringList({smithAddress().full(), jonesAddress().full()}));
 
@@ -166,7 +166,7 @@ void AutomaticUpdatesTest::geocodeResultAppliesOutsideTheJournal()
 void AutomaticUpdatesTest::geocodeBetweenAnOfflinePhoneEditAndItsReplayKeepsBoth()
 {
     TestSession mine;
-    mine.open(TestWard::document());
+    mine.createWard(TestWard::document());
     QVERIFY(commitPhone(mine, TestWard::smithId(), TestWard::bobId(), "555-2222").status == CommitStatus::Applied);
     QVERIFY(!positionOf(mine, TestWard::smithId()).has_value());
 
@@ -186,7 +186,7 @@ void AutomaticUpdatesTest::addressEditPlacesTheFamilyAtTheNewAddressEntry()
 
     // The old address's geocode lands before the edit.
     TestSession before;
-    before.open(TestWard::document());
+    before.createWard(TestWard::document());
     before.automaticUpdates().run();
     before.geocoder().resolve(smithAddress().full(), ElmPosition);
     before.geocoder().resolve(jonesAddress().full(), OakPosition);
@@ -203,7 +203,7 @@ void AutomaticUpdatesTest::addressEditPlacesTheFamilyAtTheNewAddressEntry()
 
     // The old address's geocode lands after the edit.
     TestSession after;
-    after.open(TestWard::document());
+    after.createWard(TestWard::document());
     after.automaticUpdates().run();
     QVERIFY(commitAddress(after, TestWard::smithId(), newAddress).status == CommitStatus::Applied);
     QCOMPARE(after.geocoder().requests(),
@@ -222,7 +222,7 @@ void AutomaticUpdatesTest::addressEditPlacesTheFamilyAtTheNewAddressEntry()
 void AutomaticUpdatesTest::typedCoordinatesSetTheEntryAndAGeocodeNeverReplacesThem()
 {
     TestSession session;
-    session.open(TestWard::document());
+    session.createWard(TestWard::document());
     session.automaticUpdates().run();
 
     QVERIFY(commitTyped(session, smithAddress(), TypedPosition).status == CommitStatus::Applied);
@@ -240,7 +240,7 @@ void AutomaticUpdatesTest::typedCoordinatesSetTheEntryAndAGeocodeNeverReplacesTh
 void AutomaticUpdatesTest::undoOfTypedCoordinatesRestoresThePreviousEntry()
 {
     TestSession session;
-    session.open(mappedWard());
+    session.createWard(mappedWard());
     QVERIFY(commitTyped(session, smithAddress(), TypedPosition).status == CommitStatus::Applied);
     QVERIFY(positionOf(session, TestWard::smithId()) == TypedPosition);
 
@@ -253,7 +253,7 @@ void AutomaticUpdatesTest::undoOfTypedCoordinatesRestoresThePreviousEntry()
 
     // An entry typed where there was none is removed by its undo.
     TestSession unmapped;
-    unmapped.open(TestWard::document());
+    unmapped.createWard(TestWard::document());
     QVERIFY(commitTyped(unmapped, jonesAddress(), TypedPosition).status == CommitStatus::Applied);
     QVERIFY(positionOf(unmapped, TestWard::jonesId()) == TypedPosition);
 
@@ -264,7 +264,7 @@ void AutomaticUpdatesTest::undoOfTypedCoordinatesRestoresThePreviousEntry()
 void AutomaticUpdatesTest::typedCoordinatesReplayedAfterAGeocodeOfThatAddressApply()
 {
     TestSession mine;
-    mine.open(TestWard::document());
+    mine.createWard(TestWard::document());
     QVERIFY(commitTyped(mine, smithAddress(), TypedPosition).status == CommitStatus::Applied);
 
     ReplayResult result = mine.replayOnto(mappedWard());
@@ -279,7 +279,7 @@ void AutomaticUpdatesTest::batchDropsEntriesNoFamilyUsesAndKeepsEveryEntryInUse(
 {
     Address gone = TestWard::address("99 Gone St", "Provo, UT");
     TestSession session;
-    session.open(TestWard::withCoordinates(mappedWard(), gone, NewElmPosition));
+    session.createWard(TestWard::withCoordinates(mappedWard(), gone, NewElmPosition));
     QSignalSpy appliedSpy(&session.automaticUpdates(), &AutomaticUpdates::applied);
 
     session.automaticUpdates().run();
@@ -299,7 +299,7 @@ void AutomaticUpdatesTest::batchOfSeveralAddressesAppliesOnce()
     document.setFamily(lee);
     document.onDocumentChanged(DocumentChange::full());
     TestSession session;
-    session.open(document);
+    session.createWard(document);
     QSignalSpy appliedSpy(&session.automaticUpdates(), &AutomaticUpdates::applied);
 
     session.automaticUpdates().run();
@@ -318,7 +318,7 @@ void AutomaticUpdatesTest::batchOfSeveralAddressesAppliesOnce()
 void AutomaticUpdatesTest::failedAddressIsNotRequestedAgainUntilItsTextChanges()
 {
     TestSession session;
-    session.open(TestWard::document());
+    session.createWard(TestWard::document());
     session.automaticUpdates().run();
     session.geocoder().fail(smithAddress().full());
     session.geocoder().resolve(jonesAddress().full(), OakPosition);
@@ -350,7 +350,7 @@ void AutomaticUpdatesTest::twoFamiliesAtOneAddressShareOneRequestAndOneEntry()
     Family jones = TestWard::jones();
     jones.setAddress(smithAddress());
     TestSession session;
-    session.open(TestWard::withFamily(TestWard::document(), jones));
+    session.createWard(TestWard::withFamily(TestWard::document(), jones));
     QSignalSpy finishedSpy(&session.automaticUpdates(), &AutomaticUpdates::geocodingFinished);
 
     session.automaticUpdates().run();
@@ -366,12 +366,12 @@ void AutomaticUpdatesTest::twoFamiliesAtOneAddressShareOneRequestAndOneEntry()
 void AutomaticUpdatesTest::commandThatGivesNoAddressStartsNoGeocoding()
 {
     TestSession mine;
-    mine.open(TestWard::document());
+    mine.createWard(TestWard::document());
     QVERIFY(commitPhone(mine, TestWard::smithId(), TestWard::bobId(), "555-2222").status == CommitStatus::Applied);
     QVERIFY(mine.geocoder().requests().isEmpty());
 
     TestSession theirs;
-    theirs.open(TestWard::document());
+    theirs.createWard(TestWard::document());
     QVERIFY(commitAddress(theirs, TestWard::jonesId(), TestWard::address("6 Oak Ave", "Provo, UT")).status
             == CommitStatus::Applied);
     QVERIFY(!theirs.geocoder().requests().isEmpty());
@@ -383,7 +383,7 @@ void AutomaticUpdatesTest::commandThatGivesNoAddressStartsNoGeocoding()
 void AutomaticUpdatesTest::batchThatChangesNothingEmitsNothing()
 {
     TestSession mapped;
-    mapped.open(mappedWard());
+    mapped.createWard(mappedWard());
     QSignalSpy mappedApplied(&mapped.automaticUpdates(), &AutomaticUpdates::applied);
     QSignalSpy mappedChanged(&mapped, &WardSession::documentChanged);
     mapped.automaticUpdates().run();
@@ -393,7 +393,7 @@ void AutomaticUpdatesTest::batchThatChangesNothingEmitsNothing()
 
     // A batch whose every request fails.
     TestSession failing;
-    failing.open(TestWard::document());
+    failing.createWard(TestWard::document());
     QSignalSpy failingApplied(&failing.automaticUpdates(), &AutomaticUpdates::applied);
     QSignalSpy failingChanged(&failing, &WardSession::documentChanged);
     QSignalSpy failingFinished(&failing.automaticUpdates(), &AutomaticUpdates::geocodingFinished);
@@ -411,7 +411,7 @@ void AutomaticUpdatesTest::lookupThatChangesNothingEmitsNothing()
     Document document = mappedWard();
     document.metadata().updateWard(wardWithoutDetails("111111"));
     TestSession session;
-    session.open(document);
+    session.createWard(document);
     QSignalSpy appliedSpy(&session.automaticUpdates(), &AutomaticUpdates::applied);
     QSignalSpy changedSpy(&session, &WardSession::documentChanged);
 
@@ -434,7 +434,7 @@ void AutomaticUpdatesTest::failedWardLookupContinuesToTheNextWard()
     document.metadata().updateWard(wardWithoutDetails("222222"));
     document.metadata().updateWard(wardWithoutDetails("111111"));
     TestSession session;
-    session.open(document);
+    session.createWard(document);
 
     session.automaticUpdates().run();
     QCOMPARE(session.unitLookup().requests(), QStringList({"ward 111111"}));
@@ -449,7 +449,7 @@ void AutomaticUpdatesTest::wardFoundNamingAMissingStakeLooksUpTheStakeBeforeTheN
     document.metadata().updateWard(wardWithoutDetails("222222"));
     document.metadata().updateWard(wardWithoutDetails("111111"));
     TestSession session;
-    session.open(document);
+    session.createWard(document);
     QSignalSpy appliedSpy(&session.automaticUpdates(), &AutomaticUpdates::applied);
 
     session.automaticUpdates().run();
@@ -470,7 +470,7 @@ void AutomaticUpdatesTest::undoOfAnAddressEditRequestsTheRestoredAddress()
 {
     Address newAddress = TestWard::address("14 Elm St", "Provo, UT");
     TestSession session;
-    session.open(mappedWard());
+    session.createWard(mappedWard());
 
     QVERIFY(commitAddress(session, TestWard::smithId(), newAddress).status == CommitStatus::Applied);
     QCOMPARE(session.geocoder().requests(), QStringList({newAddress.full()}));
@@ -492,7 +492,7 @@ void AutomaticUpdatesTest::lateAnswersChangeNothing()
     document.metadata().updateWard(wardWithoutDetails("222222"));
     document.metadata().updateWard(wardWithoutDetails("111111"));
     TestSession session;
-    session.open(document);
+    session.createWard(document);
     session.automaticUpdates().run();
     QCOMPARE(session.geocoder().requests(), QStringList({smithAddress().full(), jonesAddress().full()}));
     QCOMPARE(session.unitLookup().requests(), QStringList({"ward 111111"}));
@@ -543,7 +543,7 @@ void AutomaticUpdatesTest::wardFoundWithoutAChapelIsNotLookedUpAgain()
     Document document = mappedWard();
     document.metadata().updateWard(wardWithoutDetails("111111"));
     TestSession session;
-    session.open(document);
+    session.createWard(document);
     QSignalSpy appliedSpy(&session.automaticUpdates(), &AutomaticUpdates::applied);
     session.automaticUpdates().run();
     QCOMPARE(session.unitLookup().requests(), QStringList({"ward 111111"}));
@@ -564,12 +564,12 @@ void AutomaticUpdatesTest::wardFoundWithoutAChapelIsNotLookedUpAgain()
     QCOMPARE(session.unitLookup().requests(), QStringList({"ward 111111", "ward 222222"}));
 }
 
-void AutomaticUpdatesTest::failedListEmptiesWhenAWardOpens()
+void AutomaticUpdatesTest::failedListStartsEmptyInANewWard()
 {
     Document document = TestWard::withCoordinates(TestWard::document(), jonesAddress(), OakPosition);
     document.metadata().updateWard(wardWithoutDetails("111111"));
     TestSession session;
-    session.open(document);
+    session.createWard(document);
     session.automaticUpdates().run();
     QCOMPARE(session.geocoder().requests(), QStringList({smithAddress().full()}));
     QCOMPARE(session.unitLookup().requests(), QStringList({"ward 111111"}));
@@ -581,7 +581,7 @@ void AutomaticUpdatesTest::failedListEmptiesWhenAWardOpens()
     QCOMPARE(session.geocoder().requests(), QStringList({smithAddress().full()}));
     QCOMPARE(session.unitLookup().requests(), QStringList({"ward 111111"}));
 
-    session.open(document);
+    session.createWard(document);
     session.automaticUpdates().run();
 
     QCOMPARE(session.geocoder().requests(), QStringList({smithAddress().full(), smithAddress().full()}));
@@ -591,7 +591,7 @@ void AutomaticUpdatesTest::failedListEmptiesWhenAWardOpens()
 void AutomaticUpdatesTest::resultsMapFamiliesAsTheyArrive()
 {
     TestSession session;
-    session.open(TestWard::document());
+    session.createWard(TestWard::document());
     QSignalSpy changedSpy(&session.automaticUpdates(), &AutomaticUpdates::documentChanged);
     QSignalSpy appliedSpy(&session.automaticUpdates(), &AutomaticUpdates::applied);
     session.automaticUpdates().run();
@@ -620,7 +620,7 @@ void AutomaticUpdatesTest::resultsMapFamiliesAsTheyArrive()
 void AutomaticUpdatesTest::documentReplacedMidBatchLosesNoResults()
 {
     TestSession session;
-    session.open(TestWard::document());
+    session.createWard(TestWard::document());
     QSignalSpy appliedSpy(&session.automaticUpdates(), &AutomaticUpdates::applied);
     session.automaticUpdates().run();
     session.geocoder().resolve(smithAddress().full(), ElmPosition);
@@ -642,7 +642,7 @@ void AutomaticUpdatesTest::commandThatGivesAWardNeedingALookupStartsOne()
 {
     // A ward lacking its details, from a command that gives no address.
     TestSession lacking;
-    lacking.open(mappedWard());
+    lacking.createWard(mappedWard());
     QVERIFY(lacking.commit(std::make_shared<GiveWardCommand>(wardWithoutDetails("111111"))).status
             == CommitStatus::Applied);
     QCOMPARE(lacking.unitLookup().requests(), QStringList({"ward 111111"}));
@@ -650,7 +650,7 @@ void AutomaticUpdatesTest::commandThatGivesAWardNeedingALookupStartsOne()
 
     // A ward with its details, naming a stake the document lacks.
     TestSession stakeMissing;
-    stakeMissing.open(mappedWard());
+    stakeMissing.createWard(mappedWard());
     QVERIFY(stakeMissing.commit(std::make_shared<GiveWardCommand>(wardWithChapel("111111", "900000"))).status
             == CommitStatus::Applied);
     QCOMPARE(stakeMissing.unitLookup().requests(), QStringList({"stake 900000"}));
@@ -661,7 +661,7 @@ void AutomaticUpdatesTest::commandThatGivesAWardNeedingALookupStartsOne()
     document.metadata().updateStake(namedStake("900000"));
     document.metadata().updateWard(wardWithoutDetails("222222"));
     TestSession complete;
-    complete.open(document);
+    complete.createWard(document);
     QVERIFY(complete.commit(std::make_shared<GiveWardCommand>(wardWithChapel("111111", "900000"))).status
             == CommitStatus::Applied);
     QVERIFY(complete.document().metadata().findWardByUnit("111111").has_value());
@@ -677,12 +677,12 @@ void AutomaticUpdatesTest::addressEditFromAnotherDeviceLeavesTheFamilyUnmappedAn
 {
     Address newAddress = TestWard::address("14 Elm St", "Provo, UT");
     TestSession theirs;
-    theirs.open(mappedWard());
+    theirs.createWard(mappedWard());
     QVERIFY(commitAddress(theirs, TestWard::smithId(), newAddress).status == CommitStatus::Applied);
     QCOMPARE(theirs.geocoder().requests(), QStringList({newAddress.full()}));
 
     TestSession mine;
-    mine.open(mappedWard());
+    mine.createWard(mappedWard());
     QVERIFY(mine.replayOnto(theirs.document()).status == ReplayStatus::FastForwarded);
 
     QCOMPARE(TestWard::family(mine.document(), TestWard::smithId()).address().full(), newAddress.full());

@@ -50,10 +50,11 @@ Ward withLookedUpDetails(const Ward& ward, const Ward& found)
 
 }  // namespace
 
-AutomaticUpdates::AutomaticUpdates(Document& document, Geocoder* geocoder, UnitLookup* unitLookup,
-                                   QObject* parent)
+AutomaticUpdates::AutomaticUpdates(Document& document, QSet<QString>& failed, Geocoder* geocoder,
+                                   UnitLookup* unitLookup, QObject* parent)
     : QObject(parent)
     , m_document(document)
+    , m_failed(failed)
     , m_geocoder(geocoder)
     , m_unitLookup(unitLookup)
 {
@@ -62,11 +63,6 @@ AutomaticUpdates::AutomaticUpdates(Document& document, Geocoder* geocoder, UnitL
     connect(m_unitLookup, &UnitLookup::wardFound, this, &AutomaticUpdates::onWardFound);
     connect(m_unitLookup, &UnitLookup::stakeFound, this, &AutomaticUpdates::onStakeFound);
     connect(m_unitLookup, &UnitLookup::lookupFailed, this, &AutomaticUpdates::onLookupFailed);
-}
-
-void AutomaticUpdates::wardOpened()
-{
-    m_failed.clear();
 }
 
 void AutomaticUpdates::commandApplied(const Command& command)

@@ -38,7 +38,7 @@ public:
     /// Writes the report of the emergency in progress and ends it, through the session.
     EndResult endEmergency(const QString& reportPath);
 
-    /// Opens Document::empty() in the session and starts its automatic updates.
+    /// Creates a ward of Document::empty() in the session and starts its automatic updates.
     void newDocument();
 
 signals:

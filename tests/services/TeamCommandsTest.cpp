@@ -33,12 +33,12 @@ Team withLeader(const Team& team, const std::optional<PersonId>& leader)
     return updated;
 }
 
-/// Opens both sessions on the test ward holding team.
+/// Creates a ward in both sessions from the test ward holding team.
 void openBoth(WardSession& mine, WardSession& theirs, const Team& team)
 {
     Document document = TestWard::withTeam(TestWard::document(), team);
-    mine.open(document);
-    theirs.open(document);
+    mine.createWard(document);
+    theirs.createWard(document);
 }
 
 }  // namespace
@@ -90,7 +90,7 @@ void TeamCommandsTest::removingTheLeaderClearsTheLeaderAndUndoRestoresBoth()
 {
     TestSession session;
     Team opened = withLeader(TestWard::setupTeam(), TestWard::aliceId());
-    session.open(TestWard::withTeam(TestWard::document(), opened));
+    session.createWard(TestWard::withTeam(TestWard::document(), opened));
     Team saved = withMembers(opened, {TestWard::bobId()});
     QVERIFY(!saved.leaderId().has_value());
 
@@ -183,7 +183,7 @@ void TeamCommandsTest::teamDeletionReplayedAfterSomeoneAddedAMemberConflictsAndL
 void TeamCommandsTest::undoTakesBackAnAddAndADeletion()
 {
     TestSession session;
-    session.open(TestWard::document());
+    session.createWard(TestWard::document());
     Team team = TestWard::setupTeam();
 
     QVERIFY(session.commit(AddTeamCommand::fromNew(team, session.document())).status == CommitStatus::Applied);

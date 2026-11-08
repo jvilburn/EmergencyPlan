@@ -95,8 +95,8 @@ CommitResult removeAlice(WardSession& session)
 
 void openBoth(WardSession& mine, WardSession& theirs, const Document& document)
 {
-    mine.open(document);
-    theirs.open(document);
+    mine.createWard(document);
+    theirs.createWard(document);
 }
 
 }  // namespace
@@ -201,7 +201,7 @@ void EmergencyCommandsTest::attemptsAtOneTimeAreOrderedByIdWhicheverReplaysFirst
 void EmergencyCommandsTest::undoingAnAddedAttemptRestoresTheEmergencyAndRedoAddsItAgain()
 {
     TestSession session;
-    session.open(TestWard::withResponse(
+    session.createWard(TestWard::withResponse(
         TestWard::document(),
         TestWard::stormWith({phoned("attempt-jones", TestWard::jones(), 9, 0, ContactOutcome::OK, "Fine")}, {})));
     EmergencyResponse before = emergencyIn(session);
@@ -252,7 +252,7 @@ void EmergencyCommandsTest::twoOfflineStartsBecomeOneEmergency()
 void EmergencyCommandsTest::attemptWithNoEmergencyInProgressConflicts()
 {
     TestSession session;
-    session.open(TestWard::document());
+    session.createWard(TestWard::document());
     ContactAttempt attempt = phoned("attempt-smith", TestWard::smith(), 10, 0, ContactOutcome::OK, "All safe");
 
     QVERIFY(addAttempt(session, attempt).status == CommitStatus::Conflicted);
@@ -270,7 +270,7 @@ void EmergencyCommandsTest::attemptWithNoEmergencyInProgressConflicts()
 void EmergencyCommandsTest::startAndNewCategoryAreNotUndoable()
 {
     TestSession session;
-    session.open(TestWard::document());
+    session.createWard(TestWard::document());
 
     QVERIFY(session.commit(StartEmergencyCommand::fromNew(TestWard::storm())).status == CommitStatus::Applied);
     QVERIFY(emergencyIn(session) == TestWard::storm());
@@ -291,7 +291,7 @@ void EmergencyCommandsTest::endingWritesAReportHoldingEveryAttemptAndTaskThenRem
     QString path = dir.filePath("storm.pdf");
     TestSession session;
     Document ward = TestWard::withFamily(TestWard::withTeam(TestWard::document(), TestWard::setupTeam()), TestWard::lee(2010));
-    session.open(TestWard::withResponse(ward, TestWard::storm()));
+    session.createWard(TestWard::withResponse(ward, TestWard::storm()));
 
     // Smith: two phone attempts, the later with a note long enough to wrap, and a task for
     // the Setup team. Jones: a button mark, a phone attempt by Alice, who is removed before
@@ -398,7 +398,7 @@ void EmergencyCommandsTest::undoingAnEndRestoresAnEqualEmergencyKeepsTheReportAn
     TestSession session;
     EmergencyResponse storm = TestWard::stormWith({phoned("attempt-smith", TestWard::smith(), 10, 0, ContactOutcome::OK, "All safe")},
                                                   {floodedBasement()});
-    session.open(TestWard::withResponse(TestWard::document(), storm));
+    session.createWard(TestWard::withResponse(TestWard::document(), storm));
 
     QVERIFY(session.endEmergency(path) == EndResult::Ended);
     QVERIFY(!session.document().emergencyResponse().has_value());
@@ -424,7 +424,7 @@ void EmergencyCommandsTest::restoreConflictsWhenADifferentEmergencyIsInProgress(
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
     TestSession session;
-    session.open(TestWard::withResponse(TestWard::document(), TestWard::storm()));
+    session.createWard(TestWard::withResponse(TestWard::document(), TestWard::storm()));
     QVERIFY(session.endEmergency(dir.filePath("storm.pdf")) == EndResult::Ended);
     QVERIFY(session.commit(StartEmergencyCommand::fromNew(TestWard::flood())).status == CommitStatus::Applied);
     QCOMPARE(session.undoHeading(), QString("End emergency: Storm"));
@@ -445,7 +445,7 @@ void EmergencyCommandsTest::endWhoseReportCannotBeWrittenEndsNothing()
     QVERIFY(dir.isValid());
     QString path = dir.filePath("missing/storm.pdf");
     TestSession session;
-    session.open(TestWard::withResponse(TestWard::document(), TestWard::storm()));
+    session.createWard(TestWard::withResponse(TestWard::document(), TestWard::storm()));
 
     QVERIFY(session.endEmergency(path) == EndResult::ReportFailed);
 
@@ -461,7 +461,7 @@ void EmergencyCommandsTest::endingWithNoEmergencyInProgressWritesNothing()
     QVERIFY(dir.isValid());
     QString path = dir.filePath("storm.pdf");
     TestSession session;
-    session.open(TestWard::document());
+    session.createWard(TestWard::document());
 
     QVERIFY(session.endEmergency(path) == EndResult::AlreadyEnded);
 
@@ -600,7 +600,7 @@ void EmergencyCommandsTest::reassigningReplacesTheWholeAssignmentAndUndoRestores
     toSetup.setNotification(TestWard::notification(ContactMethod::Text, "Sent the address", TestWard::octoberFirst(10, 40)));
     notified.setAssignment(toSetup);
     Document withTeam = TestWard::withTeam(TestWard::document(), TestWard::setupTeam());
-    session.open(TestWard::withResponse(withTeam, TestWard::stormWith({}, {notified})));
+    session.createWard(TestWard::withResponse(withTeam, TestWard::stormWith({}, {notified})));
     EmergencyResponse opened = emergencyIn(session);
     const ResponseTask* before = opened.findTask(basementId());
     QVERIFY(before);
@@ -673,7 +673,7 @@ void EmergencyCommandsTest::statisticsCountEveryDirectoryFamilyAndEveryRemovedFa
 void EmergencyCommandsTest::statusTableFollowsEachChangeToOneFamily()
 {
     TestSession session;
-    session.open(TestWard::withResponse(
+    session.createWard(TestWard::withResponse(
         TestWard::document(),
         TestWard::stormWith({phoned("attempt-jones", TestWard::jones(), 9, 0, ContactOutcome::UnableToReach, "No answer")},
                             {})));

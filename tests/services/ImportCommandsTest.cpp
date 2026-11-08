@@ -95,7 +95,7 @@ ImportCommandsTest::ImportCommandsTest(QObject* parent)
 void ImportCommandsTest::importReplayedAfterSomeoneAddedAFamilyKeepsThatFamily()
 {
     TestSession mine;
-    mine.open(TestWard::document());
+    mine.createWard(TestWard::document());
     WardDirectoryImportResult result = mergeDirectory(directoryListing({TestWard::smith()}), mine.document(),
                                                       octoberFifteenth());
     QCOMPARE(result.removedFamilyIds, QSet<FamilyId>({TestWard::jonesId()}));
@@ -120,7 +120,7 @@ void ImportCommandsTest::importReplayedAfterSomeoneAddedAFamilyKeepsThatFamily()
 void ImportCommandsTest::importReplayedAfterAnEditToAFamilyItChangesConflicts()
 {
     TestSession mine;
-    mine.open(TestWard::document());
+    mine.createWard(TestWard::document());
     Family listedSmith = TestWard::withPhone(TestWard::smith(), TestWard::bobId(), "555-2222");
     WardDirectoryImportResult result = mergeDirectory(directoryListing({listedSmith, TestWard::jones()}),
                                                       mine.document(), octoberFifteenth());
@@ -213,7 +213,7 @@ void ImportCommandsTest::olderMinisteringPdfAddsNoUnknownFamilyOrMemberAndNoGrou
     QCOMPARE(result.districts.value(district.id()).groupIds(), QSet<MinisteringGroupId>({group.id()}));
 
     TestSession session;
-    session.open(document);
+    session.createWard(document);
     QVERIFY(session.commit(ImportMinisteringCommand::fromImport(session.document(), result, "Tanglewood EQ.pdf")).status
             == CommitStatus::Applied);
     QVERIFY(session.document().groups(MinisteringOrg::EldersQuorum) == result.groups);
@@ -234,7 +234,7 @@ void ImportCommandsTest::attemptOnAFamilyLandsAfterAnImportRemovedItAndTheReport
 {
     Document document = TestWard::withResponse(TestWard::document(), TestWard::storm());
     TestSession theirs;
-    theirs.open(document);
+    theirs.createWard(document);
     WardDirectoryImportResult result = mergeDirectory(directoryListing({TestWard::smith()}), document,
                                                       octoberFifteenth());
     QVERIFY(theirs.commit(ImportWardDirectoryCommand::fromImport(theirs.document(), result, "Tanglewood.pdf")).status
@@ -242,7 +242,7 @@ void ImportCommandsTest::attemptOnAFamilyLandsAfterAnImportRemovedItAndTheReport
     QVERIFY(!theirs.document().findFamilyById(TestWard::jonesId()).has_value());
 
     TestSession mine;
-    mine.open(document);
+    mine.createWard(document);
     ContactAttempt attempt = TestWard::attempt("attempt-jones", TestWard::jones(), TestWard::octoberFirst(10, 0),
                                                ContactMethod::Phone, TestWard::bob(), ContactOutcome::OK,
                                                "All well");
@@ -364,7 +364,7 @@ void ImportCommandsTest::undoOfADirectoryImportLeavesTheSeededCoordinatesAndTheW
     Coordinates listedLee(40.2400, -111.6600);
     parsed.addressCoordinates.insert(TestWard::lee(2010).address().full(), listedLee);
     TestSession session;
-    session.open(document);
+    session.createWard(document);
     QVERIFY(session.commit(ImportWardDirectoryCommand::fromImport(
                                document, mergeDirectory(parsed, document, octoberFifteenth()), "Tanglewood.pdf"))
                 .status
@@ -424,7 +424,7 @@ void ImportCommandsTest::eachImportReplayedAfterTheOtherImportChangedTheDateItRe
 {
     // A directory import, replayed after someone imported a newer ministering PDF.
     TestSession directoryImporter;
-    directoryImporter.open(TestWard::document());
+    directoryImporter.createWard(TestWard::document());
     WardDirectoryImportResult directory = mergeDirectory(directoryListing({TestWard::smith()}),
                                                          directoryImporter.document(), octoberFifteenth());
     QVERIFY(directoryImporter.commit(ImportWardDirectoryCommand::fromImport(directoryImporter.document(), directory,
@@ -445,7 +445,7 @@ void ImportCommandsTest::eachImportReplayedAfterTheOtherImportChangedTheDateItRe
     Document read = TestWard::document();
     read.setWardDirectoryPdfDate(octoberFifteenth());
     TestSession ministeringImporter;
-    ministeringImporter.open(read);
+    ministeringImporter.createWard(read);
     MinisteringImportResult ministering = bobMinistersToTheJoneses(read);
     QVERIFY(ministeringImporter.commit(ImportMinisteringCommand::fromImport(read, ministering, "Tanglewood EQ.pdf"))
                 .status

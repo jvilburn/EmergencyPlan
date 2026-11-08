@@ -473,5 +473,6 @@ bool Document::operator==(const Document& other) const
         && m_rsDistricts == other.m_rsDistricts
         && m_rsGroups == other.m_rsGroups
         && m_wardDirectoryPdfDate == other.m_wardDirectoryPdfDate
-        && m_ministeringPdfDate == other.m_ministeringPdfDate;
+        && m_ministeringPdfDate == other.m_ministeringPdfDate
+        && m_access == other.m_access;
 }

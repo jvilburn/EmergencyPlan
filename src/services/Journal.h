@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Command.h"
+#include "JsonReader.h"
 
 #include <QJsonObject>
 #include <QList>
@@ -11,6 +12,8 @@ struct JournalEntry
 {
     qint64 sequence;
     QJsonObject command;
+
+    bool operator==(const JournalEntry& other) const;
 };
 
 /// This device's commands that it has not yet seen land, in the order they were made. Each
@@ -32,6 +35,13 @@ public:
 
     /// The entries' descriptions, in order.
     QList<CommandDescription> descriptions() const;
+
+    QJsonObject toJson() const;
+
+    /// The journal a local file holds, each entry's command kept as it was written.
+    static Journal fromJson(JsonReader json);
+
+    bool operator==(const Journal& other) const;
 
 private:
     QList<JournalEntry> m_entries;

@@ -26,12 +26,12 @@ EmergencyAsset withPeople(const EmergencyAsset& asset, const QSet<PersonId>& peo
     return updated;
 }
 
-/// Opens both sessions on the test ward holding asset.
+/// Creates a ward in both sessions from the test ward holding asset.
 void openBoth(WardSession& mine, WardSession& theirs, const EmergencyAsset& asset)
 {
     Document document = TestWard::withAsset(TestWard::document(), asset);
-    mine.open(document);
-    theirs.open(document);
+    mine.createWard(document);
+    theirs.createWard(document);
 }
 
 }  // namespace
@@ -103,7 +103,7 @@ void EmergencyAssetCommandsTest::additionOfAPersonReplayedAfterTheyWereRemovedCo
 void EmergencyAssetCommandsTest::undoTakesBackAnAddAnEditAndADeletion()
 {
     TestSession session;
-    session.open(TestWard::document());
+    session.createWard(TestWard::document());
     EmergencyAsset asset = TestWard::generator();
 
     QVERIFY(session.commit(AddEmergencyAssetCommand::fromNew(asset, session.document())).status == CommitStatus::Applied);

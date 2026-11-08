@@ -1,7 +1,9 @@
 #include "WardSession.h"
 #include "CommandRegistry.h"
+#include "Crypto.h"
 #include "EmergencyCommands.h"
 #include "ReportGenerator.h"
+#include "WardFile.h"
 
 #include <QDateTime>
 
@@ -27,22 +29,95 @@ CommitResult attempt(const Command& command, Document& document)
     return CommitResult{CommitStatus::Applied, QString(), command.description()};
 }
 
+LocalRead notOpened(OpenStatus status, const QString& problem)
+{
+    return LocalRead{OpenResult{status, problem}, std::nullopt, QByteArray()};
+}
+
 }  // namespace
 
-WardSession::WardSession(Geocoder* geocoder, UnitLookup* unitLookup, QObject* parent)
+WardSession::WardSession(const Identity* identity, WardStore* store, Geocoder* geocoder, UnitLookup* unitLookup,
+                         QObject* parent)
     : QObject(parent)
-    , m_automaticUpdates(m_document, geocoder, unitLookup, nullptr)
+    , m_identity(identity)
+    , m_store(store)
+    , m_automaticUpdates(m_document, m_device.failed, geocoder, unitLookup, nullptr)
 {
     connect(&m_automaticUpdates, &AutomaticUpdates::documentChanged,
             this, &WardSession::documentChanged);
+    connect(&m_automaticUpdates, &AutomaticUpdates::applied, this, &WardSession::save);
 }
 
-void WardSession::open(const Document& document)
+void WardSession::createWard(const Document& document)
 {
-    m_journal = Journal();
-    m_automaticUpdates.wardOpened();
+    m_documentId = DocumentId::generate();
+    m_dataKey = Crypto::randomBytes(Crypto::KeyBytes);
+    m_landed.clear();
+    m_device = DeviceState();
+    m_savePending = false;
     clearUndoStack();
     replaceDocument(document);
+    save();
+}
+
+OpenResult WardSession::openWard(const DocumentId& document)
+{
+    LocalRead local = readLocal(*m_store, *m_identity, document);
+    if (local.result.status != OpenStatus::Opened)
+    {
+        return local.result;
+    }
+    m_documentId = document;
+    m_dataKey = local.dataKey;
+    m_landed = local.payload->landed;
+    m_device = local.payload->device.value();
+    m_savePending = false;
+    clearUndoStack();
+    replaceDocument(local.payload->ward);
+    return local.result;
+}
+
+LocalRead WardSession::readLocal(const WardStore& store, const Identity& identity, const DocumentId& document)
+{
+    StoreRead stored = store.read(document);
+    switch (stored.status)
+    {
+    case StoreReadStatus::Read:
+        break;
+    case StoreReadStatus::Missing:
+        return notOpened(OpenStatus::Missing, "this device holds no file for the ward");
+    case StoreReadStatus::Fault:
+        return notOpened(OpenStatus::Fault, stored.problem);
+    }
+
+    WardRead read = WardFile::read(stored.bytes, identity, PayloadKind::LocalFile);
+    switch (read.status)
+    {
+    case WardReadStatus::Read:
+        break;
+    case WardReadStatus::Newer:
+        return notOpened(OpenStatus::Newer, "a newer Ward Planning wrote the file");
+    case WardReadStatus::Unreadable:
+        return notOpened(OpenStatus::CannotRead, read.problem);
+    case WardReadStatus::Deleted:
+        return notOpened(OpenStatus::CannotRead, "the header names no one");
+    case WardReadStatus::NotNamed:
+        return notOpened(OpenStatus::CannotRead, "the header does not name this device");
+    }
+    if (read.header->document() != document)
+    {
+        return notOpened(OpenStatus::CannotRead, "the file holds another ward");
+    }
+    return LocalRead{OpenResult{OpenStatus::Opened, QString()}, read.payload, read.dataKey};
+}
+
+bool WardSession::retryPendingSave()
+{
+    if (m_savePending)
+    {
+        save();
+    }
+    return !m_savePending;
 }
 
 CommitResult WardSession::commit(CommandPtr command)
@@ -130,7 +205,14 @@ EndResult WardSession::endEmergency(const QString& reportPath)
 
 ReplayResult WardSession::replayOnto(const Document& version)
 {
-    if (m_journal.isEmpty())
+    ReplayResult result = replay(version);
+    save();
+    return result;
+}
+
+ReplayResult WardSession::replay(const Document& version)
+{
+    if (m_device.journal.isEmpty())
     {
         replaceDocument(version);
         return ReplayResult{ReplayStatus::FastForwarded, QString()};
@@ -138,7 +220,7 @@ ReplayResult WardSession::replayOnto(const Document& version)
 
     Document replayed = version;
     replayed.onDocumentChanged(DocumentChange::full());
-    const QList<JournalEntry>& entries = m_journal.entries();
+    const QList<JournalEntry>& entries = m_device.journal.entries();
     for (int i = 0; i < entries.size(); ++i)
     {
         CommandPtr command = CommandRegistry::fromJson(entries[i].command);
@@ -146,7 +228,7 @@ ReplayResult WardSession::replayOnto(const Document& version)
         if (result.status != CommitStatus::Applied)
         {
             QString toRedo = toRedoText(i, result);
-            m_journal.clear();
+            m_device.journal.clear();
             clearUndoStack();
             replaceDocument(version);
             return ReplayResult{ReplayStatus::Abandoned, toRedo};
@@ -163,7 +245,8 @@ CommitResult WardSession::run(const Command& command)
     {
         return result;
     }
-    m_journal.append(command);
+    m_device.journal.append(command);
+    save();
     emit documentChanged(command.documentChange());
     m_automaticUpdates.commandApplied(command);
     return result;
@@ -182,7 +265,7 @@ QString WardSession::toRedoText(int stopped, const CommitResult& stop) const
     }
     text.append(tr("These need doing again:"));
 
-    QList<CommandDescription> descriptions = m_journal.descriptions();
+    QList<CommandDescription> descriptions = m_device.journal.descriptions();
     for (int i = 0; i < descriptions.size(); ++i)
     {
         text.append(QString());
@@ -200,6 +283,22 @@ QString WardSession::toRedoText(int stopped, const CommitResult& stop) const
         }
     }
     return text.join("\n") + "\n";
+}
+
+void WardSession::save()
+{
+    QByteArray bytes = WardFile::write(m_documentId, m_dataKey, WardPayload{m_document, m_landed, m_device});
+    QString problem;
+    if (m_store->write(m_documentId, bytes, &problem))
+    {
+        m_savePending = false;
+        return;
+    }
+    if (!m_savePending)
+    {
+        m_savePending = true;
+        emit saveFailed(problem);
+    }
 }
 
 void WardSession::replaceDocument(const Document& document)

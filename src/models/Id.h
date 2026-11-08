@@ -124,6 +124,32 @@ public:
     static constexpr const char* typeName() { return "ContactAttemptId"; }
 };
 
+/// A document's id: 128 random bits, in base64url without padding. It names the local
+/// file, is bound into the header from the first save, and never changes.
+class DocumentId : public IdBase<DocumentId>
+{
+    friend class IdBase<DocumentId>;
+    using IdBase::IdBase;
+public:
+    static constexpr const char* typeName() { return "DocumentId"; }
+
+    /// Hides IdBase::generate, whose UUID form a document id does not take.
+    static DocumentId generate();
+};
+
+/// A user's id within one ward: 128 random bits, in base64url without padding, shared by
+/// that user's devices.
+class UserId : public IdBase<UserId>
+{
+    friend class IdBase<UserId>;
+    using IdBase::IdBase;
+public:
+    static constexpr const char* typeName() { return "UserId"; }
+
+    /// Hides IdBase::generate, whose UUID form a user id does not take.
+    static UserId generate();
+};
+
 // === SelectionKey ===
 
 class SelectionKey

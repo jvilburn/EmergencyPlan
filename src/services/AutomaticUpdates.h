@@ -16,21 +16,19 @@ class UnitLookup;
 /// The automatic updates of one open ward: geocoding into the table of address coordinates,
 /// and ward and stake lookup into the ward details. Their results are derived data, so they
 /// change the document outside the journal. WardSession owns one and hands it the document
-/// it works on.
+/// it works on and this device's failed list for that ward.
 class AutomaticUpdates : public QObject
 {
     Q_OBJECT
 
 public:
-    /// Works on document, which outlives it. geocoder and unitLookup answer the requests;
-    /// it does not own them.
-    AutomaticUpdates(Document& document, Geocoder* geocoder, UnitLookup* unitLookup,
+    /// Works on document and failed, the addresses and unit numbers that did not resolve,
+    /// which both outlive it. geocoder and unitLookup answer the requests; it does not own
+    /// them. Requests under way when another ward opens carry on, and apply to the document
+    /// as it stands when they answer; a result no family's address uses is dropped with the
+    /// batch's unused entries.
+    AutomaticUpdates(Document& document, QSet<QString>& failed, Geocoder* geocoder, UnitLookup* unitLookup,
                      QObject* parent);
-
-    /// A ward has opened: the failed list, which belongs to the open ward, starts empty.
-    /// Requests under way carry on, and apply to the document as it stands when they answer;
-    /// a result no family's address uses is dropped with the batch's unused entries.
-    void wardOpened();
 
     /// command has applied: a run starts when it gives a family an address the batch would
     /// request, or gives the document a ward unit a lookup is due for.
@@ -102,9 +100,9 @@ private:
     bool unitNeedsLookup(const QString& wardUnitNumber) const;
 
     Document& m_document;
+    QSet<QString>& m_failed;                 ///< addresses and unit numbers that did not resolve
     Geocoder* m_geocoder;
     UnitLookup* m_unitLookup;
-    QSet<QString> m_failed;                  ///< addresses and unit numbers that did not resolve
     QSet<QString> m_pending;                 ///< the batch's addresses not yet answered
     QHash<QString, Coordinates> m_resolved;  ///< the batch's results, held by address
     int m_batchTotal = 0;                    ///< the requests the batch has made

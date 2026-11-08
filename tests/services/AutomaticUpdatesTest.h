@@ -28,7 +28,7 @@ private slots:
     void undoOfAnAddressEditRequestsTheRestoredAddress();
     void lateAnswersChangeNothing();
     void wardFoundWithoutAChapelIsNotLookedUpAgain();
-    void failedListEmptiesWhenAWardOpens();
+    void failedListStartsEmptyInANewWard();
     void resultsMapFamiliesAsTheyArrive();
     void documentReplacedMidBatchLosesNoResults();
     void commandThatGivesAWardNeedingALookupStartsOne();
