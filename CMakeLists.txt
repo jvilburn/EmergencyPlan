@@ -558,9 +558,6 @@ if(WIN32)
         WIN32_EXECUTABLE TRUE
     )
 
-    # Windows application icon
-    # target_sources(WardPlanning PRIVATE packaging/windows/WardPlanning.rc)
-
     # Windows-specific: Include skeuomorphic stylesheet in resources
     # The stylesheet is loaded at runtime on Windows only
     message(STATUS "Windows build: Skeuomorphic styling enabled")
@@ -583,18 +580,6 @@ if(APPLE)
     # macOS-specific: Use native styling (no custom stylesheet)
     # Qt automatically uses native Aqua controls
     message(STATUS "macOS build: Native Aqua styling enabled")
-
-    # Enable Retina/HiDPI support
-    set_target_properties(WardPlanning PROPERTIES
-        MACOSX_BUNDLE_ICON_FILE "WardPlanning.icns"
-    )
-
-    # Copy icon to bundle
-    # set(MACOS_ICON ${CMAKE_SOURCE_DIR}/packaging/macos/WardPlanning.icns)
-    # set_source_files_properties(${MACOS_ICON} PROPERTIES
-    #     MACOSX_PACKAGE_LOCATION "Resources"
-    # )
-    # target_sources(WardPlanning PRIVATE ${MACOS_ICON})
 endif()
 
 # --- Cross-platform definitions ---

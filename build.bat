@@ -12,18 +12,22 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM Check if we need to configure:
-REM - No CMakeCache.txt means fresh build
-REM - CMakeLists.txt changed since last configure (compare against marker)
+REM The cache is kept only for the build type it was configured for (build\.build_type),
+REM since the libraries it found are that type's
+set CONFIGURED_TYPE=
+if exist "build\.build_type" set /p CONFIGURED_TYPE=<build\.build_type
+if /i not "%CONFIGURED_TYPE%"=="%BUILD_TYPE%" (
+    if exist "build\CMakeCache.txt" del "build\CMakeCache.txt"
+)
+
+REM Configure when there is no cache, or when CMakeLists.txt differs from the last
+REM configure's (build\.cmake_marker)
 set NEED_CONFIGURE=0
 if not exist "build\CMakeCache.txt" set NEED_CONFIGURE=1
+if not exist "build\.cmake_marker" set NEED_CONFIGURE=1
 if !NEED_CONFIGURE!==0 (
-    if exist "build\.cmake_marker" (
-        fc /b CMakeLists.txt build\.cmake_marker >nul 2>&1
-        if errorlevel 1 set NEED_CONFIGURE=1
-    ) else (
-        set NEED_CONFIGURE=1
-    )
+    fc /b CMakeLists.txt build\.cmake_marker >nul 2>&1
+    if errorlevel 1 set NEED_CONFIGURE=1
 )
 
 if !NEED_CONFIGURE!==1 (
@@ -32,17 +36,17 @@ if !NEED_CONFIGURE!==1 (
     cmake --preset windows-%BUILD_TYPE%
     if errorlevel 1 exit /b 1
     copy /y CMakeLists.txt build\.cmake_marker >nul
+    echo %BUILD_TYPE%>build\.build_type
     REM Reset deploy marker when reconfiguring
     if exist "build\.deployed" del "build\.deployed"
 ) else (
     echo.
-    echo === Skipping configure (CMakeLists.txt unchanged) ===
+    echo === Skipping configure ^(CMakeLists.txt and build type unchanged^) ===
 )
 
 echo.
 echo === Building ===
-cmake --build build --parallel
-if errorlevel 1 exit /b 1
+cmake --build build --parallel || exit /b 1
 
 REM Only deploy if marker file doesn't exist
 if not exist "build\.deployed" (
@@ -53,7 +57,7 @@ if not exist "build\.deployed" (
     echo. > build\.deployed
 ) else (
     echo.
-    echo === Skipping Qt deployment (already deployed) ===
+    echo === Skipping Qt deployment ^(already deployed^) ===
 )
 
 echo.

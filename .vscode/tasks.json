@@ -94,7 +94,7 @@
             "label": "Open Qt Designer",
             "type": "shell",
             "windows": {
-                "command": "C:/Qt/6.10.1/msvc2022_64/bin/designer.exe"
+                "command": "C:/Qt/6.11.0/msvc2022_64/bin/designer.exe"
             },
             "osx": {
                 "command": "open -a Designer"
@@ -107,7 +107,7 @@
             "label": "Open Qt Assistant",
             "type": "shell",
             "windows": {
-                "command": "C:/Qt/6.10.1/msvc2022_64/bin/assistant.exe"
+                "command": "C:/Qt/6.11.0/msvc2022_64/bin/assistant.exe"
             },
             "osx": {
                 "command": "open -a Assistant"

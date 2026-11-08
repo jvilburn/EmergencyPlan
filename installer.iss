@@ -15,6 +15,7 @@ AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
+UsePreviousGroup=no
 DisableProgramGroupPage=yes
 OutputDir=installer_output
 OutputBaseFilename=WardPlanning-{#MyAppVersion}-setup
@@ -71,13 +72,13 @@ Source: "build\bin\translations\*"; DestDir: "{app}\translations"; Flags: ignore
 ; ICU (if present in release deploy)
 Source: "build\bin\icu*.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
-; An upgrade installs into the earlier release's folder, and takes out its executable and
-; shortcuts, which carry its name
+; An upgrade installs into the earlier release's folder, and takes out its executable, Start
+; Menu folder and desktop shortcut, which carry its name, and its tile cache
 [InstallDelete]
 Type: files; Name: "{app}\EmergencyPlan.exe"
-Type: files; Name: "{group}\Ward Emergency Plan.lnk"
-Type: files; Name: "{group}\{cm:UninstallProgram,Ward Emergency Plan}.lnk"
+Type: filesandordirs; Name: "{autoprograms}\Ward Emergency Plan"
 Type: files; Name: "{autodesktop}\Ward Emergency Plan.lnk"
+Type: filesandordirs; Name: "{localappdata}\Emergency Plan\cache"
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

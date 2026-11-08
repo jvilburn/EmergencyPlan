@@ -23,6 +23,8 @@ On startup, to center the map near you, it calls https://ipinfo.io/json, an IP-b
 
 On import of a Ward Directory pdf, it uses a headless Microsoft Edge browser to access https://maps.churchofjesuschrist.org to find the location of the ward meetinghouse.
 
+To place families on the map, it sends their addresses to https://nominatim.openstreetmap.org, which returns each address's location.
+
 To display the map, it uses https://tile.openstreetmap.org for street maps and https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/ for satellite images.
 
 It caches map tiles to make map drawing responsive and also to allow drawing the maps during an emergency, when the internet may not be available.
