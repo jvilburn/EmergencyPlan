@@ -1,5 +1,6 @@
 #include "TileFetchService.h"
 
+#include <QCoreApplication>
 #include <QNetworkReply>
 #include <QNetworkRequest>
 
@@ -17,7 +18,7 @@ TileFetchService::~TileFetchService() = default;
 
 void TileFetchService::initializeProviders()
 {
-    QString userAgent = "EmergencyPlan/1.0";
+    QString userAgent = "WardPlanning/" + QCoreApplication::applicationVersion();
 
     // Street maps - OSM primary, ESRI fallback
     m_providers[TileLayer::Street] = {

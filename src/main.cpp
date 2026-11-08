@@ -17,7 +17,8 @@
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
-    app.setApplicationName("Emergency Plan");
+    app.setApplicationName("Ward Planning");
+    app.setApplicationVersion(WARD_PLANNING_VERSION);
     app.setOrganizationName("");
     app.setWindowIcon(QIcon(":/markers/marker_chapel.svg"));
 

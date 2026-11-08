@@ -1,5 +1,6 @@
 #include "GeocodingService.h"
 
+#include <QCoreApplication>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -84,7 +85,7 @@ void GeocodingService::startRequest(const QString& address)
     url.setQuery(query);
 
     QNetworkRequest request(url);
-    request.setHeader(QNetworkRequest::UserAgentHeader, USER_AGENT);
+    request.setHeader(QNetworkRequest::UserAgentHeader, "WardPlanning/" + QCoreApplication::applicationVersion());
     request.setRawHeader("Accept", "application/json");
 
     QNetworkReply* reply = m_networkManager->get(request);

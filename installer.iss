@@ -1,10 +1,12 @@
-; Ward Emergency Plan - Inno Setup Installer Script
+; Ward Planning - Inno Setup Installer Script
 ; Requires a release build: build.bat release
 
-#define MyAppName "Ward Emergency Plan"
-#define MyAppVersion "1.0.1"
-#define MyAppPublisher "Ward Emergency Plan Contributors"
-#define MyAppExeName "EmergencyPlan.exe"
+; MyAppVersion, which the build writes from the project's version
+#include "build\version.iss"
+
+#define MyAppName "Ward Planning"
+#define MyAppPublisher "Ward Planning Contributors"
+#define MyAppExeName "WardPlanning.exe"
 
 [Setup]
 AppId={{B7E3F2A1-5C8D-4F6E-9A2B-1D3E5F7A9C0B}
@@ -15,7 +17,7 @@ DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=installer_output
-OutputBaseFilename=WardEmergencyPlan-{#MyAppVersion}-setup
+OutputBaseFilename=WardPlanning-{#MyAppVersion}-setup
 SetupIconFile=src\resources\app_icon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 LicenseFile=LICENSE.txt
@@ -68,6 +70,14 @@ Source: "build\bin\translations\*"; DestDir: "{app}\translations"; Flags: ignore
 
 ; ICU (if present in release deploy)
 Source: "build\bin\icu*.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+
+; An upgrade installs into the earlier release's folder, and takes out its executable and
+; shortcuts, which carry its name
+[InstallDelete]
+Type: files; Name: "{app}\EmergencyPlan.exe"
+Type: files; Name: "{group}\Ward Emergency Plan.lnk"
+Type: files; Name: "{group}\{cm:UninstallProgram,Ward Emergency Plan}.lnk"
+Type: files; Name: "{autodesktop}\Ward Emergency Plan.lnk"
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

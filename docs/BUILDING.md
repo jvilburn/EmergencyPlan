@@ -1,4 +1,4 @@
-# Building Emergency Plan Qt
+# Building Ward Planning
 
 ## Prerequisites
 
@@ -10,7 +10,7 @@
 
 2. **Qt 6.11+**
    - Download from https://www.qt.io/download-qt-installer
-   - Select: Qt 6.x.x → MSVC 2022 64-bit
+   - Select: Qt 6.x.x > MSVC 2022 64-bit
    - Required modules: Core, Gui, Widgets, Network, Svg, Pdf, Concurrent, PrintSupport, Test
 
 3. **CMake 3.21+**
@@ -81,7 +81,7 @@ The build script:
 
 ### IDE Configuration
 
-The project includes pre-configured VS Code settings. The CMake Tools extension is **not needed** — building is handled by `build.bat`/`build.sh` via the VS Code build task.
+The project includes pre-configured VS Code settings. The CMake Tools extension is **not needed**: building is handled by `build.bat`/`build.sh` via the VS Code build task.
 
 **Build shortcut**: `Ctrl+Shift+B` (runs `build.bat`)
 

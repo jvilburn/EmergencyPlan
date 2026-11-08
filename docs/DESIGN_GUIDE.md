@@ -1,4 +1,4 @@
-# Emergency Plan Qt - Design Guide
+# Ward Planning - Design Guide
 
 ## Platform Strategy
 

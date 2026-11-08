@@ -550,7 +550,7 @@ void MainWindow::onDocumentChanged(const DocumentChange& change)
 
 void MainWindow::updateWindowTitle()
 {
-    setWindowTitle(tr("%1 - Emergency Plan").arg(DocumentManager::instance()->document().wardName()));
+    setWindowTitle(tr("%1 - Ward Planning").arg(DocumentManager::instance()->document().wardName()));
 }
 
 void MainWindow::updateUndoRedoActions()

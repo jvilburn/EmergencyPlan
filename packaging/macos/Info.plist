@@ -6,28 +6,28 @@
     <string>en</string>
 
     <key>CFBundleExecutable</key>
-    <string>EmergencyPlan</string>
+    <string>${MACOSX_BUNDLE_EXECUTABLE_NAME}</string>
 
     <key>CFBundleIconFile</key>
-    <string>EmergencyPlan.icns</string>
+    <string>${MACOSX_BUNDLE_ICON_FILE}</string>
 
     <key>CFBundleIdentifier</key>
-    <string>com.church.emergencyplan</string>
+    <string>${MACOSX_BUNDLE_GUI_IDENTIFIER}</string>
 
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
 
     <key>CFBundleName</key>
-    <string>Emergency Plan</string>
+    <string>${MACOSX_BUNDLE_BUNDLE_NAME}</string>
 
     <key>CFBundlePackageType</key>
     <string>APPL</string>
 
     <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
+    <string>${MACOSX_BUNDLE_SHORT_VERSION_STRING}</string>
 
     <key>CFBundleVersion</key>
-    <string>1.0.0</string>
+    <string>${MACOSX_BUNDLE_BUNDLE_VERSION}</string>
 
     <key>LSMinimumSystemVersion</key>
     <string>11.0</string>
@@ -46,7 +46,7 @@
 
     <!-- Privacy permissions if needed -->
     <key>NSLocationUsageDescription</key>
-    <string>Emergency Plan uses your location to center the map on your area.</string>
+    <string>Ward Planning uses your location to center the map on your area.</string>
 
     <!-- Allow network access for geocoding and map tiles -->
     <key>NSAppTransportSecurity</key>

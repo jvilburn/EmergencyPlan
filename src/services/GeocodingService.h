@@ -60,5 +60,4 @@ private:
 
     static constexpr int RATE_LIMIT_MS = 1100;  // 1.1 seconds
     static constexpr const char* NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
-    static constexpr const char* USER_AGENT = "WardPlanning/1.0";
 };

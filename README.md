@@ -1,4 +1,4 @@
-# Emergency Plan Qt
+# Ward Planning
 
 A C++/Qt desktop application for managing ward/stake family data, emergency response teams, and resources.
 
@@ -19,7 +19,7 @@ A C++/Qt desktop application for managing ward/stake family data, emergency resp
 - **PDF Import**: Import ward directories and ministering assignments from PDF
 
 ## Internet Access
-On startup, to center the map near you, it calls https://ipinfo.io/json — an IP-based geolocation service that returns the approximate location from your public IP address.
+On startup, to center the map near you, it calls https://ipinfo.io/json, an IP-based geolocation service that returns the approximate location from your public IP address.
 
 On import of a Ward Directory pdf, it uses a headless Microsoft Edge browser to access https://maps.churchofjesuschrist.org to find the location of the ward meetinghouse.
 
@@ -50,7 +50,7 @@ build.bat
 build.bat release
 
 # Run
-build\bin\EmergencyPlan.exe
+build\bin\WardPlanning.exe
 ```
 
 The build script automatically:
@@ -70,8 +70,8 @@ cd WardPlanningQt
 ./build.sh release
 
 # Run
-./build/bin/EmergencyPlan        # Linux
-open ./build/bin/EmergencyPlan.app  # macOS
+./build/bin/WardPlanning        # Linux
+open ./build/bin/WardPlanning.app  # macOS
 ```
 
 ## Development Tools

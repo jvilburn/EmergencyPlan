@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(EmergencyPlan
-    VERSION 1.0.0
-    DESCRIPTION "Emergency Plan - Ward/Stake Emergency Response Planning"
+project(WardPlanning
+    VERSION 2.0.0
+    DESCRIPTION "Ward Planning - ward planning and emergency response"
     LANGUAGES CXX
 )
 
@@ -400,7 +400,7 @@ set(LISTMODEL_HEADERS
 # ============================================================================
 # Library Target (for testing)
 # ============================================================================
-add_library(EmergencyPlanLib STATIC
+add_library(WardPlanningLib STATIC
     ${MODEL_SOURCES}
     ${MODEL_HEADERS}
     ${COMMAND_SOURCES}
@@ -415,7 +415,7 @@ add_library(EmergencyPlanLib STATIC
     ${LISTMODEL_HEADERS}
 )
 
-target_include_directories(EmergencyPlanLib PUBLIC
+target_include_directories(WardPlanningLib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/src/models
     ${CMAKE_CURRENT_SOURCE_DIR}/src/commands
@@ -428,12 +428,12 @@ target_include_directories(EmergencyPlanLib PUBLIC
 )
 
 # Mark third-party includes as SYSTEM to suppress warnings from their headers
-target_include_directories(EmergencyPlanLib SYSTEM PUBLIC
+target_include_directories(WardPlanningLib SYSTEM PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src/3rdparty
     ${MUPDF_INCLUDE_DIR}
 )
 
-target_link_libraries(EmergencyPlanLib PUBLIC
+target_link_libraries(WardPlanningLib PUBLIC
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
@@ -452,43 +452,43 @@ target_link_libraries(EmergencyPlanLib PUBLIC
 )
 
 if(HARFBUZZ_LIBRARY)
-    target_link_libraries(EmergencyPlanLib PUBLIC ${HARFBUZZ_LIBRARY})
+    target_link_libraries(WardPlanningLib PUBLIC ${HARFBUZZ_LIBRARY})
 endif()
 if(JBIG2DEC_LIBRARY)
-    target_link_libraries(EmergencyPlanLib PUBLIC ${JBIG2DEC_LIBRARY})
+    target_link_libraries(WardPlanningLib PUBLIC ${JBIG2DEC_LIBRARY})
 endif()
 if(PNG_LIBRARY)
-    target_link_libraries(EmergencyPlanLib PUBLIC ${PNG_LIBRARY})
+    target_link_libraries(WardPlanningLib PUBLIC ${PNG_LIBRARY})
 endif()
 if(BZ2_LIBRARY)
-    target_link_libraries(EmergencyPlanLib PUBLIC ${BZ2_LIBRARY})
+    target_link_libraries(WardPlanningLib PUBLIC ${BZ2_LIBRARY})
 endif()
 if(BROTLIDEC_LIBRARY)
-    target_link_libraries(EmergencyPlanLib PUBLIC ${BROTLIDEC_LIBRARY})
+    target_link_libraries(WardPlanningLib PUBLIC ${BROTLIDEC_LIBRARY})
 endif()
 if(BROTLICOMMON_LIBRARY)
-    target_link_libraries(EmergencyPlanLib PUBLIC ${BROTLICOMMON_LIBRARY})
+    target_link_libraries(WardPlanningLib PUBLIC ${BROTLICOMMON_LIBRARY})
 endif()
 
-target_compile_definitions(EmergencyPlanLib PUBLIC HAVE_MUPDF)
+target_compile_definitions(WardPlanningLib PUBLIC HAVE_MUPDF)
 
 
 # ============================================================================
 # Main Executable
 # ============================================================================
-qt_add_executable(EmergencyPlan
+qt_add_executable(WardPlanning
     src/main.cpp
     src/resources/app_icon.rc
 )
 
-target_link_libraries(EmergencyPlan PRIVATE
-    EmergencyPlanLib
+target_link_libraries(WardPlanning PRIVATE
+    WardPlanningLib
 )
 
 # ============================================================================
 # Resources
 # ============================================================================
-qt_add_resources(EmergencyPlan "icons"
+qt_add_resources(WardPlanning "icons"
     PREFIX "/"
     BASE "src/resources"
     FILES
@@ -525,7 +525,7 @@ qt_add_resources(EmergencyPlan "icons"
         src/resources/icons/win7/button-focus.png
 )
 
-qt_add_resources(EmergencyPlan "markers"
+qt_add_resources(WardPlanning "markers"
     PREFIX "/"
     BASE "src/resources"
     FILES
@@ -541,7 +541,7 @@ qt_add_resources(EmergencyPlan "markers"
         src/resources/markers/marker_antenna.svg
 )
 
-qt_add_resources(EmergencyPlan "styles"
+qt_add_resources(WardPlanning "styles"
     PREFIX "/"
     BASE "src/resources"
     FILES
@@ -554,27 +554,30 @@ qt_add_resources(EmergencyPlan "styles"
 
 # --- Windows ---
 if(WIN32)
-    set_target_properties(EmergencyPlan PROPERTIES
+    set_target_properties(WardPlanning PROPERTIES
         WIN32_EXECUTABLE TRUE
     )
 
     # Windows application icon
-    # target_sources(EmergencyPlan PRIVATE packaging/windows/EmergencyPlan.rc)
+    # target_sources(WardPlanning PRIVATE packaging/windows/WardPlanning.rc)
 
     # Windows-specific: Include skeuomorphic stylesheet in resources
     # The stylesheet is loaded at runtime on Windows only
     message(STATUS "Windows build: Skeuomorphic styling enabled")
+
+    # The installer's version, from the project's
+    configure_file(packaging/windows/version.iss.in ${CMAKE_BINARY_DIR}/version.iss @ONLY)
 endif()
 
 # --- macOS ---
 if(APPLE)
-    set_target_properties(EmergencyPlan PROPERTIES
+    set_target_properties(WardPlanning PROPERTIES
         MACOSX_BUNDLE TRUE
         MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/packaging/macos/Info.plist
-        MACOSX_BUNDLE_GUI_IDENTIFIER "com.church.emergencyplan"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.church.wardplanning"
         MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
         MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION}
-        MACOSX_BUNDLE_BUNDLE_NAME "Emergency Plan"
+        MACOSX_BUNDLE_BUNDLE_NAME "Ward Planning"
     )
 
     # macOS-specific: Use native styling (no custom stylesheet)
@@ -582,20 +585,21 @@ if(APPLE)
     message(STATUS "macOS build: Native Aqua styling enabled")
 
     # Enable Retina/HiDPI support
-    set_target_properties(EmergencyPlan PROPERTIES
-        MACOSX_BUNDLE_ICON_FILE "EmergencyPlan.icns"
+    set_target_properties(WardPlanning PROPERTIES
+        MACOSX_BUNDLE_ICON_FILE "WardPlanning.icns"
     )
 
     # Copy icon to bundle
-    # set(MACOS_ICON ${CMAKE_SOURCE_DIR}/packaging/macos/EmergencyPlan.icns)
+    # set(MACOS_ICON ${CMAKE_SOURCE_DIR}/packaging/macos/WardPlanning.icns)
     # set_source_files_properties(${MACOS_ICON} PROPERTIES
     #     MACOSX_PACKAGE_LOCATION "Resources"
     # )
-    # target_sources(EmergencyPlan PRIVATE ${MACOS_ICON})
+    # target_sources(WardPlanning PRIVATE ${MACOS_ICON})
 endif()
 
 # --- Cross-platform definitions ---
-target_compile_definitions(EmergencyPlan PRIVATE
+target_compile_definitions(WardPlanning PRIVATE
+    WARD_PLANNING_VERSION="${PROJECT_VERSION}"
     $<$<PLATFORM_ID:Windows>:PLATFORM_WINDOWS>
     $<$<PLATFORM_ID:Darwin>:PLATFORM_MACOS>
     $<$<PLATFORM_ID:Linux>:PLATFORM_LINUX>
@@ -609,11 +613,11 @@ option(BUILD_TOOLS "Build development tools" ON)
 if(BUILD_TOOLS)
     # PDF dump tool for analyzing MuPDF extraction
     add_executable(pdf_dump tools/pdf_dump.cpp)
-    target_link_libraries(pdf_dump PRIVATE EmergencyPlanLib)
+    target_link_libraries(pdf_dump PRIVATE WardPlanningLib)
 
     # Test import tool for WardDirectoryImportService
     add_executable(test_import tools/test_import.cpp)
-    target_link_libraries(test_import PRIVATE EmergencyPlanLib)
+    target_link_libraries(test_import PRIVATE WardPlanningLib)
 endif()
 
 # ============================================================================
@@ -629,7 +633,7 @@ endif()
 # ============================================================================
 # Installation
 # ============================================================================
-install(TARGETS EmergencyPlan
+install(TARGETS WardPlanning
     BUNDLE DESTINATION .
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
@@ -637,7 +641,7 @@ install(TARGETS EmergencyPlan
 # Install Qt runtime (Windows)
 if(WIN32)
     # qt_generate_deploy_app_script(
-    #     TARGET EmergencyPlan
+    #     TARGET WardPlanning
     #     OUTPUT_SCRIPT deploy_script
     #     NO_UNSUPPORTED_PLATFORM_ERROR
     # )
@@ -648,7 +652,7 @@ endif()
 # Summary
 # ============================================================================
 message(STATUS "")
-message(STATUS "=== Emergency Plan Qt Configuration ===")
+message(STATUS "=== Ward Planning Configuration ===")
 message(STATUS "  Version: ${PROJECT_VERSION}")
 message(STATUS "  C++ Standard: ${CMAKE_CXX_STANDARD}")
 message(STATUS "  Qt Version: ${Qt6_VERSION}")

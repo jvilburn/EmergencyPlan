@@ -1,8 +1,8 @@
-# Ward Emergency Plan - User Guide
+# Ward Planning - User Guide
 
 ## Overview
 
-Ward Emergency Plan is a desktop application for managing ward family data, ministering assignments, emergency response teams, and resources. It includes an interactive map and tools for coordinating welfare checks and task assignments during emergencies.
+Ward Planning is a desktop application for managing ward family data, ministering assignments, emergency response teams, and resources. It includes an interactive map and tools for coordinating welfare checks and task assignments during emergencies.
 
 ---
 

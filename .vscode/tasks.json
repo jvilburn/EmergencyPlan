@@ -58,13 +58,13 @@
         {
             "label": "Run Application",
             "type": "shell",
-            "command": "${workspaceFolder}/build/bin/EmergencyPlan.exe",
+            "command": "${workspaceFolder}/build/bin/WardPlanning.exe",
             "windows": {
-                "command": "${workspaceFolder}/build/bin/EmergencyPlan.exe"
+                "command": "${workspaceFolder}/build/bin/WardPlanning.exe"
             },
             "osx": {
                 "command": "open",
-                "args": ["${workspaceFolder}/build/bin/EmergencyPlan.app"]
+                "args": ["${workspaceFolder}/build/bin/WardPlanning.app"]
             },
             "group": "none",
             "problemMatcher": [],

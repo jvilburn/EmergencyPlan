@@ -85,7 +85,7 @@ target_include_directories(WardPlanningTests PRIVATE
 )
 
 target_link_libraries(WardPlanningTests PRIVATE
-    EmergencyPlanLib
+    WardPlanningLib
     Qt6::Test
 )
 
