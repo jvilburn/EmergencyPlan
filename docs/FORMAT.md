@@ -11,8 +11,8 @@ app writes.
   (22), a key, seed or former-key hash 32 (43), a sealed key 80 (107). A value of another length,
   with padding, with characters outside the base64url alphabet, or with non-zero unused trailing
   bits is malformed.
-- **JSON** is UTF-8. An integer is a JSON number with no fractional part; a number is any JSON
-  number.
+- **JSON** is UTF-8. An integer is a JSON number with no fractional part and a magnitude of at
+  most 2^53; a number is any JSON number.
 - **An id** in the ward part (of a person, family, team, emergency asset, ministering group or
   district, contact attempt or task) is a non-empty string. The app makes each one a UUID in its
   hyphenated form without braces; a reader takes any non-empty string.
@@ -28,8 +28,11 @@ app writes.
   wrong type, or not listed here, and reads nothing from it.
 - **Collections** of things with an id are written as arrays in id order, ids compared as
   strings by UTF-16 code unit, and sets as arrays in the same sorted order. A list whose order is
-  data (an address's lines, a family's members, callings, task categories, description lines,
-  the journal's entries) keeps its order. A reader depends on neither sorted order.
+  data keeps its order: an address's lines, a family's members, a family change's added and
+  removed members, callings, task categories, an emergency's contact attempts and tasks (most
+  recent first), the access list's users, each user's devices, the invites, the former keys
+  (oldest first), description lines and the journal's entries. A reader depends on no sorted
+  order.
 
 ## Format versions
 
@@ -341,7 +344,7 @@ A task:
 | `assignment` | assignment object | who it is given to; omitted when unassigned |
 | `resolution` | resolution object | how it was done; omitted when unresolved |
 
-An assignment, which names exactly one of a team and a person:
+An assignment. The app writes exactly one of `teamId` and `personId`:
 
 | Key | Type | Holds |
 |---|---|---|

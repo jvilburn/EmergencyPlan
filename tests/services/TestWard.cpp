@@ -13,7 +13,10 @@ T readWellFormed(const QJsonObject& json)
 {
     JsonReader reader(json);
     T value = T::fromJson(reader);
-    Q_ASSERT_X(!reader.failed(), "TestWard", qPrintable(reader.problem()));
+    if (reader.failed())
+    {
+        qFatal("TestWard builds a fixture that does not read: %s", qPrintable(reader.problem()));
+    }
     return value;
 }
 
@@ -304,8 +307,8 @@ Family TestWard::withPhone(const Family& family, const PersonId& id, const QStri
             return withMember(family, updated);
         }
     }
-    Q_ASSERT_X(false, "TestWard::withPhone", "the family has no member with that id");
-    return family;
+    qFatal("TestWard::withPhone: the family has no member with that id");
+    Q_UNREACHABLE_RETURN(family);
 }
 
 Document TestWard::withFamily(const Document& document, const Family& family)

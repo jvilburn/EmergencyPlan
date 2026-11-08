@@ -1,5 +1,12 @@
 #include "Address.h"
 
+Address Address::fromLines(const QStringList& lines)
+{
+    Address address;
+    address.m_lines = lines;
+    return address;
+}
+
 void Address::addLine(const QString& line)
 {
     QString sanitized = sanitizeLine(line);

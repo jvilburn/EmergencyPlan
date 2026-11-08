@@ -87,13 +87,7 @@ QStringList readValue<QStringList>(JsonReader& json, const QString& key)
 template<>
 Address readValue<Address>(JsonReader& json, const QString& key)
 {
-    Address address;
-    const QStringList lines = json.strings(key);
-    for (const QString& line : lines)
-    {
-        address.addLine(line);
-    }
-    return address;
+    return Address::fromLines(json.strings(key));
 }
 
 template<>

@@ -24,8 +24,8 @@
 ///
 /// Every fromJson that takes a JsonReader ends with finish(). A failure is shared with every
 /// reader made from this one and the first one found is kept, with the path of the field it
-/// names. A reader returns empty values once it has failed, so whoever reads a whole tree
-/// asks failed() once, at the top.
+/// names. A call that fails returns an empty value (for a word, the first of its values), so
+/// whoever reads a whole tree asks failed() once, at the top.
 class JsonReader
 {
 public:
@@ -94,7 +94,7 @@ public:
     QDate date(const QString& key);
     std::optional<QDate> optionalDate(const QString& key);
 
-    /// A time, written as Qt::ISODateWithMs writes it (2026-10-01T08:00:00.000Z).
+    /// A time in UTC, written as Qt::ISODateWithMs writes one (2026-10-01T08:00:00.000Z).
     QDateTime time(const QString& key);
 
     /// An id of type T, written as a non-empty string.

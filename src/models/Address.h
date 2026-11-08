@@ -3,13 +3,16 @@
 #include <QString>
 #include <QStringList>
 
-/// Type-safe wrapper for addresses stored as list of lines.
-/// Uses composition to ensure all lines are sanitized.
+/// Type-safe wrapper for addresses stored as list of lines. Lines entered or imported are
+/// cleaned through addLine; a reader keeps the lines exactly as they were written.
 class Address
 {
 public:
     /// Default constructor - creates empty address.
     Address() = default;
+
+    /// The address of exactly these lines, as a reader read them.
+    static Address fromLines(const QStringList& lines);
 
     /// Add a single line to the address (sanitizes the input).
     void addLine(const QString& line);

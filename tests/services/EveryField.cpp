@@ -97,7 +97,10 @@ DeviceState everyDeviceField(const AccessList& access)
     for (const CommandType& type : CommandRegistry::types())
     {
         QList<CommandSample> samples = CommandSamples::forType(type.name);
-        Q_ASSERT(!samples.isEmpty());
+        if (samples.isEmpty())
+        {
+            qFatal("EveryField: the command type %s has no sample", qPrintable(type.name));
+        }
         device.journal.append(*samples.front().command);
     }
     device.baseVersion = 7;

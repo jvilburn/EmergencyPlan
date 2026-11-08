@@ -230,11 +230,7 @@ Family Family::fromJson(JsonReader json)
 {
     Family family;
     family.m_id = json.id<FamilyId>("id");
-    const QStringList lines = json.optionalStrings("address");
-    for (const QString& line : lines)
-    {
-        family.m_address.addLine(line);
-    }
+    family.m_address = Address::fromLines(json.optionalStrings("address"));
     const QList<JsonReader> members = json.optionalObjects("members");
     for (const JsonReader& member : members)
     {

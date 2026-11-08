@@ -216,7 +216,7 @@ QDateTime JsonReader::time(const QString& key)
 {
     QString text = string(key);
     QDateTime time = QDateTime::fromString(text, Qt::ISODateWithMs);
-    if (!time.isValid() || time.toString(Qt::ISODateWithMs) != text)
+    if (!text.endsWith('Z') || !time.isValid() || time.toString(Qt::ISODateWithMs) != text)
     {
         fail(key, "is not a time");
         return QDateTime();

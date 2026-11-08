@@ -195,6 +195,7 @@ void JsonReaderTest::datesAndTimesReadBackAsWritten_data()
     QTest::newRow("date with a time") << "date" << "2026-10-01T08:00:00" << false;
     QTest::newRow("time") << "time" << "2026-10-01T08:00:00.000Z" << true;
     QTest::newRow("time without milliseconds") << "time" << "2026-10-01T08:00:00Z" << false;
+    QTest::newRow("time with an offset") << "time" << "2026-10-01T08:00:00.000+02:00" << false;
     QTest::newRow("time of a date alone") << "time" << "2026-10-01" << false;
     QTest::newRow("time in words") << "time" << "yesterday" << false;
 }
