@@ -790,7 +790,6 @@ a pushed version holds - the ward, its access list and the landed marks - plus, 
 - the access list as of the last dismissed access notice, which the next notice is a diff
   against
 - dismissals of the single-holder and single-admin notices
-- the failed list of addresses and unit numbers that did not resolve
 - whether the ward is no longer this device's, so a device reopened offline still knows
 - the seed of each open invite this device made (see *Invites*)
 
@@ -1462,7 +1461,8 @@ rather than one per family, and a batch or lookup that changed nothing neither s
 pushes. When the batch finishes, every held result the document as it stands lacks is added
 again, so a version that replaced the document while the batch ran loses none of them.
 Addresses and unit numbers that fail to resolve go on a failed list, kept
-by their text in the device-local state, and are not tried again until the text changes. A
+by their text in memory for the open ward, and are not tried again until the text changes
+or the app opens the ward again. A
 family whose address is on it stays unmapped until someone corrects the address or types
 its coordinates in the family edit panel. These triggers are the only ones;
 nothing geocodes on a document change as such.
@@ -1809,9 +1809,9 @@ The journal and replay, in `tests/services`:
 - an automatic batch drops the entry of an address no family has any more, and keeps every
   entry in use
 - geocoding the families of an import pushes one version for the whole batch, and an
-  address that fails to resolve is not tried again - on later versions, after closing and
-  reopening the app, or by a command that gives another family a new address - until its
-  text changes
+  address that fails to resolve is not tried again while the ward stays open - on later
+  versions, or by a command that gives another family a new address - until its text
+  changes
 - each geocode result maps its family as it arrives, before the batch finishes; a version
   that replaces the document while the batch runs ends with every held result applied
 - a batch with two families at one address sends one request for it, maps both families
