@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QByteArray>
 #include <QString>
 #include <QStringList>
 #include <QUuid>
@@ -135,6 +136,9 @@ public:
 
     /// Hides IdBase::generate, whose UUID form a document id does not take.
     static DocumentId generate();
+
+    /// The id whose 16 bytes are bytes.
+    static DocumentId fromBytes(const QByteArray& bytes);
 };
 
 /// A user's id within one ward: 128 random bits, in base64url without padding, shared by
@@ -148,6 +152,9 @@ public:
 
     /// Hides IdBase::generate, whose UUID form a user id does not take.
     static UserId generate();
+
+    /// The id whose 16 bytes are bytes.
+    static UserId fromBytes(const QByteArray& bytes);
 };
 
 // === SelectionKey ===

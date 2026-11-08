@@ -34,7 +34,7 @@ Team withLeader(const Team& team, const std::optional<PersonId>& leader)
 }
 
 /// Creates a ward in both sessions from the test ward holding team.
-void openBoth(WardSession& mine, WardSession& theirs, const Team& team)
+void openBoth(TestSession& mine, TestSession& theirs, const Team& team)
 {
     Document document = TestWard::withTeam(TestWard::document(), team);
     mine.createWard(document);

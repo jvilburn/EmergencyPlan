@@ -9,11 +9,9 @@ TestClient::TestClient(const QString& deviceName)
 {
 }
 
-void TestClient::createWard(const Document& document)
+void TestClient::createWard(const Document& content)
 {
-    Document ward = document;
-    ward.setAccess(AccessList::founding(UserId::generate(), "Alice Smith", m_deviceName, m_identity));
-    m_session->createWard(ward);
+    m_session->createWard(content, "Alice Smith", m_deviceName);
 }
 
 OpenResult TestClient::reopen()

@@ -54,7 +54,7 @@ CommitResult commitAliceEmail(WardSession& session, const QString& email)
 
 /// Creates a ward in both sessions from the test ward, then commits three edits to mine -
 /// Carol's phone, Bob's phone, the Smith address - and moves Bob's phone to 555-9999 in theirs.
-void makeThreeEditsAgainstAMovedPhone(WardSession& mine, WardSession& theirs)
+void makeThreeEditsAgainstAMovedPhone(TestSession& mine, TestSession& theirs)
 {
     mine.createWard(TestWard::document());
     theirs.createWard(TestWard::document());
@@ -66,7 +66,7 @@ void makeThreeEditsAgainstAMovedPhone(WardSession& mine, WardSession& theirs)
 
 /// A session with three entries in its journal abandoned onto a version where Bob's phone
 /// moved; true when the replay was abandoned.
-bool abandonThreeEdits(WardSession& mine)
+bool abandonThreeEdits(TestSession& mine)
 {
     TestSession theirs;
     makeThreeEditsAgainstAMovedPhone(mine, theirs);
@@ -120,13 +120,14 @@ void WardSessionTest::editThatChangesNothingIsNothingToDo()
 {
     TestSession session;
     session.createWard(TestWard::document());
+    Document created = session.document();
     QSignalSpy documentSpy(&session, &WardSession::documentChanged);
     QSignalSpy undoSpy(&session, &WardSession::undoStackChanged);
 
     CommitResult result = commitEdit(session, TestWard::smith(), TestWard::smith());
 
     QVERIFY(result.status == CommitStatus::NothingToDo);
-    QVERIFY(session.document() == TestWard::document());
+    QVERIFY(session.document() == created);
     QVERIFY(session.journal().isEmpty());
     QVERIFY(!session.canUndo());
     QCOMPARE(documentSpy.count(), 0);
@@ -157,12 +158,13 @@ void WardSessionTest::refusedCommandChangesNothingAndJournalsNothing()
 {
     TestSession session;
     session.createWard(TestWard::document());
+    Document created = session.document();
 
     CommitResult refused = session.commit(std::make_shared<ForcePhoneCommand>(TestWard::bobId(), "555-2222", "You are the only admin."));
 
     QVERIFY(refused.status == CommitStatus::Refused);
     QCOMPARE(refused.refusal, QString("You are the only admin."));
-    QVERIFY(session.document() == TestWard::document());
+    QVERIFY(session.document() == created);
     QVERIFY(session.journal().isEmpty());
 
     CommitResult allowed = session.commit(std::make_shared<ForcePhoneCommand>(TestWard::bobId(), "555-2222", QString()));
@@ -415,19 +417,22 @@ void WardSessionTest::openEmptiesTheJournalAndTheUndoStack()
     QVERIFY(session.journal().isEmpty());
     QVERIFY(!session.canUndo());
     QVERIFY(!session.canRedo());
-    QVERIFY(session.document() == TestWard::document());
+    Document expected = TestWard::document();
+    expected.setAccess(session.document().access());
+    QVERIFY(session.document() == expected);
 }
 
 void WardSessionTest::undoRunsTheInverseThroughTheCommitStep()
 {
     TestSession session;
     session.createWard(TestWard::document());
+    Document created = session.document();
     commitPhone(session, TestWard::smithId(), TestWard::bobId(), "555-2222");
 
     CommitResult undone = session.undo();
 
     QVERIFY(undone.status == CommitStatus::Applied);
-    QVERIFY(session.document() == TestWard::document());
+    QVERIFY(session.document() == created);
     QCOMPARE(session.journal().entries().size(), qsizetype(2));
     CommandDescription inverse = CommandRegistry::descriptionOf(session.journal().entries()[1].command);
     QCOMPARE(inverse.heading(), QString("Undo: Smith family"));

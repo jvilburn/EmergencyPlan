@@ -3,7 +3,6 @@
 #include "Crypto.h"
 
 #include <QJsonArray>
-#include <QStringList>
 
 QJsonObject DeviceState::toJson() const
 {
@@ -24,12 +23,6 @@ QJsonObject DeviceState::toJson() const
     if (singleAdminNoticeDismissed)
     {
         json["singleAdminNoticeDismissed"] = true;
-    }
-    if (!failed.isEmpty())
-    {
-        QStringList sorted(failed.begin(), failed.end());
-        sorted.sort();
-        json["failed"] = QJsonArray::fromStringList(sorted);
     }
     if (noLongerShared)
     {
@@ -59,8 +52,6 @@ DeviceState DeviceState::fromJson(JsonReader json)
     }
     device.singleHolderNoticeDismissed = json.optionalFlag("singleHolderNoticeDismissed");
     device.singleAdminNoticeDismissed = json.optionalFlag("singleAdminNoticeDismissed");
-    QStringList failed = json.optionalStrings("failed");
-    device.failed = QSet<QString>(failed.begin(), failed.end());
     device.noLongerShared = json.optionalFlag("noLongerShared");
     device.inviteSeeds = json.optionalBytesList("inviteSeeds", Crypto::KeyBytes);
     json.finish();
@@ -74,7 +65,6 @@ bool DeviceState::operator==(const DeviceState& other) const
         && dismissedAccess == other.dismissedAccess
         && singleHolderNoticeDismissed == other.singleHolderNoticeDismissed
         && singleAdminNoticeDismissed == other.singleAdminNoticeDismissed
-        && failed == other.failed
         && noLongerShared == other.noLongerShared
         && inviteSeeds == other.inviteSeeds;
 }

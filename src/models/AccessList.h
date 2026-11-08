@@ -64,15 +64,18 @@ private:
     QList<AccessDevice> m_devices;
 };
 
-enum class InviteKind
+/// Who a user invite is for: the role its joiner takes and a label naming them.
+struct InvitedUser
 {
-    Device,
-    User
+    AccessRole role;
+    QString label;
+
+    bool operator==(const InvitedUser& other) const { return role == other.role && label == other.label; }
 };
 
 /// An open invite: a one-time bearer key the data key is sealed to until it is used or
-/// withdrawn. A user invite carries the role its joiner takes and a label naming who it is
-/// for; a device invite carries neither, and joins as one of its maker's devices.
+/// withdrawn. A user invite names the user it is for; a device invite names none, and joins
+/// as one of its maker's devices.
 class AccessInvite
 {
 public:
@@ -80,10 +83,11 @@ public:
     static AccessInvite forUser(const UserId& maker, AccessRole role, const QString& label,
                                 const QByteArray& publicKey, const QByteArray& verifyKey);
 
-    InviteKind kind() const { return m_kind; }
     const UserId& maker() const { return m_maker; }
-    std::optional<AccessRole> role() const { return m_role; }
-    const QString& label() const { return m_label; }
+
+    /// The user a user invite is for; empty for a device invite.
+    const std::optional<InvitedUser>& invitedUser() const { return m_invitedUser; }
+
     const QByteArray& publicKey() const { return m_publicKey; }
     const QByteArray& verifyKey() const { return m_verifyKey; }
 
@@ -94,13 +98,11 @@ public:
     bool operator!=(const AccessInvite& other) const { return !(*this == other); }
 
 private:
-    AccessInvite(InviteKind kind, const UserId& maker, std::optional<AccessRole> role, const QString& label,
-                 const QByteArray& publicKey, const QByteArray& verifyKey);
+    AccessInvite(const UserId& maker, const std::optional<InvitedUser>& invitedUser, const QByteArray& publicKey,
+                 const QByteArray& verifyKey);
 
-    InviteKind m_kind;
     UserId m_maker;
-    std::optional<AccessRole> m_role;
-    QString m_label;
+    std::optional<InvitedUser> m_invitedUser;
     QByteArray m_publicKey;
     QByteArray m_verifyKey;
 };

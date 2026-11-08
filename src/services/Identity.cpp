@@ -6,15 +6,18 @@ Identity Identity::generate()
     return fromSecrets(Crypto::randomBytes(Crypto::KeyBytes), Crypto::randomBytes(Crypto::KeyBytes));
 }
 
+Identity::Identity(const QByteArray& sealingSecret, const QByteArray& signingSeed)
+    : m_sealingSecret(sealingSecret)
+    , m_signingSeed(signingSeed)
+    , m_publicKey(Crypto::sealingPublicKey(sealingSecret))
+    , m_verifyKey(Crypto::verifyKey(signingSeed))
+    , m_fingerprint(fingerprintOf(m_publicKey, m_verifyKey))
+{
+}
+
 Identity Identity::fromSecrets(const QByteArray& sealingSecret, const QByteArray& signingSeed)
 {
-    Identity identity;
-    identity.m_sealingSecret = sealingSecret;
-    identity.m_signingSeed = signingSeed;
-    identity.m_publicKey = Crypto::sealingPublicKey(sealingSecret);
-    identity.m_verifyKey = Crypto::verifyKey(signingSeed);
-    identity.m_fingerprint = fingerprintOf(identity.m_publicKey, identity.m_verifyKey);
-    return identity;
+    return Identity(sealingSecret, signingSeed);
 }
 
 QByteArray Identity::fingerprintOf(const QByteArray& publicKey, const QByteArray& verifyKey)

@@ -312,6 +312,7 @@ void ReferenceCleanupTest::deletingAFamilyRemovesItAndItsPeopleFromEveryPlaceAnd
     QVERIFY(!referencesAreWhole(dangling));
     TestSession session;
     session.createWard(ward);
+    Document created = session.document();
 
     CommitResult result = session.commit(DeleteFamilyCommand::fromSeen(TestWard::smith(), session.document()));
 
@@ -342,7 +343,7 @@ void ReferenceCleanupTest::deletingAFamilyRemovesItAndItsPeopleFromEveryPlaceAnd
     CommitResult undone = session.undo();
 
     QVERIFY(undone.status == CommitStatus::Applied);
-    QVERIFY(session.document() == ward);
+    QVERIFY(session.document() == created);
 
     QVERIFY(session.redo().status == CommitStatus::Applied);
     QVERIFY(session.document() == afterDelete);
@@ -353,6 +354,7 @@ void ReferenceCleanupTest::removingAMemberThroughTheEditPanelCleansUpThatPerson(
     Document ward = TestWard::documentWithPlaces();
     TestSession session;
     session.createWard(ward);
+    Document created = session.document();
     QSignalSpy documentSpy(&session, &WardSession::documentChanged);
     FamilyEditPanel panel(nullptr);
     panel.setFamily(TestWard::smith(), session.document());
@@ -387,7 +389,7 @@ void ReferenceCleanupTest::removingAMemberThroughTheEditPanelCleansUpThatPerson(
     CommitResult undone = session.undo();
 
     QVERIFY(undone.status == CommitStatus::Applied);
-    QVERIFY(session.document() == ward);
+    QVERIFY(session.document() == created);
 }
 
 void ReferenceCleanupTest::deletingATeamUnassignsItsOpenTasksAndUndoAssignsThemAgain()
@@ -397,6 +399,7 @@ void ReferenceCleanupTest::deletingATeamUnassignsItsOpenTasksAndUndoAssignsThemA
     Document ward = withTask(places, fence);
     TestSession session;
     session.createWard(ward);
+    Document created = session.document();
 
     QVERIFY(session.commit(DeleteTeamCommand::fromSeen(setupIn(ward), session.document())).status == CommitStatus::Applied);
 
@@ -412,7 +415,7 @@ void ReferenceCleanupTest::deletingATeamUnassignsItsOpenTasksAndUndoAssignsThemA
     CommitResult undone = session.undo();
 
     QVERIFY(undone.status == CommitStatus::Applied);
-    QVERIFY(session.document() == ward);
+    QVERIFY(session.document() == created);
 }
 
 void ReferenceCleanupTest::removalReplayedAfterThePersonJoinedAnotherTeamTakesThemOffItToo()
@@ -487,6 +490,7 @@ void ReferenceCleanupTest::removingAPersonUnassignsTheirOpenTaskAndLeavesTheirRe
     Document ward = TestWard::withResponse(places, response);
     TestSession session;
     session.createWard(ward);
+    Document created = session.document();
 
     QVERIFY(removeFromSmiths(session, TestWard::aliceId()).status == CommitStatus::Applied);
 
@@ -510,7 +514,7 @@ void ReferenceCleanupTest::removingAPersonUnassignsTheirOpenTaskAndLeavesTheirRe
     CommitResult undone = session.undo();
 
     QVERIFY(undone.status == CommitStatus::Applied);
-    QVERIFY(session.document() == ward);
+    QVERIFY(session.document() == created);
 }
 
 void ReferenceCleanupTest::reopeningATaskWhoseAssigneeWasRemovedReopensItUnassigned()
@@ -804,6 +808,7 @@ void ReferenceCleanupTest::secondUndoOfOneFamilyDeletePutsBackOnlyTheMembersItSt
     Document ward = TestWard::documentWithPlaces();
     TestSession session;
     session.createWard(ward);
+    Document created = session.document();
 
     // Two users delete the Smith family from the same version; both deletions land, the
     // second with its result already holding
@@ -814,7 +819,7 @@ void ReferenceCleanupTest::secondUndoOfOneFamilyDeletePutsBackOnlyTheMembersItSt
 
     // The second user undoes, and someone removes Alice from the family
     QVERIFY(session.undo().status == CommitStatus::Applied);
-    QVERIFY(session.document() == ward);
+    QVERIFY(session.document() == created);
     QVERIFY(removeFromSmiths(session, TestWard::aliceId()).status == CommitStatus::Applied);
     QVERIFY(inNoPlace(session.document(), TestWard::aliceId()));
 

@@ -412,6 +412,7 @@ void AutomaticUpdatesTest::lookupThatChangesNothingEmitsNothing()
     document.metadata().updateWard(wardWithoutDetails("111111"));
     TestSession session;
     session.createWard(document);
+    Document created = session.document();
     QSignalSpy appliedSpy(&session.automaticUpdates(), &AutomaticUpdates::applied);
     QSignalSpy changedSpy(&session, &WardSession::documentChanged);
 
@@ -421,7 +422,7 @@ void AutomaticUpdatesTest::lookupThatChangesNothingEmitsNothing()
 
     QCOMPARE(appliedSpy.count(), 0);
     QCOMPARE(changedSpy.count(), 0);
-    QVERIFY(session.document() == document);
+    QVERIFY(session.document() == created);
 
     // A lookup that found no details puts the unit on the failed list.
     session.automaticUpdates().run();
@@ -493,6 +494,7 @@ void AutomaticUpdatesTest::lateAnswersChangeNothing()
     document.metadata().updateWard(wardWithoutDetails("111111"));
     TestSession session;
     session.createWard(document);
+    Document created = session.document();
     session.automaticUpdates().run();
     QCOMPARE(session.geocoder().requests(), QStringList({smithAddress().full(), jonesAddress().full()}));
     QCOMPARE(session.unitLookup().requests(), QStringList({"ward 111111"}));
@@ -507,7 +509,7 @@ void AutomaticUpdatesTest::lateAnswersChangeNothing()
     session.unitLookup().findStake("900000", namedStake("900000"));
     session.unitLookup().fail("222222");
 
-    QVERIFY(session.document() == document);
+    QVERIFY(session.document() == created);
     QCOMPARE(changedSpy.count(), 0);
     QCOMPARE(appliedSpy.count(), 0);
     QCOMPARE(progressSpy.count(), 0);
@@ -564,7 +566,7 @@ void AutomaticUpdatesTest::wardFoundWithoutAChapelIsNotLookedUpAgain()
     QCOMPARE(session.unitLookup().requests(), QStringList({"ward 111111", "ward 222222"}));
 }
 
-void AutomaticUpdatesTest::failedListStartsEmptyInANewWard()
+void AutomaticUpdatesTest::failedListStartsEmptyWhenAWardIsOpenedOrCreated()
 {
     Document document = TestWard::withCoordinates(TestWard::document(), jonesAddress(), OakPosition);
     document.metadata().updateWard(wardWithoutDetails("111111"));
@@ -581,11 +583,20 @@ void AutomaticUpdatesTest::failedListStartsEmptyInANewWard()
     QCOMPARE(session.geocoder().requests(), QStringList({smithAddress().full()}));
     QCOMPARE(session.unitLookup().requests(), QStringList({"ward 111111"}));
 
-    session.createWard(document);
+    QVERIFY(session.openWard(session.documentId()).status == OpenStatus::Opened);
     session.automaticUpdates().run();
 
     QCOMPARE(session.geocoder().requests(), QStringList({smithAddress().full(), smithAddress().full()}));
     QCOMPARE(session.unitLookup().requests(), QStringList({"ward 111111", "ward 111111"}));
+    session.geocoder().fail(smithAddress().full());
+    session.unitLookup().fail("111111");
+
+    session.createWard(document);
+    session.automaticUpdates().run();
+
+    QCOMPARE(session.geocoder().requests(),
+             QStringList({smithAddress().full(), smithAddress().full(), smithAddress().full()}));
+    QCOMPARE(session.unitLookup().requests(), QStringList({"ward 111111", "ward 111111", "ward 111111"}));
 }
 
 void AutomaticUpdatesTest::resultsMapFamiliesAsTheyArrive()

@@ -24,9 +24,8 @@ public:
     FakeGeocoder& geocoder() { return m_geocoder; }
     FakeUnitLookup& unitLookup() { return m_unitLookup; }
 
-    /// Creates a ward holding document, its access list holding this device alone, under the
-    /// user Alice Smith, an admin.
-    void createWard(const Document& document);
+    /// Creates a ward holding content under the user Alice Smith, on this device.
+    void createWard(const Document& content);
 
     /// Closes the app and starts it again: a new session on the same identity and store,
     /// opening the ward the old session had open.

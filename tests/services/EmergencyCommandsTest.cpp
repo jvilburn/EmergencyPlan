@@ -93,10 +93,13 @@ CommitResult removeAlice(WardSession& session)
     return session.commit(UpdateFamilyCommand::fromEdit(smith, withoutAlice, session.document()));
 }
 
-void openBoth(WardSession& mine, WardSession& theirs, const Document& document)
+/// Creates a ward from document in mine, and in theirs, which then takes mine's ward as a
+/// version, so both hold one ward, access list included.
+void openBoth(TestSession& mine, TestSession& theirs, const Document& document)
 {
     mine.createWard(document);
     theirs.createWard(document);
+    theirs.replayOnto(mine.document());
 }
 
 }  // namespace
@@ -253,11 +256,12 @@ void EmergencyCommandsTest::attemptWithNoEmergencyInProgressConflicts()
 {
     TestSession session;
     session.createWard(TestWard::document());
+    Document created = session.document();
     ContactAttempt attempt = phoned("attempt-smith", TestWard::smith(), 10, 0, ContactOutcome::OK, "All safe");
 
     QVERIFY(addAttempt(session, attempt).status == CommitStatus::Conflicted);
 
-    QVERIFY(session.document() == TestWard::document());
+    QVERIFY(session.document() == created);
     QVERIFY(session.journal().isEmpty());
     QVERIFY(!session.canUndo());
 
@@ -462,10 +466,11 @@ void EmergencyCommandsTest::endingWithNoEmergencyInProgressWritesNothing()
     QString path = dir.filePath("storm.pdf");
     TestSession session;
     session.createWard(TestWard::document());
+    Document created = session.document();
 
     QVERIFY(session.endEmergency(path) == EndResult::AlreadyEnded);
 
-    QVERIFY(session.document() == TestWard::document());
+    QVERIFY(session.document() == created);
     QVERIFY(session.journal().isEmpty());
     QVERIFY(!QFile::exists(path));
 }

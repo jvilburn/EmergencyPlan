@@ -68,6 +68,6 @@ EndResult DocumentManager::endEmergency(const QString& reportPath)
 
 void DocumentManager::newDocument()
 {
-    m_session.createWard(Document::empty());
+    m_session.createWard(Document::empty(), tr("Me"), tr("This device"));
     m_session.automaticUpdates().run();
 }

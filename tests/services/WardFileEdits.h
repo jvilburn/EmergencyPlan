@@ -27,4 +27,9 @@ public:
     /// way WardFile::write builds one, so a test can seal any payload or recipient list.
     static QByteArray sealedFile(const DocumentId& document, const QByteArray& dataKey,
                                  const QList<RecipientKeys>& recipients, const QJsonObject& payload);
+
+    /// A file of document under dataKey, sealed to recipients, whose payload decrypts to
+    /// plaintext, so a test can seal bytes that are not a compressed payload.
+    static QByteArray sealedPlaintext(const DocumentId& document, const QByteArray& dataKey,
+                                      const QList<RecipientKeys>& recipients, const QByteArray& plaintext);
 };

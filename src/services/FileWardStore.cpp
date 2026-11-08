@@ -2,7 +2,6 @@
 
 #include <QDir>
 #include <QFile>
-#include <QObject>
 #include <QSaveFile>
 
 FileWardStore::FileWardStore(const QString& directory)
@@ -14,7 +13,7 @@ bool FileWardStore::write(const DocumentId& document, const QByteArray& bytes, Q
 {
     if (!QDir().mkpath(m_directory))
     {
-        *problem = QObject::tr("The folder %1 could not be made.").arg(QDir::toNativeSeparators(m_directory));
+        *problem = tr("The folder %1 could not be made.").arg(QDir::toNativeSeparators(m_directory));
         return false;
     }
     // Binary, with no newline translation: the payload is authenticated against these bytes.

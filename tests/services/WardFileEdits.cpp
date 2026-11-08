@@ -56,7 +56,13 @@ QJsonObject WardFileEdits::edited(const QJsonObject& json, const QStringList& pa
 QByteArray WardFileEdits::sealedFile(const DocumentId& document, const QByteArray& dataKey,
                                      const QList<RecipientKeys>& recipients, const QJsonObject& payload)
 {
-    WardHeader header = WardHeader::build(document, dataKey, recipients);
     QByteArray compressed = qCompress(QJsonDocument(payload).toJson(QJsonDocument::Compact));
-    return header.line() + '\n' + Crypto::encrypt(compressed, header.line(), header.nonce(), dataKey);
+    return sealedPlaintext(document, dataKey, recipients, compressed);
+}
+
+QByteArray WardFileEdits::sealedPlaintext(const DocumentId& document, const QByteArray& dataKey,
+                                          const QList<RecipientKeys>& recipients, const QByteArray& plaintext)
+{
+    WardHeader header = WardHeader::build(document, dataKey, recipients);
+    return header.line() + '\n' + Crypto::encrypt(plaintext, header.line(), header.nonce(), dataKey);
 }

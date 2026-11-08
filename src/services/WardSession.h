@@ -100,14 +100,16 @@ public:
     const Journal& journal() const { return m_device.journal; }
     AutomaticUpdates& automaticUpdates() { return m_automaticUpdates; }
 
-    /// Creates a ward holding document, whose access list names who may read it, under a
-    /// fresh document id and data key, and saves it. The journal, the undo and redo stacks
-    /// and the rest of this device's state start empty.
-    void createWard(const Document& document);
+    /// Creates a ward holding content under a fresh document id and data key, and saves it.
+    /// Its access list, whatever content held, names one user: userName, an admin under a new
+    /// user id, with this device alone, named deviceName. The journal, the undo and redo
+    /// stacks, the rest of this device's state and the failed list start empty.
+    void createWard(const Document& content, const QString& userName, const QString& deviceName);
 
     /// Opens the ward this device holds under document: its document with its access list,
     /// its landed marks and this device's state come from its local file, and the undo stack
-    /// starts empty. Anything but Opened leaves the session as it was and writes nothing.
+    /// and the failed list start empty. Anything but Opened leaves the session as it was and
+    /// writes nothing.
     OpenResult openWard(const DocumentId& document);
 
     /// How document's local file in store reads for identity: opened, or why not.
@@ -194,7 +196,7 @@ private:
     bool m_savePending = false;
     QList<UndoableCommandPtr> m_undoStack;
     QList<UndoableCommandPtr> m_redoStack;
-    AutomaticUpdates m_automaticUpdates;  ///< declared after m_document and m_device, which it works on
+    AutomaticUpdates m_automaticUpdates;  ///< declared after m_document, which it works on
 
     static constexpr int UndoLimit = 100;
 };

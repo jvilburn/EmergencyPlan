@@ -12,3 +12,8 @@ TestSession::TestSession()
     , WardSession(&m_deviceIdentity, &m_fakeStore, &m_fakeGeocoder, &m_fakeUnitLookup, nullptr)
 {
 }
+
+void TestSession::createWard(const Document& content)
+{
+    WardSession::createWard(content, "Test User", "Test Device");
+}

@@ -6,6 +6,7 @@
 #include "WardFileEdits.h"
 
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QTest>
 
 namespace
@@ -25,13 +26,13 @@ QString encodedBytes(int length)
 
 WardFileTest::WardFileTest(QObject* parent)
     : QObject(parent)
+    , m_laptop(Identity::generate())
+    , m_phone(Identity::generate())
 {
 }
 
 void WardFileTest::init()
 {
-    m_laptop = Identity::generate();
-    m_phone = Identity::generate();
     m_document = DocumentId::generate();
     m_dataKey = Crypto::randomBytes(Crypto::KeyBytes);
     Document ward = TestWard::document();
@@ -221,8 +222,8 @@ void WardFileTest::payloadWithAMissingOrMalformedFieldIsUnreadable_data()
                                                 << QString("landed.%1: is not an integer").arg(zeroFingerprint);
     QTest::newRow("flag written out false") << QStringList({"device", "noLongerShared"}) << QJsonValue(false)
                                             << QString("device.noLongerShared: is written out empty");
-    QTest::newRow("failed list written out empty") << QStringList({"device", "failed"}) << QJsonValue(QJsonArray())
-                                                   << QString("device.failed: is written out empty");
+    QTest::newRow("invite seeds written out empty") << QStringList({"device", "inviteSeeds"}) << QJsonValue(QJsonArray())
+                                                    << QString("device.inviteSeeds: is written out empty");
     QTest::newRow("journal missing") << QStringList({"device", "journal"}) << removed()
                                      << QString("device.journal: missing");
     QTest::newRow("sequence counter a fraction") << QStringList({"device", "journal", "lastSequence"}) << QJsonValue(1.5)
@@ -294,6 +295,49 @@ void WardFileTest::headerMustNameExactlyTheAccessListsKeys()
         WardRead read = readSealedTo(recipients);
         QVERIFY(read.status == WardReadStatus::Unreadable);
         QCOMPARE(read.problem, QString("the header and the access list differ"));
+    }
+}
+
+void WardFileTest::accessListNamingADeviceTwiceIsRefused()
+{
+    QList<RecipientKeys> keys = m_payload.ward.access().recipients();
+    QJsonObject payload = m_payload.toJson();
+    QJsonObject alice = payload.value("access").toObject().value("users").toArray().at(0).toObject();
+    QJsonArray devices = alice.value("devices").toArray();
+    devices.append(devices[0]);
+    QCOMPARE(devices.size(), qsizetype(3));
+    QJsonObject repeated = WardFileEdits::edited(payload, {"access", "users", "0", "devices"}, devices);
+    WardRead control = WardFile::read(WardFileEdits::sealedFile(m_document, m_dataKey, keys, payload), m_laptop,
+                                      PayloadKind::LocalFile);
+    QVERIFY2(control.status == WardReadStatus::Read, qPrintable(control.problem));
+
+    WardRead read = WardFile::read(WardFileEdits::sealedFile(m_document, m_dataKey, keys, repeated), m_laptop,
+                                   PayloadKind::LocalFile);
+
+    QVERIFY(read.status == WardReadStatus::Unreadable);
+    QCOMPARE(read.problem, QString("the header and the access list differ"));
+    QVERIFY(!read.payload.has_value());
+}
+
+void WardFileTest::payloadThatIsNotCompressedJsonIsUnreadable()
+{
+    QList<RecipientKeys> keys = m_payload.ward.access().recipients();
+    QByteArray compressedPayload = qCompress(QJsonDocument(m_payload.toJson()).toJson(QJsonDocument::Compact));
+    WardRead control = WardFile::read(WardFileEdits::sealedPlaintext(m_document, m_dataKey, keys, compressedPayload),
+                                      m_laptop, PayloadKind::LocalFile);
+    QVERIFY2(control.status == WardReadStatus::Read, qPrintable(control.problem));
+
+    const QList<QByteArray> plaintexts = {QByteArray("not compressed at all"), qCompress("[\"a JSON array\"]")};
+    for (const QByteArray& plaintext : plaintexts)
+    {
+        QByteArray file = WardFileEdits::sealedPlaintext(m_document, m_dataKey, keys, plaintext);
+
+        WardRead read = WardFile::read(file, m_laptop, PayloadKind::LocalFile);
+
+        QVERIFY(read.status == WardReadStatus::Unreadable);
+        QCOMPARE(read.problem, QString("the payload is not a compressed JSON object"));
+        QVERIFY(read.header->document() == m_document);
+        QVERIFY(!read.payload.has_value());
     }
 }
 

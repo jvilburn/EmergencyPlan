@@ -27,6 +27,8 @@ private slots:
     void payloadWithAMissingOrMalformedFieldIsUnreadable();
     void versionCarriesNoDeviceStateAndALocalFileMust();
     void headerMustNameExactlyTheAccessListsKeys();
+    void accessListNamingADeviceTwiceIsRefused();
+    void payloadThatIsNotCompressedJsonIsUnreadable();
     void headerNamingNoOneIsADeletedWard();
     void headerNamingOthersButNotThisDeviceIsNotNamed();
     void dataKeyThatDoesNotUnsealIsUnreadable();

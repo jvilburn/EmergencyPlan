@@ -9,8 +9,6 @@
 class Identity
 {
 public:
-    Identity() = default;
-
     /// A new identity from fresh random secrets.
     static Identity generate();
 
@@ -30,6 +28,8 @@ public:
     std::optional<QByteArray> unseal(const QByteArray& sealedKey) const;
 
 private:
+    Identity(const QByteArray& sealingSecret, const QByteArray& signingSeed);
+
     QByteArray m_sealingSecret;
     QByteArray m_signingSeed;
     QByteArray m_publicKey;

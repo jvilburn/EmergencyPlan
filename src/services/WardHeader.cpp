@@ -66,7 +66,7 @@ HeaderRead WardHeader::parse(const QByteArray& line)
 
     JsonReader json(*object);
     json.integer("format");
-    DocumentId document = DocumentId::fromString(Base64Url::encode(json.bytes("document", Crypto::IdBytes)));
+    DocumentId document = DocumentId::fromBytes(json.bytes("document", Crypto::IdBytes));
     QByteArray nonce = json.bytes("nonce", Crypto::NonceBytes);
     QList<Recipient> recipients;
     const QList<JsonReader> entryReaders = json.objects("recipients");

@@ -4,10 +4,20 @@
 
 DocumentId DocumentId::generate()
 {
-    return DocumentId(Base64Url::encode(Crypto::randomBytes(Crypto::IdBytes)));
+    return fromBytes(Crypto::randomBytes(Crypto::IdBytes));
+}
+
+DocumentId DocumentId::fromBytes(const QByteArray& bytes)
+{
+    return DocumentId(Base64Url::encode(bytes));
 }
 
 UserId UserId::generate()
 {
-    return UserId(Base64Url::encode(Crypto::randomBytes(Crypto::IdBytes)));
+    return fromBytes(Crypto::randomBytes(Crypto::IdBytes));
+}
+
+UserId UserId::fromBytes(const QByteArray& bytes)
+{
+    return UserId(Base64Url::encode(bytes));
 }

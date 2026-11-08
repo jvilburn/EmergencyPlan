@@ -6,7 +6,6 @@
 #include "WardFile.h"
 
 #include <QDateTime>
-
 #include <QStringList>
 
 namespace
@@ -41,22 +40,25 @@ WardSession::WardSession(const Identity* identity, WardStore* store, Geocoder* g
     : QObject(parent)
     , m_identity(identity)
     , m_store(store)
-    , m_automaticUpdates(m_document, m_device.failed, geocoder, unitLookup, nullptr)
+    , m_automaticUpdates(m_document, geocoder, unitLookup, nullptr)
 {
     connect(&m_automaticUpdates, &AutomaticUpdates::documentChanged,
             this, &WardSession::documentChanged);
     connect(&m_automaticUpdates, &AutomaticUpdates::applied, this, &WardSession::save);
 }
 
-void WardSession::createWard(const Document& document)
+void WardSession::createWard(const Document& content, const QString& userName, const QString& deviceName)
 {
+    Document ward = content;
+    ward.setAccess(AccessList::founding(UserId::generate(), userName, deviceName, *m_identity));
     m_documentId = DocumentId::generate();
     m_dataKey = Crypto::randomBytes(Crypto::KeyBytes);
     m_landed.clear();
     m_device = DeviceState();
     m_savePending = false;
+    m_automaticUpdates.wardOpened();
     clearUndoStack();
-    replaceDocument(document);
+    replaceDocument(ward);
     save();
 }
 
@@ -72,6 +74,7 @@ OpenResult WardSession::openWard(const DocumentId& document)
     m_landed = local.payload->landed;
     m_device = local.payload->device.value();
     m_savePending = false;
+    m_automaticUpdates.wardOpened();
     clearUndoStack();
     replaceDocument(local.payload->ward);
     return local.result;

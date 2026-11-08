@@ -7,7 +7,6 @@
 #include <QByteArray>
 #include <QJsonObject>
 #include <QList>
-#include <QSet>
 #include <QString>
 #include <optional>
 
@@ -20,7 +19,6 @@ struct DeviceState
     std::optional<AccessList> dismissedAccess;  ///< the access list as of the last dismissed access notice
     bool singleHolderNoticeDismissed = false;
     bool singleAdminNoticeDismissed = false;
-    QSet<QString> failed;                       ///< addresses and unit numbers that did not resolve
     bool noLongerShared = false;                ///< the ward is no longer this device's
     QList<QByteArray> inviteSeeds;              ///< the seed of each open invite this device made
 

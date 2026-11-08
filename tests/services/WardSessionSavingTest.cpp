@@ -132,7 +132,7 @@ void WardSessionSavingTest::undoRedoAndReplayEachSave()
     QVERIFY(abandoned.payload->device->journal.isEmpty());
 }
 
-void WardSessionSavingTest::automaticBatchSavesOnceWithTheFailedListAndItSurvivesReopening()
+void WardSessionSavingTest::automaticBatchThatMapsAnAddressSavesOnceAndTheCoordinatesSurviveReopening()
 {
     TestClient client("Laptop");
     client.createWard(TestWard::document());
@@ -147,12 +147,12 @@ void WardSessionSavingTest::automaticBatchSavesOnceWithTheFailedListAndItSurvive
     WardRead read = storedWard(client);
     QVERIFY2(read.status == WardReadStatus::Read, qPrintable(read.problem));
     QVERIFY(read.payload->ward.coordinatesFor(TestWard::smith().address()) == ElmPosition);
-    QCOMPARE(read.payload->device->failed, QSet<QString>({jonesAddress()}));
 
     QVERIFY(client.reopen().status == OpenStatus::Opened);
+    QVERIFY(client.session().document().coordinatesFor(TestWard::smith().address()) == ElmPosition);
     client.session().automaticUpdates().run();
 
-    QCOMPARE(client.geocoder().requests(), QStringList({smithAddress(), jonesAddress()}));
+    QCOMPARE(client.geocoder().requests(), QStringList({smithAddress(), jonesAddress(), jonesAddress()}));
     QCOMPARE(client.store().writes(), 2);
 }
 

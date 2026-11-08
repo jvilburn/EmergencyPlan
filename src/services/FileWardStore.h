@@ -2,12 +2,15 @@
 
 #include "WardStore.h"
 
+#include <QCoreApplication>
 #include <QString>
 
 /// The wards folder in app data: each ward is the file named by its document id with the
 /// .wardplanning extension, written through QSaveFile.
 class FileWardStore : public WardStore
 {
+    Q_DECLARE_TR_FUNCTIONS(FileWardStore)
+
 public:
     explicit FileWardStore(const QString& directory);
 

@@ -38,7 +38,6 @@ DeviceState EveryField::deviceState(const AccessList& access)
     device.dismissedAccess = access;
     device.singleHolderNoticeDismissed = true;
     device.singleAdminNoticeDismissed = true;
-    device.failed = {"12 Elm St, Provo, UT", "123456"};
     device.noLongerShared = true;
     device.inviteSeeds = {Crypto::randomBytes(Crypto::KeyBytes), Crypto::randomBytes(Crypto::KeyBytes)};
     return device;

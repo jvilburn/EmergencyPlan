@@ -26,6 +26,9 @@ class TestSession : private TestSessionFakes, public WardSession
 public:
     TestSession();
 
+    /// Creates a ward holding content under the user Test User, on the device Test Device.
+    void createWard(const Document& content);
+
     FakeGeocoder& geocoder() { return m_fakeGeocoder; }
     FakeUnitLookup& unitLookup() { return m_fakeUnitLookup; }
 };

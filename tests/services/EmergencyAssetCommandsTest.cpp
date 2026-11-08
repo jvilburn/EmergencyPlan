@@ -27,7 +27,7 @@ EmergencyAsset withPeople(const EmergencyAsset& asset, const QSet<PersonId>& peo
 }
 
 /// Creates a ward in both sessions from the test ward holding asset.
-void openBoth(WardSession& mine, WardSession& theirs, const EmergencyAsset& asset)
+void openBoth(TestSession& mine, TestSession& theirs, const EmergencyAsset& asset)
 {
     Document document = TestWard::withAsset(TestWard::document(), asset);
     mine.createWard(document);

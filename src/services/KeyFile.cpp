@@ -69,6 +69,8 @@ KeyFileResult KeyFile::create(const QString& path)
     {
         return KeyFileResult{KeyFileStatus::Fault, std::nullopt, file.errorString()};
     }
+    // Restricts the file to its owner on POSIX systems; on Windows the per-user app data
+    // folder protects it.
     QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
     return KeyFileResult{KeyFileStatus::Created, identity, QString()};
 }

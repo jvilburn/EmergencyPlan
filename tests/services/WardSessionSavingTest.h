@@ -13,7 +13,7 @@ private slots:
     void createdWardIsSavedSealedToThisDeviceAlone();
     void everyCommitSavesTheDocumentAndJournalInOneWrite();
     void undoRedoAndReplayEachSave();
-    void automaticBatchSavesOnceWithTheFailedListAndItSurvivesReopening();
+    void automaticBatchThatMapsAnAddressSavesOnceAndTheCoordinatesSurviveReopening();
     void saveThatFailsKeepsTheChangeInMemoryAndTheFileAsItWas();
     void retryingAPendingSaveWritesEverythingKept();
     void nextCommandSavesWhatAFailedSaveKept();

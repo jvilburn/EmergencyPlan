@@ -34,11 +34,6 @@ AccessRole readRole(JsonReader& json, const QString& key)
     return AccessRole::Admin;
 }
 
-UserId readUserId(JsonReader& json, const QString& key)
-{
-    return UserId::fromString(Base64Url::encode(json.bytes(key, Crypto::IdBytes)));
-}
-
 }  // namespace
 
 // ============================================================================
@@ -106,7 +101,7 @@ QJsonObject AccessUser::toJson() const
 
 AccessUser AccessUser::fromJson(JsonReader json)
 {
-    UserId id = readUserId(json, "id");
+    UserId id = UserId::fromBytes(json.bytes("id", Crypto::IdBytes));
     QString name = json.string("name");
     AccessRole role = readRole(json, "role");
     QList<AccessDevice> devices;
@@ -131,12 +126,10 @@ bool AccessUser::operator==(const AccessUser& other) const
 // AccessInvite
 // ============================================================================
 
-AccessInvite::AccessInvite(InviteKind kind, const UserId& maker, std::optional<AccessRole> role, const QString& label,
+AccessInvite::AccessInvite(const UserId& maker, const std::optional<InvitedUser>& invitedUser,
                            const QByteArray& publicKey, const QByteArray& verifyKey)
-    : m_kind(kind)
-    , m_maker(maker)
-    , m_role(role)
-    , m_label(label)
+    : m_maker(maker)
+    , m_invitedUser(invitedUser)
     , m_publicKey(publicKey)
     , m_verifyKey(verifyKey)
 {
@@ -144,13 +137,13 @@ AccessInvite::AccessInvite(InviteKind kind, const UserId& maker, std::optional<A
 
 AccessInvite AccessInvite::forDevice(const UserId& maker, const QByteArray& publicKey, const QByteArray& verifyKey)
 {
-    return AccessInvite(InviteKind::Device, maker, std::nullopt, QString(), publicKey, verifyKey);
+    return AccessInvite(maker, std::nullopt, publicKey, verifyKey);
 }
 
 AccessInvite AccessInvite::forUser(const UserId& maker, AccessRole role, const QString& label,
                                    const QByteArray& publicKey, const QByteArray& verifyKey)
 {
-    return AccessInvite(InviteKind::User, maker, role, label, publicKey, verifyKey);
+    return AccessInvite(maker, InvitedUser{role, label}, publicKey, verifyKey);
 }
 
 QJsonObject AccessInvite::toJson() const
@@ -159,16 +152,15 @@ QJsonObject AccessInvite::toJson() const
     json["maker"] = m_maker.toString();
     json["publicKey"] = Base64Url::encode(m_publicKey);
     json["verifyKey"] = Base64Url::encode(m_verifyKey);
-    switch (m_kind)
+    if (m_invitedUser.has_value())
     {
-    case InviteKind::Device:
-        json["for"] = QString("device");
-        break;
-    case InviteKind::User:
         json["for"] = QString("user");
-        json["role"] = roleName(m_role.value());
-        json["label"] = m_label;
-        break;
+        json["role"] = roleName(m_invitedUser->role);
+        json["label"] = m_invitedUser->label;
+    }
+    else
+    {
+        json["for"] = QString("device");
     }
     return json;
 }
@@ -176,7 +168,7 @@ QJsonObject AccessInvite::toJson() const
 AccessInvite AccessInvite::fromJson(JsonReader json)
 {
     QString kind = json.string("for");
-    UserId maker = readUserId(json, "maker");
+    UserId maker = UserId::fromBytes(json.bytes("maker", Crypto::IdBytes));
     QByteArray publicKey = json.bytes("publicKey", Crypto::KeyBytes);
     QByteArray verifyKey = json.bytes("verifyKey", Crypto::KeyBytes);
     if (kind == "user")
@@ -196,10 +188,8 @@ AccessInvite AccessInvite::fromJson(JsonReader json)
 
 bool AccessInvite::operator==(const AccessInvite& other) const
 {
-    return m_kind == other.m_kind
-        && m_maker == other.m_maker
-        && m_role == other.m_role
-        && m_label == other.m_label
+    return m_maker == other.m_maker
+        && m_invitedUser == other.m_invitedUser
         && m_publicKey == other.m_publicKey
         && m_verifyKey == other.m_verifyKey;
 }
