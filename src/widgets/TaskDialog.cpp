@@ -208,7 +208,7 @@ void TaskDialog::onAccepted()
         else
         {
             QMessageBox::warning(this, tr("Task"),
-                                 tr("Please choose a team from the list."));
+                                 tr("That team is no longer in the ward."));
             m_teamCombo->setFocus();
             return;
         }
@@ -228,7 +228,8 @@ void TaskDialog::onAccepted()
         else
         {
             QMessageBox::warning(this, tr("Task"),
-                                 tr("Please choose a person from the list."));
+                                 personId ? tr("That person is no longer in the ward.")
+                                          : tr("Please choose a person from the list."));
             m_personCombo->setFocus();
             return;
         }
