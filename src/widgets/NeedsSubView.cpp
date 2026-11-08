@@ -1,6 +1,6 @@
 #include "NeedsSubView.h"
 #include "BaseTreeModel.h"
-#include "WardListDialog.h"
+#include "PeoplePickerDialog.h"
 #include "DocumentManager.h"
 #include "Document.h"
 #include "FilterBar.h"
@@ -240,7 +240,7 @@ void NeedsSubView::deleteNeedFromContextMenu()
 
 void NeedsSubView::showNeedDialog(const std::optional<PersonId>& personId)
 {
-    std::optional<SpecialNeedEdit> edit = WardListDialog::editSpecialNeed(personId, this);
+    std::optional<SpecialNeedEdit> edit = PeoplePickerDialog::editSpecialNeed(personId, this);
     if (!edit)
     {
         return;

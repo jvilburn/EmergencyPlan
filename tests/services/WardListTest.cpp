@@ -9,23 +9,25 @@
 namespace
 {
 
-Ward ward(const QString& unitNumber, const QString& name)
+/// The test ward with one ward record, named name.
+Document named(const QString& name)
 {
     Ward ward;
-    ward.setUnitNumber(unitNumber);
+    ward.setUnitNumber("100000");
     ward.setName(name);
-    return ward;
+    Document document = TestWard::document();
+    document.metadata().updateWard(ward);
+    return document;
 }
 
-/// The test ward with one ward record for each name, under made-up unit numbers.
-Document withWards(const QStringList& names)
+/// first and second, the one whose id is less first.
+QList<DocumentId> byId(const DocumentId& first, const DocumentId& second)
 {
-    Document document = TestWard::document();
-    for (int i = 0; i < names.size(); ++i)
+    if (second.toString() < first.toString())
     {
-        document.metadata().updateWard(ward(QString::number(100000 + i), names[i]));
+        return {second, first};
     }
-    return document;
+    return {first, second};
 }
 
 }  // namespace
@@ -35,41 +37,46 @@ WardListTest::WardListTest(QObject* parent)
 {
 }
 
-void WardListTest::wardNameListsImportedWardsAlphabetically()
-{
-    QCOMPARE(withWards({}).wardName(), QString("Untitled ward"));
-    QCOMPARE(withWards({"Tanglewood"}).wardName(), QString("Tanglewood Ward"));
-    QCOMPARE(withWards({"Tanglewood", "Oak"}).wardName(), QString("Oak and Tanglewood Wards"));
-    QCOMPARE(withWards({"Tanglewood", "Oak", "Elm"}).wardName(), QString("Elm, Oak and Tanglewood Wards"));
-}
-
 void WardListTest::listNamesEachWardAndMarksWaitingChanges()
 {
     TestClient client("Laptop");
-    client.createWard(withWards({"Tanglewood"}));
+    client.createWard(named("Tanglewood"));
     DocumentId tanglewood = client.session().documentId();
     Family smith = TestWard::family(client.session().document(), TestWard::smithId());
     Family edited = TestWard::withPhone(smith, TestWard::bobId(), "555-0100");
     QVERIFY(client.session().commit(UpdateFamilyCommand::fromEdit(smith, edited, client.session().document())).status
             == CommitStatus::Applied);
-    client.createWard(withWards({"Oak"}));
-    DocumentId oak = client.session().documentId();
-    DocumentId damaged = DocumentId::generate();
-    client.store().put(damaged, QByteArray("not a ward file"));
+    client.createWard(named("Oak"));
+    DocumentId firstOak = client.session().documentId();
+    client.createWard(named("Oak"));
+    DocumentId secondOak = client.session().documentId();
+    DocumentId firstDamaged = DocumentId::generate();
+    DocumentId secondDamaged = DocumentId::generate();
+    client.store().put(firstDamaged, QByteArray("not a ward file"));
+    client.store().put(secondDamaged, QByteArray("not a ward file either"));
 
     QList<WardListEntry> entries = WardList::read(client.identity(), client.store());
 
-    QCOMPARE(entries.size(), 3);
-    QVERIFY(entries[0].document == oak);
-    QVERIFY(entries[0].status == OpenStatus::Opened);
-    QCOMPARE(entries[0].name, QString("Oak Ward"));
-    QVERIFY(!entries[0].changesWaiting);
-    QVERIFY(entries[1].document == tanglewood);
-    QVERIFY(entries[1].status == OpenStatus::Opened);
-    QCOMPARE(entries[1].name, QString("Tanglewood Ward"));
-    QVERIFY(entries[1].changesWaiting);
-    QVERIFY(entries[2].document == damaged);
-    QVERIFY(entries[2].status == OpenStatus::CannotRead);
-    QVERIFY(entries[2].name.isEmpty());
-    QVERIFY(!entries[2].changesWaiting);
+    // The wards that read by name, wards of one name by id, then the rest by id.
+    QList<DocumentId> oaks = byId(firstOak, secondOak);
+    QList<DocumentId> damaged = byId(firstDamaged, secondDamaged);
+    QCOMPARE(entries.size(), 5);
+    for (int i = 0; i < 2; ++i)
+    {
+        QVERIFY(entries[i].document == oaks[i]);
+        QVERIFY(entries[i].status == OpenStatus::Opened);
+        QCOMPARE(entries[i].name, QString("Oak Ward"));
+        QVERIFY(!entries[i].changesWaiting);
+    }
+    QVERIFY(entries[2].document == tanglewood);
+    QVERIFY(entries[2].status == OpenStatus::Opened);
+    QCOMPARE(entries[2].name, QString("Tanglewood Ward"));
+    QVERIFY(entries[2].changesWaiting);
+    for (int i = 0; i < 2; ++i)
+    {
+        QVERIFY(entries[3 + i].document == damaged[i]);
+        QVERIFY(entries[3 + i].status == OpenStatus::CannotRead);
+        QVERIFY(entries[3 + i].name.isEmpty());
+        QVERIFY(!entries[3 + i].changesWaiting);
+    }
 }

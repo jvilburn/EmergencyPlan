@@ -7,6 +7,7 @@
 #include <QList>
 
 class QListWidget;
+class QListWidgetItem;
 class QPushButton;
 
 /// What the user chose in the ward list.
@@ -30,12 +31,14 @@ public:
     WardListChoice choose();
 
     /// The ward chosen to open, when choose answered Open.
-    DocumentId chosenWard() const;
+    DocumentId chosenWard() const { return m_chosenWard; }
 
     /// What the user is told when a ward does not open, for each way it can fail.
     static QString openFailureMessage(OpenStatus status);
 
 private slots:
+    void onOpen();
+    void onItemActivated(QListWidgetItem* item);
     void onNewWard();
     void updateOpenButton();
 
@@ -43,6 +46,10 @@ private:
     /// The result exec answers when the user chooses New Ward.
     static constexpr int NewWardResult = 2;
 
+    /// Chooses the ward item names and closes the list with Open.
+    void openItem(const QListWidgetItem* item);
+
     QListWidget* m_list;
     QPushButton* m_openButton;
+    DocumentId m_chosenWard;
 };

@@ -2,6 +2,7 @@
 #include "AutomaticUpdatesTest.h"
 #include "BirthdayTest.h"
 #include "Crypto.h"
+#include "DocumentMetadataTest.h"
 #include "FamilyEditPanelTest.h"
 #include "FamilyOrderTest.h"
 #include "FieldChangeTest.h"
@@ -59,6 +60,7 @@ int main(int argc, char* argv[])
     StrictReadersTest strictReadersTest(nullptr);
     AppDataTest appDataTest(nullptr);
     WardListTest wardListTest(nullptr);
+    DocumentMetadataTest documentMetadataTest(nullptr);
 
     int failures = 0;
     failures += QTest::qExec(&personJsonTest, argc, argv);
@@ -85,5 +87,6 @@ int main(int argc, char* argv[])
     failures += QTest::qExec(&strictReadersTest, argc, argv);
     failures += QTest::qExec(&appDataTest, argc, argv);
     failures += QTest::qExec(&wardListTest, argc, argv);
+    failures += QTest::qExec(&documentMetadataTest, argc, argv);
     return failures;
 }

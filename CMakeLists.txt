@@ -278,9 +278,9 @@ set(WIDGET_SOURCES
     src/widgets/MinisteringView.cpp
     src/widgets/SlippyMapMath.cpp
     src/widgets/UnmappedPanel.cpp
-    src/widgets/WardListDialog.cpp
+    src/widgets/PeoplePickerDialog.cpp
     src/widgets/OpenWardDialog.cpp
-    src/widgets/WardListView.cpp
+    src/widgets/FamilyListView.cpp
     src/widgets/shared/FilterBar.cpp
     src/widgets/shared/FlowLayout.cpp
     src/widgets/shared/FilterChip.cpp
@@ -332,9 +332,9 @@ set(WIDGET_HEADERS
     src/widgets/MinisteringView.h
     src/widgets/SlippyMapMath.h
     src/widgets/UnmappedPanel.h
-    src/widgets/WardListDialog.h
+    src/widgets/PeoplePickerDialog.h
     src/widgets/OpenWardDialog.h
-    src/widgets/WardListView.h
+    src/widgets/FamilyListView.h
     src/widgets/shared/FilterBar.h
     src/widgets/shared/FlowLayout.h
     src/widgets/shared/FilterChip.h

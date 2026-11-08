@@ -488,12 +488,12 @@ class MainWindow : public QMainWindow
 };
 ```
 
-### WardListView
+### FamilyListView
 
 Main sidebar list for browsing families:
 
 ```cpp
-class WardListView : public QWidget
+class FamilyListView : public QWidget
 {
     // Owns its own Filter and FamilyListModel
     void setup(DocumentManager* documentManager);
@@ -504,12 +504,12 @@ signals:
 };
 ```
 
-### WardListDialog
+### PeoplePickerDialog
 
 Modal dialog for selecting families or persons with split list + map view:
 
 ```cpp
-class WardListDialog : public QDialog
+class PeoplePickerDialog : public QDialog
 {
     enum Mode { FamilyMode, PersonMode };
 

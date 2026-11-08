@@ -13,14 +13,14 @@ class FilterBar;
 class QPushButton;
 class SelectionPreservingTreeView;
 
-/// Tree view for ward family list.
+/// Tree view of the ward's families.
 /// Owns FilterBar (which owns Filter) and FamilyTreeModel internally.
-class WardListView : public QWidget, public FamilyMarkerProvider
+class FamilyListView : public QWidget, public FamilyMarkerProvider
 {
     Q_OBJECT
 
 public:
-    explicit WardListView(QWidget* parent);
+    explicit FamilyListView(QWidget* parent);
 
     // FamilyMarkerProvider interface
     HighlightInfo highlightInfo() const override;

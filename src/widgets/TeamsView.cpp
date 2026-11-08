@@ -1,7 +1,7 @@
 #include "TeamsView.h"
 #include "BaseTreeModel.h"
 #include "ChoiceDialog.h"
-#include "WardListDialog.h"
+#include "PeoplePickerDialog.h"
 #include "DocumentManager.h"
 #include "Document.h"
 #include "EmergencyManager.h"
@@ -530,7 +530,7 @@ void TeamsView::showTeamDialog(const std::optional<TeamId>& teamId)
 
     QString initialName = opened ? opened->name() : QString();
     QList<PersonId> initialIds = opened ? opened->memberIds().values() : QList<PersonId>();
-    std::optional<PersonSelectionResult> result = WardListDialog::selectPersons(
+    std::optional<PersonSelectionResult> result = PeoplePickerDialog::selectPersons(
         tr("Team"), initialName, initialIds, this);
 
     if (!result || result->name.isEmpty())

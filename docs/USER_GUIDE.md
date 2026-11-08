@@ -216,4 +216,4 @@ Contact attempts and task changes can be undone too. Starting an emergency and a
 
 - Every change is saved as it is made
 - If saving fails, the app says why, keeps the change while it stays open, and saves it as soon as saving works again; closing, or moving to another ward, asks first
-- The title bar shows the ward's name, from the wards in the document
+- The title bar shows the ward's name, from the wards it has imported

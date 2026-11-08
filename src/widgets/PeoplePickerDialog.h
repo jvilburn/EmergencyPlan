@@ -39,10 +39,10 @@ struct SpecialNeedEdit
     Family saved;
 };
 
-/// Modal dialog for selecting families or persons from the ward list.
+/// Modal dialog for selecting families or persons from the ward's families.
 /// Features a split view with tree on left and map on right.
 /// Uses FilterBar for search/filtering and tree models for display.
-class WardListDialog : public QDialog, public FamilyMarkerProvider
+class PeoplePickerDialog : public QDialog, public FamilyMarkerProvider
 {
     Q_OBJECT
 
@@ -54,9 +54,9 @@ public:
     };
     Q_ENUM(Mode)
 
-    explicit WardListDialog(Mode mode,
-                            bool checkable,
-                            QWidget* parent);
+    explicit PeoplePickerDialog(Mode mode,
+                                bool checkable,
+                                QWidget* parent);
 
     /// Get the name field text (trimmed).
     QString name() const;

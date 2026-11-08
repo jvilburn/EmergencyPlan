@@ -1,4 +1,4 @@
-#include "WardListView.h"
+#include "FamilyListView.h"
 #include "ActionButtonsWidget.h"
 #include "EmergencyActions.h"
 #include "Document.h"
@@ -27,7 +27,7 @@ namespace StatusFilterIndex
     constexpr int UnableToReach = 4;
 }
 
-WardListView::WardListView(QWidget* parent)
+FamilyListView::FamilyListView(QWidget* parent)
     : QWidget(parent)
 {
     setMinimumWidth(250);
@@ -61,38 +61,38 @@ WardListView::WardListView(QWidget* parent)
 
     // Connect tree events
     connect(m_treeView, &SelectionPreservingTreeView::selectionChanged,
-            this, &WardListView::onSelectionChanged);
+            this, &FamilyListView::onSelectionChanged);
     connect(m_treeView, &QTreeView::expanded,
-            this, &WardListView::onItemExpanded);
+            this, &FamilyListView::onItemExpanded);
     connect(m_treeView, &QTreeView::collapsed,
-            this, &WardListView::onItemCollapsed);
+            this, &FamilyListView::onItemCollapsed);
 
     // Context menu for task actions
     m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(m_treeView, &QWidget::customContextMenuRequested,
-            this, &WardListView::onTreeContextMenu);
+            this, &FamilyListView::onTreeContextMenu);
 
     // Connect model signals
     connect(m_model, &QAbstractItemModel::modelReset,
-            this, &WardListView::onModelReset);
+            this, &FamilyListView::onModelReset);
     connect(m_model, &QAbstractItemModel::rowsRemoved,
-            this, &WardListView::onRowsRemoved);
+            this, &FamilyListView::onRowsRemoved);
     connect(m_model, &QAbstractItemModel::rowsInserted,
-            this, &WardListView::onRowsInserted);
+            this, &FamilyListView::onRowsInserted);
 
     // Emergency lifecycle
     connect(EmergencyManager::instance(), &EmergencyManager::emergencyStarted,
-            this, &WardListView::onEmergencyStateChanged);
+            this, &FamilyListView::onEmergencyStateChanged);
     connect(EmergencyManager::instance(), &EmergencyManager::emergencyEnded,
-            this, &WardListView::onEmergencyStateChanged);
+            this, &FamilyListView::onEmergencyStateChanged);
     connect(EmergencyManager::instance(), &EmergencyManager::responseDataChanged,
-            this, &WardListView::updateFilterTabCounts);
+            this, &FamilyListView::updateFilterTabCounts);
 
     // Emit initial visible families
     emit visibleFamiliesChanged(visibleFamilyIdsList());
 }
 
-std::optional<FamilyId> WardListView::selectedFamilyId() const
+std::optional<FamilyId> FamilyListView::selectedFamilyId() const
 {
     QModelIndex current = m_treeView->currentIndex();
     if (!current.isValid())
@@ -102,7 +102,7 @@ std::optional<FamilyId> WardListView::selectedFamilyId() const
     return m_model->familyIdAt(current);
 }
 
-void WardListView::setSelectedFamilyId(const std::optional<FamilyId>& id)
+void FamilyListView::setSelectedFamilyId(const std::optional<FamilyId>& id)
 {
     if (!id)
     {
@@ -117,22 +117,22 @@ void WardListView::setSelectedFamilyId(const std::optional<FamilyId>& id)
     }
 }
 
-void WardListView::clearSelection()
+void FamilyListView::clearSelection()
 {
     m_treeView->clearSelection();
 }
 
-void WardListView::selectFamily(const FamilyId& familyId)
+void FamilyListView::selectFamily(const FamilyId& familyId)
 {
     setSelectedFamilyId(familyId);
 }
 
-QList<FamilyId> WardListView::visibleFamilyIdsList() const
+QList<FamilyId> FamilyListView::visibleFamilyIdsList() const
 {
     return m_model->familyIds();
 }
 
-HighlightInfo WardListView::highlightInfo() const
+HighlightInfo FamilyListView::highlightInfo() const
 {
     HighlightInfo info;
     std::optional<FamilyId> selected = selectedFamilyId();
@@ -143,13 +143,13 @@ HighlightInfo WardListView::highlightInfo() const
     return info;
 }
 
-QSet<FamilyId> WardListView::visibleFamilyIds() const
+QSet<FamilyId> FamilyListView::visibleFamilyIds() const
 {
     QList<FamilyId> list = visibleFamilyIdsList();
     return QSet<FamilyId>(list.begin(), list.end());
 }
 
-QString WardListView::familyStatusIcon(const FamilyId& familyId) const
+QString FamilyListView::familyStatusIcon(const FamilyId& familyId) const
 {
     EffectiveContactStatus status = EmergencyManager::instance()->familyStatus(familyId);
     switch (status)
@@ -166,7 +166,7 @@ QString WardListView::familyStatusIcon(const FamilyId& familyId) const
     return {};
 }
 
-void WardListView::onSelectionChanged()
+void FamilyListView::onSelectionChanged()
 {
     emit highlightChanged();
 
@@ -182,17 +182,17 @@ void WardListView::onSelectionChanged()
     }
 }
 
-Filter* WardListView::filter() const
+Filter* FamilyListView::filter() const
 {
     return m_filterBar->filter();
 }
 
-void WardListView::onModelReset()
+void FamilyListView::onModelReset()
 {
     emit visibleFamiliesChanged(visibleFamilyIdsList());
 }
 
-void WardListView::onRowsRemoved(const QModelIndex& parent)
+void FamilyListView::onRowsRemoved(const QModelIndex& parent)
 {
     // A family left the list. A family's own rows taking its Actions row take its buttons
     // with them.
@@ -202,7 +202,7 @@ void WardListView::onRowsRemoved(const QModelIndex& parent)
     }
 }
 
-void WardListView::onRowsInserted(const QModelIndex& parent)
+void FamilyListView::onRowsInserted(const QModelIndex& parent)
 {
     if (!parent.isValid())
     {
@@ -217,7 +217,7 @@ void WardListView::onRowsInserted(const QModelIndex& parent)
     }
 }
 
-void WardListView::onItemExpanded(const QModelIndex& index)
+void FamilyListView::onItemExpanded(const QModelIndex& index)
 {
     FamilyTreeModel::RowType type = m_model->rowTypeAt(index);
     if (type == FamilyTreeModel::RowType::Family)
@@ -226,7 +226,7 @@ void WardListView::onItemExpanded(const QModelIndex& index)
     }
 }
 
-void WardListView::onItemCollapsed(const QModelIndex& index)
+void FamilyListView::onItemCollapsed(const QModelIndex& index)
 {
     if (m_model->rowTypeAt(index) == FamilyTreeModel::RowType::Family)
     {
@@ -234,13 +234,13 @@ void WardListView::onItemCollapsed(const QModelIndex& index)
     }
 }
 
-QModelIndex WardListView::actionsIndex(const QModelIndex& familyIndex) const
+QModelIndex FamilyListView::actionsIndex(const QModelIndex& familyIndex) const
 {
     // The Actions row is the family's last child
     return m_model->index(m_model->rowCount(familyIndex) - 1, 0, familyIndex);
 }
 
-void WardListView::attachActionButtons(const QModelIndex& familyIndex)
+void FamilyListView::attachActionButtons(const QModelIndex& familyIndex)
 {
     std::optional<FamilyId> familyId = m_model->familyIdAt(familyIndex);
     QModelIndex actions = actionsIndex(familyIndex);
@@ -251,13 +251,13 @@ void WardListView::attachActionButtons(const QModelIndex& familyIndex)
 
     ActionButtonsWidget* widget = new ActionButtonsWidget(*familyId, m_treeView);
     connect(widget, &ActionButtonsWidget::editRequested,
-            this, &WardListView::editFamilyRequested);
+            this, &FamilyListView::editFamilyRequested);
     connect(widget, &ActionButtonsWidget::deleteRequested,
-            this, &WardListView::deleteFamilyRequested);
+            this, &FamilyListView::deleteFamilyRequested);
     m_treeView->setIndexWidget(actions, widget);
 }
 
-void WardListView::detachActionButtons(const QModelIndex& familyIndex)
+void FamilyListView::detachActionButtons(const QModelIndex& familyIndex)
 {
     // The view deletes the widget it held
     QModelIndex actions = actionsIndex(familyIndex);
@@ -267,7 +267,7 @@ void WardListView::detachActionButtons(const QModelIndex& familyIndex)
     }
 }
 
-void WardListView::setupEmergencyWidgets()
+void FamilyListView::setupEmergencyWidgets()
 {
     m_emergencyPanel = new QWidget(this);
     QVBoxLayout* panelLayout = new QVBoxLayout(m_emergencyPanel);
@@ -299,7 +299,7 @@ void WardListView::setupEmergencyWidgets()
         m_filterTabs.append(tab);
 
         connect(tab, &QPushButton::clicked,
-                this, &WardListView::onStatusFilterTabClicked);
+                this, &FamilyListView::onStatusFilterTabClicked);
     }
 
     // Default: "All" selected
@@ -311,7 +311,7 @@ void WardListView::setupEmergencyWidgets()
     m_emergencyPanel->hide();
 }
 
-void WardListView::onEmergencyStateChanged()
+void FamilyListView::onEmergencyStateChanged()
 {
     bool active = EmergencyManager::instance()->isActive();
     m_emergencyPanel->setVisible(active);
@@ -336,7 +336,7 @@ void WardListView::onEmergencyStateChanged()
     }
 }
 
-void WardListView::onStatusFilterTabClicked()
+void FamilyListView::onStatusFilterTabClicked()
 {
     QPushButton* tab = qobject_cast<QPushButton*>(sender());
     if (!tab)
@@ -348,7 +348,7 @@ void WardListView::onStatusFilterTabClicked()
     onStatusFilterClicked(statusIndex);
 }
 
-void WardListView::onStatusFilterClicked(int statusIndex)
+void FamilyListView::onStatusFilterClicked(int statusIndex)
 {
     Filter* f = m_filterBar->filter();
 
@@ -372,7 +372,7 @@ void WardListView::onStatusFilterClicked(int statusIndex)
     }
 }
 
-void WardListView::updateFilterTabCounts()
+void FamilyListView::updateFilterTabCounts()
 {
     EmergencyManager* manager = EmergencyManager::instance();
     if (!manager->isActive())
@@ -393,7 +393,7 @@ void WardListView::updateFilterTabCounts()
     m_filterTabs[StatusFilterIndex::UnableToReach]->setText(tr("Unable to Reach (%1)").arg(unable));
 }
 
-void WardListView::onTreeContextMenu(const QPoint& pos)
+void FamilyListView::onTreeContextMenu(const QPoint& pos)
 {
     QModelIndex index = m_treeView->indexAt(pos);
     if (!index.isValid())

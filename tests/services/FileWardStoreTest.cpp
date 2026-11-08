@@ -70,7 +70,8 @@ void FileWardStoreTest::documentsAreTheFilesNamedByADocumentId()
     QVERIFY(store.write(first, QByteArray("first"), &problem));
     QVERIFY(store.write(second, QByteArray("second"), &problem));
     for (const QString& name : {QString("notes.txt"), QString("copy of a ward.wardplanning"),
-                                first.toString() + ".wardplanning.bak"})
+                                first.toString() + ".wardplanning.bak",
+                                first.toString() + ".old.wardplanning"})
     {
         QFile other(directory + "/" + name);
         QVERIFY(other.open(QIODevice::WriteOnly));

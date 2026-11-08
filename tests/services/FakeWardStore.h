@@ -13,7 +13,10 @@ public:
 
     bool write(const DocumentId& document, const QByteArray& bytes, QString* problem) override;
     StoreRead read(const DocumentId& document) const override;
-    QList<DocumentId> documents() const override { return m_files.keys(); }
+
+    /// Every id it holds a file for, in descending id order, so a caller that leans on the
+    /// order a store lists in, rather than sorting, shows it.
+    QList<DocumentId> documents() const override;
 
     /// While set, every write fails with "the disk is full" and leaves the file as it was.
     void setFailWrites(bool fail) { m_failWrites = fail; }

@@ -1,4 +1,4 @@
-#include "WardListDialog.h"
+#include "PeoplePickerDialog.h"
 #include "FilterBar.h"
 #include "FamilyTreeModel.h"
 #include "PersonTreeModel.h"
@@ -18,9 +18,9 @@
 #include <QPushButton>
 #include <QSet>
 
-WardListDialog::WardListDialog(Mode mode,
-                               bool checkable,
-                               QWidget* parent)
+PeoplePickerDialog::PeoplePickerDialog(Mode mode,
+                                       bool checkable,
+                                       QWidget* parent)
     : QDialog(parent)
     , m_mode(mode)
     , m_checkable(checkable)
@@ -28,12 +28,12 @@ WardListDialog::WardListDialog(Mode mode,
     setupUi();
 }
 
-QString WardListDialog::name() const
+QString PeoplePickerDialog::name() const
 {
     return m_nameEdit->text().trimmed();
 }
 
-void WardListDialog::setupUi()
+void PeoplePickerDialog::setupUi()
 {
     resize(1000, 700);
 
@@ -92,7 +92,7 @@ void WardListDialog::setupUi()
 
     // Connections
     connect(m_treeView, &SelectionPreservingTreeView::selectionChanged,
-            this, &WardListDialog::onSelectionChanged);
+            this, &PeoplePickerDialog::onSelectionChanged);
     connect(m_buttonBox, &QDialogButtonBox::accepted,
             this, &QDialog::accept);
     connect(m_buttonBox, &QDialogButtonBox::rejected,
@@ -103,7 +103,7 @@ void WardListDialog::setupUi()
     m_mapWidget->requestFitAllFamilies();
 }
 
-void WardListDialog::selectFamily(const FamilyId& familyId)
+void PeoplePickerDialog::selectFamily(const FamilyId& familyId)
 {
     if (m_mode == FamilyMode && m_familyModel)
     {
@@ -134,7 +134,7 @@ void WardListDialog::selectFamily(const FamilyId& familyId)
     }
 }
 
-void WardListDialog::onSelectionChanged()
+void PeoplePickerDialog::onSelectionChanged()
 {
     // Update map highlighting
     m_mapWidget->updateHighlights();
@@ -163,7 +163,7 @@ void WardListDialog::onSelectionChanged()
     m_buttonBox->button(QDialogButtonBox::Ok)->setEnabled(m_openedNeed.has_value());
 }
 
-void WardListDialog::openSpecialNeed(const PersonId& personId)
+void PeoplePickerDialog::openSpecialNeed(const PersonId& personId)
 {
     const Document& document = DocumentManager::instance()->document();
     std::optional<FamilyId> familyId = document.familyIdForPerson(personId);
@@ -182,7 +182,7 @@ void WardListDialog::openSpecialNeed(const PersonId& personId)
     m_nameEdit->setText(person->specialNeedNote());
 }
 
-QSet<FamilyId> WardListDialog::highlightedFamilyIds() const
+QSet<FamilyId> PeoplePickerDialog::highlightedFamilyIds() const
 {
     if (m_checkable)
     {
@@ -237,14 +237,14 @@ QSet<FamilyId> WardListDialog::highlightedFamilyIds() const
     return {};
 }
 
-HighlightInfo WardListDialog::highlightInfo() const
+HighlightInfo PeoplePickerDialog::highlightInfo() const
 {
     HighlightInfo info;
     info.highlightedFamilyIds = highlightedFamilyIds();
     return info;
 }
 
-QSet<FamilyId> WardListDialog::visibleFamilyIds() const
+QSet<FamilyId> PeoplePickerDialog::visibleFamilyIds() const
 {
     // Show all families in the dialog
     return {};
@@ -252,13 +252,13 @@ QSet<FamilyId> WardListDialog::visibleFamilyIds() const
 
 // Static convenience methods
 
-std::optional<FamilySelectionResult> WardListDialog::selectFamilies(
+std::optional<FamilySelectionResult> PeoplePickerDialog::selectFamilies(
     const QString& nameLabel,
     const QString& initialName,
     const QList<FamilyId>& initialIds,
     QWidget* parent)
 {
-    WardListDialog dialog(FamilyMode, true, parent);
+    PeoplePickerDialog dialog(FamilyMode, true, parent);
     dialog.setWindowTitle(tr("Select Families \u2014 %1").arg(nameLabel));
     dialog.m_nameLabel->setText(nameLabel + tr(":"));
     dialog.m_nameEdit->setText(initialName);
@@ -289,11 +289,11 @@ std::optional<FamilySelectionResult> WardListDialog::selectFamilies(
     return result;
 }
 
-std::optional<SpecialNeedEdit> WardListDialog::editSpecialNeed(
+std::optional<SpecialNeedEdit> PeoplePickerDialog::editSpecialNeed(
     const std::optional<PersonId>& lockedPerson,
     QWidget* parent)
 {
-    WardListDialog dialog(PersonMode, false, parent);
+    PeoplePickerDialog dialog(PersonMode, false, parent);
     dialog.setWindowTitle(tr("Special Need"));
     dialog.m_nameLabel->setText(tr("Need:"));
     dialog.m_editsSpecialNeed = true;
@@ -328,13 +328,13 @@ std::optional<SpecialNeedEdit> WardListDialog::editSpecialNeed(
     return SpecialNeedEdit{opened.family, saved};
 }
 
-std::optional<PersonSelectionResult> WardListDialog::selectPersons(
+std::optional<PersonSelectionResult> PeoplePickerDialog::selectPersons(
     const QString& nameLabel,
     const QString& initialName,
     const QList<PersonId>& initialIds,
     QWidget* parent)
 {
-    WardListDialog dialog(PersonMode, true, parent);
+    PeoplePickerDialog dialog(PersonMode, true, parent);
     dialog.setWindowTitle(tr("Select People \u2014 %1").arg(nameLabel));
     dialog.m_nameLabel->setText(nameLabel + tr(":"));
     dialog.m_nameEdit->setText(initialName);

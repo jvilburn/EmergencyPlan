@@ -1,6 +1,6 @@
 #include "MainWindow.h"
 #include "EmergencyBanner.h"
-#include "WardListView.h"
+#include "FamilyListView.h"
 #include "MinisteringView.h"
 #include "NeedsSubView.h"
 #include "SidebarWidget.h"
@@ -87,8 +87,8 @@ void MainWindow::setupUi()
     m_sidebarTabs = new SidebarWidget(5, m_splitter);
 
     // Row 1
-    m_wardListView = new WardListView(this);
-    m_sidebarTabs->addPage(m_wardListView, tr("Families"));
+    m_familyListView = new FamilyListView(this);
+    m_sidebarTabs->addPage(m_familyListView, tr("Families"));
 
     m_ministeringView = new MinisteringView(this);
     m_sidebarTabs->addPage(m_ministeringView, tr("Ministering"));
@@ -129,8 +129,8 @@ void MainWindow::setupUi()
     m_splitter->setStretchFactor(1, 0);  // Edit panel doesn't stretch
     m_splitter->setStretchFactor(2, 1);  // Map stretches
 
-    // Set initial highlight provider (WardListView)
-    m_mapWidget->setMarkerProvider(m_wardListView);
+    // Set initial highlight provider (FamilyListView)
+    m_mapWidget->setMarkerProvider(m_familyListView);
 
     // Status bar
     statusBar()->showMessage(tr("Ready"));
@@ -168,7 +168,7 @@ void MainWindow::setupMenus(bool developer)
     fileMenu->addSeparator();
 
     m_exitAction = fileMenu->addAction(tr("E&xit"), this, &QMainWindow::close);
-    m_exitAction->setShortcut(QKeySequence::Quit);
+    m_exitAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Q));
 
     // Edit menu
     QMenu* editMenu = menuBar()->addMenu(tr("&Edit"));
@@ -225,13 +225,13 @@ void MainWindow::setupConnections()
 
     // Highlight and visibility changes from sidebar views
     // highlightChanged connections are handled automatically by MapWidget::setMarkerProvider
-    connect(m_wardListView, &WardListView::visibleFamiliesChanged,
+    connect(m_familyListView, &FamilyListView::visibleFamiliesChanged,
             m_mapWidget, &MapWidget::updateHighlights);
 
     // Family editing
-    connect(m_wardListView, &WardListView::editFamilyRequested,
+    connect(m_familyListView, &FamilyListView::editFamilyRequested,
             this, &MainWindow::onEditFamilyRequested);
-    connect(m_wardListView, &WardListView::deleteFamilyRequested,
+    connect(m_familyListView, &FamilyListView::deleteFamilyRequested,
             this, &MainWindow::onDeleteFamilyRequested);
     connect(m_editPanel, &FamilyEditPanel::saveRequested,
             this, &MainWindow::onSaveFamily);
@@ -307,7 +307,8 @@ bool MainWindow::chooseWard()
         switch (dialog.choose())
         {
         case WardListChoice::Open:
-            if (openWard(dialog.chosenWard()))
+            if (dialog.chosenWard() == DocumentManager::instance()->documentId()
+                || openWard(dialog.chosenWard()))
             {
                 return true;
             }
@@ -391,7 +392,7 @@ bool MainWindow::unsavedChangesMayBeLost()
 
 void MainWindow::closeEvent(QCloseEvent* event)
 {
-    if (!unsavedChangesMayBeLost())
+    if (!mayLeaveWard())
     {
         event->ignore();
         return;
@@ -716,28 +717,12 @@ void MainWindow::onSidebarTabChanged(int index)
 
 void MainWindow::onEditFamilyRequested(const FamilyId& familyId)
 {
-    // If editing a different family, check for unsaved changes
-    if (m_editPanel->isVisible() && m_editPanel->familyId() != familyId)
+    if (m_editPanel->isVisible()
+        && m_editPanel->familyId() != familyId
+        && !closeEditPanel())
     {
-        if (m_editPanel->isDirty())
-        {
-            QMessageBox::StandardButton result = QMessageBox::question(
-                this,
-                tr("Unsaved Changes"),
-                tr("Save changes to %1?").arg(m_editPanel->family().displayName()),
-                QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
-
-            if (result == QMessageBox::Save)
-            {
-                onSaveFamily();
-            }
-            else if (result == QMessageBox::Cancel)
-            {
-                return;
-            }
-        }
+        return;
     }
-
     openEditPanel(familyId);
 }
 

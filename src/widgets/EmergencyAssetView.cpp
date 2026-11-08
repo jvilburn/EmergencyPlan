@@ -1,6 +1,6 @@
 #include "EmergencyAssetView.h"
 #include "BaseTreeModel.h"
-#include "WardListDialog.h"
+#include "PeoplePickerDialog.h"
 #include "DocumentManager.h"
 #include "Document.h"
 #include "EmergencyAsset.h"
@@ -363,7 +363,7 @@ void EmergencyAssetView::showAssetDialog(const std::optional<EmergencyAssetId>& 
 
     QString initialName = opened ? opened->name() : QString();
     QList<PersonId> initialIds = opened ? opened->personIds().values() : QList<PersonId>();
-    std::optional<PersonSelectionResult> result = WardListDialog::selectPersons(
+    std::optional<PersonSelectionResult> result = PeoplePickerDialog::selectPersons(
         nameLabel(), initialName, initialIds, this);
 
     if (!result || result->name.isEmpty())

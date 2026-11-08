@@ -14,7 +14,7 @@ class QProgressBar;
 class EmergencyAssetView;
 class FamilyEditPanel;
 class MapWidget;
-class WardListView;
+class FamilyListView;
 class MinisteringView;
 class NeedsSubView;
 class SidebarWidget;
@@ -40,7 +40,7 @@ public:
     bool openStartingWard();
 
 protected:
-    /// Tries a pending save once more, and when it still fails asks before closing.
+    /// Closes only when mayLeaveWard agrees.
     void closeEvent(QCloseEvent* event) override;
 
 private slots:
@@ -105,7 +105,7 @@ private:
     bool openWard(const DocumentId& document);
 
     /// Shows the ward list until a ward opens or is created from it, or the user closes it.
-    /// False when the user closes it.
+    /// Choosing the ward already open leaves it open as it is. False when the user closes it.
     bool chooseWard();
 
     /// True when nothing is left unsaved after one more try at saving, or when the user
@@ -139,7 +139,7 @@ private:
     QSplitter* m_splitter;
     EmergencyBanner* m_emergencyBanner;
     SidebarWidget* m_sidebarTabs;
-    WardListView* m_wardListView;
+    FamilyListView* m_familyListView;
     MinisteringView* m_ministeringView;
     NeedsSubView* m_needsView;
     TeamsView* m_teamsView;

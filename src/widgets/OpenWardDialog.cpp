@@ -39,10 +39,10 @@ OpenWardDialog::OpenWardDialog(const QList<WardListEntry>& wards, QWidget* paren
     buttons->addButton(QDialogButtonBox::Close);
     layout->addWidget(buttons);
 
-    connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::accepted, this, &OpenWardDialog::onOpen);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     connect(newWardButton, &QPushButton::clicked, this, &OpenWardDialog::onNewWard);
-    connect(m_list, &QListWidget::itemActivated, this, &QDialog::accept);
+    connect(m_list, &QListWidget::itemActivated, this, &OpenWardDialog::onItemActivated);
     connect(m_list, &QListWidget::itemSelectionChanged, this, &OpenWardDialog::updateOpenButton);
 
     if (!wards.isEmpty() && wards.first().status == OpenStatus::Opened)
@@ -65,9 +65,24 @@ WardListChoice OpenWardDialog::choose()
     }
 }
 
-DocumentId OpenWardDialog::chosenWard() const
+void OpenWardDialog::onOpen()
 {
-    return DocumentId::fromString(m_list->selectedItems().first()->data(Qt::UserRole).toString());
+    QList<QListWidgetItem*> selected = m_list->selectedItems();
+    if (!selected.isEmpty())
+    {
+        openItem(selected.constFirst());
+    }
+}
+
+void OpenWardDialog::onItemActivated(QListWidgetItem* item)
+{
+    openItem(item);
+}
+
+void OpenWardDialog::openItem(const QListWidgetItem* item)
+{
+    m_chosenWard = DocumentId::fromString(item->data(Qt::UserRole).toString());
+    accept();
 }
 
 void OpenWardDialog::onNewWard()
@@ -93,7 +108,7 @@ QString OpenWardDialog::openFailureMessage(OpenStatus status)
     case OpenStatus::Newer:
         return tr("This ward was saved by a newer version of Ward Planning. Update to open it.");
     case OpenStatus::Fault:
-        return tr("This ward's file could not be read just now. Try again.");
+        return tr("This ward's file could not be read just now.");
     }
     return QString();
 }

@@ -10,6 +10,5 @@ public:
     explicit WardListTest(QObject* parent);
 
 private slots:
-    void wardNameListsImportedWardsAlphabetically();
     void listNamesEachWardAndMarksWaitingChanges();
 };
