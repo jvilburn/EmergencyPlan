@@ -65,8 +65,10 @@ Two related ideas surfaced during design and are deferred to their own work:
 | Local copy | Complete, always present, fully editable offline |
 | Running instances | One per user (see *Receiving an invitation*) |
 | Where the local file lives | Local application data (`QStandardPaths::AppLocalDataLocation`), keyed by document id; the user never chooses a path |
-| Third-party sync folders | Not built. Continuity rests on the project being open source. |
-| The split of responsibility | **The ward says who may read it; the server stores versions and relays changes.** Besides the version condition, the server checks only that a write's header is well formed and names its document, and that its signer is named by the current header, or for a new document by its own. |
+| Third-party sync folders | Not built. |
+| Update files | A version on disk, sent by email or message and opened like a fetch, so wards share with no server at all (see *Update files*) |
+| Which version wins | Each version's header carries its number and its writer; the higher number wins, then the higher writer fingerprint. Every transport follows this one rule. |
+| The split of responsibility | **The ward says who may read it; the server stores versions and relays changes.** Besides keeping only a higher-numbered version, the server checks only that a write's header is well formed and names its document, and that its signer is the header's writer and is named by the current header, or for a new document by its own. |
 | Who has access | The access list inside the encrypted payload: users, their devices, and open invites |
 | Key model | Envelope encryption, one data key per document, sealed to each device |
 | Key generation | Silent, only when no key file exists. No user-visible key material. |
@@ -82,7 +84,7 @@ Two related ideas surfaced during design and are deferred to their own work:
 | Crypto library | libsodium 1.0.22 or later from vcpkg, to be pinned in the manifest |
 | Document storage | One encrypted payload. Replay happens on the model, so storage stays simple. |
 | Encryption coverage | Every document; a past emergency is kept as its summary report |
-| File extension | `.wardplanning`, for each ward's file in app data |
+| File extension | `.wardplanning`, for each ward's file in app data; `.wardupdate`, for an update file |
 
 ### Settled, and not for review to reopen
 
@@ -102,8 +104,9 @@ design's answer, not a gap:
 - **No base copy, no save counter, no debounce.**
 - **No exported copies.** A copy would be sealed to the ward's devices, each of which already
   holds the ward; *Show in folder* opens the `wards` folder with the ward's own file
-  selected. The developer-only export
-  under *Debugging*, off by default, is the one exception.
+  selected. Update files and invitations carry a version to another device and are not
+  copies kept for their own sake; the developer-only export under *Debugging*, off by
+  default, is the one other file holding the ward.
 - **Installing an older Ward Planning over a newer one is not supported.**
 - **1.0 `.emergencyplan` files are not migrated**, and their teams, tags, assets, special
   needs and notes are not carried over.
@@ -135,8 +138,6 @@ design's answer, not a gap:
 - **A misbehaving server, or whoever holds the domain, may disrupt in any way that leaks
   nothing**: stall sharing, lose versions, or make devices treat a ward as removed. The
   design defends against the server learning anything, not against it getting in the way.
-- **The server is trusted to number versions.** Older content served under a higher number,
-  by a server bug or a renumbered restore, is not detected.
 - **Server error recovery is out of scope**: repairing a bad version, restoring from backup,
   and what an export must carry for a successor belong to the server's own design.
 - **How the imports match families and members, and which family fields a ministering
@@ -170,6 +171,7 @@ This document uses its terms for precision; the interface uses these:
 | conflict, abandoned replay | *Your changes could not be applied, because the ward changed first* |
 | to-redo file | *To redo*, in the file's name; *These need doing again*, inside it |
 | journal, unpushed changes | *Your changes are saved here and will go up when the connection returns* |
+| update file | *update*; *Send Update* |
 | no longer this device's | *This ward is no longer shared with this device* |
 
 Terms with no place in the interface at all: push, fetch, replay, version (of a ward; the
@@ -208,7 +210,8 @@ making; its first download is the accepted exception below.
 **Defended against.** The server operator reading member data; the operator is the
 application's author, and the design keeps that from being a matter of trust. Anyone who
 obtains a file without ever having held a key. A removed user writing anything, which
-the server refuses because the current header no longer names them. A user removed by
+the server refuses because the current header no longer names them, and which every device
+that has taken the removal refuses in an update file. A user removed by
 an admin reading a later version obtained some other way, which is under a key they never
 held. Silent corruption or truncation.
 
@@ -223,9 +226,10 @@ copied out of app data, and devices that never reconnect, keep what they had eit
 **Detected, not prevented.** Tampering with a local file's header, including its document
 id: the header is bound as associated data, so a modified local file fails to decrypt
 rather than quietly attaching itself to a different document. **A rolled-back head** from a
-server fault: a head whose version is below the base this device holds is refused, and
-the device keeps its copy and stops pushing, the accepted stall below. A hostile server can
-relabel an old version, which is the accepted stale-version case below.
+server fault: a head that ranks below the version this device holds is refused, and the
+device keeps its copy and stops pushing, the accepted stall below. A version's number and
+writer are in its header, which the payload binds, so no server can relabel an old version
+as a newer one; serving an old version is the accepted stale-version case below.
 
 **Inside the trust boundary.** Every key holder can read everything and write whatever
 they like into the document. Admins also decide who has access. A ward's admins are its
@@ -333,20 +337,23 @@ entry, and check versions without decrypting anything.
 `\n`, then the payload's bytes. Compact JSON escapes every newline inside it, so the first
 `\n` is always the boundary, and the header stays readable in a text viewer. On the wire, a
 version travels in this same framing, as the raw request or response body, and
-`GET /documents/{id}/head` returns the header line as its body, with the version,
-publisher fingerprint and publish time in response headers (see *What the server is*).
+`GET /documents/{id}/head` returns the header line as its body, with the publish time in a
+response header (see *What the server is*). An update file is the same framing on disk,
+after one signature line (see *Update files*).
 
 **Header**
 
 - format version, which starts at 1
 - document id: 128 random bits generated by the app when the document is created, and
   never changed
+- the version's number and writer (see *Which version wins*)
 - payload nonce
 - recipient entries, one per device and one per open invite: `{fingerprint, data key
   sealed to that X25519 public key}`
 
-The header is a JSON object with the keys `format` (an integer), `document`, `nonce`, and
-`recipients`, an array of objects with the keys `fingerprint` and `sealedKey`. Every binary
+The header is a JSON object with the keys `format` (an integer), `document`, `number` (an
+integer), `writer` (a fingerprint), `nonce`, and `recipients`, an array of objects with the
+keys `fingerprint` and `sealedKey`. Every binary
 value is base64url without padding: the document id is 16 bytes (22 characters), the nonce
 24 bytes (32 characters), a fingerprint 16 bytes (22 characters), and a sealed key 80 bytes
 (107 characters), a 32-byte data key plus `crypto_box_SEALBYTES`, which is 48.
@@ -573,16 +580,17 @@ keys. Within a ward, a user is named by a 128-bit user id their devices share.
 A store of encrypted documents that tells the users holding one open when it changes, and
 who else holds it open. Nothing about users.
 
-It holds the current version of each ward and a version number that rises with it. The
-number is there for the write condition, so two users cannot both write from the same
-starting point; no call asks for an earlier version, and none is kept.
+It holds the current version of each ward. It reads the version's number from its header and
+keeps a push only when that number is above the number it holds, so two users cannot both
+write from the same starting point; no call asks for an earlier version, and none is kept.
+The server keeps no counter of its own.
 
 | Call | Who may | What |
 |---|---|---|
 | `POST /documents` | anyone | Stores version 1 of a new document under its client-made id, and refuses an id that already exists. Rate-limited by address. |
-| `GET /documents/{id}/head` | anyone with the id | Version, publisher fingerprint and time, and the header. |
+| `GET /documents/{id}/head` | anyone with the id | The header, and when it was published. |
 | `GET /documents/{id}` | anyone with the id | The current version: header and blob. Ciphertext; unreadable without a key. |
-| `PUT /documents/{id}` | a key holder | Conditional on `Ward-Base-Version`. Signed. |
+| `PUT /documents/{id}` | a key holder | Kept only when the header's number is above the current one. Signed. |
 | the live channel | a key holder | Open while the ward is open. Carries presence and version notices. |
 | `GET /releases/latest` | anyone | The current app version per platform, with each installer's download address. |
 | `GET /download` | anyone | A web page offering the installers, for people who do not have the app yet. |
@@ -591,20 +599,21 @@ starting point; no call asks for an earlier version, and none is kept.
 over one UTF-8 line:
 
 ```
-wardplanning-v1 <call> <document id> <base version> <header hash> <payload hash>
+wardplanning-v1 <call> <document id> <header hash> <payload hash>
 ```
 
-`<call>` is `create` for a `POST`, `push` for a `PUT`, and `channel` for opening the live
-channel. The base version is a decimal integer. The hashes are BLAKE2b-256 of the exact
+`<call>` is `create` for a `POST`, `push` for a `PUT`, `channel` for opening the live
+channel, and `update` for an update file. The hashes are BLAKE2b-256 of the exact
 bytes on either side of the body's first `\n`. **Every binary value on the wire is
 base64url without padding, as in the header**: the document id in this line, in URLs and
 in an invitation (22 characters), the hashes (43), the keys, the signature, and the
-invite seed. A `create` has no base version and signs `0`; `channel` signs `-` for the
-fields it lacks, which no version or base64url value can be. No field contains a space, so
-the line is unambiguous, simple to build on any server, and readable in a log.
+invite seed. `channel` signs `-` for the hashes it lacks, which no base64url value can be.
+No field contains a space, so the line is unambiguous, simple to build on any server, and
+readable in a log.
 
 The server computes the signer's fingerprint from the keys exactly as clients do, and
-accepts a `PUT` only if the *current* header names that fingerprint. There are no
+accepts a `POST` or `PUT` only if that fingerprint is the header's `writer`, and a `PUT`
+only if the *current* header names it too. There are no
 sessions, no challenge, no registration, no token. The first version of a document is the
 exception: anyone may create one, and the `POST` is accepted when the header it carries
 names its signer. Opening the live channel carries the same signature, so only key holders
@@ -614,12 +623,11 @@ appear as present.
 
 | Header | On | Holds |
 |---|---|---|
-| `Ward-Base-Version` | `PUT` requests | the version the push builds on |
 | `Ward-Signer` | `POST` and `PUT` requests | the signer's X25519 public key and Ed25519 verify key, joined by `.` |
 | `Ward-Signature` | `POST` and `PUT` requests | the Ed25519 signature of the signed line |
-| `Ward-Version` | answers to `head`, `GET`, `POST` and `PUT` | the current version, which after a stored write is that write's |
-| `Ward-Publisher` | answers to `head` and `GET` | the fingerprint that published the current version |
 | `Ward-Published` | answers to `head` and `GET` | when the current version was published, ISO 8601 in UTC |
+
+The current version's number and its publisher are the header's `number` and `writer`.
 
 **A write is stored or it is not.** The server answers a success status when it stored the
 write and an error status otherwise, and a read with the ward or `404` when it has none;
@@ -664,10 +672,10 @@ A WebSocket at `/documents/{id}/channel` that the client opens when it opens a w
 holds while the ward is open. The upgrade request carries `Ward-Signer` and
 `Ward-Signature`, signed over the `channel` line. The server sends one kind of message, a
 JSON text message `{"present":[...],"version":n}`: every fingerprint with a channel open to
-the ward, the receiver's own among them, in base64url, and the current version. It sends it
-to a channel when the channel opens, and to every channel when who is here changes and when
-it stores a version. Each message is the whole state, so a client takes the list as who is
-here and looks when the version is above its base.
+the ward, the receiver's own among them, in base64url, and the current version's number. It
+sends it to a channel when the channel opens, and to every channel when who is here changes
+and when it stores a version. Each message is the whole state, so a client takes the list as
+who is here and looks when the number is above the number of the version it holds.
 
 - **Opening it answers with the current version.** The ward's object adds the socket and
   sends it the message in one step, so a version that landed while the client was away is
@@ -702,7 +710,7 @@ device invitation*; whoever holds it can already read the ward.
 ## Every edit is a version
 
 A command applies to the open document, and the document is pushed as the next version
-right away. The server broadcasts the new version number to the other channels, and each
+right away. The server broadcasts the new version's number to the other channels, and each
 client fetches it and validates it completely before anything local changes.
 
 **An incoming version is applied at once**, the way a shared document in a browser shows
@@ -739,10 +747,10 @@ estimate because none would change it.
 
 1. The header's `format` is one this app reads; a newer one is the notice under *File
    format*.
-2. The version, read in plain text from the same response that carries the header, is not
-   below the base this device holds; a version taken becomes the base by that same number,
-   never by one from a separate call.
-   It comes before the next check so that a server restored to a version from before this
+2. The version does not rank below the version this device holds (see *Which version
+   wins*); the same version is nothing new. Its number and writer are read from the header
+   itself, never from a separate call.
+   This comes before the next check so that a server restored to a version from before this
    device joined reads as rolled back, not as the ward leaving this device.
 3. The header names this device. One that names no recipient is a deleted ward (see *Who
    has access, changed by two users*), and one that names others but not this device is the
@@ -756,7 +764,8 @@ estimate because none would change it.
 
 For a join, step 3 asks that the header name the invite. For a first download - a join,
 cleared app data, or an unreadable local file - steps 2 and 7 do not apply, since there is
-nothing to compare against; that is the accepted first download under *Threat model*.
+nothing to compare against; that is the accepted first download under *Threat model*. An
+update file is taken by these same checks (see *Update files*).
 
 Any other failure keeps the local file untouched: the local file is the one copy that has
 to survive a version nobody can read. The device keeps working on that copy and pushes
@@ -766,32 +775,90 @@ nothing while the head fails; see the accepted stall under *Threat model*.
 ward is open, and in none of the states that stop its
 pushes: a newer format on the server, a head that fails a check above, saves failing, a
 push that faults, or a ward no longer this device's. The actions whose change must reach the
-server - *Add a user*, *Add a device*, Leave and *Remove this device* - are offered only
-while the ward is syncing; otherwise each shows the notice of what stops it, which is
-*Connect to the internet* only when that is the cause.
+server - Leave and *Remove this device* - are offered only while the ward is syncing;
+otherwise each shows the notice of what stops it, which is *Connect to the internet* only
+when that is the cause.
+
+## Which version wins
+
+Every version's header carries its `number` and its `writer`, the fingerprint of the device
+or open invite that wrote it. The header is the payload's associated data, so neither can
+change without the payload failing to decrypt. **A version ranks above another when its
+number is higher, or when the numbers are equal and its writer's fingerprint is higher**,
+compared byte by byte. A device writes its next version at one above the number of the
+version it holds, and takes a version only when it ranks above that one. The local file's
+header names the version this device holds: the one it last took or wrote.
+
+Two devices that write from the same version write the same number. The server keeps a push
+only when its number is above the one it holds, so the first one kept wins there; the other
+device fetches it, takes it, replays its journal and pushes the next number. Update files can
+cross, so two versions of one number can both reach a device, and every device ranks them the
+same way. Say Alice and Bob both send version 5, and Bob's fingerprint is higher:
+
+- Alice opens Bob's 5. It ranks above her own 5, so she takes it; her changes are still in
+  her journal and replay on top, and she sends 6.
+- Bob opens Alice's 5. It ranks below his own, so it is set aside with *You already have a
+  newer update*. Her changes reach him in her 6.
+- Bob opens Alice's 6 and takes it. It was built on his 5, so its landed marks cover his
+  changes, nothing of his replays, and both hold the same ward.
+
+## Update files
+
+**An update file is a version on disk**, carried between devices by email, a message, or
+anything else that carries a file, so a ward is shared with no server and no account. It is
+the version a push would send - the header and a payload holding the ward, its access list
+and the landed marks, with no `device` part - after one line holding the writer's signature
+over its `update` line (see *What the server is*). It is named for the ward and the day, such
+as `Tanglewood Ward 2026-11-08.wardupdate`. The server and update files carry the same
+versions, ranked the same way, so a ward can use either or both.
+
+- **Sending.** *Send Update* writes the next version as an update file and opens the
+  platform's share sheet with it, or on a desktop the folder holding it with the file
+  selected. Each member sends to every other member; a device learns of others' changes only
+  from versions that reach it. The written version becomes the one this device holds. Its
+  journal entries stay until a version this device takes carries them, since a version
+  written at the same time elsewhere can outrank it.
+- **Receiving.** Opening an update file - double-clicking it, *Open in* on a phone, or
+  dropping it on the window - takes it as a fetch would. The ward must be one this device
+  holds, and the signature must verify against the verify key the access list of the
+  version this device holds gives the writer; a file from a device that list does not name
+  is refused with *This update is from a device this copy of the ward does not list yet.
+  Open the update from whoever added it first.* The checks under *Every edit is a version*
+  then apply, the journal is trimmed by this device's landed mark, and the rest replays on
+  top. A file that does not rank above the version held is set aside with *You already have
+  a newer update*. When the replay carried changes of this device's own, the app asks the
+  user to send an update, so those changes reach the others.
+- **Lost and out-of-order files cost nothing lasting.** Each version holds the whole ward,
+  and a sender's next version carries everything its journal still holds.
+- **Access travels the same way.** A removal rotates the key and seals the next version only
+  to the devices that remain, so a removed device opens no later update file, and once the
+  removal reaches a device, that device refuses the removed one's files. A version that does
+  not name this device is the ward no longer being this device's, as from the server.
 
 ## The journal
 
 Every command run in a ward this device holds, apart from Leave and *Remove this device*
 (see *Saving*), is appended to its journal, and leaves the
-journal when this device sees a version on the server that carries it. Content and access
-changes go into the same journal in the order they were made, because they are the same
-kind of thing: an edit to one encrypted document. **The journal holds this device's
-commands that it has not yet seen land on the server**, and the interface shows that
-changes are waiting while it holds any.
+journal when a push of this device's that the server keeps, or a version this device takes,
+carries it. Content and access changes go into the same journal in the order they were
+made, because they are the same kind of thing: an edit to one encrypted document. **The
+journal holds this device's commands that it has not yet seen land**, and the interface
+shows that changes are waiting while it holds any.
 
 **The journal lives inside the local file.** The local file's encrypted payload holds what
 a pushed version holds - the ward, its access list and the landed marks - plus, under
 `device`, the state that belongs to this device alone:
 
 - the journal and its sequence counter
-- the base version this device holds, which the push condition and the rolled-back check
-  use
 - the access list as of the last dismissed access notice, which the next notice is a diff
   against
 - dismissals of the single-holder and single-admin notices
 - whether the ward is no longer this device's, so a device reopened offline still knows
-- the seed of each open invite this device made (see *Invites*)
+- the seed of each open invite this device made, and of the invite it joined through until a
+  version it takes names this device (see *Invites*)
+
+The version this device holds is named by the local file's header (see *Which version
+wins*).
 
 A pushed version's payload holds the ward, its access list and the landed marks. In memory these are separate, so a push serialises the ward and
 the local save writes the ward with the device's own state beside it; nothing is trimmed. One `QSaveFile` write
@@ -1335,18 +1402,16 @@ seed for `crypto_box_seed_keypair`, and subkey 2 the seed for `crypto_sign_seed_
    asks who the invite is for, and makes nothing until that is answered; the answer is the
    invite's `label`. A *Make them an admin* checkbox, off by default, sets the invite's
    role, which the joiner takes. An invite keeps the role it was made with, even if its
-   maker is later demoted; an admin can withdraw any invite. *Add a device* and *Add a
-   user* are offered only while the ward is syncing (see *Every edit is a
-   version*), and the invitation is saved
-   only once that version is on the server, so every invitation a user can send is one that
-   works. Since
-   inviting and joining both need the server, a ward's users are added before an emergency
-   rather than during one.
+   maker is later demoted; an admin can withdraw any invite. While the ward is syncing (see
+   *Every edit is a version*), the invitation is saved only once that version is on the
+   server, so the join's push meets a header that names the invite. While it is not, the
+   invitation is saved at once and the app asks the inviter to send an update to the other
+   members, so their versions keep the invite open until the new member's join reaches them.
 
    **The invitation is a small file**, such as `Tanglewood Ward - for Bob.wardinvite`: one
-   line of JSON holding its own `format` integer, the document id and the seed, and nothing
-   else; an app that meets a higher `format` shows the newer-version notice, as for a ward
-   file (see *File format*). The app
+   line of JSON holding its own `format` integer, the document id and the seed, then the
+   version that opened the invite, in a ward file's framing; an app that meets a higher
+   `format` shows the newer-version notice, as for a ward file (see *File format*). The app
    saves it where the user chooses and opens that folder with the file selected, ready to
    attach to an email, drag onto a stick or send in a text, with a short message to go with
    it:
@@ -1360,23 +1425,30 @@ seed for `crypto_box_seed_keypair`, and subkey 2 the seed for `crypto_sign_seed_
    The device that made the invite keeps its seed in its device-local state, saved with the
    invite before the push, for as long as the access list it holds names that invite. So
    *Save invitation* on the open invite in *Who has access* writes the file again on that
-   device, and the invitation can be saved once the head names the invite (see *What the
-   server is*). The seed regenerates the invite's private
+   device, carrying the version it holds, which names the invite while it is open. The seed
+   regenerates the invite's private
    keys, and it sits in the same encrypted file as the data key those keys unseal, so keeping
    it exposes nothing that file does not already hold.
 2. **Joining** on a device, once the app has the invitation (see *Receiving an
-   invitation*), looks at the head first. If the header already names this device, there
-   is no join: the current version becomes the device's copy, and the ward opens with *This device already has access to Tanglewood Ward*; the invite stays
-   open.
-   Otherwise: derive the invite keypair from the seed, fetch the current version, unseal
-   the data key with the invite's private key, validate as any download is validated, ask
-   the user to confirm by the ward's name, then write the next version: the invite entry becomes a device
-   entry, under the inviter's user for a device invite, under a new user for a user
-   invite, named by the joiner, signed by the invite's signing key, whose verify key the
-   current header names. Once the join lands, the device saves the version it joined, as
-   after any push; a copy it still holds from before it lost access is replaced, and
-   nothing from that copy carries over. A join that loses to a newer version fetches it and
-   joins again on top of it.
+   invitation*), starts from the version the invitation carries, or from the head when the
+   device is connected and the head ranks above it. If that version already names this
+   device, there is no join: it becomes the device's copy, and the ward opens with *This
+   device already has access to Tanglewood Ward*; the invite stays open.
+   Otherwise: derive the invite keypair from the seed, unseal the data key with the invite's
+   private key, validate as any download is validated, ask the user to confirm by the
+   ward's name, then write the next version: the invite entry becomes a device entry, under
+   the inviter's user for a device invite, under a new user for a user invite, named by the
+   joiner. Its `writer` is the invite's fingerprint, and it is signed by the invite's
+   signing key, whose verify key the version it builds on names. The join goes out as any
+   version does: pushed while the ward is syncing, and otherwise the app asks the new member
+   to send an update to every member, since a device seals versions only to the devices the
+   version it holds names. Until a member takes the join, that member's versions stay sealed
+   to the open invite, and the new member reads them with the seed, which it keeps until a
+   version it takes names it. A copy the device still holds from before it lost access is
+   replaced, and nothing from that copy carries over. A join that loses to a newer version
+   takes it and joins again on top of it. Where that version names neither this device nor
+   the invite - the same invitation used by another device first, or withdrawn - the join is
+   refused with *This invite has been used or withdrawn*.
    From then on the device signs as itself. The ward opens.
 3. **Withdrawing** an unused invite is a write without its entry, by whoever made it or by
    an admin. Removing a user, and a user leaving, withdraws the invites they made.
@@ -1385,7 +1457,9 @@ A join and a withdrawal each drop the invite's key from the recipients, so each 
 the data key; for a join, the joining device generates the new key, as the member it now
 is. The seed lives on in the invitation wherever it was sent, and reads are open to anyone
 with the document id, so without rotation an invitation found later would read every
-version after it. With it, a used or withdrawn invitation opens nothing.
+version after it. With it, a used or withdrawn invitation opens the version it carries and
+nothing later. Whoever holds the invitation file can read the ward as of that version, as
+anyone holding the seed can.
 
 The invitation is the gate. Whoever opens it first gets in, visibly, and can be removed.
 
@@ -1575,20 +1649,22 @@ where each ward is a
 `.wardplanning` file in the documented format, and nothing that opens one: a user who
 copies that folder to a stick for backup or support carries only files that need a key
 the stick does not hold. It is there for support, and for getting the data out if the
-server goes away. Backup is the local file on every member's device and the server's copy. The app
-writes no other copies, apart from the developer-only export under *Debugging*, off by
-default: anything it exported would be sealed to the ward's devices, each of which already
-holds the ward.
+server goes away. Backup is the local file on every member's device and the server's copy.
+Besides update files and invitations, which carry a version to other devices, the app writes
+no other copies apart from the developer-only export under *Debugging*, off by default:
+anything it exported would be sealed to the ward's devices, each of which already holds the
+ward.
 
 ## Receiving an invitation
 
-**Opening an invitation joins.** The installer registers the `.wardinvite` type, so
+**Opening an invitation joins.** The installer registers the `.wardinvite` and `.wardupdate` types, so
 double-clicking an invitation opens Ward Planning on it. Dropping one onto the app's window
 does the same, and *Join a ward*, prominent on the first-run screen where a new user with no
-wards lands and in the ward list too, offers a file picker. The app reads the seed from the
-file, fetches the ward, unseals it with the invite's key, and asks *Join Tanglewood Ward?*
-with the ward's own name, read from the ward rather than from the file's name; confirming
-runs the join. Nothing is typed, pasted or copied.
+wards lands and in the ward list too, offers a file picker. The app reads the seed and the
+version from the file, unseals the ward with the invite's key, and asks *Join Tanglewood
+Ward?* with the ward's own name, read from the ward rather than from the file's name;
+confirming runs the join (see *Invites*), with no server needed. Nothing is typed, pasted or
+copied. An update file opens the same ways (see *Update files*).
 
 **One instance per user.** On every desktop platform the app holds a per-user `QLockFile` in
 app data while it runs, with `setStaleLockTime(0)` so that only a dead process, not age, makes the lock stale; a second
@@ -1624,13 +1700,15 @@ plaintext PDF written wherever the user chooses, which is worth saying in the sa
 
 ## If the server goes away
 
-The server could stop, whether abandoned, unaffordable, or deliberately retired. This
-design does not build a second sharing transport against that possibility. **Ward Planning
-is open source, so a maintainer can adapt it**, and a rescue path used once, in a scenario
-that may never arrive, should not shape the interface every user touches weekly.
+The server could stop, whether abandoned, unaffordable, or deliberately retired. **Wards
+keep sharing through update files** (see *Update files*), which need no server, no account,
+and nothing its maintainer runs: members send updates and invitations to each other, under
+the same rules for versions, access and joining. What members lose is speed, since changes
+move as fast as people send and open files; presence; and Leave and *Remove this device*,
+which need the server.
 
-What the design does keep are the things that make such an adaptation possible, each of
-which costs nothing to hold on to:
+The design also keeps what lets someone restore the server, each of which costs nothing to
+hold on to:
 
 1. **The document is self-sufficient.** Its access list and data key live in the
    file, so every member can open, edit and share it with no server state to restore. A
@@ -1642,7 +1720,7 @@ which costs nothing to hold on to:
 3. **Every member holds a complete, readable copy**, a `.wardplanning` file in app data that
    *Show in folder* reveals.
 
-**A successor restores the service rather than members detaching from it.** Because
+**A successor can restore the service with no step for members.** Because
 documents carry only their id and the app supplies the server address, continuity is an
 operator task that members never see: at the same domain, the successor deploys the
 open-source server from a current export of blobs and apps reconnect; at a new domain,
@@ -1651,8 +1729,8 @@ document follows it. Releases and the update check live on the server, so that r
 reaches members automatically only if it is published while the old address still
 answers; this is why the handover keeps the domain.
 
-Members keep editing their local copies throughout, and sharing resumes once the service
-returns.
+Members keep editing and sending updates throughout, and sharing through the server resumes
+once the service returns.
 
 ## Failure paths
 
@@ -1750,7 +1828,8 @@ Format and crypto, in `tests/services`:
   AEAD check, asserted as that failure; and a local file whose header id and file name are
   both changed to another ward's id fails the same way
 - the known-answer vectors for the fingerprint, the former-key hash, the invite keypairs
-  derived from a fixed seed, and the signed line for each of `create`, `push` and `channel`
+  derived from a fixed seed, and the signed line for each of `create`, `push`, `channel` and
+  `update`
 - a local file holding a value in every field of every part, written by the app when the
   test runs, is read back by the reader in `tests/spec`, written only from
   `docs/FORMAT.md`, which parses every field strictly and recovers each of those values, so
@@ -1766,7 +1845,7 @@ Format and crypto, in `tests/services`:
 - a version whose header has a fingerprint matching no device's or invite's key pair, one
   built from one device's X25519 key and another's verify key included, or whose access
   list has a device or invite with no header entry, is refused
-- a head whose version is below this copy's is refused and changes nothing, and one that
+- a head that ranks below this copy's version is refused and changes nothing, and one that
   is also from before this device joined, so lacks it, reports the server as rolled back,
   not this ward as no longer this device's
 - a removal rotates the key: the data key the removed user's devices held fails the AEAD
@@ -1965,15 +2044,33 @@ The journal and replay, in `tests/services`:
 - a removal made offline by an admin who is demoted before it replays is refused with the
   member's wording, and the user it named is still there
 
+Update files, in `tests/services`, with no server:
+
+- two devices that each send version 5 converge: the one with the lower fingerprint takes
+  the other's 5, replays its own changes and sends 6; the other sets the lower 5 aside and
+  takes 6, and both then hold equal wards, each change present
+- an update file that does not rank above the version held is set aside and changes
+  nothing; one whose signature does not verify, or whose writer the held access list does
+  not name, is refused
+- after a removal reaches a device, an update file written by the removed device is
+  refused, and the removed device cannot open the next version
+- a user invited and joined entirely through files: the invitation carries the version, the
+  join opens the ward, the join's update taken by another member lets that member's next
+  version be read by the new member; and a member's version written before taking the join
+  is read by the new member with the seed
+- the same invitation used on two devices: both join; the lower-ranked join, replayed onto
+  the winner, is refused with *This invite has been used or withdrawn*
+
 Against the fake server, in `tests/server`:
 
-- pushing from the current base version succeeds and advances it
-- pushing from a stale base version is refused, and the journal replays on the fetched
-  version and pushes again
-- a write whose signature is not from a device the current header names is refused
-- the server stores a write only when its base is current, its header is well formed and
-  names its document, and its signer is named as the design requires, and refuses it
-  otherwise, with the `Ward-` headers the header table lists on every answer
+- a push numbered one above the stored version is kept; one at or below the stored number,
+  including a second push of the same number from another device, is refused, and that
+  device's journal replays on the fetched version and pushes the next number
+- a write whose signature is not from a device the current header names, or whose signer is
+  not the header's `writer`, is refused
+- the server stores a write only when its number is above the stored one, its header is well
+  formed and names its document, and its signer is named as the design requires, and
+  refuses it otherwise, with the `Ward-` headers the header table lists on every answer
 - a refused push followed by a head without this device puts it in the no-longer-yours
   state; a refused push followed by an unchanged head leaves the journal as it was, tells
   the user once that changes could not be shared, and is retried; a refused join reports

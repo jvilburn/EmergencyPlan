@@ -1,6 +1,7 @@
 # The .wardplanning Format
 
-The specification of a Ward Planning ward file and of the device key file, format version 1.
+The specification of a Ward Planning ward file, update file, invitation file and device key
+file, format version 1.
 A reader built from this document alone reads every file the app writes. `tests/spec` is such
 a reader, built without Qt or any of the app's code, and the test suite checks it against a
 file holding a value in every field the app writes.
@@ -79,6 +80,8 @@ compact JSON, which escapes every newline inside it, so the first `\n` is the bo
 |---|---|---|
 | `format` | integer | 1 |
 | `document` | 16 bytes | the document id |
+| `number` | integer | the version's number, at least 1; a ward's first version is 1, and each later one is one above the version its writer held |
+| `writer` | 16 bytes | the fingerprint of the device or open invite that wrote the version |
 | `nonce` | 24 bytes | the payload's nonce, drawn from `randombytes_buf` on every write |
 | `recipients` | array of objects | one per device and one per open invite |
 
@@ -106,7 +109,7 @@ One object. Its parts:
 | `ward` | object | the ward's content (see *ward*) |
 | `access` | object | who may read the ward (see *access*) |
 | `landed` | object | each device's landed mark (see *landed*) |
-| `device` | object | this device's own state (see *device*): required in a local file, and refused in a version on the server |
+| `device` | object | this device's own state (see *device*): required in a local file, and refused in a version on the server, an update file or an invitation file |
 
 ### access
 
@@ -156,7 +159,6 @@ integers: the highest journal sequence number of that device the version include
 | Key | Type | Holds |
 |---|---|---|
 | `journal` | journal object | this device's commands not yet seen to land |
-| `baseVersion` | integer | the server version this device holds; omitted until it has one |
 | `dismissedAccess` | access object | the access list as of the last dismissed access notice; omitted until one is dismissed |
 | `singleHolderNoticeDismissed` | `true` | omitted when false |
 | `singleAdminNoticeDismissed` | `true` | omitted when false |
@@ -576,3 +578,37 @@ fails this is refused.
 A header with an empty `recipients` array and a fresh nonce, followed by its `\n` and nothing
 after it. A reader recognizes it by the empty `recipients`, before any payload rule applies. No
 local file takes this form.
+
+## Update files
+
+A `.wardupdate` file is one line holding a 64-byte Ed25519 signature, one `\n`, then a version
+in the framing above: its header, `\n`, and a payload holding `ward`, `access` and `landed`,
+and no `device`. The signature is over the UTF-8 line
+
+```
+wardplanning-v1 update <document> <header hash> <payload hash>
+```
+
+with single spaces, where `<document>` is the header's `document`, and the hashes are 32-byte
+unkeyed BLAKE2b of the header line's bytes, without its `\n`, and of the payload's bytes; all
+three are base64url. It verifies with the verify key of the device or open invite whose
+fingerprint is the header's `writer`, as the access list of the version the reader holds gives
+it. A reader refuses a file whose signature does not verify, or whose `writer` that access list
+does not name.
+
+## Invitation files
+
+A `.wardinvite` file is one line of compact JSON, one `\n`, then a version in the framing
+above, whose payload holds `ward`, `access` and `landed`, and no `device`, and whose header
+names the invite among its recipients.
+
+| Key | Type | Holds |
+|---|---|---|
+| `format` | integer | 1 |
+| `document` | 16 bytes | the document id |
+| `seed` | 32 bytes | the invite's seed |
+
+The invite's keys come from the seed through `crypto_kdf_derive_from_key` with the context
+`wpinvite` and 32-byte subkeys: subkey 1 is the seed for `crypto_box_seed_keypair`, and subkey 2
+the seed for `crypto_sign_seed_keypair`. The invite's fingerprint is computed from that pair of
+public keys as for a device.
