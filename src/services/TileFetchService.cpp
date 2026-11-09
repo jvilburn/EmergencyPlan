@@ -78,10 +78,17 @@ void TileFetchService::fetch(TileId id, const TileMetadata& currentMeta)
     {
         return;
     }
+    // A tile every provider just failed waits before it is asked for again, so a repaint
+    // while offline or refused asks nothing.
+    auto failed = m_failedAt.constFind(id);
+    if (failed != m_failedAt.constEnd() && failed->secsTo(QDateTime::currentDateTime()) < RetryAfterSeconds)
+    {
+        return;
+    }
     m_pendingTiles.insert(id);
 
     // Start with first provider
-    startFetch(id, 0, {});
+    startFetch(id, 0);
 }
 
 QString TileFetchService::providerAttribution(const QString& providerId) const
@@ -146,15 +153,15 @@ bool TileFetchService::needsFetch(TileId id, const TileMetadata& meta) const
 // Network handling
 // ============================================================================
 
-void TileFetchService::startFetch(TileId id, int providerIndex, const QString& lastError)
+void TileFetchService::startFetch(TileId id, int providerIndex)
 {
     TileLayer layer = id.layer();
 
     if (!m_providers.contains(layer) || providerIndex >= m_providers[layer].size())
     {
-        // No more providers to try
+        // Every provider failed
         m_pendingTiles.remove(id);
-        emit fetchFailed(id, lastError.isEmpty() ? "No providers for layer" : lastError);
+        m_failedAt.insert(id, QDateTime::currentDateTime());
         return;
     }
 
@@ -186,23 +193,9 @@ void TileFetchService::onRequestFinished(QNetworkReply* reply)
     }
 
     RequestContext ctx = m_inFlightRequests.take(reply);
-    QString error;
-
-    if (reply->error() != QNetworkReply::NoError)
+    QImage image;
+    if (reply->error() == QNetworkReply::NoError && image.loadFromData(reply->readAll()))
     {
-        error = reply->errorString();
-    }
-    else if (QByteArray data = reply->readAll(); data.isEmpty())
-    {
-        error = "Empty response";
-    }
-    else if (QImage image; !image.loadFromData(data))
-    {
-        error = "Invalid image data";
-    }
-    else
-    {
-        // Success!
         QString etag = QString::fromUtf8(reply->rawHeader("ETag"));
         QString lastModified = QString::fromUtf8(reply->rawHeader("Last-Modified"));
         handleSuccess(ctx, image, etag, lastModified);
@@ -210,7 +203,7 @@ void TileFetchService::onRequestFinished(QNetworkReply* reply)
     }
 
     // Try next provider
-    startFetch(ctx.id, ctx.providerIndex + 1, error);
+    startFetch(ctx.id, ctx.providerIndex + 1);
 }
 
 void TileFetchService::handleSuccess(const RequestContext& ctx, const QImage& image,
@@ -227,6 +220,7 @@ void TileFetchService::handleSuccess(const RequestContext& ctx, const QImage& im
 
     // Remove from pending before emitting (in case slot triggers new fetch)
     m_pendingTiles.remove(ctx.id);
+    m_failedAt.remove(ctx.id);
 
     emit tileFetched(ctx.id, image, meta);
 }

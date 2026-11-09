@@ -2,6 +2,8 @@
 
 #include "TileTypes.h"
 
+#include <QDateTime>
+#include <QHash>
 #include <QObject>
 #include <QImage>
 #include <QNetworkAccessManager>
@@ -32,7 +34,7 @@ struct TileProviderConfig
 /// Provider fallback:
 /// - Each layer has a list of providers in priority order
 /// - If primary provider fails, tries next provider
-/// - Emits fetchFailed only after all providers exhausted
+/// - A tile every provider failed is not asked for again for RetryAfterSeconds
 ///
 /// Request deduplication:
 /// - Tracks in-flight requests by layer/z/x/y
@@ -65,9 +67,6 @@ signals:
     /// TileService should save this to cache and emit tileReady.
     void tileFetched(TileId id, const QImage& image, const TileMetadata& metadata);
 
-    /// Emitted when all providers for a tile have failed.
-    void fetchFailed(TileId id, const QString& error);
-
 private slots:
     void onRequestFinished(QNetworkReply* reply);
 
@@ -80,7 +79,7 @@ private:
     };
 
     void initializeProviders();
-    void startFetch(TileId id, int providerIndex, const QString& lastError);
+    void startFetch(TileId id, int providerIndex);
     void handleSuccess(const RequestContext& ctx, const QImage& image,
                        const QString& etag, const QString& lastModified);
 
@@ -91,6 +90,10 @@ private:
 
     /// Tiles with pending fetch requests (for deduplication).
     QSet<TileId> m_pendingTiles;
+
+    /// When every provider last failed each tile; a success removes its entry.
+    QHash<TileId, QDateTime> m_failedAt;
+    static constexpr int RetryAfterSeconds = 60;
 
     /// In-flight network requests.
     QMap<QNetworkReply*, RequestContext> m_inFlightRequests;
