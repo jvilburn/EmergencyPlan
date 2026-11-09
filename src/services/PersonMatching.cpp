@@ -1,188 +1,165 @@
 #include "PersonMatching.h"
 
-namespace PersonMatching
+#include <QSet>
+
+namespace
 {
 
-int scorePersonMatch(const Person& source, const Person& target)
+/// A household's contact keys, each prefixed by its kind so a street never equals a phone.
+QSet<QString> keysOf(const Family& family)
 {
-    int score = 0;
-
-    QString sourceFirst = source.givenNames().split(' ').first().toLower();
-    QString targetFirst = target.givenNames().split(' ').first().toLower();
-
-    // First name matching - disqualify if no match at all
-    if (sourceFirst == targetFirst)
+    QSet<QString> keys;
+    if (!family.address().lines().isEmpty())
     {
-        score += 10;
-    }
-    else if (sourceFirst.startsWith(targetFirst) || targetFirst.startsWith(sourceFirst))
-    {
-        // Partial match (Mike/Michael, Bob/Robert won't match this way, but Tom/Thomas might)
-        score += 5;
-    }
-    else
-    {
-        // No first name match at all - disqualify
-        return 0;
-    }
-
-    // Gender mismatch - disqualify if both have gender and they differ
-    if (source.gender().has_value() && target.gender().has_value()
-        && source.gender().value() != target.gender().value())
-    {
-        return 0;
-    }
-
-    // Birth month+day matching (not year - year is often missing for adults)
-    if (source.birthday().hasDate() && target.birthday().hasDate()
-        && source.birthday().month() == target.birthday().month()
-        && source.birthday().day() == target.birthday().day())
-    {
-        score += 7;
-    }
-
-    // Both are parents
-    if (source.isParent() && target.isParent())
-    {
-        score += 2;
-    }
-
-    // Phone match
-    if (!source.phone().isEmpty() && source.phone().matches(target.phone()))
-    {
-        score += 5;
-    }
-
-    // Email match
-    if (!source.email().isEmpty() && !target.email().isEmpty()
-        && source.email().compare(target.email(), Qt::CaseInsensitive) == 0)
-    {
-        score += 5;
-    }
-
-    return score;
-}
-
-PersonMatchScore findBestPersonMatch(const Person& source, const Family& family)
-{
-    constexpr int minimumScore = 10;
-    PersonMatchScore best;
-
-    for (const Person& member : family.members())
-    {
-        int score = scorePersonMatch(source, member);
-        if (score >= minimumScore && score > best.score)
+        QString street = family.address().lines().first().simplified().toLower();
+        if (!street.isEmpty())
         {
-            best.personId = member.id();
-            best.score = score;
+            keys.insert("street:" + street);
         }
     }
-
-    return best;
+    for (const Person& member : family.members())
+    {
+        for (const Phone& phone : {member.phone(), member.altPhone()})
+        {
+            // The last ten digits, so "+13366080008" and "336-608-0008" agree.
+            QString digits = phone.digits().right(10);
+            if (digits.size() >= 7)
+            {
+                keys.insert("phone:" + digits);
+            }
+        }
+        QString email = member.email().trimmed().toLower();
+        if (!email.isEmpty())
+        {
+            keys.insert("email:" + email);
+        }
+    }
+    return keys;
 }
 
-FamilyMemberMatchResult findFamilyByMembers(
-    const Family& sourceFamily,
-    const QHash<FamilyId, Family>& targetFamilies)
+bool sameGivenNames(const Person& a, const Person& b)
 {
-    FamilyMemberMatchResult bestResult;
-    bestResult.totalSourceMembers = sourceFamily.members().size();
+    return a.givenNames().compare(b.givenNames(), Qt::CaseInsensitive) == 0;
+}
 
-    QString sourceSurname = sourceFamily.surname().toLower();
+bool sameFirstGivenName(const Person& a, const Person& b)
+{
+    return a.name().firstName().compare(b.name().firstName(), Qt::CaseInsensitive) == 0;
+}
 
-    // Filter by surname first
-    for (const Family& targetFamily : targetFamilies)
+/// The index in target of the member person is, among those not yet used that names accepts;
+/// none when there is none.
+std::optional<qsizetype> takeMatch(const Person& person, const QList<Person>& target, QSet<qsizetype>& used,
+                                   bool (*names)(const Person&, const Person&))
+{
+    std::optional<qsizetype> chosen;
+    for (qsizetype i = 0; i < target.size(); ++i)
     {
-        if (targetFamily.surname().toLower() != sourceSurname)
+        const Person& member = target[i];
+        if (used.contains(i) || !names(person, member))
         {
             continue;
         }
-
-        // Count matching members using scored matching
-        FamilyMemberMatchResult current;
-        current.familyId = targetFamily.id();
-        current.totalSourceMembers = sourceFamily.members().size();
-
-        for (const Person& sourceMember : sourceFamily.members())
+        if (person.gender().has_value() && member.gender().has_value() && person.gender() != member.gender())
         {
-            PersonMatchScore match = findBestPersonMatch(sourceMember, targetFamily);
-            if (match.score >= 10)  // Uses the minimum threshold
-            {
-                current.matchedMembers++;
-                current.personIdMapping.insert(sourceMember.id(), *match.personId);
-            }
+            continue;
         }
-
-        // Keep best match
-        if (current.matchedMembers > bestResult.matchedMembers)
+        bool sameBirthday = person.birthday().hasDate() && member.birthday().hasDate()
+            && person.birthday().month() == member.birthday().month()
+            && person.birthday().day() == member.birthday().day();
+        if (sameBirthday)
         {
-            bestResult = current;
+            chosen = i;
+            break;
+        }
+        if (!chosen.has_value())
+        {
+            chosen = i;
         }
     }
-
-    // Check majority rule: at least half must match
-    if (bestResult.matchedMembers > 0
-        && bestResult.matchedMembers >= (bestResult.totalSourceMembers + 1) / 2)
+    if (chosen.has_value())
     {
-        return bestResult;
+        used.insert(*chosen);
     }
-
-    // No majority match
-    bestResult.familyId = std::nullopt;
-    bestResult.personIdMapping.clear();
-    return bestResult;
+    return chosen;
 }
 
-FamilyReplacementResult findReplacedFamily(
-    const Family& sourceFamily,
-    const QHash<FamilyId, Family>& targetFamilies)
+}  // namespace
+
+namespace PersonMatching
 {
-    FamilyReplacementResult bestResult;
-    bestResult.totalSourceMembers = sourceFamily.members().size();
 
-    // For each source member, find which target family they might be in
-    QHash<FamilyId, int> familyMatchCounts;  // familyId -> count of matched members
-    QHash<FamilyId, QHash<PersonId, PersonId>> familyPersonMappings;  // familyId -> (source -> target)
-
-    for (const Person& sourceMember : sourceFamily.members())
+std::optional<FamilyId> findFamily(const Family& source, const QHash<FamilyId, Family>& families)
+{
+    QSet<QString> sourceKeys = keysOf(source);
+    QList<FamilyId> candidates;
+    for (const Family& family : families)
     {
-        // Search ALL families (not filtered by surname)
-        for (const Family& targetFamily : targetFamilies)
+        if (keysOf(family).intersects(sourceKeys))
         {
-            PersonMatchScore match = findBestPersonMatch(sourceMember, targetFamily);
-            // Higher threshold for cross-surname matching - require more than just first name
-            // First name alone (10) or first name + parent (12) isn't enough evidence
-            // Need first name + birthday/phone/email (15+) to claim same person
-            if (match.score >= 15)
+            candidates.append(family.id());
+        }
+    }
+    bool keyed = !candidates.isEmpty();
+    if (!keyed)
+    {
+        for (const Family& family : families)
+        {
+            if (family.surname().compare(source.surname(), Qt::CaseInsensitive) == 0)
             {
-                familyMatchCounts[targetFamily.id()]++;
-                familyPersonMappings[targetFamily.id()].insert(sourceMember.id(), *match.personId);
+                candidates.append(family.id());
             }
         }
     }
 
-    // Find family with most matches
-    for (auto it = familyMatchCounts.begin(); it != familyMatchCounts.end(); ++it)
+    std::optional<FamilyId> best;
+    qsizetype bestMatched = -1;
+    for (const FamilyId& id : candidates)
     {
-        if (it.value() > bestResult.matchedMembers)
+        qsizetype matched = matchMembers(source, families.value(id)).size();
+        if (!keyed && (matched == 0 || matched < (source.members().size() + 1) / 2))
         {
-            bestResult.replacedFamilyId = it.key();
-            bestResult.matchedMembers = it.value();
-            bestResult.personIdMapping = familyPersonMappings[it.key()];
+            continue;
+        }
+        if (matched > bestMatched || (matched == bestMatched && id < *best))
+        {
+            best = id;
+            bestMatched = matched;
         }
     }
+    return best;
+}
 
-    // Check majority rule (at least half)
-    if (bestResult.matchedMembers > 0
-        && bestResult.matchedMembers >= (bestResult.totalSourceMembers + 1) / 2)
+QHash<PersonId, PersonId> matchMembers(const Family& source, const Family& target)
+{
+    const QList<Person>& members = target.members();
+    QSet<qsizetype> used;
+    QHash<PersonId, PersonId> mapping;
+    for (const Person& person : source.members())
     {
-        return bestResult;
+        if (person.name().firstName().isEmpty())
+        {
+            continue;
+        }
+        std::optional<qsizetype> match = takeMatch(person, members, used, sameGivenNames);
+        if (match.has_value())
+        {
+            mapping.insert(person.id(), members[*match].id());
+        }
     }
-
-    // No majority match - truly new family
-    bestResult.replacedFamilyId = std::nullopt;
-    bestResult.personIdMapping.clear();
-    return bestResult;
+    for (const Person& person : source.members())
+    {
+        if (mapping.contains(person.id()) || person.name().firstName().isEmpty())
+        {
+            continue;
+        }
+        std::optional<qsizetype> match = takeMatch(person, members, used, sameFirstGivenName);
+        if (match.has_value())
+        {
+            mapping.insert(person.id(), members[*match].id());
+        }
+    }
+    return mapping;
 }
 
 }  // namespace PersonMatching

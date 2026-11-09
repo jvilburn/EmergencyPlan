@@ -32,84 +32,11 @@ namespace
     }
 
     // ========================================================================
-    // Matching
-    // ========================================================================
-
-    /// Find existing family by surname, display name, address, and phone.
-    /// Matches by surname first, then narrows by display name if multiple,
-    /// then by address, then by phone if still ambiguous.
-    std::optional<Family> findMatchingFamily(
-        const Family& pdfFamily,
-        const QHash<FamilyId, Family>& families)
-    {
-        // Try member-based matching first (by surname)
-        PersonMatching::FamilyMemberMatchResult match =
-            PersonMatching::findFamilyByMembers(pdfFamily, families);
-
-        if (match.familyId.has_value())
-        {
-            return families.value(*match.familyId);
-        }
-
-        // Fallback: try replacement detection (for surname changes)
-        PersonMatching::FamilyReplacementResult replacement =
-            PersonMatching::findReplacedFamily(pdfFamily, families);
-
-        if (replacement.replacedFamilyId.has_value())
-        {
-            return families.value(*replacement.replacedFamilyId);
-        }
-
-        return std::nullopt;
-    }
-
-    /// Find matching person in family by first name and isParent.
-    std::optional<Person> findMatchingPerson(
-        const Person& person,
-        const Family& family)
-    {
-        QString firstName = person.givenNames().split(' ').first();
-
-        // Collect all first name matches
-        QList<Person> candidates;
-        for (const Person& member : family.members())
-        {
-            QString existingFirstName = member.givenNames().split(' ').first();
-            if (existingFirstName.compare(firstName, Qt::CaseInsensitive) == 0)
-            {
-                candidates.append(member);
-            }
-        }
-
-        if (candidates.isEmpty())
-        {
-            return std::nullopt;
-        }
-
-        if (candidates.size() == 1)
-        {
-            return candidates.first();
-        }
-
-        // Multiple first name matches - try isParent disambiguation
-        for (const Person& candidate : candidates)
-        {
-            if (person.isParent() == candidate.isParent())
-            {
-                return candidate;
-            }
-        }
-
-        // Can't disambiguate further - return first match
-        return candidates.first();
-    }
-
-    // ========================================================================
     // Merging
     // ========================================================================
 
-    /// Merge PDF family members into existing family.
-    /// Builds personIdMapping. Returns updated family if any changes made.
+    /// Merge PDF family members into existing family, matched as PersonMatching::matchMembers
+    /// matches them. Builds personIdMapping. Returns updated family if any changes made.
     /// When isAuthoritative: can update names and add new members.
     /// When not authoritative: only fills empty fields.
     std::optional<Family> mergeFamilyMembers(
@@ -128,10 +55,19 @@ namespace
         }
 
         QList<Person> updatedMembers = targetFamily.members();
+        QHash<PersonId, PersonId> matches = PersonMatching::matchMembers(sourceFamily, targetFamily);
 
         for (const Person& sourceMember : sourceFamily.members())
         {
-            std::optional<Person> existingMember = findMatchingPerson(sourceMember, targetFamily);
+            std::optional<Person> existingMember;
+            auto match = matches.constFind(sourceMember.id());
+            for (const Person& member : targetFamily.members())
+            {
+                if (match != matches.constEnd() && member.id() == *match)
+                {
+                    existingMember = member;
+                }
+            }
 
             if (existingMember.has_value())
             {
@@ -203,8 +139,7 @@ namespace
     }
 
     /// Merge source families into target, remapping IDs in groups and districts.
-    /// - Matches families by surname, displayName, address, phone
-    /// - Matches persons by firstName, isParent
+    /// - Matches families and persons as PersonMatching does
     /// - isParent=true wins over isParent=false when merging
     /// - When isAuthoritative: unmatched families are added, names can be updated
     /// - When not authoritative: only fills empty fields, no new families or members added,
@@ -223,7 +158,12 @@ namespace
         // Merge each source family into target
         for (const Family& sourceFamily : sourceFamilies)
         {
-            std::optional<Family> match = findMatchingFamily(sourceFamily, targetFamilies);
+            std::optional<FamilyId> matchId = PersonMatching::findFamily(sourceFamily, targetFamilies);
+            std::optional<Family> match;
+            if (matchId.has_value())
+            {
+                match = targetFamilies.value(*matchId);
+            }
 
             if (match.has_value())
             {

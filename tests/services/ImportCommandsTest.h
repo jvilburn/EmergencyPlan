@@ -26,5 +26,8 @@ private slots:
     void undoOfADirectoryImportLeavesTheSeededCoordinatesAndTheWardRecord();
     void membersSharingAFirstGivenNameKeepTheirOwnIdsInEitherOrder();
     void directoryReadsEveryChildOfAFamilyWithMoreThanThree();
+    void ministerMatchesTheHouseholdHisPhoneNamesNotAnotherWithHisName();
+    void sistersSharingAFirstNameKeepTheirOwnRecords();
+    void householdsSharingAnAddressAndPhoneResolveToTheLowerId();
     void eachImportReplayedAfterTheOtherImportChangedTheDateItReadConflicts();
 };

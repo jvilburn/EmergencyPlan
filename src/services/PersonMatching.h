@@ -3,58 +3,27 @@
 #include "Family.h"
 
 #include <QHash>
-#include <QList>
-#include <QString>
 #include <optional>
 
+/// Matches a household from an import to a family the ward holds, and its members to that
+/// family's members. Contact details identify a household, since couples share a phone or an
+/// email; names pick the person within it.
 namespace PersonMatching
 {
-    /// Score for a person match
-    struct PersonMatchScore
-    {
-        std::optional<PersonId> personId;
-        int score = 0;
-    };
+    /// The family in families that the household source is.
+    ///
+    /// The candidates are the families that share a contact key with source: the street line
+    /// of the address, ignoring case and spacing, or a phone (its last ten digits) or an email
+    /// of any member. With no candidate, the candidates are the families with source's surname
+    /// whose members match at least half of source's. Among the candidates, the one matching
+    /// the most of source's members wins, then the lowest id, so every import picks the same
+    /// one. None when there is no candidate.
+    std::optional<FamilyId> findFamily(const Family& source, const QHash<FamilyId, Family>& families);
 
-    /// Result of family matching with member-based scoring
-    struct FamilyMemberMatchResult
-    {
-        std::optional<FamilyId> familyId;  // nullopt if no match
-        int matchedMembers = 0;     // How many members matched
-        int totalSourceMembers = 0; // How many members in source family
-        QHash<PersonId, PersonId> personIdMapping;  // source person ID -> target person ID
-    };
-
-    /// Result of searching for family members across all families
-    struct FamilyReplacementResult
-    {
-        std::optional<FamilyId> replacedFamilyId;  // nullopt if truly new
-        int matchedMembers = 0;     // How many source members found in that family
-        int totalSourceMembers = 0;
-        QHash<PersonId, PersonId> personIdMapping;  // source person ID -> existing person ID
-    };
-
-    /// Score how well two persons match.
-    /// Disqualifiers: no first name match, gender mismatch (if both have gender).
-    /// Scoring: firstName exact +10, firstName partial +5, birth month+day +7,
-    /// both isParent +2, phone match +5, email match +5.
-    int scorePersonMatch(const Person& source, const Person& target);
-
-    /// Find the best matching person in a family using scored matching.
-    /// Returns the person ID and score. Score of 0 means no match.
-    PersonMatchScore findBestPersonMatch(const Person& source, const Family& family);
-
-    /// Find a matching family using member-based matching.
-    /// Filters by surname first, then checks if majority of source members match.
-    /// Returns empty familyId if no match with majority.
-    FamilyMemberMatchResult findFamilyByMembers(
-        const Family& sourceFamily,
-        const QHash<FamilyId, Family>& targetFamilies);
-
-    /// Search all families for members of the source family (ignoring surname).
-    /// Used as fallback when surname-based matching fails.
-    /// Returns the family that contains at least half of source members, if any.
-    FamilyReplacementResult findReplacedFamily(
-        const Family& sourceFamily,
-        const QHash<FamilyId, Family>& targetFamilies);
+    /// Which member of target each of source's members is, for those matched. Each member of
+    /// target is matched at most once: first by the same given names, then by the same first
+    /// given name, ignoring case. Among several, one whose gender differs where both are known
+    /// is never taken, one with the same birthday day and month is preferred, and then the
+    /// first in target's order.
+    QHash<PersonId, PersonId> matchMembers(const Family& source, const Family& target);
 }

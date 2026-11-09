@@ -1,4 +1,5 @@
 #include "WardDirectoryImportService.h"
+#include "PersonMatching.h"
 
 #include <QFileInfo>
 
@@ -19,43 +20,6 @@ namespace
         return std::nullopt;
     }
 
-    QString firstGivenName(const Person& person)
-    {
-        return person.givenNames().split(' ').first();
-    }
-
-    bool sameGivenNames(const Person& a, const Person& b)
-    {
-        return a.givenNames().compare(b.givenNames(), Qt::CaseInsensitive) == 0;
-    }
-
-    bool sameFirstGivenName(const Person& a, const Person& b)
-    {
-        return firstGivenName(a).compare(firstGivenName(b), Qt::CaseInsensitive) == 0;
-    }
-
-    /// The first of unmatched that matches person, taken out of unmatched, or none when
-    /// person has no first given name or none matches.
-    std::optional<Person> takeMatch(
-        const Person& person,
-        QList<Person>& unmatched,
-        bool (*matches)(const Person&, const Person&))
-    {
-        if (firstGivenName(person).isEmpty())
-        {
-            return std::nullopt;
-        }
-
-        for (qsizetype i = 0; i < unmatched.size(); ++i)
-        {
-            if (matches(person, unmatched[i]))
-            {
-                return unmatched.takeAt(i);
-            }
-        }
-        return std::nullopt;
-    }
-
     /// parsedFamily with existingFamily's id and note. A matched member is the existing
     /// person with what the directory prints set over it: name, phone, email, callings and
     /// whether they are a parent.
@@ -63,27 +27,20 @@ namespace
         const Family& parsedFamily,
         const Family& existingFamily)
     {
-        const QList<Person>& parsedMembers = parsedFamily.members();
-        QList<Person> unmatched = existingFamily.members();
-
-        QList<std::optional<Person>> matches;
-        for (const Person& parsedPerson : parsedMembers)
-        {
-            matches.append(takeMatch(parsedPerson, unmatched, sameGivenNames));
-        }
-        for (qsizetype i = 0; i < parsedMembers.size(); ++i)
-        {
-            if (!matches[i].has_value())
-            {
-                matches[i] = takeMatch(parsedMembers[i], unmatched, sameFirstGivenName);
-            }
-        }
+        QHash<PersonId, PersonId> matches = PersonMatching::matchMembers(parsedFamily, existingFamily);
 
         QList<Person> updatedMembers;
-        for (qsizetype i = 0; i < parsedMembers.size(); ++i)
+        for (const Person& parsedPerson : parsedFamily.members())
         {
-            const Person& parsedPerson = parsedMembers[i];
-            const std::optional<Person>& existingPerson = matches[i];
+            std::optional<Person> existingPerson;
+            auto match = matches.constFind(parsedPerson.id());
+            for (const Person& member : existingFamily.members())
+            {
+                if (match != matches.constEnd() && member.id() == *match)
+                {
+                    existingPerson = member;
+                }
+            }
 
             if (existingPerson.has_value())
             {

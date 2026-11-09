@@ -37,11 +37,9 @@ namespace WardDirectoryImportService
     ///
     /// Each parsed family takes the id of the first existing family with the same surname
     /// and display name, ignoring case, that no other parsed family has taken; a family that
-    /// matches none keeps its new id. Within a matched family, each existing member is
-    /// matched at most once, in two passes: each parsed member takes the id of an existing
-    /// member with the same given names, ignoring case; then each parsed member still
-    /// unmatched takes the id of the first remaining existing member with the same first
-    /// given name. A member that matches none keeps its new id. A matched family keeps its
+    /// matches none keeps its new id. Within a matched family, each parsed member takes the
+    /// id of the existing member PersonMatching::matchMembers matches it to, and a member
+    /// that matches none keeps its new id. A matched family keeps its
     /// note, and a matched member keeps everything the directory does not print: only their
     /// name, phone, email, callings and whether they are a parent come from parsed.
     ///

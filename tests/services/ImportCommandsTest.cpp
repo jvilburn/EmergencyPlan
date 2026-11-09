@@ -93,6 +93,33 @@ MinisteringImportResult bobMinistersToTheJoneses(const Document& document)
     return result;
 }
 
+/// An adult with that id, name and phone, and nothing else.
+Person adult(const QString& id, const QString& surname, const QString& givenNames, const QString& phone)
+{
+    return Person::createWithId(PersonId::fromString(id), Name(surname, givenNames), std::nullopt, Birthday(),
+                                Phone(phone), Phone(), QString(), QStringList(), true, QString(), QString());
+}
+
+/// A ministering PDF dated 1 Sep 2026 listing ministers' households, ministered households
+/// and one group.
+MinisteringPdfParser::ParseResult ministeringListing(const QList<Family>& ministers, const QList<Family>& ministered,
+                                                     const MinisteringGroup& group)
+{
+    MinisteringPdfParser::ParseResult parsed;
+    parsed.success = true;
+    parsed.documentDate = QDate(2026, 9, 1);
+    for (const Family& family : ministers)
+    {
+        parsed.ministerFamilies.insert(family.id(), family);
+    }
+    for (const Family& family : ministered)
+    {
+        parsed.ministeredFamilies.insert(family.id(), family);
+    }
+    parsed.groups.insert(group.id(), group);
+    return parsed;
+}
+
 /// The ids of family's members, in its member order.
 QStringList memberIds(const Family& family)
 {
@@ -477,6 +504,86 @@ void ImportCommandsTest::directoryReadsEveryChildOfAFamilyWithMoreThanThree()
     QCOMPARE(names, QStringList({"John", "Mary", "Anna", "Ben", "Cara", "Dan", "Eve"}));
     QCOMPARE(phones, QStringList({"555-555-1001", "", "555-555-2001", "555-555-2002", "555-555-2003",
                                   "555-555-2004", "555-555-2005"}));
+}
+
+void ImportCommandsTest::ministerMatchesTheHouseholdHisPhoneNamesNotAnotherWithHisName()
+{
+    Person father = adult("person-john-father", "Smith", "John", "555-555-1001");
+    Person son = adult("person-john-son", "Smith", "John", "555-555-2002");
+    QHash<FamilyId, Family> families = {
+        {FamilyId::fromString("family-father"),
+         Family::createWithId(FamilyId::fromString("family-father"), TestWard::address("1 Oak St", "Provo, UT"),
+                              {father})},
+        {FamilyId::fromString("family-son"),
+         Family::createWithId(FamilyId::fromString("family-son"), TestWard::address("2 Elm St", "Provo, UT"),
+                              {son})},
+    };
+    Person minister = adult("pdf-john", "Smith", "John", "(555) 555-2002");
+    MinisteringPdfParser::ParseResult parsed = ministeringListing(
+        {Family::createWithId(FamilyId::fromString("pdf-minister"), TestWard::address("2 Elm St", "Provo, UT 84601"),
+                              {minister})},
+        {}, MinisteringGroup::createEQ({minister.id()}, {}));
+
+    MinisteringImportResult result = MinisteringImportService::merge(parsed, families, std::nullopt);
+
+    QVERIFY(result.families == families);
+    QCOMPARE(result.groups.begin()->ministerIds(), QSet<PersonId>({son.id()}));
+}
+
+void ImportCommandsTest::sistersSharingAFirstNameKeepTheirOwnRecords()
+{
+    Person maryJane = Person::createWithId(PersonId::fromString("person-mary-jane"), Name("Carter", "Mary Jane"),
+                                           std::nullopt, Birthday(), Phone(), Phone(), QString(), QStringList(),
+                                           false, QString(), QString());
+    Person maryBeth = Person::createWithId(PersonId::fromString("person-mary-beth"), Name("Carter", "Mary Beth"),
+                                           std::nullopt, Birthday(), Phone(), Phone(), QString(), QStringList(),
+                                           false, QString(), QString());
+    FamilyId carterId = FamilyId::fromString("family-carter");
+    Address birch = TestWard::address("3 Birch Ln", "Provo, UT");
+    QHash<FamilyId, Family> families = {{carterId, Family::createWithId(carterId, birch, {maryJane, maryBeth})}};
+    // The PDF lists Mary Beth first.
+    Person listedBeth = Person::createWithId(PersonId::fromString("pdf-mary-beth"), Name("Carter", "Mary Beth"),
+                                             Gender::Female, Birthday::create(2010, 6, 2), Phone(), Phone(),
+                                             QString(), QStringList(), false, QString(), QString());
+    Person listedJane = Person::createWithId(PersonId::fromString("pdf-mary-jane"), Name("Carter", "Mary Jane"),
+                                             Gender::Female, Birthday::create(2008, 5, 1), Phone(), Phone(),
+                                             QString(), QStringList(), false, QString(), QString());
+    Family listed = Family::createWithId(FamilyId::fromString("pdf-carter"), birch, {listedBeth, listedJane});
+    MinisteringPdfParser::ParseResult parsed =
+        ministeringListing({}, {listed}, MinisteringGroup::createEQ({}, {listed.id()}));
+
+    MinisteringImportResult result = MinisteringImportService::merge(parsed, families, std::nullopt);
+
+    QCOMPARE(result.families.size(), qsizetype(1));
+    Family carter = result.families.value(carterId);
+    QCOMPARE(memberIds(carter), QStringList({"person-mary-jane", "person-mary-beth"}));
+    QCOMPARE(carter.members()[0].givenNames(), QString("Mary Jane"));
+    QVERIFY(carter.members()[0].birthday() == Birthday::create(2008, 5, 1));
+    QCOMPARE(carter.members()[1].givenNames(), QString("Mary Beth"));
+    QVERIFY(carter.members()[1].birthday() == Birthday::create(2010, 6, 2));
+    QCOMPARE(result.groups.begin()->familyIds(), QSet<FamilyId>({carterId}));
+}
+
+void ImportCommandsTest::householdsSharingAnAddressAndPhoneResolveToTheLowerId()
+{
+    // Two households at one address with one phone, each holding a John Smith: nothing the
+    // PDF prints tells them apart, so every import picks the lower id.
+    Address shared = TestWard::address("4 Pine St", "Provo, UT");
+    Person first = adult("person-john-a", "Smith", "John", "555-555-4004");
+    Person second = adult("person-john-b", "Smith", "John", "555-555-4004");
+    QHash<FamilyId, Family> families = {
+        {FamilyId::fromString("family-b"), Family::createWithId(FamilyId::fromString("family-b"), shared, {second})},
+        {FamilyId::fromString("family-a"), Family::createWithId(FamilyId::fromString("family-a"), shared, {first})},
+    };
+    Person minister = adult("pdf-john", "Smith", "John", "555-555-4004");
+    MinisteringPdfParser::ParseResult parsed = ministeringListing(
+        {Family::createWithId(FamilyId::fromString("pdf-minister"), shared, {minister})}, {},
+        MinisteringGroup::createEQ({minister.id()}, {}));
+
+    MinisteringImportResult result = MinisteringImportService::merge(parsed, families, std::nullopt);
+
+    QVERIFY(result.families == families);
+    QCOMPARE(result.groups.begin()->ministerIds(), QSet<PersonId>({first.id()}));
 }
 
 void ImportCommandsTest::eachImportReplayedAfterTheOtherImportChangedTheDateItReadConflicts()
