@@ -522,6 +522,22 @@ void MainWindow::dragEnterEvent(QDragEnterEvent* event)
     }
 }
 
+void MainWindow::onHandedOver(const QString& path)
+{
+    if (isMinimized())
+    {
+        showNormal();
+    }
+    raise();
+    activateWindow();
+    if (!path.isEmpty())
+    {
+        // Opened from the event loop rather than inside the socket's signal, since opening
+        // it asks the user questions.
+        QMetaObject::invokeMethod(this, "openUpdateFile", Qt::QueuedConnection, Q_ARG(QString, path));
+    }
+}
+
 void MainWindow::dropEvent(QDropEvent* event)
 {
     // The update opens once the drop has finished, so the window it was dragged from is not

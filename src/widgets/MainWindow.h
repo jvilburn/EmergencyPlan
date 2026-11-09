@@ -45,6 +45,10 @@ public slots:
     /// update.
     void openUpdateFile(const QString& path);
 
+    /// Another launch handed over path, its update file, or nothing: brings the window
+    /// forward and opens the update.
+    void onHandedOver(const QString& path);
+
 protected:
     /// Closes only when mayLeaveWard agrees.
     void closeEvent(QCloseEvent* event) override;

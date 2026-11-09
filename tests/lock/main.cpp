@@ -5,7 +5,13 @@
 // WardPlanningLockTests hold <path>
 //
 // Takes the instance lock at path through InstanceLock and prints held or refused on a line.
-// Held, it keeps the lock until its standard input closes, then exits 0; refused, it exits 1.
+// Held, it listens for handovers, prints "received <message>" for the first one and exits 0;
+// refused, it exits 1.
+//
+// WardPlanningLockTests hand <path> <message>
+//
+// Hands message to the holder of the lock at path and prints handed or not handed; prints held
+// and exits 1 when it takes the lock itself.
 
 #include "InstanceLock.h"
 #include "LockTest.h"
@@ -15,22 +21,40 @@
 #include <QTest>
 
 #include <iostream>
-#include <limits>
 
 namespace
 {
 
-int hold(const QString& path)
+int hold(QCoreApplication& app, const QString& path)
 {
-    InstanceLock lock(path);
+    InstanceLock lock(path, nullptr);
     if (!lock.take())
     {
         std::cout << "refused" << std::endl;
         return 1;
     }
+    QObject::connect(&lock, &InstanceLock::handedOver, &app,
+                     [](const QString& message)
+                     {
+                         std::cout << "received " << message.toStdString() << std::endl;
+                         QCoreApplication::exit(0);
+                     });
+    lock.listen();
     std::cout << "held" << std::endl;
-    std::cin.ignore(std::numeric_limits<std::streamsize>::max());
-    return 0;
+    return app.exec();
+}
+
+int hand(const QString& path, const QString& message)
+{
+    InstanceLock lock(path, nullptr);
+    if (lock.take())
+    {
+        std::cout << "held" << std::endl;
+        return 1;
+    }
+    bool handed = lock.handOver(message);
+    std::cout << (handed ? "handed" : "not handed") << std::endl;
+    return handed ? 0 : 1;
 }
 
 }  // namespace
@@ -41,7 +65,11 @@ int main(int argc, char* argv[])
     QStringList arguments = app.arguments();
     if (arguments.size() == 3 && arguments[1] == "hold")
     {
-        return hold(arguments[2]);
+        return hold(app, arguments[2]);
+    }
+    if (arguments.size() == 4 && arguments[1] == "hand")
+    {
+        return hand(arguments[2], arguments[3]);
     }
 
     LockTest lockTest(nullptr);

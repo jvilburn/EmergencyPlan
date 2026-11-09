@@ -3,6 +3,7 @@
 #include <QCommandLineParser>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QIcon>
 #include <QMessageBox>
 #include "AppData.h"
@@ -29,12 +30,24 @@ int main(int argc, char *argv[])
     parser.process(app);
 
     // App data is named after the application, so it is found after the name is set. A launch
-    // that cannot take the instance lock exits, and the lock is taken before the key file is
-    // read, so two first starts never both make keys.
+    // that cannot take the instance lock hands its update file, or nothing, to the Ward
+    // Planning holding it and exits; the lock is taken before the key file is read, so two
+    // first starts never both make keys.
     AppData appData = AppData::standard();
-    InstanceLock lock(appData.lockFilePath());
+    InstanceLock lock(appData.lockFilePath(), nullptr);
+    QString update;
+    if (!parser.positionalArguments().isEmpty())
+    {
+        update = QFileInfo(parser.positionalArguments().first()).absoluteFilePath();
+    }
     if (!lock.take())
     {
+        if (!lock.handOver(update) && !update.isEmpty())
+        {
+            QMessageBox::warning(nullptr, QObject::tr("Ward Planning"),
+                                 QObject::tr("Ward Planning is already running but did not answer, so the update was "
+                                             "not opened. Open it there with File > Open Update."));
+        }
         return 0;
     }
 
@@ -84,9 +97,11 @@ int main(int argc, char *argv[])
         return 0;
     }
     window.show();
-    if (!parser.positionalArguments().isEmpty())
+    QObject::connect(&lock, &InstanceLock::handedOver, &window, &MainWindow::onHandedOver);
+    lock.listen();
+    if (!update.isEmpty())
     {
-        window.openUpdateFile(parser.positionalArguments().first());
+        window.openUpdateFile(update);
     }
 
     return app.exec();
