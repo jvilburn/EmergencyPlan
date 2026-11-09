@@ -586,6 +586,27 @@ void ImportCommandsTest::householdsSharingAnAddressAndPhoneResolveToTheLowerId()
     QCOMPARE(result.groups.begin()->ministerIds(), QSet<PersonId>({first.id()}));
 }
 
+void ImportCommandsTest::directoryFamilyWhoseParentsChangeKeepsItsIdAndNotes()
+{
+    // Bob was single; the directory now lists the family as "Smith, Bob & Alice".
+    Person bob = TestWard::bob();
+    bob.setNote("Drives the ward van");
+    Family single = Family::createWithId(TestWard::smithId(), TestWard::smith().address(), {bob});
+    single.setNote("Gate code is 1234");
+    Document document = TestWard::withFamily(TestWard::document(), single);
+
+    WardDirectoryImportResult result =
+        mergeDirectory(directoryListing({TestWard::smith(), TestWard::jones()}), document, octoberFifteenth());
+
+    QVERIFY(result.removedFamilyIds.isEmpty());
+    QVERIFY(result.families.contains(TestWard::smithId()));
+    Family smith = result.families.value(TestWard::smithId());
+    QCOMPARE(smith.displayName(), TestWard::smith().displayName());
+    QCOMPARE(smith.note(), QString("Gate code is 1234"));
+    QCOMPARE(memberIds(smith), QStringList({"person-bob", "pdf-person-alice"}));
+    QCOMPARE(smith.members().first().note(), QString("Drives the ward van"));
+}
+
 void ImportCommandsTest::eachImportReplayedAfterTheOtherImportChangedTheDateItReadConflicts()
 {
     // A directory import, replayed after someone imported a newer ministering PDF.

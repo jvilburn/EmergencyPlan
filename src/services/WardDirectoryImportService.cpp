@@ -2,24 +2,10 @@
 #include "PersonMatching.h"
 
 #include <QFileInfo>
+#include <algorithm>
 
 namespace
 {
-    std::optional<Family> findMatchingFamily(
-        const Family& pdfFamily,
-        const QHash<FamilyId, Family>& families)
-    {
-        for (const Family& family : families)
-        {
-            if (family.surname().compare(pdfFamily.surname(), Qt::CaseInsensitive) == 0
-                && family.displayName().compare(pdfFamily.displayName(), Qt::CaseInsensitive) == 0)
-            {
-                return family;
-            }
-        }
-        return std::nullopt;
-    }
-
     /// parsedFamily with existingFamily's id and note. A matched member is the existing
     /// person with what the directory prints set over it: name, phone, email, callings and
     /// whether they are a parent.
@@ -105,16 +91,19 @@ WardDirectoryImportResult WardDirectoryImportService::merge(
     // The existing families no parsed family has matched yet
     QHash<FamilyId, Family> unmatched = existingFamilies;
 
-    // Process each parsed family with ID preservation
-    for (const Family& parsedFamily : parsed.families)
+    // In order of display name, so each import of one directory matches the same way
+    QList<Family> parsedFamilies = parsed.families.values();
+    std::sort(parsedFamilies.begin(), parsedFamilies.end(),
+              [](const Family& a, const Family& b) { return a.displayName() < b.displayName(); });
+    for (const Family& parsedFamily : parsedFamilies)
     {
-        std::optional<Family> existingMatch = findMatchingFamily(parsedFamily, unmatched);
+        std::optional<FamilyId> existingMatch = PersonMatching::findFamily(parsedFamily, unmatched);
 
         if (existingMatch.has_value())
         {
-            Family merged = mergeWithExisting(parsedFamily, *existingMatch);
+            Family merged = mergeWithExisting(parsedFamily, unmatched.value(*existingMatch));
             result.families.insert(merged.id(), merged);
-            unmatched.remove(existingMatch->id());
+            unmatched.remove(*existingMatch);
         }
         else
         {

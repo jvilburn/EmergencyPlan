@@ -35,11 +35,11 @@ namespace WardDirectoryImportService
 
     /// The import of parsed, from a PDF dated pdfDate, onto existingFamilies.
     ///
-    /// Each parsed family takes the id of the first existing family with the same surname
-    /// and display name, ignoring case, that no other parsed family has taken; a family that
-    /// matches none keeps its new id. Within a matched family, each parsed member takes the
-    /// id of the existing member PersonMatching::matchMembers matches it to, and a member
-    /// that matches none keeps its new id. A matched family keeps its
+    /// In order of display name, each parsed family takes the id of the existing family
+    /// PersonMatching::findFamily finds among those no other parsed family has taken; a
+    /// family that matches none keeps its new id. Within a matched family, each parsed
+    /// member takes the id of the existing member PersonMatching::matchMembers matches it to,
+    /// and a member that matches none keeps its new id. A matched family keeps its
     /// note, and a matched member keeps everything the directory does not print: only their
     /// name, phone, email, callings and whether they are a parent come from parsed.
     ///

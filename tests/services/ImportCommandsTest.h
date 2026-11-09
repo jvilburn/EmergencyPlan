@@ -29,5 +29,6 @@ private slots:
     void ministerMatchesTheHouseholdHisPhoneNamesNotAnotherWithHisName();
     void sistersSharingAFirstNameKeepTheirOwnRecords();
     void householdsSharingAnAddressAndPhoneResolveToTheLowerId();
+    void directoryFamilyWhoseParentsChangeKeepsItsIdAndNotes();
     void eachImportReplayedAfterTheOtherImportChangedTheDateItReadConflicts();
 };
