@@ -38,10 +38,6 @@ namespace
     const QRegularExpression DATE_PATTERN(
         R"(^(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})$)");
 
-    // Matches birthday like "7 Oct" or "23 May (16)"
-    const QRegularExpression BIRTHDAY_PATTERN(
-        R"(^(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(?:\s+\((\d+)\))?$)");
-
     // Month name to number mapping
     const QHash<QString, int> MONTH_MAP = {
         {"Jan", 1}, {"Feb", 2}, {"Mar", 3}, {"Apr", 4},
@@ -59,44 +55,6 @@ namespace
         std::optional<double> birthdayX;    // Date pattern like "7 Oct"
         bool isRSFormat = false;            // True if family header is full name (RS), false if surname only (EQ)
     };
-
-    // ============================================================================
-    // Birthday Parsing Helper (local to this parser)
-    // ============================================================================
-
-    /// Parse birthday text like "7 Oct" or "23 May (16)" into Birthday object.
-    /// Uses documentDate to calculate birth year from age if present.
-    Birthday parseBirthday(const QString& text, const QDate& documentDate)
-    {
-        QRegularExpressionMatch match = BIRTHDAY_PATTERN.match(text.trimmed());
-        if (!match.hasMatch())
-        {
-            return Birthday();
-        }
-
-        int day = match.captured(1).toInt();
-        int month = MONTH_MAP.value(match.captured(2), 0);
-        if (month == 0)
-        {
-            return Birthday();
-        }
-
-        std::optional<int> year;
-        if (match.capturedLength(3) > 0)
-        {
-            int age = match.captured(3).toInt();
-            // Calculate birth year from age relative to document date
-            int birthYear = documentDate.year() - age;
-            // Adjust if birthday hasn't occurred yet this year
-            if (QDate(birthYear, month, day) > documentDate)
-            {
-                birthYear--;
-            }
-            year = birthYear;
-        }
-
-        return Birthday::create(year, month, day);
-    }
 
     // ============================================================================
     // Content Heuristics
@@ -529,7 +487,7 @@ namespace
             Name name(nameText);
 
             std::optional<Gender> gender = Gender::fromString(genderText);
-            Birthday birthday = parseBirthday(birthdayText, documentDate);
+            Birthday birthday = Birthday::fromPdfText(birthdayText, documentDate);
 
             Person member = Person::create(
                 name,

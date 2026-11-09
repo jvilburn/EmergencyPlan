@@ -49,3 +49,34 @@ void BirthdayTest::displayShowsWhicheverPartsAreSet()
 
     QCOMPARE(Birthday::create(part(year), part(month), part(day)).display(), expected);
 }
+
+void BirthdayTest::pdfAgeGivesTheYearAsOfThePdfDate_data()
+{
+    QTest::addColumn<QString>("text");
+    QTest::addColumn<QDate>("documentDate");
+    QTest::addColumn<int>("year");
+    QTest::addColumn<int>("month");
+    QTest::addColumn<int>("day");
+
+    QTest::newRow("birthday still to come") << QString("7 Oct (16)") << QDate(2025, 9, 21) << 2008 << 10 << 7;
+    QTest::newRow("birthday passed") << QString("7 Oct (16)") << QDate(2025, 11, 21) << 2009 << 10 << 7;
+    QTest::newRow("birthday that day") << QString("21 Sep (16)") << QDate(2025, 9, 21) << 2009 << 9 << 21;
+    QTest::newRow("later in the month") << QString("22 Sep (16)") << QDate(2025, 9, 21) << 2008 << 9 << 22;
+    QTest::newRow("leap day") << QString("29 Feb (4)") << QDate(2025, 1, 10) << 2020 << 2 << 29;
+    QTest::newRow("no age") << QString("7 Oct") << QDate(2025, 9, 21) << 0 << 10 << 7;
+    QTest::newRow("not a birthday") << QString("Male") << QDate(2025, 9, 21) << 0 << 0 << 0;
+}
+
+void BirthdayTest::pdfAgeGivesTheYearAsOfThePdfDate()
+{
+    QFETCH(QString, text);
+    QFETCH(QDate, documentDate);
+    QFETCH(int, year);
+    QFETCH(int, month);
+    QFETCH(int, day);
+
+    Birthday birthday = Birthday::fromPdfText(text, documentDate);
+
+    QCOMPARE(birthday.display(), Birthday::create(part(year), part(month), part(day)).display());
+    QVERIFY(birthday == Birthday::create(part(year), part(month), part(day)));
+}

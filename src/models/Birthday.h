@@ -2,6 +2,7 @@
 
 #include "JsonReader.h"
 
+#include <QDate>
 #include <QString>
 #include <QJsonObject>
 #include <optional>
@@ -54,6 +55,10 @@ public:
 
     /// Returns true if text matches birthday pattern like "7 Oct" or "23 May (16)".
     static bool isBirthday(const QString& text);
+
+    /// The birthday text like "7 Oct" or "23 May (16)" names, with the age taken as of
+    /// documentDate to give the year; an empty birthday when text is not one.
+    static Birthday fromPdfText(const QString& text, const QDate& documentDate);
 
 private:
     /// Calculate age from current date. Returns nullopt if year unknown.

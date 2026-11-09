@@ -4,12 +4,16 @@
 #include <QLocale>
 #include <QObject>
 #include <QRegularExpression>
+#include <QStringList>
 
 namespace
 {
-    // Matches "7 Oct", "23 May", "7 Oct (16)", "23 May (8)"
+    // Matches "7 Oct", "23 May", "7 Oct (16)", "23 May (8)": the day, the month and the age
     const QRegularExpression BIRTHDAY_PATTERN(
-        R"(^\d{1,2}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(\s+\(\d+\))?$)");
+        R"(^(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(?:\s+\((\d+)\))?$)");
+
+    const QStringList MONTHS = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 
     /// The part under key, or none when its writer left it out.
     std::optional<int> readPart(JsonReader& json, const QString& key)
@@ -181,4 +185,28 @@ bool Birthday::operator==(const Birthday& other) const
 bool Birthday::isBirthday(const QString& text)
 {
     return BIRTHDAY_PATTERN.match(text.trimmed()).hasMatch();
+}
+
+Birthday Birthday::fromPdfText(const QString& text, const QDate& documentDate)
+{
+    QRegularExpressionMatch match = BIRTHDAY_PATTERN.match(text.trimmed());
+    if (!match.hasMatch())
+    {
+        return Birthday();
+    }
+    int day = match.captured(1).toInt();
+    int month = MONTHS.indexOf(match.captured(2)) + 1;
+    if (match.capturedLength(3) == 0)
+    {
+        return create(std::nullopt, month, day);
+    }
+
+    // The age is as of documentDate, so a birthday still to come that year is one year
+    // further back.
+    int year = documentDate.year() - match.captured(3).toInt();
+    if (month > documentDate.month() || (month == documentDate.month() && day > documentDate.day()))
+    {
+        --year;
+    }
+    return create(year, month, day);
 }

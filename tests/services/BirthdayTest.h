@@ -12,4 +12,6 @@ public:
 private slots:
     void displayShowsWhicheverPartsAreSet_data();
     void displayShowsWhicheverPartsAreSet();
+    void pdfAgeGivesTheYearAsOfThePdfDate_data();
+    void pdfAgeGivesTheYearAsOfThePdfDate();
 };
