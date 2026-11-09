@@ -5,7 +5,7 @@
 /// Imports work out every change at construction and replay like any command: they
 /// conflict with an edit to something they change and with a change to the other import's
 /// PDF date they read, keep what the app holds that no PDF prints, and an older ministering
-/// PDF adds no one it cannot match.
+/// PDF adds no one it cannot match. The directory parser reads every member a family lists.
 class ImportCommandsTest : public QObject
 {
     Q_OBJECT
@@ -25,5 +25,6 @@ private slots:
     void memberThePdfAddsLandsAtItsPdfIndex();
     void undoOfADirectoryImportLeavesTheSeededCoordinatesAndTheWardRecord();
     void membersSharingAFirstGivenNameKeepTheirOwnIdsInEitherOrder();
+    void directoryReadsEveryChildOfAFamilyWithMoreThanThree();
     void eachImportReplayedAfterTheOtherImportChangedTheDateItReadConflicts();
 };

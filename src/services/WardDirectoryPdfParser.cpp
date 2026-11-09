@@ -234,7 +234,7 @@ namespace
         return std::nullopt;
     }
 
-    /// Parse a person from a column's fields.
+    /// Parse a person from their fields: their name, then their details.
     /// Returns nullopt if no valid person name is found.
     std::optional<Person> parsePersonFromFields(
         const QList<PdfTextField>& fields,
@@ -361,21 +361,29 @@ namespace
                 break;
             }
         }
-        // Gather Child columns
-        QList<PdfTextField> childColumns[3];  // 0=col1, 1=col2, 2=col3
+        // Gather children in reading order: each name starts a child in its column, and the
+        // detail fields below it in that column are that child's. Rows of three repeat for as
+        // many children as the family has.
+        QList<QList<PdfTextField>> childFields;
+        std::optional<qsizetype> columnChild[3];  // the child each column's details belong to
         while (fieldIter != contentFields.constEnd())
         {
             const PdfTextField& field = *fieldIter;
             std::optional<int> childColumnIndex = getChildColumnIndex(field.left());
-            if (childColumnIndex.has_value())
-            {
-                childColumns[childColumnIndex.value()].append(field);
-                ++fieldIter;
-            }
-            else
+            if (!childColumnIndex.has_value())
             {
                 break;
             }
+            if (isPersonName(field))
+            {
+                childFields.append({field});
+                columnChild[*childColumnIndex] = childFields.size() - 1;
+            }
+            else if (columnChild[*childColumnIndex].has_value())
+            {
+                childFields[*columnChild[*childColumnIndex]].append(field);
+            }
+            ++fieldIter;
         }
 
         // ====================================================================
@@ -431,10 +439,9 @@ namespace
             members.append(*person);
         }
 
-        // Children from all three columns
-        for (int col = 0; col < 3; ++col)
+        for (const QList<PdfTextField>& fields : childFields)
         {
-            if (auto person = parsePersonFromFields(childColumns[col], surname, false))
+            if (auto person = parsePersonFromFields(fields, surname, false))
             {
                 members.append(*person);
             }
@@ -471,17 +478,30 @@ WardDirectoryPdfParser::ParseResult WardDirectoryPdfParser::parse(const QString&
         return result;
     }
 
+    QList<QList<PdfTextField>> pages;
+    for (int pageNum = 0; pageNum < numPages; ++pageNum)
+    {
+        pages.append(extractor.textFields(pageNum));
+    }
+    return parseFields(pages);
+}
+
+WardDirectoryPdfParser::ParseResult WardDirectoryPdfParser::parseFields(const QList<QList<PdfTextField>>& pages)
+{
+    ParseResult result;
+    result.success = false;
+
     // ========================================================================
-    // Phase 1: Load all pages, extract metadata, collect content fields
+    // Phase 1: Extract metadata, collect content fields
     // ========================================================================
 
     // Collect all family blocks: (familyName, fields)
     QList<QList<PdfTextField>> familyBlocks;
     QList<PdfTextField> currentFields;
 
-    for (int pageNum = 0; pageNum < numPages; ++pageNum)
+    for (int pageNum = 0; pageNum < pages.size(); ++pageNum)
     {
-        QList<PdfTextField> pageFields = extractor.textFields(pageNum);
+        const QList<PdfTextField>& pageFields = pages[pageNum];
         if (pageFields.isEmpty())
         {
             continue;

@@ -420,6 +420,43 @@ void ImportCommandsTest::membersSharingAFirstGivenNameKeepTheirOwnIdsInEitherOrd
     }
 }
 
+void ImportCommandsTest::directoryReadsEveryChildOfAFamilyWithMoreThanThree()
+{
+    // A family as the directory prints it: parents in two columns, then children three to a
+    // row, each name over its phone.
+    auto name = [](const QString& text, double left, double y)
+    { return PdfTextField(text, left, left + 40, y, 9.0f, false); };
+    auto phone = [](const QString& text, double left, double y)
+    { return PdfTextField(text, left, left + 40, y, 7.0f, false); };
+    QList<PdfTextField> page = {
+        PdfTextField("Tanglewood Ward - 123456", 200, 400, 20, 13.0f, true),
+        PdfTextField("Carter, John & Mary", 32, 150, 60, 11.0f, true),
+        PdfTextField("3 Birch Ln", 310, 400, 60, 8.0f, false),
+        PdfTextField("Provo, UT", 310, 400, 70, 8.0f, false),
+        name("John", 50, 90), name("Mary", 319, 90),
+        phone("555-555-1001", 50, 100),
+        name("Anna", 50, 130), name("Ben", 229, 130), name("Cara", 408, 130),
+        phone("555-555-2001", 50, 140), phone("555-555-2002", 229, 140), phone("555-555-2003", 408, 140),
+        name("Dan", 50, 170), name("Eve", 229, 170),
+        phone("555-555-2004", 50, 180), phone("555-555-2005", 229, 180),
+    };
+
+    WardDirectoryPdfParser::ParseResult parsed = WardDirectoryPdfParser::parseFields({page});
+
+    QVERIFY(parsed.success);
+    QCOMPARE(parsed.families.size(), 1);
+    QStringList names;
+    QStringList phones;
+    for (const Person& member : parsed.families.begin()->members())
+    {
+        names.append(member.givenNames());
+        phones.append(QString(member.phone()));
+    }
+    QCOMPARE(names, QStringList({"John", "Mary", "Anna", "Ben", "Cara", "Dan", "Eve"}));
+    QCOMPARE(phones, QStringList({"555-555-1001", "", "555-555-2001", "555-555-2002", "555-555-2003",
+                                  "555-555-2004", "555-555-2005"}));
+}
+
 void ImportCommandsTest::eachImportReplayedAfterTheOtherImportChangedTheDateItReadConflicts()
 {
     // A directory import, replayed after someone imported a newer ministering PDF.

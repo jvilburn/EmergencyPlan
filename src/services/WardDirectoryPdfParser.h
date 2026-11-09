@@ -6,6 +6,7 @@
 
 #include "Coordinates.h"
 #include "Family.h"
+#include "PdfExtractor.h"
 #include "Person.h"
 
 namespace WardDirectoryPdfParser
@@ -32,4 +33,8 @@ namespace WardDirectoryPdfParser
     /// Parse a ward directory PDF file.
     /// @param pdfPath Path to the PDF file
     ParseResult parse(const QString& pdfPath);
+
+    /// Parses a ward directory from each page's text fields, in reading order, as
+    /// PdfExtractor::textFields gives them.
+    ParseResult parseFields(const QList<QList<PdfTextField>>& pages);
 }
