@@ -4,6 +4,7 @@
 
 #include <QPainter>
 #include <QApplication>
+#include <QIcon>
 #include <QLinearGradient>
 
 SculptedItemDelegate::SculptedItemDelegate(BaseTreeModel* model, QWidget* parent)
@@ -103,7 +104,25 @@ void SculptedItemDelegate::paintSculpted(QPainter* painter, const QStyleOptionVi
         textRect.setLeft(textRect.left() + textRect.height() + 2);
     }
 
-    // Draw text
+    // The model's icon, such as a family's emergency status, before the text
+    QIcon icon = qvariant_cast<QIcon>(index.data(Qt::DecorationRole));
+    if (!icon.isNull())
+    {
+        QRect iconRect = QStyle::alignedRect(Qt::LeftToRight, Qt::AlignLeft | Qt::AlignVCenter, QSize(16, 16),
+                                             textRect);
+        icon.paint(painter, iconRect);
+        textRect.setLeft(iconRect.right() + 5);
+    }
+
+    // The model's font and color; a selected or hovered row keeps its white text
+    QVariant font = index.data(Qt::FontRole);
+    painter->setFont(font.isValid() ? qvariant_cast<QFont>(font).resolve(option.font) : option.font);
+    QVariant foreground = index.data(Qt::ForegroundRole);
+    if (!selected && !hovered && foreground.isValid())
+    {
+        textColor = qvariant_cast<QColor>(foreground);
+    }
+
     QString text = index.data(Qt::DisplayRole).toString();
     painter->setPen(textColor);
     painter->drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, text);
