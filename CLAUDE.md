@@ -57,6 +57,10 @@ Using `QHash<QString, Model>` instead of `QList<Model>` because:
 - O(1) lookup by ID
 - Display order is computed at render time (sorted by name, etc.)
 
+## Project Memory
+
+@docs/memory/mobile_versions_planned.md
+
 ## Architecture References
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md) - Application architecture
 
