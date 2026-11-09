@@ -32,9 +32,6 @@ public:
     /// @param stakeUnitNumber The stake unit number to look up (e.g., "654321")
     void lookupStake(const QString& stakeUnitNumber) override;
 
-    /// Cancel any pending lookup request.
-    void cancel();
-
 private slots:
     void onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
 
@@ -47,6 +44,9 @@ private:
 
     static QString findEdgePath();
     void startLookup(const QString& unitNumber, LookupType type);
+
+    /// Stops the lookup under way, if any, which then reports nothing.
+    void cancel();
     void parseWardResponse(const QString& wardUnitNumber, const QByteArray& data);
     void parseStakeResponse(const QString& stakeUnitNumber, const QByteArray& data);
 

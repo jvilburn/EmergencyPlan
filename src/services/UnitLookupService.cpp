@@ -2,6 +2,7 @@
 
 #include <QDir>
 #include <QRegularExpression>
+#include <utility>
 
 // Church meetinghouse locator base URL
 static const QString BASE_URL = "https://maps.churchofjesuschrist.org";
@@ -97,12 +98,15 @@ void UnitLookupService::startLookup(const QString& unitNumber, LookupType type)
 
 void UnitLookupService::cancel()
 {
-    if (m_pendingProcess)
+    // Disconnected before the wait, which can deliver finished: a cancelled lookup reports
+    // nothing.
+    QProcess* process = std::exchange(m_pendingProcess, nullptr);
+    if (process)
     {
-        m_pendingProcess->kill();
-        m_pendingProcess->waitForFinished(3000);
-        m_pendingProcess->deleteLater();
-        m_pendingProcess = nullptr;
+        process->disconnect(this);
+        process->kill();
+        process->waitForFinished(3000);
+        process->deleteLater();
     }
     m_currentUnitNumber.clear();
 }
