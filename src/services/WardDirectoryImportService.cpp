@@ -56,9 +56,9 @@ namespace
         return std::nullopt;
     }
 
-    /// parsedFamily with existingFamily's id, each matched member's id, and what the app
-    /// keeps that the directory does not print: the family's note, and each matched member's
-    /// note and special-need note.
+    /// parsedFamily with existingFamily's id and note. A matched member is the existing
+    /// person with what the directory prints set over it: name, phone, email, callings and
+    /// whether they are a parent.
     Family mergeWithExisting(
         const Family& parsedFamily,
         const Family& existingFamily)
@@ -87,20 +87,12 @@ namespace
 
             if (existingPerson.has_value())
             {
-                Person updated = Person::createWithId(
-                    existingPerson->id(),
-                    parsedPerson.name(),
-                    parsedPerson.gender(),
-                    parsedPerson.birthday(),
-                    parsedPerson.phone(),
-                    parsedPerson.altPhone(),
-                    parsedPerson.email(),
-                    parsedPerson.callings(),
-                    parsedPerson.isParent(),
-                    parsedPerson.wardUnitNumber(),
-                    parsedPerson.stakeUnitNumber());
-                updated.setSpecialNeedNote(existingPerson->specialNeedNote());
-                updated.setNote(existingPerson->note());
+                Person updated = *existingPerson;
+                updated.setName(parsedPerson.name());
+                updated.setPhone(parsedPerson.phone());
+                updated.setEmail(parsedPerson.email());
+                updated.setCallings(parsedPerson.callings());
+                updated.setIsParent(parsedPerson.isParent());
                 updatedMembers.append(updated);
             }
             else

@@ -33,6 +33,25 @@ Family printed(const Family& family)
     return Family::createWithId(FamilyId::fromString("pdf-" + family.id().toString()), family.address(), members);
 }
 
+/// family as the directory prints it: printed, with no gender, birthday, alt phone or unit
+/// numbers, which the directory does not print.
+Family listedInDirectory(const Family& family)
+{
+    Family listed = printed(family);
+    QList<Person> members;
+    for (Person member : listed.members())
+    {
+        member.setGender(std::nullopt);
+        member.setBirthday(Birthday());
+        member.setAltPhone(Phone());
+        member.setWardUnitNumber(QString());
+        member.setStakeUnitNumber(QString());
+        members.append(member);
+    }
+    listed.setMembers(members);
+    return listed;
+}
+
 /// The Tanglewood ward directory, unit 123456, listing families, as the parser gives it.
 WardDirectoryPdfParser::ParseResult directoryListing(const QList<Family>& families)
 {
@@ -42,7 +61,7 @@ WardDirectoryPdfParser::ParseResult directoryListing(const QList<Family>& famili
     parsed.wardUnitNumber = "123456";
     for (const Family& family : families)
     {
-        Family listed = printed(family);
+        Family listed = listedInDirectory(family);
         parsed.families.insert(listed.id(), listed);
     }
     return parsed;
@@ -141,6 +160,9 @@ void ImportCommandsTest::importReplayedAfterAnEditToAFamilyItChangesConflicts()
 void ImportCommandsTest::reimportingTheSameDirectoryKeepsNotesAndCoordinatesAndHoldsNoChange()
 {
     Person bob = TestWard::bob();
+    bob.setBirthday(Birthday::create(1975, 3, 4));
+    bob.setAltPhone(Phone("555-1112"));
+    bob.setWardUnitNumber("123456");
     bob.setNote("Drives the ward van");
     bob.setSpecialNeedNote("Uses a wheelchair; the ramp is at the back door.");
     Family smith = TestWard::withMember(TestWard::smith(), bob);
