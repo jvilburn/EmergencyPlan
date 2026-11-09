@@ -33,4 +33,5 @@ private slots:
     void documentReplacedMidBatchLosesNoResults();
     void commandThatGivesAWardNeedingALookupStartsOne();
     void addressEditFromAnotherDeviceLeavesTheFamilyUnmappedAndRequestsNothing();
+    void takenUpdateRequestsAnAddressItLeavesUnmapped();
 };

@@ -308,6 +308,7 @@ TakeResult WardSession::takeUpdate(const QByteArray& file)
     m_dataKey = read.dataKey;
     m_landed = read.payload->landed;
     save();
+    m_automaticUpdates.run();
     return TakeResult{TakeStatus::Taken, QString(), replayed};
 }
 

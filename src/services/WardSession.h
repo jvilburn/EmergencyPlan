@@ -207,8 +207,9 @@ public:
     /// key this device holds, or names that key among its former keys. Taking it drops the
     /// journal entries its landed mark for this device covers, raising the counter to that
     /// mark, replays the rest onto it as replayOnto does, and makes it the version this
-    /// device holds, under its data key and with its landed marks, then saves. The next
-    /// update this device writes is numbered one above it.
+    /// device holds, under its data key and with its landed marks, then saves, and starts a
+    /// run of the automatic updates for what the version lacks. The next update this device
+    /// writes is numbered one above it.
     TakeResult takeUpdate(const QByteArray& file);
 
 signals:

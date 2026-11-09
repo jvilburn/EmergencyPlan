@@ -1,5 +1,6 @@
 #include "AutomaticUpdatesTest.h"
 #include "AddressCoordinatesCommands.h"
+#include "Crypto.h"
 #include "FamilyCommands.h"
 #include "TestClient.h"
 #include "TestWard.h"
@@ -705,4 +706,20 @@ void AutomaticUpdatesTest::addressEditFromAnotherDeviceLeavesTheFamilyUnmappedAn
         QVERIFY(family.address().full() != smithAddress().full());
     }
     QVERIFY(mine.geocoder().requests().isEmpty());
+}
+
+void AutomaticUpdatesTest::takenUpdateRequestsAnAddressItLeavesUnmapped()
+{
+    Address newAddress = TestWard::address("14 Elm St", "Provo, UT");
+    TestClient mine("Laptop");
+    TestClient theirs("Phone");
+    TestClient::holdWard({&mine, &theirs}, {&mine, &theirs}, DocumentId::generate(),
+                         Crypto::randomBytes(Crypto::KeyBytes), mappedWard());
+    QVERIFY(commitAddress(theirs.session(), TestWard::smithId(), newAddress).status == CommitStatus::Applied);
+
+    QVERIFY(mine.session().takeUpdate(theirs.session().writeUpdate()).status == TakeStatus::Taken);
+
+    QCOMPARE(mine.geocoder().requests(), QStringList({newAddress.full()}));
+    mine.geocoder().resolve(newAddress.full(), NewElmPosition);
+    QVERIFY(positionOf(mine.session(), TestWard::smithId()) == NewElmPosition);
 }
