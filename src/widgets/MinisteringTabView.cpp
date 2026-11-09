@@ -96,11 +96,6 @@ HighlightInfo MinisteringTabView::highlightInfo() const
     return {};
 }
 
-QSet<FamilyId> MinisteringTabView::visibleFamilyIds() const
-{
-    return {};  // Show all
-}
-
 void MinisteringTabView::clearSelection()
 {
     m_mainView->clearSelection();

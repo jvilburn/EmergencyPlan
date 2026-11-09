@@ -291,12 +291,6 @@ HighlightInfo EmergencyAssetView::highlightInfo() const
     return {assoc.relatedFamilyIds, assoc.contactPointFamilyIds};
 }
 
-QSet<FamilyId> EmergencyAssetView::visibleFamilyIds() const
-{
-    // Show all families
-    return {};
-}
-
 void EmergencyAssetView::clearSelection()
 {
     m_tree->clearSelection();

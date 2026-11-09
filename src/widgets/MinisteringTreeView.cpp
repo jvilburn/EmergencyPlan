@@ -70,11 +70,6 @@ HighlightInfo MinisteringTreeView::highlightInfo() const
     return {assoc.relatedFamilyIds, assoc.contactPointFamilyIds};
 }
 
-QSet<FamilyId> MinisteringTreeView::visibleFamilyIds() const
-{
-    return {};  // Show all
-}
-
 void MinisteringTreeView::clearSelection()
 {
     m_tree->clearSelection();

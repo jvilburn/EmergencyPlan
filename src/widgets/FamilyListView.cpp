@@ -143,7 +143,7 @@ HighlightInfo FamilyListView::highlightInfo() const
     return info;
 }
 
-QSet<FamilyId> FamilyListView::visibleFamilyIds() const
+std::optional<QSet<FamilyId>> FamilyListView::visibleFamilyIds() const
 {
     QList<FamilyId> list = visibleFamilyIdsList();
     return QSet<FamilyId>(list.begin(), list.end());

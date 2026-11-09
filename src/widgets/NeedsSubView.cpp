@@ -146,12 +146,6 @@ HighlightInfo NeedsSubView::highlightInfo() const
     return {assoc.relatedFamilyIds, assoc.contactPointFamilyIds};
 }
 
-QSet<FamilyId> NeedsSubView::visibleFamilyIds() const
-{
-    // Show all families
-    return {};
-}
-
 void NeedsSubView::clearSelection()
 {
     m_tree->clearSelection();

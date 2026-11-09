@@ -551,8 +551,7 @@ void MapWidget::drawMarkers(QPainter& painter)
     // If we have a highlight provider, use it for all highlighting decisions
     if (m_markerProvider)
     {
-        QSet<FamilyId> visibleIds = m_markerProvider->visibleFamilyIds();
-        bool hasVisibleFilter = !visibleIds.isEmpty();
+        std::optional<QSet<FamilyId>> visibleIds = m_markerProvider->visibleFamilyIds();
 
         // Get highlight info once (semantic data from provider)
         HighlightInfo info = m_markerProvider->highlightInfo();
@@ -574,8 +573,8 @@ void MapWidget::drawMarkers(QPainter& painter)
             QVariantMap hh = var.toMap();
             FamilyId id = FamilyId::fromString(hh["id"].toString());
 
-            // Skip if not in visible set (when filtering is active)
-            if (hasVisibleFilter && !visibleIds.contains(id))
+            // Skip families the view does not show
+            if (visibleIds.has_value() && !visibleIds->contains(id))
             {
                 continue;
             }

@@ -4,6 +4,7 @@
 
 #include <QSet>
 #include <QString>
+#include <optional>
 
 /// Semantic highlight data - providers specify WHAT to highlight,
 /// MapWidget decides HOW to render it.
@@ -35,8 +36,8 @@ public:
     /// Get highlight information - which families to emphasize and which are contact points
     virtual HighlightInfo highlightInfo() const = 0;
 
-    /// Set of family IDs to show (empty = show all)
-    virtual QSet<FamilyId> visibleFamilyIds() const = 0;
+    /// The families to show on the map; none when every family shows.
+    virtual std::optional<QSet<FamilyId>> visibleFamilyIds() const { return std::nullopt; }
 
     /// Optional status icon overlay (empty = no icon)
     /// Response Mode uses this for welfare status icons

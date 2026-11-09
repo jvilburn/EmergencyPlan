@@ -201,11 +201,6 @@ HighlightInfo TaskListView::highlightInfo() const
     return info;
 }
 
-QSet<FamilyId> TaskListView::visibleFamilyIds() const
-{
-    return {};  // show all families
-}
-
 void TaskListView::clearSelection()
 {
     m_treeView->clearSelection();

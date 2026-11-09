@@ -459,11 +459,6 @@ HighlightInfo TeamsView::highlightInfo() const
     return {assoc.relatedFamilyIds, assoc.contactPointFamilyIds};
 }
 
-QSet<FamilyId> TeamsView::visibleFamilyIds() const
-{
-    return {};
-}
-
 void TeamsView::clearSelection()
 {
     m_tree->clearSelection();

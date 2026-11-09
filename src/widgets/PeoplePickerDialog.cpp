@@ -244,12 +244,6 @@ HighlightInfo PeoplePickerDialog::highlightInfo() const
     return info;
 }
 
-QSet<FamilyId> PeoplePickerDialog::visibleFamilyIds() const
-{
-    // Show all families in the dialog
-    return {};
-}
-
 // Static convenience methods
 
 std::optional<FamilySelectionResult> PeoplePickerDialog::selectFamilies(
