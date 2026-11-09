@@ -723,3 +723,55 @@ void AutomaticUpdatesTest::takenUpdateRequestsAnAddressItLeavesUnmapped()
     mine.geocoder().resolve(newAddress.full(), NewElmPosition);
     QVERIFY(positionOf(mine.session(), TestWard::smithId()) == NewElmPosition);
 }
+
+void AutomaticUpdatesTest::lookUpOfAnAddressSavedWhileItIsPendingMapsTheFamilyWithOneRequest()
+{
+    Address newAddress = TestWard::address("14 Elm St", "Provo, UT");
+    TestClient client("Laptop");
+    client.createWard(mappedWard());
+    QSignalSpy answered(&client.session().automaticUpdates(), &AutomaticUpdates::answered);
+
+    client.session().automaticUpdates().lookUp(newAddress.full());
+    QCOMPARE(client.geocoder().requests(), QStringList({newAddress.full()}));
+    QVERIFY(commitAddress(client.session(), TestWard::smithId(), newAddress).status == CommitStatus::Applied);
+    QCOMPARE(client.geocoder().requests(), QStringList({newAddress.full()}));
+    QVERIFY(!positionOf(client.session(), TestWard::smithId()).has_value());
+
+    client.geocoder().resolve(newAddress.full(), NewElmPosition);
+
+    QVERIFY(positionOf(client.session(), TestWard::smithId()) == NewElmPosition);
+    QCOMPARE(answered.size(), 1);
+    QCOMPARE(answered.first().first().toString(), newAddress.full());
+}
+
+void AutomaticUpdatesTest::lookUpRequestsAFailedAddressAgain()
+{
+    Address newAddress = TestWard::address("14 Elm St", "Provo, UT");
+    TestClient client("Laptop");
+    client.createWard(mappedWard());
+    QVERIFY(commitAddress(client.session(), TestWard::smithId(), newAddress).status == CommitStatus::Applied);
+    client.geocoder().fail(newAddress.full());
+    client.session().automaticUpdates().run();
+    QCOMPARE(client.geocoder().requests(), QStringList({newAddress.full()}));
+
+    client.session().automaticUpdates().lookUp(newAddress.full());
+
+    QCOMPARE(client.geocoder().requests(), QStringList({newAddress.full(), newAddress.full()}));
+    client.geocoder().resolve(newAddress.full(), NewElmPosition);
+    QVERIFY(positionOf(client.session(), TestWard::smithId()) == NewElmPosition);
+}
+
+void AutomaticUpdatesTest::lookUpOfAnAddressNoFamilyHasAnswersAndAddsNoEntry()
+{
+    Address unsaved = TestWard::address("14 Elm St", "Provo, UT");
+    TestClient client("Laptop");
+    client.createWard(mappedWard());
+    QSignalSpy answered(&client.session().automaticUpdates(), &AutomaticUpdates::answered);
+
+    client.session().automaticUpdates().lookUp(unsaved.full());
+    client.geocoder().resolve(unsaved.full(), NewElmPosition);
+
+    QCOMPARE(answered.size(), 1);
+    QCOMPARE(answered.first().first().toString(), unsaved.full());
+    QVERIFY(client.session().document().addressCoordinates() == mappedWard().addressCoordinates());
+}

@@ -9,6 +9,7 @@
 #include <QObject>
 #include <QSet>
 #include <QString>
+#include <optional>
 
 class Geocoder;
 class UnitLookup;
@@ -47,8 +48,19 @@ public:
     /// without a chapel, goes on the failed list.
     void run();
 
+    /// Look Up in the family edit panel: requests address, the text Address::full() gives, as
+    /// one of the batch's requests, taking it off the failed list. When the address is pending
+    /// already, its answer is awaited instead. Its answer applies as any of the batch's does,
+    /// so it maps the families at that address once one has it, saved before or after the
+    /// request was made.
+    void lookUp(const QString& address);
+
 signals:
     void documentChanged(const DocumentChange& change);
+
+    /// The geocoder answered a request of the batch for address: its coordinates, or none
+    /// when it found none.
+    void answered(const QString& address, const std::optional<Coordinates>& coordinates);
 
     /// The batch's requests answered, out of those it has made.
     void geocodingProgress(int completed, int total);

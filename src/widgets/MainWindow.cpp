@@ -123,7 +123,7 @@ void MainWindow::setupUi()
     m_sidebarTabs->addPage(m_recoveryView, tr("Skills && Gear"));
 
     // Edit panel (initially hidden)
-    m_editPanel = new FamilyEditPanel(m_splitter);
+    m_editPanel = new FamilyEditPanel(DocumentManager::instance()->automaticUpdates(), m_splitter);
     m_editPanel->hide();
 
     // Map in the center

@@ -34,4 +34,7 @@ private slots:
     void commandThatGivesAWardNeedingALookupStartsOne();
     void addressEditFromAnotherDeviceLeavesTheFamilyUnmappedAndRequestsNothing();
     void takenUpdateRequestsAnAddressItLeavesUnmapped();
+    void lookUpOfAnAddressSavedWhileItIsPendingMapsTheFamilyWithOneRequest();
+    void lookUpRequestsAFailedAddressAgain();
+    void lookUpOfAnAddressNoFamilyHasAnswersAndAddsNoEntry();
 };

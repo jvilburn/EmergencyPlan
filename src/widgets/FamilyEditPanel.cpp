@@ -2,7 +2,7 @@
 #include "AppStyles.h"
 #include "MemberAccordion.h"
 #include "Document.h"
-#include "GeocodingService.h"
+#include "AutomaticUpdates.h"
 #include "Address.h"
 
 #include <QVBoxLayout>
@@ -16,10 +16,12 @@
 #include <QMessageBox>
 #include <QSet>
 
-FamilyEditPanel::FamilyEditPanel(QWidget* parent)
+FamilyEditPanel::FamilyEditPanel(AutomaticUpdates& automaticUpdates, QWidget* parent)
     : QFrame(parent)
+    , m_automaticUpdates(automaticUpdates)
 {
     setupUi();
+    connect(&m_automaticUpdates, &AutomaticUpdates::answered, this, &FamilyEditPanel::onAnswered);
 }
 
 void FamilyEditPanel::setupUi()
@@ -80,9 +82,6 @@ void FamilyEditPanel::setupUi()
     locationHeaderLayout->addStretch();
     m_lookupButton = new QPushButton(tr("Look Up Coordinates"), this);
     connect(m_lookupButton, &QPushButton::clicked, this, &FamilyEditPanel::onLookUpCoordinates);
-    m_geocoder = new GeocodingService(this);
-    connect(m_geocoder, &GeocodingService::geocodingComplete,
-            this, &FamilyEditPanel::onGeocodingComplete);
     locationHeaderLayout->addWidget(m_lookupButton);
     contentLayout->addLayout(locationHeaderLayout);
 
@@ -141,6 +140,7 @@ void FamilyEditPanel::setFamily(const Family& family, const Document& document)
     m_originalFamily = family;
     m_editedFamily = family;
     m_addressCoordinates = document.addressCoordinates();
+    m_lookingUp.clear();
 
     // Address
     {
@@ -233,7 +233,9 @@ void FamilyEditPanel::updateCoordinatesEnabled()
     bool hasAddress = !m_editedFamily.address().isEmpty();
     m_latEdit->setEnabled(hasAddress);
     m_lonEdit->setEnabled(hasAddress);
-    m_lookupButton->setEnabled(hasAddress && !m_geocoder->hasPendingRequests());
+    bool lookingUp = hasAddress && m_lookingUp == m_editedFamily.address().full();
+    m_lookupButton->setEnabled(hasAddress && !lookingUp);
+    m_lookupButton->setText(lookingUp ? tr("Looking up...") : tr("Look Up Coordinates"));
 }
 
 void FamilyEditPanel::refreshCoordinates(const Document& document)
@@ -257,25 +259,24 @@ void FamilyEditPanel::updateSaveEnabled()
 
 void FamilyEditPanel::onLookUpCoordinates()
 {
-    QString addressText = m_addressEdit->toPlainText().trimmed();
-
-    m_lookupButton->setText(tr("Looking up..."));
-
-    // Join address lines with commas for geocoding
-    QString query = addressText.replace('\n', ", ");
-    m_geocoder->geocodeAddress(query);
+    m_lookingUp = m_editedFamily.address().full();
     updateCoordinatesEnabled();
+    m_automaticUpdates.lookUp(m_lookingUp);
 }
 
-void FamilyEditPanel::onGeocodingComplete(const GeocodingResult& result)
+void FamilyEditPanel::onAnswered(const QString& address, const std::optional<Coordinates>& coordinates)
 {
-    m_lookupButton->setText(tr("Look Up Coordinates"));
+    if (address != m_lookingUp || address != m_editedFamily.address().full())
+    {
+        return;
+    }
+    m_lookingUp.clear();
     updateCoordinatesEnabled();
 
-    if (result.success && result.latitude.has_value() && result.longitude.has_value())
+    if (coordinates.has_value())
     {
-        m_latEdit->setText(QString::number(*result.latitude, 'f', 6));
-        m_lonEdit->setText(QString::number(*result.longitude, 'f', 6));
+        m_latEdit->setText(QString::number(coordinates->latitude(), 'f', 6));
+        m_lonEdit->setText(QString::number(coordinates->longitude(), 'f', 6));
     }
     else
     {

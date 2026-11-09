@@ -45,11 +45,6 @@ void GeocodingService::geocodeAddress(const QString& address)
     }
 }
 
-bool GeocodingService::hasPendingRequests() const
-{
-    return !m_requestQueue.isEmpty() || m_requestInFlight;
-}
-
 void GeocodingService::processNextRequest()
 {
     if (m_requestQueue.isEmpty() || m_requestInFlight)

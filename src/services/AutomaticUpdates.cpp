@@ -117,6 +117,19 @@ void AutomaticUpdates::run()
     lookUpNextUnit();
 }
 
+void AutomaticUpdates::lookUp(const QString& address)
+{
+    if (m_pending.contains(address))
+    {
+        return;
+    }
+    m_failed.remove(address);
+    m_pending.insert(address);
+    ++m_batchTotal;
+    emit geocodingProgress(m_batchTotal - m_pending.size(), m_batchTotal);
+    m_geocoder->geocode(address);
+}
+
 bool AutomaticUpdates::needsCoordinates(const Address& address) const
 {
     QString text = address.full();
@@ -156,6 +169,7 @@ void AutomaticUpdates::onGeocoded(const QString& address, const Coordinates& coo
             }
         }
     }
+    emit answered(address, coordinates);
     onBatchRequestAnswered();
 }
 
@@ -166,6 +180,7 @@ void AutomaticUpdates::onGeocodeFailed(const QString& address)
         return;
     }
     m_failed.insert(address);
+    emit answered(address, std::nullopt);
     onBatchRequestAnswered();
 }
 

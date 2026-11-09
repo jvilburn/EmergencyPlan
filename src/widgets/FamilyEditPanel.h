@@ -12,8 +12,7 @@ class QLineEdit;
 class QPushButton;
 class QLabel;
 class MemberAccordion;
-class GeocodingService;
-struct GeocodingResult;
+class AutomaticUpdates;
 
 /// Side panel for editing a family's address, location, note, and members.
 class FamilyEditPanel : public QFrame
@@ -21,7 +20,8 @@ class FamilyEditPanel : public QFrame
     Q_OBJECT
 
 public:
-    explicit FamilyEditPanel(QWidget* parent);
+    /// Look Up asks automaticUpdates, which outlives the panel, for the address shown.
+    FamilyEditPanel(AutomaticUpdates& automaticUpdates, QWidget* parent);
 
     /// Opens the panel on family. The coordinate fields show the entry that the document's
     /// table of address coordinates holds for the address the panel shows.
@@ -54,7 +54,10 @@ signals:
 
 private slots:
     void onLookUpCoordinates();
-    void onGeocodingComplete(const GeocodingResult& result);
+
+    /// Fills the coordinate fields with the answer to this panel's Look Up, while the panel
+    /// still shows the address it looked up; any other answer is not this panel's.
+    void onAnswered(const QString& address, const std::optional<Coordinates>& coordinates);
     void onAddressChanged();
     void onCoordinatesTyped();
     void onMembersChanged();
@@ -74,7 +77,8 @@ private:
     /// True when the coordinate fields hold text other than what showEntryFor last wrote.
     bool coordinatesTyped() const;
 
-    /// Enables the coordinate fields and the lookup while the panel shows an address.
+    /// Enables the coordinate fields while the panel shows an address, and Look Up while it
+    /// shows one it is not looking up already.
     void updateCoordinatesEnabled();
 
     /// Disables Save while the coordinate fields are typed but do not hold a latitude and a
@@ -98,7 +102,8 @@ private:
     QLineEdit* m_latEdit;
     QLineEdit* m_lonEdit;
     QPushButton* m_lookupButton;
-    GeocodingService* m_geocoder;
+    AutomaticUpdates& m_automaticUpdates;
+    QString m_lookingUp;  ///< the address this panel's Look Up awaits; empty when none
 
     // Note
     QTextEdit* m_noteEdit;

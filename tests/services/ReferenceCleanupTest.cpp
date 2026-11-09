@@ -356,7 +356,7 @@ void ReferenceCleanupTest::removingAMemberThroughTheEditPanelCleansUpThatPerson(
     client.createWard(ward);
     Document created = client.session().document();
     QSignalSpy documentSpy(&client.session(), &WardSession::documentChanged);
-    FamilyEditPanel panel(nullptr);
+    FamilyEditPanel panel(client.session().automaticUpdates(), nullptr);
     panel.setFamily(TestWard::smith(), client.session().document());
 
     QVERIFY(clickRemoveMember(panel, TestWard::aliceId()));

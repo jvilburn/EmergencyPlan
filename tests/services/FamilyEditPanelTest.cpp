@@ -4,80 +4,19 @@
 #include "FamilyChange.h"
 #include "FamilyEditPanel.h"
 #include "MemberEditor.h"
+#include "TestClient.h"
 #include "TestWard.h"
 
-#include <QAbstractNetworkCache>
-#include <QBuffer>
 #include <QLineEdit>
-#include <QNetworkAccessManager>
-#include <QNetworkProxy>
 #include <QPushButton>
-#include <QTcpServer>
 #include <QTest>
 #include <QTextEdit>
-#include <QUrlQuery>
 
 namespace
 {
 
 const Coordinates ElmPosition(40.2338, -111.6585);
 const Coordinates OakPosition(40.2410, -111.6520);
-
-/// A network cache holding a fresh answer for every URL, so a request made through it is
-/// answered from the cache rather than the network. It records the URLs it is asked for.
-class AnsweringCache : public QAbstractNetworkCache
-{
-public:
-    explicit AnsweringCache(const QByteArray& answer);
-
-    QList<QUrl> askedFor() const { return m_askedFor; }
-
-    QNetworkCacheMetaData metaData(const QUrl& url) override;
-    void updateMetaData(const QNetworkCacheMetaData&) override {}
-    QIODevice* data(const QUrl& url) override;
-    bool remove(const QUrl&) override { return false; }
-    qint64 cacheSize() const override { return m_answer.size(); }
-    QIODevice* prepare(const QNetworkCacheMetaData&) override { return nullptr; }
-    void insert(QIODevice*) override {}
-    void clear() override {}
-
-private:
-    QByteArray m_answer;
-    QList<QUrl> m_askedFor;
-};
-
-AnsweringCache::AnsweringCache(const QByteArray& answer)
-    : m_answer(answer)
-{
-}
-
-QNetworkCacheMetaData AnsweringCache::metaData(const QUrl& url)
-{
-    m_askedFor.append(url);
-    QNetworkCacheMetaData metaData;
-    metaData.setUrl(url);
-    metaData.setExpirationDate(QDateTime::currentDateTimeUtc().addSecs(3600));
-    metaData.setAttributes({{QNetworkRequest::HttpStatusCodeAttribute, 200}});
-    return metaData;
-}
-
-QIODevice* AnsweringCache::data(const QUrl&)
-{
-    QBuffer* buffer = new QBuffer();
-    buffer->setData(m_answer);
-    buffer->open(QIODevice::ReadOnly);
-    return buffer;
-}
-
-/// A local port nothing listens on.
-quint16 closedPort()
-{
-    QTcpServer server;
-    server.listen(QHostAddress::LocalHost);
-    quint16 port = server.serverPort();
-    server.close();
-    return port;
-}
 
 QList<PersonId> idsOf(const Family& family)
 {
@@ -176,7 +115,8 @@ FamilyEditPanelTest::FamilyEditPanelTest(QObject* parent)
 void FamilyEditPanelTest::addedChildMovesIntoPlaceWhenItsBirthYearIsTyped()
 {
     Family opened = TestWard::lee(2010);
-    FamilyEditPanel panel(nullptr);
+    TestClient client("Laptop");
+    FamilyEditPanel panel(client.session().automaticUpdates(), nullptr);
     panel.setFamily(opened, Document());
 
     PersonId added;
@@ -200,7 +140,8 @@ void FamilyEditPanelTest::addedChildMovesIntoPlaceWhenItsBirthYearIsTyped()
 void FamilyEditPanelTest::addedChildStaysLastWhileAMemberHasNoBirthYear()
 {
     Family opened = TestWard::lee(std::nullopt);
-    FamilyEditPanel panel(nullptr);
+    TestClient client("Laptop");
+    FamilyEditPanel panel(client.session().automaticUpdates(), nullptr);
     panel.setFamily(opened, Document());
 
     PersonId added;
@@ -219,7 +160,8 @@ void FamilyEditPanelTest::coordinateFieldsAreEnabledOnlyWhileTheAddressIsNotEmpt
 {
     Family unaddressed = TestWard::smith();
     unaddressed.setAddress(Address());
-    FamilyEditPanel panel(nullptr);
+    TestClient client("Laptop");
+    FamilyEditPanel panel(client.session().automaticUpdates(), nullptr);
     panel.setFamily(unaddressed, TestWard::document());
     QLineEdit* latitude = lineEditWithPlaceholder(panel, "Latitude");
     QLineEdit* longitude = lineEditWithPlaceholder(panel, "Longitude");
@@ -252,7 +194,8 @@ void FamilyEditPanelTest::coordinateFieldsAreEnabledOnlyWhileTheAddressIsNotEmpt
 
 void FamilyEditPanelTest::coordinatesShownFromTheEntryAreNotTyped()
 {
-    FamilyEditPanel panel(nullptr);
+    TestClient client("Laptop");
+    FamilyEditPanel panel(client.session().automaticUpdates(), nullptr);
     panel.setFamily(TestWard::smith(), smithMapped(Coordinates(40.12345678, -111.98765432)));
     QLineEdit* latitude = lineEditWithPlaceholder(panel, "Latitude");
     QLineEdit* longitude = lineEditWithPlaceholder(panel, "Longitude");
@@ -278,7 +221,8 @@ void FamilyEditPanelTest::coordinatesShownFromTheEntryAreNotTyped()
 
 void FamilyEditPanelTest::typedCoordinatesAreReturnedAndMakeThePanelDirty()
 {
-    FamilyEditPanel panel(nullptr);
+    TestClient client("Laptop");
+    FamilyEditPanel panel(client.session().automaticUpdates(), nullptr);
     panel.setFamily(TestWard::smith(), TestWard::document());
     QLineEdit* latitude = lineEditWithPlaceholder(panel, "Latitude");
     QLineEdit* longitude = lineEditWithPlaceholder(panel, "Longitude");
@@ -298,7 +242,7 @@ void FamilyEditPanelTest::typedCoordinatesAreReturnedAndMakeThePanelDirty()
     QVERIFY(panel.family() == TestWard::smith());
 
     // Text other than what the panel showed that reads as the entry is typed, and not dirty.
-    FamilyEditPanel mapped(nullptr);
+    FamilyEditPanel mapped(client.session().automaticUpdates(), nullptr);
     mapped.setFamily(TestWard::smith(), smithMapped(ElmPosition));
     QLineEdit* mappedLatitude = lineEditWithPlaceholder(mapped, "Latitude");
     QVERIFY(mappedLatitude != nullptr);
@@ -312,7 +256,8 @@ void FamilyEditPanelTest::typedCoordinatesAreReturnedAndMakeThePanelDirty()
 void FamilyEditPanelTest::saveIsDisabledWhileTypedCoordinatesDoNotParse()
 {
     QString prompt("Enter a latitude and a longitude");
-    FamilyEditPanel panel(nullptr);
+    TestClient client("Laptop");
+    FamilyEditPanel panel(client.session().automaticUpdates(), nullptr);
     panel.setFamily(TestWard::smith(), smithMapped(ElmPosition));
     QLineEdit* latitude = lineEditWithPlaceholder(panel, "Latitude");
     QLineEdit* longitude = lineEditWithPlaceholder(panel, "Longitude");
@@ -346,7 +291,8 @@ void FamilyEditPanelTest::refreshShowsTheNewEntryUnlessCoordinatesAreTyped()
     Document document = TestWard::document();
 
     // Untyped fields show the entry for the address shown, once there is one.
-    FamilyEditPanel untyped(nullptr);
+    TestClient client("Laptop");
+    FamilyEditPanel untyped(client.session().automaticUpdates(), nullptr);
     untyped.setFamily(TestWard::smith(), document);
     QLineEdit* latitude = lineEditWithPlaceholder(untyped, "Latitude");
     QLineEdit* longitude = lineEditWithPlaceholder(untyped, "Longitude");
@@ -365,7 +311,7 @@ void FamilyEditPanelTest::refreshShowsTheNewEntryUnlessCoordinatesAreTyped()
     QVERIFY(!untyped.isDirty());
 
     // The address shown, not the one opened.
-    FamilyEditPanel readdressed(nullptr);
+    FamilyEditPanel readdressed(client.session().automaticUpdates(), nullptr);
     readdressed.setFamily(TestWard::smith(), document);
     QTextEdit* address = addressField(readdressed);
     QLineEdit* readdressedLatitude = lineEditWithPlaceholder(readdressed, "Latitude");
@@ -380,7 +326,7 @@ void FamilyEditPanelTest::refreshShowsTheNewEntryUnlessCoordinatesAreTyped()
     QCOMPARE(readdressedLongitude->text(), QString("-111.652000"));
 
     // Typed fields are left as typed.
-    FamilyEditPanel typed(nullptr);
+    FamilyEditPanel typed(client.session().automaticUpdates(), nullptr);
     typed.setFamily(TestWard::smith(), document);
     QLineEdit* typedLatitude = lineEditWithPlaceholder(typed, "Latitude");
     QLineEdit* typedLongitude = lineEditWithPlaceholder(typed, "Longitude");
@@ -397,9 +343,10 @@ void FamilyEditPanelTest::refreshShowsTheNewEntryUnlessCoordinatesAreTyped()
     QVERIFY(typed.isDirty());
 }
 
-void FamilyEditPanelTest::lookUpIsDisabledWhileItsRequestIsPending()
+void FamilyEditPanelTest::lookUpFillsTheFieldsOnlyWhileTheAddressLookedUpIsShown()
 {
-    FamilyEditPanel panel(nullptr);
+    TestClient client("Laptop");
+    FamilyEditPanel panel(client.session().automaticUpdates(), nullptr);
     panel.setFamily(TestWard::smith(), TestWard::document());
     QLineEdit* latitude = lineEditWithPlaceholder(panel, "Latitude");
     QLineEdit* longitude = lineEditWithPlaceholder(panel, "Longitude");
@@ -410,37 +357,38 @@ void FamilyEditPanelTest::lookUpIsDisabledWhileItsRequestIsPending()
     QVERIFY(address != nullptr);
     QVERIFY(lookUp != nullptr);
     QVERIFY(lookUp->isEnabled());
-
-    // The panel's geocoder is answered from this cache; a request that missed it would go to
-    // a closed local port and fail, so nothing reaches the network.
-    QList<QNetworkAccessManager*> networks = panel.findChildren<QNetworkAccessManager*>();
-    QCOMPARE(networks.size(), 1);
-    AnsweringCache* cache = new AnsweringCache(R"([{"lat":"40.2350","lon":"-111.6600"}])");
-    networks.first()->setCache(cache);
-    networks.first()->setProxy(QNetworkProxy(QNetworkProxy::HttpProxy, "127.0.0.1", closedPort()));
-    QString query = address->toPlainText().trimmed().replace('\n', ", ");
+    QString smith = TestWard::smith().address().full();
+    QString oak = TestWard::address("4 Oak Ave", "Provo, UT").full();
 
     lookUp->click();
+    QCOMPARE(client.geocoder().requests(), QStringList({smith}));
     QVERIFY(!lookUp->isEnabled());
     QCOMPARE(lookUp->text(), QString("Looking up..."));
 
-    // An address edit while the request is pending leaves Look Up disabled.
+    // The address changes before the answer: the answer is not for the address shown.
     address->setPlainText("4 Oak Ave\nProvo, UT");
-    QVERIFY(!lookUp->isEnabled());
-
-    QTRY_VERIFY(lookUp->isEnabled());
+    QVERIFY(lookUp->isEnabled());
     QCOMPARE(lookUp->text(), QString("Look Up Coordinates"));
-    QCOMPARE(latitude->text(), QString("40.235000"));
-    QCOMPARE(longitude->text(), QString("-111.660000"));
-    QCOMPARE(cache->askedFor().size(), 1);
-    QCOMPARE(QUrlQuery(cache->askedFor().first()).queryItemValue("q", QUrl::FullyDecoded), query);
+    client.geocoder().resolve(smith, ElmPosition);
+    QCOMPARE(latitude->text(), QString());
+    QCOMPARE(longitude->text(), QString());
+
+    lookUp->click();
+    QCOMPARE(client.geocoder().requests(), QStringList({smith, oak}));
+    client.geocoder().resolve(oak, OakPosition);
+    QVERIFY(lookUp->isEnabled());
+    QCOMPARE(lookUp->text(), QString("Look Up Coordinates"));
+    QCOMPARE(latitude->text(), QString("40.241000"));
+    QCOMPARE(longitude->text(), QString("-111.652000"));
+    QVERIFY(panel.typedCoordinates() == OakPosition);
 }
 
 void FamilyEditPanelTest::typedFamilyNoteIsReturnedTrimmedAndMakesThePanelDirty()
 {
     Family noted = TestWard::smith();
     noted.setNote("Gate code is 1234");
-    FamilyEditPanel panel(nullptr);
+    TestClient client("Laptop");
+    FamilyEditPanel panel(client.session().automaticUpdates(), nullptr);
     panel.setFamily(noted, TestWard::document());
     QTextEdit* note = nullptr;
     for (QTextEdit* edit : panel.findChildren<QTextEdit*>())

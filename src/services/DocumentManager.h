@@ -26,6 +26,7 @@ public:
 
     // Document access
     const Document& document() const { return m_session.document(); }
+    AutomaticUpdates& automaticUpdates() { return m_session.automaticUpdates(); }
 
     /// Runs the command through the session's commit step. A command that conflicted or was
     /// refused emits commandNotApplied.
