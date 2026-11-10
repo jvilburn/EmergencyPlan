@@ -128,10 +128,9 @@ QList<FamilyTreeModel::TreeNode*> FamilyTreeModel::childNodes(TreeNode* familyNo
         memberNode->memberIndex = memberIdx;
 
         // Member detail nodes, only for values the member has
-        Phone phone = person.displayPhone();
-        if (!phone.isEmpty())
+        if (!person.phone().isEmpty())
         {
-            appendDetail(memberNode, DetailType::Phone, tr("Phone: %1").arg(QString(phone)));
+            appendDetail(memberNode, DetailType::Phone, tr("Phone: %1").arg(QString(person.phone())));
         }
         if (!person.altPhone().isEmpty())
         {
@@ -147,7 +146,7 @@ QList<FamilyTreeModel::TreeNode*> FamilyTreeModel::childNodes(TreeNode* familyNo
         }
 
         // Birthday: show date for everyone, append age for children
-        QString birthDisplay = person.birthDateDisplay();
+        QString birthDisplay = person.birthday().display();
         if (!birthDisplay.isEmpty())
         {
             QString ageStr = person.ageDisplay();

@@ -207,13 +207,13 @@ void MemberAccordion::updateHeaderText(int index)
     {
         details += p.gender()->toString().left(1);
     }
-    if (!p.birthday().dateDisplay().isEmpty())
+    if (!p.birthday().display().isEmpty())
     {
         if (!details.isEmpty())
         {
             details += QString::fromUtf8(" \u00B7 ");
         }
-        details += p.birthday().dateDisplay();
+        details += p.birthday().display();
         if (!p.birthday().ageDisplay().isEmpty())
         {
             details += " " + p.birthday().ageDisplay();

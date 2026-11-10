@@ -73,33 +73,6 @@ bool Birthday::isChild() const
     return personAge.value() < 18;
 }
 
-QString Birthday::dateDisplay() const
-{
-    if (!m_month.has_value() || !m_day.has_value())
-    {
-        return QString();
-    }
-
-    // Use a reference year to get month name
-    QDate displayDate(2000, m_month.value(), m_day.value());
-    if (!displayDate.isValid())
-    {
-        return QString();
-    }
-
-    QString monthName = QLocale::c().monthName(m_month.value(), QLocale::ShortFormat);
-
-    if (m_year.has_value())
-    {
-        return QString("%1 %2 %3")
-            .arg(m_day.value())
-            .arg(monthName)
-            .arg(m_year.value());
-    }
-
-    return QString("%1 %2").arg(m_day.value()).arg(monthName);
-}
-
 QString Birthday::display() const
 {
     QString monthAndDay;

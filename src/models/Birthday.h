@@ -31,9 +31,6 @@ public:
     /// Returns true if age < 18.
     bool isChild() const;
 
-    /// Returns "19 Nov" or "19 Nov 2010" if year known.
-    QString dateDisplay() const;
-
     /// The parts that are set, whichever they are: "Jan 4, 1980", "Jan 4", "Jan 1980",
     /// "1980", "Jan", "day 4, 1980", "day 4", or empty when none is set.
     QString display() const;

@@ -67,7 +67,7 @@ void dumpPerson(const Person& p, QTextStream& out, const QString& indent)
     }
     if (p.birthday().hasDate())
     {
-        out << indent << "Birth: " << p.birthDateDisplay() << "\n";
+        out << indent << "Birth: " << p.birthday().display() <<"\n";
     }
     if (!p.callings().isEmpty())
     {
@@ -441,7 +441,7 @@ int parseEQMinistering(const QString& pdfPath, QTextStream& out, QTextStream& er
                             }
                             if (m.birthday().hasDate())
                             {
-                                out << " - " << m.birthday().dateDisplay();
+                                out << " - " << m.birthday().display();
                             }
                             out << "\n";
                         }
