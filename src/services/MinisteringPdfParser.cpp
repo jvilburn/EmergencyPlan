@@ -875,16 +875,29 @@ MinisteringPdfParser::ParseResult MinisteringPdfParser::parse(const QString& pdf
         return result;
     }
 
+    QList<QList<PdfTextField>> pages;
+    for (int pageNum = 0; pageNum < numPages; ++pageNum)
+    {
+        pages.append(extractor.textFields(pageNum));
+    }
+    return parseFields(pages);
+}
+
+MinisteringPdfParser::ParseResult MinisteringPdfParser::parseFields(QList<QList<PdfTextField>> pages)
+{
+    ParseResult result;
+    result.success = false;
+
     // ========================================================================
-    // Phase 1: Load all pages, extract metadata, collect content fields
+    // Phase 1: Extract metadata, collect content fields
     // ========================================================================
 
     QList<PdfTextField> allContentFields;
     double yOffset = 0.0;
 
-    for (int pageNum = 0; pageNum < numPages; ++pageNum)
+    for (int pageNum = 0; pageNum < pages.size(); ++pageNum)
     {
-        QList<PdfTextField> pageFields = extractor.textFields(pageNum);
+        QList<PdfTextField>& pageFields = pages[pageNum];
         if (pageFields.isEmpty())
         {
             continue;
@@ -940,22 +953,19 @@ MinisteringPdfParser::ParseResult MinisteringPdfParser::parse(const QString& pdf
             }
         }
 
-        // Append content fields (filtered - no headers/footers).
-        // Apply cumulative Y offset so that Y coordinates are document-relative
-        // rather than page-relative. This ensures Y-based grouping and merging
-        // works correctly when companionships span multiple pages.
+        // The next page's content goes below this one's, so Y-based grouping and merging
+        // work for a companionship that spans pages: by this page's footer Y, below all of its
+        // content, plus its header Y, where its content starts. Taken before the offset moves
+        // this page's fields.
+        double pageAdvance = pageFields[contentEnd].y() + pageFields[contentStart].y();
+
+        // Append content fields (filtered - no headers/footers), document-relative.
         for (int i = contentStart; i < contentEnd; ++i)
         {
             pageFields[i].addY(yOffset);
             allContentFields.append(pageFields[i]);
         }
-
-        // Accumulate offset for next page: footer Y (beyond all content) plus
-        // header Y (content start position) provides a natural page gap.
-        if (contentEnd < pageFields.size())
-        {
-            yOffset += pageFields[contentEnd].y() + pageFields[contentStart].y();
-        }
+        yOffset += pageAdvance;
     }
 
     if (allContentFields.isEmpty())

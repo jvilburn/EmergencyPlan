@@ -15,6 +15,7 @@
 #include "EmergencyAssetCommandsTest.h"
 #include "EmergencyCommandsTest.h"
 #include "MemberEditorTest.h"
+#include "MinisteringPdfParserTest.h"
 #include "PersonJsonTest.h"
 #include "ReferenceCleanupTest.h"
 #include "SpecReaderTest.h"
@@ -69,6 +70,7 @@ int main(int argc, char* argv[])
     UpdateFileTest updateFileTest(nullptr);
     UserFolderTest userFolderTest(nullptr);
     TreeViewStateTest treeViewStateTest(nullptr);
+    MinisteringPdfParserTest ministeringPdfParserTest(nullptr);
 
     int failures = 0;
     failures += QTest::qExec(&personJsonTest, argc, argv);
@@ -100,5 +102,6 @@ int main(int argc, char* argv[])
     failures += QTest::qExec(&updateFileTest, argc, argv);
     failures += QTest::qExec(&userFolderTest, argc, argv);
     failures += QTest::qExec(&treeViewStateTest, argc, argv);
+    failures += QTest::qExec(&ministeringPdfParserTest, argc, argv);
     return failures;
 }

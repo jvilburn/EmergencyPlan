@@ -6,6 +6,7 @@
 #include <QDate>
 #include <optional>
 
+#include "PdfExtractor.h"
 #include "Person.h"
 #include "Family.h"
 #include "MinisteringDistrict.h"
@@ -42,4 +43,8 @@ namespace MinisteringPdfParser
     /// RS format: Bold "Last, First" name in family column, ministers to individuals
     /// @param pdfPath Path to the PDF file
     ParseResult parse(const QString& pdfPath);
+
+    /// Parses a ministering PDF from each page's text fields, in reading order, as
+    /// PdfExtractor::textFields gives them.
+    ParseResult parseFields(QList<QList<PdfTextField>> pages);
 }
