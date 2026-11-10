@@ -687,16 +687,6 @@ void readLanded(Fields fields)
 void readDeviceState(Fields fields)
 {
     readJournal(fields.object("journal"));
-    std::optional<Fields> dismissedAccess = fields.optionalObject("dismissedAccess");
-    if (dismissedAccess.has_value())
-    {
-        std::vector<PublicKeys> dismissedKeys;
-        readAccess(*dismissedAccess, &dismissedKeys);
-    }
-    fields.optionalTrue("singleHolderNoticeDismissed");
-    fields.optionalTrue("singleAdminNoticeDismissed");
-    fields.optionalTrue("noLongerShared");
-    fields.optionalBytesList("inviteSeeds", KeyBytes);
     fields.done();
 }
 

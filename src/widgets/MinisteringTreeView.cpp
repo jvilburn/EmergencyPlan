@@ -49,13 +49,6 @@ void MinisteringTreeView::onTreeExpanded(const QModelIndex& index)
             }
         }
     }
-    else if (type == ItemType::Minister
-             || type == ItemType::MinisteredFamily
-             || type == ItemType::MinisteredSister)
-    {
-        // Load contact info on expand
-        m_model->loadContactDetails(index);
-    }
 }
 
 void MinisteringTreeView::expandDistricts()

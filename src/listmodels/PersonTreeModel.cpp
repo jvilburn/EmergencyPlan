@@ -110,58 +110,7 @@ void PersonTreeModel::buildPersonNode(int personIndex)
     personNode->displayText = person.displayName();
     m_personNodes.append(personNode);
 
-    // Add phone detail
-    if (!person.phone().isEmpty())
-    {
-        TreeNode* detailNode = new TreeNode();
-        detailNode->type = ItemType::ContactDetail;
-        detailNode->personId = personId;
-        detailNode->familyId = familyId;
-        detailNode->displayText = ContactIcons::Phone + QString(person.phone());
-        detailNode->parent = personNode;
-        personNode->children.append(detailNode);
-    }
-
-    // Add alt phone detail
-    if (!person.altPhone().isEmpty())
-    {
-        TreeNode* detailNode = new TreeNode();
-        detailNode->type = ItemType::ContactDetail;
-        detailNode->personId = personId;
-        detailNode->familyId = familyId;
-        detailNode->displayText = ContactIcons::Phone + QString(person.altPhone()) + tr(" (alt)");
-        detailNode->parent = personNode;
-        personNode->children.append(detailNode);
-    }
-
-    // Add email detail
-    if (!person.email().isEmpty())
-    {
-        TreeNode* detailNode = new TreeNode();
-        detailNode->type = ItemType::ContactDetail;
-        detailNode->personId = personId;
-        detailNode->familyId = familyId;
-        detailNode->displayText = ContactIcons::Email + person.email();
-        detailNode->parent = personNode;
-        personNode->children.append(detailNode);
-    }
-
-    // Add address from family
-    const QHash<FamilyId, Family>& families = doc.families();
-    if (families.contains(familyId))
-    {
-        const Family& family = families[familyId];
-        if (!family.address().isEmpty())
-        {
-            TreeNode* detailNode = new TreeNode();
-            detailNode->type = ItemType::ContactDetail;
-            detailNode->personId = personId;
-            detailNode->familyId = familyId;
-            detailNode->displayText = ContactIcons::Address + family.address().full();
-            detailNode->parent = personNode;
-            personNode->children.append(detailNode);
-        }
-    }
+    appendContactRows(personNode, personContactLines(personId, doc));
 
     // If no contact details, add placeholder
     if (personNode->children.isEmpty())

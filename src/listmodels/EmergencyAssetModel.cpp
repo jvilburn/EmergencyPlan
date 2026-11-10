@@ -90,6 +90,7 @@ void EmergencyAssetModel::rebuild()
             personNode->assetId = asset.id();
             personNode->displayText = personData.second;
             personNode->parent = assetNode;
+            appendContactRows(personNode, personContactLines(personData.first, doc));
             assetNode->children.append(personNode);
         }
 
@@ -203,12 +204,6 @@ bool EmergencyAssetModel::hasChildren(const QModelIndex& parent) const
     if (!node)
     {
         return false;
-    }
-
-    // Person nodes can have contact children (lazy loaded)
-    if (node->type == ItemType::Person)
-    {
-        return true;
     }
 
     return !node->children.isEmpty();
@@ -363,122 +358,4 @@ std::optional<PersonId> EmergencyAssetModel::personIdAt(const QModelIndex& index
         return std::nullopt;
     }
     return node->personId;
-}
-
-void EmergencyAssetModel::loadContactDetails(const QModelIndex& index)
-{
-    TreeNode* node = nodeFromIndex(index);
-    if (!node || node->contactsLoaded)
-    {
-        return;
-    }
-
-    // Only load contacts for person nodes
-    if (node->type != ItemType::Person)
-    {
-        return;
-    }
-
-    const Document& doc = DocumentManager::instance()->document();
-    if (!node->personId)
-    {
-        node->contactsLoaded = true;
-        return;
-    }
-
-    std::optional<Person> person = doc.findPersonById(*node->personId);
-    if (!person)
-    {
-        node->contactsLoaded = true;
-        return;
-    }
-
-    // Check for address availability
-    std::optional<FamilyId> familyId = doc.familyIdForPerson(*node->personId);
-    const QHash<FamilyId, Family>& families = doc.families();
-    bool hasAddress = false;
-    if (familyId && families.contains(*familyId))
-    {
-        hasAddress = !families[*familyId].address().isEmpty();
-    }
-
-    // Count actual items to insert
-    int itemCount = 0;
-    if (!person->phone().isEmpty())
-    {
-        itemCount++;
-    }
-    if (!person->altPhone().isEmpty())
-    {
-        itemCount++;
-    }
-    if (!person->email().isEmpty())
-    {
-        itemCount++;
-    }
-    if (hasAddress)
-    {
-        itemCount++;
-    }
-
-    if (itemCount == 0)
-    {
-        node->contactsLoaded = true;
-        return;
-    }
-
-    int insertRow = node->children.size();
-    beginInsertRows(index, insertRow, insertRow + itemCount - 1);
-
-    // Phone
-    if (!person->phone().isEmpty())
-    {
-        TreeNode* phoneNode = new TreeNode();
-        phoneNode->type = ItemType::ContactDetail;
-        phoneNode->personId = node->personId;
-        phoneNode->assetId = node->assetId;
-        phoneNode->displayText = ContactIcons::Phone + person->phone();
-        phoneNode->parent = node;
-        node->children.append(phoneNode);
-    }
-
-    // Alt phone
-    if (!person->altPhone().isEmpty())
-    {
-        TreeNode* altPhoneNode = new TreeNode();
-        altPhoneNode->type = ItemType::ContactDetail;
-        altPhoneNode->personId = node->personId;
-        altPhoneNode->assetId = node->assetId;
-        altPhoneNode->displayText = ContactIcons::Phone + person->altPhone() + tr(" (alt)");
-        altPhoneNode->parent = node;
-        node->children.append(altPhoneNode);
-    }
-
-    // Email
-    if (!person->email().isEmpty())
-    {
-        TreeNode* emailNode = new TreeNode();
-        emailNode->type = ItemType::ContactDetail;
-        emailNode->personId = node->personId;
-        emailNode->assetId = node->assetId;
-        emailNode->displayText = ContactIcons::Email + person->email();
-        emailNode->parent = node;
-        node->children.append(emailNode);
-    }
-
-    // Address (from family)
-    if (hasAddress)
-    {
-        const Family& family = families[*familyId];
-        TreeNode* addrNode = new TreeNode();
-        addrNode->type = ItemType::ContactDetail;
-        addrNode->personId = node->personId;
-        addrNode->assetId = node->assetId;
-        addrNode->displayText = ContactIcons::Address + family.address().full();
-        addrNode->parent = node;
-        node->children.append(addrNode);
-    }
-
-    endInsertRows();
-    node->contactsLoaded = true;
 }

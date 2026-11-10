@@ -515,7 +515,6 @@ namespace
         std::optional<Family> family;
         std::optional<PersonId> ministeredPersonId;  // For RS format
         QString error;
-        bool isRSFormat = false;  // Detected format (only meaningful for first family)
     };
 
     /// Parse a single family from its fields.
@@ -559,28 +558,11 @@ namespace
             headerText = headerFields[0].text().trimmed();
         }
 
-        QString surname;
+        // An RS header names the sister ministered to; an EQ header is a surname only
         std::optional<QString> ministeredPersonName;
-
-        // Detect EQ vs RS based on header format
-        result.isRSFormat = Name::looksLikeFullName(headerText);
-
-        if (Name::isSurnameOnly(headerText))
+        if (Name::looksLikeFullName(headerText))
         {
-            // EQ style: just surname
-            surname = headerText;
-        }
-        else if (Name::looksLikeFullName(headerText))
-        {
-            // RS style: full "Last, First" name
             ministeredPersonName = headerText;
-            int commaPos = headerText.indexOf(',');
-            surname = (commaPos > 0) ? headerText.left(commaPos).trimmed() : headerText;
-        }
-        else
-        {
-            // Unknown format, use as-is
-            surname = headerText;
         }
 
         QList<Person> members = parseFamilyMembers(memberFields, cols, documentDate);

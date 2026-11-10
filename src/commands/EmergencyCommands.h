@@ -45,7 +45,7 @@ public:
 
     QString type() const override { return TypeName; }
     CommandOutcome execute(Document& document) const override;
-    UndoableCommandPtr inverse() const override;
+    CommandPtr inverse() const override;
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
@@ -58,7 +58,7 @@ private:
 /// The inverse of EndEmergencyCommand: puts the emergency back as it was removed. Its result
 /// holds when the emergency in progress equals it, and it conflicts when a different one is
 /// in progress.
-class RestoreEmergencyCommand : public UndoableCommand
+class RestoreEmergencyCommand : public Command
 {
 public:
     static constexpr const char* TypeName = "restoreEmergency";
@@ -67,7 +67,6 @@ public:
 
     QString type() const override { return TypeName; }
     CommandOutcome execute(Document& document) const override;
-    UndoableCommandPtr inverse() const override;
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
@@ -95,7 +94,7 @@ public:
 
     QString type() const override { return TypeName; }
     CommandOutcome execute(Document& document) const override;
-    UndoableCommandPtr inverse() const override;
+    CommandPtr inverse() const override;
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
@@ -108,7 +107,7 @@ private:
 /// The inverse of AddContactAttemptCommand, which is how an attempt is undone. It removes
 /// the attempt by id: its result holds when the attempt is already gone, and it conflicts
 /// when no emergency is in progress. It holds the whole attempt for its inverse to add back.
-class DeleteContactAttemptCommand : public UndoableCommand
+class DeleteContactAttemptCommand : public Command
 {
 public:
     static constexpr const char* TypeName = "deleteContactAttempt";
@@ -117,7 +116,6 @@ public:
 
     QString type() const override { return TypeName; }
     CommandOutcome execute(Document& document) const override;
-    UndoableCommandPtr inverse() const override;
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
@@ -143,7 +141,7 @@ public:
 
     QString type() const override { return TypeName; }
     CommandOutcome execute(Document& document) const override;
-    UndoableCommandPtr inverse() const override;
+    CommandPtr inverse() const override;
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
@@ -182,7 +180,7 @@ public:
 
     QString type() const override { return TypeName; }
     CommandOutcome execute(Document& document) const override;
-    UndoableCommandPtr inverse() const override;
+    CommandPtr inverse() const override;
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
@@ -213,7 +211,7 @@ public:
 
     QString type() const override { return TypeName; }
     CommandOutcome execute(Document& document) const override;
-    UndoableCommandPtr inverse() const override;
+    CommandPtr inverse() const override;
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 

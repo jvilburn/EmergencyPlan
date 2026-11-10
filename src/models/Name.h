@@ -28,9 +28,6 @@ public:
     // Static classification/matching functions (for raw QString parsing)
     // ========================================================================
 
-    /// Returns true if text is a surname only (letters/spaces, no comma).
-    static bool isSurnameOnly(const QString& text);
-
     /// Returns true if text matches "Last, First" or "Last, First Middle" name format.
     static bool looksLikeFullName(const QString& text);
 };

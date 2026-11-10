@@ -155,8 +155,6 @@ private:
 
     void rebuildPersonToFamilyMap();
     void rebuildDecorationCaches();
-    /// Works out the family's entry in the status table again.
-    void updateEmergencyStatus(const FamilyId& familyId);
 
     // Ward/Stake hierarchy and document naming
     DocumentMetadata m_metadata;

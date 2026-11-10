@@ -36,7 +36,7 @@ CommandOutcome AddTeamCommand::execute(Document& document) const
     return CommandOutcome::Applied;
 }
 
-UndoableCommandPtr AddTeamCommand::inverse() const
+CommandPtr AddTeamCommand::inverse() const
 {
     return std::make_shared<DeleteTeamCommand>(m_team, m_cleanup, description().undone());
 }
@@ -135,7 +135,7 @@ CommandOutcome UpdateTeamCommand::execute(Document& document) const
     return CommandOutcome::Applied;
 }
 
-UndoableCommandPtr UpdateTeamCommand::inverse() const
+CommandPtr UpdateTeamCommand::inverse() const
 {
     return std::make_shared<UpdateTeamCommand>(m_teamId,
                                                changeSwapped(m_name),
@@ -199,7 +199,7 @@ CommandOutcome DeleteTeamCommand::execute(Document& document) const
     return CommandOutcome::Applied;
 }
 
-UndoableCommandPtr DeleteTeamCommand::inverse() const
+CommandPtr DeleteTeamCommand::inverse() const
 {
     return std::make_shared<AddTeamCommand>(m_team, m_cleanup, description().undone());
 }

@@ -12,7 +12,7 @@ class Filter;
 /// Structure:
 /// - UnassignedHeader (top level) - shows "Unassigned (N families/sisters)"
 /// - MinisteredFamily (EQ) or MinisteredSister (RS) - individual items
-/// - ContactDetail - phone, email, address (loaded on demand)
+/// - ContactDetail - phone, email, address, built with the tree
 ///
 /// It rebuilds on every document change.
 class UnassignedMinisteringModel : public BaseTreeModel
@@ -50,9 +50,6 @@ public:
     /// Find the first MinisteredFamily or MinisteredSister node matching familyId.
     QModelIndex indexForFamilyId(const FamilyId& familyId) const;
 
-    // Lazy loading for contact details
-    void loadContactDetails(const QModelIndex& index);
-
     // Check if there are any unassigned items
     bool hasUnassigned() const;
 
@@ -69,7 +66,6 @@ private:
         QString displayText;
         TreeNode* parent = nullptr;
         QList<TreeNode*> children;
-        bool contactsLoaded = false;
 
         ~TreeNode()
         {

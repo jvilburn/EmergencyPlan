@@ -68,24 +68,12 @@ NeedsSubView::NeedsSubView(QWidget* parent)
             this, &NeedsSubView::onSelectionChanged);
     connect(m_tree, &QTreeView::customContextMenuRequested,
             this, &NeedsSubView::onContextMenu);
-    connect(m_tree, &QTreeView::expanded,
-            this, &NeedsSubView::onTreeExpanded);
 }
 
 void NeedsSubView::onSelectionChanged()
 {
     updateButtonStates();
     emit highlightChanged();
-}
-
-void NeedsSubView::onTreeExpanded(const QModelIndex& index)
-{
-    ItemType type = m_model->itemTypeAt(index);
-
-    if (type == ItemType::Person)
-    {
-        m_model->loadContactDetails(index);
-    }
 }
 
 void NeedsSubView::onContextMenu(const QPoint& pos)

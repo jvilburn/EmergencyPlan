@@ -203,7 +203,7 @@ void UnmappedPanel::paintEvent(QPaintEvent* /*event*/)
         state.showPip = highlight.contactPointFamilyIds.contains(item.familyId);
         state.icons = m_viewModel->familyIcons(item.familyId);
 
-        MarkerRenderer::draw(painter, item.markerPos, QVariantMap(), state);
+        MarkerRenderer::draw(painter, item.markerPos, state);
 
         // Draw label (elided if too long)
         painter.setPen(QColor(60, 60, 60));
@@ -256,7 +256,7 @@ std::optional<FamilyId> UnmappedPanel::markerAtPoint(const QPoint& pos) const
         MarkerRenderer::State state;
         state.scale = 0.5;
 
-        if (MarkerRenderer::hitTest(item.markerPos, pos, QVariantMap(), state))
+        if (MarkerRenderer::hitTest(item.markerPos, pos, state))
         {
             return item.familyId;
         }

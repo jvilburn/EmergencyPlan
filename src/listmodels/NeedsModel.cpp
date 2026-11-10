@@ -83,6 +83,7 @@ void NeedsModel::rebuild()
                     text += QString(" - %1").arg(person.specialNeedNote());
                 }
                 node->displayText = text;
+                appendContactRows(node, personContactLines(person.id(), doc));
 
                 unsorted.append({node, person.displayName().toLower()});
             }
@@ -186,12 +187,6 @@ bool NeedsModel::hasChildren(const QModelIndex& parent) const
     if (!node)
     {
         return false;
-    }
-
-    // Person nodes can have contact children (lazy loaded)
-    if (node->type == ItemType::Person)
-    {
-        return true;
     }
 
     return !node->children.isEmpty();
@@ -319,114 +314,4 @@ ItemType NeedsModel::itemTypeAt(const QModelIndex& index) const
         return node->type;
     }
     return ItemType::Invalid;
-}
-
-void NeedsModel::loadContactDetails(const QModelIndex& index)
-{
-    TreeNode* node = nodeFromIndex(index);
-    if (!node || node->contactsLoaded)
-    {
-        return;
-    }
-
-    if (node->type != ItemType::Person)
-    {
-        return;
-    }
-
-    const Document& doc = DocumentManager::instance()->document();
-    std::optional<Person> person = doc.findPersonById(node->personId);
-    if (!person)
-    {
-        node->contactsLoaded = true;
-        return;
-    }
-
-    // Check for address availability
-    const QHash<FamilyId, Family>& families = doc.families();
-    bool hasAddress = false;
-    if (families.contains(node->familyId))
-    {
-        hasAddress = !families[node->familyId].address().isEmpty();
-    }
-
-    // Count actual items to insert
-    int itemCount = 0;
-    if (!person->phone().isEmpty())
-    {
-        itemCount++;
-    }
-    if (!person->altPhone().isEmpty())
-    {
-        itemCount++;
-    }
-    if (!person->email().isEmpty())
-    {
-        itemCount++;
-    }
-    if (hasAddress)
-    {
-        itemCount++;
-    }
-
-    if (itemCount == 0)
-    {
-        node->contactsLoaded = true;
-        return;
-    }
-
-    int insertRow = node->children.size();
-    beginInsertRows(index, insertRow, insertRow + itemCount - 1);
-
-    // Phone
-    if (!person->phone().isEmpty())
-    {
-        TreeNode* phoneNode = new TreeNode();
-        phoneNode->type = ItemType::ContactDetail;
-        phoneNode->personId = node->personId;
-        phoneNode->familyId = node->familyId;
-        phoneNode->displayText = ContactIcons::Phone + person->phone();
-        phoneNode->parent = node;
-        node->children.append(phoneNode);
-    }
-
-    // Alt phone
-    if (!person->altPhone().isEmpty())
-    {
-        TreeNode* altPhoneNode = new TreeNode();
-        altPhoneNode->type = ItemType::ContactDetail;
-        altPhoneNode->personId = node->personId;
-        altPhoneNode->familyId = node->familyId;
-        altPhoneNode->displayText = ContactIcons::Phone + person->altPhone() + tr(" (alt)");
-        altPhoneNode->parent = node;
-        node->children.append(altPhoneNode);
-    }
-
-    // Email
-    if (!person->email().isEmpty())
-    {
-        TreeNode* emailNode = new TreeNode();
-        emailNode->type = ItemType::ContactDetail;
-        emailNode->personId = node->personId;
-        emailNode->familyId = node->familyId;
-        emailNode->displayText = ContactIcons::Email + person->email();
-        emailNode->parent = node;
-        node->children.append(emailNode);
-    }
-
-    // Address (from family)
-    if (hasAddress)
-    {
-        const Family& family = families[node->familyId];
-        TreeNode* addrNode = new TreeNode();
-        addrNode->type = ItemType::ContactDetail;
-        addrNode->personId = node->personId;
-        addrNode->familyId = node->familyId;
-        addrNode->displayText = ContactIcons::Address + family.address().full();
-        addrNode->parent = node;
-        node->children.append(addrNode);
-    }
-
-    endInsertRows();
-    node->contactsLoaded = true;
 }

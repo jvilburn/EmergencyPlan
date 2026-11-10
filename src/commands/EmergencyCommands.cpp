@@ -214,7 +214,7 @@ CommandOutcome EndEmergencyCommand::execute(Document& document) const
     return CommandOutcome::Applied;
 }
 
-UndoableCommandPtr EndEmergencyCommand::inverse() const
+CommandPtr EndEmergencyCommand::inverse() const
 {
     return std::make_shared<RestoreEmergencyCommand>(m_response, description().undone());
 }
@@ -243,7 +243,7 @@ CommandPtr EndEmergencyCommand::fromJson(JsonReader json, const CommandDescripti
 // ----------------------------------------------------------------------------
 
 RestoreEmergencyCommand::RestoreEmergencyCommand(const EmergencyResponse& response, const CommandDescription& description)
-    : UndoableCommand(description)
+    : Command(description)
     , m_response(response)
 {
 }
@@ -257,11 +257,6 @@ CommandOutcome RestoreEmergencyCommand::execute(Document& document) const
         return CommandOutcome::Applied;
     }
     return *inProgress == m_response ? CommandOutcome::Applied : CommandOutcome::Conflicted;
-}
-
-UndoableCommandPtr RestoreEmergencyCommand::inverse() const
-{
-    return std::make_shared<EndEmergencyCommand>(m_response, description().undone());
 }
 
 QJsonObject RestoreEmergencyCommand::toJson() const
@@ -314,7 +309,7 @@ CommandOutcome AddContactAttemptCommand::execute(Document& document) const
     return CommandOutcome::Applied;
 }
 
-UndoableCommandPtr AddContactAttemptCommand::inverse() const
+CommandPtr AddContactAttemptCommand::inverse() const
 {
     return std::make_shared<DeleteContactAttemptCommand>(m_attempt, description().undone());
 }
@@ -343,7 +338,7 @@ CommandPtr AddContactAttemptCommand::fromJson(JsonReader json, const CommandDesc
 // ----------------------------------------------------------------------------
 
 DeleteContactAttemptCommand::DeleteContactAttemptCommand(const ContactAttempt& attempt, const CommandDescription& description)
-    : UndoableCommand(description)
+    : Command(description)
     , m_attempt(attempt)
 {
 }
@@ -361,11 +356,6 @@ CommandOutcome DeleteContactAttemptCommand::execute(Document& document) const
         document.setEmergencyResponse(response);
     }
     return CommandOutcome::Applied;
-}
-
-UndoableCommandPtr DeleteContactAttemptCommand::inverse() const
-{
-    return std::make_shared<AddContactAttemptCommand>(m_attempt, description().undone());
 }
 
 QJsonObject DeleteContactAttemptCommand::toJson() const
@@ -424,7 +414,7 @@ CommandOutcome AddTaskCommand::execute(Document& document) const
     return CommandOutcome::Applied;
 }
 
-UndoableCommandPtr AddTaskCommand::inverse() const
+CommandPtr AddTaskCommand::inverse() const
 {
     return std::make_shared<DeleteTaskCommand>(m_task, description().undone());
 }
@@ -540,7 +530,7 @@ CommandOutcome UpdateTaskCommand::execute(Document& document) const
     return CommandOutcome::Applied;
 }
 
-UndoableCommandPtr UpdateTaskCommand::inverse() const
+CommandPtr UpdateTaskCommand::inverse() const
 {
     return std::make_shared<UpdateTaskCommand>(m_familyId,
                                                m_taskId,
@@ -621,7 +611,7 @@ CommandOutcome DeleteTaskCommand::execute(Document& document) const
     return CommandOutcome::Applied;
 }
 
-UndoableCommandPtr DeleteTaskCommand::inverse() const
+CommandPtr DeleteTaskCommand::inverse() const
 {
     return std::make_shared<AddTaskCommand>(m_task, description().undone());
 }

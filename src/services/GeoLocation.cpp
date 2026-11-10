@@ -1,5 +1,4 @@
-// geolocation.cpp
-#include "geolocation.h"
+#include "GeoLocation.h"
 #include <QNetworkReply>
 #include <QJsonDocument>
 #include <QJsonObject>

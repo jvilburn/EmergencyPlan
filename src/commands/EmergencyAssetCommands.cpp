@@ -35,7 +35,7 @@ CommandOutcome AddEmergencyAssetCommand::execute(Document& document) const
     return CommandOutcome::Applied;
 }
 
-UndoableCommandPtr AddEmergencyAssetCommand::inverse() const
+CommandPtr AddEmergencyAssetCommand::inverse() const
 {
     return std::make_shared<DeleteEmergencyAssetCommand>(m_asset, description().undone());
 }
@@ -112,7 +112,7 @@ CommandOutcome UpdateEmergencyAssetCommand::execute(Document& document) const
     return CommandOutcome::Applied;
 }
 
-UndoableCommandPtr UpdateEmergencyAssetCommand::inverse() const
+CommandPtr UpdateEmergencyAssetCommand::inverse() const
 {
     return std::make_shared<UpdateEmergencyAssetCommand>(m_assetId,
                                                          changeSwapped(m_name),
@@ -175,7 +175,7 @@ CommandOutcome DeleteEmergencyAssetCommand::execute(Document& document) const
     return CommandOutcome::Applied;
 }
 
-UndoableCommandPtr DeleteEmergencyAssetCommand::inverse() const
+CommandPtr DeleteEmergencyAssetCommand::inverse() const
 {
     return std::make_shared<AddEmergencyAssetCommand>(m_asset, description().undone());
 }

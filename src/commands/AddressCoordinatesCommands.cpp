@@ -86,7 +86,7 @@ CommandOutcome SetAddressCoordinatesCommand::execute(Document& document) const
     return CommandOutcome::Applied;
 }
 
-UndoableCommandPtr SetAddressCoordinatesCommand::inverse() const
+CommandPtr SetAddressCoordinatesCommand::inverse() const
 {
     return std::make_shared<RevertAddressCoordinatesCommand>(m_address, m_before, m_typed, description().undone());
 }
@@ -111,7 +111,7 @@ RevertAddressCoordinatesCommand::RevertAddressCoordinatesCommand(const QString& 
                                                                  const std::optional<Coordinates>& before,
                                                                  const Coordinates& typed,
                                                                  const CommandDescription& description)
-    : UndoableCommand(description)
+    : Command(description)
     , m_address(address)
     , m_before(before)
     , m_typed(typed)
@@ -131,11 +131,6 @@ CommandOutcome RevertAddressCoordinatesCommand::execute(Document& document) cons
     }
     document.setAddressCoordinates(m_address, m_before);
     return CommandOutcome::Applied;
-}
-
-UndoableCommandPtr RevertAddressCoordinatesCommand::inverse() const
-{
-    return std::make_shared<SetAddressCoordinatesCommand>(m_address, m_before, m_typed, description().undone());
 }
 
 QJsonObject RevertAddressCoordinatesCommand::toJson() const

@@ -18,7 +18,7 @@ class ResponseTask;
 /// Level 0: Teams sorted by name, displayed as "Name (N)" where N = member count
 /// Level 1: Members in each team, sorted by display name. Leader shown first with "(leader)" suffix.
 ///          During emergencies: task rows appended after members.
-/// Level 2: Contact details (phone, email, address) - lazy loaded on expand
+/// Level 2: Contact details (phone, email, address), built with the tree
 ///
 /// It rebuilds on every document change.
 ///
@@ -53,9 +53,6 @@ public:
     QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
     bool hasChildren(const QModelIndex& parent = {}) const override;
 
-    // Lazy loading for contact details
-    void loadContactDetails(const QModelIndex& index);
-
     // BaseTreeModel interface
     ItemType itemTypeAt(const QModelIndex& index) const override;
     SelectionKey selectionKeyAt(const QModelIndex& index) const override;
@@ -84,7 +81,6 @@ private:
         QString displayText;
         TreeNode* parent = nullptr;
         QList<TreeNode*> children;
-        bool contactsLoaded = false;
         bool taskResolved = false;
 
         ~TreeNode() { qDeleteAll(children); }

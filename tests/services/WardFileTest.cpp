@@ -253,10 +253,8 @@ void WardFileTest::payloadWithAMissingOrMalformedFieldIsUnreadable_data()
                                                   << QString("landed.not-a-fingerprint: is not a fingerprint");
     QTest::newRow("landed mark not an integer") << QStringList({"landed", zeroFingerprint}) << QJsonValue(QString("3"))
                                                 << QString("landed.%1: is not an integer").arg(zeroFingerprint);
-    QTest::newRow("flag written out false") << QStringList({"device", "noLongerShared"}) << QJsonValue(false)
-                                            << QString("device.noLongerShared: is written out empty");
-    QTest::newRow("invite seeds written out empty") << QStringList({"device", "inviteSeeds"}) << QJsonValue(QJsonArray())
-                                                    << QString("device.inviteSeeds: is written out empty");
+    QTest::newRow("former keys written out empty") << QStringList({"access", "formerKeys"}) << QJsonValue(QJsonArray())
+                                                   << QString("access.formerKeys: is written out empty");
     QTest::newRow("journal missing") << QStringList({"device", "journal"}) << removed()
                                      << QString("device.journal: missing");
     QTest::newRow("sequence counter a fraction") << QStringList({"device", "journal", "lastSequence"}) << QJsonValue(1.5)

@@ -45,13 +45,13 @@ inline QString layerName(TileLayer layer)
     return layer == TileLayer::Street ? "street" : "satellite";
 }
 
-/// Metadata for a cached tile, stored alongside the tile image.
-/// Used for conditional requests and staleness checks.
+/// Metadata for a cached tile, stored alongside the tile image: when it is stale, and how to
+/// ask its provider whether it changed.
 struct TileMetadata
 {
     QDateTime fetchDate;      ///< When the tile was downloaded (or oldest source for composites)
-    QString etag;             ///< ETag header for conditional requests (empty for scaled/composite)
-    QString lastModified;     ///< Last-Modified header for conditional requests (empty for scaled/composite)
+    QString etag;             ///< the provider's ETag, sent back to ask whether the tile changed
+    QString lastModified;     ///< the provider's Last-Modified, sent back the same way
     QString providerId;       ///< Provider that served this tile (empty if mixed sources)
     bool isScaledUp = false;  ///< True if scaled from lower zoom - needs native fetch
 

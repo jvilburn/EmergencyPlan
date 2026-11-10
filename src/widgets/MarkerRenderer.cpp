@@ -185,11 +185,8 @@ static void drawBlurredShadow(QPainter& painter, const QPointF& pos,
     painter.drawImage(drawPos, blurredImage);
 }
 
-void draw(QPainter& painter, const QPointF& pos,
-          const QVariantMap& family, const State& state)
+void draw(QPainter& painter, const QPointF& pos, const State& state)
 {
-    Q_UNUSED(family)  // Family data passed via state.icons
-
     double size = SVG_BASE_SIZE * state.scale;
     int intSize = static_cast<int>(qCeil(size));
 
@@ -306,11 +303,8 @@ void draw(QPainter& painter, const QPointF& pos,
     painter.setOpacity(1.0);
 }
 
-bool hitTest(const QPointF& markerPos, const QPointF& point,
-             const QVariantMap& family, const State& state)
+bool hitTest(const QPointF& markerPos, const QPointF& point, const State& state)
 {
-    Q_UNUSED(family)
-
     double dx = point.x() - markerPos.x();
     double dy = point.y() - markerPos.y();
     double distance = qSqrt(dx * dx + dy * dy);

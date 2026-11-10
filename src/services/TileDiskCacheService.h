@@ -22,9 +22,6 @@ public:
     /// Call once before using the service.
     void initialize();
 
-    /// Check if service is initialized
-    bool isInitialized() const { return m_initialized; }
-
     /// Load tile + metadata together (returns nullopt if not found)
     std::optional<CachedTile> load(TileId id) const;
 
@@ -42,7 +39,6 @@ private:
 
     QSet<TileId> m_tileIndex;
     QString m_cacheDir;
-    bool m_initialized = false;
     bool m_indexDirty = false;
     QTimer m_indexSaveTimer;
 };

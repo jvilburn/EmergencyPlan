@@ -159,7 +159,7 @@ CommandOutcome ImportMinisteringCommand::execute(Document& document) const
     return CommandOutcome::Applied;
 }
 
-UndoableCommandPtr ImportMinisteringCommand::inverse() const
+CommandPtr ImportMinisteringCommand::inverse() const
 {
     return std::make_shared<ImportMinisteringCommand>(m_org,
                                                       m_collection.swapped(),

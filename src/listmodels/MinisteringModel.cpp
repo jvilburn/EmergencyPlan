@@ -191,6 +191,7 @@ void MinisteringModel::addMinistersSection(TreeNode* companionshipNode, const Mi
         }
 
         ministerNode->parent = ministersHeader;
+        appendContactRows(ministerNode, personContactLines(ministerData.second, doc));
         ministersHeader->children.append(ministerNode);
     }
 }
@@ -247,6 +248,7 @@ void MinisteringModel::addMinisteredSection(TreeNode* companionshipNode, const M
             familyNode->familyId = familyData.second;
             familyNode->displayText = familyData.first;
             familyNode->parent = ministeredHeader;
+            appendContactRows(familyNode, familyContactLines(familyData.second, doc));
             ministeredHeader->children.append(familyNode);
         }
     }
@@ -279,6 +281,7 @@ void MinisteringModel::addMinisteredSection(TreeNode* companionshipNode, const M
             sisterNode->personId = sisterData.second;
             sisterNode->displayText = sisterData.first;
             sisterNode->parent = ministeredHeader;
+            appendContactRows(sisterNode, personContactLines(sisterData.second, doc));
             ministeredHeader->children.append(sisterNode);
         }
     }
@@ -391,14 +394,6 @@ bool MinisteringModel::hasChildren(const QModelIndex& parent) const
     if (!node)
     {
         return false;
-    }
-
-    // Person/family nodes can have contact children (lazy loaded)
-    if (node->type == ItemType::Minister
-        || node->type == ItemType::MinisteredFamily
-        || node->type == ItemType::MinisteredSister)
-    {
-        return true;
     }
 
     return !node->children.isEmpty();
@@ -792,198 +787,6 @@ std::optional<MinisteringGroupId> MinisteringModel::companionshipIdAt(const QMod
         node = node->parent;
     }
     return std::nullopt;
-}
-
-// Note: Similar logic exists in UnassignedMinisteringModel::loadContactDetails().
-// Kept separate per "no base class" design decision (see tree-view-model-migration.md).
-void MinisteringModel::loadContactDetails(const QModelIndex& index)
-{
-    TreeNode* node = nodeFromIndex(index);
-    if (!node || node->contactsLoaded)
-    {
-        return;
-    }
-
-    // Only load contacts for person/family nodes
-    if (node->type != ItemType::Minister
-        && node->type != ItemType::MinisteredFamily
-        && node->type != ItemType::MinisteredSister)
-    {
-        return;
-    }
-
-    const Document& doc = DocumentManager::instance()->document();
-    int insertRow = node->children.size();
-
-    if (node->type == ItemType::Minister || node->type == ItemType::MinisteredSister)
-    {
-        // Person contact info
-        if (!node->personId)
-        {
-            node->contactsLoaded = true;
-            return;
-        }
-
-        std::optional<Person> person = doc.findPersonById(*node->personId);
-        if (!person)
-        {
-            node->contactsLoaded = true;
-            return;
-        }
-
-        // Check for address availability
-        std::optional<FamilyId> familyId = doc.familyIdForPerson(*node->personId);
-        const QHash<FamilyId, Family>& families = doc.families();
-        bool hasAddress = false;
-        if (familyId && families.contains(*familyId))
-        {
-            hasAddress = !families[*familyId].address().isEmpty();
-        }
-
-        // Count actual items to insert
-        int itemCount = 0;
-        if (!person->phone().isEmpty())
-        {
-            itemCount++;
-        }
-        if (!person->altPhone().isEmpty())
-        {
-            itemCount++;
-        }
-        if (!person->email().isEmpty())
-        {
-            itemCount++;
-        }
-        if (hasAddress)
-        {
-            itemCount++;
-        }
-
-        if (itemCount == 0)
-        {
-            node->contactsLoaded = true;
-            return;
-        }
-
-        beginInsertRows(index, insertRow, insertRow + itemCount - 1);
-
-        // Phone
-        if (!person->phone().isEmpty())
-        {
-            TreeNode* phoneNode = new TreeNode();
-            phoneNode->type = ItemType::ContactDetail;
-            phoneNode->displayText = ContactIcons::Phone + person->phone();
-            phoneNode->personId = node->personId;
-            phoneNode->parent = node;
-            node->children.append(phoneNode);
-        }
-
-        // Alt phone
-        if (!person->altPhone().isEmpty())
-        {
-            TreeNode* altPhoneNode = new TreeNode();
-            altPhoneNode->type = ItemType::ContactDetail;
-            altPhoneNode->displayText = ContactIcons::Phone + person->altPhone() + tr(" (alt)");
-            altPhoneNode->personId = node->personId;
-            altPhoneNode->parent = node;
-            node->children.append(altPhoneNode);
-        }
-
-        // Email
-        if (!person->email().isEmpty())
-        {
-            TreeNode* emailNode = new TreeNode();
-            emailNode->type = ItemType::ContactDetail;
-            emailNode->displayText = ContactIcons::Email + person->email();
-            emailNode->personId = node->personId;
-            emailNode->parent = node;
-            node->children.append(emailNode);
-        }
-
-        // Address (from family)
-        if (hasAddress)
-        {
-            const Family& family = families[*familyId];
-            TreeNode* addrNode = new TreeNode();
-            addrNode->type = ItemType::ContactDetail;
-            addrNode->displayText = ContactIcons::Address + family.address().full();
-            addrNode->personId = node->personId;
-            addrNode->parent = node;
-            node->children.append(addrNode);
-        }
-
-        endInsertRows();
-    }
-    else if (node->type == ItemType::MinisteredFamily)
-    {
-        // Family contact info
-        const QHash<FamilyId, Family>& families = doc.families();
-        if (!node->familyId || !families.contains(*node->familyId))
-        {
-            node->contactsLoaded = true;
-            return;
-        }
-
-        const Family& family = families[*node->familyId];
-
-        // Count actual items to insert
-        int itemCount = 0;
-        bool hasParentPhone = false;
-        for (const Person& member : family.members())
-        {
-            if (member.isParent() && !member.phone().isEmpty())
-            {
-                hasParentPhone = true;
-                itemCount++;
-                break;
-            }
-        }
-        if (!family.address().isEmpty())
-        {
-            itemCount++;
-        }
-
-        if (itemCount == 0)
-        {
-            node->contactsLoaded = true;
-            return;
-        }
-
-        beginInsertRows(index, insertRow, insertRow + itemCount - 1);
-
-        // Find head of household for phone
-        if (hasParentPhone)
-        {
-            for (const Person& member : family.members())
-            {
-                if (member.isParent() && !member.phone().isEmpty())
-                {
-                    TreeNode* phoneNode = new TreeNode();
-                    phoneNode->type = ItemType::ContactDetail;
-                    phoneNode->displayText = ContactIcons::Phone + member.phone();
-                    phoneNode->familyId = node->familyId;
-                    phoneNode->parent = node;
-                    node->children.append(phoneNode);
-                    break;
-                }
-            }
-        }
-
-        // Address
-        if (!family.address().isEmpty())
-        {
-            TreeNode* addrNode = new TreeNode();
-            addrNode->type = ItemType::ContactDetail;
-            addrNode->displayText = ContactIcons::Address + family.address().full();
-            addrNode->familyId = node->familyId;
-            addrNode->parent = node;
-            node->children.append(addrNode);
-        }
-
-        endInsertRows();
-    }
-
-    node->contactsLoaded = true;
 }
 
 MinisteringModel::TreeNode* MinisteringModel::findMinisteredSection(TreeNode* companionshipNode) const

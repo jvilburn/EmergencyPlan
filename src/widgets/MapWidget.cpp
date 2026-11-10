@@ -258,7 +258,7 @@ void MapWidget::updateLayerButtonIcon()
     m_layerButton->setToolTip(tooltip);
 
     TileService* tileService = TileService::instance();
-    if (!tileService || !tileService->isInitialized())
+    if (!tileService)
     {
         return;
     }
@@ -385,7 +385,7 @@ void MapWidget::paintEvent(QPaintEvent* /*event*/)
 void MapWidget::drawTiles(QPainter& painter)
 {
     TileService* tileService = TileService::instance();
-    if (!tileService || !tileService->isInitialized())
+    if (!tileService)
     {
         // Draw placeholder background
         painter.fillRect(rect(), QColor(200, 200, 200));
@@ -543,7 +543,7 @@ void MapWidget::drawChurchMarkers(QPainter& painter)
 
 void MapWidget::drawMarkers(QPainter& painter)
 {
-    const QVariantList& families = m_viewModel->families();
+    const QList<MapViewModel::MappedFamily>& families = m_viewModel->families();
 
     // Use fractional zoom for smooth marker positioning during animation
     double clampedZoom = qBound(static_cast<double>(MIN_ZOOM), m_zoom, static_cast<double>(MAX_ZOOM));
@@ -562,16 +562,14 @@ void MapWidget::drawMarkers(QPainter& painter)
         struct MarkerInfo
         {
             QPointF pos;
-            QVariantMap data;
             MarkerRenderer::State state;
             qreal sortOpacity;
         };
         QVector<MarkerInfo> markers;
 
-        for (const QVariant& var : families)
+        for (const MapViewModel::MappedFamily& family : families)
         {
-            QVariantMap hh = var.toMap();
-            FamilyId id = FamilyId::fromString(hh["id"].toString());
+            const FamilyId& id = family.id;
 
             // Skip families the view does not show
             if (visibleIds.has_value() && !visibleIds->contains(id))
@@ -579,8 +577,8 @@ void MapWidget::drawMarkers(QPainter& painter)
                 continue;
             }
 
-            double lat = hh["latitude"].toDouble();
-            double lng = hh["longitude"].toDouble();
+            double lat = family.position.latitude();
+            double lng = family.position.longitude();
             QPointF pos = SlippyMapMath::latLngToPixel(lat, lng, clampedZoom,
                                                         m_centerLat, m_centerLng,
                                                         width(), height());
@@ -604,7 +602,7 @@ void MapWidget::drawMarkers(QPainter& painter)
             state.statusIcon = statusIcon;
             state.icons = m_viewModel->familyIcons(id);  // Use cached icons
 
-            markers.append({pos, hh, state, opacity});
+            markers.append({pos, state, opacity});
         }
 
         // Sort by opacity, then by pip (so pip markers draw on top)
@@ -621,7 +619,7 @@ void MapWidget::drawMarkers(QPainter& painter)
 
         for (const MarkerInfo& m : markers)
         {
-            MarkerRenderer::draw(painter, m.pos, m.data, m.state);
+            MarkerRenderer::draw(painter, m.pos, m.state);
         }
         return;
     }
@@ -825,23 +823,22 @@ void MapWidget::wheelEvent(QWheelEvent* event)
 
 std::optional<FamilyId> MapWidget::markerAtPoint(const QPoint& pos) const
 {
-    const QVariantList& families = m_viewModel->families();
+    const QList<MapViewModel::MappedFamily>& families = m_viewModel->families();
     double clampedZoom = qBound(static_cast<double>(MIN_ZOOM), m_zoom, static_cast<double>(MAX_ZOOM));
 
     // Check in reverse order (topmost markers drawn last)
     for (int i = families.size() - 1; i >= 0; --i)
     {
-        QVariantMap hh = families[i].toMap();
-        double lat = hh["latitude"].toDouble();
-        double lng = hh["longitude"].toDouble();
+        double lat = families[i].position.latitude();
+        double lng = families[i].position.longitude();
         QPointF markerPos = SlippyMapMath::latLngToPixel(lat, lng, clampedZoom,
                                                           m_centerLat, m_centerLng,
                                                           width(), height());
 
         MarkerRenderer::State state;  // Default state for hit testing
-        if (MarkerRenderer::hitTest(markerPos, pos, hh, state))
+        if (MarkerRenderer::hitTest(markerPos, pos, state))
         {
-            return FamilyId::fromString(hh["id"].toString());
+            return families[i].id;
         }
     }
 
@@ -939,19 +936,16 @@ void MapWidget::ensureVisible(const QSet<FamilyId>& familyIds)
     QSet<FamilyId> addedIds;
 
     // Add currently visible family markers
-    const QVariantList& allFamilies = m_viewModel->families();
-    for (const QVariant& var : allFamilies)
+    for (const MapViewModel::MappedFamily& family : m_viewModel->families())
     {
-        QVariantMap fam = var.toMap();
-        double lat = fam["latitude"].toDouble();
-        double lng = fam["longitude"].toDouble();
+        double lat = family.position.latitude();
+        double lng = family.position.longitude();
 
         if (lat >= currentViewport.minLat && lat <= currentViewport.maxLat
             && lng >= currentViewport.minLng && lng <= currentViewport.maxLng)
         {
-            FamilyId id = FamilyId::fromString(fam["id"].toString());
-            markers.append({lat, lng, MarkerRenderer::familyBounds(m_viewModel->familyIcons(id))});
-            addedIds.insert(id);
+            markers.append({lat, lng, MarkerRenderer::familyBounds(m_viewModel->familyIcons(family.id))});
+            addedIds.insert(family.id);
         }
     }
 
@@ -996,19 +990,15 @@ void MapWidget::ensureVisible(const QSet<FamilyId>& familyIds)
 void MapWidget::fitAllFamilies()
 {
     const Document& doc = DocumentManager::instance()->document();
-    const QVariantList& families = m_viewModel->families();
-
     QVector<MarkerInfo> markers;
 
     // Add all family markers
-    for (const QVariant& var : families)
+    for (const MapViewModel::MappedFamily& family : m_viewModel->families())
     {
-        QVariantMap fam = var.toMap();
-        FamilyId id = FamilyId::fromString(fam["id"].toString());
         markers.append({
-            fam["latitude"].toDouble(),
-            fam["longitude"].toDouble(),
-            MarkerRenderer::familyBounds(m_viewModel->familyIcons(id))
+            family.position.latitude(),
+            family.position.longitude(),
+            MarkerRenderer::familyBounds(m_viewModel->familyIcons(family.id))
         });
     }
 

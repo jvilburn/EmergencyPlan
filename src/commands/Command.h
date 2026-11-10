@@ -117,8 +117,8 @@ class UndoableCommand : public Command
 {
 public:
     /// The command that takes this one back, described by description().undone(). Never
-    /// empty.
-    virtual UndoableCommandPtr inverse() const = 0;
+    /// empty. Undo runs it without stacking it, so it need not be undoable itself.
+    virtual CommandPtr inverse() const = 0;
 
 protected:
     explicit UndoableCommand(const CommandDescription& description);

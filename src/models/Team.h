@@ -32,10 +32,7 @@ public:
     void setMemberIds(const QSet<PersonId>& memberIds);
 
     // Computed properties
-    bool hasLeader() const { return m_leaderId.has_value(); }
     bool hasMember(const PersonId& memberId) const { return m_memberIds.contains(memberId); }
-    bool isEmpty() const { return m_memberIds.isEmpty(); }
-    int memberCount() const { return m_memberIds.size(); }
 
     // JSON serialization
     QJsonObject toJson() const;

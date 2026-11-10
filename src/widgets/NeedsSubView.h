@@ -29,7 +29,6 @@ signals:
 
 private slots:
     void onSelectionChanged();
-    void onTreeExpanded(const QModelIndex& index);
     void onContextMenu(const QPoint& pos);
     void editNeedFromContextMenu();
     void deleteNeedFromContextMenu();

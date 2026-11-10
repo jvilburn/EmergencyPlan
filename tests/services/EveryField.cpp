@@ -91,7 +91,7 @@ AccessList everyAccessField(const Identity& laptop, const Identity& phone)
     return AccessList(users, invites, {Crypto::randomBytes(Crypto::KeyBytes)});
 }
 
-DeviceState everyDeviceField(const AccessList& access)
+DeviceState everyDeviceField()
 {
     DeviceState device;
     for (const CommandType& type : CommandRegistry::types())
@@ -103,11 +103,6 @@ DeviceState everyDeviceField(const AccessList& access)
         }
         device.journal.append(*samples.front().command);
     }
-    device.dismissedAccess = access;
-    device.singleHolderNoticeDismissed = true;
-    device.singleAdminNoticeDismissed = true;
-    device.noLongerShared = true;
-    device.inviteSeeds = {Crypto::randomBytes(Crypto::KeyBytes), Crypto::randomBytes(Crypto::KeyBytes)};
     return device;
 }
 
@@ -141,5 +136,5 @@ WardPayload EveryField::payload(const Identity& laptop, const Identity& phone)
     ward.setAccess(everyAccessField(laptop, phone));
     return WardPayload{ward,
                        {{laptop.fingerprint(), 3}, {phone.fingerprint(), 5}},
-                       everyDeviceField(ward.access())};
+                       everyDeviceField()};
 }

@@ -53,9 +53,6 @@ public:
     /// Must call before getTile()
     void initialize();
 
-    /// Check if service is initialized
-    bool isInitialized() const;
-
     /// Primary API - always returns immediately.
     /// Returns cached tile, composite, scaled placeholder, or gray placeholder.
     /// Triggers async fetch if needed.
@@ -65,9 +62,6 @@ public:
     QString attribution() const;
 
 signals:
-    /// Emitted when service is initialized
-    void initialized();
-
     /// Emitted when any tile is updated - triggers full repaint.
     /// No arguments because the renderer should just redraw all visible tiles.
     void tileReady();

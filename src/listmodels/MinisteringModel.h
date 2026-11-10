@@ -15,9 +15,7 @@ class Filter;
 /// - Companionship - shows "Minister1, Minister2 (N)"
 /// - SectionHeader - "Ministers" or "Families"/"Sisters" (italic)
 /// - Minister/MinisteredFamily/MinisteredSister - individual person/family
-/// - ContactDetail - phone, email, address (loaded on demand)
-///
-/// Contact details are loaded lazily when a person/family node is expanded.
+/// - ContactDetail - phone, email, address, built with the tree
 /// It rebuilds on every document change.
 class MinisteringModel : public BaseTreeModel
 {
@@ -61,9 +59,6 @@ public:
     /// Find the first Minister node whose person belongs to the given family.
     QModelIndex indexForMinisterByFamilyId(const FamilyId& familyId) const;
 
-    // Lazy loading for contact details
-    void loadContactDetails(const QModelIndex& index);
-
 private:
     void rebuild();
     void clearNodes();
@@ -79,7 +74,6 @@ private:
         QString displayText;
         TreeNode* parent = nullptr;
         QList<TreeNode*> children;
-        bool contactsLoaded = false;
 
         ~TreeNode()
         {

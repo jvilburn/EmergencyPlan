@@ -7,7 +7,6 @@
 #include <QPainter>
 #include <QPixmap>
 #include <QPointF>
-#include <QVariantMap>
 
 class Ward;
 class Document;
@@ -38,12 +37,10 @@ namespace MarkerRenderer
     MarkerIcons computeFamilyIcons(const FamilyId& familyId, const Document& doc);
 
     /// Draw a family marker at the given position.
-    void draw(QPainter& painter, const QPointF& pos,
-              const QVariantMap& family, const State& state);
+    void draw(QPainter& painter, const QPointF& pos, const State& state);
 
     /// Check if a point is within a marker's hit area.
-    bool hitTest(const QPointF& markerPos, const QPointF& point,
-                 const QVariantMap& family, const State& state);
+    bool hitTest(const QPointF& markerPos, const QPointF& point, const State& state);
 
     /// Check if a marker at the given position is visible within widget bounds.
     bool isVisible(const QPointF& pos, int widgetWidth, int widgetHeight);

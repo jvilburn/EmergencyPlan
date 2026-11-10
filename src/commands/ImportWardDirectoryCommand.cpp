@@ -75,7 +75,7 @@ CommandOutcome ImportWardDirectoryCommand::execute(Document& document) const
     return CommandOutcome::Applied;
 }
 
-UndoableCommandPtr ImportWardDirectoryCommand::inverse() const
+CommandPtr ImportWardDirectoryCommand::inverse() const
 {
     return std::make_shared<ImportWardDirectoryCommand>(m_families.swapped(),
                                                         changeSwapped(m_pdfDate),

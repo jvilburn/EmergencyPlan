@@ -20,7 +20,7 @@ public:
 
     QString type() const override { return TypeName; }
     CommandOutcome execute(Document& document) const override;
-    UndoableCommandPtr inverse() const override;
+    CommandPtr inverse() const override;
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
@@ -50,7 +50,7 @@ public:
 
     QString type() const override { return TypeName; }
     CommandOutcome execute(Document& document) const override;
-    UndoableCommandPtr inverse() const override;
+    CommandPtr inverse() const override;
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
@@ -77,7 +77,7 @@ public:
 
     QString type() const override { return TypeName; }
     CommandOutcome execute(Document& document) const override;
-    UndoableCommandPtr inverse() const override;
+    CommandPtr inverse() const override;
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 

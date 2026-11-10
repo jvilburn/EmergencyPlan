@@ -79,8 +79,6 @@ EmergencyAssetView::EmergencyAssetView(ResponseArea area,
     // Expand top-level items when model is reset
 
     // Load contact details when person node is expanded
-    connect(m_tree, &QTreeView::expanded,
-            this, &EmergencyAssetView::onTreeExpanded);
 
     updateButtonStates();
 }
@@ -111,16 +109,6 @@ void EmergencyAssetView::onTreeDoubleClicked(const QModelIndex& index)
 
     case ItemType::Invalid:
         break;
-    }
-}
-
-void EmergencyAssetView::onTreeExpanded(const QModelIndex& index)
-{
-    ItemType type = m_model->itemTypeAt(index);
-
-    if (type == ItemType::Person)
-    {
-        m_model->loadContactDetails(index);
     }
 }
 

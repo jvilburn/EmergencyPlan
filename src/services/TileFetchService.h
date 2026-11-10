@@ -22,7 +22,6 @@ struct TileProviderConfig
     QString userAgent;       ///< User-Agent header value
     QString attribution;     ///< Attribution text to display
     int minCacheDays = 30;   ///< Minimum days before checking for updates
-    bool supportsConditional = false;  ///< Supports ETag/If-None-Match
 };
 
 /// Pure network service for fetching map tiles with provider fallback.
@@ -49,8 +48,9 @@ public:
 
     /// Initiate async fetch for a tile.
     /// Deduplicates requests - safe to call multiple times for same tile.
-    /// @param currentMeta Optional metadata for conditional request (ETag/If-None-Match)
-    void fetch(TileId id, const TileMetadata& currentMeta);
+    /// The provider that served cached is asked only whether the tile changed, by its ETag
+    /// or Last-Modified; when it has not, cached comes back with a new fetch date.
+    void fetch(TileId id, const CachedTile& cached);
 
     /// Get attribution text for a specific provider ID.
     QString providerAttribution(const QString& providerId) const;
@@ -76,12 +76,13 @@ private:
     {
         TileId id;
         int providerIndex;  ///< Index into m_providers[id.layer()]
+        CachedTile cached;  ///< the tile held when the fetch began
     };
 
     void initializeProviders();
-    void startFetch(TileId id, int providerIndex);
-    void handleSuccess(const RequestContext& ctx, const QImage& image,
-                       const QString& etag, const QString& lastModified);
+    void startFetch(TileId id, int providerIndex, const CachedTile& cached);
+    void handleSuccess(const RequestContext& ctx, const QImage& image, const QString& etag,
+                       const QString& lastModified);
 
     QNetworkAccessManager* m_networkManager;
 

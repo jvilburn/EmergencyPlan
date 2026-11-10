@@ -359,7 +359,7 @@ void UpdateFamilyCommandTest::addedMemberTakesItsIndexInTheSavedFamily()
 void UpdateFamilyCommandTest::inverseSwapsTheChangeUnderAnUndoHeading()
 {
     UndoableCommandPtr edit = bobPhoneEdit("555-2222");
-    UndoableCommandPtr inverse = edit->inverse();
+    CommandPtr inverse = edit->inverse();
 
     QCOMPARE(inverse->description().heading(), QString("Undo: Smith family"));
     QCOMPARE(inverse->description().lines(), edit->description().lines());

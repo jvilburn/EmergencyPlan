@@ -44,7 +44,7 @@ public:
 
     /// The family and date changes swapped. The coordinates and the ward record stay in
     /// place.
-    UndoableCommandPtr inverse() const override;
+    CommandPtr inverse() const override;
 
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;

@@ -28,7 +28,7 @@ public:
 
     QString type() const override { return TypeName; }
     CommandOutcome execute(Document& document) const override;
-    UndoableCommandPtr inverse() const override;
+    CommandPtr inverse() const override;
     QJsonObject toJson() const override;
 
     /// The whole document when it can change a place outside the family: it removes a
@@ -63,7 +63,7 @@ public:
 
     QString type() const override { return TypeName; }
     CommandOutcome execute(Document& document) const override;
-    UndoableCommandPtr inverse() const override;
+    CommandPtr inverse() const override;
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
@@ -77,7 +77,7 @@ private:
 /// A deleted family put back, with its people restored to the places the deletion held that
 /// still stand as it left them. Its result holds when the family is there; it never
 /// conflicts.
-class RestoreFamilyCommand : public UndoableCommand
+class RestoreFamilyCommand : public Command
 {
 public:
     static constexpr const char* TypeName = "restoreFamily";
@@ -86,7 +86,6 @@ public:
 
     QString type() const override { return TypeName; }
     CommandOutcome execute(Document& document) const override;
-    UndoableCommandPtr inverse() const override;
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 

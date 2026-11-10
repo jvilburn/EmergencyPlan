@@ -32,12 +32,6 @@ void TileService::setInstance(TileService* instance)
 void TileService::initialize()
 {
     m_diskCache->initialize();
-    emit initialized();
-}
-
-bool TileService::isInitialized() const
-{
-    return m_diskCache->isInitialized();
 }
 
 // ============================================================================
@@ -109,7 +103,7 @@ QImage TileService::getTile(TileId id)
     // Trigger fetch if needed
     if (m_fetchService->needsFetch(id, entry->metadata))
     {
-        m_fetchService->fetch(id, entry->metadata);
+        m_fetchService->fetch(id, *entry);
     }
 
     return entry->image;

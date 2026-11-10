@@ -162,11 +162,6 @@ integers: the highest journal sequence number of that device the version include
 | Key | Type | Holds |
 |---|---|---|
 | `journal` | journal object | this device's commands not yet seen to land |
-| `dismissedAccess` | access object | the access list as of the last dismissed access notice; omitted until one is dismissed |
-| `singleHolderNoticeDismissed` | `true` | omitted when false |
-| `singleAdminNoticeDismissed` | `true` | omitted when false |
-| `noLongerShared` | `true` | the ward is no longer this device's; omitted when false |
-| `inviteSeeds` | array of 32-byte values | the seed of each open invite this device made; omitted when empty |
 
 A journal:
 

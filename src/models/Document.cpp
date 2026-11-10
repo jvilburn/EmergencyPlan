@@ -278,32 +278,13 @@ void Document::onDocumentChanged(const DocumentChange& change)
     }
 
     // Emergency status for map markers and lists
-    if (change.action == ChangeAction::Full || change.emergencyChanged)
+    if (change.action == ChangeAction::Full || change.emergencyChanged || change.emergencyFamilyId.has_value())
     {
         m_emergencyStatuses.clear();
         if (m_emergencyResponse.has_value())
         {
             m_emergencyStatuses = m_emergencyResponse->statusByFamily();
         }
-    }
-    else if (change.emergencyFamilyId.has_value())
-    {
-        updateEmergencyStatus(*change.emergencyFamilyId);
-    }
-}
-
-void Document::updateEmergencyStatus(const FamilyId& familyId)
-{
-    EffectiveContactStatus status = m_emergencyResponse.has_value()
-        ? m_emergencyResponse->statusOf(familyId)
-        : EffectiveContactStatus::NotContacted;
-    if (status == EffectiveContactStatus::NotContacted)
-    {
-        m_emergencyStatuses.remove(familyId);
-    }
-    else
-    {
-        m_emergencyStatuses.insert(familyId, status);
     }
 }
 

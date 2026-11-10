@@ -28,8 +28,7 @@ void TileFetchService::initializeProviders()
             "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
             userAgent,
             "© OpenStreetMap contributors",
-            30,    // minCacheDays
-            true   // supportsConditional
+            30     // minCacheDays
         },
         TileProviderConfig{
             "esri-street",
@@ -37,8 +36,7 @@ void TileFetchService::initializeProviders()
             "https://services.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
             userAgent,
             "© Esri",
-            30,
-            false
+            30
         }
     };
 
@@ -50,8 +48,7 @@ void TileFetchService::initializeProviders()
             "https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}",
             userAgent,
             "© USGS The National Map",
-            30,
-            false
+            30
         },
         TileProviderConfig{
             "esri-imagery",
@@ -59,8 +56,7 @@ void TileFetchService::initializeProviders()
             "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
             userAgent,
             "© Esri",
-            30,
-            false
+            30
         }
     };
 }
@@ -69,10 +65,8 @@ void TileFetchService::initializeProviders()
 // Public API
 // ============================================================================
 
-void TileFetchService::fetch(TileId id, const TileMetadata& currentMeta)
+void TileFetchService::fetch(TileId id, const CachedTile& cached)
 {
-    Q_UNUSED(currentMeta);  // TODO: Use for conditional requests (If-None-Match)
-
     // Deduplicate - don't fetch if already in flight
     if (m_pendingTiles.contains(id))
     {
@@ -88,7 +82,7 @@ void TileFetchService::fetch(TileId id, const TileMetadata& currentMeta)
     m_pendingTiles.insert(id);
 
     // Start with first provider
-    startFetch(id, 0);
+    startFetch(id, 0, cached);
 }
 
 QString TileFetchService::providerAttribution(const QString& providerId) const
@@ -153,7 +147,7 @@ bool TileFetchService::needsFetch(TileId id, const TileMetadata& meta) const
 // Network handling
 // ============================================================================
 
-void TileFetchService::startFetch(TileId id, int providerIndex)
+void TileFetchService::startFetch(TileId id, int providerIndex, const CachedTile& cached)
 {
     TileLayer layer = id.layer();
 
@@ -178,9 +172,22 @@ void TileFetchService::startFetch(TileId id, int providerIndex)
     request.setHeader(QNetworkRequest::UserAgentHeader, config.userAgent);
     request.setRawHeader("Accept", "image/png,image/*;q=0.9,*/*;q=0.8");
 
+    // Validators belong to the provider that gave them
+    if (cached.metadata.providerId == config.id)
+    {
+        if (!cached.metadata.etag.isEmpty())
+        {
+            request.setRawHeader("If-None-Match", cached.metadata.etag.toUtf8());
+        }
+        if (!cached.metadata.lastModified.isEmpty())
+        {
+            request.setRawHeader("If-Modified-Since", cached.metadata.lastModified.toUtf8());
+        }
+    }
+
     QNetworkReply* reply = m_networkManager->get(request);
 
-    m_inFlightRequests.insert(reply, RequestContext{id, providerIndex});
+    m_inFlightRequests.insert(reply, RequestContext{id, providerIndex, cached});
 }
 
 void TileFetchService::onRequestFinished(QNetworkReply* reply)
@@ -193,30 +200,39 @@ void TileFetchService::onRequestFinished(QNetworkReply* reply)
     }
 
     RequestContext ctx = m_inFlightRequests.take(reply);
+    QString etag = QString::fromUtf8(reply->rawHeader("ETag"));
+    QString lastModified = QString::fromUtf8(reply->rawHeader("Last-Modified"));
+    if (reply->error() == QNetworkReply::NoError
+        && reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() == 304)
+    {
+        // Not modified: the tile held is current, and a validator the answer leaves out
+        // still holds
+        handleSuccess(ctx, ctx.cached.image, etag.isEmpty() ? ctx.cached.metadata.etag : etag,
+                      lastModified.isEmpty() ? ctx.cached.metadata.lastModified : lastModified);
+        return;
+    }
     QImage image;
     if (reply->error() == QNetworkReply::NoError && image.loadFromData(reply->readAll()))
     {
-        QString etag = QString::fromUtf8(reply->rawHeader("ETag"));
-        QString lastModified = QString::fromUtf8(reply->rawHeader("Last-Modified"));
         handleSuccess(ctx, image, etag, lastModified);
         return;
     }
 
     // Try next provider
-    startFetch(ctx.id, ctx.providerIndex + 1);
+    startFetch(ctx.id, ctx.providerIndex + 1, ctx.cached);
 }
 
-void TileFetchService::handleSuccess(const RequestContext& ctx, const QImage& image,
-                                      const QString& etag, const QString& lastModified)
+void TileFetchService::handleSuccess(const RequestContext& ctx, const QImage& image, const QString& etag,
+                                     const QString& lastModified)
 {
     TileLayer layer = ctx.id.layer();
 
     TileMetadata meta;
     meta.fetchDate = QDateTime::currentDateTime();
     meta.providerId = m_providers[layer][ctx.providerIndex].id;
+    meta.isScaledUp = false;
     meta.etag = etag;
     meta.lastModified = lastModified;
-    meta.isScaledUp = false;
 
     // Remove from pending before emitting (in case slot triggers new fetch)
     m_pendingTiles.remove(ctx.id);

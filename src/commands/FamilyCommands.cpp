@@ -47,7 +47,7 @@ CommandOutcome UpdateFamilyCommand::execute(Document& document) const
     return CommandOutcome::Applied;
 }
 
-UndoableCommandPtr UpdateFamilyCommand::inverse() const
+CommandPtr UpdateFamilyCommand::inverse() const
 {
     return std::make_shared<UpdateFamilyCommand>(m_familyId, m_change.swapped(), m_removedCleanup, m_addedCleanup,
                                                  description().undone());
@@ -129,7 +129,7 @@ CommandOutcome DeleteFamilyCommand::execute(Document& document) const
     return CommandOutcome::Applied;
 }
 
-UndoableCommandPtr DeleteFamilyCommand::inverse() const
+CommandPtr DeleteFamilyCommand::inverse() const
 {
     return std::make_shared<RestoreFamilyCommand>(m_family, m_cleanup, description().undone());
 }
@@ -162,7 +162,7 @@ CommandPtr DeleteFamilyCommand::fromJson(JsonReader json, const CommandDescripti
 RestoreFamilyCommand::RestoreFamilyCommand(const Family& family,
                                            const ReferenceCleanup& cleanup,
                                            const CommandDescription& description)
-    : UndoableCommand(description)
+    : Command(description)
     , m_family(family)
     , m_cleanup(cleanup)
 {
@@ -176,11 +176,6 @@ CommandOutcome RestoreFamilyCommand::execute(Document& document) const
     }
     m_cleanup.restore(document);
     return CommandOutcome::Applied;
-}
-
-UndoableCommandPtr RestoreFamilyCommand::inverse() const
-{
-    return std::make_shared<DeleteFamilyCommand>(m_family, m_cleanup, description().undone());
 }
 
 QJsonObject RestoreFamilyCommand::toJson() const

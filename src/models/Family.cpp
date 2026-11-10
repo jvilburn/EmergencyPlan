@@ -99,19 +99,6 @@ QString Family::displayName() const
     return result;
 }
 
-QList<Person> Family::children() const
-{
-    QList<Person> result;
-    for (const Person& member : m_members)
-    {
-        if (!member.isParent())
-        {
-            result.append(member);
-        }
-    }
-    return result;
-}
-
 qsizetype Family::insertionIndexFor(const Person& person) const
 {
     if (!person.birthday().year().has_value())

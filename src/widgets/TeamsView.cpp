@@ -89,8 +89,6 @@ TeamsView::TeamsView(QWidget* parent)
     // comes back
 
     // Load contact details when member node is expanded
-    connect(m_tree, &QTreeView::expanded,
-            this, &TeamsView::onTreeExpanded);
 
     updateButtonStates();
 }
@@ -120,16 +118,6 @@ void TeamsView::onTreeDoubleClicked(const QModelIndex& index)
 
     default:
         break;
-    }
-}
-
-void TeamsView::onTreeExpanded(const QModelIndex& index)
-{
-    ItemType type = m_model->itemTypeAt(index);
-
-    if (type == ItemType::TeamMember)
-    {
-        m_model->loadContactDetails(index);
     }
 }
 

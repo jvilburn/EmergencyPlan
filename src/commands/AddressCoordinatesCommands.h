@@ -25,7 +25,7 @@ public:
 
     QString type() const override { return TypeName; }
     CommandOutcome execute(Document& document) const override;
-    UndoableCommandPtr inverse() const override;
+    CommandPtr inverse() const override;
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 
@@ -40,7 +40,7 @@ private:
 /// The inverse of SetAddressCoordinatesCommand: puts back what the entry held before, when
 /// it still holds the typed coordinates. Its result already holds when the entry holds
 /// before, and any other entry makes it conflict.
-class RevertAddressCoordinatesCommand : public UndoableCommand
+class RevertAddressCoordinatesCommand : public Command
 {
 public:
     static constexpr const char* TypeName = "revertAddressCoordinates";
@@ -52,7 +52,6 @@ public:
 
     QString type() const override { return TypeName; }
     CommandOutcome execute(Document& document) const override;
-    UndoableCommandPtr inverse() const override;
     QJsonObject toJson() const override;
     DocumentChange documentChange() const override;
 

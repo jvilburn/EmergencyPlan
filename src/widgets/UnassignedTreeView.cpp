@@ -46,10 +46,6 @@ void UnassignedTreeView::onTreeExpanded(const QModelIndex& index)
     {
         emit headerExpansionChanged(true);
     }
-    else if (type == ItemType::MinisteredFamily || type == ItemType::MinisteredSister)
-    {
-        m_model->loadContactDetails(index);
-    }
 }
 
 void UnassignedTreeView::onTreeCollapsed(const QModelIndex& index)

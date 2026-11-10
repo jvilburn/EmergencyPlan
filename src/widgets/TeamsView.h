@@ -35,7 +35,6 @@ signals:
 private slots:
     void onSelectionChanged();
     void onTreeDoubleClicked(const QModelIndex& index);
-    void onTreeExpanded(const QModelIndex& index);
     void onContextMenu(const QPoint& pos);
     void editTeamFromContextMenu();
     void setLeaderFromContextMenu();

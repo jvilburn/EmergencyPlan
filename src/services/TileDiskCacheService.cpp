@@ -73,11 +73,6 @@ TileDiskCacheService::~TileDiskCacheService()
 
 void TileDiskCacheService::initialize()
 {
-    if (m_initialized)
-    {
-        return;
-    }
-
     QDir dir(m_cacheDir);
     if (!dir.exists())
     {
@@ -94,8 +89,6 @@ void TileDiskCacheService::initialize()
         scanTileDirectories();
         saveIndex();
     }
-
-    m_initialized = true;
 }
 
 void TileDiskCacheService::scanTileDirectories()

@@ -1,6 +1,5 @@
 #include "WardDirectoryPdfParser.h"
 #include "PdfExtractor.h"
-#include "PdfFieldUtils.h"
 #include "Address.h"
 #include "Calling.h"
 #include "Email.h"
@@ -100,19 +99,6 @@ namespace
         return isFamilyHeader(field) || isAddressLine(field);
     }
 
-    bool isCoordinates(const PdfTextField& field)
-    {
-        if (!fontSizeMatches(field.fontSize(), FONT_SIZE_DETAIL))
-        {
-            return false;
-        }
-        if (field.left() < X_ADDRESS - X_TOLERANCE)
-        {
-            return false;
-        }
-        return COORDINATES_PATTERN.match(field.text().trimmed()).hasMatch();
-    }
-
     bool isPersonName(const PdfTextField& field)
     {
         return fontSizeMatches(field.fontSize(), FONT_SIZE_NAME);
@@ -121,12 +107,6 @@ namespace
     bool isPrimaryPersonName(const PdfTextField& field)
     {
         return isPersonName(field) && isNearX(field.left(), X_PRIMARY);
-    }
-
-    bool isPersonDetail(const PdfTextField& field)
-    {
-        return fontSizeMatches(field.fontSize(), FONT_SIZE_DETAIL)
-            && field.left() < X_ADDRESS - X_TOLERANCE;
     }
 
     // ============================================================================
@@ -183,21 +163,6 @@ namespace
                 person.callings.append(text);
             }
         }
-    }
-
-    /// Determine which parent column a field is in based on X position
-    /// Returns 0=primary, 1=secondary, or nullopt if neither
-    std::optional<int> getParentColumnIndex(double x)
-    {
-        if (isNearX(x, X_PRIMARY))
-        {
-            return 0;
-        }
-        if (isNearX(x, X_SECONDARY))
-        {
-            return 1;
-        }
-        return std::nullopt;
     }
 
     /// Determine family header column index based on X position

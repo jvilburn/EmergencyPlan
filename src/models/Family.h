@@ -33,7 +33,6 @@ public:
     // Computed properties from members
     QString surname() const;
     QString displayName() const;
-    QList<Person> children() const;
 
     /// Where the member order rule puts person among the members: the index of the first
     /// member person comes before, by fathers (parents who are male), then mothers (parents

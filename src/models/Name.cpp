@@ -42,23 +42,6 @@ QString Name::firstName() const
 // Static functions (for raw QString classification/matching)
 // ============================================================================
 
-bool Name::isSurnameOnly(const QString& text)
-{
-    QString trimmed = text.trimmed();
-    if (trimmed.isEmpty() || trimmed.contains(','))
-    {
-        return false;
-    }
-    for (const QChar& ch : trimmed)
-    {
-        if (!ch.isLetter() && !ch.isSpace())
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
 bool Name::looksLikeFullName(const QString& text)
 {
     // Check for ", " with non-empty text on both sides

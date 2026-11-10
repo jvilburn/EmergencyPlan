@@ -159,6 +159,7 @@ void TeamsTreeModel::rebuild()
             memberNode->teamId = team.id();
             memberNode->displayText = member.displayName;
             memberNode->parent = teamNode;
+            appendContactRows(memberNode, personContactLines(member.personId, doc));
             teamNode->children.append(memberNode);
         }
 
@@ -314,16 +315,6 @@ bool TeamsTreeModel::hasChildren(const QModelIndex& parent) const
     if (!node)
     {
         return false;
-    }
-
-    // Member nodes can have contact children (lazy loaded)
-    if (node->type == ItemType::TeamMember)
-    {
-        if (node->contactsLoaded)
-        {
-            return !node->children.isEmpty();
-        }
-        return true;  // Not yet loaded, assume yes
     }
 
     return !node->children.isEmpty();
@@ -561,117 +552,4 @@ QModelIndex TeamsTreeModel::indexForFamilyId(const FamilyId& familyId) const
         }
     }
     return {};
-}
-
-void TeamsTreeModel::loadContactDetails(const QModelIndex& index)
-{
-    TreeNode* node = nodeFromIndex(index);
-    if (!node || node->contactsLoaded)
-    {
-        return;
-    }
-
-    if (node->type != ItemType::TeamMember)
-    {
-        return;
-    }
-
-    const Document& doc = DocumentManager::instance()->document();
-    if (!node->personId)
-    {
-        node->contactsLoaded = true;
-        return;
-    }
-
-    std::optional<Person> person = doc.findPersonById(*node->personId);
-    if (!person)
-    {
-        node->contactsLoaded = true;
-        return;
-    }
-
-    // Check for address availability
-    std::optional<FamilyId> familyId = doc.familyIdForPerson(*node->personId);
-    const QHash<FamilyId, Family>& families = doc.families();
-    bool hasAddress = false;
-    if (familyId && families.contains(*familyId))
-    {
-        hasAddress = !families[*familyId].address().isEmpty();
-    }
-
-    // Count items to insert
-    int itemCount = 0;
-    if (!person->phone().isEmpty())
-    {
-        itemCount++;
-    }
-    if (!person->altPhone().isEmpty())
-    {
-        itemCount++;
-    }
-    if (!person->email().isEmpty())
-    {
-        itemCount++;
-    }
-    if (hasAddress)
-    {
-        itemCount++;
-    }
-
-    if (itemCount == 0)
-    {
-        node->contactsLoaded = true;
-        return;
-    }
-
-    int insertRow = node->children.size();
-    beginInsertRows(index, insertRow, insertRow + itemCount - 1);
-
-    if (!person->phone().isEmpty())
-    {
-        TreeNode* phoneNode = new TreeNode();
-        phoneNode->type = ItemType::ContactDetail;
-        phoneNode->personId = node->personId;
-        phoneNode->teamId = node->teamId;
-        phoneNode->displayText = ContactIcons::Phone + person->phone();
-        phoneNode->parent = node;
-        node->children.append(phoneNode);
-    }
-
-    if (!person->altPhone().isEmpty())
-    {
-        TreeNode* altPhoneNode = new TreeNode();
-        altPhoneNode->type = ItemType::ContactDetail;
-        altPhoneNode->personId = node->personId;
-        altPhoneNode->teamId = node->teamId;
-        altPhoneNode->displayText = ContactIcons::Phone + person->altPhone() + tr(" (alt)");
-        altPhoneNode->parent = node;
-        node->children.append(altPhoneNode);
-    }
-
-    if (!person->email().isEmpty())
-    {
-        TreeNode* emailNode = new TreeNode();
-        emailNode->type = ItemType::ContactDetail;
-        emailNode->personId = node->personId;
-        emailNode->teamId = node->teamId;
-        emailNode->displayText = ContactIcons::Email + person->email();
-        emailNode->parent = node;
-        node->children.append(emailNode);
-    }
-
-    if (hasAddress)
-    {
-        const Family& family = families[*familyId];
-        TreeNode* addrNode = new TreeNode();
-        addrNode->type = ItemType::ContactDetail;
-        addrNode->personId = node->personId;
-        addrNode->teamId = node->teamId;
-        addrNode->displayText = ContactIcons::Address + family.address().full();
-        addrNode->parent = node;
-        node->children.append(addrNode);
-    }
-
-    endInsertRows();
-    node->contactsLoaded = true;
 }

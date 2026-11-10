@@ -10,7 +10,7 @@ class Filter;
 /// Model for special needs tree (2-level: Person → ContactDetail).
 ///
 /// Level 0: People with special needs, displayed as "PersonName - note" or just "PersonName"
-/// Level 1: Contact details (phone, email, address) - lazy loaded on expand
+/// Level 1: Contact details (phone, email, address), built with the tree
 ///
 /// Sorted alphabetically by person display name.
 class NeedsModel : public BaseTreeModel
@@ -38,9 +38,6 @@ public:
     QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
     bool hasChildren(const QModelIndex& parent = {}) const override;
 
-    // Lazy loading for contact details
-    void loadContactDetails(const QModelIndex& index);
-
     // BaseTreeModel interface
     ItemType itemTypeAt(const QModelIndex& index) const override;
     SelectionKey selectionKeyAt(const QModelIndex& index) const override;
@@ -67,7 +64,6 @@ private:
         QString displayText;
         TreeNode* parent = nullptr;
         QList<TreeNode*> children;
-        bool contactsLoaded = false;
 
         ~TreeNode()
         {

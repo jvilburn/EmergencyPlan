@@ -567,27 +567,6 @@ QList<ResponseTask> EmergencyResponse::tasksFor(const FamilyId& familyId) const
     return itemsFor(m_tasks, familyId);
 }
 
-EffectiveContactStatus EmergencyResponse::statusOf(const FamilyId& familyId) const
-{
-    for (const ResponseTask& task : m_tasks)
-    {
-        if (task.familyId() == familyId && !task.isResolved())
-        {
-            return EffectiveContactStatus::NeedsHelp;
-        }
-    }
-    for (const ContactAttempt& attempt : m_contactAttempts)
-    {
-        if (attempt.familyId() == familyId && attempt.outcome().has_value())
-        {
-            return *attempt.outcome() == ContactOutcome::OK
-                ? EffectiveContactStatus::OK
-                : EffectiveContactStatus::UnableToReach;
-        }
-    }
-    return EffectiveContactStatus::NotContacted;
-}
-
 QHash<FamilyId, EffectiveContactStatus> EmergencyResponse::statusByFamily() const
 {
     QHash<FamilyId, EffectiveContactStatus> statuses;

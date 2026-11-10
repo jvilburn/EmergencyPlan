@@ -290,11 +290,6 @@ public:
     QList<ContactAttempt> contactAttemptsFor(const FamilyId& familyId) const;
     QList<ResponseTask> tasksFor(const FamilyId& familyId) const;
 
-    /// One family's status: Needs Help while one of its tasks is unresolved, otherwise the
-    /// outcome of its most recent attempt that has one, otherwise Not Contacted. Walks from
-    /// the newest end of each list and stops at the first entry that decides it.
-    EffectiveContactStatus statusOf(const FamilyId& familyId) const;
-
     /// Each family's status, worked out in one pass: Needs Help while one of its tasks is
     /// unresolved, otherwise the outcome of its most recent attempt that has one. A family
     /// missing from it is Not Contacted.

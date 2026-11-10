@@ -36,7 +36,6 @@ public:
     ~MapWidget() override;
 
     /// Access the map viewmodel
-    MapViewModel* viewModel() const { return m_viewModel; }
 
     /// Fit map to show all families
     void fitAllFamilies();
