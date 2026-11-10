@@ -19,11 +19,7 @@ UnmappedPanel::UnmappedPanel(MapViewModel* viewModel,
     // Set up filter for unmapped families only
     m_filter->setMappedFilter(MappedFilter::Unmapped);
 
-    // Rebuild layout when model changes
-    connect(m_model, &QAbstractItemModel::modelReset,
-            this, &UnmappedPanel::onModelChanged);
-
-    recalculateLayout();
+    connect(m_model, &QAbstractItemModel::modelReset, this, &UnmappedPanel::familiesChanged);
 }
 
 bool UnmappedPanel::hasUnmappedFamilies() const
@@ -42,32 +38,22 @@ void UnmappedPanel::setExpanded(bool expanded)
     if (m_isExpanded != expanded)
     {
         m_isExpanded = expanded;
-        updateGeometry();
         update();
     }
 }
 
-void UnmappedPanel::onModelChanged()
-{
-    recalculateLayout();
-    updateGeometry();
-    update();
-}
-
-void UnmappedPanel::recalculateLayout()
+QSize UnmappedPanel::layOut(int availableHeight)
 {
     m_layout.clear();
+    update();
 
     int count = m_model->rowCount();
     if (count == 0)
     {
-        return;
+        return QSize(0, 0);
     }
 
-    // Get available height (parent's height or our max height)
-    int availableHeight = parentWidget() ? parentWidget()->height() : 600;
-
-    // Calculate how many rows fit in available height (no header for bottom panel)
+    // Calculate how many rows fit in available height
     int contentHeight = availableHeight - HEADER_HEIGHT - V_PADDING * 2;
     int rowsPerColumn = qMax(1, contentHeight / ROW_HEIGHT);
 
@@ -76,10 +62,6 @@ void UnmappedPanel::recalculateLayout()
 
     // Recalculate rows per column to distribute evenly
     rowsPerColumn = (count + numColumns - 1) / numColumns;
-
-    // Store for sizeHint
-    m_numColumns = numColumns;
-    m_rowsPerColumn = rowsPerColumn;
 
     QFontMetrics fm(font());
 
@@ -112,30 +94,10 @@ void UnmappedPanel::recalculateLayout()
 
         m_layout.append(item);
     }
-}
 
-QSize UnmappedPanel::sizeHint() const
-{
-    if (m_layout.isEmpty())
-    {
-        return QSize(0, 0);
-    }
-
-    int width = m_numColumns * COLUMN_WIDTH + H_PADDING * 2;
-
-    if (!m_isExpanded)
-    {
-        return QSize(width, HEADER_HEIGHT);
-    }
-
-    int height = HEADER_HEIGHT + V_PADDING * 2 + m_rowsPerColumn * ROW_HEIGHT;
-
-    return QSize(width, height);
-}
-
-QSize UnmappedPanel::minimumSizeHint() const
-{
-    return QSize(MIN_COLUMNS * COLUMN_WIDTH + H_PADDING * 2, HEADER_HEIGHT + ROW_HEIGHT);
+    int width = numColumns * COLUMN_WIDTH + H_PADDING * 2;
+    int height = m_isExpanded ? HEADER_HEIGHT + V_PADDING * 2 + rowsPerColumn * ROW_HEIGHT : HEADER_HEIGHT;
+    return QSize(width, qMin(height, availableHeight));
 }
 
 void UnmappedPanel::paintEvent(QPaintEvent* /*event*/)

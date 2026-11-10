@@ -141,6 +141,7 @@ void MapWidget::setupUi()
             m_unmappedPanel, QOverload<>::of(&QWidget::update));
     connect(m_unmappedPanel, &UnmappedPanel::headerClicked,
             this, &MapWidget::onUnmappedPanelHeaderClicked);
+    connect(m_unmappedPanel, &UnmappedPanel::familiesChanged, this, &MapWidget::updateButtonPositions);
 
     // Geocoding state for unmapped panel visibility
     connect(DocumentManager::instance(), &DocumentManager::geocodingProgressChanged,
@@ -167,11 +168,9 @@ void MapWidget::updateButtonPositions()
     if (m_unmappedPanel->hasUnmappedFamilies())
     {
         m_unmappedPanel->setVisible(true);
-        QSize panelSize = m_unmappedPanel->sizeHint();
-        // Clamp height to widget height
-        int panelHeight = qMin(panelSize.height(), height());
-        m_unmappedPanel->setFixedSize(panelSize.width(), panelHeight);
-        m_unmappedPanel->move(width() - panelSize.width(), height() - panelHeight);
+        QSize panelSize = m_unmappedPanel->layOut(height());
+        m_unmappedPanel->setFixedSize(panelSize);
+        m_unmappedPanel->move(width() - panelSize.width(), height() - panelSize.height());
     }
     else
     {

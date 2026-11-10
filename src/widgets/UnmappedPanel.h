@@ -27,9 +27,9 @@ public:
     /// Set the marker provider (owned by caller)
     void setMarkerProvider(FamilyMarkerProvider* provider);
 
-    /// Calculate the preferred size for the panel
-    QSize sizeHint() const override;
-    QSize minimumSizeHint() const override;
+    /// Lays the families out in columns that fit availableHeight, 2 at the least, and
+    /// returns the panel's size for that height: the header alone while collapsed.
+    QSize layOut(int availableHeight);
 
     /// Set expanded/collapsed state
     void setExpanded(bool expanded);
@@ -42,13 +42,13 @@ signals:
     /// Emitted when the header is clicked (for expand/collapse toggle)
     void headerClicked();
 
+    /// The unmapped families changed, so the panel needs laying out again.
+    void familiesChanged();
+
 protected:
     void paintEvent(QPaintEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
-
-private slots:
-    void onModelChanged();
 
 private:
     struct MarkerLayout
@@ -59,7 +59,6 @@ private:
         QRectF labelRect;
     };
 
-    void recalculateLayout();
     std::optional<FamilyId> markerAtPoint(const QPoint& pos) const;
 
     MapViewModel* m_viewModel;
@@ -69,8 +68,6 @@ private:
     bool m_isExpanded = true;
 
     QList<MarkerLayout> m_layout;
-    int m_numColumns = 0;
-    int m_rowsPerColumn = 0;
 
     // Layout constants
     static constexpr int HEADER_HEIGHT = 24;
