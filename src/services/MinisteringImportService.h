@@ -41,9 +41,12 @@ namespace MinisteringImportService
 
     /// The import of parseResult onto existingFamilies.
     /// The PDF is authoritative for family data when wardDirectoryDate is not set, or when
-    /// the PDF's date is set and is the same day as wardDirectoryDate or later. When it is
-    /// not, family data from it is treated as stale: it only fills empty fields, and a family
-    /// or person it cannot match is not added and is left out of the groups and districts.
+    /// the PDF's date is set and is the same day as wardDirectoryDate or later. Then each
+    /// field it prints for a matched family or person (address, name, gender, birthday, phone,
+    /// email) replaces the held one, and what it cannot match is added. When it is not, its
+    /// family data is treated as stale: it only fills empty fields, and a family or person it
+    /// cannot match is not added and is left out of the groups and districts. A field the PDF
+    /// leaves out is always kept, and a parent stays a parent.
     MinisteringImportResult merge(
         MinisteringPdfParser::ParseResult parseResult,
         const QHash<FamilyId, Family>& existingFamilies,

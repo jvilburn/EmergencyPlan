@@ -30,5 +30,6 @@ private slots:
     void sistersSharingAFirstNameKeepTheirOwnRecords();
     void householdsSharingAnAddressAndPhoneResolveToTheLowerId();
     void directoryFamilyWhoseParentsChangeKeepsItsIdAndNotes();
+    void newerMinisteringPdfUpdatesAMovedFamilyAndAnOlderOneOnlyFillsGaps();
     void eachImportReplayedAfterTheOtherImportChangedTheDateItReadConflicts();
 };

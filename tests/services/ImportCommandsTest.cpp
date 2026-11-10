@@ -520,7 +520,7 @@ void ImportCommandsTest::ministerMatchesTheHouseholdHisPhoneNamesNotAnotherWithH
     };
     Person minister = adult("pdf-john", "Smith", "John", "(555) 555-2002");
     MinisteringPdfParser::ParseResult parsed = ministeringListing(
-        {Family::createWithId(FamilyId::fromString("pdf-minister"), TestWard::address("2 Elm St", "Provo, UT 84601"),
+        {Family::createWithId(FamilyId::fromString("pdf-minister"), TestWard::address("2 Elm St", "Provo, UT"),
                               {minister})},
         {}, MinisteringGroup::createEQ({minister.id()}, {}));
 
@@ -605,6 +605,52 @@ void ImportCommandsTest::directoryFamilyWhoseParentsChangeKeepsItsIdAndNotes()
     QCOMPARE(smith.note(), QString("Gate code is 1234"));
     QCOMPARE(memberIds(smith), QStringList({"person-bob", "pdf-person-alice"}));
     QCOMPARE(smith.members().first().note(), QString("Drives the ward van"));
+}
+
+void ImportCommandsTest::newerMinisteringPdfUpdatesAMovedFamilyAndAnOlderOneOnlyFillsGaps()
+{
+    FamilyId carterId = FamilyId::fromString("family-carter");
+    Person john = Person::createWithId(PersonId::fromString("person-john"), Name("Carter", "John"), Gender::Male,
+                                       Birthday::create(1970, 5, 1), Phone("555-555-1001"), Phone(),
+                                       "john.old@example.com", QStringList(), true, QString(), QString());
+    Person mary = Person::createWithId(PersonId::fromString("person-mary"), Name("Carter", "Mary"), Gender::Female,
+                                       Birthday(), Phone(), Phone(), QString(), QStringList(), true, QString(),
+                                       QString());
+    Address birch = TestWard::address("3 Birch Ln", "Provo, UT");
+    QHash<FamilyId, Family> families = {{carterId, Family::createWithId(carterId, birch, {john, mary})}};
+
+    // The family moved: the PDF, dated 1 Sep 2026, prints a new address, phone and email,
+    // and adults' birthdays without a year.
+    Address elm = TestWard::address("9 Elm St", "Provo, UT 84601");
+    Person listedJohn = Person::createWithId(PersonId::fromString("pdf-john"), Name("Carter", "John"), Gender::Male,
+                                             Birthday::create(std::nullopt, 5, 1), Phone("(555) 555-9999"), Phone(),
+                                             "john.new@example.com", QStringList(), true, QString(), QString());
+    Person listedMary = Person::createWithId(PersonId::fromString("pdf-mary"), Name("Carter", "Mary"),
+                                             Gender::Female, Birthday::create(std::nullopt, 7, 4),
+                                             Phone("555-555-2002"), Phone(), QString(), QStringList(), true,
+                                             QString(), QString());
+    Family listed = Family::createWithId(FamilyId::fromString("pdf-carter"), elm, {listedJohn, listedMary});
+    MinisteringPdfParser::ParseResult parsed =
+        ministeringListing({}, {listed}, MinisteringGroup::createEQ({}, {listed.id()}));
+
+    // Newer than the directory: what it prints replaces what the ward holds
+    MinisteringImportResult newer = MinisteringImportService::merge(parsed, families, QDate(2026, 8, 1));
+    Family moved = newer.families.value(carterId);
+    QVERIFY(moved.address() == elm);
+    QCOMPARE(QString(moved.members()[0].phone()), QString("(555) 555-9999"));
+    QCOMPARE(QString(moved.members()[0].email()), QString("john.new@example.com"));
+    QVERIFY(moved.members()[0].birthday() == Birthday::create(1970, 5, 1));  // the same day keeps its year
+    QCOMPARE(QString(moved.members()[1].phone()), QString("555-555-2002"));
+    QVERIFY(moved.members()[1].birthday() == Birthday::create(std::nullopt, 7, 4));
+
+    // Older than the directory: it only fills what the ward lacks
+    MinisteringImportResult older = MinisteringImportService::merge(parsed, families, QDate(2026, 10, 1));
+    Family kept = older.families.value(carterId);
+    QVERIFY(kept.address() == birch);
+    QCOMPARE(QString(kept.members()[0].phone()), QString("555-555-1001"));
+    QCOMPARE(QString(kept.members()[0].email()), QString("john.old@example.com"));
+    QCOMPARE(QString(kept.members()[1].phone()), QString("555-555-2002"));
+    QVERIFY(kept.members()[1].birthday() == Birthday::create(std::nullopt, 7, 4));
 }
 
 void ImportCommandsTest::eachImportReplayedAfterTheOtherImportChangedTheDateItReadConflicts()

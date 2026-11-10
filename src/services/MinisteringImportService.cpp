@@ -35,20 +35,35 @@ namespace
     // Merging
     // ========================================================================
 
+    /// True when the PDF's birthday says something the held one does not: another day or
+    /// month, or a year the held one lacks or differs from. A PDF prints no year for adults,
+    /// so a held year stays unless the day changed.
+    bool birthdayDiffers(const Birthday& printed, const Birthday& held)
+    {
+        return printed.month() != held.month()
+            || printed.day() != held.day()
+            || (printed.year().has_value() && printed.year() != held.year());
+    }
+
     /// Merge PDF family members into existing family, matched as PersonMatching::matchMembers
     /// matches them. Builds personIdMapping. Returns updated family if any changes made.
-    /// When isAuthoritative: can update names and add new members.
-    /// When not authoritative: only fills empty fields.
+    /// A field the PDF prints replaces the held one when the PDF is authoritative and they
+    /// differ, and fills it only when it is empty otherwise; a field the PDF leaves out is
+    /// kept. An authoritative PDF also adds the members it cannot match.
     std::optional<Family> mergeFamilyMembers(
         const Family& sourceFamily,
         Family targetFamily,
         QHash<PersonId, PersonId>& personIdMapping,
         bool isAuthoritative)
     {
+        // Whether a field the PDF prints replaces the held one
+        auto takes = [isAuthoritative](bool printed, bool differs, bool heldEmpty)
+        { return printed && (isAuthoritative ? differs : heldEmpty); };
+
         bool anyChanges = false;
 
-        // Copy address if target doesn't have one (always allowed - filling empty field)
-        if (targetFamily.address().isEmpty() && !sourceFamily.address().isEmpty())
+        if (takes(!sourceFamily.address().isEmpty(), sourceFamily.address() != targetFamily.address(),
+                  targetFamily.address().isEmpty()))
         {
             targetFamily.setAddress(sourceFamily.address());
             anyChanges = true;
@@ -59,74 +74,64 @@ namespace
 
         for (const Person& sourceMember : sourceFamily.members())
         {
-            std::optional<Person> existingMember;
             auto match = matches.constFind(sourceMember.id());
-            for (const Person& member : targetFamily.members())
+            if (match == matches.constEnd())
             {
-                if (match != matches.constEnd() && member.id() == *match)
+                if (isAuthoritative)
                 {
-                    existingMember = member;
+                    personIdMapping.insert(sourceMember.id(), sourceMember.id());
+                    updatedMembers.append(sourceMember);
+                    anyChanges = true;
                 }
+                // Not authoritative: the member is not added, and gets no mapping
+                continue;
             }
+            personIdMapping.insert(sourceMember.id(), *match);
 
-            if (existingMember.has_value())
+            for (Person& member : updatedMembers)
             {
-                // Found matching member - map IDs
-                personIdMapping.insert(sourceMember.id(), existingMember->id());
-
-                // Only update names if authoritative
-                bool needsNameUpdate = isAuthoritative
-                    && (sourceMember.surname() != existingMember->surname()
-                        || sourceMember.givenNames() != existingMember->givenNames());
-                // isParent = true wins over false (always allowed - filling empty/false field)
-                bool needsIsParentUpdate = sourceMember.isParent() && !existingMember->isParent();
-                // Copy gender if source has it and target doesn't (always allowed - filling empty field)
-                bool needsGenderUpdate = sourceMember.gender().has_value()
-                    && !existingMember->gender().has_value();
-                // Copy birthday if source has date and target doesn't (always allowed - filling empty field)
-                bool needsBirthdayUpdate = sourceMember.birthday().hasDate()
-                    && !existingMember->birthday().hasDate();
-
-                if (needsNameUpdate || needsIsParentUpdate || needsGenderUpdate
-                    || needsBirthdayUpdate)
+                if (member.id() != *match)
                 {
-                    // Find and update the member in the list
-                    for (int i = 0; i < updatedMembers.size(); ++i)
-                    {
-                        if (updatedMembers[i].id() == existingMember->id())
-                        {
-                            Person updated = updatedMembers[i];
-                            if (needsNameUpdate)
-                            {
-                                updated.setName(sourceMember.name());
-                            }
-                            if (needsIsParentUpdate)
-                            {
-                                updated.setIsParent(true);
-                            }
-                            if (needsGenderUpdate)
-                            {
-                                updated.setGender(sourceMember.gender());
-                            }
-                            if (needsBirthdayUpdate)
-                            {
-                                updated.setBirthday(sourceMember.birthday());
-                            }
-                            updatedMembers[i] = updated;
-                            anyChanges = true;
-                            break;
-                        }
-                    }
+                    continue;
                 }
+                Person updated = member;
+                if (isAuthoritative && sourceMember.name() != member.name())
+                {
+                    updated.setName(sourceMember.name());
+                }
+                // A parent stays a parent: the PDF marks parents by indent alone
+                if (sourceMember.isParent())
+                {
+                    updated.setIsParent(true);
+                }
+                if (takes(sourceMember.gender().has_value(), sourceMember.gender() != member.gender(),
+                          !member.gender().has_value()))
+                {
+                    updated.setGender(sourceMember.gender());
+                }
+                if (takes(sourceMember.birthday().hasDate(), birthdayDiffers(sourceMember.birthday(), member.birthday()),
+                          !member.birthday().hasDate()))
+                {
+                    updated.setBirthday(sourceMember.birthday());
+                }
+                if (takes(!sourceMember.phone().isEmpty(), !sourceMember.phone().matches(member.phone()),
+                          member.phone().isEmpty()))
+                {
+                    updated.setPhone(sourceMember.phone());
+                }
+                if (takes(!sourceMember.email().isEmpty(),
+                          sourceMember.email().compare(member.email(), Qt::CaseInsensitive) != 0,
+                          member.email().isEmpty()))
+                {
+                    updated.setEmail(sourceMember.email());
+                }
+                if (updated != member)
+                {
+                    member = updated;
+                    anyChanges = true;
+                }
+                break;
             }
-            else if (isAuthoritative)
-            {
-                // No match and authoritative - add as new member
-                personIdMapping.insert(sourceMember.id(), sourceMember.id());
-                updatedMembers.append(sourceMember);
-                anyChanges = true;
-            }
-            // No match and not authoritative - the member is not added, and gets no mapping
         }
 
         if (anyChanges)
@@ -140,11 +145,10 @@ namespace
 
     /// Merge source families into target, remapping IDs in groups and districts.
     /// - Matches families and persons as PersonMatching does
-    /// - isParent=true wins over isParent=false when merging
-    /// - When isAuthoritative: unmatched families are added, names can be updated
-    /// - When not authoritative: only fills empty fields, no new families or members added,
-    ///   and the source families and persons left unmatched are left out of the groups and
-    ///   districts
+    /// - Merges each matched family's fields as mergeFamilyMembers does
+    /// - When isAuthoritative: unmatched families are added
+    /// - When not authoritative: no new families or members are added, and the source
+    ///   families and persons left unmatched are left out of the groups and districts
     void mergeFamilies(
         QHash<FamilyId, Family>& targetFamilies,
         const QHash<FamilyId, Family>& sourceFamilies,
