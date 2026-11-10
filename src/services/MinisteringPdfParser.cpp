@@ -9,6 +9,7 @@
 #include "Address.h"
 
 #include <QSet>
+#include <algorithm>
 #include <QRegularExpression>
 #include <QUuid>
 #include <cmath>
@@ -53,7 +54,6 @@ namespace
         std::optional<double> parentNameX;  // Leftmost full name in member column (parents are flush left)
         std::optional<double> genderX;      // "Male" or "Female"
         std::optional<double> birthdayX;    // Date pattern like "7 Oct"
-        bool isRSFormat = false;            // True if family header is full name (RS), false if surname only (EQ)
     };
 
     // ============================================================================
@@ -85,6 +85,43 @@ namespace
     bool isPresidencyMemberLabel(const QString& text)
     {
         return text.trimmed() == "Presidency Member:";
+    }
+
+    /// Whether fields, a whole list in reading order, are the Relief Society's. Its first
+    /// ministered household header tells: the first bold text right of the minister column
+    /// on a row that is not a presidency row. A Relief Society header is a sister's full name
+    /// ("Berlin, Jill"), an Elders Quorum one a surname ("Edwards"). A list with no household
+    /// reads as the Elders Quorum's.
+    bool isReliefSocietyList(const QList<PdfTextField>& fields)
+    {
+        // The minister column is the leftmost bold full name
+        double ministerX = std::numeric_limits<double>::max();
+        QList<double> presidencyRows;
+        for (const PdfTextField& field : fields)
+        {
+            if (field.bold() && Name::looksLikeFullName(field.text().trimmed()))
+            {
+                ministerX = qMin(ministerX, field.left());
+            }
+            if (isPresidencyMemberLabel(field.text()))
+            {
+                presidencyRows.append(field.y());
+            }
+        }
+        for (const PdfTextField& field : fields)
+        {
+            if (!field.bold() || field.left() <= ministerX + X_TOLERANCE)
+            {
+                continue;
+            }
+            bool onPresidencyRow = std::any_of(presidencyRows.begin(), presidencyRows.end(),
+                                               [&field](double y) { return std::abs(field.y() - y) <= Y_GROUP_TOLERANCE; });
+            if (!onPresidencyRow)
+            {
+                return Name::looksLikeFullName(field.text().trimmed());
+            }
+        }
+        return false;
     }
 
     bool isDistrictTitle(float fontSize, float districtFontSize)
@@ -214,8 +251,6 @@ namespace
                 if (!cols.ministerX || field.left() > *cols.ministerX + X_TOLERANCE)
                 {
                     cols.familyX = field.left();
-                    // Detect format: RS has full names, EQ has surnames only
-                    cols.isRSFormat = Name::looksLikeFullName(text);
                 }
             }
 
@@ -729,55 +764,6 @@ namespace
             }
         }
 
-        // Detect format when we first see a family header
-        // This is authoritative - RS has "Last, First" headers, EQ has surname only
-        if (cols.familyX.has_value() && !result.detectedFormat.has_value())
-        {
-            result.detectedFormat = cols.isRSFormat;
-
-            // Backfill earlier groups and presidency members now that we know the format
-            if (cols.isRSFormat)
-            {
-                // Convert earlier groups from EQ to RS
-                for (auto& group : result.groups)
-                {
-                    group.setIsRSGroup(true);
-                }
-            }
-
-            // Set district presidency member genders based on detected format
-            Gender presidencyGender = cols.isRSFormat ? Gender::Female : Gender::Male;
-            for (const auto& district : result.districts)
-            {
-                if (district.presidencyMemberId().has_value())
-                {
-                    PersonId personId = *district.presidencyMemberId();
-                    // Find the family containing this person
-                    for (auto& family : result.ministerFamilies)
-                    {
-                        QList<Person> members = family.members();
-                        bool changed = false;
-                        for (Person& member : members)
-                        {
-                            if (member.id() == personId)
-                            {
-                                member.setGender(presidencyGender);
-                                changed = true;
-                            }
-                        }
-                        if (changed)
-                        {
-                            family.setMembers(members);
-                        }
-                    }
-                }
-            }
-        }
-
-        // Use detected format if known, otherwise use column detection for this companionship
-        bool effectiveRSFormat = result.detectedFormat.value_or(cols.isRSFormat);
-        result.isRSFormat = effectiveRSFormat;
-
         // Parse ministers into Family objects (with minister as member)
         QList<Person> ministers = parseMinistersFromFields(ministerFields, result.ministerFamilies);
 
@@ -968,6 +954,9 @@ MinisteringPdfParser::ParseResult MinisteringPdfParser::parseFields(QList<QList<
 
     float districtFontSize = detectDistrictFontSize(allContentFields);
 
+    // The list's kind, read ahead, so each presidency member and group takes it as it is made
+    result.isRSFormat = isReliefSocietyList(allContentFields);
+
     // Group all content by Y position
     QList<QList<PdfTextField>> fieldRows = groupFieldsByY(allContentFields, Y_GROUP_TOLERANCE);
 
@@ -1058,7 +1047,8 @@ MinisteringPdfParser::ParseResult MinisteringPdfParser::parseFields(QList<QList<
                                 Phone(),      // phone
                                 Phone(),      // altPhone
                                 Email(),      // email
-                                std::nullopt, // gender (set by backfill once format detected)
+                                // A presidency member is of the organization's presidency
+                                result.isRSFormat ? Gender::Female : Gender::Male,
                                 Birthday(),
                                 QStringList() // callings
                             );

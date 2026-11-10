@@ -4,7 +4,8 @@
 #include <QStringList>
 
 /// Type-safe wrapper for addresses stored as list of lines. Lines entered or imported are
-/// cleaned through addLine; a reader keeps the lines exactly as they were written.
+/// cleaned through addLine, which also cuts a ZIP+4 to its five digits, so one address reads
+/// the same from every source; a reader keeps the lines exactly as they were written.
 class Address
 {
 public:
@@ -40,7 +41,8 @@ public:
     bool operator!=(const Address& other) const;
 
 private:
-    /// Sanitize a single line: remove control characters, trim whitespace.
+    /// Sanitize a single line: remove control characters, trim whitespace, and cut a ZIP+4
+    /// ("27028-8315") to its five digits.
     static QString sanitizeLine(const QString& line);
 
     QStringList m_lines;

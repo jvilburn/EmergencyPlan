@@ -1,5 +1,7 @@
 #include "Address.h"
 
+#include <QRegularExpression>
+
 Address Address::fromLines(const QStringList& lines)
 {
     Address address;
@@ -86,5 +88,6 @@ QString Address::sanitizeLine(const QString& line)
             result.append(' ');
         }
     }
-    return result.simplified();
+    static const QRegularExpression zipPlusFour(R"(\b(\d{5})-\d{4}\b)");
+    return result.simplified().replace(zipPlusFour, "\\1");
 }

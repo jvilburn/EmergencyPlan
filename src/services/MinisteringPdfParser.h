@@ -18,8 +18,7 @@ namespace MinisteringPdfParser
     struct ParseResult
     {
         bool success = false;
-        bool isRSFormat = false;             // Final format: true for RS, false for EQ
-        std::optional<bool> detectedFormat;  // Set when first family header detected
+        bool isRSFormat = false;  // True for a Relief Society list, false for an Elders Quorum one
 
         QHash<MinisteringDistrictId, MinisteringDistrict> districts;
         QHash<MinisteringGroupId, MinisteringGroup> groups;

@@ -17,4 +17,5 @@ private slots:
     void eldersQuorumCompanionshipReadsMinistersAndHouseholds();
     void reliefSocietyCompanionshipMinistersToTheSisterItNames();
     void companionshipsOnEveryPageOfALongListStayApart();
+    void presidencyMembersAreCreatedWithTheListsGender();
 };

@@ -133,7 +133,8 @@ void MinisteringPdfParserTest::eldersQuorumCompanionshipReadsMinistersAndHouseho
     std::optional<Family> household = familyWith(result.ministeredFamilies, "Edwards, Debra");
     QVERIFY(household.has_value());
     QCOMPARE(group.familyIds(), QSet<FamilyId>({household->id()}));
-    QCOMPARE(household->address().lines(), QStringList({"338 Oakland Ave", "Mocksville NC 27028-8315"}));
+    // The ZIP+4 is cut to five digits
+    QCOMPARE(household->address().lines(), QStringList({"338 Oakland Ave", "Mocksville NC 27028"}));
     QCOMPARE(household->members().size(), qsizetype(2));
     Person debra = memberNamed(*household, "Edwards, Debra");
     QVERIFY(debra.isParent());
@@ -230,4 +231,51 @@ void MinisteringPdfParserTest::companionshipsOnEveryPageOfALongListStayApart()
         found.insert(ministerSurname, result.ministeredFamilies.value(*group.familyIds().begin()).surname());
     }
     QCOMPARE(found, expected);
+}
+
+void MinisteringPdfParserTest::presidencyMembersAreCreatedWithTheListsGender()
+{
+    // Two districts, each led by a presidency member, before and after the list's first
+    // household
+    auto district = [](const QString& title, const QString& leader, const QString& minister, const QString& household,
+                       double top)
+    {
+        return QList<PdfTextField>{
+            text(title, 23.4, top, false, 16.9f),
+            text("Presidency Member:  ", 23.4, top + 27.1, false, 11.5f),
+            text(leader, 134.9, top + 27.1, true, 11.5f),
+            text(". . . . . . . . . . . . . . . . . . . .", 23.4, top + 48.3),
+            text(minister, MinisterX, top + 66.0, true),
+            text(household, FamilyX, top + 69.9, true),
+            text(household + ", Debra", ParentX, top + 70.6),
+            text("Female", GenderX, top + 70.6),
+            text("6 May", BirthdayX, top + 70.6),
+            separator(top + 110.0),
+        };
+    };
+    QList<PdfTextField> content = district("District 1", "Moeller, Jacob", "Flake, Andrew", "Edwards", 62.5);
+    content.append(district("District 2", "Walker, Jesse", "Nelson, Caleb", "Lewis", 300.0));
+
+    MinisteringPdfParser::ParseResult result = MinisteringPdfParser::parseFields({page(1, content)});
+
+    QVERIFY2(result.success, qPrintable(result.errors.join("; ")));
+    QVERIFY(!result.isRSFormat);
+    QCOMPARE(result.districts.size(), qsizetype(2));
+    for (const MinisteringDistrict& each : result.districts)
+    {
+        QVERIFY(each.presidencyMemberId().has_value());
+        std::optional<Person> leader;
+        for (const Family& family : result.ministerFamilies)
+        {
+            for (const Person& member : family.members())
+            {
+                if (member.id() == *each.presidencyMemberId())
+                {
+                    leader = member;
+                }
+            }
+        }
+        QVERIFY(leader.has_value());
+        QVERIFY2(leader->gender() == Gender::Male, qPrintable(each.name()));
+    }
 }
