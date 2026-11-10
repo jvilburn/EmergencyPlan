@@ -136,8 +136,7 @@ void PeoplePickerDialog::selectFamily(const FamilyId& familyId)
 
 void PeoplePickerDialog::onSelectionChanged()
 {
-    // Update map highlighting
-    m_mapWidget->updateHighlights();
+    emit highlightChanged();
 
     if (!m_editsSpecialNeed)
     {
@@ -256,8 +255,7 @@ std::optional<FamilySelectionResult> PeoplePickerDialog::selectFamilies(
     dialog.setWindowTitle(tr("Select Families \u2014 %1").arg(nameLabel));
     dialog.m_nameLabel->setText(nameLabel + tr(":"));
     dialog.m_nameEdit->setText(initialName);
-    connect(dialog.m_familyModel, &FamilyTreeModel::dataChanged,
-            dialog.m_mapWidget, &MapWidget::updateHighlights);
+    connect(dialog.m_familyModel, &FamilyTreeModel::dataChanged, &dialog, &PeoplePickerDialog::highlightChanged);
     if (!initialIds.isEmpty())
     {
         QSet<FamilyId> idSet(initialIds.begin(), initialIds.end());
@@ -332,8 +330,7 @@ std::optional<PersonSelectionResult> PeoplePickerDialog::selectPersons(
     dialog.setWindowTitle(tr("Select People \u2014 %1").arg(nameLabel));
     dialog.m_nameLabel->setText(nameLabel + tr(":"));
     dialog.m_nameEdit->setText(initialName);
-    connect(dialog.m_personModel, &PersonTreeModel::dataChanged,
-            dialog.m_mapWidget, &MapWidget::updateHighlights);
+    connect(dialog.m_personModel, &PersonTreeModel::dataChanged, &dialog, &PeoplePickerDialog::highlightChanged);
     if (!initialIds.isEmpty())
     {
         QSet<PersonId> idSet(initialIds.begin(), initialIds.end());

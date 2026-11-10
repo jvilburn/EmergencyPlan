@@ -89,6 +89,11 @@ public:
         const QList<PersonId>& initialIds,
         QWidget* parent);
 
+signals:
+    /// What the map should highlight changed: the selection or a check box. The map listens
+    /// for it, as for every view that provides its markers.
+    void highlightChanged();
+
 private slots:
     void onSelectionChanged();
 

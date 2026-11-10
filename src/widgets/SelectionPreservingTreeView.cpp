@@ -33,7 +33,8 @@ void SelectionPreservingTreeView::clearSelection()
 void SelectionPreservingTreeView::mousePressEvent(QMouseEvent* event)
 {
     QModelIndex clicked = indexAt(event->pos());
-    if (clicked.isValid() && (clicked.flags() & Qt::ItemIsUserCheckable))
+    // The row's own rect leaves out the expand arrow to its left, which still expands
+    if (clicked.isValid() && (clicked.flags() & Qt::ItemIsUserCheckable) && visualRect(clicked).contains(event->pos()))
     {
         // Toggle the clicked item's checkbox
         QVariant checkData = clicked.data(Qt::CheckStateRole);
@@ -42,9 +43,15 @@ void SelectionPreservingTreeView::mousePressEvent(QMouseEvent* event)
 
         if ((event->modifiers() & Qt::ShiftModifier) && currentIndex().isValid())
         {
-            // Shift+click: toggle range from current to clicked
-            int start = qMin(currentIndex().row(), clicked.row());
-            int end = qMax(currentIndex().row(), clicked.row());
+            // Shift+click: toggle range from current to clicked, counting a current member
+            // row as its family's
+            QModelIndex anchor = currentIndex();
+            while (anchor.parent().isValid())
+            {
+                anchor = anchor.parent();
+            }
+            int start = qMin(anchor.row(), clicked.row());
+            int end = qMax(anchor.row(), clicked.row());
             for (int row = start; row <= end; ++row)
             {
                 QModelIndex rowIndex = model()->index(row, 0);
