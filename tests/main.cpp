@@ -22,6 +22,7 @@
 #include "StrictReadersTest.h"
 #include "TeamCommandsTest.h"
 #include "UpdateFamilyCommandTest.h"
+#include "TileCacheTest.h"
 #include "TreeViewStateTest.h"
 #include "UpdateFileTest.h"
 #include "UserFolderTest.h"
@@ -71,6 +72,7 @@ int main(int argc, char* argv[])
     UserFolderTest userFolderTest(nullptr);
     TreeViewStateTest treeViewStateTest(nullptr);
     MinisteringPdfParserTest ministeringPdfParserTest(nullptr);
+    TileCacheTest tileCacheTest(nullptr);
 
     int failures = 0;
     failures += QTest::qExec(&personJsonTest, argc, argv);
@@ -103,5 +105,6 @@ int main(int argc, char* argv[])
     failures += QTest::qExec(&userFolderTest, argc, argv);
     failures += QTest::qExec(&treeViewStateTest, argc, argv);
     failures += QTest::qExec(&ministeringPdfParserTest, argc, argv);
+    failures += QTest::qExec(&tileCacheTest, argc, argv);
     return failures;
 }

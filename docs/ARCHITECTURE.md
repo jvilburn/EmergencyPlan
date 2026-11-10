@@ -543,7 +543,7 @@ signals:
 
 - **TileService** - Main orchestration: provider fallback, scaled tile generation, layer switching
 - **TileFetchService** - Network fetching with multi-provider fallback and deduplication
-- **TileDiskCacheService** - Directory-based disk cache with in-memory QSet index
+- **TileDiskCacheService** - Directory-based disk cache: a tile file is QOI pixels then its metadata, and an index records when each tile was last drawn. Tiles around the households (`TileCoverage`, from the map's families) are never deleted; outside them each layer keeps at most its `TileBudget` of tiles, and saving a new tile past it deletes that layer's least recently drawn
 
 ---
 

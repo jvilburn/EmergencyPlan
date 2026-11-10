@@ -167,6 +167,7 @@ set(SERVICE_SOURCES
     src/services/WardDirectoryPdfParser.cpp
     src/services/MinisteringPdfParser.cpp
     src/services/MinisteringImportService.cpp
+    src/services/TileCoverage.cpp
     src/services/TileDiskCacheService.cpp
     src/services/TileFetchService.cpp
     src/services/TileService.cpp
@@ -207,6 +208,7 @@ set(SERVICE_HEADERS
     src/services/WardDirectoryPdfParser.h
     src/services/MinisteringPdfParser.h
     src/services/MinisteringImportService.h
+    src/services/TileCoverage.h
     src/services/TileDiskCacheService.h
     src/services/TileFetchService.h
     src/services/TileTypes.h
@@ -387,6 +389,7 @@ target_include_directories(WardPlanningLib PUBLIC
 # Mark third-party includes as SYSTEM to suppress warnings from their headers
 target_include_directories(WardPlanningLib SYSTEM PUBLIC
     ${MUPDF_INCLUDE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/qoi
 )
 
 target_link_libraries(WardPlanningLib PUBLIC

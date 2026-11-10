@@ -1,10 +1,12 @@
 #pragma once
 
+#include "Coordinates.h"
 #include "TileTypes.h"
 
 #include <QObject>
 #include <QImage>
 #include <QCache>
+#include <QList>
 #include <QSet>
 
 #include <memory>
@@ -61,6 +63,10 @@ public:
     /// Get attribution text for all used providers
     QString attribution() const;
 
+    /// The households the cache keeps tiles around: the tiles TileCoverage gives for them,
+    /// up to maxZoom, are never trimmed.
+    void protectAround(const QList<Coordinates>& households, int maxZoom);
+
 signals:
     /// Emitted when any tile is updated - triggers full repaint.
     /// No arguments because the renderer should just redraw all visible tiles.
@@ -95,6 +101,8 @@ private:
     QCache<TileId, CachedTile> m_memoryCache{MEMORY_CACHE_MAX_TILES};
 
     QImage m_grayPlaceholder;
+
+    QList<Coordinates> m_protectedHouseholds;  ///< as protectAround last took them
 
     // Track which providers have been used (for attribution)
     QSet<QString> m_usedProviders;

@@ -1,4 +1,5 @@
 #include "TileService.h"
+#include "TileCoverage.h"
 #include "TileDiskCacheService.h"
 #include "TileFetchService.h"
 
@@ -10,7 +11,7 @@ TileService* TileService::s_instance = nullptr;
 
 TileService::TileService(QObject* parent)
     : QObject(parent)
-    , m_diskCache(std::make_unique<TileDiskCacheService>(getCacheDir(), this))
+    , m_diskCache(std::make_unique<TileDiskCacheService>(getCacheDir(), TileBudget::forDevice(), this))
     , m_fetchService(std::make_unique<TileFetchService>(this))
 {
     connect(m_fetchService.get(), &TileFetchService::tileFetched,
@@ -83,6 +84,8 @@ QImage TileService::getTile(TileId id)
         m_memoryCache.insert(id, entry);
     }
 
+    m_diskCache->markUsed(id);
+
     // Track provider for attribution (rebuild cached string only when set grows)
     if (!entry->metadata.providerId.isEmpty()
         && !m_usedProviders.contains(entry->metadata.providerId))
@@ -112,6 +115,17 @@ QImage TileService::getTile(TileId id)
 QString TileService::attribution() const
 {
     return m_cachedAttribution;
+}
+
+void TileService::protectAround(const QList<Coordinates>& households, int maxZoom)
+{
+    // Most document changes move no household, and the tiles take a moment to work out.
+    if (households == m_protectedHouseholds)
+    {
+        return;
+    }
+    m_protectedHouseholds = households;
+    m_diskCache->setProtected(TileCoverage::around(households, maxZoom));
 }
 
 // ============================================================================

@@ -70,6 +70,9 @@ protected:
 
 private slots:
     void onTileReady();
+
+    /// Redraws, and has the tile cache keep the tiles around every mapped household.
+    void onFamiliesChanged();
     void onZoomIn();
     void onZoomOut();
     void onToggleLayer();

@@ -65,8 +65,8 @@ MapWidget::MapWidget(QWidget* parent)
     }
 
     // Connect viewmodel signals
-    connect(m_viewModel, &MapViewModel::familiesChanged,
-            this, QOverload<>::of(&QWidget::update));
+    connect(m_viewModel, &MapViewModel::familiesChanged, this, &MapWidget::onFamiliesChanged);
+    onFamiliesChanged();
     // Update button positions when document changes (affects unmapped panel)
     connect(DocumentManager::instance(), &DocumentManager::documentChanged,
             this, [this](const DocumentChange&) { updateButtonPositions(); update(); });
@@ -539,6 +539,21 @@ void MapWidget::drawChurchMarkers(QPainter& painter)
 
         MarkerRenderer::drawChurch(painter, pos, state);
     }
+}
+
+void MapWidget::onFamiliesChanged()
+{
+    // The cache keeps the tiles around every household
+    if (TileService* tileService = TileService::instance())
+    {
+        QList<Coordinates> households;
+        for (const MapViewModel::MappedFamily& family : m_viewModel->families())
+        {
+            households.append(family.position);
+        }
+        tileService->protectAround(households, MAX_ZOOM);
+    }
+    update();
 }
 
 void MapWidget::drawMarkers(QPainter& painter)

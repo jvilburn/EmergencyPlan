@@ -19,6 +19,8 @@ add_executable(WardPlanningTests
     services/FakeWardStore.cpp
     services/MinisteringPdfParserTest.h
     services/MinisteringPdfParserTest.cpp
+    services/TileCacheTest.h
+    services/TileCacheTest.cpp
     services/TreeViewStateTest.h
     services/TreeViewStateTest.cpp
     services/TestClient.h

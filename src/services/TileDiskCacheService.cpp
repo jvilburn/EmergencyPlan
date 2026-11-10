@@ -1,4 +1,5 @@
 #include "TileDiskCacheService.h"
+#include "TileCoverage.h"
 
 #include <QDir>
 #include <QDirIterator>
@@ -9,11 +10,17 @@
 #include <QJsonObject>
 #include <QTimeZone>
 
+#include <algorithm>
+#include <cstdlib>
 #include <cstring>
+
+#define QOI_IMPLEMENTATION
+#define QOI_NO_STDIO
+#include "qoi.h"
 
 static constexpr int INDEX_SAVE_DELAY_MS = 5000;
 
-/// POD struct for on-disk tile metadata — appended after pixel data.
+/// POD struct for on-disk tile metadata, appended after the pixel data.
 /// Must be trivially copyable (no Qt types, no pointers).
 struct TileMetaDisk
 {
@@ -25,9 +32,6 @@ struct TileMetaDisk
     uint8_t reserved[7];        ///< padding for future use
 };
 static_assert(std::is_trivially_copyable_v<TileMetaDisk>);
-
-static constexpr qint64 PIXEL_BYTES = 256 * 256 * 4;
-static constexpr qint64 EXPECTED_SIZE = PIXEL_BYTES + sizeof(TileMetaDisk);
 
 static TileMetaDisk toMetaDisk(const TileMetadata& meta)
 {
@@ -54,8 +58,18 @@ static TileMetadata fromMetaDisk(const TileMetaDisk& d)
     return meta;
 }
 
-TileDiskCacheService::TileDiskCacheService(const QString& cacheDir, QObject* parent)
+TileBudget TileBudget::forDevice()
+{
+#if defined(Q_OS_ANDROID) || defined(Q_OS_IOS)
+    return TileBudget{8000, 1000};
+#else
+    return TileBudget{80000, 10000};
+#endif
+}
+
+TileDiskCacheService::TileDiskCacheService(const QString& cacheDir, const TileBudget& budget, QObject* parent)
     : QObject(parent)
+    , m_budget(budget)
     , m_cacheDir(cacheDir)
 {
     m_indexSaveTimer.setSingleShot(true);
@@ -116,7 +130,8 @@ void TileDiskCacheService::scanTileDirectories()
                 int z = parts[0].toInt();
                 int x = parts[1].toInt();
                 int y = parts[2].chopped(5).toInt();
-                m_tileIndex.insert(TileId(layer, z, x, y));
+                // With no record of use, a scanned tile is the least recently used.
+                m_tileIndex.insert(TileId(layer, z, x, y), 0);
             }
         }
     }
@@ -141,19 +156,24 @@ bool TileDiskCacheService::loadIndex()
         return false;
     }
 
+    // Each entry is [layer, z, x, y, last use]; an index with any other entry is rebuilt by
+    // scanning
     m_tileIndex.clear();
+    m_lastUse = 0;
     QJsonArray arr = doc.array();
     for (const QJsonValue& val : arr)
     {
         QJsonArray tile = val.toArray();
-        if (tile.size() == 4)
+        if (tile.size() != 5)
         {
-            TileLayer layer = static_cast<TileLayer>(tile[0].toInt());
-            int z = tile[1].toInt();
-            int x = tile[2].toInt();
-            int y = tile[3].toInt();
-            m_tileIndex.insert(TileId(layer, z, x, y));
+            m_tileIndex.clear();
+            m_lastUse = 0;
+            return false;
         }
+        TileLayer layer = static_cast<TileLayer>(tile[0].toInt());
+        qint64 use = tile[4].toInteger();
+        m_tileIndex.insert(TileId(layer, tile[1].toInt(), tile[2].toInt(), tile[3].toInt()), use);
+        m_lastUse = qMax(m_lastUse, use);
     }
 
     return true;
@@ -162,13 +182,14 @@ bool TileDiskCacheService::loadIndex()
 void TileDiskCacheService::saveIndex()
 {
     QJsonArray arr;
-    for (const TileId& id : m_tileIndex)
+    for (auto it = m_tileIndex.constBegin(); it != m_tileIndex.constEnd(); ++it)
     {
         QJsonArray tile;
-        tile.append(static_cast<int>(id.layer()));
-        tile.append(id.zoom());
-        tile.append(id.x());
-        tile.append(id.y());
+        tile.append(static_cast<int>(it.key().layer()));
+        tile.append(it.key().zoom());
+        tile.append(it.key().x());
+        tile.append(it.key().y());
+        tile.append(it.value());
         arr.append(tile);
     }
 
@@ -201,43 +222,41 @@ std::optional<CachedTile> TileDiskCacheService::load(TileId id) const
         return std::nullopt;
     }
 
-    QString tilePath = getTilePath(id);
-    QFile file(tilePath);
+    QFile file(getTilePath(id));
     if (!file.open(QIODevice::ReadOnly))
     {
         return std::nullopt;
     }
+    QByteArray bytes = file.readAll();
 
-    qint64 fileSize = file.size();
-    if (fileSize < PIXEL_BYTES)
+    // QOI pixels, then the metadata. A file that does not decode is a tile not cached: it is
+    // fetched again and overwritten.
+    qsizetype pixelBytes = bytes.size() - qsizetype(sizeof(TileMetaDisk));
+    if (pixelBytes <= 0)
     {
         return std::nullopt;
     }
-
-    // Read pixel data directly into QImage buffer -- no intermediate QByteArray, no copy
-    QImage image(256, 256, QImage::Format_ARGB32_Premultiplied);
-    if (file.read(reinterpret_cast<char*>(image.bits()), PIXEL_BYTES) != PIXEL_BYTES)
+    qoi_desc desc;
+    void* pixels = qoi_decode(bytes.constData(), int(pixelBytes), &desc, 4);
+    if (!pixels)
     {
         return std::nullopt;
     }
-
-    // Read metadata from the trailer (if present)
-    TileMetadata meta;
-    if (fileSize >= EXPECTED_SIZE)
+    if (desc.width != 256 || desc.height != 256)
     {
-        TileMetaDisk d{};
-        file.read(reinterpret_cast<char*>(&d), sizeof(TileMetaDisk));
-        meta = fromMetaDisk(d);
+        std::free(pixels);
+        return std::nullopt;
     }
-
-    return CachedTile{image, meta};
+    // The image takes the decoded buffer as its own, and frees it.
+    QImage image(static_cast<uchar*>(pixels), 256, 256, 256 * 4, QImage::Format_ARGB32_Premultiplied,
+                 [](void* buffer) { std::free(buffer); }, pixels);
+    TileMetaDisk d{};
+    std::memcpy(&d, bytes.constData() + pixelBytes, sizeof(TileMetaDisk));
+    return CachedTile{image, fromMetaDisk(d)};
 }
 
 void TileDiskCacheService::save(TileId id, const CachedTile& tile)
 {
-    QString tilePath = getTilePath(id);
-    QDir().mkpath(QFileInfo(tilePath).absolutePath());
-
     QImage image = tile.image;
     if (image.format() != QImage::Format_ARGB32_Premultiplied)
     {
@@ -249,21 +268,84 @@ void TileDiskCacheService::save(TileId id, const CachedTile& tile)
         return;
     }
 
+    if (!m_tileIndex.contains(id) && !isProtected(id))
+    {
+        makeRoom(id.layer());
+    }
+
+    // QOI over the image's own bytes, which it stores losslessly whatever their order
+    qoi_desc desc{256, 256, 4, QOI_SRGB};
+    int encodedBytes = 0;
+    void* encoded = qoi_encode(image.constBits(), &desc, &encodedBytes);
+    if (!encoded)
+    {
+        return;
+    }
+
+    QString tilePath = getTilePath(id);
+    QDir().mkpath(QFileInfo(tilePath).absolutePath());
     QFile file(tilePath);
+    bool written = false;
     if (file.open(QIODevice::WriteOnly))
     {
-        file.write(reinterpret_cast<const char*>(image.constBits()), PIXEL_BYTES);
-
         TileMetaDisk d = toMetaDisk(tile.metadata);
-        file.write(reinterpret_cast<const char*>(&d), sizeof(d));
+        written = file.write(static_cast<const char*>(encoded), encodedBytes) == encodedBytes
+            && file.write(reinterpret_cast<const char*>(&d), sizeof(d)) == qint64(sizeof(d));
         file.close();
+    }
+    std::free(encoded);
 
-        bool isNew = !m_tileIndex.contains(id);
-        m_tileIndex.insert(id);
-        if (isNew)
-        {
-            scheduleIndexSave();
-        }
+    if (written)
+    {
+        m_tileIndex.insert(id, ++m_lastUse);
+        scheduleIndexSave();
     }
 }
 
+void TileDiskCacheService::markUsed(TileId id)
+{
+    auto it = m_tileIndex.find(id);
+    if (it == m_tileIndex.end() || it.value() == m_lastUse)
+    {
+        return;
+    }
+    it.value() = ++m_lastUse;
+    scheduleIndexSave();
+}
+
+void TileDiskCacheService::setProtected(const QSet<TileId>& places)
+{
+    m_protected = places;
+}
+
+bool TileDiskCacheService::isProtected(TileId id) const
+{
+    return m_protected.contains(TileCoverage::placeOf(id));
+}
+
+void TileDiskCacheService::makeRoom(TileLayer layer)
+{
+    int budget = layer == TileLayer::Street ? m_budget.street : m_budget.satellite;
+    QList<std::pair<qint64, TileId>> trimmable;
+    for (auto it = m_tileIndex.constBegin(); it != m_tileIndex.constEnd(); ++it)
+    {
+        if (it.key().layer() == layer && !isProtected(it.key()))
+        {
+            trimmable.append({it.value(), it.key()});
+        }
+    }
+    qsizetype excess = trimmable.size() - budget + 1;
+    if (excess <= 0)
+    {
+        return;
+    }
+
+    auto byUse = [](const std::pair<qint64, TileId>& a, const std::pair<qint64, TileId>& b) { return a.first < b.first; };
+    std::nth_element(trimmable.begin(), trimmable.begin() + (excess - 1), trimmable.end(), byUse);
+    for (qsizetype i = 0; i < excess; ++i)
+    {
+        QFile::remove(getTilePath(trimmable[i].second));
+        m_tileIndex.remove(trimmable[i].second);
+    }
+    scheduleIndexSave();
+}
