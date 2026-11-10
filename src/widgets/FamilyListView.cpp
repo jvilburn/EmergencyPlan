@@ -75,10 +75,6 @@ FamilyListView::FamilyListView(QWidget* parent)
     // Connect model signals
     connect(m_model, &QAbstractItemModel::modelReset,
             this, &FamilyListView::onModelReset);
-    connect(m_model, &QAbstractItemModel::rowsRemoved,
-            this, &FamilyListView::onRowsRemoved);
-    connect(m_model, &QAbstractItemModel::rowsInserted,
-            this, &FamilyListView::onRowsInserted);
 
     // Emergency lifecycle
     connect(EmergencyManager::instance(), &EmergencyManager::emergencyStarted,
@@ -192,31 +188,6 @@ void FamilyListView::onModelReset()
     emit visibleFamiliesChanged(visibleFamilyIdsList());
 }
 
-void FamilyListView::onRowsRemoved(const QModelIndex& parent)
-{
-    // A family left the list. A family's own rows taking its Actions row take its buttons
-    // with them.
-    if (!parent.isValid())
-    {
-        emit visibleFamiliesChanged(visibleFamilyIdsList());
-    }
-}
-
-void FamilyListView::onRowsInserted(const QModelIndex& parent)
-{
-    if (!parent.isValid())
-    {
-        emit visibleFamiliesChanged(visibleFamilyIdsList());
-        return;
-    }
-
-    // Rows inserted under an expanded family may bring a new Actions row
-    if (m_model->rowTypeAt(parent) == FamilyTreeModel::RowType::Family && m_treeView->isExpanded(parent))
-    {
-        attachActionButtons(parent);
-    }
-}
-
 void FamilyListView::onItemExpanded(const QModelIndex& index)
 {
     FamilyTreeModel::RowType type = m_model->rowTypeAt(index);
@@ -322,17 +293,6 @@ void FamilyListView::onEmergencyStateChanged()
         // ended, so clearing it changes nothing shown.
         m_filterBar->filter()->setContactStatusFilter(std::nullopt);
         m_filterTabs.first()->setChecked(true);
-    }
-
-    // The buttons of each expanded family again, with or without the emergency's
-    for (int row = 0; row < m_model->rowCount(); ++row)
-    {
-        QModelIndex familyIndex = m_model->index(row, 0);
-        if (m_treeView->isExpanded(familyIndex))
-        {
-            detachActionButtons(familyIndex);
-            attachActionButtons(familyIndex);
-        }
     }
 }
 

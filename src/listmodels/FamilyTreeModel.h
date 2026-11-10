@@ -1,7 +1,6 @@
 #pragma once
 
 #include "BaseTreeModel.h"
-#include "DocumentChange.h"
 #include "DocumentManager.h"
 
 #include <QList>
@@ -102,28 +101,9 @@ public:
     bool setData(const QModelIndex& index, const QVariant& value, int role = Qt::EditRole) override;
 
 private slots:
-    void onDocumentChanged(const DocumentChange& change);
-    void onFamilyStatusChanged(const FamilyId& familyId);
-    void onEmergencyStateChanged();
     void rebuild();
 
 private:
-    /// Shows or hides the family by the filter: inserts it, rows and all, when it newly
-    /// passes, and removes it when it no longer does. Its row when it was shown and still
-    /// is, otherwise -1.
-    int applyFilter(const FamilyId& familyId);
-
-    /// Replaces every child row of the family at row.
-    void replaceChildren(int row);
-
-    /// Replaces the attempt and task rows of the family at row.
-    void replaceEmergencyRows(int row);
-
-    void insertFamilyRow(const Family& family);
-    void removeFamilyRow(int row);
-
-    /// Sets familyIndex on the nodes of each family from row on to its place.
-    void reindexFrom(int row);
 
     /// Internal tree node structure
     struct TreeNode

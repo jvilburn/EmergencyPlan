@@ -1,7 +1,6 @@
 #pragma once
 
 #include "BaseTreeModel.h"
-#include "DocumentChange.h"
 #include "ItemType.h"
 
 #include <QList>
@@ -61,9 +60,6 @@ public:
 
 public slots:
     void rebuild();
-
-private slots:
-    void onDocumentChanged(const DocumentChange& change);
 
 private:
     void clearNodes();

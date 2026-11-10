@@ -17,8 +17,9 @@ PersonTreeModel::PersonTreeModel(Filter* filter,
     , m_filter(filter)
     , m_checkable(checkable)
 {
+    // Rebuilt on every change; the view keeps its selection, expansion and scroll.
     connect(DocumentManager::instance(), &DocumentManager::documentChanged,
-            this, &PersonTreeModel::onDocumentChanged);
+            this, &PersonTreeModel::rebuild);
     if (m_filter)
     {
         connect(m_filter, &Filter::changed, this, &PersonTreeModel::rebuild);
@@ -35,15 +36,6 @@ void PersonTreeModel::clearNodes()
 {
     qDeleteAll(m_personNodes);
     m_personNodes.clear();
-}
-
-void PersonTreeModel::onDocumentChanged(const DocumentChange& change)
-{
-    // Full rebuild for structural changes
-    if (change.action == ChangeAction::Full || change.familyId)
-    {
-        rebuild();
-    }
 }
 
 void PersonTreeModel::rebuild()

@@ -59,7 +59,7 @@ For list and tree displays:
 
 1. Widget reads data through DocumentManager or list models
 2. DocumentManager provides `const Document&` access
-3. List models rebuild when `documentChanged` fires
+3. List models rebuild when `documentChanged` fires, and their views keep selection, expansion and scroll
 
 ### Modifying Data
 
@@ -118,7 +118,7 @@ Coordinates belong to addresses: a family's place on the map is its address's en
 
 A ward holds at most one emergency in progress, which holds its contact attempts and tasks, each carrying the id of the family it is for. They are the log of what happened, so each also records the names of what it involves as they stood when it was written: an attempt its family's and the reached person's, a task its family's, and an assignment its assignee's, person or team. The views, the command descriptions and the report show those names, and use the ids for the live views: notify reads the assignee's contact details, and the map's status is per family. A family's status is worked out from the attempts and tasks that carry its id: Needs Help while one of its tasks is unresolved, otherwise the outcome of its most recent attempt that has one, otherwise Not Contacted. The attempt, task and category commands write to the emergency in progress and conflict when there is none. Starting one while one is in progress changes nothing, so two responders who each start one offline end up in one emergency. `WardSession::endEmergency` writes the emergency's summary report, naming families, people and teams as the attempts, tasks and assignments recorded them, and a family with none of them as the document holds it, and then removes it.
 
-`EmergencyManager` turns the document's changes into four signals: `emergencyStarted` (none in progress to one), `emergencyEnded` (one to none), `familyStatusChanged(familyId)` (one family's attempts or tasks), and `responseDataChanged` (the counts, the progress bar and the map). On a change to one family's attempts or tasks, the family tree, the task table and the teams tree each replace only that family's rows. On a start or an end, the family tree replaces each family's attempt and task rows and the task table and the teams tree rebuild; every view rebuilds on a full document change.
+`EmergencyManager` turns the document's changes into three signals: `emergencyStarted` (none in progress to one), `emergencyEnded` (one to none), and `responseDataChanged` (the counts, the progress bar and the map). Every list model rebuilds on every document change. `SelectionPreservingTreeView` keeps what the user sees across a rebuild: before it, the view saves the keys of the selected row, of every expanded row and of the row at the top, and after it, it selects, expands and scrolls to the rows with those keys. The teams and asset trees also expand each top-level row new since the last rebuild. The task table, a plain table view, keeps its selected task and its top task the same way.
 
 ### Unified Models
 

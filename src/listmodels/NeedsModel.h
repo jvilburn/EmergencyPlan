@@ -1,7 +1,6 @@
 #pragma once
 
 #include "BaseTreeModel.h"
-#include "DocumentChange.h"
 
 #include <QList>
 #include <QString>
@@ -57,12 +56,8 @@ public:
     /// Find the first person node belonging to the given family.
     QModelIndex indexForFamilyId(const FamilyId& familyId) const;
 
-private slots:
-    void onDocumentChanged(const DocumentChange& change);
-
 private:
     void rebuild();
-    bool shouldRebuild(const DocumentChange& change) const;
 
     struct TreeNode
     {

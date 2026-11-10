@@ -1,6 +1,5 @@
 #pragma once
 
-#include "DocumentChange.h"
 #include "Id.h"
 
 #include <QAbstractTableModel>
@@ -8,9 +7,8 @@
 class ResponseTask;
 
 /// The table of every task in the emergency in progress, sorted unresolved first, then by
-/// assignee (assigned before unassigned), category and family. A change to one family's tasks
-/// replaces only that family's rows, so selection follows the rows that stay; an emergency
-/// starting or ending, or a full document change, rebuilds the table.
+/// assignee (assigned before unassigned), category and family. It rebuilds on every document
+/// change.
 class TaskListModel : public QAbstractTableModel
 {
     Q_OBJECT
@@ -43,9 +41,7 @@ public:
     bool isNotifiedForRow(int row) const;
 
 private slots:
-    void onDocumentChanged(const DocumentChange& change);
     void rebuild();
-    void replaceFamilyRows(const FamilyId& familyId);
 
 private:
     /// One task's row. The names are the family's and the assignee's as the task recorded
@@ -65,9 +61,6 @@ private:
 
     static TaskEntry entryFor(const ResponseTask& task);
     static bool taskEntryLessThan(const TaskEntry& a, const TaskEntry& b);
-
-    /// The row where entry belongs among the others, which are in order.
-    int sortedRow(const TaskEntry& entry) const;
 
     QList<TaskEntry> m_entries;
 };

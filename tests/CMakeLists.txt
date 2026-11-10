@@ -17,6 +17,8 @@ add_executable(WardPlanningTests
     services/FakeUnitLookup.cpp
     services/FakeWardStore.h
     services/FakeWardStore.cpp
+    services/TreeViewStateTest.h
+    services/TreeViewStateTest.cpp
     services/TestClient.h
     services/TestClient.cpp
     services/EveryField.h

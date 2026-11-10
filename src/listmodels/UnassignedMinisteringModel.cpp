@@ -17,8 +17,9 @@ UnassignedMinisteringModel::UnassignedMinisteringModel(Filter* filter,
     , m_filter(filter)
     , m_org(org)
 {
+    // Rebuilt on every change; the view keeps its selection, expansion and scroll.
     connect(DocumentManager::instance(), &DocumentManager::documentChanged,
-            this, &UnassignedMinisteringModel::onDocumentChanged);
+            this, &UnassignedMinisteringModel::rebuild);
     if (m_filter)
     {
         connect(m_filter, &Filter::changed, this, &UnassignedMinisteringModel::rebuild);
@@ -35,22 +36,6 @@ void UnassignedMinisteringModel::clearNodes()
 {
     delete m_headerNode;
     m_headerNode = nullptr;
-}
-
-void UnassignedMinisteringModel::onDocumentChanged(const DocumentChange& change)
-{
-    // Full document reload
-    if (change.action == ChangeAction::Full)
-    {
-        rebuild();
-        return;
-    }
-
-    // Family updated: refresh display text only
-    if (change.familyId)
-    {
-        refreshFamilyDisplayText(*change.familyId);
-    }
 }
 
 void UnassignedMinisteringModel::rebuild()
@@ -683,66 +668,4 @@ void UnassignedMinisteringModel::loadContactDetails(const QModelIndex& index)
 bool UnassignedMinisteringModel::hasUnassigned() const
 {
     return m_headerNode != nullptr;
-}
-
-void UnassignedMinisteringModel::refreshFamilyDisplayText(const FamilyId& familyId)
-{
-    if (!m_headerNode)
-    {
-        return;
-    }
-
-    const Document& doc = DocumentManager::instance()->document();
-    const QHash<FamilyId, Family>& families = doc.families();
-
-    if (!families.contains(familyId))
-    {
-        return;
-    }
-
-    const Family& family = families[familyId];
-
-    // Build set of person IDs in this family for quick lookup
-    QSet<PersonId> personIds;
-    for (const Person& member : family.members())
-    {
-        personIds.insert(member.id());
-    }
-
-    // Walk children of header and update affected nodes
-    for (int itemRow = 0; itemRow < m_headerNode->children.size(); ++itemRow)
-    {
-        TreeNode* itemNode = m_headerNode->children[itemRow];
-        bool needsUpdate = false;
-
-        if (itemNode->type == ItemType::MinisteredSister)
-        {
-            // Person node - check if person is in updated family
-            if (itemNode->personId && personIds.contains(*itemNode->personId))
-            {
-                std::optional<Person> person = doc.findPersonById(*itemNode->personId);
-                if (person)
-                {
-                    itemNode->displayText = person->displayName();
-                    needsUpdate = true;
-                }
-            }
-        }
-        else if (itemNode->type == ItemType::MinisteredFamily)
-        {
-            // Family node - check if this is the updated family
-            if (itemNode->familyId && *itemNode->familyId == familyId)
-            {
-                itemNode->displayText = family.displayName();
-                needsUpdate = true;
-            }
-        }
-
-        if (needsUpdate)
-        {
-            QModelIndex headerIndex = createIndex(0, 0, m_headerNode);
-            QModelIndex itemIndex = index(itemRow, 0, headerIndex);
-            emit dataChanged(itemIndex, itemIndex);
-        }
-    }
 }

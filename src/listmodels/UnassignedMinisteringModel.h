@@ -1,7 +1,6 @@
 #pragma once
 
 #include "BaseTreeModel.h"
-#include "DocumentChange.h"
 
 #include <QList>
 #include <QString>
@@ -15,8 +14,7 @@ class Filter;
 /// - MinisteredFamily (EQ) or MinisteredSister (RS) - individual items
 /// - ContactDetail - phone, email, address (loaded on demand)
 ///
-/// This model rebuilds on Full, EqGroup, RsGroup, and Family add/remove changes.
-/// Family updates only refresh display text (no structural rebuild).
+/// It rebuilds on every document change.
 class UnassignedMinisteringModel : public BaseTreeModel
 {
     Q_OBJECT
@@ -58,12 +56,8 @@ public:
     // Check if there are any unassigned items
     bool hasUnassigned() const;
 
-private slots:
-    void onDocumentChanged(const DocumentChange& change);
-
 private:
     void rebuild();
-    void refreshFamilyDisplayText(const FamilyId& familyId);
     void clearNodes();
 
     /// Internal tree node structure

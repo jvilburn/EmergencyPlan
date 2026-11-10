@@ -1,7 +1,6 @@
 #pragma once
 
 #include "BaseTreeModel.h"
-#include "DocumentChange.h"
 #include "Id.h"
 
 #include <QList>
@@ -21,8 +20,7 @@ class ResponseTask;
 ///          During emergencies: task rows appended after members.
 /// Level 2: Contact details (phone, email, address) - lazy loaded on expand
 ///
-/// A change to one family's tasks updates only that family's task rows; an emergency
-/// starting or ending, a team changing, or a full document change rebuilds the tree.
+/// It rebuilds on every document change.
 ///
 /// Selection key formats:
 ///   Team         -> {teamId}
@@ -72,16 +70,8 @@ public:
     /// Find the first member node belonging to the given family.
     QModelIndex indexForFamilyId(const FamilyId& familyId) const;
 
-private slots:
-    void onDocumentChanged(const DocumentChange& change);
-    void rebuild();
-
-    /// Brings the family's task rows up to date under every team and in the Unassigned
-    /// Tasks section, which comes or goes with its tasks.
-    void replaceFamilyTasks(const FamilyId& familyId);
-
 private:
-    void refreshFamilyDisplayText(const FamilyId& familyId);
+    void rebuild();
     void clearNodes();
 
     struct TreeNode
@@ -104,15 +94,9 @@ private:
 
     /// A row under parent showing task.
     static TreeNode* newTaskNode(const ResponseTask& task, TreeNode* parent);
-    static void setTask(TreeNode* taskNode, const ResponseTask& task);
 
     /// The Unassigned Tasks section holding a row for each of tasks.
     static TreeNode* newUnassignedHeader(const QList<ResponseTask>& tasks);
-
-    /// Makes parentNode's task rows show tasks, its tasks in order, changing only the rows
-    /// of familyId's tasks: the rows of every other family's tasks are already in place.
-    void syncTaskRows(TreeNode* parentNode, const QModelIndex& parentIndex,
-                      const QList<ResponseTask>& tasks, const FamilyId& familyId);
 
     QList<TreeNode*> m_teamNodes;  // Top-level team nodes (owned)
     Filter* m_filter;

@@ -37,7 +37,6 @@ private slots:
     void onTreeDoubleClicked(const QModelIndex& index);
     void onTreeExpanded(const QModelIndex& index);
     void onContextMenu(const QPoint& pos);
-    void expandAssets();
     void editAssetFromContextMenu();
     void removePersonFromContextMenu();
     void onRemovePersonClicked();

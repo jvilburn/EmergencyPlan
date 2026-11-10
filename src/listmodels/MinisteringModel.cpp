@@ -20,18 +20,13 @@ MinisteringModel::MinisteringModel(Filter* filter,
     , m_filter(filter)
     , m_org(org)
 {
+    // Rebuilt on every change; the view keeps its selection, expansion and scroll.
     connect(DocumentManager::instance(), &DocumentManager::documentChanged,
-            this, &MinisteringModel::onDocumentChanged);
+            this, &MinisteringModel::rebuild);
     if (m_filter)
     {
         connect(m_filter, &Filter::changed, this, &MinisteringModel::rebuild);
     }
-    connect(EmergencyManager::instance(), &EmergencyManager::familyStatusChanged,
-            this, &MinisteringModel::onFamilyStatusChanged);
-    connect(EmergencyManager::instance(), &EmergencyManager::emergencyStarted,
-            this, &MinisteringModel::onEmergencyStateChanged);
-    connect(EmergencyManager::instance(), &EmergencyManager::emergencyEnded,
-            this, &MinisteringModel::onEmergencyStateChanged);
     rebuild();
 }
 
@@ -44,22 +39,6 @@ void MinisteringModel::clearNodes()
 {
     qDeleteAll(m_districtNodes);
     m_districtNodes.clear();
-}
-
-void MinisteringModel::onDocumentChanged(const DocumentChange& change)
-{
-    // Full document reload
-    if (change.action == ChangeAction::Full)
-    {
-        rebuild();
-        return;
-    }
-
-    // Family updated: refresh display text only
-    if (change.familyId)
-    {
-        refreshFamilyDisplayText(*change.familyId);
-    }
 }
 
 void MinisteringModel::rebuild()
@@ -1007,110 +986,6 @@ void MinisteringModel::loadContactDetails(const QModelIndex& index)
     node->contactsLoaded = true;
 }
 
-void MinisteringModel::onFamilyStatusChanged(const FamilyId& familyId)
-{
-    // Find nodes for this family and emit dataChanged for DecorationRole
-    // Also update parent companionship/district display text
-    const Document& doc = DocumentManager::instance()->document();
-
-    for (int d = 0; d < m_districtNodes.size(); ++d)
-    {
-        TreeNode* districtNode = m_districtNodes[d];
-        bool districtAffected = false;
-
-        for (int c = 0; c < districtNode->children.size(); ++c)
-        {
-            TreeNode* compNode = districtNode->children[c];
-            if (compNode->type != ItemType::Companionship)
-            {
-                continue;
-            }
-
-            bool companionshipAffected = false;
-
-            for (int s = 0; s < compNode->children.size(); ++s)
-            {
-                TreeNode* sectionNode = compNode->children[s];
-                if (sectionNode->type != ItemType::SectionHeader
-                    || isMinistersSection(sectionNode))
-                {
-                    continue;
-                }
-
-                for (int i = 0; i < sectionNode->children.size(); ++i)
-                {
-                    TreeNode* itemNode = sectionNode->children[i];
-                    FamilyId fid = familyIdForNode(itemNode);
-                    if (!fid.isNull() && fid == familyId)
-                    {
-                        QModelIndex sectionIndex = createIndex(s, 0, sectionNode);
-                        QModelIndex itemIndex = index(i, 0, sectionIndex);
-                        emit dataChanged(itemIndex, itemIndex, {Qt::DecorationRole});
-                        companionshipAffected = true;
-                    }
-                }
-            }
-
-            if (companionshipAffected)
-            {
-                // Update companionship compact status
-                int filteredCount = countMinisteredChildren(compNode);
-                const QHash<MinisteringGroupId, MinisteringGroup>& groups =
-                    doc.groups(m_org);
-
-                if (compNode->groupId && groups.contains(*compNode->groupId))
-                {
-                    const MinisteringGroup& group = groups[*compNode->groupId];
-                    QStringList ministerNames;
-                    for (const PersonId& ministerId : group.ministerIds())
-                    {
-                        std::optional<Person> person = doc.findPersonById(ministerId);
-                        if (person)
-                        {
-                            ministerNames.append(person->displayName());
-                        }
-                    }
-
-                    compNode->displayText = formatCompanionshipText(
-                        ministerNames.join(", "), filteredCount, compNode);
-
-                    QModelIndex districtIndex = createIndex(d, 0, districtNode);
-                    QModelIndex compIndex = index(c, 0, districtIndex);
-                    emit dataChanged(compIndex, compIndex);
-                }
-
-                districtAffected = true;
-            }
-        }
-
-        if (districtAffected)
-        {
-            // Recalculate district display text with updated progress
-            const auto& districts = doc.districts(m_org);
-            if (districtNode->districtId && districts.contains(*districtNode->districtId))
-            {
-                const MinisteringDistrict& dist = districts[*districtNode->districtId];
-                int districtCount = 0;
-                for (TreeNode* cn : districtNode->children)
-                {
-                    if (cn->type == ItemType::Companionship)
-                    {
-                        districtCount += countMinisteredChildren(cn);
-                    }
-                }
-                districtNode->displayText = formatDistrictText(dist, districtCount, districtNode);
-            }
-            QModelIndex districtIndex = createIndex(d, 0, districtNode);
-            emit dataChanged(districtIndex, districtIndex);
-        }
-    }
-}
-
-void MinisteringModel::onEmergencyStateChanged()
-{
-    rebuild();
-}
-
 MinisteringModel::TreeNode* MinisteringModel::findMinisteredSection(TreeNode* companionshipNode) const
 {
     for (TreeNode* child : companionshipNode->children)
@@ -1287,139 +1162,4 @@ QString MinisteringModel::formatDistrictText(const MinisteringDistrict& district
     }
 
     return baseText;
-}
-
-void MinisteringModel::refreshFamilyDisplayText(const FamilyId& familyId)
-{
-    const Document& doc = DocumentManager::instance()->document();
-    const auto& families = doc.families();
-
-    if (!families.contains(familyId))
-    {
-        return;
-    }
-
-    const Family& family = families[familyId];
-
-    // Build set of person IDs in this family for quick lookup
-    QSet<PersonId> personIds;
-    for (const Person& member : family.members())
-    {
-        personIds.insert(member.id());
-    }
-
-    // Walk tree and update affected nodes
-    for (int districtRow = 0; districtRow < m_districtNodes.size(); ++districtRow)
-    {
-        TreeNode* districtNode = m_districtNodes[districtRow];
-
-        for (int compRow = 0; compRow < districtNode->children.size(); ++compRow)
-        {
-            TreeNode* compNode = districtNode->children[compRow];
-            if (compNode->type != ItemType::Companionship)
-            {
-                continue;
-            }
-
-            bool companionshipAffected = false;
-
-            for (int sectionRow = 0; sectionRow < compNode->children.size(); ++sectionRow)
-            {
-                TreeNode* sectionNode = compNode->children[sectionRow];
-                if (sectionNode->type != ItemType::SectionHeader)
-                {
-                    continue;
-                }
-
-                for (int itemRow = 0; itemRow < sectionNode->children.size(); ++itemRow)
-                {
-                    TreeNode* itemNode = sectionNode->children[itemRow];
-                    bool needsUpdate = false;
-
-                    if (itemNode->type == ItemType::Minister
-                        || itemNode->type == ItemType::MinisteredSister)
-                    {
-                        // Person node - check if person is in updated family
-                        if (itemNode->personId && personIds.contains(*itemNode->personId))
-                        {
-                            std::optional<Person> person = doc.findPersonById(*itemNode->personId);
-                            if (person)
-                            {
-                                itemNode->displayText = person->displayName();
-                                needsUpdate = true;
-                                if (itemNode->type == ItemType::Minister)
-                                {
-                                    companionshipAffected = true;
-                                }
-                            }
-                        }
-                    }
-                    else if (itemNode->type == ItemType::MinisteredFamily)
-                    {
-                        // Family node - check if this is the updated family
-                        if (itemNode->familyId && *itemNode->familyId == familyId)
-                        {
-                            itemNode->displayText = family.displayName();
-                            needsUpdate = true;
-                        }
-                    }
-
-                    if (needsUpdate)
-                    {
-                        QModelIndex sectionIndex = createIndex(sectionRow, 0, sectionNode);
-                        QModelIndex itemIndex = index(itemRow, 0, sectionIndex);
-                        emit dataChanged(itemIndex, itemIndex);
-                    }
-                }
-            }
-
-            // Update companionship text if any minister was affected
-            if (companionshipAffected)
-            {
-                const QHash<MinisteringGroupId, MinisteringGroup>& groups =
-                    doc.groups(m_org);
-
-                if (compNode->groupId && groups.contains(*compNode->groupId))
-                {
-                    const MinisteringGroup& group = groups[*compNode->groupId];
-                    QStringList ministerNames;
-                    for (const PersonId& ministerId : group.ministerIds())
-                    {
-                        std::optional<Person> person = doc.findPersonById(ministerId);
-                        if (person)
-                        {
-                            ministerNames.append(person->displayName());
-                        }
-                    }
-                    int filteredCount = countMinisteredChildren(compNode);
-                    compNode->displayText = formatCompanionshipText(
-                        ministerNames.join(", "), filteredCount, compNode);
-
-                    QModelIndex districtIndex = createIndex(districtRow, 0, districtNode);
-                    QModelIndex compIndex = index(compRow, 0, districtIndex);
-                    emit dataChanged(compIndex, compIndex);
-                }
-            }
-        }
-
-        // Update district header with sum of filtered counts from all companionships
-        int districtCount = 0;
-        for (TreeNode* compNode : districtNode->children)
-        {
-            if (compNode->type == ItemType::Companionship)
-            {
-                districtCount += countMinisteredChildren(compNode);
-            }
-        }
-
-        const auto& districts = doc.districts(m_org);
-        if (districtNode->districtId && districts.contains(*districtNode->districtId))
-        {
-            const MinisteringDistrict& district = districts[*districtNode->districtId];
-            districtNode->displayText = formatDistrictText(district, districtCount, districtNode);
-
-            QModelIndex districtIndex = createIndex(districtRow, 0, districtNode);
-            emit dataChanged(districtIndex, districtIndex);
-        }
-    }
 }

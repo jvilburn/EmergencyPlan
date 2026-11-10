@@ -41,9 +41,6 @@ signals:
     /// The ward went from an emergency in progress to none.
     void emergencyEnded();
 
-    /// One family's attempts or tasks in the emergency in progress changed.
-    void familyStatusChanged(const FamilyId& familyId);
-
     /// The statistics may have changed: the counts, the progress bar and the map.
     void responseDataChanged();
 

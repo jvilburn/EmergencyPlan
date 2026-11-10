@@ -23,14 +23,9 @@ QString assigneeName(const ResponseTask& task)
 TaskListModel::TaskListModel(QObject* parent)
     : QAbstractTableModel(parent)
 {
+    // Rebuilt on every change; the view keeps its selected task and scroll.
     connect(DocumentManager::instance(), &DocumentManager::documentChanged,
-            this, &TaskListModel::onDocumentChanged);
-    connect(EmergencyManager::instance(), &EmergencyManager::emergencyStarted,
             this, &TaskListModel::rebuild);
-    connect(EmergencyManager::instance(), &EmergencyManager::emergencyEnded,
-            this, &TaskListModel::rebuild);
-    connect(EmergencyManager::instance(), &EmergencyManager::familyStatusChanged,
-            this, &TaskListModel::replaceFamilyRows);
     rebuild();
 }
 
@@ -175,14 +170,6 @@ bool TaskListModel::isNotifiedForRow(int row) const
     return m_entries.at(row).notified;
 }
 
-void TaskListModel::onDocumentChanged(const DocumentChange& change)
-{
-    if (change.action == ChangeAction::Full)
-    {
-        rebuild();
-    }
-}
-
 void TaskListModel::rebuild()
 {
     beginResetModel();
@@ -201,69 +188,6 @@ void TaskListModel::rebuild()
     endResetModel();
 }
 
-void TaskListModel::replaceFamilyRows(const FamilyId& familyId)
-{
-    EmergencyManager* manager = EmergencyManager::instance();
-    if (!manager->isActive())
-    {
-        return;
-    }
-    QHash<TaskId, TaskEntry> wanted;
-    for (const ResponseTask& task : manager->response().tasksFor(familyId))
-    {
-        wanted.insert(task.id(), entryFor(task));
-    }
-
-    // The family's rows whose task is gone go; the others take the task as it stands, and
-    // move to their place
-    for (int row = m_entries.size() - 1; row >= 0; --row)
-    {
-        if (m_entries.at(row).familyId == familyId && !wanted.contains(m_entries.at(row).taskId))
-        {
-            beginRemoveRows(QModelIndex(), row, row);
-            m_entries.removeAt(row);
-            endRemoveRows();
-        }
-    }
-    for (auto it = wanted.begin(); it != wanted.end();)
-    {
-        int row = 0;
-        while (row < m_entries.size() && m_entries.at(row).taskId != it.key())
-        {
-            ++row;
-        }
-        if (row == m_entries.size())
-        {
-            ++it;
-            continue;
-        }
-
-        m_entries[row] = it.value();
-        emit dataChanged(index(row, 0), index(row, ColumnCount - 1));
-
-        // Its place among the other rows, which are in order
-        TaskEntry entry = m_entries.takeAt(row);
-        int target = sortedRow(entry);
-        m_entries.insert(row, entry);
-        if (target != row)
-        {
-            beginMoveRows(QModelIndex(), row, row, QModelIndex(), target > row ? target + 1 : target);
-            m_entries.move(row, target);
-            endMoveRows();
-        }
-        it = wanted.erase(it);
-    }
-
-    // What is left in wanted are the family's new tasks
-    for (const TaskEntry& entry : wanted)
-    {
-        int row = sortedRow(entry);
-        beginInsertRows(QModelIndex(), row, row);
-        m_entries.insert(row, entry);
-        endInsertRows();
-    }
-}
-
 TaskListModel::TaskEntry TaskListModel::entryFor(const ResponseTask& task)
 {
     TaskEntry entry;
@@ -277,12 +201,6 @@ TaskListModel::TaskEntry TaskListModel::entryFor(const ResponseTask& task)
     entry.resolved = task.isResolved();
     entry.notified = task.isNotified();
     return entry;
-}
-
-int TaskListModel::sortedRow(const TaskEntry& entry) const
-{
-    return static_cast<int>(std::upper_bound(m_entries.begin(), m_entries.end(), entry, &TaskListModel::taskEntryLessThan)
-                            - m_entries.begin());
 }
 
 // Sort: unresolved first, then assigned before unassigned, then assignee, category and family

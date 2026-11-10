@@ -17,8 +17,9 @@ EmergencyAssetModel::EmergencyAssetModel(Filter* filter,
     , m_filter(filter)
     , m_area(area)
 {
+    // Rebuilt on every change; the view keeps its selection, expansion and scroll.
     connect(DocumentManager::instance(), &DocumentManager::documentChanged,
-            this, &EmergencyAssetModel::onDocumentChanged);
+            this, &EmergencyAssetModel::rebuild);
     if (m_filter)
     {
         connect(m_filter, &Filter::changed, this, &EmergencyAssetModel::rebuild);
@@ -35,22 +36,6 @@ void EmergencyAssetModel::clearNodes()
 {
     qDeleteAll(m_assetNodes);
     m_assetNodes.clear();
-}
-
-void EmergencyAssetModel::onDocumentChanged(const DocumentChange& change)
-{
-    // Full document reload or an asset changed
-    if (change.action == ChangeAction::Full || change.assetId)
-    {
-        rebuild();
-        return;
-    }
-
-    // Family updated: refresh display text only
-    if (change.familyId)
-    {
-        refreshFamilyDisplayText(*change.familyId);
-    }
 }
 
 void EmergencyAssetModel::rebuild()
@@ -496,50 +481,4 @@ void EmergencyAssetModel::loadContactDetails(const QModelIndex& index)
 
     endInsertRows();
     node->contactsLoaded = true;
-}
-
-void EmergencyAssetModel::refreshFamilyDisplayText(const FamilyId& familyId)
-{
-    const Document& doc = DocumentManager::instance()->document();
-    const QHash<FamilyId, Family>& families = doc.families();
-
-    if (!families.contains(familyId))
-    {
-        return;
-    }
-
-    const Family& family = families[familyId];
-
-    // Build set of person IDs in this family for quick lookup
-    QSet<PersonId> personIds;
-    for (const Person& member : family.members())
-    {
-        personIds.insert(member.id());
-    }
-
-    // Walk tree and update affected person nodes
-    for (int assetRow = 0; assetRow < m_assetNodes.size(); ++assetRow)
-    {
-        TreeNode* assetNode = m_assetNodes[assetRow];
-
-        for (int personRow = 0; personRow < assetNode->children.size(); ++personRow)
-        {
-            TreeNode* personNode = assetNode->children[personRow];
-
-            if (personNode->type == ItemType::Person
-                && personNode->personId
-                && personIds.contains(*personNode->personId))
-            {
-                std::optional<Person> person = doc.findPersonById(*personNode->personId);
-                if (person)
-                {
-                    personNode->displayText = person->displayName() + formatContactSuffix(*person);
-
-                    QModelIndex assetIndex = createIndex(assetRow, 0, assetNode);
-                    QModelIndex personIndex = index(personRow, 0, assetIndex);
-                    emit dataChanged(personIndex, personIndex);
-                }
-            }
-        }
-    }
 }

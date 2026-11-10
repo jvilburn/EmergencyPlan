@@ -71,10 +71,6 @@ void EmergencyManager::onDocumentChanged(const DocumentChange& change)
     {
         emit emergencyEnded();
     }
-    if (change.emergencyFamilyId.has_value())
-    {
-        emit familyStatusChanged(*change.emergencyFamilyId);
-    }
 
     // The counts take in every directory family, so a change to the families moves them too
     bool countsMoved = change.action == ChangeAction::Full

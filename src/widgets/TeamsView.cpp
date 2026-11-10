@@ -68,6 +68,7 @@ TeamsView::TeamsView(QWidget* parent)
     m_tree->setContextMenuPolicy(Qt::CustomContextMenu);
     m_tree->setIndentation(16);
     m_tree->expandToDepth(0);
+    m_tree->setExpandsNewTopLevelRows(true);
     layout->addWidget(m_tree);
 
     // Connections
@@ -86,8 +87,6 @@ TeamsView::TeamsView(QWidget* parent)
 
     // Expand top-level items when model is reset, and the Unassigned Tasks section when it
     // comes back
-    connect(m_model, &QAbstractItemModel::modelReset, this, &TeamsView::expandTeams);
-    connect(m_model, &QAbstractItemModel::rowsInserted, this, &TeamsView::onRowsInserted);
 
     // Load contact details when member node is expanded
     connect(m_tree, &QTreeView::expanded,
@@ -273,23 +272,6 @@ void TeamsView::onContextMenu(const QPoint& pos)
     m_contextTeamId = std::nullopt;
     m_contextPersonId = std::nullopt;
     m_contextTaskId = std::nullopt;
-}
-
-void TeamsView::expandTeams()
-{
-    m_tree->expandToDepth(0);
-}
-
-void TeamsView::onRowsInserted(const QModelIndex& parent, int first, int last)
-{
-    if (parent.isValid())
-    {
-        return;
-    }
-    for (int row = first; row <= last; ++row)
-    {
-        m_tree->expand(m_model->index(row, 0));
-    }
 }
 
 void TeamsView::editTeamFromContextMenu()

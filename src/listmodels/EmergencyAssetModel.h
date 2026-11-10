@@ -1,7 +1,6 @@
 #pragma once
 
 #include "BaseTreeModel.h"
-#include "DocumentChange.h"
 #include "ResponseArea.h"
 
 #include <QList>
@@ -15,8 +14,7 @@ class Filter;
 /// Level 1: People in each asset, sorted by display name
 /// Level 2: Contact details (phone, email, address) - lazy loaded on expand
 ///
-/// This model rebuilds on Full, EmergencyAsset, and Family add/remove changes.
-/// Family updates only refresh display text (no structural rebuild).
+/// It rebuilds on every document change.
 class EmergencyAssetModel : public BaseTreeModel
 {
     Q_OBJECT
@@ -61,12 +59,8 @@ public:
     QModelIndex indexForFamilyId(const FamilyId& familyId) const;
     ResponseArea area() const { return m_area; }
 
-private slots:
-    void onDocumentChanged(const DocumentChange& change);
-
 private:
     void rebuild();
-    void refreshFamilyDisplayText(const FamilyId& familyId);
     void clearNodes();
 
     /// Internal tree node structure

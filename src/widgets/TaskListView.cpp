@@ -71,6 +71,10 @@ TaskListView::TaskListView(QWidget* parent)
     connect(m_notifyButton, &QPushButton::clicked, this, &TaskListView::onNotifyTask);
     connect(m_treeView->selectionModel(), &QItemSelectionModel::selectionChanged,
             this, &TaskListView::onSelectionChanged);
+    connect(m_model, &QAbstractItemModel::modelAboutToBeReset,
+            this, &TaskListView::onModelAboutToBeReset);
+    connect(m_model, &QAbstractItemModel::modelReset,
+            this, &TaskListView::onModelReset);
     connect(m_model, &QAbstractItemModel::modelReset,
             this, &TaskListView::onSelectionChanged);
     connect(m_model, &QAbstractItemModel::dataChanged,
@@ -86,6 +90,47 @@ bool byName(const QPair<QString, QString>& a, const QPair<QString, QString>& b)
 }
 
 }  // namespace
+
+void TaskListView::onModelAboutToBeReset()
+{
+    m_savedTask = taskAt(m_treeView->currentIndex());
+    m_topTask = taskAt(m_treeView->indexAt(QPoint(1, 1)));
+}
+
+void TaskListView::onModelReset()
+{
+    if (m_savedTask.has_value() && rowOf(*m_savedTask) >= 0)
+    {
+        m_treeView->setCurrentIndex(m_model->index(rowOf(*m_savedTask), 0));
+    }
+    if (m_topTask.has_value() && rowOf(*m_topTask) >= 0)
+    {
+        m_treeView->scrollTo(m_model->index(rowOf(*m_topTask), 0), QAbstractItemView::PositionAtTop);
+    }
+    m_savedTask = std::nullopt;
+    m_topTask = std::nullopt;
+}
+
+int TaskListView::rowOf(const TaskId& task) const
+{
+    for (int row = 0; row < m_model->rowCount(); ++row)
+    {
+        if (m_model->taskIdForRow(row) == task)
+        {
+            return row;
+        }
+    }
+    return -1;
+}
+
+std::optional<TaskId> TaskListView::taskAt(const QModelIndex& index) const
+{
+    if (!index.isValid())
+    {
+        return std::nullopt;
+    }
+    return m_model->taskIdForRow(index.row());
+}
 
 void TaskListView::onAddTask()
 {

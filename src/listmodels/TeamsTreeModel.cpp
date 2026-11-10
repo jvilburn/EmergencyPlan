@@ -87,18 +87,13 @@ TeamsTreeModel::TeamsTreeModel(Filter* filter,
     : BaseTreeModel(parent)
     , m_filter(filter)
 {
+    // Rebuilt on every change; the view keeps its selection, expansion and scroll.
     connect(DocumentManager::instance(), &DocumentManager::documentChanged,
-            this, &TeamsTreeModel::onDocumentChanged);
+            this, &TeamsTreeModel::rebuild);
     if (m_filter)
     {
         connect(m_filter, &Filter::changed, this, &TeamsTreeModel::rebuild);
     }
-    connect(EmergencyManager::instance(), &EmergencyManager::emergencyStarted,
-            this, &TeamsTreeModel::rebuild);
-    connect(EmergencyManager::instance(), &EmergencyManager::emergencyEnded,
-            this, &TeamsTreeModel::rebuild);
-    connect(EmergencyManager::instance(), &EmergencyManager::familyStatusChanged,
-            this, &TeamsTreeModel::replaceFamilyTasks);
     rebuild();
 }
 
@@ -111,22 +106,6 @@ void TeamsTreeModel::clearNodes()
 {
     qDeleteAll(m_teamNodes);
     m_teamNodes.clear();
-}
-
-void TeamsTreeModel::onDocumentChanged(const DocumentChange& change)
-{
-    // Full document reload or a team changed
-    if (change.action == ChangeAction::Full || change.teamId)
-    {
-        rebuild();
-        return;
-    }
-
-    // Family updated: its members' names
-    if (change.familyId)
-    {
-        refreshFamilyDisplayText(*change.familyId);
-    }
 }
 
 void TeamsTreeModel::rebuild()
@@ -214,16 +193,11 @@ TeamsTreeModel::TreeNode* TeamsTreeModel::newTaskNode(const ResponseTask& task, 
     taskNode->type = ItemType::TaskRow;
     taskNode->teamId = parent->teamId;
     taskNode->parent = parent;
-    setTask(taskNode, task);
-    return taskNode;
-}
-
-void TeamsTreeModel::setTask(TreeNode* taskNode, const ResponseTask& task)
-{
     taskNode->taskId = task.id();
     taskNode->familyId = task.familyId();
     taskNode->taskResolved = task.isResolved();
     taskNode->displayText = taskText(task);
+    return taskNode;
 }
 
 TeamsTreeModel::TreeNode* TeamsTreeModel::newUnassignedHeader(const QList<ResponseTask>& tasks)
@@ -236,101 +210,6 @@ TeamsTreeModel::TreeNode* TeamsTreeModel::newUnassignedHeader(const QList<Respon
         header->children.append(newTaskNode(task, header));
     }
     return header;
-}
-
-void TeamsTreeModel::replaceFamilyTasks(const FamilyId& familyId)
-{
-    if (!EmergencyManager::instance()->isActive())
-    {
-        return;
-    }
-
-    for (int row = 0; row < m_teamNodes.size(); ++row)
-    {
-        TreeNode* teamNode = m_teamNodes.at(row);
-        if (teamNode->type == ItemType::Team)
-        {
-            syncTaskRows(teamNode, index(row, 0), tasksUnder(teamNode->teamId), familyId);
-        }
-    }
-
-    // The Unassigned Tasks section is last, and shown only while it holds a task
-    QList<ResponseTask> unassigned = tasksUnder(std::nullopt);
-    int headerRow = m_teamNodes.size() - 1;
-    bool hasHeader = headerRow >= 0 && m_teamNodes.at(headerRow)->type == ItemType::UnassignedTasksHeader;
-    if (hasHeader && unassigned.isEmpty())
-    {
-        beginRemoveRows(QModelIndex(), headerRow, headerRow);
-        delete m_teamNodes.takeLast();
-        endRemoveRows();
-    }
-    else if (!hasHeader && !unassigned.isEmpty())
-    {
-        int newRow = m_teamNodes.size();
-        beginInsertRows(QModelIndex(), newRow, newRow);
-        m_teamNodes.append(newUnassignedHeader(unassigned));
-        endInsertRows();
-    }
-    else if (hasHeader)
-    {
-        TreeNode* header = m_teamNodes.at(headerRow);
-        QModelIndex headerIndex = index(headerRow, 0);
-        syncTaskRows(header, headerIndex, unassigned, familyId);
-        header->displayText = unassignedHeaderText(unassigned.size());
-        emit dataChanged(headerIndex, headerIndex);
-    }
-}
-
-void TeamsTreeModel::syncTaskRows(TreeNode* parentNode, const QModelIndex& parentIndex,
-                                  const QList<ResponseTask>& tasks, const FamilyId& familyId)
-{
-    QList<TreeNode*>& children = parentNode->children;
-
-    // Task rows follow any member rows
-    int first = 0;
-    while (first < children.size() && children.at(first)->type != ItemType::TaskRow)
-    {
-        ++first;
-    }
-
-    // The family's rows whose task is no longer here go
-    QSet<TaskId> taskIds;
-    for (const ResponseTask& task : tasks)
-    {
-        taskIds.insert(task.id());
-    }
-    for (int row = children.size() - 1; row >= first; --row)
-    {
-        TreeNode* node = children.at(row);
-        if (node->familyId == familyId && !taskIds.contains(*node->taskId))
-        {
-            beginRemoveRows(parentIndex, row, row);
-            delete children.takeAt(row);
-            endRemoveRows();
-        }
-    }
-
-    // The rows left are in the tasks' order, since a task's place never changes. Walk the
-    // tasks with them: the family's rows take their task as it stands, and its tasks with
-    // no row get one at their place.
-    for (int i = 0; i < tasks.size(); ++i)
-    {
-        const ResponseTask& task = tasks.at(i);
-        int row = first + i;
-        if (row < children.size() && children.at(row)->taskId == task.id())
-        {
-            if (task.familyId() == familyId)
-            {
-                setTask(children.at(row), task);
-                QModelIndex taskIndex = index(row, 0, parentIndex);
-                emit dataChanged(taskIndex, taskIndex);
-            }
-            continue;
-        }
-        beginInsertRows(parentIndex, row, row);
-        children.insert(row, newTaskNode(task, parentNode));
-        endInsertRows();
-    }
 }
 
 TeamsTreeModel::TreeNode* TeamsTreeModel::nodeFromIndex(const QModelIndex& index) const
@@ -795,56 +674,4 @@ void TeamsTreeModel::loadContactDetails(const QModelIndex& index)
 
     endInsertRows();
     node->contactsLoaded = true;
-}
-
-void TeamsTreeModel::refreshFamilyDisplayText(const FamilyId& familyId)
-{
-    const Document& doc = DocumentManager::instance()->document();
-    const QHash<FamilyId, Family>& families = doc.families();
-
-    if (!families.contains(familyId))
-    {
-        return;
-    }
-
-    const Family& family = families[familyId];
-
-    QSet<PersonId> personIds;
-    for (const Person& member : family.members())
-    {
-        personIds.insert(member.id());
-    }
-
-    for (int teamRow = 0; teamRow < m_teamNodes.size(); ++teamRow)
-    {
-        TreeNode* teamNode = m_teamNodes[teamRow];
-
-        for (int memberRow = 0; memberRow < teamNode->children.size(); ++memberRow)
-        {
-            TreeNode* memberNode = teamNode->children[memberRow];
-
-            if (memberNode->type == ItemType::TeamMember
-                && memberNode->personId
-                && personIds.contains(*memberNode->personId))
-            {
-                std::optional<Person> person = doc.findPersonById(*memberNode->personId);
-                if (person)
-                {
-                    QString displayName = person->displayName() + formatContactSuffix(*person);
-                    std::optional<Team> teamOpt = teamNode->teamId
-                        ? doc.findTeamById(*teamNode->teamId)
-                        : std::nullopt;
-                    if (teamOpt && teamOpt->leaderId() && *teamOpt->leaderId() == *memberNode->personId)
-                    {
-                        displayName += tr(" (leader)");
-                    }
-                    memberNode->displayText = displayName;
-
-                    QModelIndex teamIndex = createIndex(teamRow, 0, teamNode);
-                    QModelIndex memberIndex = index(memberRow, 0, teamIndex);
-                    emit dataChanged(memberIndex, memberIndex);
-                }
-            }
-        }
-    }
 }

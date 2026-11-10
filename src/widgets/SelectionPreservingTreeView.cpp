@@ -94,21 +94,45 @@ void SelectionPreservingTreeView::onCurrentChanged(const QModelIndex& current, c
 
 void SelectionPreservingTreeView::onModelAboutToBeReset()
 {
-    // Save current selection before model clears
     QModelIndex current = currentIndex();
-    if (current.isValid())
+    m_savedKey = current.isValid() ? std::optional<SelectionKey>(m_typedModel->selectionKeyAt(current)) : std::nullopt;
+
+    m_expandedKeys.clear();
+    collectExpandedKeys(QModelIndex(), m_expandedKeys);
+
+    m_topLevelKeys.clear();
+    for (int row = 0; row < model()->rowCount(); ++row)
     {
-        m_savedKey = m_typedModel->selectionKeyAt(current);
+        m_topLevelKeys.append(m_typedModel->selectionKeyAt(model()->index(row, 0)));
     }
-    else
-    {
-        m_savedKey = std::nullopt;
-    }
+
+    QModelIndex top = indexAt(QPoint(1, 1));
+    m_topKey = top.isValid() ? std::optional<SelectionKey>(m_typedModel->selectionKeyAt(top)) : std::nullopt;
 }
 
 void SelectionPreservingTreeView::onModelReset()
 {
-    // Try to restore selection after model rebuild
+    // Parents come before their children, so each is expanded before what is under it.
+    for (const SelectionKey& key : std::as_const(m_expandedKeys))
+    {
+        QModelIndex index = findIndex(key);
+        if (index.isValid())
+        {
+            expand(index);
+        }
+    }
+    if (m_expandsNewTopLevelRows)
+    {
+        for (int row = 0; row < model()->rowCount(); ++row)
+        {
+            QModelIndex index = model()->index(row, 0);
+            if (!m_topLevelKeys.contains(m_typedModel->selectionKeyAt(index)))
+            {
+                expand(index);
+            }
+        }
+    }
+
     if (m_savedKey.has_value())
     {
         QModelIndex index = findIndex(*m_savedKey);
@@ -118,8 +142,33 @@ void SelectionPreservingTreeView::onModelReset()
         }
     }
 
-    // Clear saved state
+    if (m_topKey.has_value())
+    {
+        QModelIndex index = findIndex(*m_topKey);
+        if (index.isValid())
+        {
+            scrollTo(index, QAbstractItemView::PositionAtTop);
+        }
+    }
+
     m_savedKey = std::nullopt;
+    m_expandedKeys.clear();
+    m_topKey = std::nullopt;
+    m_topLevelKeys.clear();
+}
+
+void SelectionPreservingTreeView::collectExpandedKeys(const QModelIndex& parent, QList<SelectionKey>& keys) const
+{
+    int rowCount = model()->rowCount(parent);
+    for (int row = 0; row < rowCount; ++row)
+    {
+        QModelIndex index = model()->index(row, 0, parent);
+        if (isExpanded(index))
+        {
+            keys.append(m_typedModel->selectionKeyAt(index));
+            collectExpandedKeys(index, keys);
+        }
+    }
 }
 
 QModelIndex SelectionPreservingTreeView::findIndex(const SelectionKey& key) const

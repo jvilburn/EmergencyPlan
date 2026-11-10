@@ -1,7 +1,6 @@
 #pragma once
 
 #include "BaseTreeModel.h"
-#include "DocumentChange.h"
 
 #include <QList>
 #include <QString>
@@ -19,7 +18,7 @@ class Filter;
 /// - ContactDetail - phone, email, address (loaded on demand)
 ///
 /// Contact details are loaded lazily when a person/family node is expanded.
-/// This model rebuilds on Full, EqDistrict, EqGroup, RsDistrict, RsGroup, Family scopes.
+/// It rebuilds on every document change.
 class MinisteringModel : public BaseTreeModel
 {
     Q_OBJECT
@@ -65,14 +64,8 @@ public:
     // Lazy loading for contact details
     void loadContactDetails(const QModelIndex& index);
 
-private slots:
-    void onDocumentChanged(const DocumentChange& change);
-    void onFamilyStatusChanged(const FamilyId& familyId);
-    void onEmergencyStateChanged();
-
 private:
     void rebuild();
-    void refreshFamilyDisplayText(const FamilyId& familyId);
     void clearNodes();
 
     /// Internal tree node structure

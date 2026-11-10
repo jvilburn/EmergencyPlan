@@ -13,8 +13,9 @@ NeedsModel::NeedsModel(Filter* filter,
     : BaseTreeModel(parent)
     , m_filter(filter)
 {
+    // Rebuilt on every change; the view keeps its selection, expansion and scroll.
     connect(DocumentManager::instance(), &DocumentManager::documentChanged,
-            this, &NeedsModel::onDocumentChanged);
+            this, &NeedsModel::rebuild);
     if (m_filter)
     {
         connect(m_filter, &Filter::changed, this, &NeedsModel::rebuild);
@@ -40,19 +41,6 @@ NeedsModel::TreeNode* NeedsModel::nodeFromIndex(const QModelIndex& index) const
         return nullptr;
     }
     return static_cast<TreeNode*>(index.internalPointer());
-}
-
-bool NeedsModel::shouldRebuild(const DocumentChange& change) const
-{
-    return change.action == ChangeAction::Full || change.familyId.has_value();
-}
-
-void NeedsModel::onDocumentChanged(const DocumentChange& change)
-{
-    if (shouldRebuild(change))
-    {
-        rebuild();
-    }
 }
 
 void NeedsModel::rebuild()

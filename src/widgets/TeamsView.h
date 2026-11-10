@@ -37,8 +37,6 @@ private slots:
     void onTreeDoubleClicked(const QModelIndex& index);
     void onTreeExpanded(const QModelIndex& index);
     void onContextMenu(const QPoint& pos);
-    void expandTeams();
-    void onRowsInserted(const QModelIndex& parent, int first, int last);
     void editTeamFromContextMenu();
     void setLeaderFromContextMenu();
     void clearLeaderFromContextMenu();

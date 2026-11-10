@@ -44,8 +44,6 @@ signals:
 private slots:
     void onSelectionChanged();
     void onModelReset();
-    void onRowsRemoved(const QModelIndex& parent);
-    void onRowsInserted(const QModelIndex& parent);
     void onItemExpanded(const QModelIndex& index);
     void onItemCollapsed(const QModelIndex& index);
     void onEmergencyStateChanged();

@@ -60,6 +60,7 @@ EmergencyAssetView::EmergencyAssetView(ResponseArea area,
     m_tree->setContextMenuPolicy(Qt::CustomContextMenu);
     m_tree->setIndentation(16);
     m_tree->expandToDepth(0);
+    m_tree->setExpandsNewTopLevelRows(true);
     layout->addWidget(m_tree);
 
     // Connections
@@ -76,7 +77,6 @@ EmergencyAssetView::EmergencyAssetView(ResponseArea area,
             this, &EmergencyAssetView::onContextMenu);
 
     // Expand top-level items when model is reset
-    connect(m_model, &QAbstractItemModel::modelReset, this, &EmergencyAssetView::expandAssets);
 
     // Load contact details when person node is expanded
     connect(m_tree, &QTreeView::expanded,
@@ -204,11 +204,6 @@ void EmergencyAssetView::onContextMenu(const QPoint& pos)
     // Clear context after menu closes (whether action taken or dismissed)
     m_contextAssetId = std::nullopt;
     m_contextPersonId = std::nullopt;
-}
-
-void EmergencyAssetView::expandAssets()
-{
-    m_tree->expandToDepth(0);
 }
 
 void EmergencyAssetView::editAssetFromContextMenu()
