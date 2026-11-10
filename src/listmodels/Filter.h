@@ -98,6 +98,12 @@ private:
     static bool familyContainsWord(const Family& family, const QString& word);
 
     // Team and asset helpers
+    /// Whether the filter names a team, or an asset, the document holds. One deleted since it
+    /// was chosen names nothing, so it filters nothing and the bar shows no chip for it; it
+    /// filters again if an undo brings it back.
+    bool namesTeam(const Document& document) const;
+    bool namesAsset(const Document& document) const;
+
     bool isOnTeam(const Document& document, const PersonId& personId) const;
     bool hasResponseArea(const Document& document, const PersonId& personId) const;
 

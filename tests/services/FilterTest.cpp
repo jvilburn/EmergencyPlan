@@ -43,3 +43,23 @@ void FilterTest::searchMatchesAFamilysNote()
     QVERIFY(!filter.passes(document, TestWard::jones()));
     QVERIFY(!filter.passes(document, TestWard::carol()));
 }
+
+void FilterTest::deletedTeamOrAssetFiltersNothing()
+{
+    Document withSetup = TestWard::withTeam(TestWard::document(), TestWard::setupTeam());
+    Filter byTeam(nullptr);
+    byTeam.setTeamIds({TestWard::setupTeamId()});
+    QVERIFY(byTeam.passes(withSetup, TestWard::smith()));
+    QVERIFY(!byTeam.passes(withSetup, TestWard::jones()));
+    QVERIFY(!byTeam.passes(withSetup, TestWard::carol()));
+
+    Document deleted = withSetup;
+    deleted.removeTeam(TestWard::setupTeamId());
+    QVERIFY(byTeam.passes(deleted, TestWard::jones()));
+    QVERIFY(byTeam.passes(deleted, TestWard::carol()));
+
+    Filter byAsset(nullptr);
+    byAsset.setAssetTypeIds({EmergencyAssetId::fromString("asset-gone")});
+    QVERIFY(byAsset.passes(TestWard::document(), TestWard::jones()));
+    QVERIFY(byAsset.passes(TestWard::document(), TestWard::carol()));
+}

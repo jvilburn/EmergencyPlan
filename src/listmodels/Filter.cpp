@@ -290,6 +290,30 @@ bool Filter::familyContainsWord(const Family& family, const QString& word)
         || family.note().toLower().contains(word);
 }
 
+bool Filter::namesTeam(const Document& document) const
+{
+    for (const TeamId& teamId : m_teamIds)
+    {
+        if (document.findTeamById(teamId).has_value())
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool Filter::namesAsset(const Document& document) const
+{
+    for (const EmergencyAssetId& assetId : m_assetTypeIds)
+    {
+        if (document.findEmergencyAssetById(assetId).has_value())
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool Filter::isOnTeam(const Document& document, const PersonId& personId) const
 {
     for (const TeamId& teamId : m_teamIds)
@@ -306,7 +330,7 @@ bool Filter::isOnTeam(const Document& document, const PersonId& personId) const
 bool Filter::hasResponseArea(const Document& document, const PersonId& personId) const
 {
     // Case 1: Only assetTypeIds set (no response areas) - check specific assets
-    if (m_responseAreas.isEmpty() && !m_assetTypeIds.isEmpty())
+    if (m_responseAreas.isEmpty() && namesAsset(document))
     {
         for (const EmergencyAssetId& assetId : m_assetTypeIds)
         {
@@ -327,7 +351,7 @@ bool Filter::hasResponseArea(const Document& document, const PersonId& personId)
         if (personAreas.contains(area))
         {
             // If specific assets are also filtered, check those too
-            if (!m_assetTypeIds.isEmpty())
+            if (namesAsset(document))
             {
                 // Check if person has any of the specific assets in this area
                 for (const EmergencyAssetId& assetId : m_assetTypeIds)
@@ -373,8 +397,8 @@ bool Filter::passes(const Document& document, const Family& family) const
     }
 
     // Pre-compute family-level asset matches
-    bool assetsOk = m_responseAreas.isEmpty() && m_assetTypeIds.isEmpty();
-    bool teamsOk = m_teamIds.isEmpty();
+    bool assetsOk = m_responseAreas.isEmpty() && !namesAsset(document);
+    bool teamsOk = !namesTeam(document);
     bool personCriteriaOk = m_callings.isEmpty()
         && !m_gender.has_value()
         && m_ageFilter == AgeFilter::All
@@ -481,13 +505,13 @@ bool Filter::passes(const Document& document, const Person& person) const
     }
 
     // Teams
-    if (!m_teamIds.isEmpty() && !isOnTeam(document, person.id()))
+    if (namesTeam(document) && !isOnTeam(document, person.id()))
     {
         return false;
     }
 
     // Assets: response areas
-    if (!m_responseAreas.isEmpty() || !m_assetTypeIds.isEmpty())
+    if (!m_responseAreas.isEmpty() || namesAsset(document))
     {
         if (!hasResponseArea(document, person.id()))
         {
