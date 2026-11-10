@@ -66,7 +66,8 @@ Two related ideas surfaced during design and are deferred to their own work:
 | Running instances | One per user (see *Receiving an invitation*) |
 | Where the local file lives | Local application data (`QStandardPaths::AppLocalDataLocation`), keyed by document id; the user never chooses a path |
 | Third-party sync folders | Not built. |
-| Update files | A version on disk, sent by email or message and opened like a fetch, so wards share with no server at all (see *Update files*) |
+| Update files | A version on disk, sent by email or message and opened like a fetch, so wards keep sharing once the server is gone. Sent only with the server turned off; taken with it on or off (see *Update files*) |
+| Using the server | *Use the Ward Planning server*, a switch in *Settings*, on by default and app-wide. It is turned off only once the server has shut down, and then every ward shares by update files (see *If the server goes away*) |
 | Which version wins | Each version's header carries its number and its writer; the higher number wins, then the higher writer fingerprint. Every transport follows this one rule. |
 | The split of responsibility | **The ward says who may read it; the server stores versions and relays changes.** Besides keeping only a higher-numbered version, the server checks only that a write's header is well formed and names its document, and that its signer is the header's writer and is named by the current header, or for a new document by its own. |
 | Who has access | The access list inside the encrypted payload: users, their devices, and open invites |
@@ -110,8 +111,9 @@ design's answer, not a gap:
 - **Installing an older Ward Planning over a newer one is not supported.**
 - **1.0 `.emergencyplan` files are not migrated**, and their teams, tags, assets, special
   needs and notes are not carried over.
-- **An unreadable or restored head stalls sharing** until the operator repairs it (see
-  *Threat model*); there is no client-side republish. A ward this device has already had
+- **An unreadable head stalls sharing** until the operator repairs it (see *Threat
+  model*). A head that ranks below this device's copy is pushed over (see *Every edit is a
+  version*). A ward this device has already had
   from or given to the server, which the server now answers `404` for - deleted and since
   pruned, pruned while in use, or lost - is a removal (see *Everything else, from the
   document*). A ward not yet on the server makes its first push as usual.
@@ -171,7 +173,9 @@ This document uses its terms for precision; the interface uses these:
 | conflict, abandoned replay | *Your changes could not be applied, because the ward changed first* |
 | to-redo file | *To redo*, in the file's name; *These need doing again*, inside it |
 | journal, unpushed changes | *Your changes are saved here and will go up when the connection returns* |
+| entries no version this device holds carries, with the server off | *You have changes to share*; *Send Update* |
 | update file | *update*; *Send Update* |
+| the server switch | *Use the Ward Planning server*, in *Settings* |
 | no longer this device's | *This ward is no longer shared with this device* |
 
 Terms with no place in the interface at all: push, fetch, replay, version (of a ward; the
@@ -226,8 +230,8 @@ copied out of app data, and devices that never reconnect, keep what they had eit
 **Detected, not prevented.** Tampering with a local file's header, including its document
 id: the header is bound as associated data, so a modified local file fails to decrypt
 rather than quietly attaching itself to a different document. **A rolled-back head** from a
-server fault: a head that ranks below the version this device holds is refused, and the
-device keeps its copy and stops pushing, the accepted stall below. A version's number and
+server fault: a head that ranks below the version this device holds is not taken, and the
+device pushes its copy over it (see *Every edit is a version*). A version's number and
 writer are in its header, which the payload binds, so no server can relabel an old version
 as a newer one; serving an old version is the accepted stale-version case below.
 
@@ -298,10 +302,11 @@ version.** Members would see different or stale work while believing they were c
 Nothing is exposed and every member keeps their own edits; the gain to an attacker is
 disruption only.
 
-**Accepted: an unreadable or restored head stalls sharing.** A version every client
-refuses - written by a client bug, or corrupted in storage - or a server restored to
-versions older than members hold stops the devices that hold a newer version from
-pushing. Repairing the server is the server's own design, outside this one.
+**Accepted: an unreadable head stalls sharing.** A head that ranks at or above this
+device's copy and that every client refuses - written by a client bug, or corrupted in
+storage - stops the devices that see it from pushing. Repairing the server is the server's
+own design, outside this one. A server restored to versions older than members hold is
+pushed over by the first member it names to look (see *Every edit is a version*).
 
 **Cleaned up when the user asks.** A removed member's local copy: their app offers to
 delete it once it learns the ward is no longer theirs.
@@ -751,7 +756,7 @@ estimate because none would change it.
    wins*); the same version is nothing new. Its number and writer are read from the header
    itself, never from a separate call.
    This comes before the next check so that a server restored to a version from before this
-   device joined reads as rolled back, not as the ward leaving this device.
+   device joined reads as older, not as the ward leaving this device.
 3. The header names this device. One that names no recipient is a deleted ward (see *Who
    has access, changed by two users*), and one that names others but not this device is the
    ward no longer being this device's (see *Everything else, from the document*); neither is
@@ -767,6 +772,14 @@ cleared app data, or an unreadable local file - steps 2 and 7 do not apply, sinc
 nothing to compare against; that is the accepted first download under *Threat model*. An
 update file is taken by these same checks (see *Update files*).
 
+**A head that ranks below this device's copy is pushed over.** The device pushes its next
+version, as it would after an edit, though its journal may be empty; that number is above
+the head's, so the server keeps it when the head names this device. This is how a version taken from an update file with the server on, and a server
+restored to versions older than members hold, reach the server again. A head from before
+this device joined does not name it, so the server refuses this device's push; the head is
+then unchanged, so the push is a fault, retried as anything pending is (see *Saving*),
+until the push of a member the head names lands.
+
 Any other failure keeps the local file untouched: the local file is the one copy that has
 to survive a version nobody can read. The device keeps working on that copy and pushes
 nothing while the head fails; see the accepted stall under *Threat model*.
@@ -777,7 +790,8 @@ pushes: a newer format on the server, a head that fails a check above, saves fai
 push that faults, or a ward no longer this device's. The actions whose change must reach the
 server - Leave and *Remove this device* - are offered only while the ward is syncing;
 otherwise each shows the notice of what stops it, which is *Connect to the internet* only
-when that is the cause.
+when that is the cause. With the server turned off in *Settings*, no ward is syncing (see
+*If the server goes away*).
 
 ## Which version wins
 
@@ -806,14 +820,16 @@ same way. Say Alice and Bob both send version 5, and Bob's fingerprint is higher
 ## Update files
 
 **An update file is a version on disk**, carried between devices by email, a message, or
-anything else that carries a file, so a ward is shared with no server and no account. It is
+anything else that carries a file, so wards keep sharing once the server is gone. It is
 the version a push would send - the header and a payload holding the ward, its access list
 and the landed marks, with no `device` part - after one line holding the writer's signature
 over its `update` line (see *What the server is*). It is named for the ward and the day, such
 as `Tanglewood Ward 2026-11-08.wardupdate`. The server and update files carry the same
-versions, ranked the same way, so a ward can use either or both.
+versions, ranked the same way, so a ward moves from one to the other with nothing
+converted.
 
-- **Sending.** *Send Update* writes the next version as an update file in the `Ward
+- **Sending.** *Send Update* is offered only while the server is turned off in *Settings*
+  (see *If the server goes away*). It writes the next version as an update file in the `Ward
   Planning` folder in the user's Documents, where to-redo files go, in place of an update of
   that ward written the same day, and opens the platform's share sheet with it, or on a
   desktop the folder holding it with the file selected. Each member sends to every other
@@ -821,17 +837,23 @@ versions, ranked the same way, so a ward can use either or both.
   version becomes the one this device holds. Its journal entries stay until a version this
   device takes carries them, since a version written at the same time elsewhere can outrank
   it.
-- **Receiving.** Opening an update file - double-clicking it, *Open in* on a phone, or
-  dropping it on the window, or *Open Update...* in the File menu - takes it as a fetch
-  would, opening its ward first when another is open. The ward must be one this device holds,
+- **Changes to share.** With the server off, the app shows *You have changes to share*,
+  with *Send Update*, while the journal holds entries above this device's own landed mark
+  in the version it holds: changes that no version this device holds carries. Sending
+  clears it, since the version written carries every entry. Taking a version that lacks
+  some of this device's entries replays them on top, above that version's mark, so the
+  notice shows again.
+- **Receiving**, with the server on or off. Opening an update file - double-clicking it,
+  *Open in* on a phone, or dropping it on the window, or *Open Update...* in the File menu -
+  takes it as a fetch would, opening its ward first when another is open. The ward must be one this device holds,
   or the file is refused with *This update is for a ward this device does not have*, and the
   signature must verify against the verify key the access list of the version this device
   holds gives the writer; a file from a device that list does not name is refused with
   *This update is from a device this copy of the ward does not list yet. Open the update
   from whoever added it first.* The checks under *Every edit is a version* then apply, the journal is trimmed by this device's landed mark, and the rest replays on
   top. A file that does not rank above the version held is set aside with *You already have
-  a newer update*. When the replay carried changes of this device's own, the app asks the
-  user to send an update, so those changes reach the others.
+  a newer update*. With the server on, the next look settles it as any look does: a head that ranks below the version
+  taken is pushed over (see *Every edit is a version*), and one that ranks above it is taken.
 - **Lost and out-of-order files cost nothing lasting.** Each version holds the whole ward,
   and a sender's next version carries everything its journal still holds.
 - **Access travels the same way.** A removal rotates the key and seals the next version only
@@ -846,8 +868,10 @@ Every command run in a ward this device holds, apart from Leave and *Remove this
 journal when a push of this device's that the server keeps, or a version this device takes,
 carries it. Content and access changes go into the same journal in the order they were
 made, because they are the same kind of thing: an edit to one encrypted document. **The
-journal holds this device's commands that it has not yet seen land**, and the interface
-shows that changes are waiting while it holds any.
+journal holds this device's commands that it has not yet seen land**. With the server on,
+the interface shows that changes are waiting while it holds any; with it off, it shows
+*You have changes to share* for the entries no version this device holds carries (see
+*Update files*).
 
 **The journal lives inside the local file.** The local file's encrypted payload holds what
 a pushed version holds - the ward, its access list and the landed marks - plus, under
@@ -1064,7 +1088,7 @@ ministering, the emergency response and the access list. In particular:
   construction). A change of assignee sets the notification to none, since the new
   assignee has not been told.
 - **The access list** is new in its entirety. Invite, remove a user, remove a device,
-  withdraw an invite, set a role, rename yourself, rename one of your devices and leave are
+  withdraw an invite, set a role, rename yourself, rename this device and leave are
   each a command, which is what lets an access
   change replay like any other. Join is a command too, run once by the joining device under
   the invite's key, and refused with *This invite has been used or withdrawn* when the
@@ -1176,7 +1200,7 @@ a command made when a rule allowed it can arrive where the rule does not. The ru
 - Anyone, admins included, uses *Remove device* only on their own devices; removing a user
   takes all of that user's.
 - A user cannot Remove themselves; Leave is how they go.
-- A user renames only themselves and their own devices.
+- A device renames only itself and its own user.
 
 These are refusals rather than start conditions because what changed is somebody else's
 entry. When a step-down replays onto a ward whose other admin has left, the stepping-down
@@ -1407,11 +1431,13 @@ seed for `crypto_box_seed_keypair`, and subkey 2 the seed for `crypto_sign_seed_
    asks who the invite is for, and makes nothing until that is answered; the answer is the
    invite's `label`. A *Make them an admin* checkbox, off by default, sets the invite's
    role, which the joiner takes. An invite keeps the role it was made with, even if its
-   maker is later demoted; an admin can withdraw any invite. While the ward is syncing (see
-   *Every edit is a version*), the invitation is saved only once that version is on the
-   server, so the join's push meets a header that names the invite. While it is not, the
-   invitation is saved at once and the app asks the inviter to send an update to the other
-   members, so their versions keep the invite open until the new member's join reaches them.
+   maker is later demoted; an admin can withdraw any invite. With the server on, both are
+   offered only while the ward is syncing (see *Every edit is a version*), and the
+   invitation is saved only once that version is on the server, so the join's push meets a
+   header that names the invite. With the server off, the invitation is saved at once, and
+   the invite, a journal entry like any edit, brings up *You have changes to share* (see
+   *Update files*); the update the inviter sends lets the other members' versions keep the
+   invite open until the new member's join reaches them.
 
    **The invitation is a small file**, such as `Tanglewood Ward - for Bob.wardinvite`: one
    line of JSON holding its own `format` integer, the document id and the seed, then the
@@ -1445,9 +1471,10 @@ seed for `crypto_box_seed_keypair`, and subkey 2 the seed for `crypto_sign_seed_
    the inviter's user for a device invite, under a new user for a user invite, named by the
    joiner. Its `writer` is the invite's fingerprint, and it is signed by the invite's
    signing key, whose verify key the version it builds on names. The join goes out as any
-   version does: pushed while the ward is syncing, and otherwise the app asks the new member
-   to send an update to every member, since a device seals versions only to the devices the
-   version it holds names. Until a member takes the join, that member's versions stay sealed
+   version does: with the server on, it is pushed, and joining needs a connection; with the
+   server off, the app asks the new member to send an update to every member, since a device
+   seals versions only to the devices the version it holds names. Until a member takes the
+   join, that member's versions stay sealed
    to the open invite, and the new member reads them with the seed, which it keeps until a
    version it takes names it. A copy the device still holds from before it lost access is
    replaced, and nothing from that copy carries over. A join that loses to a newer version
@@ -1472,8 +1499,7 @@ The invitation is the gate. Whoever opens it first gets in, visibly, and can be 
 
 - **Who has access**: the access list, read from the open ward. Add a device, Add a user,
   Remove, Make admin / Make member, Withdraw invite, Save invitation (open invites this
-  device made), Rename (yourself and your own devices), Leave, Remove device (own
-  devices).
+  device made), Leave, Remove device (own devices). Names change in *Settings*.
 - **Access notices**: the client diffs the access list between the version it last dismissed and
   the current one, one line per entry that differs: joined as member or admin, no longer
   has access, now an admin or a member, a device added or removed, an invite made or used.
@@ -1668,7 +1694,7 @@ does the same, and *Join a ward*, prominent on the first-run screen where a new 
 wards lands and in the ward list too, offers a file picker. The app reads the seed and the
 version from the file, unseals the ward with the invite's key, and asks *Join Tanglewood
 Ward?* with the ward's own name, read from the ward rather than from the file's name;
-confirming runs the join (see *Invites*), with no server needed. Nothing is typed, pasted or
+confirming runs the join (see *Invites*). Nothing is typed, pasted or
 copied. An update file opens the same ways (see *Update files*).
 
 **One instance per user.** On every desktop platform the app holds a per-user `QLockFile` in
@@ -1681,6 +1707,27 @@ writing the same local file and journal.
 
 **On phones**, an attachment opens in Ward Planning through the platform's own open-in
 flow, which the phone ports use.
+
+## Settings
+
+*Settings* is one short form that fits a phone screen, app-wide and kept in the app's own
+settings file:
+
+- ***Use the Ward Planning server***, on by default (see *If the server goes away*).
+- ***This device's name***, which the first-run screen asks for. It is the name this device
+  takes when it creates or joins a ward. Changing it renames this device in every ward it
+  holds that is still its own and names it otherwise: each rename is a command in its
+  ward's journal, and goes out as that ward's other changes do.
+- ***Your name***, which fills in the name asked for when the user creates a ward or joins
+  through *Add a user*. Changing it renames the user in every ward this device holds that
+  is still its own and names them otherwise, in the same way. **A rename made on another of
+  the user's devices reaches this one too**: taking a version in which this device's user
+  has a name other than *Your name* sets *Your name* to it, and renames the user in this device's other
+  wards in the same way.
+- ***Map home***, where the map opens. The app first sets it from the device's approximate
+  location; *Use current view* sets it to what the map shows.
+- **Advanced**, collapsed until opened: the server address override, for testers and
+  self-hosters (see *File format*). Changing it starts afresh (see *Settled*).
 
 ## Single key holder notice
 
@@ -1707,10 +1754,22 @@ plaintext PDF written wherever the user chooses, which is worth saying in the sa
 
 The server could stop, whether abandoned, unaffordable, or deliberately retired. **Wards
 keep sharing through update files** (see *Update files*), which need no server, no account,
-and nothing its maintainer runs: members send updates and invitations to each other, under
-the same rules for versions, access and joining. What members lose is speed, since changes
-move as fast as people send and open files; presence; and Leave and *Remove this device*,
-which need the server.
+and nothing its maintainer runs.
+
+**The switch is *Use the Ward Planning server*, in the app's *Settings***: on by default,
+and app-wide, since a server that is gone is gone for every ward. The line under it reads
+*Turn this off only if the Ward Planning server has shut down. Every member of your wards
+must turn it off too.* With it off, the app makes no call to the server, no ward is
+syncing, *Send Update* is offered, and members send updates and invitations to each other,
+under the same rules for versions, access and joining. What members lose is speed, since
+changes move as fast as people send and open files; presence; the update check, which the
+server serves; and Leave and *Remove this device*, which need the server.
+
+A member who turns the server off while the others still use it reaches them only through
+the update files they send: another member takes one with the server on, and that member's
+next look pushes it over the server's head. The member who turned it off hears of the
+others' changes only from update files, which members with the server on are not offered to
+send.
 
 The design also keeps what lets someone restore the server, each of which costs nothing to
 hold on to:
@@ -1725,7 +1784,8 @@ hold on to:
 3. **Every member holds a complete, readable copy**, a `.wardplanning` file in app data that
    *Show in folder* reveals.
 
-**A successor can restore the service with no step for members.** Because
+**A successor can restore the service with no step for members who kept the server
+on.** Because
 documents carry only their id and the app supplies the server address, continuity is an
 operator task that members never see: at the same domain, the successor deploys the
 open-source server from a current export of blobs and apps reconnect; at a new domain,
@@ -1734,8 +1794,10 @@ document follows it. Releases and the update check live on the server, so that r
 reaches members automatically only if it is published while the old address still
 answers; this is why the handover keeps the domain.
 
-Members keep editing and sending updates throughout, and sharing through the server resumes
-once the service returns.
+Members keep editing and sending updates throughout. Once the service returns, members who
+turned the server off turn it back on, and sharing through it resumes: a restored head older
+than a member's copy is pushed over by that member's first look (see *Every edit is a
+version*).
 
 ## Failure paths
 
@@ -1746,7 +1808,6 @@ once the service returns.
 | A rule refused a replayed command | The wording the app gives for that operation, as it would if the user tried it now: *You are the only admin...*, then where the to-redo file is, as above. |
 | The local save failed | Your change could not be saved: *reason*. It is kept while the app stays open and saved as soon as saving works again; closing asks first. |
 | The server is unreachable | Working offline. Your changes are saved here and will go up when the connection returns. |
-| Head is older than this copy | The server has an older copy of this ward than yours. Nothing was changed on this device. |
 | A push that faults | Your changes could not be shared right now. They are saved here. |
 | Head fails validation | The ward on the server could not be read. Your copy is safe and you can keep working; sharing resumes when the server has a readable copy. |
 | Header format is newer | This ward was saved by a newer version of Ward Planning. Update to see the latest changes and share your work. |
@@ -1761,7 +1822,8 @@ once the service returns.
 | An invitation opened while offline | Connect to the internet, then open the invitation again. |
 | Leave or Remove this device while offline | Connect to the internet to leave this ward. / Connect to the internet to remove this device. |
 | Add a user or Add a device while offline | Connect to the internet to invite someone. |
-| Any of those four while connected but not syncing | The notice of the state that stops pushing, such as *This ward was saved by a newer version of Ward Planning...* |
+| Any of those four with the server on, while connected but not syncing | The notice of the state that stops pushing, such as *This ward was saved by a newer version of Ward Planning...* |
+| Leave or Remove this device with the server off | Leaving a ward needs the Ward Planning server, which is turned off in Settings. / Removing this device needs the Ward Planning server, which is turned off in Settings. |
 | The invite's push loses to a conflict | Your invite could not be created, because the ward changed first. Try again. |
 | Not an admin | In *Who has access*, a member sees *To add or remove users, ask an admin: names* in place of the *Add a user* button. |
 | Head lacks this device, names no one, or the server no longer has the ward | This ward is no longer shared with this device. With an offer to delete this copy. |
@@ -1854,9 +1916,11 @@ Format and crypto, in `tests/services`:
 - a version whose header has a fingerprint matching no device's or invite's key pair, one
   built from one device's X25519 key and another's verify key included, or whose access
   list has a device or invite with no header entry, is refused
-- a head that ranks below this copy's version is refused and changes nothing, and one that
-  is also from before this device joined, so lacks it, reports the server as rolled back,
-  not this ward as no longer this device's
+- a head that ranks below this copy's version changes nothing local, and the device pushes
+  its next version over it, with an empty journal too, which the server keeps; one that is
+  also from before this device joined, so lacks it, leaves the ward this device's, its push
+  refused and retried until another member's push over it lands, after which this device's
+  push is kept
 - a removal rotates the key: the data key the removed user's devices held fails the AEAD
   check on the next version's payload, not only their missing recipient entry; a write
   that removes nobody keeps the key; the written header has exactly the expected entries,
@@ -1949,7 +2013,7 @@ The journal and replay, in `tests/services`:
   landed: with the newcomer a member, it is refused with the last-admin wording and the
   ward keeps both users; with the newcomer an admin, it applies, the ward stays with the
   newcomer, and nothing is deleted
-- Add a user and Add a device are offered only while the ward is syncing - not offline, and
+- with the server on, Add a user and Add a device are offered only while the ward is syncing - not offline, and
   not while connected with a newer format on the server, where the newer-version notice is
   shown instead - and an invitation is saved only
   after the version naming it is on the server; an invite whose push loses saves none
@@ -1957,7 +2021,7 @@ The journal and replay, in `tests/services`:
   next fetch, offers *Save invitation* after that fetch, and the invitation joins; once the invite is
   used, withdrawn, or abandoned in a replay, the seed is gone from the local file and no
   invitation is offered; *Add a user* with no answer to who it is for makes no invite
-- Leave and Remove this device are offered only while the ward is syncing; once confirmed, the ward accepts
+- Leave and Remove this device are offered only while the ward is syncing, and with the server off show its notice; once confirmed, the ward accepts
   no edit; on a push refused by a rule, the ward is editable again and the local file is
   unchanged; on a push that succeeds, the user is told they left, and the local file still
   opens on this device, read-only, no longer this device's, with an empty journal; with the answer dropped, the next head ends in
@@ -2058,6 +2122,10 @@ Update files, in `tests/services`, with no server:
 - two devices that each send version 5 converge: the one with the lower fingerprint takes
   the other's 5, replays its own changes and sends 6; the other sets the lower 5 aside and
   takes 6, and both then hold equal wards, each change present
+- *You have changes to share* through that exchange: shown on both after their edits,
+  cleared on both by sending 5, shown again on the lower-fingerprint device after it takes
+  the other's 5 and replays, cleared by sending 6, and not shown again on the other device,
+  whose journal still holds its entries after it sets the lower 5 aside
 - an update file that does not rank above the version held is set aside and changes
   nothing; one whose signature does not verify, or whose writer the held access list does
   not name, is refused
@@ -2069,6 +2137,27 @@ Update files, in `tests/services`, with no server:
   is read by the new member with the seed
 - the same invitation used on two devices: both join; the lower-ranked join, replayed onto
   the winner, is refused with *This invite has been used or withdrawn*
+
+Names in *Settings*, with no server:
+
+- changing *This device's name* or *Your name* journals one rename in each ward this device
+  holds that names it otherwise, and none in a ward that already has the new name or is no
+  longer this device's
+- a second device of the same user, taking a version with the new user name, sets *Your
+  name* to it and journals the rename in each of its other wards that names the user
+  otherwise; a ward held only by the second device ends with the new name
+
+The server switch, against the fake server:
+
+- with the server off, the fake server records no call while a ward is opened, edited,
+  sent as an update and joined through an invitation; *Send Update* is offered, and Add a
+  user saves the invitation at once; with the server on, *Send Update* is not offered
+- with the server on, an update file that ranks above the server's head is taken, and the
+  next look pushes the next version over the head, which the server keeps; one that ranks
+  below the head is taken, and the next look takes the head and replays onto it
+- members who traded update files with the server off turn it on: the first to look pushes
+  over the older head; each other member takes the version now there, or, holding one that
+  ranks above it, pushes over it in turn; and all end holding equal wards
 
 Against the fake server, in `tests/server`:
 
