@@ -110,7 +110,7 @@ bool TileFetchService::needsFetch(TileId id, const TileMetadata& meta) const
     }
 
     // Scaled tile - always fetch to get native resolution
-    if (meta.isScaledUp)
+    if (meta.isStandIn)
     {
         return true;
     }
@@ -230,7 +230,7 @@ void TileFetchService::handleSuccess(const RequestContext& ctx, const QImage& im
     TileMetadata meta;
     meta.fetchDate = QDateTime::currentDateTime();
     meta.providerId = m_providers[layer][ctx.providerIndex].id;
-    meta.isScaledUp = false;
+    meta.isStandIn = false;
     meta.etag = etag;
     meta.lastModified = lastModified;
 

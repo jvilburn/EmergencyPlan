@@ -78,13 +78,16 @@ private slots:
 private:
     /// Try to composite a tile from 4 cached children at z+1.
     /// Returns null image if not all children are cached.
-    /// Populates outMeta with oldest child's fetchDate and shared providerId.
+    /// Populates outMeta with oldest child's fetchDate, shared providerId and isStandIn=true.
     QImage tryComposite(TileId id, TileMetadata* outMeta);
 
-    /// Try to scale a tile from cached parent at z-1.
-    /// Returns null image if parent not cached.
-    /// Populates outMeta with isScaledUp=true.
+    /// Try to scale a tile from the nearest cached tile above it, as many levels up as it
+    /// takes. Returns null image if none is cached.
+    /// Populates outMeta with isStandIn=true.
     QImage tryScale(TileId id, TileMetadata* outMeta);
+
+    /// The tile held in memory, or else on disk; none when neither holds it.
+    std::optional<CachedTile> cachedTile(TileId id);
 
     /// Get or create a gray placeholder image.
     QImage grayPlaceholder();

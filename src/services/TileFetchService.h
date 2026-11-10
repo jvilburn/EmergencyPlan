@@ -57,7 +57,7 @@ public:
 
     /// Check if fetch is needed based on metadata.
     /// Returns true if:
-    /// - meta.isScaledUp (fuzzy quality, need native)
+    /// - meta.isStandIn (built from another zoom, need native)
     /// - !meta.isValid() (no tile at all)
     /// - tile is stale per provider's minCacheDays
     bool needsFetch(TileId id, const TileMetadata& meta) const;

@@ -144,18 +144,12 @@ QImage TileService::tryComposite(TileId id, TileMetadata* outMeta)
     int childX = x * 2;
     int childY = y * 2;
 
-    // Load all 4 children (returns nullopt if any missing)
-    std::optional<CachedTile> tl = m_diskCache->load(TileId(layer, childZ, childX, childY));
-    std::optional<CachedTile> tr = m_diskCache->load(TileId(layer, childZ, childX + 1, childY));
-    std::optional<CachedTile> bl = m_diskCache->load(TileId(layer, childZ, childX, childY + 1));
-    std::optional<CachedTile> br = m_diskCache->load(TileId(layer, childZ, childX + 1, childY + 1));
-
-    if (!tl || !tr || !bl || !br)
-    {
-        return {};
-    }
-
-    if (tl->image.isNull() || tr->image.isNull() || bl->image.isNull() || br->image.isNull())
+    // All 4 children, stopping at the first one missing so no more are decoded
+    std::optional<CachedTile> tl, tr, bl, br;
+    if (!(tl = cachedTile(TileId(layer, childZ, childX, childY)))
+        || !(tr = cachedTile(TileId(layer, childZ, childX + 1, childY)))
+        || !(bl = cachedTile(TileId(layer, childZ, childX, childY + 1)))
+        || !(br = cachedTile(TileId(layer, childZ, childX + 1, childY + 1))))
     {
         return {};
     }
@@ -207,7 +201,8 @@ QImage TileService::tryComposite(TileId id, TileMetadata* outMeta)
         {
             outMeta->providerId = sharedProvider;
         }
-        outMeta->isScaledUp = false;
+        // Kept for offline use, and replaced by the real tile once it can be fetched
+        outMeta->isStandIn = true;
     }
 
     return composited;
@@ -215,44 +210,44 @@ QImage TileService::tryComposite(TileId id, TileMetadata* outMeta)
 
 QImage TileService::tryScale(TileId id, TileMetadata* outMeta)
 {
-    int z = id.zoom();
-    if (z <= 0)
+    // The nearest cached tile above, by as many levels as it takes while its part over this
+    // tile is at least a pixel, enlarged
+    for (int levels = 1; levels <= id.zoom() && (256 >> levels) >= 1; ++levels)
     {
-        return {};
+        std::optional<CachedTile> ancestor =
+            cachedTile(TileId(id.layer(), id.zoom() - levels, id.x() >> levels, id.y() >> levels));
+        if (!ancestor)
+        {
+            continue;
+        }
+
+        int size = 256 >> levels;
+        int mask = (1 << levels) - 1;
+        QImage part = ancestor->image.copy((id.x() & mask) * size, (id.y() & mask) * size, size, size);
+        QImage scaled = part.scaled(256, 256, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+
+        if (outMeta)
+        {
+            outMeta->fetchDate = ancestor->metadata.fetchDate.isValid()
+                ? ancestor->metadata.fetchDate
+                : QDateTime::currentDateTime();
+            outMeta->providerId = ancestor->metadata.providerId;
+            outMeta->isStandIn = true;
+        }
+        return scaled;
     }
+    return {};
+}
 
-    TileLayer layer = id.layer();
-    int x = id.x();
-    int y = id.y();
-
-    int parentZ = z - 1;
-    int parentX = x / 2;
-    int parentY = y / 2;
-
-    TileId parentId(layer, parentZ, parentX, parentY);
-    std::optional<CachedTile> parent = m_diskCache->load(parentId);
-    if (!parent || parent->image.isNull())
+std::optional<CachedTile> TileService::cachedTile(TileId id)
+{
+    // A gray placeholder in memory holds no tile
+    CachedTile* entry = m_memoryCache.object(id);
+    if (entry && entry->metadata.isValid())
     {
-        return {};
+        return *entry;
     }
-
-    // Extract quadrant and scale up
-    int qx = (x % 2) * 128;
-    int qy = (y % 2) * 128;
-    QImage quadrant = parent->image.copy(qx, qy, 128, 128);
-    QImage scaled = quadrant.scaled(256, 256, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-
-    // Populate output metadata - inherit from parent, mark as scaled
-    if (outMeta)
-    {
-        outMeta->fetchDate = parent->metadata.fetchDate.isValid()
-            ? parent->metadata.fetchDate
-            : QDateTime::currentDateTime();
-        outMeta->providerId = parent->metadata.providerId;
-        outMeta->isScaledUp = true;
-    }
-
-    return scaled;
+    return m_diskCache->load(id);
 }
 
 QImage TileService::grayPlaceholder()

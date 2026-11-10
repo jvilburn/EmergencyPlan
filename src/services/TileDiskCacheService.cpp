@@ -28,7 +28,7 @@ struct TileMetaDisk
     char providerId[16];        ///< e.g. "osm", "usgs", "esri-street"
     char etag[64];              ///< ETag header (often empty)
     char lastModified[64];      ///< Last-Modified header (often empty)
-    uint8_t isScaledUp;         ///< bool
+    uint8_t isStandIn;          ///< bool
     uint8_t reserved[7];        ///< padding for future use
 };
 static_assert(std::is_trivially_copyable_v<TileMetaDisk>);
@@ -40,7 +40,7 @@ static TileMetaDisk toMetaDisk(const TileMetadata& meta)
     qstrncpy(d.providerId, meta.providerId.toUtf8().constData(), sizeof(d.providerId));
     qstrncpy(d.etag, meta.etag.toUtf8().constData(), sizeof(d.etag));
     qstrncpy(d.lastModified, meta.lastModified.toUtf8().constData(), sizeof(d.lastModified));
-    d.isScaledUp = meta.isScaledUp ? 1 : 0;
+    d.isStandIn = meta.isStandIn ? 1 : 0;
     return d;
 }
 
@@ -54,7 +54,7 @@ static TileMetadata fromMetaDisk(const TileMetaDisk& d)
     meta.providerId = QString::fromUtf8(d.providerId, strnlen(d.providerId, sizeof(d.providerId)));
     meta.etag = QString::fromUtf8(d.etag, strnlen(d.etag, sizeof(d.etag)));
     meta.lastModified = QString::fromUtf8(d.lastModified, strnlen(d.lastModified, sizeof(d.lastModified)));
-    meta.isScaledUp = d.isScaledUp != 0;
+    meta.isStandIn = d.isStandIn != 0;
     return meta;
 }
 

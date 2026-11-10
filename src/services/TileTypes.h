@@ -53,7 +53,9 @@ struct TileMetadata
     QString etag;             ///< the provider's ETag, sent back to ask whether the tile changed
     QString lastModified;     ///< the provider's Last-Modified, sent back the same way
     QString providerId;       ///< Provider that served this tile (empty if mixed sources)
-    bool isScaledUp = false;  ///< True if scaled from lower zoom - needs native fetch
+    /// Built from tiles at another zoom, the parent scaled up or the four below joined; the
+    /// real tile is fetched to replace it.
+    bool isStandIn = false;
 
     bool isValid() const { return fetchDate.isValid(); }
 };
