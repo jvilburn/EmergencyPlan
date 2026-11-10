@@ -11,7 +11,7 @@
 #include <QJsonObject>
 
 GeocodingService::GeocodingService(QObject* parent)
-    : QObject(parent)
+    : Geocoder(parent)
     , m_networkManager(new QNetworkAccessManager(this))
     , m_rateLimitTimer(new QTimer(this))
 {
@@ -27,15 +27,8 @@ GeocodingService::GeocodingService(QObject* parent)
 
 GeocodingService::~GeocodingService() = default;
 
-void GeocodingService::geocodeAddress(const QString& address)
+void GeocodingService::geocode(const QString& address)
 {
-    if (address.trimmed().isEmpty())
-    {
-        // Immediately emit failure for empty addresses
-        emit geocodingComplete({address, std::nullopt, std::nullopt, false});
-        return;
-    }
-
     m_requestQueue.append(address);
 
     // Start processing if not already running
@@ -93,13 +86,10 @@ void GeocodingService::onRequestFinished(QNetworkReply* reply)
     m_requestInFlight = false;
 
     QString address = reply->property("address").toString();
-    GeocodingResult result{address, std::nullopt, std::nullopt, false};
-
+    std::optional<Coordinates> found;
     if (reply->error() == QNetworkReply::NoError)
     {
-        QByteArray data = reply->readAll();
-        QJsonDocument doc = QJsonDocument::fromJson(data);
-
+        QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
         if (doc.isArray() && !doc.array().isEmpty())
         {
             QJsonObject obj = doc.array().first().toObject();
@@ -107,18 +97,21 @@ void GeocodingService::onRequestFinished(QNetworkReply* reply)
             bool lonOk = false;
             double lat = obj["lat"].toString().toDouble(&latOk);
             double lon = obj["lon"].toString().toDouble(&lonOk);
-
             if (latOk && lonOk)
             {
-                result.latitude = lat;
-                result.longitude = lon;
-                result.success = true;
+                found = Coordinates(lat, lon);
             }
         }
     }
-    // Fail silently - no logging per user preference
 
-    emit geocodingComplete(result);
+    if (found.has_value())
+    {
+        emit resolved(address, *found);
+    }
+    else
+    {
+        emit failed(address);
+    }
 
     // Process next request after rate limit delay
     if (!m_requestQueue.isEmpty())

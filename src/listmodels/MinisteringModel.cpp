@@ -421,7 +421,7 @@ QVariant MinisteringModel::data(const QModelIndex& index, int role) const
                 FamilyId fid = familyIdForNode(node);
                 if (!fid.isNull())
                 {
-                    EffectiveContactStatus status = EmergencyManager::instance()->familyStatus(fid);
+                    EffectiveContactStatus status = DocumentManager::instance()->document().emergencyStatus(fid);
                     if (status != EffectiveContactStatus::NotContacted)
                     {
                         return StatusIcons::iconForStatus(status);
@@ -842,7 +842,7 @@ QString MinisteringModel::compactStatusSummary(TreeNode* companionshipNode) cons
             continue;
         }
 
-        EffectiveContactStatus status = EmergencyManager::instance()->familyStatus(fid);
+        EffectiveContactStatus status = DocumentManager::instance()->document().emergencyStatus(fid);
         switch (status)
         {
         case EffectiveContactStatus::OK:
@@ -896,7 +896,7 @@ QString MinisteringModel::districtProgressText(TreeNode* districtNode) const
             }
 
             total++;
-            EffectiveContactStatus status = EmergencyManager::instance()->familyStatus(fid);
+            EffectiveContactStatus status = DocumentManager::instance()->document().emergencyStatus(fid);
             if (status != EffectiveContactStatus::NotContacted)
             {
                 contacted++;

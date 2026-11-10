@@ -161,7 +161,6 @@ set(COMMAND_HEADERS
 set(SERVICE_SOURCES
     src/services/DocumentManager.cpp
     src/services/PdfExtractor.cpp
-    src/services/PdfFieldUtils.cpp
     src/services/PersonMatching.cpp
     src/services/WardDirectoryImportService.cpp
     src/services/WardDirectoryPdfParser.cpp
@@ -174,7 +173,6 @@ set(SERVICE_SOURCES
     src/services/UnitLookup.cpp
     src/services/UnitLookupService.cpp
     src/services/Geocoder.cpp
-    src/services/NominatimGeocoder.cpp
     src/services/GeocodingService.cpp
     src/services/GeoLocation.cpp
     src/services/EmergencyManager.cpp
@@ -216,7 +214,6 @@ set(SERVICE_HEADERS
     src/services/UnitLookup.h
     src/services/UnitLookupService.h
     src/services/Geocoder.h
-    src/services/NominatimGeocoder.h
     src/services/GeocodingService.h
     src/services/GeoLocation.h
     src/services/EmergencyManager.h

@@ -471,7 +471,7 @@ signals:
 };
 ```
 
-The app's `NominatimGeocoder` answers through `GeocodingService`, which calls OpenStreetMap's Nominatim with at most one request every 1.1 seconds; `UnitLookupService` reads the meetinghouse locator through headless Edge. `DocumentManager` creates both and hands them to its session.
+The app's `GeocodingService` calls OpenStreetMap's Nominatim with at most one request every 1.1 seconds; `UnitLookupService` reads the meetinghouse locator through headless Edge. `DocumentManager` creates both and hands them to its session.
 
 ---
 

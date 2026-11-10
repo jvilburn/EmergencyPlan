@@ -327,6 +327,7 @@ void ImportCommandsTest::importDescriptionIsOneLineNamingTheFile()
 
     MinisteringImportResult ministering;
     ministering.success = true;
+    ministering.pdfDate = QDate(2026, 9, 1);
     ministering.families = TestWard::document().families();
     MinisteringGroup group = MinisteringGroup::createEQ({TestWard::bobId()}, {TestWard::jonesId()});
     ministering.groups.insert(group.id(), group);

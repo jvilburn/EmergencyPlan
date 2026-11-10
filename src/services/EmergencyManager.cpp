@@ -35,11 +35,6 @@ const EmergencyResponse& EmergencyManager::response() const
     return *document().emergencyResponse();
 }
 
-EffectiveContactStatus EmergencyManager::familyStatus(const FamilyId& familyId) const
-{
-    return document().emergencyStatus(familyId);
-}
-
 int EmergencyManager::totalFamilies() const
 {
     if (!isActive())

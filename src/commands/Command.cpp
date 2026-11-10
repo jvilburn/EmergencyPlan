@@ -27,6 +27,11 @@ QString personName(const PersonId& id, const Document& document)
     return person.has_value() ? person->displayName() : QObject::tr("(removed)");
 }
 
+QString orNone(const QString& text)
+{
+    return text.isEmpty() ? QObject::tr("(none)") : text;
+}
+
 QStringList describePeopleChange(const IdSetChange<PersonId>& change, const Document& document)
 {
     QStringList lines;

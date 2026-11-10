@@ -25,10 +25,6 @@ public:
     /// The emergency in progress, as the document holds it. Only while isActive().
     const EmergencyResponse& response() const;
 
-    /// The family's status in the emergency in progress, from the document's status table;
-    /// Not Contacted when none is in progress.
-    EffectiveContactStatus familyStatus(const FamilyId& familyId) const;
-
     /// The statistics of the emergency in progress over the directory's families; 0 when
     /// none is in progress.
     int totalFamilies() const;

@@ -297,6 +297,7 @@ QList<CommandPtr> sparsestCommands()
     directory.success = true;
     MinisteringImportResult ministering;
     ministering.success = true;
+    ministering.pdfDate = QDate(2026, 9, 1);
 
     return {
         UpdateFamilyCommand::fromEdit(bare, noted, ward),

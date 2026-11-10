@@ -1,6 +1,5 @@
 #include "MinisteringPdfParser.h"
 #include "PdfExtractor.h"
-#include "PdfFieldUtils.h"
 #include "Birthday.h"
 #include "Email.h"
 #include "Gender.h"
@@ -55,6 +54,58 @@ namespace
         std::optional<double> genderX;      // "Male" or "Female"
         std::optional<double> birthdayX;    // Date pattern like "7 Oct"
     };
+
+    // ============================================================================
+    // Page Layout
+    // ============================================================================
+
+    /// Groups fields, already sorted by Y, into rows: a field within yTolerance of a row's
+    /// first field is on that row.
+    QList<QList<PdfTextField>> groupFieldsByY(const QList<PdfTextField>& fields, double yTolerance)
+    {
+        QList<QList<PdfTextField>> rows;
+        for (const PdfTextField& field : fields)
+        {
+            if (rows.isEmpty() || std::abs(field.y() - rows.last().first().y()) > yTolerance)
+            {
+                rows.append(QList<PdfTextField>());
+            }
+            rows.last().append(field);
+        }
+        return rows;
+    }
+
+    /// Where a page's header and footer are: the "Ministering Assignments" field, followed
+    /// by the ward and stake lines, and the "For Church Use Only" field, after the page
+    /// number. None when the page lacks either.
+    struct PageMarkers
+    {
+        int header;
+        int footer;
+    };
+
+    std::optional<PageMarkers> findPageMarkers(const QList<PdfTextField>& fields)
+    {
+        std::optional<int> header;
+        std::optional<int> footer;
+        for (int i = 0; i < fields.size(); ++i)
+        {
+            QString text = fields[i].text().trimmed();
+            if (!header.has_value() && text == "Ministering Assignments")
+            {
+                header = i;
+            }
+            if (text.contains("For Church Use Only"))
+            {
+                footer = i;
+            }
+        }
+        if (!header.has_value() || !footer.has_value())
+        {
+            return std::nullopt;
+        }
+        return PageMarkers{*header, *footer};
+    }
 
     // ============================================================================
     // Content Heuristics
@@ -871,43 +922,22 @@ MinisteringPdfParser::ParseResult MinisteringPdfParser::parseFields(QList<QList<
             continue;
         }
 
-        // Find content boundaries (between header and footer)
-        // Header: "Ministering Assignments" + ward + stake (2 fields after marker)
-        // Footer: page number (1 field before marker) + "For Church Use Only"
-        std::pair<int, int> contentBounds = findContentBounds(
-            pageFields,
-            [](const QString& text) { return text == "Ministering Assignments"; },
-            [](const QString& text) { return text.contains("For Church Use Only"); },
-            2,  // headerFieldsAfterMarker: ward, stake
-            1); // footerFieldsBeforeMarker: page number
-        int contentStart = contentBounds.first;
-        int contentEnd = contentBounds.second;
-
-        // Check if markers were found (contentStart=0 means no header, contentEnd=size means no footer)
-        if (contentStart == 0 || contentEnd == pageFields.size())
+        std::optional<PageMarkers> markers = findPageMarkers(pageFields);
+        if (!markers.has_value())
         {
             result.errors.append(QObject::tr("Not a Ministering PDF"));
             return result;
         }
+        // The content lies between the header's ward and stake lines and the footer's page
+        // number.
+        int contentStart = markers->header + 3;
+        int contentEnd = markers->footer - 1;
 
         // Extract metadata from first page header/footer
         if (pageNum == 0)
         {
-            // Find header start to locate ward/stake lines
-            for (int i = 0; i < pageFields.size(); ++i)
-            {
-                if (pageFields[i].text().trimmed() == "Ministering Assignments")
-                {
-                    if (i + 2 >= pageFields.size())
-                    {
-                        result.errors.append(QObject::tr("PDF header truncated: missing ward/stake info after 'Ministering Assignments'"));
-                        return result;
-                    }
-                    parseHeaderInfo(pageFields[i + 1].text(), result.wardName, result.wardUnitNumber);
-                    parseHeaderInfo(pageFields[i + 2].text(), result.stakeName, result.stakeUnitNumber);
-                    break;
-                }
-            }
+            parseHeaderInfo(pageFields[markers->header + 1].text(), result.wardName, result.wardUnitNumber);
+            parseHeaderInfo(pageFields[markers->header + 2].text(), result.stakeName, result.stakeUnitNumber);
 
             // Find date in footer
             for (int i = contentEnd; i < pageFields.size(); ++i)

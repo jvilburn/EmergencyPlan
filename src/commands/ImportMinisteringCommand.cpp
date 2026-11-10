@@ -110,11 +110,8 @@ UndoableCommandPtr ImportMinisteringCommand::fromImport(const Document& document
                                                   MinisteringCollection{result.districts, result.groups});
     FamilyCollectionChange families = FamilyCollectionChange::between(document, result.families, {});
 
-    std::optional<FieldChange<std::optional<QDate>>> pdfDate;
-    if (result.pdfDate.has_value())
-    {
-        pdfDate = changeBetween(document.ministeringPdfDate(), result.pdfDate);
-    }
+    std::optional<FieldChange<std::optional<QDate>>> pdfDate =
+        changeBetween(document.ministeringPdfDate(), std::optional<QDate>(result.pdfDate));
 
     CommandDescription description(QObject::tr("Import the ministering assignments from %1.").arg(fileName), {});
     return std::make_shared<ImportMinisteringCommand>(org, collection, families, pdfDate,

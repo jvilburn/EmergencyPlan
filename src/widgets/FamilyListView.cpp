@@ -147,7 +147,7 @@ std::optional<QSet<FamilyId>> FamilyListView::visibleFamilyIds() const
 
 QString FamilyListView::familyStatusIcon(const FamilyId& familyId) const
 {
-    EffectiveContactStatus status = EmergencyManager::instance()->familyStatus(familyId);
+    EffectiveContactStatus status = DocumentManager::instance()->document().emergencyStatus(familyId);
     switch (status)
     {
         case EffectiveContactStatus::OK:

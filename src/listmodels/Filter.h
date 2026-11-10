@@ -86,9 +86,9 @@ private:
     /// address coordinates), contact (family.hasContact()).
     bool passesFamilyCriteria(const Document& document, const Family& family) const;
 
-    /// The selected contact status, read through EmergencyManager::familyStatus. Every
-    /// family passes it while no emergency is in progress.
-    bool passesContactStatus(const Family& family) const;
+    /// The selected contact status, as document gives it for the family. Every family passes
+    /// it while no emergency is in progress.
+    bool passesContactStatus(const Document& document, const Family& family) const;
 
     /// Person-only criteria: callings, gender, age.
     bool passesPersonCriteria(const Person& person) const;

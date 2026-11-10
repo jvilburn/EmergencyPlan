@@ -25,7 +25,7 @@ struct MinisteringImportResult
     QString wardUnitNumber;
     QString stakeName;
     QString stakeUnitNumber;
-    std::optional<QDate> pdfDate;  // From PDF footer (documentDate)
+    QDate pdfDate;  // From the PDF footer
 };
 
 /// Imports ministering data from PDF files: resolves the PDF's people and families to the

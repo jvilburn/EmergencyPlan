@@ -197,14 +197,14 @@ bool Filter::passesFamilyCriteria(const Document& document, const Family& family
     return true;
 }
 
-bool Filter::passesContactStatus(const Family& family) const
+bool Filter::passesContactStatus(const Document& document, const Family& family) const
 {
     if (!m_contactStatusFilter.has_value())
     {
         return true;
     }
-    EmergencyManager* manager = EmergencyManager::instance();
-    return !manager->isActive() || manager->familyStatus(family.id()) == *m_contactStatusFilter;
+    return !EmergencyManager::instance()->isActive()
+        || document.emergencyStatus(family.id()) == *m_contactStatusFilter;
 }
 
 bool Filter::passesPersonCriteria(const Person& person) const
@@ -376,7 +376,7 @@ bool Filter::hasResponseArea(const Document& document, const PersonId& personId)
 bool Filter::passes(const Document& document, const Family& family) const
 {
     // 1. Family-only criteria (fail fast)
-    if (!passesFamilyCriteria(document, family) || !passesContactStatus(family))
+    if (!passesFamilyCriteria(document, family) || !passesContactStatus(document, family))
     {
         return false;
     }

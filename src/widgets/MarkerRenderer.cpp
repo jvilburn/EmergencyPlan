@@ -8,6 +8,7 @@
 #include <QGraphicsBlurEffect>
 #include <QGraphicsPixmapItem>
 #include <QGraphicsScene>
+#include <QHash>
 #include <QIcon>
 #include <QPainter>
 #include <QSet>
@@ -185,6 +186,39 @@ static void drawBlurredShadow(QPainter& painter, const QPointF& pos,
     painter.drawImage(drawPos, blurredImage);
 }
 
+// The glow around a highlighted marker: three blurred shadow layers centered in the image.
+// It depends only on scale, so each scale's glow is rendered once and kept.
+static QImage highlightGlow(double scale)
+{
+    static QHash<double, QImage> glows;
+    auto it = glows.constFind(scale);
+    if (it != glows.constEnd())
+    {
+        return *it;
+    }
+
+    double ringOuterRadius = (SVG_BASE_SIZE / 2.0 + HIGHLIGHT_RING_WIDTH) * scale;
+    // The largest layer's reach, plus the third layer's 3-point drop and a margin
+    double extent = ringOuterRadius + (SHADOW_SPREAD_RADIUS + SHADOW_BLUR_RADIUS + 3.0) * scale + 2.0;
+    int canvasSize = static_cast<int>(qCeil(extent * 2.0));
+    QImage glow(canvasSize, canvasSize, QImage::Format_ARGB32_Premultiplied);
+    glow.fill(Qt::transparent);
+
+    QPainter painter(&glow);
+    QPointF center(canvasSize / 2.0, canvasSize / 2.0);
+    // Largest blur first
+    drawBlurredShadow(painter, center, ringOuterRadius, scale,
+                      SHADOW_BLUR_RADIUS * scale, SHADOW_SPREAD_RADIUS, 140, 0.0, 0.0);
+    drawBlurredShadow(painter, center, ringOuterRadius, scale,
+                      8.0 * scale, 1.0, 100, 0.0, 0.0);
+    drawBlurredShadow(painter, center, ringOuterRadius, scale,
+                      6.0 * scale, 0.0, 80, 0.0, 3.0);
+    painter.end();
+
+    glows.insert(scale, glow);
+    return glow;
+}
+
 void draw(QPainter& painter, const QPointF& pos, const State& state)
 {
     double size = SVG_BASE_SIZE * state.scale;
@@ -197,15 +231,9 @@ void draw(QPainter& painter, const QPointF& pos, const State& state)
         // Ring dimensions (thin ring around the marker)
         double ringWidth = HIGHLIGHT_RING_WIDTH * state.scale;
         double markerRadius = size / 2.0;
-        double ringOuterRadius = markerRadius + ringWidth;
 
-        // Draw all 3 shadow layers (order: largest blur first)
-        drawBlurredShadow(painter, pos, ringOuterRadius, state.scale,
-                          SHADOW_BLUR_RADIUS * state.scale, SHADOW_SPREAD_RADIUS, 140, 0.0, 0.0);
-        drawBlurredShadow(painter, pos, ringOuterRadius, state.scale,
-                          8.0 * state.scale, 1.0, 100, 0.0, 0.0);
-        drawBlurredShadow(painter, pos, ringOuterRadius, state.scale,
-                          6.0 * state.scale, 0.0, 80, 0.0, 3.0);
+        QImage glow = highlightGlow(state.scale);
+        painter.drawImage(QPointF(pos.x() - glow.width() / 2.0, pos.y() - glow.height() / 2.0), glow);
 
         // Draw thin dark blue ring around the marker
         double ringRadius = markerRadius + ringWidth / 2.0;

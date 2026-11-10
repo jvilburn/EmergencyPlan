@@ -1,31 +1,18 @@
 #pragma once
 
-#include <QObject>
+#include "Geocoder.h"
+
 #include <QDateTime>
-#include <optional>
+#include <QStringList>
 
 class QNetworkAccessManager;
 class QNetworkReply;
 class QTimer;
 
-/// Result of a geocoding request.
-struct GeocodingResult
-{
-    QString address;
-    std::optional<double> latitude;
-    std::optional<double> longitude;
-    bool success = false;
-};
-
-/// Low-level geocoding service using Nominatim (OpenStreetMap).
-///
-/// Features:
-/// - Rate limiting: 1.1 seconds between requests (Nominatim requires max 1/sec)
-/// - Async operation with signal-based completion
-/// - Fails silently on errors (returns empty coordinates)
-///
-/// NominatimGeocoder answers WardSession's automatic updates through it.
-class GeocodingService : public QObject
+/// The app's geocoder, over OpenStreetMap's Nominatim. Requests wait in a queue and go out
+/// at most one every 1.1 seconds, as Nominatim requires. An address Nominatim does not find,
+/// or a request that fails, answers with failed.
+class GeocodingService : public Geocoder
 {
     Q_OBJECT
 
@@ -33,14 +20,7 @@ public:
     explicit GeocodingService(QObject* parent);
     ~GeocodingService() override;
 
-    /// Queue an address for geocoding.
-    /// Result will be emitted via geocodingComplete signal.
-    void geocodeAddress(const QString& address);
-
-signals:
-    /// Emitted when geocoding completes (success or failure).
-    /// On failure, latitude/longitude will be nullopt.
-    void geocodingComplete(const GeocodingResult& result);
+    void geocode(const QString& address) override;
 
 private slots:
     void onRequestFinished(QNetworkReply* reply);

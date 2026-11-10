@@ -52,6 +52,9 @@ private:
 /// them.
 QString personName(const PersonId& id, const Document& document);
 
+/// The text, or "(none)" when it is empty.
+QString orNone(const QString& text);
+
 /// A description line per person a change to a set of people adds, then per person it
 /// removes: "added: <name>" and "removed: <name>", named as document holds them, in name
 /// order.

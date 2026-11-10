@@ -233,28 +233,11 @@ namespace
     // Date Comparison
     // ========================================================================
 
-    /// Determine if ministering PDF is authoritative for family data.
-    /// Returns true if:
-    /// - wardDirectoryDate is not set (first import), OR
-    /// - PDF date is set AND is >= wardDirectoryDate
-    bool isMinisteringAuthoritative(
-        std::optional<QDate> pdfDate,
-        std::optional<QDate> wardDirectoryDate)
+    /// True when the ministering PDF is authoritative for family data: no ward directory
+    /// has been imported, or the PDF is from the same day as the directory or later.
+    bool isMinisteringAuthoritative(const QDate& pdfDate, std::optional<QDate> wardDirectoryDate)
     {
-        // No ward directory date means first import - ministering is authoritative
-        if (!wardDirectoryDate.has_value())
-        {
-            return true;
-        }
-
-        // If PDF date is missing, we can't compare - assume not authoritative
-        if (!pdfDate.has_value())
-        {
-            return false;
-        }
-
-        // Ministering is authoritative if same date or newer
-        return *pdfDate >= *wardDirectoryDate;
+        return !wardDirectoryDate.has_value() || pdfDate >= *wardDirectoryDate;
     }
 }  // anonymous namespace
 
@@ -293,11 +276,7 @@ MinisteringImportResult MinisteringImportService::merge(
     result.stakeName = parseResult.stakeName;
     result.stakeUnitNumber = parseResult.stakeUnitNumber;
 
-    // Pass through PDF date
-    if (parseResult.documentDate.isValid())
-    {
-        result.pdfDate = parseResult.documentDate;
-    }
+    result.pdfDate = parseResult.documentDate;
 
     // Determine if ministering data is authoritative for family changes
     bool isAuthoritative = isMinisteringAuthoritative(result.pdfDate, wardDirectoryDate);

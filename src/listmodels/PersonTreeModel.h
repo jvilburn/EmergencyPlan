@@ -2,6 +2,7 @@
 
 #include "BaseTreeModel.h"
 #include "ItemType.h"
+#include "Person.h"
 
 #include <QList>
 #include <QSet>
@@ -63,7 +64,7 @@ public slots:
 
 private:
     void clearNodes();
-    void buildPersonNode(int personIndex);
+    void buildPersonNode(const Person& person, const FamilyId& familyId);
 
     /// Internal tree node structure
     struct TreeNode
@@ -80,8 +81,6 @@ private:
 
     TreeNode* nodeFromIndex(const QModelIndex& index) const;
 
-    // Sorted list of (personId, familyId) pairs
-    QList<QPair<PersonId, FamilyId>> m_personData;
     QList<TreeNode*> m_personNodes;  // Top-level nodes (owned)
     Filter* m_filter;
     bool m_checkable = false;

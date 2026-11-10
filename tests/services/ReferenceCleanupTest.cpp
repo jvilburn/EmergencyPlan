@@ -385,11 +385,34 @@ void ReferenceCleanupTest::removingAMemberThroughTheEditPanelCleansUpThatPerson(
     QVERIFY(taskIn(removed, TestWard::shinglesTaskId()) == unassigned(taskIn(ward, TestWard::shinglesTaskId())));
     QVERIFY(taskIn(removed, TestWard::basementTaskId()) == taskIn(ward, TestWard::basementTaskId()));
     QVERIFY(referencesAreWhole(removed));
+    QVERIFY(removed.personResponseAreas(TestWard::aliceId()).isEmpty());
 
     CommitResult undone = client.session().undo();
 
     QVERIFY(undone.status == CommitStatus::Applied);
     QVERIFY(client.session().document() == created);
+    // The marker badge reads the document's cache, which equality does not compare
+    QCOMPARE(client.session().document().personResponseAreas(TestWard::aliceId()),
+             QSet<ResponseArea>({ResponseArea::Recovery}));
+}
+
+void ReferenceCleanupTest::addedMemberIsFoundInItsFamily()
+{
+    TestClient client("Laptop");
+    client.createWard(TestWard::document());
+    QSignalSpy documentSpy(&client.session(), &WardSession::documentChanged);
+    Family opened = TestWard::smith();
+    QList<Person> members = opened.members();
+    members.append(TestWard::gus());
+    Family saved = opened;
+    saved.setMembers(members);
+
+    CommitResult result = client.session().commit(UpdateFamilyCommand::fromEdit(opened, saved, client.session().document()));
+
+    QVERIFY(result.status == CommitStatus::Applied);
+    QCOMPARE(documentSpy.count(), 1);
+    QVERIFY(documentSpy.at(0).at(0).value<DocumentChange>().action != ChangeAction::Full);
+    QVERIFY(client.session().document().familyIdForPerson(TestWard::gus().id()) == TestWard::smithId());
 }
 
 void ReferenceCleanupTest::deletingATeamUnassignsItsOpenTasksAndUndoAssignsThemAgain()

@@ -1,4 +1,5 @@
 #include "FamilyChange.h"
+#include "Command.h"
 #include "Document.h"
 #include "FieldChangeJson.h"
 
@@ -128,15 +129,6 @@ QSet<FamilyId> idsOf(const QHash<FamilyId, Family>& families)
 // ----------------------------------------------------------------------------
 // Description text
 // ----------------------------------------------------------------------------
-
-QString orNone(const QString& value)
-{
-    if (value.isEmpty())
-    {
-        return QObject::tr("(none)");
-    }
-    return value;
-}
 
 QString valueText(const QString& value)
 {

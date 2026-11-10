@@ -43,7 +43,6 @@ void PersonTreeModel::rebuild()
     beginResetModel();
 
     clearNodes();
-    m_personData.clear();
 
     const Document& doc = DocumentManager::instance()->document();
     const QHash<FamilyId, Family>& families = doc.families();
@@ -51,7 +50,7 @@ void PersonTreeModel::rebuild()
     // Collect all persons with their family IDs
     struct PersonInfo
     {
-        PersonId personId;
+        Person person;
         FamilyId familyId;
         QString displayName;
     };
@@ -67,7 +66,7 @@ void PersonTreeModel::rebuild()
             {
                 continue;
             }
-            allPersons.append({person.id(), family.id(), person.displayName()});
+            allPersons.append({person, family.id(), person.displayName()});
         }
     }
 
@@ -76,31 +75,18 @@ void PersonTreeModel::rebuild()
               [](const PersonInfo& a, const PersonInfo& b)
               { return a.displayName.toLower() < b.displayName.toLower(); });
 
-    // Build m_personData and tree nodes
-    for (int i = 0; i < allPersons.size(); ++i)
+    for (const PersonInfo& info : allPersons)
     {
-        const PersonInfo& info = allPersons.at(i);
-        m_personData.append({info.personId, info.familyId});
-        buildPersonNode(i);
+        buildPersonNode(info.person, info.familyId);
     }
 
     endResetModel();
 }
 
-void PersonTreeModel::buildPersonNode(int personIndex)
+void PersonTreeModel::buildPersonNode(const Person& person, const FamilyId& familyId)
 {
-    const QPair<PersonId, FamilyId>& data = m_personData.at(personIndex);
-    const PersonId& personId = data.first;
-    const FamilyId& familyId = data.second;
-
     const Document& doc = DocumentManager::instance()->document();
-    std::optional<Person> personOpt = doc.findPersonById(personId);
-    if (!personOpt)
-    {
-        return;
-    }
-
-    const Person& person = *personOpt;
+    const PersonId& personId = person.id();
 
     // Create person node
     TreeNode* personNode = new TreeNode();

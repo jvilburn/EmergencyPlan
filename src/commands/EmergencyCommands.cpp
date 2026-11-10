@@ -48,11 +48,6 @@ std::optional<TaskResolution> readValue<std::optional<TaskResolution>>(JsonReade
 namespace
 {
 
-QString orNone(const QString& text)
-{
-    return text.isEmpty() ? QObject::tr("(none)") : text;
-}
-
 /// True when there is no assignment, or document holds the team or person it names.
 bool assigneeExists(const std::optional<TaskAssignment>& assignment, const Document& document)
 {

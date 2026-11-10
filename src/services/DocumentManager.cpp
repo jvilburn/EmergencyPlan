@@ -1,5 +1,5 @@
 #include "DocumentManager.h"
-#include "NominatimGeocoder.h"
+#include "GeocodingService.h"
 #include "UnitLookupService.h"
 
 DocumentManager* DocumentManager::s_instance = nullptr;
@@ -8,7 +8,7 @@ DocumentManager::DocumentManager(const Identity* identity, FileWardStore* store,
     : QObject(parent)
     , m_identity(identity)
     , m_store(store)
-    , m_session(identity, store, new NominatimGeocoder(this), new UnitLookupService(this), this)
+    , m_session(identity, store, new GeocodingService(this), new UnitLookupService(this), this)
 {
     Q_ASSERT(!s_instance);
     s_instance = this;

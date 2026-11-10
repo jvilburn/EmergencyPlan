@@ -390,7 +390,7 @@ QVariant FamilyTreeModel::data(const QModelIndex& index, int role) const
             if (node->type == RowType::Family)
             {
                 FamilyId familyId = m_familyIds.at(node->familyIndex);
-                EffectiveContactStatus status = EmergencyManager::instance()->familyStatus(familyId);
+                EffectiveContactStatus status = DocumentManager::instance()->document().emergencyStatus(familyId);
                 if (status != EffectiveContactStatus::NotContacted)
                 {
                     return StatusIcons::iconForStatus(status);
@@ -403,7 +403,7 @@ QVariant FamilyTreeModel::data(const QModelIndex& index, int role) const
             {
                 FamilyId familyId = m_familyIds.at(node->familyIndex);
                 return QVariant::fromValue(
-                    static_cast<int>(EmergencyManager::instance()->familyStatus(familyId)));
+                    static_cast<int>(DocumentManager::instance()->document().emergencyStatus(familyId)));
             }
             return QVariant();
 

@@ -15,6 +15,7 @@ public:
 private slots:
     void deletingAFamilyRemovesItAndItsPeopleFromEveryPlaceAndUndoRestoresEach();
     void removingAMemberThroughTheEditPanelCleansUpThatPerson();
+    void addedMemberIsFoundInItsFamily();
     void deletingATeamUnassignsItsOpenTasksAndUndoAssignsThemAgain();
     void removalReplayedAfterThePersonJoinedAnotherTeamTakesThemOffItToo();
     void removalReplayedAfterThePersonWasAssignedATaskUnassignsIt();
