@@ -16,8 +16,9 @@
 #include <QMessageBox>
 #include <QSet>
 
-FamilyEditPanel::FamilyEditPanel(AutomaticUpdates& automaticUpdates, QWidget* parent)
+FamilyEditPanel::FamilyEditPanel(const Document& document, AutomaticUpdates& automaticUpdates, QWidget* parent)
     : QFrame(parent)
+    , m_document(document)
     , m_automaticUpdates(automaticUpdates)
 {
     setupUi();
@@ -134,12 +135,11 @@ void FamilyEditPanel::setupUi()
     mainLayout->addLayout(buttonLayout);
 }
 
-void FamilyEditPanel::setFamily(const Family& family, const Document& document)
+void FamilyEditPanel::setFamily(const Family& family)
 {
     m_familyId = family.id();
     m_originalFamily = family;
     m_editedFamily = family;
-    m_addressCoordinates = document.addressCoordinates();
     m_lookingUp.clear();
 
     // Address
@@ -191,24 +191,14 @@ bool FamilyEditPanel::isDirty() const
 {
     std::optional<Coordinates> typed = typedCoordinates();
     return m_editedFamily != m_originalFamily
-        || (typed.has_value() && typed != entryFor(m_editedFamily.address()));
-}
-
-std::optional<Coordinates> FamilyEditPanel::entryFor(const Address& address) const
-{
-    auto it = m_addressCoordinates.constFind(address.full());
-    if (it != m_addressCoordinates.constEnd())
-    {
-        return *it;
-    }
-    return std::nullopt;
+        || (typed.has_value() && typed != m_document.coordinatesFor(m_editedFamily.address()));
 }
 
 void FamilyEditPanel::showEntryFor(const Address& address)
 {
     const QSignalBlocker latBlocker(m_latEdit);
     const QSignalBlocker lonBlocker(m_lonEdit);
-    std::optional<Coordinates> entry = entryFor(address);
+    std::optional<Coordinates> entry = m_document.coordinatesFor(address);
     if (entry.has_value())
     {
         m_latEdit->setText(QString::number(entry->latitude(), 'f', 6));
@@ -238,9 +228,8 @@ void FamilyEditPanel::updateCoordinatesEnabled()
     m_lookupButton->setText(lookingUp ? tr("Looking up...") : tr("Look Up Coordinates"));
 }
 
-void FamilyEditPanel::refreshCoordinates(const Document& document)
+void FamilyEditPanel::refreshCoordinates()
 {
-    m_addressCoordinates = document.addressCoordinates();
     if (!coordinatesTyped())
     {
         showEntryFor(m_editedFamily.address());

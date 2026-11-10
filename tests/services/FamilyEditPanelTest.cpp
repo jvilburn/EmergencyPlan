@@ -116,8 +116,9 @@ void FamilyEditPanelTest::addedChildMovesIntoPlaceWhenItsBirthYearIsTyped()
 {
     Family opened = TestWard::lee(2010);
     TestClient client("Laptop");
-    FamilyEditPanel panel(client.session().automaticUpdates(), nullptr);
-    panel.setFamily(opened, Document());
+    Document document;
+    FamilyEditPanel panel(document, client.session().automaticUpdates(), nullptr);
+    panel.setFamily(opened);
 
     PersonId added;
     addMemberBornIn(panel, "2008", added);
@@ -141,8 +142,9 @@ void FamilyEditPanelTest::addedChildStaysLastWhileAMemberHasNoBirthYear()
 {
     Family opened = TestWard::lee(std::nullopt);
     TestClient client("Laptop");
-    FamilyEditPanel panel(client.session().automaticUpdates(), nullptr);
-    panel.setFamily(opened, Document());
+    Document document;
+    FamilyEditPanel panel(document, client.session().automaticUpdates(), nullptr);
+    panel.setFamily(opened);
 
     PersonId added;
     addMemberBornIn(panel, "2008", added);
@@ -161,8 +163,9 @@ void FamilyEditPanelTest::coordinateFieldsAreEnabledOnlyWhileTheAddressIsNotEmpt
     Family unaddressed = TestWard::smith();
     unaddressed.setAddress(Address());
     TestClient client("Laptop");
-    FamilyEditPanel panel(client.session().automaticUpdates(), nullptr);
-    panel.setFamily(unaddressed, TestWard::document());
+    Document document = TestWard::document();
+    FamilyEditPanel panel(document, client.session().automaticUpdates(), nullptr);
+    panel.setFamily(unaddressed);
     QLineEdit* latitude = lineEditWithPlaceholder(panel, "Latitude");
     QLineEdit* longitude = lineEditWithPlaceholder(panel, "Longitude");
     QTextEdit* address = addressField(panel);
@@ -186,7 +189,7 @@ void FamilyEditPanelTest::coordinateFieldsAreEnabledOnlyWhileTheAddressIsNotEmpt
     QVERIFY(!longitude->isEnabled());
     QVERIFY(!lookUp->isEnabled());
 
-    panel.setFamily(TestWard::smith(), TestWard::document());
+    panel.setFamily(TestWard::smith());
     QVERIFY(latitude->isEnabled());
     QVERIFY(longitude->isEnabled());
     QVERIFY(lookUp->isEnabled());
@@ -195,8 +198,9 @@ void FamilyEditPanelTest::coordinateFieldsAreEnabledOnlyWhileTheAddressIsNotEmpt
 void FamilyEditPanelTest::coordinatesShownFromTheEntryAreNotTyped()
 {
     TestClient client("Laptop");
-    FamilyEditPanel panel(client.session().automaticUpdates(), nullptr);
-    panel.setFamily(TestWard::smith(), smithMapped(Coordinates(40.12345678, -111.98765432)));
+    Document document = smithMapped(Coordinates(40.12345678, -111.98765432));
+    FamilyEditPanel panel(document, client.session().automaticUpdates(), nullptr);
+    panel.setFamily(TestWard::smith());
     QLineEdit* latitude = lineEditWithPlaceholder(panel, "Latitude");
     QLineEdit* longitude = lineEditWithPlaceholder(panel, "Longitude");
     QVERIFY(latitude != nullptr);
@@ -222,8 +226,9 @@ void FamilyEditPanelTest::coordinatesShownFromTheEntryAreNotTyped()
 void FamilyEditPanelTest::typedCoordinatesAreReturnedAndMakeThePanelDirty()
 {
     TestClient client("Laptop");
-    FamilyEditPanel panel(client.session().automaticUpdates(), nullptr);
-    panel.setFamily(TestWard::smith(), TestWard::document());
+    Document document = TestWard::document();
+    FamilyEditPanel panel(document, client.session().automaticUpdates(), nullptr);
+    panel.setFamily(TestWard::smith());
     QLineEdit* latitude = lineEditWithPlaceholder(panel, "Latitude");
     QLineEdit* longitude = lineEditWithPlaceholder(panel, "Longitude");
     QVERIFY(latitude != nullptr);
@@ -242,8 +247,9 @@ void FamilyEditPanelTest::typedCoordinatesAreReturnedAndMakeThePanelDirty()
     QVERIFY(panel.family() == TestWard::smith());
 
     // Text other than what the panel showed that reads as the entry is typed, and not dirty.
-    FamilyEditPanel mapped(client.session().automaticUpdates(), nullptr);
-    mapped.setFamily(TestWard::smith(), smithMapped(ElmPosition));
+    Document mappedDocument = smithMapped(ElmPosition);
+    FamilyEditPanel mapped(mappedDocument, client.session().automaticUpdates(), nullptr);
+    mapped.setFamily(TestWard::smith());
     QLineEdit* mappedLatitude = lineEditWithPlaceholder(mapped, "Latitude");
     QVERIFY(mappedLatitude != nullptr);
     QCOMPARE(mappedLatitude->text(), QString("40.233800"));
@@ -257,8 +263,9 @@ void FamilyEditPanelTest::saveIsDisabledWhileTypedCoordinatesDoNotParse()
 {
     QString prompt("Enter a latitude and a longitude");
     TestClient client("Laptop");
-    FamilyEditPanel panel(client.session().automaticUpdates(), nullptr);
-    panel.setFamily(TestWard::smith(), smithMapped(ElmPosition));
+    Document document = smithMapped(ElmPosition);
+    FamilyEditPanel panel(document, client.session().automaticUpdates(), nullptr);
+    panel.setFamily(TestWard::smith());
     QLineEdit* latitude = lineEditWithPlaceholder(panel, "Latitude");
     QLineEdit* longitude = lineEditWithPlaceholder(panel, "Longitude");
     QPushButton* save = buttonWithText(panel, "Save");
@@ -288,31 +295,33 @@ void FamilyEditPanelTest::saveIsDisabledWhileTypedCoordinatesDoNotParse()
 
 void FamilyEditPanelTest::refreshShowsTheNewEntryUnlessCoordinatesAreTyped()
 {
-    Document document = TestWard::document();
-
     // Untyped fields show the entry for the address shown, once there is one.
     TestClient client("Laptop");
-    FamilyEditPanel untyped(client.session().automaticUpdates(), nullptr);
-    untyped.setFamily(TestWard::smith(), document);
+    Document untypedDocument = TestWard::document();
+    FamilyEditPanel untyped(untypedDocument, client.session().automaticUpdates(), nullptr);
+    untyped.setFamily(TestWard::smith());
     QLineEdit* latitude = lineEditWithPlaceholder(untyped, "Latitude");
     QLineEdit* longitude = lineEditWithPlaceholder(untyped, "Longitude");
     QVERIFY(latitude != nullptr);
     QVERIFY(longitude != nullptr);
     QVERIFY(latitude->text().isEmpty());
 
-    untyped.refreshCoordinates(TestWard::withCoordinates(document, TestWard::jones().address(), OakPosition));
+    untypedDocument = TestWard::withCoordinates(untypedDocument, TestWard::jones().address(), OakPosition);
+    untyped.refreshCoordinates();
     QVERIFY(latitude->text().isEmpty());
     QVERIFY(longitude->text().isEmpty());
 
-    untyped.refreshCoordinates(smithMapped(ElmPosition));
+    untypedDocument = smithMapped(ElmPosition);
+    untyped.refreshCoordinates();
     QCOMPARE(latitude->text(), QString("40.233800"));
     QCOMPARE(longitude->text(), QString("-111.658500"));
     QVERIFY(!untyped.typedCoordinates().has_value());
     QVERIFY(!untyped.isDirty());
 
     // The address shown, not the one opened.
-    FamilyEditPanel readdressed(client.session().automaticUpdates(), nullptr);
-    readdressed.setFamily(TestWard::smith(), document);
+    Document readdressedDocument = TestWard::document();
+    FamilyEditPanel readdressed(readdressedDocument, client.session().automaticUpdates(), nullptr);
+    readdressed.setFamily(TestWard::smith());
     QTextEdit* address = addressField(readdressed);
     QLineEdit* readdressedLatitude = lineEditWithPlaceholder(readdressed, "Latitude");
     QLineEdit* readdressedLongitude = lineEditWithPlaceholder(readdressed, "Longitude");
@@ -320,14 +329,15 @@ void FamilyEditPanelTest::refreshShowsTheNewEntryUnlessCoordinatesAreTyped()
     QVERIFY(readdressedLatitude != nullptr);
     QVERIFY(readdressedLongitude != nullptr);
     address->setPlainText("4 Oak Ave\nProvo, UT");
-    Document bothMapped = TestWard::withCoordinates(smithMapped(ElmPosition), TestWard::jones().address(), OakPosition);
-    readdressed.refreshCoordinates(bothMapped);
+    readdressedDocument = TestWard::withCoordinates(smithMapped(ElmPosition), TestWard::jones().address(), OakPosition);
+    readdressed.refreshCoordinates();
     QCOMPARE(readdressedLatitude->text(), QString("40.241000"));
     QCOMPARE(readdressedLongitude->text(), QString("-111.652000"));
 
     // Typed fields are left as typed.
-    FamilyEditPanel typed(client.session().automaticUpdates(), nullptr);
-    typed.setFamily(TestWard::smith(), document);
+    Document typedDocument = TestWard::document();
+    FamilyEditPanel typed(typedDocument, client.session().automaticUpdates(), nullptr);
+    typed.setFamily(TestWard::smith());
     QLineEdit* typedLatitude = lineEditWithPlaceholder(typed, "Latitude");
     QLineEdit* typedLongitude = lineEditWithPlaceholder(typed, "Longitude");
     QVERIFY(typedLatitude != nullptr);
@@ -335,7 +345,8 @@ void FamilyEditPanelTest::refreshShowsTheNewEntryUnlessCoordinatesAreTyped()
     typedLatitude->setText("40.3");
     typedLongitude->setText("-111.7");
 
-    typed.refreshCoordinates(smithMapped(ElmPosition));
+    typedDocument = smithMapped(ElmPosition);
+    typed.refreshCoordinates();
 
     QCOMPARE(typedLatitude->text(), QString("40.3"));
     QCOMPARE(typedLongitude->text(), QString("-111.7"));
@@ -346,8 +357,9 @@ void FamilyEditPanelTest::refreshShowsTheNewEntryUnlessCoordinatesAreTyped()
 void FamilyEditPanelTest::lookUpFillsTheFieldsOnlyWhileTheAddressLookedUpIsShown()
 {
     TestClient client("Laptop");
-    FamilyEditPanel panel(client.session().automaticUpdates(), nullptr);
-    panel.setFamily(TestWard::smith(), TestWard::document());
+    Document document = TestWard::document();
+    FamilyEditPanel panel(document, client.session().automaticUpdates(), nullptr);
+    panel.setFamily(TestWard::smith());
     QLineEdit* latitude = lineEditWithPlaceholder(panel, "Latitude");
     QLineEdit* longitude = lineEditWithPlaceholder(panel, "Longitude");
     QTextEdit* address = addressField(panel);
@@ -388,8 +400,9 @@ void FamilyEditPanelTest::typedFamilyNoteIsReturnedTrimmedAndMakesThePanelDirty(
     Family noted = TestWard::smith();
     noted.setNote("Gate code is 1234");
     TestClient client("Laptop");
-    FamilyEditPanel panel(client.session().automaticUpdates(), nullptr);
-    panel.setFamily(noted, TestWard::document());
+    Document document = TestWard::document();
+    FamilyEditPanel panel(document, client.session().automaticUpdates(), nullptr);
+    panel.setFamily(noted);
     QTextEdit* note = nullptr;
     for (QTextEdit* edit : panel.findChildren<QTextEdit*>())
     {

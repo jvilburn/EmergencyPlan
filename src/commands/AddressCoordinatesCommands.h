@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Address.h"
 #include "Command.h"
 #include "Coordinates.h"
 
@@ -16,9 +17,9 @@ public:
     /// The command that sets typed on the entry for address, with the entry as the document
     /// holds it now as before, or an empty pointer when the entry already equals typed,
     /// which WardSession::commit takes as nothing to do.
-    static UndoableCommandPtr fromTyped(const Document& document, const QString& address, const Coordinates& typed);
+    static UndoableCommandPtr fromTyped(const Document& document, const Address& address, const Coordinates& typed);
 
-    SetAddressCoordinatesCommand(const QString& address,
+    SetAddressCoordinatesCommand(const Address& address,
                                  const std::optional<Coordinates>& before,
                                  const Coordinates& typed,
                                  const CommandDescription& description);
@@ -32,7 +33,7 @@ public:
     static CommandPtr fromJson(JsonReader json, const CommandDescription& description);
 
 private:
-    QString m_address;
+    Address m_address;
     std::optional<Coordinates> m_before;
     Coordinates m_typed;
 };
@@ -45,7 +46,7 @@ class RevertAddressCoordinatesCommand : public Command
 public:
     static constexpr const char* TypeName = "revertAddressCoordinates";
 
-    RevertAddressCoordinatesCommand(const QString& address,
+    RevertAddressCoordinatesCommand(const Address& address,
                                     const std::optional<Coordinates>& before,
                                     const Coordinates& typed,
                                     const CommandDescription& description);
@@ -58,7 +59,7 @@ public:
     static CommandPtr fromJson(JsonReader json, const CommandDescription& description);
 
 private:
-    QString m_address;
+    Address m_address;
     std::optional<Coordinates> m_before;
     Coordinates m_typed;
 };

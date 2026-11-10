@@ -123,7 +123,7 @@ void MainWindow::setupUi()
     m_sidebarTabs->addPage(m_recoveryView, tr("Skills && Gear"));
 
     // Edit panel (initially hidden)
-    m_editPanel = new FamilyEditPanel(DocumentManager::instance()->automaticUpdates(), m_splitter);
+    m_editPanel = new FamilyEditPanel(DocumentManager::instance()->document(), DocumentManager::instance()->automaticUpdates(), m_splitter);
     m_editPanel->hide();
 
     // Map in the center
@@ -739,7 +739,7 @@ void MainWindow::onDocumentChanged(const DocumentChange& change)
     updateWindowTitle();
     if (m_editPanel->isVisible())
     {
-        m_editPanel->refreshCoordinates(DocumentManager::instance()->document());
+        m_editPanel->refreshCoordinates();
     }
 
     // A full change can put a different emergency in place of the one in progress
@@ -978,7 +978,7 @@ void MainWindow::saveEdit()
     if (typed.has_value())
     {
         DocumentManager::instance()->executeCommand(SetAddressCoordinatesCommand::fromTyped(
-            DocumentManager::instance()->document(), saved.address().full(), *typed));
+            DocumentManager::instance()->document(), saved.address(), *typed));
     }
 }
 
@@ -1051,7 +1051,7 @@ void MainWindow::openEditPanel(const FamilyId& familyId)
         return;
     }
 
-    m_editPanel->setFamily(it.value(), DocumentManager::instance()->document());
+    m_editPanel->setFamily(it.value());
 
     if (!m_editPanel->isVisible())
     {

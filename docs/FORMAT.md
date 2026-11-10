@@ -457,7 +457,7 @@ A placed member:
 
 | Key | Type | Holds |
 |---|---|---|
-| `address` | string | the address entry's key |
+| `address` | array of strings | the address's lines, whose entry it changes |
 | `before` | coordinates object | the entry before the position was typed; omitted when there was none |
 | `typed` | coordinates object | the position typed |
 

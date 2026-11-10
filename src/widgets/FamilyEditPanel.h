@@ -20,17 +20,16 @@ class FamilyEditPanel : public QFrame
     Q_OBJECT
 
 public:
-    /// Look Up asks automaticUpdates, which outlives the panel, for the address shown.
-    FamilyEditPanel(AutomaticUpdates& automaticUpdates, QWidget* parent);
+    /// The coordinate fields show document's entry for the address shown, and Look Up asks
+    /// automaticUpdates for it; both outlive the panel.
+    FamilyEditPanel(const Document& document, AutomaticUpdates& automaticUpdates, QWidget* parent);
 
-    /// Opens the panel on family. The coordinate fields show the entry that the document's
-    /// table of address coordinates holds for the address the panel shows.
-    void setFamily(const Family& family, const Document& document);
+    /// Opens the panel on family.
+    void setFamily(const Family& family);
 
-    /// Takes the document's current table of address coordinates. While the coordinate
-    /// fields still read what the panel showed, they show the entry for the address shown;
-    /// typed coordinates are left as they are.
-    void refreshCoordinates(const Document& document);
+    /// Shows the document's current entry for the address shown while the coordinate fields
+    /// still read what the panel showed; typed coordinates are left as they are.
+    void refreshCoordinates();
     Family family() const;
 
     /// The family as setFamily gave it: the start condition of the edit.
@@ -67,9 +66,6 @@ private:
     void setupUi();
     void updateTitle();
 
-    /// The entry the table the panel opened with holds for address, or none.
-    std::optional<Coordinates> entryFor(const Address& address) const;
-
     /// Shows the entry for address in the coordinate fields, or clears them, and remembers
     /// the text shown.
     void showEntryFor(const Address& address);
@@ -88,7 +84,6 @@ private:
     FamilyId m_familyId;
     Family m_originalFamily;
     Family m_editedFamily;
-    QHash<QString, Coordinates> m_addressCoordinates;
     QString m_shownLatitude;
     QString m_shownLongitude;
 
@@ -102,6 +97,7 @@ private:
     QLineEdit* m_latEdit;
     QLineEdit* m_lonEdit;
     QPushButton* m_lookupButton;
+    const Document& m_document;
     AutomaticUpdates& m_automaticUpdates;
     QString m_lookingUp;  ///< the address this panel's Look Up awaits; empty when none
 

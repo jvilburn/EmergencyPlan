@@ -163,7 +163,7 @@ class FamilyCollectionChange
 public:
     /// The change from the families document holds to imported, the families as an import
     /// leaves them: each one document lacks is added, and each one that differs gets the
-    /// change between, which keeps the imported family's member order. Each family in removed
+    /// change between. Each family in removed
     /// that document holds is removed as document holds it. Each cleanup holds the places in
     /// document that refer to the families and people it names.
     static FamilyCollectionChange between(const Document& document,

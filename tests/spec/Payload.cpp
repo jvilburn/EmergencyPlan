@@ -450,7 +450,7 @@ void readFamilyRemovalFields(Fields fields)
 
 void readAddressCoordinatesFields(Fields fields)
 {
-    fields.text("address");
+    fields.texts("address");
     std::optional<Fields> before = fields.optionalObject("before");
     if (before.has_value())
     {

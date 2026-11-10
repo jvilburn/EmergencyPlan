@@ -99,10 +99,10 @@ QList<CommandSample> setAddressCoordinatesSamples()
     QList<CommandSample> samples;
     samples.append(CommandSample{SampleCase::StartHolds,
                                  TestWard::document(),
-                                 SetAddressCoordinatesCommand::fromTyped(TestWard::document(), address.full(), typed)});
+                                 SetAddressCoordinatesCommand::fromTyped(TestWard::document(), address, typed)});
     samples.append(CommandSample{SampleCase::ResultHolds,
                                  typedThere,
-                                 SetAddressCoordinatesCommand::fromTyped(TestWard::document(), address.full(), typed)});
+                                 SetAddressCoordinatesCommand::fromTyped(TestWard::document(), address, typed)});
     return samples;
 }
 
@@ -113,7 +113,7 @@ QList<CommandSample> revertAddressCoordinatesSamples()
     Coordinates typed(40.2338, -111.6585);
     Coordinates other(40.2400, -111.6600);
     Document geocodedThere = TestWard::withCoordinates(TestWard::document(), address, geocoded);
-    CommandPtr revert = SetAddressCoordinatesCommand::fromTyped(geocodedThere, address.full(), typed)->inverse();
+    CommandPtr revert = SetAddressCoordinatesCommand::fromTyped(geocodedThere, address, typed)->inverse();
 
     QList<CommandSample> samples;
     samples.append(CommandSample{SampleCase::StartHolds,

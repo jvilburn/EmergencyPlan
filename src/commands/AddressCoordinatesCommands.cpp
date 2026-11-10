@@ -1,27 +1,17 @@
 #include "AddressCoordinatesCommands.h"
 #include "Document.h"
 
+#include <QJsonArray>
 #include <QObject>
 
 namespace
 {
 
-/// The entry the table holds for the address text, or none.
-std::optional<Coordinates> entryFor(const Document& document, const QString& address)
-{
-    auto it = document.addressCoordinates().constFind(address);
-    if (it != document.addressCoordinates().constEnd())
-    {
-        return *it;
-    }
-    return std::nullopt;
-}
-
 /// The fields both commands hold, which are the same in both directions.
-QJsonObject entryChangeToJson(const QString& address, const std::optional<Coordinates>& before, const Coordinates& typed)
+QJsonObject entryChangeToJson(const Address& address, const std::optional<Coordinates>& before, const Coordinates& typed)
 {
     QJsonObject json;
-    json["address"] = address;
+    json["address"] = QJsonArray::fromStringList(address.lines());
     if (before.has_value())
     {
         json["before"] = before->toJson();
@@ -33,14 +23,14 @@ QJsonObject entryChangeToJson(const QString& address, const std::optional<Coordi
 /// The fields entryChangeToJson wrote, which both commands read the same way.
 struct EntryChange
 {
-    QString address;
+    Address address;
     std::optional<Coordinates> before;
     Coordinates typed;
 };
 
 EntryChange entryChangeFromJson(JsonReader json)
 {
-    QString address = json.string("address");
+    Address address = Address::fromLines(json.strings("address"));
     std::optional<Coordinates> before;
     std::optional<JsonReader> beforeJson = json.optionalObject("before");
     if (beforeJson.has_value())
@@ -55,21 +45,21 @@ EntryChange entryChangeFromJson(JsonReader json)
 }  // namespace
 
 UndoableCommandPtr SetAddressCoordinatesCommand::fromTyped(const Document& document,
-                                                           const QString& address,
+                                                           const Address& address,
                                                            const Coordinates& typed)
 {
-    std::optional<Coordinates> before = entryFor(document, address);
+    std::optional<Coordinates> before = document.coordinatesFor(address);
     if (before == typed)
     {
         return nullptr;
     }
     QString line = QObject::tr("latitude %1, longitude %2")
                        .arg(QString::number(typed.latitude(), 'f', 6), QString::number(typed.longitude(), 'f', 6));
-    CommandDescription description(QObject::tr("Map position for %1").arg(address), {line});
+    CommandDescription description(QObject::tr("Map position for %1").arg(address.full()), {line});
     return std::make_shared<SetAddressCoordinatesCommand>(address, before, typed, description);
 }
 
-SetAddressCoordinatesCommand::SetAddressCoordinatesCommand(const QString& address,
+SetAddressCoordinatesCommand::SetAddressCoordinatesCommand(const Address& address,
                                                            const std::optional<Coordinates>& before,
                                                            const Coordinates& typed,
                                                            const CommandDescription& description)
@@ -82,7 +72,7 @@ SetAddressCoordinatesCommand::SetAddressCoordinatesCommand(const QString& addres
 
 CommandOutcome SetAddressCoordinatesCommand::execute(Document& document) const
 {
-    document.setAddressCoordinates(m_address, m_typed);
+    document.setAddressCoordinates(m_address.full(), m_typed);
     return CommandOutcome::Applied;
 }
 
@@ -107,7 +97,7 @@ CommandPtr SetAddressCoordinatesCommand::fromJson(JsonReader json, const Command
     return std::make_shared<SetAddressCoordinatesCommand>(change.address, change.before, change.typed, description);
 }
 
-RevertAddressCoordinatesCommand::RevertAddressCoordinatesCommand(const QString& address,
+RevertAddressCoordinatesCommand::RevertAddressCoordinatesCommand(const Address& address,
                                                                  const std::optional<Coordinates>& before,
                                                                  const Coordinates& typed,
                                                                  const CommandDescription& description)
@@ -120,7 +110,7 @@ RevertAddressCoordinatesCommand::RevertAddressCoordinatesCommand(const QString& 
 
 CommandOutcome RevertAddressCoordinatesCommand::execute(Document& document) const
 {
-    std::optional<Coordinates> current = entryFor(document, m_address);
+    std::optional<Coordinates> current = document.coordinatesFor(m_address);
     if (current == m_before)
     {
         return CommandOutcome::Applied;
@@ -129,7 +119,7 @@ CommandOutcome RevertAddressCoordinatesCommand::execute(Document& document) cons
     {
         return CommandOutcome::Conflicted;
     }
-    document.setAddressCoordinates(m_address, m_before);
+    document.setAddressCoordinates(m_address.full(), m_before);
     return CommandOutcome::Applied;
 }
 

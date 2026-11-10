@@ -288,7 +288,7 @@ QList<CommandPtr> sparsestCommands()
     done.setAssignment(TaskAssignment::toTeam(team));
     done.setResolution(TaskResolution::create(QString()));
     UndoableCommandPtr removeFamily = DeleteFamilyCommand::fromSeen(bare, ward);
-    UndoableCommandPtr typed = SetAddressCoordinatesCommand::fromTyped(ward, "12 Elm St, Provo, UT",
+    UndoableCommandPtr typed = SetAddressCoordinatesCommand::fromTyped(ward, Address::fromLines({"12 Elm St", "Provo, UT"}),
                                                                         Coordinates(40.2338, -111.6585));
     UndoableCommandPtr end = EndEmergencyCommand::fromReported(storm);
     UndoableCommandPtr addAttempt = AddContactAttemptCommand::fromNew(

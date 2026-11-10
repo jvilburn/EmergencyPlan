@@ -106,7 +106,7 @@ CommitResult commitPhone(WardSession& session, const FamilyId& familyId, const P
 /// Commits coordinates typed for the address, against the session's current entry.
 CommitResult commitTyped(WardSession& session, const Address& address, const Coordinates& typed)
 {
-    return session.commit(SetAddressCoordinatesCommand::fromTyped(session.document(), address.full(), typed));
+    return session.commit(SetAddressCoordinatesCommand::fromTyped(session.document(), address, typed));
 }
 
 /// A ward with that unit number and no details.
