@@ -216,7 +216,7 @@ void MemberAccordion::updateHeaderText(int index)
         details += p.birthday().dateDisplay();
         if (!p.birthday().ageDisplay().isEmpty())
         {
-            details += " (" + p.birthday().ageDisplay() + ")";
+            details += " " + p.birthday().ageDisplay();
         }
     }
     if (!p.displayPhone().isEmpty())
