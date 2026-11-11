@@ -207,7 +207,7 @@ the simpler design wins.
 with the content, and it is not trusted with who has access either: both live in the
 encrypted payload, and a client seals the data key only to a device it approved itself or
 that an earlier version already held. A client takes a new version only when it descends
-from one it already holds, under the same key or naming that key among its former keys,
+from one it already holds, sharing a key with it (see *Former keys*),
 so once a device holds a version, the server cannot hand it a ward of the server's own
 making; its first download is the accepted exception below.
 
@@ -494,9 +494,11 @@ the server cannot read or change.
 **Former keys.** The access list also carries a hash of every data key the ward used before
 its current one (32-byte BLAKE2b, personalised `wp-former-key`; see *Primitives*),
 appended at each rotation.
-A client takes a version only when its key is one the client already holds for that ward,
-or when the version names one of those among its former keys. Keys are held per ward, so
-a version of another ward does not descend. Only someone who held an
+A client takes a version only when it shares a key with the copy the client holds: the key
+either is under, or any key either names among its former keys. So update files that cross
+a rotation still converge: a version written under the key the other copy rotated away from
+names nothing that copy is under, and shares the key that copy names as former. Keys are
+held per ward, so a version of another ward does not descend. Only someone who held an
 earlier key can name it, and the hashes travel only inside the encrypted payload, so the
 server can neither forge a descendant nor learn them. The list grows by one entry per
 rotation, a handful a year.
@@ -882,8 +884,8 @@ a pushed version holds - the ward, its access list and the landed marks - plus, 
   against
 - dismissals of the single-holder and single-admin notices
 - whether the ward is no longer this device's, so a device reopened offline still knows
-- the seed of each open invite this device made, and of the invite it joined through until a
-  version it takes names this device (see *Invites*)
+- the seed of each open invite this device made, and of the invite it joined through (see
+  *Invites*)
 
 The version this device holds is named by the local file's header (see *Which version
 wins*).
@@ -1144,11 +1146,12 @@ is the whole answer to two users working at once, and there is no second mechani
 importing a directory, inviting someone, removing a user, changing a role: all of them are
 commands, all of them enter the journal, and all of them replay by the one rule. Who may
 read the ward lives in the same encrypted payload as the ward itself, so a change to it is
-a change to the document and needs no path of its own. Three writes take a path of their
-own, each described where it lives: automatic updates, which are derived data and stay out
-of the journal (see *The journal*); the join, which a device makes under the invite's key
-before it has a journal (see *Invites*); and Leave with *Remove this device*, which never
-touch the open document (see *Saving*).
+a change to the document and needs no path of its own. The join is a command in the joining
+device's journal too, signed by the invite's key, so a join that loses runs again on top
+of the winner (see *Invites*). Two writes take a path of their own, each described where it
+lives: automatic updates, which are derived data and stay out of the journal (see *The
+journal*); and Leave with *Remove this device*, which never touch the open document (see
+*Saving*).
 
 The model is `git rebase`: the journal is a run of commits, the server's version is the new
 base, and each command is replayed onto it rather than two finished states being compared.
@@ -1475,8 +1478,10 @@ seed for `crypto_box_seed_keypair`, and subkey 2 the seed for `crypto_sign_seed_
    server off, the app asks the new member to send an update to every member, since a device
    seals versions only to the devices the version it holds names. Until a member takes the
    join, that member's versions stay sealed
-   to the open invite, and the new member reads them with the seed, which it keeps until a
-   version it takes names it. A copy the device still holds from before it lost access is
+   to the open invite, and the new member reads them with the seed, which it keeps for as
+   long as it holds the ward: a member who has not taken the join can send a version at any
+   time. A version that names the invite and not this device is taken with the seed, and
+   the join runs again on top of it, as for a join that loses below. A copy the device still holds from before it lost access is
    replaced, and nothing from that copy carries over. A join that loses to a newer version
    takes it and joins again on top of it. Where that version names neither this device nor
    the invite - the same invitation used by another device first, or withdrawn - the join is
@@ -2135,6 +2140,14 @@ Update files, in `tests/services`, with no server:
   join opens the ward, the join's update taken by another member lets that member's next
   version be read by the new member; and a member's version written before taking the join
   is read by the new member with the seed
+- after the new member has taken a version that names it, a version from a member who never
+  took the join, ranking above, is taken with the seed, the join runs again on top, and the
+  new member still holds the ward; once that member takes the join, all hold equal wards
+- update files that cross a rotation converge: an admin removes a user and sends, a member
+  who has not taken that sends a version under the old key ranking above it, and the admin
+  takes it, its removal replays on top and rotates again, and the member takes the next
+  version; the removed user's devices open neither of the admin's versions, nor any the
+  member writes after taking one
 - the same invitation used on two devices: both join; the lower-ranked join, replayed onto
   the winner, is refused with *This invite has been used or withdrawn*
 
