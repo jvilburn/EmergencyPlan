@@ -38,8 +38,7 @@ public:
 private slots:
     void onUseCurrentView();
 
-    /// OK is enabled while this device's name is not empty, and your name is not empty or was
-    /// empty when the dialog opened.
+    /// OK is enabled while both names are not empty.
     void updateOkButton();
 
 private:
@@ -47,7 +46,6 @@ private:
     void showMapHome(const std::optional<Coordinates>& home);
 
     Coordinates m_currentView;
-    bool m_userNameWasEmpty;
     std::optional<Coordinates> m_mapHome;
 
     QCheckBox* m_useServer;

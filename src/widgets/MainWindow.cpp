@@ -67,7 +67,7 @@ MainWindow::MainWindow(AppSettings* settings, bool developer, QWidget* parent)
     setupConnections();
     setAcceptDrops(true);
 
-    initializeDefaultLocation();
+    initializeMapHome();
     updateWindowTitle();
     updateUndoRedoActions();
 }
@@ -277,6 +277,18 @@ bool MainWindow::openStartingWard()
         }
         m_settings->setDeviceName(deviceName);
     }
+    if (m_settings->userName().isEmpty())
+    {
+        bool ok = false;
+        QString userName = QInputDialog::getText(this, tr("Ward Planning"), tr("Your name"), QLineEdit::Normal,
+                                                 QString(), &ok)
+                               .trimmed();
+        if (!ok || userName.isEmpty())
+        {
+            return false;
+        }
+        m_settings->setUserName(userName);
+    }
 
     std::optional<DocumentId> lastWard = m_settings->lastWard();
     if (lastWard && openWard(*lastWard))
@@ -286,20 +298,10 @@ bool MainWindow::openStartingWard()
     return chooseWard();
 }
 
-bool MainWindow::createWard()
+void MainWindow::createWard()
 {
-    bool ok = false;
-    QString userName = QInputDialog::getText(this, tr("New Ward"), tr("Your name"), QLineEdit::Normal,
-                                             m_settings->userName(), &ok)
-                           .trimmed();
-    if (!ok || userName.isEmpty())
-    {
-        return false;
-    }
-    m_settings->setUserName(userName);
-    DocumentManager::instance()->createWard(userName, m_settings->deviceName());
+    DocumentManager::instance()->createWard(m_settings->userName(), m_settings->deviceName());
     m_settings->setLastWard(DocumentManager::instance()->documentId());
-    return true;
 }
 
 bool MainWindow::openWard(const DocumentId& document)
@@ -330,11 +332,8 @@ bool MainWindow::chooseWard()
             }
             break;
         case WardListChoice::NewWard:
-            if (createWard())
-            {
-                return true;
-            }
-            break;
+            createWard();
+            return true;
         case WardListChoice::Close:
             return false;
         }
@@ -467,9 +466,10 @@ void MainWindow::openUpdateFile(const QString& path)
     }
 
     // A name set on another of this user's devices becomes Your name here.
-    if (std::optional<QString> name = DocumentManager::instance()->session().followUserName(m_settings->userName()))
+    QString name = DocumentManager::instance()->session().followUserName(m_settings->userName());
+    if (!name.isEmpty())
     {
-        m_settings->setUserName(*name);
+        m_settings->setUserName(name);
     }
 
     switch (result.replay.status)
@@ -498,7 +498,7 @@ void MainWindow::onSettings()
         m_settings->setDeviceName(dialog.deviceName());
         DocumentManager::instance()->session().renameDeviceEverywhere(dialog.deviceName());
     }
-    if (!dialog.userName().isEmpty() && dialog.userName() != m_settings->userName())
+    if (dialog.userName() != m_settings->userName())
     {
         m_settings->setUserName(dialog.userName());
         DocumentManager::instance()->session().renameUserEverywhere(dialog.userName());
@@ -839,7 +839,7 @@ void MainWindow::onGeocodingFinished()
 // Map Home
 // ============================================================================
 
-void MainWindow::initializeDefaultLocation()
+void MainWindow::initializeMapHome()
 {
     if (std::optional<Coordinates> home = m_settings->mapHome())
     {
@@ -847,7 +847,7 @@ void MainWindow::initializeDefaultLocation()
     }
     else
     {
-        // No saved location - request via geolocation
+        // No map home yet: ask for the device's location
         GeoLocation* geoLocation = new GeoLocation(this);
         connect(geoLocation, &GeoLocation::locationReady,
                 this, &MainWindow::onLocationReady);

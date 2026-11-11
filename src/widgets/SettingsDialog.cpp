@@ -13,7 +13,6 @@
 SettingsDialog::SettingsDialog(const AppSettings& settings, const Coordinates& currentView, QWidget* parent)
     : QDialog(parent)
     , m_currentView(currentView)
-    , m_userNameWasEmpty(settings.userName().isEmpty())
 {
     setWindowTitle(tr("Settings"));
 
@@ -80,7 +79,7 @@ void SettingsDialog::onUseCurrentView()
 
 void SettingsDialog::updateOkButton()
 {
-    m_okButton->setEnabled(!deviceName().isEmpty() && (!userName().isEmpty() || m_userNameWasEmpty));
+    m_okButton->setEnabled(!deviceName().isEmpty() && !userName().isEmpty());
 }
 
 void SettingsDialog::showMapHome(const std::optional<Coordinates>& home)

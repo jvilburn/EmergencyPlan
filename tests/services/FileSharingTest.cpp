@@ -371,7 +371,7 @@ void FileSharingTest::deviceInviteJoinsAsOneOfItsMakersDevices()
     QCOMPARE(alice.devices()[1].name(), QString("Phone"));
     QCOMPARE(alice.devices()[1].fingerprint(), phone.identity().fingerprint());
     QCOMPARE(phone.session().ownUserName(), QString("Alice"));
-    QVERIFY(phone.session().followUserName(QString()) == QString("Alice"));
+    QCOMPARE(phone.session().followUserName(QString()), QString("Alice"));
     QVERIFY(TestSharing::send(phone, {&laptop}) == QList<TakeStatus>{TakeStatus::Taken});
     QCOMPARE(TestSharing::userNamed(laptop, "Alice").devices().size(), qsizetype(2));
 }
@@ -532,9 +532,9 @@ void FileSharingTest::secondDeviceTakingTheNewUserNameFollowsIt()
     QVERIFY(TestSharing::send(laptop, {&phone}) == QList<TakeStatus>{TakeStatus::Taken});
     QCOMPARE(phone.session().ownUserName(), QString("Alice Jones"));
 
-    std::optional<QString> followed = phone.session().followUserName("Alice");
+    QString followed = phone.session().followUserName("Alice");
 
-    QVERIFY(followed == QString("Alice Jones"));
+    QCOMPARE(followed, QString("Alice Jones"));
     QVERIFY(phone.session().journal().isEmpty());
     QVERIFY(phone.session().openWard(second).status == OpenStatus::Opened);
     QCOMPARE(phone.session().journal().entries().size(), qsizetype(1));
@@ -543,5 +543,5 @@ void FileSharingTest::secondDeviceTakingTheNewUserNameFollowsIt()
     QVERIFY(phone.session().openWard(phoneOnly).status == OpenStatus::Opened);
     QCOMPARE(phone.session().ownUserName(), QString("Alice Jones"));
     QCOMPARE(TestSharing::userNames(phone), (QStringList{"Alice Jones", "Carol"}));
-    QVERIFY(!phone.session().followUserName("Alice Jones").has_value());
+    QCOMPARE(phone.session().followUserName("Alice Jones"), QString());
 }

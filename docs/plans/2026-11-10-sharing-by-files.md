@@ -5105,11 +5105,10 @@ calls `session().readInvitation(bytes)`, and by its status:
   changes and share your work.*
 - `AlreadyHasAccess`: when `mayLeaveWard()`, `DocumentManager::openWard(invited.document)`, the
   last ward set to it, and *This device already has access to %1.*
-- `Joinable`: asks *Join %1?* with the ward's own name; for a user invite, the same dialog asks
-  *Your name*, filled in with `m_settings->userName()`, and its OK is enabled while it is not
-  empty. On OK and `mayLeaveWard()`: `DocumentManager::join(invited, name, deviceName)`, the
-  last ward set to it, *Your name* set to the name given when it was empty, `followUserName`
-  applied as after a take, and *You have joined %1. Send an update to every member of the ward
+- `Joinable`: asks only *Join %1?* with the ward's own name, with no name field. On OK and
+  `mayLeaveWard()`: `DocumentManager::join(invited, m_settings->userName(),
+  m_settings->deviceName())`, the last ward set to it, `followUserName` applied as after a
+  take, and *You have joined %1. Send an update to every member of the ward
   so they see you.*; the share notice then shows *You have changes to share*.
 
 **`DocumentManager::join(const InvitedWard&, const QString& userName, const QString&
@@ -5221,8 +5220,8 @@ choice this plan makes.
     executor cannot run the code to observe them. Task 6's independent reader derives the keys
     with libsodium's own seed-keypair calls, which stands in. Literal values can be pinned from
     the first run if you want them too.
-12. **Joining asks *Your name* for a user invite, filled in with *Your name*,** and sets *Your
-    name* from it when it was empty. A device invite asks nothing but *Join Tanglewood Ward?*;
-    the device takes its user's name, which `followUserName` then makes *Your name*.
+12. **Joining asks only *Join Tanglewood Ward?*** A user invite takes *Your name* from
+    *Settings*; a device invite's device takes its user's name from the ward, which
+    `followUserName` then makes *Your name*.
 13. **Where the invitation is saved:** a save dialog starting in the *Ward Planning* folder in
     Documents, as the design's "where the user chooses".

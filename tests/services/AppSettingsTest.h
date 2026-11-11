@@ -11,5 +11,6 @@ public:
 
 private slots:
     void missingFileReadsAsEveryDefault();
+    void aHandWrittenFileReadsEveryKey();
     void eachValueSurvivesANewSettingsOnTheSameFile();
 };

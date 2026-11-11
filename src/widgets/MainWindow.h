@@ -34,7 +34,7 @@ public:
     MainWindow(AppSettings* settings, bool developer, QWidget* parent);
     ~MainWindow();
 
-    /// Opens the ward the app starts on: on the first start, asks this device's name; then
+    /// Opens the ward the app starts on: on the first start, asks this device's name and your name; then
     /// opens the last ward, or, when there is none or it does not open, shows the ward list.
     /// False when the user cancels, which quits the app.
     bool openStartingWard();
@@ -112,7 +112,7 @@ private:
     void setupUi();
     void setupMenus(bool developer);
     void setupConnections();
-    void initializeDefaultLocation();
+    void initializeMapHome();
     void openEditPanel(const FamilyId& familyId);
     void closeEditPanelInternal();
 
@@ -124,9 +124,8 @@ private:
     /// False when the user cancels, which leaves the panel as it is.
     bool settleUnsavedEdit();
 
-    /// Asks the user's name, kept for the next new ward, and creates a ward under it on this
-    /// device, which becomes the last ward. False when the user cancels.
-    bool createWard();
+    /// Creates a ward under Your name on this device, which becomes the last ward.
+    void createWard();
 
     /// Opens the ward, which becomes the last ward; when it does not open, tells why. False
     /// when it does not open.

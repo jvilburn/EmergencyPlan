@@ -21,6 +21,7 @@
 #include "MinisteringPdfParserTest.h"
 #include "PersonJsonTest.h"
 #include "ReferenceCleanupTest.h"
+#include "SettingsDialogTest.h"
 #include "SpecReaderTest.h"
 #include "StrictReadersTest.h"
 #include "TeamCommandsTest.h"
@@ -69,6 +70,7 @@ int main(int argc, char* argv[])
     StrictReadersTest strictReadersTest(nullptr);
     AppDataTest appDataTest(nullptr);
     AppSettingsTest appSettingsTest(nullptr);
+    SettingsDialogTest settingsDialogTest(nullptr);
     WardListTest wardListTest(nullptr);
     DocumentMetadataTest documentMetadataTest(nullptr);
     SpecReaderTest specReaderTest(nullptr);
@@ -105,6 +107,7 @@ int main(int argc, char* argv[])
     failures += QTest::qExec(&strictReadersTest, argc, argv);
     failures += QTest::qExec(&appDataTest, argc, argv);
     failures += QTest::qExec(&appSettingsTest, argc, argv);
+    failures += QTest::qExec(&settingsDialogTest, argc, argv);
     failures += QTest::qExec(&wardListTest, argc, argv);
     failures += QTest::qExec(&documentMetadataTest, argc, argv);
     failures += QTest::qExec(&specReaderTest, argc, argv);

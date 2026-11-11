@@ -10,8 +10,8 @@ Ward Planning is a desktop application for managing ward family data, ministerin
 
 ### Wards
 
-- The first launch asks for a name for this device
-- **File > New Ward** (Ctrl+N) - Asks your name and creates a ward on this device
+- The first launch asks for a name for this device and for your name
+- **File > New Ward** (Ctrl+N) - Creates a ward on this device, under your name
 - **File > Open Ward** (Ctrl+O) - Lists the wards on this device by name; a ward whose changes have not yet gone out is marked *changes waiting*
 - **File > Show in Folder** - Opens the folder that holds the ward's file, with the file selected; only this ward's devices can open it
 - Each launch reopens the last ward; when there is none, or it does not open, the ward list shows instead
@@ -30,8 +30,8 @@ After importing, the app automatically geocodes addresses in the background (sho
 **File > Settings** holds settings for the whole app, on this device:
 
 - **Use the Ward Planning server** - Turn this off only if the Ward Planning server has shut down. Every member of your wards must turn it off too.
-- **This device's name** - The name this device has in your wards. Changing it renames this device in every ward on this device.
-- **Your name** - The name filled in when you create a ward. Changing it renames you in every ward on this device. A new name set on another of your devices reaches this one in the updates you open.
+- **This device's name** - The name this device has in your wards, asked for at the first launch. Changing it renames this device in every ward on this device.
+- **Your name** - The name you have in the wards you create or join, asked for at the first launch. Changing it renames you in every ward on this device. A new name set on another of your devices reaches this one in the updates you open.
 - **Map home** - Where the map opens. The app first sets it from your approximate location; **Use current view** sets it to what the map shows now.
 
 ---

@@ -21,14 +21,25 @@ void AppSettingsTest::missingFileReadsAsEveryDefault()
     QCOMPARE(missing.userName(), QString());
     QVERIFY(!missing.lastWard().has_value());
     QVERIFY(!missing.mapHome().has_value());
+}
 
-    QString path = dir.filePath("written.json");
+void AppSettingsTest::aHandWrittenFileReadsEveryKey()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    QString path = dir.filePath("settings.json");
     QFile file(path);
     QVERIFY(file.open(QIODevice::WriteOnly));
-    file.write(R"({"deviceName":"Laptop"})");
+    file.write(R"({"useServer":true,"deviceName":"Laptop","userName":"Alice Smith",)"
+               R"("lastWardId":"5f1c2a7e-3b9d-4e8a-9c61-0d2f7b4a8e13","defaultLat":40.2338,"defaultLng":-111.6585})");
     file.close();
+
     AppSettings written(path);
+    QVERIFY(written.useServer());
     QCOMPARE(written.deviceName(), QString("Laptop"));
+    QCOMPARE(written.userName(), QString("Alice Smith"));
+    QVERIFY(written.lastWard() == DocumentId::fromString("5f1c2a7e-3b9d-4e8a-9c61-0d2f7b4a8e13"));
+    QVERIFY(written.mapHome() == Coordinates(40.2338, -111.6585));
 }
 
 void AppSettingsTest::eachValueSurvivesANewSettingsOnTheSameFile()

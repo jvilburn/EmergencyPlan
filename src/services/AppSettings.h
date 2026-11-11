@@ -24,7 +24,8 @@ public:
     QString deviceName() const { return m_json.value("deviceName").toString(); }
     void setDeviceName(const QString& name);
 
-    /// Your name, which fills in the name asked for when the user creates or joins a ward.
+    /// Your name, which the first start asks for, and which this device's user takes when
+    /// creating or joining a ward; empty until then.
     QString userName() const { return m_json.value("userName").toString(); }
     void setUserName(const QString& name);
 

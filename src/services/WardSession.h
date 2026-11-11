@@ -308,8 +308,8 @@ public:
 
     /// When this device's user in the open ward is named other than yourName, renames the
     /// user to that name in every other ward this device holds that names them otherwise, and
-    /// answers the name, which is Your name from then on. Otherwise answers none.
-    std::optional<QString> followUserName(const QString& yourName);
+    /// answers the name, which is Your name from then on. Otherwise answers empty.
+    QString followUserName(const QString& yourName);
 
 signals:
     /// The document changed, through a command, a replay, an open or an automatic update.

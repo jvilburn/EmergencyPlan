@@ -1519,9 +1519,9 @@ The invitation is the gate. Whoever opens it first gets in, visibly, and can be 
   delete the copy, in a notice that stays until the user does. Coming back is by a new
   invitation, which joins as a first join does (see *Invites*).
 - **A second device of your own**: *Add a device*, send yourself the invitation, open it there.
-  The first-run screen asks only for a device name. A user's own name is asked where it
-  is used: when they create a ward, and when they join through *Add a user*; a device
-  joining through *Add a device* takes its user's name.
+  The first-run screen asks for this device's name and the user's name; creating a ward
+  and joining through *Add a user* take both from *Settings*, and a device joining through
+  *Add a device* takes this device's name from *Settings* and its user's name from the ward.
 - **Cleared app data, a reimaged profile or a replaced device** gives a fresh identity; wards come back by invite from
   another holder, or from your other device. The server keeps no index of who holds what, so
   there is no ward list to restore from it.
@@ -1722,8 +1722,8 @@ settings file:
   takes when it creates or joins a ward. Changing it renames this device in every ward it
   holds that is still its own and names it otherwise: each rename is a command in its
   ward's journal, and goes out as that ward's other changes do.
-- ***Your name***, which fills in the name asked for when the user creates a ward or joins
-  through *Add a user*. Changing it renames the user in every ward this device holds that
+- ***Your name***, which the first-run screen asks for. It is the name this device's user
+  takes when creating a ward or joining through *Add a user*. Changing it renames the user in every ward this device holds that
   is still its own and names them otherwise, in the same way. **A rename made on another of
   the user's devices reaches this one too**: taking a version in which this device's user
   has a name other than *Your name* sets *Your name* to it, and renames the user in this device's other

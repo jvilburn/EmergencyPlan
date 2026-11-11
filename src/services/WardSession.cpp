@@ -466,12 +466,12 @@ void WardSession::renameEverywhere(CommandPtr (*rename)(const QByteArray&, const
     }
 }
 
-std::optional<QString> WardSession::followUserName(const QString& yourName)
+QString WardSession::followUserName(const QString& yourName)
 {
     QString name = ownUserName();
     if (name == yourName)
     {
-        return std::nullopt;
+        return QString();
     }
     renameUserEverywhere(name);
     return name;
