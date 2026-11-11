@@ -13,6 +13,7 @@ public:
 
     bool write(const DocumentId& document, const QByteArray& bytes, QString* problem) override;
     StoreRead read(const DocumentId& document) const override;
+    bool remove(const DocumentId& document, QString* problem) override;
 
     /// Every id it holds a file for, in descending id order, so a caller that leans on the
     /// order a store lists in, rather than sorting, shows it.

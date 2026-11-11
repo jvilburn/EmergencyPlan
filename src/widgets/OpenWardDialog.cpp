@@ -28,7 +28,18 @@ OpenWardDialog::OpenWardDialog(const QList<WardListEntry>& wards, QWidget* paren
             item->setFlags(Qt::NoItemFlags);
             continue;
         }
-        item->setText(ward.changesWaiting ? tr("%1 (changes waiting)").arg(ward.name) : ward.name);
+        if (ward.noLongerShared)
+        {
+            item->setText(tr("%1 (no longer shared)").arg(ward.name));
+        }
+        else if (ward.changesToShare)
+        {
+            item->setText(tr("%1 (changes to share)").arg(ward.name));
+        }
+        else
+        {
+            item->setText(ward.name);
+        }
         item->setData(Qt::UserRole, ward.document.toString());
     }
     layout->addWidget(m_list);

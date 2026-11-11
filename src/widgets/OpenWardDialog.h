@@ -18,8 +18,9 @@ enum class WardListChoice
     Close     ///< nothing
 };
 
-/// The ward list: the wards this device holds, by name, with the ones whose changes are
-/// waiting marked, and a ward whose file does not read listed by why, which cannot be chosen.
+/// The ward list: the wards this device holds, by name, with the ones no longer shared with
+/// this device and the ones with changes to share marked, and a ward whose file does not read
+/// listed by why, which cannot be chosen.
 class OpenWardDialog : public QDialog
 {
     Q_OBJECT

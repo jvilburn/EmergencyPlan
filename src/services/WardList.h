@@ -14,7 +14,8 @@ struct WardListEntry
     DocumentId document;
     OpenStatus status;    ///< Opened when the file reads; otherwise why it does not
     QString name;         ///< the ward's name, when the file reads
-    bool changesWaiting;  ///< its journal holds commands
+    bool changesToShare;  ///< its journal holds changes no version this device holds carries
+    bool noLongerShared;  ///< the ward is no longer this device's
 };
 
 /// The wards this device holds, read from their local files.

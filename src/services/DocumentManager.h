@@ -60,6 +60,10 @@ public:
     /// The open ward's file.
     QString filePath() const { return m_store->pathOf(documentId()); }
 
+    /// Removes the open ward's file from the store. A failure says why in problem, as a clause
+    /// with no final period.
+    bool removeOpenWard(QString* problem) { return m_store->remove(documentId(), problem); }
+
     /// The open ward as a save writes it.
     WardPayload payload() const { return m_session.payload(); }
 

@@ -27,6 +27,13 @@ StoreRead FakeWardStore::read(const DocumentId& document) const
     return StoreRead{StoreReadStatus::Read, m_files.value(document), QString()};
 }
 
+bool FakeWardStore::remove(const DocumentId& document, QString* problem)
+{
+    Q_UNUSED(problem);
+    m_files.remove(document);
+    return true;
+}
+
 QList<DocumentId> FakeWardStore::documents() const
 {
     QList<DocumentId> documents = m_files.keys();

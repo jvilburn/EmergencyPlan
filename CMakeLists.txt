@@ -288,6 +288,7 @@ set(WIDGET_SOURCES
     src/widgets/EmergencyAssetView.cpp
     src/widgets/EmergencyActions.cpp
     src/widgets/EmergencyBanner.cpp
+    src/widgets/ShareNotice.cpp
     src/widgets/EmergencyProgressBar.cpp
     src/widgets/SidebarWidget.cpp
     src/widgets/MinisteringTreeView.cpp
@@ -329,6 +330,7 @@ set(WIDGET_HEADERS
     src/widgets/EmergencyAssetView.h
     src/widgets/EmergencyActions.h
     src/widgets/EmergencyBanner.h
+    src/widgets/ShareNotice.h
     src/widgets/EmergencyProgressBar.h
     src/widgets/SidebarWidget.h
     src/widgets/TeamsView.h

@@ -66,6 +66,17 @@ StoreRead FileWardStore::read(const DocumentId& document) const
     return StoreRead{StoreReadStatus::Read, bytes, QString()};
 }
 
+bool FileWardStore::remove(const DocumentId& document, QString* problem)
+{
+    QFile file(pathOf(document));
+    if (!file.remove())
+    {
+        *problem = asClause(file.errorString());
+        return false;
+    }
+    return true;
+}
+
 QList<DocumentId> FileWardStore::documents() const
 {
     QList<DocumentId> documents;

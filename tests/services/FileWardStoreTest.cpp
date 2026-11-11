@@ -85,3 +85,22 @@ void FileWardStoreTest::documentsAreTheFilesNamedByADocumentId()
     QVERIFY(documents.contains(second));
     QVERIFY(FileWardStore(root.path() + "/none").documents().isEmpty());
 }
+
+void FileWardStoreTest::removeDeletesOnlyThatWardsFile()
+{
+    QTemporaryDir root;
+    FileWardStore store(root.path() + "/wards");
+    DocumentId removed = DocumentId::generate();
+    DocumentId kept = DocumentId::generate();
+    QString problem;
+    QVERIFY(store.write(removed, QByteArray("removed"), &problem));
+    QVERIFY(store.write(kept, QByteArray("kept"), &problem));
+
+    QVERIFY(store.remove(removed, &problem));
+
+    QVERIFY(store.read(removed).status == StoreReadStatus::Missing);
+    StoreRead read = store.read(kept);
+    QVERIFY(read.status == StoreReadStatus::Read);
+    QCOMPARE(read.bytes, QByteArray("kept"));
+    QVERIFY(store.documents() == QList<DocumentId>({kept}));
+}

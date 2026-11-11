@@ -16,6 +16,7 @@ public:
 
     bool write(const DocumentId& document, const QByteArray& bytes, QString* problem) override;
     StoreRead read(const DocumentId& document) const override;
+    bool remove(const DocumentId& document, QString* problem) override;
 
     /// Each file in the folder with the .wardplanning extension whose base name is a document
     /// id.

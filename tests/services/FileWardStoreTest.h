@@ -13,4 +13,5 @@ private slots:
     void eachWardIsOneFileNamedByItsDocumentId();
     void writeFailuresSayWhyAsAClause();
     void documentsAreTheFilesNamedByADocumentId();
+    void removeDeletesOnlyThatWardsFile();
 };

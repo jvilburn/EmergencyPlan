@@ -1,10 +1,14 @@
 #include "WardListTest.h"
+#include "AccessCommands.h"
 #include "FamilyCommands.h"
 #include "TestClient.h"
+#include "TestSharing.h"
 #include "TestWard.h"
 #include "WardList.h"
 
 #include <QTest>
+
+#include <algorithm>
 
 namespace
 {
@@ -30,6 +34,15 @@ QList<DocumentId> byId(const DocumentId& first, const DocumentId& second)
     return {first, second};
 }
 
+/// The entry of entries for document.
+WardListEntry entryOf(const QList<WardListEntry>& entries, const DocumentId& document)
+{
+    auto it = std::find_if(entries.begin(), entries.end(),
+                           [&](const WardListEntry& entry) { return entry.document == document; });
+    Q_ASSERT(it != entries.end());
+    return *it;
+}
+
 }  // namespace
 
 WardListTest::WardListTest(QObject* parent)
@@ -37,7 +50,7 @@ WardListTest::WardListTest(QObject* parent)
 {
 }
 
-void WardListTest::listNamesEachWardAndMarksWaitingChanges()
+void WardListTest::listNamesEachWardAndMarksChangesToShare()
 {
     TestClient client("Laptop");
     client.createWard(named("Tanglewood"));
@@ -66,17 +79,51 @@ void WardListTest::listNamesEachWardAndMarksWaitingChanges()
         QVERIFY(entries[i].document == oaks[i]);
         QVERIFY(entries[i].status == OpenStatus::Opened);
         QCOMPARE(entries[i].name, QString("Oak Ward"));
-        QVERIFY(!entries[i].changesWaiting);
+        QVERIFY(!entries[i].changesToShare);
     }
     QVERIFY(entries[2].document == tanglewood);
     QVERIFY(entries[2].status == OpenStatus::Opened);
     QCOMPARE(entries[2].name, QString("Tanglewood Ward"));
-    QVERIFY(entries[2].changesWaiting);
+    QVERIFY(entries[2].changesToShare);
     for (int i = 0; i < 2; ++i)
     {
         QVERIFY(entries[3 + i].document == damaged[i]);
         QVERIFY(entries[3 + i].status == OpenStatus::CannotRead);
         QVERIFY(entries[3 + i].name.isEmpty());
-        QVERIFY(!entries[3 + i].changesWaiting);
+        QVERIFY(!entries[3 + i].changesToShare);
     }
+}
+
+void WardListTest::listMarksChangesToShareAndWardsNoLongerShared()
+{
+    TestClient laptop("Laptop");
+    TestClient bob("Bob");
+    DocumentId unsent = TestSharing::share({&laptop}, TestSharing::accessOf({&laptop}, {}));
+    QVERIFY(TestSharing::commitBobsPhone(laptop, "555-0100") == CommitStatus::Applied);
+    DocumentId sent = TestSharing::share({&laptop}, TestSharing::accessOf({&laptop}, {}));
+    QVERIFY(TestSharing::commitBobsPhone(laptop, "555-0101") == CommitStatus::Applied);
+    laptop.session().writeUpdate();
+    QCOMPARE(laptop.session().journal().entries().size(), qsizetype(1));
+    DocumentId gone = TestSharing::share({&laptop, &bob}, TestSharing::accessOf({&bob}, {&laptop}));
+    QVERIFY(bob.session()
+                .commit(RemoveUserCommand::create(bob.identity().fingerprint(), TestSharing::userNamed(bob, "Laptop")))
+                .status
+            == CommitStatus::Applied);
+    QVERIFY(TestSharing::send(bob, {&laptop}) == QList<TakeStatus>{TakeStatus::NotNamed});
+
+    QList<WardListEntry> entries = WardList::read(laptop.identity(), laptop.store());
+
+    QCOMPARE(entries.size(), 3);
+    WardListEntry unsentEntry = entryOf(entries, unsent);
+    WardListEntry sentEntry = entryOf(entries, sent);
+    WardListEntry goneEntry = entryOf(entries, gone);
+    QVERIFY(unsentEntry.status == OpenStatus::Opened);
+    QVERIFY(sentEntry.status == OpenStatus::Opened);
+    QVERIFY(goneEntry.status == OpenStatus::Opened);
+    QVERIFY(unsentEntry.changesToShare);
+    QVERIFY(!sentEntry.changesToShare);
+    QVERIFY(!goneEntry.changesToShare);
+    QVERIFY(!unsentEntry.noLongerShared);
+    QVERIFY(!sentEntry.noLongerShared);
+    QVERIFY(goneEntry.noLongerShared);
 }

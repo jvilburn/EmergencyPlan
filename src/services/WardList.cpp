@@ -31,11 +31,13 @@ QList<WardListEntry> WardList::read(const Identity& identity, const WardStore& s
     for (const DocumentId& document : store.documents())
     {
         LocalRead local = WardSession::readLocal(store, identity, document);
-        WardListEntry entry{document, local.result.status, QString(), false};
+        WardListEntry entry{document, local.result.status, QString(), false, false};
         if (local.payload)
         {
             entry.name = local.payload->ward.wardName();
-            entry.changesWaiting = !local.payload->device->journal.isEmpty();
+            entry.changesToShare = WardSession::changesToShare(local.payload->device->journal, local.payload->landed,
+                                                               identity.fingerprint());
+            entry.noLongerShared = local.payload->device->noLongerShared;
         }
         entries.append(entry);
     }

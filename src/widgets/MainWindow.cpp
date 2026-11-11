@@ -28,6 +28,7 @@
 #include "GeoLocation.h"
 #include "OpenWardDialog.h"
 #include "SettingsDialog.h"
+#include "ShareNotice.h"
 #include "ShowInFolder.h"
 #include "UpdateFile.h"
 #include "UserFolder.h"
@@ -70,6 +71,7 @@ MainWindow::MainWindow(AppSettings* settings, bool developer, QWidget* parent)
     initializeMapHome();
     updateWindowTitle();
     updateUndoRedoActions();
+    updateSharing();
 }
 
 MainWindow::~MainWindow()
@@ -87,9 +89,11 @@ void MainWindow::setupUi()
     centralLayout->setSpacing(0);
 
     m_emergencyBanner = new EmergencyBanner(centralContainer);
+    m_shareNotice = new ShareNotice(centralContainer);
     m_splitter = new QSplitter(Qt::Horizontal, centralContainer);
 
     centralLayout->addWidget(m_emergencyBanner);
+    centralLayout->addWidget(m_shareNotice);
     centralLayout->addWidget(m_splitter, 1);
     setCentralWidget(centralContainer);
 
@@ -171,7 +175,7 @@ void MainWindow::setupMenus(bool developer)
 
     fileMenu->addSeparator();
 
-    fileMenu->addAction(tr("&Send Update"), this, &MainWindow::onSendUpdate);
+    m_sendUpdateAction = fileMenu->addAction(tr("&Send Update"), this, &MainWindow::onSendUpdate);
     fileMenu->addAction(tr("Open &Update..."), this, &MainWindow::onOpenUpdate);
 
     fileMenu->addSeparator();
@@ -226,6 +230,10 @@ void MainWindow::setupConnections()
             this, &MainWindow::onSaveFailed);
     connect(qApp, &QGuiApplication::applicationStateChanged,
             this, &MainWindow::onApplicationStateChanged);
+    connect(m_shareNotice, &ShareNotice::sendUpdateRequested,
+            this, &MainWindow::onSendUpdate);
+    connect(m_shareNotice, &ShareNotice::deleteCopyRequested,
+            this, &MainWindow::onDeleteCopy);
 
     // Emergency lifecycle
     connect(EmergencyManager::instance(), &EmergencyManager::emergencyStarted,
@@ -370,6 +378,7 @@ void MainWindow::onSendUpdate()
     QString wardName = DocumentManager::instance()->document().wardName();
     QString name = UpdateFile::fileName(wardName, QDate::currentDate());
     QByteArray bytes = DocumentManager::instance()->writeUpdate();
+    updateSharing();
     QString problem;
     QString path = UserFolder::standard().write(name, bytes, &problem);
     if (path.isEmpty())
@@ -379,6 +388,50 @@ void MainWindow::onSendUpdate()
     }
     ShowInFolder::reveal(path);
     statusBar()->showMessage(tr("Send %1 to every other member of %2.").arg(name, wardName));
+}
+
+void MainWindow::onDeleteCopy()
+{
+    QString wardName = DocumentManager::instance()->document().wardName();
+    QMessageBox question(QMessageBox::Question, tr("Delete This Copy"),
+                         tr("Delete this copy of %1 from this device?").arg(wardName), QMessageBox::Cancel, this);
+    QPushButton* deleteButton = question.addButton(tr("Delete"), QMessageBox::DestructiveRole);
+    question.exec();
+    if (question.clickedButton() != deleteButton || !mayLeaveWard())
+    {
+        return;
+    }
+
+    QString problem;
+    if (!DocumentManager::instance()->removeOpenWard(&problem))
+    {
+        QMessageBox::warning(this, tr("Delete This Copy"), tr("This copy could not be deleted: %1.").arg(problem));
+        return;
+    }
+    if (!chooseWard())
+    {
+        close();
+    }
+}
+
+void MainWindow::updateSharing()
+{
+    const WardSession& session = DocumentManager::instance()->session();
+    bool serverOff = !m_settings->useServer();
+    m_sendUpdateAction->setVisible(serverOff);
+    m_sendUpdateAction->setEnabled(!session.isNoLongerShared());
+    if (session.isNoLongerShared())
+    {
+        m_shareNotice->showNoLongerShared();
+    }
+    else if (serverOff && session.hasChangesToShare())
+    {
+        m_shareNotice->showChangesToShare();
+    }
+    else
+    {
+        m_shareNotice->clearNotice();
+    }
 }
 
 void MainWindow::onOpenUpdate()
@@ -432,6 +485,7 @@ void MainWindow::openUpdateFile(const QString& path)
     }
 
     TakeResult result = DocumentManager::instance()->takeUpdate(bytes);
+    updateSharing();
     QString wardName = DocumentManager::instance()->document().wardName();
     switch (result.status)
     {
@@ -479,7 +533,7 @@ void MainWindow::openUpdateFile(const QString& path)
         QMessageBox::information(this, tr("Open Update"), tr("The update has been added to %1.").arg(wardName));
         break;
     case ReplayStatus::Abandoned:
-        showChangesToRedo(result.replay.toRedo);
+        showChangesToRedo(result.replay);
         break;
     }
 }
@@ -507,28 +561,34 @@ void MainWindow::onSettings()
     {
         m_settings->setMapHome(*home);
     }
+    updateSharing();
 }
 
-void MainWindow::showChangesToRedo(const QString& toRedo)
+void MainWindow::showChangesToRedo(const ReplayResult& replay)
 {
+    const QString& toRedo = replay.toRedo;
     QString wardName = DocumentManager::instance()->document().wardName();
     QString baseName = tr("To redo - %1 - %2")
                            .arg(wardName, QDateTime::currentDateTime().toString("yyyy-MM-dd HH.mm"));
     QString problem;
     QString path = UserFolder::standard().writeNew(baseName, ".txt", toRedo.toUtf8(), &problem);
-    QString stopped = toRedo.section('\n', 0, 0);
+    QString opening = toRedo.section('\n', 0, 0);
+    for (const QString& name : replay.stillHaveAccess)
+    {
+        opening += " " + tr("%1 still has access until you remove them again.").arg(name);
+    }
 
     QMessageBox message(QMessageBox::Warning, tr("Changes Not Applied"), QString(), QMessageBox::Ok, this);
     if (path.isEmpty())
     {
         message.setText(tr("%1 The list of what needs doing again could not be saved: %2. It is shown below.")
-                            .arg(stopped, problem));
+                            .arg(opening, problem));
         message.setDetailedText(toRedo);
         message.exec();
         return;
     }
     message.setText(tr("%1 What needs doing again is in %2, in the Ward Planning folder in Documents.")
-                        .arg(stopped, QFileInfo(path).fileName()));
+                        .arg(opening, QFileInfo(path).fileName()));
     QPushButton* open = message.addButton(tr("Open"), QMessageBox::ActionRole);
     message.exec();
     if (message.clickedButton() == open)
@@ -761,6 +821,7 @@ void MainWindow::onDocumentChanged(const DocumentChange& change)
     int count = DocumentManager::instance()->document().families().size();
     statusBar()->showMessage(tr("%1 families").arg(count));
     updateWindowTitle();
+    updateSharing();
     if (m_editPanel->isVisible())
     {
         m_editPanel->refreshCoordinates();

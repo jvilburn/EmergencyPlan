@@ -34,6 +34,9 @@ public:
 
     virtual StoreRead read(const DocumentId& document) const = 0;
 
+    /// Removes the ward's file. A failure says why in problem, as a clause with no final period.
+    virtual bool remove(const DocumentId& document, QString* problem) = 0;
+
     /// The id of every ward this device holds a file for, in no particular order.
     virtual QList<DocumentId> documents() const = 0;
 };

@@ -21,6 +21,7 @@ class SidebarWidget;
 class TaskListView;
 class TeamsView;
 class EmergencyBanner;
+class ShareNotice;
 class GeoLocation;
 class EmergencyResponse;
 
@@ -62,6 +63,14 @@ private slots:
     void onShowInFolder();
     void onSendUpdate();
     void onOpenUpdate();
+
+    /// Asks, then deletes this device's copy of the open ward and shows the ward list; closing
+    /// the list closes the window.
+    void onDeleteCopy();
+
+    /// Shows Send Update while the server is switched off, enabled while the open ward is
+    /// still this device's, and the share notice for the open ward.
+    void updateSharing();
 
     /// Shows Settings, and on OK saves what changed; a changed name renames this device or
     /// its user in every ward this device holds.
@@ -136,8 +145,8 @@ private:
     bool chooseWard();
 
     /// Writes the to-redo file of an abandoned replay and tells the user where it is, with an
-    /// offer to open it.
-    void showChangesToRedo(const QString& toRedo);
+    /// offer to open it, and who a removal among the changes left with access.
+    void showChangesToRedo(const ReplayResult& replay);
 
     /// True when nothing is left unsaved after one more try at saving, or when the user
     /// agrees to lose what is.
@@ -156,6 +165,7 @@ private:
     // Widgets
     QSplitter* m_splitter;
     EmergencyBanner* m_emergencyBanner;
+    ShareNotice* m_shareNotice;
     SidebarWidget* m_sidebarTabs;
     FamilyListView* m_familyListView;
     MinisteringView* m_ministeringView;
@@ -171,6 +181,7 @@ private:
 
     // Actions
     QAction* m_newWardAction;
+    QAction* m_sendUpdateAction;
     QAction* m_importPdfAction;
     QAction* m_importMinisteringPdfAction;
     QAction* m_startEmergencyAction;

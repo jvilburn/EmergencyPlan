@@ -12,7 +12,7 @@ Ward Planning is a desktop application for managing ward family data, ministerin
 
 - The first launch asks for a name for this device and for your name
 - **File > New Ward** (Ctrl+N) - Creates a ward on this device, under your name
-- **File > Open Ward** (Ctrl+O) - Lists the wards on this device by name; a ward whose changes have not yet gone out is marked *changes waiting*
+- **File > Open Ward** (Ctrl+O) - Lists the wards on this device by name; a ward with changes you have not yet sent is marked *changes to share*, and one no longer shared with this device is marked *no longer shared*
 - **File > Show in Folder** - Opens the folder that holds the ward's file, with the file selected; only this ward's devices can open it
 - Each launch reopens the last ward; when there is none, or it does not open, the ward list shows instead
 
@@ -33,6 +33,15 @@ After importing, the app automatically geocodes addresses in the background (sho
 - **This device's name** - The name this device has in your wards, asked for at the first launch. Changing it renames this device in every ward on this device.
 - **Your name** - The name you have in the wards you create or join, asked for at the first launch. Changing it renames you in every ward on this device. A new name set on another of your devices reaches this one in the updates you open.
 - **Map home** - Where the map opens. The app first sets it from your approximate location; **Use current view** sets it to what the map shows now.
+
+### Sharing updates
+
+With **Use the Ward Planning server** turned off in Settings, the members of a ward share their changes by sending each other updates:
+
+- **File > Send Update** - Saves the ward as it stands on this device as an update, named for the ward and the day (such as *Tanglewood Ward 2026-11-08.wardupdate*), in the *Ward Planning* folder in Documents, in place of an update of that ward saved the same day, and opens the folder with the file selected. Send the file, by email, a message or anything else that carries a file, to every other member of the ward. Each member sends their own updates to every other member.
+- **You have changes to share** - Shown above the map, with a **Send Update** button, while this device has changes that no update it has sent or opened carries. Sending an update clears it. Opening an update from someone who did not have your changes yet puts your changes on top of theirs, so it shows again.
+- **Opening an update** - Double-click the file, drop it on the window, or use **File > Open Update...**. When another ward is open, the update's ward opens first. An update older than the one this device has is set aside with *You already have a newer update*.
+- **This ward is no longer shared with this device.** - Shown above the map when an update opened here leaves this device out. The copy stays on this device, read-only, until you delete it with **Delete this copy**, which then shows the ward list.
 
 ---
 
