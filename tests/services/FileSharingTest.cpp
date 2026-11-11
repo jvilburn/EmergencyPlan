@@ -43,13 +43,13 @@ void FileSharingTest::invitationReadsBackItsDocumentAndSeed()
     QCOMPARE(Identity::fromInviteSeed(seeds[0]).fingerprint(), made.invite);
     InvitationRead read = InvitationFile::read(invitation);
     QVERIFY(read.status == InvitationReadStatus::Read);
-    QVERIFY(read.document == alice.session().documentId());
     QCOMPARE(read.seed, seeds[0]);
     // The invitation carries the next version, which names the invite; this device still holds
     // the version before it, so the invite is still a change to share.
     QCOMPARE(WardFileEdits::headerOf(read.version)["number"].toInteger(), held.number + 1);
     WardRead version = WardFile::read(read.version, Identity::fromInviteSeed(read.seed), PayloadKind::Version);
     QVERIFY2(version.status == WardReadStatus::Read, qPrintable(version.problem));
+    QVERIFY(version.header->document() == alice.session().documentId());
     QVERIFY(alice.session().version() == held);
     QVERIFY(alice.session().hasChangesToShare());
     AccessInvite invite = *alice.session().document().access().findInvite(made.invite);
@@ -66,9 +66,7 @@ void FileSharingTest::anyOtherFileIsNotAnInvitation()
     QByteArray invitation = alice.session().writeInvitation(made.invite);
     QByteArray wardFile = alice.store().file(ward);
     QByteArray update = alice.session().writeUpdate();
-    QJsonObject newerLine{{"format", 2},
-                          {"document", ward.toString()},
-                          {"seed", Base64Url::encode(Crypto::randomBytes(Crypto::KeyBytes))}};
+    QJsonObject newerLine{{"format", 2}, {"seed", Base64Url::encode(Crypto::randomBytes(Crypto::KeyBytes))}};
     QByteArray newer = QJsonDocument(newerLine).toJson(QJsonDocument::Compact) + '\n' + TestSharing::versionIn(invitation);
     TestClient stranger("Stranger");
 
@@ -319,13 +317,37 @@ void FileSharingTest::invitationOpenedOnADeviceTheWardNamesJoinsNothing()
     VersionRank carolVersion = carol.session().version();
 
     InvitedWard invited = carol.session().readInvitation(invitation);
-    carol.session().join(invited, QString(), "Carol");
 
     QVERIFY(invited.status == InvitationStatus::AlreadyHasAccess);
     QCOMPARE(invited.wardName, alice.session().document().wardName());
+    QVERIFY(carol.session().openWard(invited.document).status == OpenStatus::Opened);
     QVERIFY(carol.session().payload() == carolBefore);
     QVERIFY(carol.session().version() == carolVersion);
     QVERIFY(alice.session().document().access().findInvite(made.invite).has_value());
+}
+
+void FileSharingTest::invitationOpenedAgainOnTheDeviceThatJoinedThroughItKeepsItsCopy()
+{
+    TestClient alice("Alice");
+    TestClient bob("Bob's phone");
+    TestSharing::share({&alice}, TestSharing::accessOf({&alice}, {}));
+    InviteResult made = alice.session().invite(InvitedUser{AccessRole::Member, "Bob"});
+    QByteArray invitation = alice.session().writeInvitation(made.invite);
+    bob.session().join(bob.session().readInvitation(invitation), "Bob Brown", "Bob's phone");
+    QVERIFY(TestSharing::commitBobsPhone(bob, "555-2222") == CommitStatus::Applied);
+    WardPayload bobBefore = bob.session().payload();
+    VersionRank bobVersion = bob.session().version();
+
+    InvitedWard invited = bob.session().readInvitation(invitation);
+
+    QVERIFY(invited.status == InvitationStatus::AlreadyHasAccess);
+    QVERIFY(invited.document == alice.session().documentId());
+    QVERIFY(bob.session().openWard(invited.document).status == OpenStatus::Opened);
+    QVERIFY(bob.session().payload() == bobBefore);
+    QCOMPARE(bob.session().journal().entries().size(), qsizetype(2));
+    QVERIFY(bob.session().version() == bobVersion);
+    QCOMPARE(bobVersion.writer, made.invite);
+    QCOMPARE(TestSharing::bobsPhone(bob), QString("555-2222"));
 }
 
 void FileSharingTest::deviceInviteJoinsAsOneOfItsMakersDevices()

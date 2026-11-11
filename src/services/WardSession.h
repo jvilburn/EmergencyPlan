@@ -115,9 +115,8 @@ struct LocalRead
 /// What an invitation file holds, as this device reads it.
 enum class InvitationStatus
 {
-    Joinable,          ///< its version names its invite, which this device can join through
-    AlreadyHasAccess,  ///< its version already names this device
-    UsedOrWithdrawn,   ///< its version names neither this device nor its invite
+    Joinable,          ///< this device can join through its invite
+    AlreadyHasAccess,  ///< this device holds the ward as its own
     NotAnInvitation,   ///< the file is not an invitation, or its version fails a check; problem says which
     Newer              ///< a newer Ward Planning wrote it
 };
@@ -129,7 +128,7 @@ struct InvitedWard
     QString problem;                     ///< when NotAnInvitation
     DocumentId document;                 ///< when Joinable or AlreadyHasAccess
     QByteArray seed;                     ///< when Joinable
-    std::optional<WardRead> version;     ///< when Joinable or AlreadyHasAccess: the version it carries, read
+    std::optional<WardRead> version;     ///< when Joinable: the version it carries, read
     std::optional<AccessInvite> invite;  ///< when Joinable: the open invite it joins through
     QString wardName;                    ///< when Joinable or AlreadyHasAccess
 };
@@ -281,20 +280,17 @@ public:
     QByteArray writeInvitation(const QByteArray& invite) const;
 
     /// What file holds as an invitation, read by this device: its line, then its version read
-    /// as this device, which finds it AlreadyHasAccess when the version names it, and
-    /// otherwise as the invite its seed gives. Changes nothing.
+    /// as the invite its seed gives. It is AlreadyHasAccess when this device holds the version's
+    /// ward as its own: its copy opens and is still this device's. The caller then opens that
+    /// copy with openWard. Otherwise it is Joinable. Changes nothing.
     InvitedWard readInvitation(const QByteArray& file) const;
 
-    /// Joins the ward invited carries, which readInvitation found Joinable or
-    /// AlreadyHasAccess. Joinable: its version becomes this device's copy as a first download,
-    /// replacing any copy held before, with nothing of that copy kept - under the version's
-    /// key, with its landed marks and its recipients, and an empty journal counting on from
-    /// this device's mark in it - and JoinCommand runs on it through the commit step, naming
-    /// this device deviceName and, for a user invite, its new user userName. This device keeps
-    /// the invite's seed for as long as it holds the ward.
-    /// AlreadyHasAccess: opens the copy this device holds; only when it holds none, or one it
-    /// cannot read, takes the version as its copy with an empty journal, so a read that fails
-    /// for a moment never overwrites the local file.
+    /// Joins the ward invited carries, which readInvitation found Joinable: its version becomes
+    /// this device's copy as a first download, replacing any copy held before, with nothing of
+    /// that copy kept - under the version's key, with its landed marks and its recipients, and
+    /// an empty journal counting on from this device's mark in it - and JoinCommand runs on it
+    /// through the commit step, naming this device deviceName and, for a user invite, its new
+    /// user userName. This device keeps the invite's seed for as long as it holds the ward.
     void join(const InvitedWard& invited, const QString& userName, const QString& deviceName);
 
     /// The name of this device's user in the open ward.

@@ -20,6 +20,7 @@ private slots:
     void sameInvitationUsedOnTwoDevices();
     void withdrawnInviteRotatesAndItsInvitationJoinsNothingLater();
     void invitationOpenedOnADeviceTheWardNamesJoinsNothing();
+    void invitationOpenedAgainOnTheDeviceThatJoinedThroughItKeepsItsCopy();
     void deviceInviteJoinsAsOneOfItsMakersDevices();
     void seedLeavesTheFileOnceTheInviteIsWithdrawnOrAbandoned();
     void addAUserIsForAdminsAndAnyoneAddsADevice();

@@ -603,7 +603,7 @@ A ministering collection:
 |---|---|---|
 | `actor` | 16 bytes | the fingerprint of the device that made it |
 | `user` | 16 bytes | the id of the user whose role it sets |
-| `role` | change of a word: `admin` or `member` | the role |
+| `role` | word: `admin` or `member` | the role it sets |
 
 `renameUser`:
 
@@ -659,8 +659,7 @@ wardplanning-v1 update <document> <header hash> <payload hash>
 with single spaces, where `<document>` is the header's `document`, and the hashes are 32-byte
 unkeyed BLAKE2b of the header line's bytes, without its `\n`, and of the payload's bytes; all
 three are base64url. It verifies with the verify key of the device or open invite whose
-fingerprint is the header's `writer`, as the access list of the version the reader holds gives
-it. A reader refuses a file whose signature does not verify, or whose `writer` that access list
+fingerprint is the header's `writer`, as the access list the reader holds gives it. A reader refuses a file whose signature does not verify, or whose `writer` that access list
 does not name. A device that joined through an invite writes its versions as that invite, signed
 with the invite's keys, while the version it holds does not name the device.
 
@@ -668,12 +667,11 @@ with the invite's keys, while the version it holds does not name the device.
 
 A `.wardinvite` file is one line of compact JSON, one `\n`, then a version in the framing
 above, whose payload holds `ward`, `access` and `landed`, and no `device`, and whose header
-names the invite among its recipients.
+names the invite among its recipients. The header's `document` names the ward.
 
 | Key | Type | Holds |
 |---|---|---|
 | `format` | integer | 1 |
-| `document` | 16 bytes | the document id |
 | `seed` | 32 bytes | the invite's seed |
 
 The invite's keys come from the seed through `crypto_kdf_derive_from_key` with the context

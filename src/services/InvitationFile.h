@@ -1,7 +1,5 @@
 #pragma once
 
-#include "Id.h"
-
 #include <QByteArray>
 #include <QString>
 
@@ -16,23 +14,22 @@ enum class InvitationReadStatus
 struct InvitationRead
 {
     InvitationReadStatus status;
-    QString problem;      ///< when NotAnInvitation
-    DocumentId document;  ///< when Read
-    QByteArray seed;      ///< when Read
-    QByteArray version;   ///< when Read: the version, in a ward file's framing
+    QString problem;     ///< when NotAnInvitation
+    QByteArray seed;     ///< when Read
+    QByteArray version;  ///< when Read: the version, in a ward file's framing
 };
 
-/// A .wardinvite file: one line of compact JSON holding its own format, the document id and
-/// the invite's seed, one newline, then the version that opened the invite, in a ward file's
-/// framing, with no device part.
+/// A .wardinvite file: one line of compact JSON holding its own format and the invite's seed,
+/// one newline, then the version that opened the invite, in a ward file's framing, with no
+/// device part. The version's header names the ward.
 class InvitationFile
 {
 public:
     /// The format this app writes, and the only one it reads.
     static constexpr int Format = 1;
 
-    /// The bytes of an invitation to document for the invite seed gives, carrying version.
-    static QByteArray write(const DocumentId& document, const QByteArray& seed, const QByteArray& version);
+    /// The bytes of an invitation for the invite seed gives, carrying version.
+    static QByteArray write(const QByteArray& seed, const QByteArray& version);
 
     /// bytes split at the first newline, the line read strictly: a format above Format is
     /// Newer, and anything that is not this format's line is NotAnInvitation.

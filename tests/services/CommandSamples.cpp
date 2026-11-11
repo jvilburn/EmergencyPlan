@@ -547,7 +547,7 @@ QList<CommandSample> withdrawInviteSamples()
     };
 }
 
-/// Carol made an admin; with two roles, it conflicts only once she is gone.
+/// Carol made an admin; it conflicts only once she is gone.
 QList<CommandSample> setRoleSamples()
 {
     AccessSampleWard sample = accessSampleWard();

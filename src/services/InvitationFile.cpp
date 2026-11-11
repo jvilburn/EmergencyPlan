@@ -11,16 +11,15 @@ namespace
 
 InvitationRead notAnInvitation(const QString& problem)
 {
-    return InvitationRead{InvitationReadStatus::NotAnInvitation, problem, DocumentId(), QByteArray(), QByteArray()};
+    return InvitationRead{InvitationReadStatus::NotAnInvitation, problem, QByteArray(), QByteArray()};
 }
 
 }  // namespace
 
-QByteArray InvitationFile::write(const DocumentId& document, const QByteArray& seed, const QByteArray& version)
+QByteArray InvitationFile::write(const QByteArray& seed, const QByteArray& version)
 {
     QJsonObject json;
     json["format"] = Format;
-    json["document"] = document.toString();
     json["seed"] = Base64Url::encode(seed);
     return QJsonDocument(json).toJson(QJsonDocument::Compact) + '\n' + version;
 }
@@ -44,7 +43,7 @@ InvitationRead InvitationFile::read(const QByteArray& bytes)
     }
     if (format.toDouble() > Format)
     {
-        return InvitationRead{InvitationReadStatus::Newer, QString(), DocumentId(), QByteArray(), QByteArray()};
+        return InvitationRead{InvitationReadStatus::Newer, QString(), QByteArray(), QByteArray()};
     }
     if (format.toDouble() != Format)
     {
@@ -53,15 +52,13 @@ InvitationRead InvitationFile::read(const QByteArray& bytes)
 
     JsonReader json(*object);
     json.integer("format");
-    QByteArray document = json.bytes("document", Crypto::IdBytes);
     QByteArray seed = json.bytes("seed", Crypto::KeyBytes);
     json.finish();
     if (json.failed())
     {
         return notAnInvitation(json.problem());
     }
-    return InvitationRead{InvitationReadStatus::Read, QString(), DocumentId::fromBytes(document), seed,
-                          bytes.mid(boundary + 1)};
+    return InvitationRead{InvitationReadStatus::Read, QString(), seed, bytes.mid(boundary + 1)};
 }
 
 QString InvitationFile::fileName(const QString& wardName, const QString& inviteDescription)

@@ -5103,9 +5103,8 @@ calls `session().readInvitation(bytes)`, and by its status:
 - `NotAnInvitation`: *This file is not a Ward Planning invitation.* (the problem goes to the log).
 - `Newer`: *This ward was saved by a newer version of Ward Planning. Update to see the latest
   changes and share your work.*
-- `UsedOrWithdrawn`: *This invite has been used or withdrawn. Ask the sender.*
-- `AlreadyHasAccess`: when `mayLeaveWard()`, `DocumentManager::join(invited, QString(),
-  deviceName)`, the last ward set to it, and *This device already has access to %1.*
+- `AlreadyHasAccess`: when `mayLeaveWard()`, `DocumentManager::openWard(invited.document)`, the
+  last ward set to it, and *This device already has access to %1.*
 - `Joinable`: asks *Join %1?* with the ward's own name; for a user invite, the same dialog asks
   *Your name*, filled in with `m_settings->userName()`, and its OK is enabled while it is not
   empty. On OK and `mayLeaveWard()`: `DocumentManager::join(invited, name, deviceName)`, the
@@ -5148,11 +5147,11 @@ opens update and invitation files through `openFile`.
 
 **`tests/spec/main.cpp`** gains a mode, `WardPlanningSpecReader --invitation <file>`, which reads
 the file as `docs/FORMAT.md`'s *Invitation files* states and nothing of the app's: the line
-strictly (`format`, `document`, `seed`, nothing else; a `format` above 1 exits 2); the invite's
-keys from the seed with `crypto_kdf_derive_from_key` (context `wpinvite`, subkeys 1 and 2) into
+strictly (`format`, `seed`, nothing else; a `format` above 1 exits 2); the invite's keys from
+the seed with `crypto_kdf_derive_from_key` (context `wpinvite`, subkeys 1 and 2) into
 `crypto_box_seed_keypair` and `crypto_sign_seed_keypair`; its fingerprint as for a device; the
 header's entry for that fingerprint, unsealed; the payload read as a version; header and access
-list agreeing; the header's `document` equal to the line's. It prints the payload as compact
+list agreeing. It prints the payload as compact
 JSON, then a newline, then the invite's fingerprint in base64url.
 
 **Tests:**
@@ -5203,34 +5202,27 @@ choice this plan makes.
    list yet. Open the update from whoever added it first.* The second device learns it was too
    late when it takes a later version, which names neither it nor the invite: *This invite has
    been used or withdrawn*, and its copy becomes no longer shared.
-6. **An invitation opened on a device the ward already names** opens the copy that device holds;
-   only when it holds none, or one it cannot read, does the invitation's version become its
-   copy, so a read that fails for a moment never overwrites the local file. The design says the
-   version "becomes the device's copy", which would replace a newer local copy and its journal.
-7. **The rename commands name only the device that made them**, so renaming another user or their
+6. **The rename commands name only the device that made them**, so renaming another user or their
    device cannot be expressed and has no rule. The design's test "renaming another user or their
    device is refused" has no case; `AccessTest::renamesReachEveryDevice` covers the rest.
-8. **With two roles, a role change conflicts only when its user is gone.** The design's "two
-   admins setting one user's role differently is a conflict" has no case: a change whose before
-   differs from the current role finds its after there, which is the result already holding.
-9. **With the server switch on, nothing shares**, since there is no server code: *Send Update*
+7. **With the server switch on, nothing shares**, since there is no server code: *Send Update*
    is hidden, and *Add a user*, *Add a device*, *Leave* and *Remove this device* show the
    connect-to-the-internet notices, the design's words for a ward that is not syncing because it
    is offline. Receiving updates and invitations works with it on or off.
-10. **The invitation's message has no download link**, since there is no server to serve
+8. **The invitation's message has no download link**, since there is no server to serve
     `/download`: *Alice Smith has invited you to Tanglewood Ward. Install Ward Planning, then
     open the attached invitation.*
-11. **The ward list marks "(changes to share)"** by the changes-to-share rule, in place of
+9. **The ward list marks "(changes to share)"** by the changes-to-share rule, in place of
     "(changes waiting)" for a non-empty journal, and "(no longer shared)".
-12. **`DocumentManager` gains `WardSession& session()`** for the new calls, in place of a
+10. **`DocumentManager` gains `WardSession& session()`** for the new calls, in place of a
     forwarding function for each. Its existing forwarders (`writeUpdate`, `takeUpdate`, undo and
     redo, and the rest) could go the same way; the plan leaves them.
-13. **The invite keypairs' known-answer vectors are not pinned as literal values**, since the
+11. **The invite keypairs' known-answer vectors are not pinned as literal values**, since the
     executor cannot run the code to observe them. Task 6's independent reader derives the keys
     with libsodium's own seed-keypair calls, which stands in. Literal values can be pinned from
     the first run if you want them too.
-14. **Joining asks *Your name* for a user invite, filled in with *Your name*,** and sets *Your
+12. **Joining asks *Your name* for a user invite, filled in with *Your name*,** and sets *Your
     name* from it when it was empty. A device invite asks nothing but *Join Tanglewood Ward?*;
     the device takes its user's name, which `followUserName` then makes *Your name*.
-15. **Where the invitation is saved:** a save dialog starting in the *Ward Planning* folder in
+13. **Where the invitation is saved:** a save dialog starting in the *Ward Planning* folder in
     Documents, as the design's "where the user chooses".

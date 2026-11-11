@@ -849,8 +849,8 @@ converted.
   *Open in* on a phone, or dropping it on the window, or *Open Update...* in the File menu -
   takes it as a fetch would, opening its ward first when another is open. The ward must be one this device holds,
   or the file is refused with *This update is for a ward this device does not have*, and the
-  signature must verify against the verify key the access list of the version this device
-  holds gives the writer; a file from a device that list does not name is refused with
+  signature must verify against the verify key the access list this device holds gives the
+  writer; a file from a device that list does not name is refused with
   *This update is from a device this copy of the ward does not list yet. Open the update
   from whoever added it first.* The checks under *Every edit is a version* then apply, the journal is trimmed by this device's landed mark, and the rest replays on
   top. A file that does not rank above the version held is set aside with *You already have
@@ -1385,9 +1385,8 @@ different users both apply. Two admins removing the same user: the second finds 
 intent already satisfied and there is nothing to do. A removal names the user by id and
 takes their whole entry, whatever devices it holds by then, and every invite they have
 made by then, since the intent is that this person is out; a device the user added or an
-invite they made in the meantime goes with them, and the removal conflicts with neither. Two admins setting one user's role
-differently is a conflict, so the second admin's replay is abandoned and they do it again
-knowing what the first one did.
+invite they made in the meantime goes with them, and the removal conflicts with neither. Two
+role changes to one user both apply, and the later one stands.
 
 Mutual removal needs no rule of its own: if two admins remove each other while offline,
 whoever pushes first stands, and the other's write is refused because the current header no
@@ -1443,8 +1442,8 @@ seed for `crypto_box_seed_keypair`, and subkey 2 the seed for `crypto_sign_seed_
    invite open until the new member's join reaches them.
 
    **The invitation is a small file**, such as `Tanglewood Ward - for Bob.wardinvite`: one
-   line of JSON holding its own `format` integer, the document id and the seed, then the
-   version that opened the invite, in a ward file's framing; an app that meets a higher
+   line of JSON holding its own `format` integer and the seed, then the version that opened
+   the invite, in a ward file's framing, whose header names the ward; an app that meets a higher
    `format` shows the newer-version notice, as for a ward file (see *File format*). The app
    saves it where the user chooses and opens that folder with the file selected, ready to
    attach to an email, drag onto a stick or send in a text, with a short message to go with
@@ -1465,9 +1464,9 @@ seed for `crypto_box_seed_keypair`, and subkey 2 the seed for `crypto_sign_seed_
    it exposes nothing that file does not already hold.
 2. **Joining** on a device, once the app has the invitation (see *Receiving an
    invitation*), starts from the version the invitation carries, or from the head when the
-   device is connected and the head ranks above it. If that version already names this
-   device, there is no join: it becomes the device's copy, and the ward opens with *This
-   device already has access to Tanglewood Ward*; the invite stays open.
+   device is connected and the head ranks above it. If this device holds the ward as its
+   own, there is no join: its copy opens with *This device already has access to
+   Tanglewood Ward*; the invite stays open.
    Otherwise: derive the invite keypair from the seed, unseal the data key with the invite's
    private key, validate as any download is validated, ask the user to confirm by the
    ward's name, then write the next version: the invite entry becomes a device entry, under
@@ -1817,7 +1816,7 @@ version*).
 | Head fails validation | The ward on the server could not be read. Your copy is safe and you can keep working; sharing resumes when the server has a readable copy. |
 | Header format is newer | This ward was saved by a newer version of Ward Planning. Update to see the latest changes and share your work. |
 | An invitation already used or withdrawn | This invite has been used or withdrawn. Ask the sender. |
-| An invitation opened on a device the ward already names | This device already has access to Tanglewood Ward. |
+| An invitation opened on a device that holds the ward as its own | This device already has access to Tanglewood Ward. |
 | An invitation for a ward the server does not have | The server has no such ward. Ask the sender for a new invitation. |
 | A file opened that is not an invitation | This file is not a Ward Planning invitation. |
 | A file opened that is not an update | This file is not a Ward Planning update. |
@@ -2109,7 +2108,8 @@ The journal and replay, in `tests/services`:
 - renaming yourself and one of your devices each reach every device by the ordinary path,
   and renaming another user or their device is refused
 - an access-list command replays: two admins removing different users both apply; removing the
-  same user twice applies in full; two different roles for one user is a conflict; a
+  same user twice applies in full; two role changes to one user both apply, and the later
+  one stands; a
   removal replayed after that user added a device applies and takes the new device too; one
   replayed after that user made an invite withdraws it, and that invite's seed cannot
   unseal the version the removal wrote; a user who leaves has their open invites withdrawn
@@ -2148,8 +2148,10 @@ Update files, in `tests/services`, with no server:
   takes it, its removal replays on top and rotates again, and the member takes the next
   version; the removed user's devices open neither of the admin's versions, nor any the
   member writes after taking one
-- the same invitation used on two devices: both join; the lower-ranked join, replayed onto
-  the winner, is refused with *This invite has been used or withdrawn*
+- the same invitation used on two devices: both join, and the two joins tie in rank; a
+  member takes the first that reaches it and refuses the second, whose writer, the invite,
+  it no longer lists; the second device learns *This invite has been used or withdrawn* when
+  it takes the member's next version, and the first device takes that version
 
 Names in *Settings*, with no server:
 

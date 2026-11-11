@@ -252,11 +252,10 @@ CommandPtr SetRoleCommand::create(const QByteArray& actor, const AccessUser& use
     QString heading = role == AccessRole::Admin
         ? QObject::tr("Make %1 an admin").arg(user.name())
         : QObject::tr("Make %1 a member").arg(user.name());
-    return std::make_shared<SetRoleCommand>(actor, user.id(), FieldChange<AccessRole>(user.role(), role),
-                                            CommandDescription(heading, {}));
+    return std::make_shared<SetRoleCommand>(actor, user.id(), role, CommandDescription(heading, {}));
 }
 
-SetRoleCommand::SetRoleCommand(const QByteArray& actor, const UserId& userId, const FieldChange<AccessRole>& role,
+SetRoleCommand::SetRoleCommand(const QByteArray& actor, const UserId& userId, AccessRole role,
                                const CommandDescription& description)
     : Command(description)
     , m_actor(actor)
@@ -269,11 +268,11 @@ CommandOutcome SetRoleCommand::execute(Document& document) const
 {
     AccessList access = document.access();
     std::optional<AccessUser> user = access.findUser(m_userId);
-    if (!user.has_value() || !m_role.holds(user->role()))
+    if (!user.has_value())
     {
         return CommandOutcome::Conflicted;
     }
-    user->setRole(m_role.after());
+    user->setRole(m_role);
     access.setUser(*user);
     document.setAccess(access);
     return CommandOutcome::Applied;
@@ -281,7 +280,7 @@ CommandOutcome SetRoleCommand::execute(Document& document) const
 
 QString SetRoleCommand::refusal(const Document& document) const
 {
-    return AccessRules::setRole(document.access(), m_actor, m_userId, m_role.after());
+    return AccessRules::setRole(document.access(), m_actor, m_userId, m_role);
 }
 
 QJsonObject SetRoleCommand::toJson() const
@@ -289,7 +288,7 @@ QJsonObject SetRoleCommand::toJson() const
     QJsonObject json;
     json["actor"] = Base64Url::encode(m_actor);
     json["user"] = m_userId.toString();
-    json["role"] = changeToJson(m_role);
+    json["role"] = accessRoleName(m_role);
     return json;
 }
 
@@ -302,7 +301,7 @@ CommandPtr SetRoleCommand::fromJson(JsonReader json, const CommandDescription& d
 {
     QByteArray actor = readActor(json);
     UserId user = readUserId(json, "user");
-    FieldChange<AccessRole> role = changeFromJson<AccessRole>(json.object("role"));
+    AccessRole role = readAccessRole(json, "role");
     json.finish();
     return std::make_shared<SetRoleCommand>(actor, user, role, description);
 }

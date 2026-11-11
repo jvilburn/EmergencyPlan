@@ -116,18 +116,17 @@ private:
     QByteArray m_invite;  ///< the fingerprint of the invite withdrawn
 };
 
-/// Sets one user's role, judged per value as UpdateFamilyCommand judges a field: it conflicts
-/// when the user is gone, and with two roles it meets nothing else to conflict with. Its rule:
-/// admins only, and the only admin cannot step down.
+/// Sets one user's role. It conflicts only when the user is gone, so of two role changes to one
+/// user, the later stands. Its rule: admins only, and the only admin cannot step down.
 class SetRoleCommand : public Command
 {
 public:
     static constexpr const char* TypeName = "setRole";
 
-    /// user's role, as the user saw it, set to role on the device actor.
+    /// user's role set to role on the device actor.
     static CommandPtr create(const QByteArray& actor, const AccessUser& user, AccessRole role);
 
-    SetRoleCommand(const QByteArray& actor, const UserId& userId, const FieldChange<AccessRole>& role,
+    SetRoleCommand(const QByteArray& actor, const UserId& userId, AccessRole role,
                    const CommandDescription& description);
 
     QString type() const override { return TypeName; }
@@ -141,7 +140,7 @@ public:
 private:
     QByteArray m_actor;
     UserId m_userId;
-    FieldChange<AccessRole> m_role;
+    AccessRole m_role;
 };
 
 /// Renames the user of the device that made it, judged per value. It names no other user, so a

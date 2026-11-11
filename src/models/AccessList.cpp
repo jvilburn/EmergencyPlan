@@ -418,7 +418,7 @@ AccessList AccessList::fromJson(JsonReader json)
     {
         invites.append(AccessInvite::fromJson(invite));
     }
-    QList<QByteArray> formerKeys = json.optionalBytesList("formerKeys", Crypto::KeyBytes);
+    QList<QByteArray> formerKeys = json.optionalBytesList("formerKeys", Crypto::HashBytes);
     json.finish();
     return AccessList(users, invites, formerKeys);
 }

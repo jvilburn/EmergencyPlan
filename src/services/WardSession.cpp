@@ -381,7 +381,7 @@ QByteArray WardSession::writeInvitation(const QByteArray& invite) const
             seed = candidate;
         }
     }
-    return InvitationFile::write(m_documentId, seed, nextVersion().bytes);
+    return InvitationFile::write(seed, nextVersion().bytes);
 }
 
 InvitedWard WardSession::readInvitation(const QByteArray& file) const
@@ -397,13 +397,6 @@ InvitedWard WardSession::readInvitation(const QByteArray& file) const
         return notJoinable(InvitationStatus::NotAnInvitation, invitation.problem);
     }
 
-    WardRead asThisDevice = WardFile::read(invitation.version, *m_identity, PayloadKind::Version);
-    if (asThisDevice.status == WardReadStatus::Read)
-    {
-        return InvitedWard{InvitationStatus::AlreadyHasAccess, QString(), invitation.document, QByteArray(),
-                           asThisDevice, std::nullopt, asThisDevice.payload->ward.wardName()};
-    }
-
     Identity keys = Identity::fromInviteSeed(invitation.seed);
     WardRead read = WardFile::read(invitation.version, keys, PayloadKind::Version);
     switch (read.status)
@@ -416,35 +409,27 @@ InvitedWard WardSession::readInvitation(const QByteArray& file) const
         return notJoinable(InvitationStatus::NotAnInvitation, read.problem);
     case WardReadStatus::Deleted:
     case WardReadStatus::NotNamed:
-        return notJoinable(InvitationStatus::UsedOrWithdrawn, QString());
+        return notJoinable(InvitationStatus::NotAnInvitation, "the version does not name the invite");
     }
-    if (read.header->document() != invitation.document)
+
+    const DocumentId& document = read.header->document();
+    QString wardName = read.payload->ward.wardName();
+    LocalRead local = readLocal(*m_store, *m_identity, document);
+    if (local.result.status == OpenStatus::Opened && !local.payload->device->noLongerShared)
     {
-        return notJoinable(InvitationStatus::NotAnInvitation, "the version is of another ward");
+        return InvitedWard{InvitationStatus::AlreadyHasAccess, QString(), document, QByteArray(), std::nullopt,
+                           std::nullopt, wardName};
     }
-    return InvitedWard{InvitationStatus::Joinable, QString(), invitation.document, invitation.seed, read,
-                       read.payload->ward.access().findInvite(keys.fingerprint()), read.payload->ward.wardName()};
+    return InvitedWard{InvitationStatus::Joinable, QString(), document, invitation.seed, read,
+                       read.payload->ward.access().findInvite(keys.fingerprint()), wardName};
 }
 
 void WardSession::join(const InvitedWard& invited, const QString& userName, const QString& deviceName)
 {
-    if (invited.status == InvitationStatus::AlreadyHasAccess)
-    {
-        OpenStatus opened = openWard(invited.document).status;
-        if (opened != OpenStatus::Missing && opened != OpenStatus::CannotRead)
-        {
-            return;
-        }
-    }
     takeFirstDownload(invited.document, *invited.version);
-    if (invited.status == InvitationStatus::Joinable)
-    {
-        m_device.joinSeed = invited.seed;
-        AccessDevice device(deviceName, m_identity->publicKey(), m_identity->verifyKey());
-        commit(JoinCommand::create(*invited.invite, device, userName, invited.wardName));
-        return;
-    }
-    save();
+    m_device.joinSeed = invited.seed;
+    AccessDevice device(deviceName, m_identity->publicKey(), m_identity->verifyKey());
+    commit(JoinCommand::create(*invited.invite, device, userName, invited.wardName));
 }
 
 QString WardSession::ownUserName() const
@@ -595,10 +580,15 @@ QStringList WardSession::stillHavingAccess(const AccessList& access) const
 
 void WardSession::save()
 {
-    const AccessList& access = m_document.access();
-    m_device.inviteSeeds.removeIf([&access](const QByteArray& seed) {
-        return !access.findInvite(Identity::fromInviteSeed(seed).fingerprint()).has_value();
-    });
+    QList<QByteArray> keptSeeds;
+    for (const QByteArray& seed : m_device.inviteSeeds)
+    {
+        if (m_document.access().findInvite(Identity::fromInviteSeed(seed).fingerprint()).has_value())
+        {
+            keptSeeds.append(seed);
+        }
+    }
+    m_device.inviteSeeds = keptSeeds;
     QByteArray bytes = WardFile::write(m_documentId, m_version, m_dataKey, payload());
     QString problem;
     if (m_store->write(m_documentId, bytes, &problem))

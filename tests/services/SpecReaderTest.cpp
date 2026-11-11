@@ -188,7 +188,6 @@ void SpecReaderTest::specReaderRefusesAFieldTheSpecLacksInEveryTable()
         fieldsOf(json, "importWardDirectory") + QStringList{"families", "changed", "0"},
         fieldsOf(json, "importMinistering") + QStringList{"collection", "before"},
         fieldsOf(json, "invite") + QStringList{"invite"},
-        fieldsOf(json, "setRole") + QStringList{"role"},
         fieldsOf(json, "renameUser") + QStringList{"name"},
         fieldsOf(json, "renameDevice") + QStringList{"name"},
         fieldsOf(json, "join") + QStringList{"invite"},

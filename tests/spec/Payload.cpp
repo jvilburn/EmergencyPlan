@@ -623,11 +623,6 @@ void readLanded(Fields fields)
 // access commands
 // ============================================================================
 
-void roleValue(Fields& owner, const std::string& key)
-{
-    owner.word(key, Roles);
-}
-
 void readInviteFields(Fields fields)
 {
     std::vector<PublicKeys> keys;
@@ -661,7 +656,7 @@ void readSetRoleFields(Fields fields)
 {
     fields.bytes("actor", FingerprintBytes);
     fields.bytes("user", IdBytes);
-    readChange(fields.object("role"), roleValue);
+    fields.word("role", Roles);
     fields.done();
 }
 
