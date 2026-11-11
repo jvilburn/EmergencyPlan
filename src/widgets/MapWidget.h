@@ -7,6 +7,7 @@
 #include <QVariantMap>
 #include <QSet>
 #include <optional>
+#include "Coordinates.h"
 #include "Id.h"
 
 class QTimer;
@@ -48,6 +49,9 @@ public:
 
     /// Set the map center location
     void setCenter(double lat, double lng);
+
+    /// The map center: what the map shows.
+    Coordinates center() const { return Coordinates(m_centerLat, m_centerLng); }
 
     /// Set the marker provider for marker rendering
     void setMarkerProvider(FamilyMarkerProvider* provider);

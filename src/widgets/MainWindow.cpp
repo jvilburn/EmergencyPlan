@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "AppSettings.h"
 #include "EmergencyBanner.h"
 #include "FamilyListView.h"
 #include "MinisteringView.h"
@@ -26,6 +27,7 @@
 #include "MinisteringImportService.h"
 #include "GeoLocation.h"
 #include "OpenWardDialog.h"
+#include "SettingsDialog.h"
 #include "ShowInFolder.h"
 #include "UpdateFile.h"
 #include "UserFolder.h"
@@ -56,9 +58,9 @@
 #include <QJsonObject>
 #include <QSaveFile>
 
-MainWindow::MainWindow(const QString& settingsFilePath, bool developer, QWidget* parent)
+MainWindow::MainWindow(AppSettings* settings, bool developer, QWidget* parent)
     : QMainWindow(parent)
-    , m_settingsFilePath(settingsFilePath)
+    , m_settings(settings)
 {
     setupUi();
     setupMenus(developer);
@@ -180,6 +182,7 @@ void MainWindow::setupMenus(bool developer)
 
     fileMenu->addSeparator();
 
+    fileMenu->addAction(tr("Se&ttings..."), this, &MainWindow::onSettings);
     m_exitAction = fileMenu->addAction(tr("E&xit"), this, &QMainWindow::close);
     m_exitAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Q));
 
@@ -262,7 +265,7 @@ void MainWindow::setupConnections()
 
 bool MainWindow::openStartingWard()
 {
-    if (loadSetting("deviceName").isEmpty())
+    if (m_settings->deviceName().isEmpty())
     {
         bool ok = false;
         QString deviceName = QInputDialog::getText(this, tr("Ward Planning"), tr("Name this device"),
@@ -272,11 +275,11 @@ bool MainWindow::openStartingWard()
         {
             return false;
         }
-        saveSetting("deviceName", deviceName);
+        m_settings->setDeviceName(deviceName);
     }
 
-    QString lastWardId = loadSetting("lastWardId");
-    if (!lastWardId.isEmpty() && openWard(DocumentId::fromString(lastWardId)))
+    std::optional<DocumentId> lastWard = m_settings->lastWard();
+    if (lastWard && openWard(*lastWard))
     {
         return true;
     }
@@ -287,15 +290,15 @@ bool MainWindow::createWard()
 {
     bool ok = false;
     QString userName = QInputDialog::getText(this, tr("New Ward"), tr("Your name"), QLineEdit::Normal,
-                                             loadSetting("userName"), &ok)
+                                             m_settings->userName(), &ok)
                            .trimmed();
     if (!ok || userName.isEmpty())
     {
         return false;
     }
-    saveSetting("userName", userName);
-    DocumentManager::instance()->createWard(userName, loadSetting("deviceName"));
-    saveSetting("lastWardId", DocumentManager::instance()->documentId().toString());
+    m_settings->setUserName(userName);
+    DocumentManager::instance()->createWard(userName, m_settings->deviceName());
+    m_settings->setLastWard(DocumentManager::instance()->documentId());
     return true;
 }
 
@@ -308,7 +311,7 @@ bool MainWindow::openWard(const DocumentId& document)
         QMessageBox::warning(this, tr("Ward Not Opened"), OpenWardDialog::openFailureMessage(result.status));
         return false;
     }
-    saveSetting("lastWardId", document.toString());
+    m_settings->setLastWard(document);
     return true;
 }
 
@@ -463,6 +466,12 @@ void MainWindow::openUpdateFile(const QString& path)
         return;
     }
 
+    // A name set on another of this user's devices becomes Your name here.
+    if (std::optional<QString> name = DocumentManager::instance()->session().followUserName(m_settings->userName()))
+    {
+        m_settings->setUserName(*name);
+    }
+
     switch (result.replay.status)
     {
     case ReplayStatus::FastForwarded:
@@ -472,6 +481,31 @@ void MainWindow::openUpdateFile(const QString& path)
     case ReplayStatus::Abandoned:
         showChangesToRedo(result.replay.toRedo);
         break;
+    }
+}
+
+void MainWindow::onSettings()
+{
+    SettingsDialog dialog(*m_settings, m_mapWidget->center(), this);
+    if (dialog.exec() != QDialog::Accepted)
+    {
+        return;
+    }
+
+    m_settings->setUseServer(dialog.useServer());
+    if (dialog.deviceName() != m_settings->deviceName())
+    {
+        m_settings->setDeviceName(dialog.deviceName());
+        DocumentManager::instance()->session().renameDeviceEverywhere(dialog.deviceName());
+    }
+    if (!dialog.userName().isEmpty() && dialog.userName() != m_settings->userName())
+    {
+        m_settings->setUserName(dialog.userName());
+        DocumentManager::instance()->session().renameUserEverywhere(dialog.userName());
+    }
+    if (std::optional<Coordinates> home = dialog.mapHome())
+    {
+        m_settings->setMapHome(*home);
     }
 }
 
@@ -802,70 +836,14 @@ void MainWindow::onGeocodingFinished()
 }
 
 // ============================================================================
-// Default Location / Settings
+// Map Home
 // ============================================================================
-
-QJsonObject MainWindow::loadSettings() const
-{
-    QFile file(m_settingsFilePath);
-    if (!file.open(QIODevice::ReadOnly))
-    {
-        return QJsonObject();
-    }
-    QJsonDocument document = QJsonDocument::fromJson(file.readAll());
-    return document.isObject() ? document.object() : QJsonObject();
-}
-
-void MainWindow::saveSettings(const QJsonObject& json) const
-{
-    QSaveFile file(m_settingsFilePath);
-    if (file.open(QIODevice::WriteOnly))
-    {
-        file.write(QJsonDocument(json).toJson());
-        file.commit();
-    }
-}
-
-QString MainWindow::loadSetting(const QString& key) const
-{
-    return loadSettings()[key].toString();
-}
-
-void MainWindow::saveSetting(const QString& key, const QString& value) const
-{
-    QJsonObject json = loadSettings();
-    json[key] = value;
-    saveSettings(json);
-}
-
-bool MainWindow::loadDefaultLocation(double& lat, double& lng) const
-{
-    QJsonObject json = loadSettings();
-    if (!json.contains("defaultLat") || !json.contains("defaultLng"))
-    {
-        return false;
-    }
-
-    lat = json["defaultLat"].toDouble();
-    lng = json["defaultLng"].toDouble();
-    return true;
-}
-
-void MainWindow::saveDefaultLocation(double lat, double lng) const
-{
-    QJsonObject json = loadSettings();
-    json["defaultLat"] = lat;
-    json["defaultLng"] = lng;
-    saveSettings(json);
-}
 
 void MainWindow::initializeDefaultLocation()
 {
-    double lat, lng;
-    if (loadDefaultLocation(lat, lng))
+    if (std::optional<Coordinates> home = m_settings->mapHome())
     {
-        // Use saved location
-        m_mapWidget->setCenter(lat, lng);
+        m_mapWidget->setCenter(home->latitude(), home->longitude());
     }
     else
     {
@@ -882,7 +860,7 @@ void MainWindow::initializeDefaultLocation()
 void MainWindow::onLocationReady(double latitude, double longitude)
 {
     m_mapWidget->setCenter(latitude, longitude);
-    saveDefaultLocation(latitude, longitude);
+    m_settings->setMapHome(Coordinates(latitude, longitude));
 
     // Clean up the GeoLocation object
     sender()->deleteLater();

@@ -1,5 +1,6 @@
 #include "AccessTest.h"
 #include "AppDataTest.h"
+#include "AppSettingsTest.h"
 #include "AutomaticUpdatesTest.h"
 #include "BirthdayTest.h"
 #include "Crypto.h"
@@ -67,6 +68,7 @@ int main(int argc, char* argv[])
     WardSessionSavingTest wardSessionSavingTest(nullptr);
     StrictReadersTest strictReadersTest(nullptr);
     AppDataTest appDataTest(nullptr);
+    AppSettingsTest appSettingsTest(nullptr);
     WardListTest wardListTest(nullptr);
     DocumentMetadataTest documentMetadataTest(nullptr);
     SpecReaderTest specReaderTest(nullptr);
@@ -102,6 +104,7 @@ int main(int argc, char* argv[])
     failures += QTest::qExec(&wardSessionSavingTest, argc, argv);
     failures += QTest::qExec(&strictReadersTest, argc, argv);
     failures += QTest::qExec(&appDataTest, argc, argv);
+    failures += QTest::qExec(&appSettingsTest, argc, argv);
     failures += QTest::qExec(&wardListTest, argc, argv);
     failures += QTest::qExec(&documentMetadataTest, argc, argv);
     failures += QTest::qExec(&specReaderTest, argc, argv);

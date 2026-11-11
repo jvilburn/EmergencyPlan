@@ -28,6 +28,9 @@ public:
     const Document& document() const { return m_session.document(); }
     AutomaticUpdates& automaticUpdates() { return m_session.automaticUpdates(); }
 
+    /// The open ward's session, for the calls this wrapper does not forward.
+    WardSession& session() { return m_session; }
+
     /// Runs the command through the session's commit step. A command that conflicted or was
     /// refused emits commandNotApplied.
     CommitResult executeCommand(CommandPtr command);

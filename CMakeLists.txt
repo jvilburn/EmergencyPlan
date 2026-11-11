@@ -195,6 +195,7 @@ set(SERVICE_SOURCES
     src/services/WardFile.cpp
     src/services/FileWardStore.cpp
     src/services/AppData.cpp
+    src/services/AppSettings.cpp
     src/services/WardList.cpp
     src/services/ShowInFolder.cpp
     src/services/UpdateFile.cpp
@@ -238,6 +239,7 @@ set(SERVICE_HEADERS
     src/services/WardStore.h
     src/services/FileWardStore.h
     src/services/AppData.h
+    src/services/AppSettings.h
     src/services/WardList.h
     src/services/ShowInFolder.h
     src/services/UpdateFile.h
@@ -274,6 +276,7 @@ set(WIDGET_SOURCES
     src/widgets/UnmappedPanel.cpp
     src/widgets/PeoplePickerDialog.cpp
     src/widgets/OpenWardDialog.cpp
+    src/widgets/SettingsDialog.cpp
     src/widgets/FamilyListView.cpp
     src/widgets/shared/FilterBar.cpp
     src/widgets/shared/FlowLayout.cpp
@@ -314,6 +317,7 @@ set(WIDGET_HEADERS
     src/widgets/UnmappedPanel.h
     src/widgets/PeoplePickerDialog.h
     src/widgets/OpenWardDialog.h
+    src/widgets/SettingsDialog.h
     src/widgets/FamilyListView.h
     src/widgets/shared/FilterBar.h
     src/widgets/shared/FlowLayout.h

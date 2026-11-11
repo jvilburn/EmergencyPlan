@@ -79,6 +79,8 @@ add_executable(WardPlanningTests
     services/StrictReadersTest.cpp
     services/AppDataTest.h
     services/AppDataTest.cpp
+    services/AppSettingsTest.h
+    services/AppSettingsTest.cpp
     services/WardListTest.h
     services/WardListTest.cpp
     services/DocumentMetadataTest.h

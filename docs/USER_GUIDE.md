@@ -25,6 +25,15 @@ The fastest way to populate your ward data is by importing PDFs from church tool
 
 After importing, the app automatically geocodes addresses in the background (shown in the status bar).
 
+### Settings
+
+**File > Settings** holds settings for the whole app, on this device:
+
+- **Use the Ward Planning server** - Turn this off only if the Ward Planning server has shut down. Every member of your wards must turn it off too.
+- **This device's name** - The name this device has in your wards. Changing it renames this device in every ward on this device.
+- **Your name** - The name filled in when you create a ward. Changing it renames you in every ward on this device. A new name set on another of your devices reaches this one in the updates you open.
+- **Map home** - Where the map opens. The app first sets it from your approximate location; **Use current view** sets it to what the map shows now.
+
 ---
 
 ## Application Layout

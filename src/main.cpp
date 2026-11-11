@@ -7,6 +7,7 @@
 #include <QIcon>
 #include <QMessageBox>
 #include "AppData.h"
+#include "AppSettings.h"
 #include "Crypto.h"
 #include "DocumentManager.h"
 #include "EmergencyManager.h"
@@ -91,7 +92,8 @@ int main(int argc, char *argv[])
     TileService::setInstance(&tileService);
     tileService.initialize();
 
-    MainWindow window(appData.settingsFilePath(), parser.isSet(developerOption), nullptr);
+    AppSettings settings(appData.settingsFilePath());
+    MainWindow window(&settings, parser.isSet(developerOption), nullptr);
     if (!window.openStartingWard())
     {
         return 0;

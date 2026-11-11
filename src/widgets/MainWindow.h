@@ -1,6 +1,5 @@
 #pragma once
 
-#include <QJsonObject>
 #include <QMainWindow>
 #include <QSplitter>
 #include <QString>
@@ -11,6 +10,7 @@
 
 class QLabel;
 class QProgressBar;
+class AppSettings;
 class EmergencyAssetView;
 class FamilyEditPanel;
 class MapWidget;
@@ -29,9 +29,9 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    /// settingsFilePath is the file that holds this device's settings. developer adds the
+    /// settings are the app's own settings, which the window does not own. developer adds the
     /// Debugging menu.
-    MainWindow(const QString& settingsFilePath, bool developer, QWidget* parent);
+    MainWindow(AppSettings* settings, bool developer, QWidget* parent);
     ~MainWindow();
 
     /// Opens the ward the app starts on: on the first start, asks this device's name; then
@@ -62,6 +62,11 @@ private slots:
     void onShowInFolder();
     void onSendUpdate();
     void onOpenUpdate();
+
+    /// Shows Settings, and on OK saves what changed; a changed name renames this device or
+    /// its user in every ward this device holds.
+    void onSettings();
+
     void onExportDecryptedJson();
     void onSaveFailed(const QString& problem);
     void onApplicationStateChanged(Qt::ApplicationState state);
@@ -144,23 +149,10 @@ private:
     /// either.
     bool mayLeaveWard();
 
-    // Settings helpers
     /// The report's suggested path: the emergency's name and start date in Documents.
     static QString defaultReportPath(const EmergencyResponse& response);
 
-    /// The settings file as an object, empty when it is missing or does not read.
-    QJsonObject loadSettings() const;
-
-    /// Replaces the settings file with json in one write.
-    void saveSettings(const QJsonObject& json) const;
-
-    /// The text setting under key in the settings file, empty when it has none.
-    QString loadSetting(const QString& key) const;
-    void saveSetting(const QString& key, const QString& value) const;
-    bool loadDefaultLocation(double& lat, double& lng) const;
-    void saveDefaultLocation(double lat, double lng) const;
-
-    QString m_settingsFilePath;
+    AppSettings* m_settings;
 
     // Widgets
     QSplitter* m_splitter;
