@@ -10,6 +10,11 @@ TestClient::TestClient(const QString& deviceName)
 {
 }
 
+AccessDevice TestClient::device() const
+{
+    return AccessDevice(m_deviceName, m_identity.publicKey(), m_identity.verifyKey());
+}
+
 void TestClient::createWard(const Document& content)
 {
     m_session->createWard(content, "Alice Smith", m_deviceName);
@@ -27,13 +32,20 @@ void TestClient::holdWard(const QList<TestClient*>& holders, const QList<TestCli
     QList<AccessUser> users;
     for (const TestClient* client : listed)
     {
-        AccessDevice device(client->deviceName(), client->identity().publicKey(), client->identity().verifyKey());
-        users.append(AccessUser(UserId::generate(), client->deviceName(), AccessRole::Admin, {device}));
+        users.append(AccessUser(UserId::generate(), client->deviceName(), AccessRole::Admin, {client->device()}));
     }
+    holdWard(holders, AccessList(users, {}, {}), *listed.first(), document, dataKey, content);
+}
+
+void TestClient::holdWard(const QList<TestClient*>& holders, const AccessList& access, const TestClient& writer,
+                          const DocumentId& document, const QByteArray& dataKey, const Document& content)
+{
     Document ward = content;
-    ward.setAccess(AccessList(users, {}, {}));
-    VersionRank first{1, listed.first()->identity().fingerprint()};
-    QByteArray file = WardFile::write(document, first, dataKey, WardPayload{ward, {}, DeviceState()});
+    ward.setAccess(access);
+    DeviceState device;
+    device.heldRecipients = access.recipientFingerprints();
+    VersionRank first{1, writer.identity().fingerprint()};
+    QByteArray file = WardFile::write(document, first, dataKey, WardPayload{ward, {}, device});
     for (TestClient* holder : holders)
     {
         holder->store().put(document, file);

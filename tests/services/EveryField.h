@@ -22,7 +22,9 @@ public:
     /// Jones, a member, on her Desktop; a member invite Alice made for Bob; a device invite
     /// Carol made; and one former key, so its recipients in order are laptop, phone,
     /// Desktop, Bob's invite and Carol's device invite. Landed marks of 3 for laptop and 5
-    /// for phone, and a value in every field of this device's state, whose journal holds the
-    /// first sample of every registered command type in registry order.
+    /// for phone, and a value in every field of this device's state: a journal holding the
+    /// first sample of every registered command type in registry order, the laptop and phone
+    /// as the held version's recipients, one invite seed, a join seed, and the no-longer-shared
+    /// flag.
     static WardPayload payload(const Identity& laptop, const Identity& phone);
 };

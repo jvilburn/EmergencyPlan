@@ -87,6 +87,12 @@ add_executable(WardPlanningTests
     services/SpecReaderTest.cpp
     services/UpdateFileTest.h
     services/UpdateFileTest.cpp
+    services/TestSharing.h
+    services/TestSharing.cpp
+    services/AccessTest.h
+    services/AccessTest.cpp
+    services/FileSharingTest.h
+    services/FileSharingTest.cpp
     services/UserFolderTest.h
     services/UserFolderTest.cpp
 )

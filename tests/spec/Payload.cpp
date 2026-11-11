@@ -545,6 +545,148 @@ void readImportMinisteringFields(Fields fields)
     fields.done();
 }
 
+// ============================================================================
+// access and landed
+// ============================================================================
+
+PublicKeys readPublicKeys(Fields& fields)
+{
+    PublicKeys keys;
+    keys.sealingPublic = fields.bytes("publicKey", KeyBytes);
+    keys.verifyKey = fields.bytes("verifyKey", KeyBytes);
+    return keys;
+}
+
+void readDevice(Fields fields, std::vector<PublicKeys>* keys)
+{
+    fields.text("name");
+    keys->push_back(readPublicKeys(fields));
+    fields.done();
+}
+
+void readUser(Fields fields, std::vector<PublicKeys>* keys)
+{
+    fields.bytes("id", IdBytes);
+    fields.text("name");
+    fields.word("role", Roles);
+    for (const Fields& device : fields.objects("devices"))
+    {
+        readDevice(device, keys);
+    }
+    fields.done();
+}
+
+/// An invite object, whose keys it adds to keys: true when it is for a user.
+bool readInvite(Fields fields, std::vector<PublicKeys>* keys)
+{
+    std::string kind = fields.word("for", InviteKinds);
+    fields.bytes("maker", IdBytes);
+    if (kind == "user")
+    {
+        fields.word("role", Roles);
+        fields.text("label");
+    }
+    keys->push_back(readPublicKeys(fields));
+    fields.done();
+    return kind == "user";
+}
+
+/// An access object, whose devices' and open invites' keys it adds to keys.
+void readAccess(Fields fields, std::vector<PublicKeys>* keys)
+{
+    for (const Fields& user : fields.objects("users"))
+    {
+        readUser(user, keys);
+    }
+    for (const Fields& invite : fields.optionalObjects("invites"))
+    {
+        readInvite(invite, keys);
+    }
+    fields.optionalBytesList("formerKeys", KeyBytes);
+    fields.done();
+}
+
+void readLanded(Fields fields)
+{
+    for (const std::string& key : fields.keys())
+    {
+        if (!decode(key, FingerprintBytes).has_value())
+        {
+            throw Refusal(fields.pathOf(key) + " is not keyed by a fingerprint");
+        }
+        fields.integer(key);
+    }
+    fields.done();
+}
+
+// ============================================================================
+// access commands
+// ============================================================================
+
+void roleValue(Fields& owner, const std::string& key)
+{
+    owner.word(key, Roles);
+}
+
+void readInviteFields(Fields fields)
+{
+    std::vector<PublicKeys> keys;
+    fields.bytes("actor", FingerprintBytes);
+    readInvite(fields.object("invite"), &keys);
+    fields.done();
+}
+
+void readRemoveUserFields(Fields fields)
+{
+    fields.bytes("actor", FingerprintBytes);
+    fields.bytes("user", IdBytes);
+    fields.done();
+}
+
+void readRemoveDeviceFields(Fields fields)
+{
+    fields.bytes("actor", FingerprintBytes);
+    fields.bytes("device", FingerprintBytes);
+    fields.done();
+}
+
+void readWithdrawInviteFields(Fields fields)
+{
+    fields.bytes("actor", FingerprintBytes);
+    fields.bytes("invite", FingerprintBytes);
+    fields.done();
+}
+
+void readSetRoleFields(Fields fields)
+{
+    fields.bytes("actor", FingerprintBytes);
+    fields.bytes("user", IdBytes);
+    readChange(fields.object("role"), roleValue);
+    fields.done();
+}
+
+void readRenameFields(Fields fields)
+{
+    fields.bytes("actor", FingerprintBytes);
+    readChange(fields.object("name"), textValue);
+    fields.done();
+}
+
+void readJoinFields(Fields fields)
+{
+    std::vector<PublicKeys> keys;
+    bool forUser = readInvite(fields.object("invite"), &keys);
+    readDevice(fields.object("device"), &keys);
+    if (forUser)
+    {
+        Fields user = fields.object("user");
+        user.bytes("id", IdBytes);
+        user.text("name");
+        user.done();
+    }
+    fields.done();
+}
+
 struct CommandType
 {
     const char* type;
@@ -574,6 +716,14 @@ const CommandType CommandTypes[] = {
     {"addTaskCategory", readAddTaskCategoryFields},
     {"importWardDirectory", readImportWardDirectoryFields},
     {"importMinistering", readImportMinisteringFields},
+    {"invite", readInviteFields},
+    {"removeUser", readRemoveUserFields},
+    {"removeDevice", readRemoveDeviceFields},
+    {"withdrawInvite", readWithdrawInviteFields},
+    {"setRole", readSetRoleFields},
+    {"renameUser", readRenameFields},
+    {"renameDevice", readRenameFields},
+    {"join", readJoinFields},
 };
 
 // ============================================================================
@@ -617,76 +767,24 @@ void readJournal(Fields fields)
     fields.done();
 }
 
-// ============================================================================
-// access and landed
-// ============================================================================
-
-PublicKeys readPublicKeys(Fields& fields)
-{
-    PublicKeys keys;
-    keys.sealingPublic = fields.bytes("publicKey", KeyBytes);
-    keys.verifyKey = fields.bytes("verifyKey", KeyBytes);
-    return keys;
-}
-
-void readUser(Fields fields, std::vector<PublicKeys>* keys)
-{
-    fields.bytes("id", IdBytes);
-    fields.text("name");
-    fields.word("role", Roles);
-    for (Fields& device : fields.objects("devices"))
-    {
-        device.text("name");
-        keys->push_back(readPublicKeys(device));
-        device.done();
-    }
-    fields.done();
-}
-
-void readInvite(Fields fields, std::vector<PublicKeys>* keys)
-{
-    std::string kind = fields.word("for", InviteKinds);
-    fields.bytes("maker", IdBytes);
-    if (kind == "user")
-    {
-        fields.word("role", Roles);
-        fields.text("label");
-    }
-    keys->push_back(readPublicKeys(fields));
-    fields.done();
-}
-
-/// An access object, whose devices' and open invites' keys it adds to keys.
-void readAccess(Fields fields, std::vector<PublicKeys>* keys)
-{
-    for (const Fields& user : fields.objects("users"))
-    {
-        readUser(user, keys);
-    }
-    for (const Fields& invite : fields.optionalObjects("invites"))
-    {
-        readInvite(invite, keys);
-    }
-    fields.optionalBytesList("formerKeys", KeyBytes);
-    fields.done();
-}
-
-void readLanded(Fields fields)
-{
-    for (const std::string& key : fields.keys())
-    {
-        if (!decode(key, FingerprintBytes).has_value())
-        {
-            throw Refusal(fields.pathOf(key) + " is not keyed by a fingerprint");
-        }
-        fields.integer(key);
-    }
-    fields.done();
-}
-
 void readDeviceState(Fields fields)
 {
     readJournal(fields.object("journal"));
+    std::vector<std::string> held = fields.texts("heldRecipients");
+    for (std::size_t i = 0; i < held.size(); ++i)
+    {
+        if (!decode(held[i], FingerprintBytes).has_value())
+        {
+            throw Refusal(fields.pathOf("heldRecipients") + "[" + std::to_string(i) + "] is not a fingerprint");
+        }
+    }
+    fields.optionalBytesList("inviteSeeds", KeyBytes);
+    std::string joinSeed = fields.optionalText("joinSeed");
+    if (!joinSeed.empty() && !decode(joinSeed, KeyBytes).has_value())
+    {
+        throw Refusal(fields.pathOf("joinSeed") + " is not base64url of 32 bytes");
+    }
+    fields.optionalTrue("noLongerShared");
     fields.done();
 }
 

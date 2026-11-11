@@ -45,6 +45,13 @@ public:
     /// The X25519 public key of a secret key: crypto_scalarmult_base.
     static QByteArray sealingPublicKey(const QByteArray& secretKey);
 
+    /// Subkey number id of key, KeyBytes long, under an eight-character context:
+    /// crypto_kdf_derive_from_key.
+    static QByteArray deriveSubkey(const QByteArray& key, quint64 id, const char* context);
+
+    /// The X25519 secret key crypto_box_seed_keypair makes from seed.
+    static QByteArray sealingSecretFromSeed(const QByteArray& seed);
+
     /// The Ed25519 verify key of a seed: the public half of crypto_sign_seed_keypair.
     static QByteArray verifyKey(const QByteArray& seed);
 

@@ -14,6 +14,10 @@ public:
 
     static Identity fromSecrets(const QByteArray& sealingSecret, const QByteArray& signingSeed);
 
+    /// An invite's identity: subkeys 1 and 2 of seed under the context wpinvite seed its
+    /// X25519 keypair, as crypto_box_seed_keypair makes it, and its Ed25519 keypair.
+    static Identity fromInviteSeed(const QByteArray& seed);
+
     /// 16-byte BLAKE2b over the X25519 public key followed by the Ed25519 verify key,
     /// personalized wp-fingerprint. A changed key is a different device.
     static QByteArray fingerprintOf(const QByteArray& publicKey, const QByteArray& verifyKey);

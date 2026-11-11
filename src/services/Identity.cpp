@@ -20,6 +20,12 @@ Identity Identity::fromSecrets(const QByteArray& sealingSecret, const QByteArray
     return Identity(sealingSecret, signingSeed);
 }
 
+Identity Identity::fromInviteSeed(const QByteArray& seed)
+{
+    return fromSecrets(Crypto::sealingSecretFromSeed(Crypto::deriveSubkey(seed, 1, "wpinvite")),
+                       Crypto::deriveSubkey(seed, 2, "wpinvite"));
+}
+
 QByteArray Identity::fingerprintOf(const QByteArray& publicKey, const QByteArray& verifyKey)
 {
     return Crypto::hash(publicKey + verifyKey, Crypto::FingerprintBytes, "wp-fingerprint");

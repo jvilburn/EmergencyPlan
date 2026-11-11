@@ -41,8 +41,7 @@ public:
 
 public slots:
     /// Takes the update file at path, opening its ward first when another is open, and tells
-    /// the user how it went; when this device's own changes went on top, asks to send an
-    /// update.
+    /// the user how it went.
     void openUpdateFile(const QString& path);
 
     /// Another launch handed over path, its update file, or nothing: brings the window

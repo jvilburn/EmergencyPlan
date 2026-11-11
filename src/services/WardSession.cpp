@@ -1,10 +1,11 @@
 #include "WardSession.h"
+#include "AccessCommands.h"
 #include "CommandRegistry.h"
 #include "Crypto.h"
 #include "EmergencyCommands.h"
+#include "InvitationFile.h"
 #include "ReportGenerator.h"
 #include "UpdateFile.h"
-#include "WardFile.h"
 
 #include <QDateTime>
 #include <QStringList>
@@ -36,17 +37,29 @@ LocalRead notOpened(OpenStatus status, const QString& problem)
 
 TakeResult notTaken(TakeStatus status, const QString& problem)
 {
-    return TakeResult{status, problem, ReplayResult{ReplayStatus::FastForwarded, QString()}};
+    return TakeResult{status, problem, ReplayResult{ReplayStatus::FastForwarded, QString(), QStringList()}};
 }
 
-/// True when a version read under its data key descends from the version this device holds
-/// under heldKey: it is under that key, or its access list names that key among its former
-/// keys.
-bool descends(const WardRead& version, const QByteArray& heldKey)
+InvitedWard notJoinable(InvitationStatus status, const QString& problem)
 {
-    QByteArray heldKeyHash = Crypto::hash(heldKey, Crypto::HashBytes, "wp-former-key");
-    return version.dataKey == heldKey
-        || version.payload->ward.access().formerKeys().contains(heldKeyHash);
+    return InvitedWard{status, problem, DocumentId(), QByteArray(), std::nullopt, std::nullopt, QString()};
+}
+
+/// The keys a copy under dataKey with access has held: the hash of dataKey, and every former
+/// key access names.
+QSet<QByteArray> keyHistory(const QByteArray& dataKey, const AccessList& access)
+{
+    QSet<QByteArray> keys(access.formerKeys().begin(), access.formerKeys().end());
+    keys.insert(AccessList::formerKeyHash(dataKey));
+    return keys;
+}
+
+/// True when a version read under its data key descends from the copy this device holds under
+/// heldKey with the access list held: the two share a key. Keys are held per ward, so another
+/// ward's version shares none, and only a holder of a key can name it, inside the payload.
+bool descends(const WardRead& version, const QByteArray& heldKey, const AccessList& held)
+{
+    return keyHistory(version.dataKey, version.payload->ward.access()).intersects(keyHistory(heldKey, held));
 }
 
 }  // namespace
@@ -56,6 +69,8 @@ WardSession::WardSession(const Identity* identity, WardStore* store, Geocoder* g
     : QObject(parent)
     , m_identity(identity)
     , m_store(store)
+    , m_geocoder(geocoder)
+    , m_unitLookup(unitLookup)
     , m_automaticUpdates(m_document, geocoder, unitLookup, nullptr)
 {
     connect(&m_automaticUpdates, &AutomaticUpdates::documentChanged,
@@ -72,6 +87,7 @@ void WardSession::createWard(const Document& content, const QString& userName, c
     m_dataKey = Crypto::randomBytes(Crypto::KeyBytes);
     m_landed.clear();
     m_device = DeviceState();
+    m_device.heldRecipients = ward.access().recipientFingerprints();
     m_savePending = false;
     m_automaticUpdates.wardOpened();
     clearUndoStack();
@@ -139,6 +155,13 @@ bool WardSession::retryPendingSave()
         save();
     }
     return !m_savePending;
+}
+
+bool WardSession::changesToShare(const Journal& journal, const QHash<QByteArray, qint64>& landed,
+                                 const QByteArray& device)
+{
+    return !journal.isEmpty()
+        && journal.entries().last().sequence > landed.value(device);
 }
 
 CommitResult WardSession::commit(CommandPtr command)
@@ -233,24 +256,16 @@ ReplayResult WardSession::replayOnto(const Document& version)
 
 QByteArray WardSession::writeUpdate()
 {
-    VersionRank next{m_version.number + 1, m_identity->fingerprint()};
-    QHash<QByteArray, qint64> landed;
-    const QList<RecipientKeys> recipients = m_document.access().recipients();
-    for (const RecipientKeys& keys : recipients)
-    {
-        QByteArray fingerprint = Identity::fingerprintOf(keys.publicKey, keys.verifyKey);
-        if (m_landed.contains(fingerprint))
-        {
-            landed.insert(fingerprint, m_landed.value(fingerprint));
-        }
-    }
-    landed.insert(m_identity->fingerprint(), m_device.journal.lastSequence());
-
-    QByteArray version = WardFile::write(m_documentId, next, m_dataKey, WardPayload{m_document, landed, std::nullopt});
-    m_version = next;
-    m_landed = landed;
+    NextVersion next = nextVersion();
+    AccessList access = m_document.access();
+    access.setFormerKeys(next.formerKeys);
+    m_document.setAccess(access);
+    m_version = next.version;
+    m_dataKey = next.dataKey;
+    m_landed = next.landed;
+    m_device.heldRecipients = next.recipients;
     save();
-    return UpdateFile::write(m_documentId, version, *m_identity);
+    return UpdateFile::write(m_documentId, next.bytes, next.writer);
 }
 
 TakeResult WardSession::takeUpdate(const QByteArray& file)
@@ -284,7 +299,7 @@ TakeResult WardSession::takeUpdate(const QByteArray& file)
         return notTaken(TakeStatus::NotNewer, QString());
     }
 
-    WardRead read = WardFile::read(update.version, *m_identity, PayloadKind::Version);
+    WardRead read = readVersion(update.version);
     switch (read.status)
     {
     case WardReadStatus::Read:
@@ -295,21 +310,186 @@ TakeResult WardSession::takeUpdate(const QByteArray& file)
         return notTaken(TakeStatus::Unreadable, read.problem);
     case WardReadStatus::Deleted:
     case WardReadStatus::NotNamed:
-        return notTaken(TakeStatus::NotNamed, QString());
+    {
+        TakeStatus status = joinUnlanded() ? TakeStatus::InviteUsedOrWithdrawn : TakeStatus::NotNamed;
+        becomeNoLongerShared();
+        return notTaken(status, QString());
     }
-    if (!descends(read, m_dataKey))
+    }
+    if (!descends(read, m_dataKey, m_document.access()))
     {
         return notTaken(TakeStatus::Unreadable, "the version does not descend from the one this device holds");
     }
 
+    // A version read with the join seed comes from a member who has not taken the join: the
+    // join runs again on it first, so this device is on the list every replayed entry meets.
+    Document base = read.payload->ward;
+    CommandPtr rejoin;
+    if (!read.header->sealedKeyFor(m_identity->fingerprint()).has_value())
+    {
+        QByteArray invite = Identity::fromInviteSeed(*m_device.joinSeed).fingerprint();
+        rejoin = JoinCommand::rejoin(*base.access().findInvite(invite), m_document.access(),
+                                     m_identity->fingerprint(), base.wardName());
+        attempt(*rejoin, base);
+    }
     m_device.journal.dropLanded(read.payload->landed.value(m_identity->fingerprint()));
-    ReplayResult replayed = replay(read.payload->ward);
+    ReplayResult replayed = replay(base);
+    if (rejoin)
+    {
+        m_device.journal.append(*rejoin);
+    }
     m_version = header.version();
     m_dataKey = read.dataKey;
     m_landed = read.payload->landed;
+    m_device.heldRecipients = read.payload->ward.access().recipientFingerprints();
     save();
     m_automaticUpdates.run();
     return TakeResult{TakeStatus::Taken, QString(), replayed};
+}
+
+InviteResult WardSession::invite(const std::optional<InvitedUser>& user)
+{
+    QByteArray seed = Crypto::randomBytes(Crypto::KeyBytes);
+    Identity keys = Identity::fromInviteSeed(seed);
+    m_device.inviteSeeds.append(seed);
+    CommitResult result = commit(InviteCommand::create(m_identity->fingerprint(), m_document.access(), user, keys));
+    if (result.status != CommitStatus::Applied)
+    {
+        m_device.inviteSeeds.removeOne(seed);
+        return InviteResult{result, QByteArray()};
+    }
+    return InviteResult{result, keys.fingerprint()};
+}
+
+QSet<QByteArray> WardSession::invitesMadeHere() const
+{
+    QSet<QByteArray> invites;
+    for (const QByteArray& seed : m_device.inviteSeeds)
+    {
+        invites.insert(Identity::fromInviteSeed(seed).fingerprint());
+    }
+    return invites;
+}
+
+QByteArray WardSession::writeInvitation(const QByteArray& invite) const
+{
+    QByteArray seed;
+    for (const QByteArray& candidate : m_device.inviteSeeds)
+    {
+        if (Identity::fromInviteSeed(candidate).fingerprint() == invite)
+        {
+            seed = candidate;
+        }
+    }
+    return InvitationFile::write(m_documentId, seed, nextVersion().bytes);
+}
+
+InvitedWard WardSession::readInvitation(const QByteArray& file) const
+{
+    InvitationRead invitation = InvitationFile::read(file);
+    switch (invitation.status)
+    {
+    case InvitationReadStatus::Read:
+        break;
+    case InvitationReadStatus::Newer:
+        return notJoinable(InvitationStatus::Newer, QString());
+    case InvitationReadStatus::NotAnInvitation:
+        return notJoinable(InvitationStatus::NotAnInvitation, invitation.problem);
+    }
+
+    WardRead asThisDevice = WardFile::read(invitation.version, *m_identity, PayloadKind::Version);
+    if (asThisDevice.status == WardReadStatus::Read)
+    {
+        return InvitedWard{InvitationStatus::AlreadyHasAccess, QString(), invitation.document, QByteArray(),
+                           asThisDevice, std::nullopt, asThisDevice.payload->ward.wardName()};
+    }
+
+    Identity keys = Identity::fromInviteSeed(invitation.seed);
+    WardRead read = WardFile::read(invitation.version, keys, PayloadKind::Version);
+    switch (read.status)
+    {
+    case WardReadStatus::Read:
+        break;
+    case WardReadStatus::Newer:
+        return notJoinable(InvitationStatus::Newer, QString());
+    case WardReadStatus::Unreadable:
+        return notJoinable(InvitationStatus::NotAnInvitation, read.problem);
+    case WardReadStatus::Deleted:
+    case WardReadStatus::NotNamed:
+        return notJoinable(InvitationStatus::UsedOrWithdrawn, QString());
+    }
+    if (read.header->document() != invitation.document)
+    {
+        return notJoinable(InvitationStatus::NotAnInvitation, "the version is of another ward");
+    }
+    return InvitedWard{InvitationStatus::Joinable, QString(), invitation.document, invitation.seed, read,
+                       read.payload->ward.access().findInvite(keys.fingerprint()), read.payload->ward.wardName()};
+}
+
+void WardSession::join(const InvitedWard& invited, const QString& userName, const QString& deviceName)
+{
+    if (invited.status == InvitationStatus::AlreadyHasAccess)
+    {
+        OpenStatus opened = openWard(invited.document).status;
+        if (opened != OpenStatus::Missing && opened != OpenStatus::CannotRead)
+        {
+            return;
+        }
+    }
+    takeFirstDownload(invited.document, *invited.version);
+    if (invited.status == InvitationStatus::Joinable)
+    {
+        m_device.joinSeed = invited.seed;
+        AccessDevice device(deviceName, m_identity->publicKey(), m_identity->verifyKey());
+        commit(JoinCommand::create(*invited.invite, device, userName, invited.wardName));
+        return;
+    }
+    save();
+}
+
+QString WardSession::ownUserName() const
+{
+    return m_document.access().userOfDevice(m_identity->fingerprint())->name();
+}
+
+void WardSession::renameDeviceEverywhere(const QString& deviceName)
+{
+    renameEverywhere(&RenameDeviceCommand::create, deviceName);
+}
+
+void WardSession::renameUserEverywhere(const QString& userName)
+{
+    renameEverywhere(&RenameUserCommand::create, userName);
+}
+
+void WardSession::renameEverywhere(CommandPtr (*rename)(const QByteArray&, const AccessList&, const QString&),
+                                   const QString& name)
+{
+    const QList<DocumentId> documents = m_store->documents();
+    for (const DocumentId& document : documents)
+    {
+        if (document == m_documentId)
+        {
+            commit(rename(m_identity->fingerprint(), m_document.access(), name));
+            continue;
+        }
+        WardSession other(m_identity, m_store, m_geocoder, m_unitLookup, nullptr);
+        if (other.openWard(document).status == OpenStatus::Opened)
+        {
+            other.commit(rename(m_identity->fingerprint(), other.document().access(), name));
+        }
+    }
+}
+
+std::optional<QString> WardSession::followUserName(const QString& yourName)
+{
+    QString name = ownUserName();
+    if (name == yourName)
+    {
+        return std::nullopt;
+    }
+    renameUserEverywhere(name);
+    return name;
 }
 
 ReplayResult WardSession::replay(const Document& version)
@@ -317,7 +497,7 @@ ReplayResult WardSession::replay(const Document& version)
     if (m_device.journal.isEmpty())
     {
         replaceDocument(version);
-        return ReplayResult{ReplayStatus::FastForwarded, QString()};
+        return ReplayResult{ReplayStatus::FastForwarded, QString(), QStringList()};
     }
 
     Document replayed = version;
@@ -330,18 +510,24 @@ ReplayResult WardSession::replay(const Document& version)
         if (result.status != CommitStatus::Applied)
         {
             QString toRedo = toRedoText(i, result);
+            QStringList stillHaveAccess = stillHavingAccess(version.access());
             m_device.journal.clear();
             clearUndoStack();
             replaceDocument(version);
-            return ReplayResult{ReplayStatus::Abandoned, toRedo};
+            return ReplayResult{ReplayStatus::Abandoned, toRedo, stillHaveAccess};
         }
     }
     replaceDocument(replayed);
-    return ReplayResult{ReplayStatus::Replayed, QString()};
+    return ReplayResult{ReplayStatus::Replayed, QString(), QStringList()};
 }
 
 CommitResult WardSession::run(const Command& command)
 {
+    if (m_device.noLongerShared)
+    {
+        return CommitResult{CommitStatus::Refused, tr("This ward is no longer shared with this device."),
+                            command.description()};
+    }
     CommitResult result = attempt(command, m_document);
     if (result.status != CommitStatus::Applied)
     {
@@ -387,8 +573,32 @@ QString WardSession::toRedoText(int stopped, const CommitResult& stop) const
     return text.join("\n") + "\n";
 }
 
+QStringList WardSession::stillHavingAccess(const AccessList& access) const
+{
+    QStringList names;
+    for (const JournalEntry& entry : m_device.journal.entries())
+    {
+        std::shared_ptr<const RemoveUserCommand> removal
+            = std::dynamic_pointer_cast<const RemoveUserCommand>(CommandRegistry::fromJson(JsonReader(entry.command)));
+        if (!removal)
+        {
+            continue;
+        }
+        std::optional<AccessUser> user = access.findUser(removal->userId());
+        if (user.has_value())
+        {
+            names.append(user->name());
+        }
+    }
+    return names;
+}
+
 void WardSession::save()
 {
+    const AccessList& access = m_document.access();
+    m_device.inviteSeeds.removeIf([&access](const QByteArray& seed) {
+        return !access.findInvite(Identity::fromInviteSeed(seed).fingerprint()).has_value();
+    });
     QByteArray bytes = WardFile::write(m_documentId, m_version, m_dataKey, payload());
     QString problem;
     if (m_store->write(m_documentId, bytes, &problem))
@@ -401,6 +611,92 @@ void WardSession::save()
         m_savePending = true;
         emit saveFailed(problem);
     }
+}
+
+WardSession::NextVersion WardSession::nextVersion() const
+{
+    Document document = m_document;
+    AccessList access = document.access();
+    QSet<QByteArray> recipients = access.recipientFingerprints();
+    QByteArray dataKey = m_dataKey;
+    if (!recipients.contains(m_device.heldRecipients))
+    {
+        QList<QByteArray> formerKeys = access.formerKeys();
+        formerKeys.append(AccessList::formerKeyHash(m_dataKey));
+        access.setFormerKeys(formerKeys);
+        document.setAccess(access);
+        dataKey = Crypto::randomBytes(Crypto::KeyBytes);
+    }
+
+    QHash<QByteArray, qint64> landed;
+    const QSet<QByteArray> devices = access.deviceFingerprints();
+    for (auto it = m_landed.constBegin(); it != m_landed.constEnd(); ++it)
+    {
+        if (devices.contains(it.key()))
+        {
+            landed.insert(it.key(), it.value());
+        }
+    }
+    landed.insert(m_identity->fingerprint(), m_device.journal.lastSequence());
+
+    Identity signer = writer();
+    VersionRank version{m_version.number + 1, signer.fingerprint()};
+    QByteArray bytes = WardFile::write(m_documentId, version, dataKey, WardPayload{document, landed, std::nullopt});
+    return NextVersion{bytes, version, dataKey, access.formerKeys(), landed, recipients, signer};
+}
+
+Identity WardSession::writer() const
+{
+    if (!m_device.heldRecipients.contains(m_identity->fingerprint()))
+    {
+        return Identity::fromInviteSeed(*m_device.joinSeed);
+    }
+    return *m_identity;
+}
+
+bool WardSession::joinUnlanded() const
+{
+    for (const JournalEntry& entry : m_device.journal.entries())
+    {
+        if (entry.command["type"].toString() == JoinCommand::TypeName)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+WardRead WardSession::readVersion(const QByteArray& version) const
+{
+    WardRead read = WardFile::read(version, *m_identity, PayloadKind::Version);
+    if (read.status == WardReadStatus::NotNamed && m_device.joinSeed.has_value())
+    {
+        return WardFile::read(version, Identity::fromInviteSeed(*m_device.joinSeed), PayloadKind::Version);
+    }
+    return read;
+}
+
+void WardSession::takeFirstDownload(const DocumentId& document, const WardRead& version)
+{
+    m_documentId = document;
+    m_version = version.header->version();
+    m_dataKey = version.dataKey;
+    m_landed = version.payload->landed;
+    m_device = DeviceState();
+    m_device.journal.dropLanded(m_landed.value(m_identity->fingerprint()));
+    m_device.heldRecipients = version.payload->ward.access().recipientFingerprints();
+    m_savePending = false;
+    m_automaticUpdates.wardOpened();
+    clearUndoStack();
+    replaceDocument(version.payload->ward);
+}
+
+void WardSession::becomeNoLongerShared()
+{
+    m_device.noLongerShared = true;
+    m_device.journal.clear();
+    clearUndoStack();
+    save();
 }
 
 void WardSession::replaceDocument(const Document& document)

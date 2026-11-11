@@ -11,6 +11,8 @@ static_assert(static_cast<int>(crypto_aead_xchacha20poly1305_ietf_NPUBBYTES) == 
 static_assert(static_cast<int>(crypto_box_SEALBYTES) + Crypto::KeyBytes == Crypto::SealedKeyBytes);
 static_assert(static_cast<int>(crypto_generichash_blake2b_PERSONALBYTES) == 16);
 static_assert(static_cast<int>(crypto_sign_BYTES) == Crypto::SignatureBytes);
+static_assert(static_cast<int>(crypto_kdf_KEYBYTES) == Crypto::KeyBytes);
+static_assert(static_cast<int>(crypto_box_SEEDBYTES) == Crypto::KeyBytes);
 
 namespace
 {
@@ -115,6 +117,22 @@ QByteArray Crypto::sealingPublicKey(const QByteArray& secretKey)
     QByteArray publicKey(crypto_box_PUBLICKEYBYTES, '\0');
     crypto_scalarmult_base(bytesOf(publicKey), bytesOf(secretKey));
     return publicKey;
+}
+
+QByteArray Crypto::deriveSubkey(const QByteArray& key, quint64 id, const char* context)
+{
+    Q_ASSERT(qstrlen(context) == crypto_kdf_CONTEXTBYTES);
+    QByteArray subkey(KeyBytes, '\0');
+    crypto_kdf_derive_from_key(bytesOf(subkey), static_cast<size_t>(subkey.size()), id, context, bytesOf(key));
+    return subkey;
+}
+
+QByteArray Crypto::sealingSecretFromSeed(const QByteArray& seed)
+{
+    QByteArray publicKey(crypto_box_PUBLICKEYBYTES, '\0');
+    QByteArray secretKey(crypto_box_SECRETKEYBYTES, '\0');
+    crypto_box_seed_keypair(bytesOf(publicKey), bytesOf(secretKey), bytesOf(seed));
+    return secretKey;
 }
 
 QByteArray Crypto::verifyKey(const QByteArray& seed)

@@ -26,6 +26,9 @@ public:
     FakeGeocoder& geocoder() { return m_geocoder; }
     FakeUnitLookup& unitLookup() { return m_unitLookup; }
 
+    /// This device as an access-list entry, named deviceName.
+    AccessDevice device() const;
+
     /// Creates a ward holding content under the user Alice Smith, on this device.
     void createWard(const Document& content);
 
@@ -41,6 +44,13 @@ public:
     /// listed's first client, with no landed marks and an empty journal. Every holder is
     /// listed, so each can open its file, and every holder of one call holds an equal ward.
     static void holdWard(const QList<TestClient*>& holders, const QList<TestClient*>& listed,
+                         const DocumentId& document, const QByteArray& dataKey, const Document& content);
+
+    /// Gives each of holders a local file of one ward and opens it: document under dataKey,
+    /// holding content with access as its access list, as version 1 written by writer, with
+    /// no landed marks, an empty journal, and access's recipients as the held version's.
+    /// Every holder is on access, so each can open its file.
+    static void holdWard(const QList<TestClient*>& holders, const AccessList& access, const TestClient& writer,
                          const DocumentId& document, const QByteArray& dataKey, const Document& content);
 
     /// Closes the app and starts it again: a new session on the same identity and store,

@@ -86,7 +86,9 @@ void WardSessionSavingTest::createdWardIsSavedSealedToThisDeviceAlone()
     QVERIFY(read.payload->ward.access().invites().isEmpty());
     QVERIFY(read.payload->ward.access().formerKeys().isEmpty());
     QVERIFY(read.payload->landed.isEmpty());
-    QVERIFY(read.payload->device.value() == DeviceState());
+    DeviceState expectedDevice;
+    expectedDevice.heldRecipients = {client.identity().fingerprint()};
+    QVERIFY(read.payload->device.value() == expectedDevice);
     QVERIFY(read.payload->ward == client.session().document());
 
     Identity stranger = Identity::generate();

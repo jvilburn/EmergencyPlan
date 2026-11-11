@@ -139,6 +139,8 @@ set(COMMAND_SOURCES
     src/commands/EmergencyCommands.cpp
     src/commands/ImportWardDirectoryCommand.cpp
     src/commands/ImportMinisteringCommand.cpp
+    src/commands/AccessRules.cpp
+    src/commands/AccessCommands.cpp
     src/commands/ReferenceCleanup.cpp
 )
 
@@ -155,6 +157,8 @@ set(COMMAND_HEADERS
     src/commands/EmergencyCommands.h
     src/commands/ImportWardDirectoryCommand.h
     src/commands/ImportMinisteringCommand.h
+    src/commands/AccessRules.h
+    src/commands/AccessCommands.h
     src/commands/ReferenceCleanup.h
 )
 
@@ -194,6 +198,7 @@ set(SERVICE_SOURCES
     src/services/WardList.cpp
     src/services/ShowInFolder.cpp
     src/services/UpdateFile.cpp
+    src/services/InvitationFile.cpp
     src/services/UserFolder.cpp
     src/services/InstanceLock.cpp
 )
@@ -236,6 +241,7 @@ set(SERVICE_HEADERS
     src/services/WardList.h
     src/services/ShowInFolder.h
     src/services/UpdateFile.h
+    src/services/InvitationFile.h
     src/services/UserFolder.h
     src/services/InstanceLock.h
 )

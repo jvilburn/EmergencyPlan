@@ -24,7 +24,7 @@ private slots:
     void landedMarkDropsWhatLandedAndKeepsWhatCameAfter();
     void takingAVersionRaisesTheCounterToThisDevicesMark();
     void writtenVersionDropsTheMarksOfDevicesNoLongerListed();
-    void versionUnderAnotherKeyMustNameTheHeldOne();
-    void versionThatLeavesThisDeviceOutChangesNothing();
+    void versionUnderAnotherKeyMustShareAKeyWithTheHeldOne();
+    void versionThatLeavesThisDeviceOutEndsItsShare();
     void updateOfAnotherWardOrFormatOrNotAnUpdateChangesNothing();
 };

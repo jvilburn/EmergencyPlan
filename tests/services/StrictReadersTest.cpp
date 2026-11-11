@@ -1,4 +1,5 @@
 #include "StrictReadersTest.h"
+#include "AccessCommands.h"
 #include "AddressCoordinatesCommands.h"
 #include "CommandRegistry.h"
 #include "EmergencyAssetCommands.h"
@@ -243,7 +244,7 @@ int journalIndexOf(const QString& type)
 /// emergency asset with no people; a ministering group of each organization and a district
 /// with nobody in them; ward and stake records with no fields; an emergency with no attempts
 /// or tasks; this device alone on the access list, with no invites or former keys; no landed
-/// marks; and a device state with an empty journal and no flags.
+/// marks; and a device state with an empty journal, no held recipients and no flags.
 WardPayload emptiestPayload(const Identity& device)
 {
     Person bob = Person::createWithId(PersonId::fromString("person-bob"), Name("Smith", "Bob"), std::nullopt, Birthday(),
@@ -267,8 +268,8 @@ WardPayload emptiestPayload(const Identity& device)
 /// edit that changes only the note, removals with nothing to clean up, coordinates typed
 /// where there were none, edits that change only a name, an attempt with only its required
 /// fields, a task with no assignment, a task edit that gives it an assignment with no
-/// notification and a resolution with no notes, and imports onto an empty ward that change
-/// nothing.
+/// notification and a resolution with no notes, imports onto an empty ward that change
+/// nothing, and an invite and a join for a device.
 QList<CommandPtr> sparsestCommands()
 {
     Family bare = Family::createWithId(FamilyId::fromString("family-bare"), Address(), {});
@@ -298,6 +299,14 @@ QList<CommandPtr> sparsestCommands()
     MinisteringImportResult ministering;
     ministering.success = true;
     ministering.pdfDate = QDate(2026, 9, 1);
+    Identity laptop = Identity::generate();
+    Identity phone = Identity::generate();
+    Identity invited = Identity::generate();
+    AccessUser alice(UserId::generate(), "Alice", AccessRole::Admin,
+                     {AccessDevice("Laptop", laptop.publicKey(), laptop.verifyKey()),
+                      AccessDevice("Phone", phone.publicKey(), phone.verifyKey())});
+    AccessList access({alice}, {}, {});
+    AccessInvite deviceInvite = AccessInvite::forDevice(alice.id(), invited.publicKey(), invited.verifyKey());
 
     return {
         UpdateFamilyCommand::fromEdit(bare, noted, ward),
@@ -322,6 +331,15 @@ QList<CommandPtr> sparsestCommands()
         AddTaskCategoryCommand::fromNew("Power lines"),
         ImportWardDirectoryCommand::fromImport(Document::empty(), directory, "Tanglewood.pdf"),
         ImportMinisteringCommand::fromImport(Document::empty(), ministering, "Tanglewood EQ.pdf"),
+        InviteCommand::create(laptop.fingerprint(), access, std::nullopt, invited),
+        RemoveUserCommand::create(laptop.fingerprint(), alice),
+        RemoveDeviceCommand::create(laptop.fingerprint(), alice.devices()[1]),
+        WithdrawInviteCommand::create(laptop.fingerprint(), deviceInvite, access),
+        SetRoleCommand::create(laptop.fingerprint(), alice, AccessRole::Member),
+        RenameUserCommand::create(laptop.fingerprint(), access, "Alice Jones"),
+        RenameDeviceCommand::create(laptop.fingerprint(), access, "Work laptop"),
+        JoinCommand::create(deviceInvite, AccessDevice("Tablet", phone.publicKey(), phone.verifyKey()), QString(),
+                            "Tanglewood Ward"),
     };
 }
 
@@ -363,7 +381,7 @@ void StrictReadersTest::emptiestRoundTrips()
     QCOMPARE(ward["families"].toArray()[0].toObject().keys(), QStringList({"id"}));
     QCOMPARE(ward["families"].toArray()[1].toObject()["members"].toArray()[0].toObject().keys(),
              QStringList({"id", "name"}));
-    QCOMPARE(json["device"].toObject().keys(), QStringList({"journal"}));
+    QCOMPARE(json["device"].toObject().keys(), QStringList({"heldRecipients", "journal"}));
 
     PayloadReading reading = readPayload(json);
 

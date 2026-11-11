@@ -126,6 +126,17 @@ std::optional<QDate> readValue<std::optional<QDate>>(JsonReader& json, const QSt
     return json.date(key);
 }
 
+QJsonValue toJsonValue(AccessRole value)
+{
+    return accessRoleName(value);
+}
+
+template<>
+AccessRole readValue<AccessRole>(JsonReader& json, const QString& key)
+{
+    return readAccessRole(json, key);
+}
+
 QJsonObject peopleChangeToJson(const IdSetChange<PersonId>& change)
 {
     QJsonObject json;

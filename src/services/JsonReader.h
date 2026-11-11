@@ -155,8 +155,14 @@ public:
         return hashOf<Key, T>(optionalObjects(key));
     }
 
+    /// An array of base64url values of exactly length bytes each, written when empty too.
+    QList<QByteArray> bytesList(const QString& key, int length);
+
     /// An array of base64url values of exactly length bytes each.
     QList<QByteArray> optionalBytesList(const QString& key, int length);
+
+    /// A base64url value of exactly length bytes, or none when the key is absent.
+    std::optional<QByteArray> optionalBytes(const QString& key, int length);
 
     /// Fails the read at key, unless it has already failed.
     void fail(const QString& key, const QString& what);
@@ -184,6 +190,9 @@ private:
 
     /// texts, failing the read at the first empty one, an element of the array under key.
     QStringList idTexts(const QString& key, const QStringList& texts);
+
+    /// texts, read under key, each decoded as base64url of exactly length bytes.
+    QList<QByteArray> decodedBytes(const QString& key, const QStringList& texts, int length);
 
     template<typename T, typename WordOf>
     static QStringList wordsOf(const QList<T>& values, WordOf wordOf)

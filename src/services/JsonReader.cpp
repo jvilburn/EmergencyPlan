@@ -344,9 +344,27 @@ QStringList JsonReader::optionalStrings(const QString& key)
     return readStrings(key, value.toArray());
 }
 
+QList<QByteArray> JsonReader::bytesList(const QString& key, int length)
+{
+    return decodedBytes(key, strings(key), length);
+}
+
 QList<QByteArray> JsonReader::optionalBytesList(const QString& key, int length)
 {
-    QStringList texts = optionalStrings(key);
+    return decodedBytes(key, optionalStrings(key), length);
+}
+
+std::optional<QByteArray> JsonReader::optionalBytes(const QString& key, int length)
+{
+    if (takeOptional(key).isUndefined())
+    {
+        return std::nullopt;
+    }
+    return bytes(key, length);
+}
+
+QList<QByteArray> JsonReader::decodedBytes(const QString& key, const QStringList& texts, int length)
+{
     QList<QByteArray> values;
     for (int i = 0; i < texts.size(); ++i)
     {

@@ -1,3 +1,4 @@
+#include "AccessTest.h"
 #include "AppDataTest.h"
 #include "AutomaticUpdatesTest.h"
 #include "BirthdayTest.h"
@@ -6,6 +7,7 @@
 #include "FamilyEditPanelTest.h"
 #include "FamilyOrderTest.h"
 #include "FieldChangeTest.h"
+#include "FileSharingTest.h"
 #include "FileWardStoreTest.h"
 #include "FilterTest.h"
 #include "IdentityTest.h"
@@ -69,6 +71,8 @@ int main(int argc, char* argv[])
     DocumentMetadataTest documentMetadataTest(nullptr);
     SpecReaderTest specReaderTest(nullptr);
     UpdateFileTest updateFileTest(nullptr);
+    AccessTest accessTest(nullptr);
+    FileSharingTest fileSharingTest(nullptr);
     UserFolderTest userFolderTest(nullptr);
     TreeViewStateTest treeViewStateTest(nullptr);
     MinisteringPdfParserTest ministeringPdfParserTest(nullptr);
@@ -102,6 +106,8 @@ int main(int argc, char* argv[])
     failures += QTest::qExec(&documentMetadataTest, argc, argv);
     failures += QTest::qExec(&specReaderTest, argc, argv);
     failures += QTest::qExec(&updateFileTest, argc, argv);
+    failures += QTest::qExec(&accessTest, argc, argv);
+    failures += QTest::qExec(&fileSharingTest, argc, argv);
     failures += QTest::qExec(&userFolderTest, argc, argv);
     failures += QTest::qExec(&treeViewStateTest, argc, argv);
     failures += QTest::qExec(&ministeringPdfParserTest, argc, argv);

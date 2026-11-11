@@ -449,6 +449,9 @@ void MainWindow::openUpdateFile(const QString& path)
     case TakeStatus::NotNamed:
         QMessageBox::warning(this, tr("Open Update"), tr("This ward is no longer shared with this device."));
         return;
+    case TakeStatus::InviteUsedOrWithdrawn:
+        QMessageBox::warning(this, tr("Open Update"), tr("This invite has been used or withdrawn. Ask the sender."));
+        return;
     case TakeStatus::Newer:
         QMessageBox::warning(this, tr("Open Update"),
                              tr("This ward was saved by a newer version of Ward Planning. Update to see the latest "
@@ -463,22 +466,9 @@ void MainWindow::openUpdateFile(const QString& path)
     switch (result.replay.status)
     {
     case ReplayStatus::FastForwarded:
+    case ReplayStatus::Replayed:
         QMessageBox::information(this, tr("Open Update"), tr("The update has been added to %1.").arg(wardName));
         break;
-    case ReplayStatus::Replayed:
-    {
-        QMessageBox::StandardButton answer = QMessageBox::question(
-            this, tr("Open Update"),
-            tr("The update has been added to %1, with your own changes on top. Send an update so the others get "
-               "your changes?")
-                .arg(wardName),
-            QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
-        if (answer == QMessageBox::Yes)
-        {
-            onSendUpdate();
-        }
-        break;
-    }
     case ReplayStatus::Abandoned:
         showChangesToRedo(result.replay.toRedo);
         break;

@@ -1,8 +1,10 @@
 #include "CommandSamples.h"
+#include "AccessCommands.h"
 #include "AddressCoordinatesCommands.h"
 #include "EmergencyAssetCommands.h"
 #include "EmergencyCommands.h"
 #include "FamilyCommands.h"
+#include "Identity.h"
 #include "ImportMinisteringCommand.h"
 #include "ImportWardDirectoryCommand.h"
 #include "TeamCommands.h"
@@ -448,6 +450,173 @@ QList<CommandSample> importMinisteringSamples()
     return samples;
 }
 
+/// The test ward whose access list has Alice, an admin, on her laptop and phone; Carol, a
+/// member, on her desktop; and a member invite Alice made for Bob, with the keys behind them.
+struct AccessSampleWard
+{
+    Document ward;
+    Identity laptop;
+    Identity phone;
+    Identity desktop;
+};
+
+AccessSampleWard accessSampleWard()
+{
+    Identity laptop = Identity::generate();
+    Identity phone = Identity::generate();
+    Identity desktop = Identity::generate();
+    Identity bobsInvite = Identity::generate();
+    UserId alice = UserId::generate();
+    AccessList access({AccessUser(alice, "Alice", AccessRole::Admin,
+                                  {AccessDevice("Laptop", laptop.publicKey(), laptop.verifyKey()),
+                                   AccessDevice("Phone", phone.publicKey(), phone.verifyKey())}),
+                       AccessUser(UserId::generate(), "Carol", AccessRole::Member,
+                                  {AccessDevice("Desktop", desktop.publicKey(), desktop.verifyKey())})},
+                      {AccessInvite::forUser(alice, AccessRole::Member, "Bob", bobsInvite.publicKey(),
+                                             bobsInvite.verifyKey())},
+                      {});
+    Document ward = TestWard::document();
+    ward.setAccess(access);
+    return AccessSampleWard{ward, laptop, phone, desktop};
+}
+
+/// The user named name in ward's access list.
+AccessUser accessUserNamed(const Document& ward, const QString& name)
+{
+    for (const AccessUser& user : ward.access().users())
+    {
+        if (user.name() == name)
+        {
+            return user;
+        }
+    }
+    qFatal("CommandSamples: the ward holds no user named %s", qPrintable(name));
+}
+
+/// ward with user in place of the user who has user's id.
+Document withAccessUser(const Document& ward, const AccessUser& user)
+{
+    AccessList access = ward.access();
+    access.setUser(user);
+    Document changed = ward;
+    changed.setAccess(access);
+    return changed;
+}
+
+/// Invites and removals never conflict, so they have no Conflicts sample.
+QList<CommandSample> inviteSamples()
+{
+    AccessSampleWard sample = accessSampleWard();
+    CommandPtr invite = InviteCommand::create(sample.laptop.fingerprint(), sample.ward.access(), std::nullopt,
+                                              Identity::generate());
+    return {
+        CommandSample{SampleCase::StartHolds, sample.ward, invite},
+        CommandSample{SampleCase::ResultHolds, runOn(sample.ward, invite), invite},
+    };
+}
+
+QList<CommandSample> removeUserSamples()
+{
+    AccessSampleWard sample = accessSampleWard();
+    CommandPtr remove = RemoveUserCommand::create(sample.laptop.fingerprint(), accessUserNamed(sample.ward, "Carol"));
+    return {
+        CommandSample{SampleCase::StartHolds, sample.ward, remove},
+        CommandSample{SampleCase::ResultHolds, runOn(sample.ward, remove), remove},
+    };
+}
+
+QList<CommandSample> removeDeviceSamples()
+{
+    AccessSampleWard sample = accessSampleWard();
+    CommandPtr remove = RemoveDeviceCommand::create(
+        sample.laptop.fingerprint(), AccessDevice("Phone", sample.phone.publicKey(), sample.phone.verifyKey()));
+    return {
+        CommandSample{SampleCase::StartHolds, sample.ward, remove},
+        CommandSample{SampleCase::ResultHolds, runOn(sample.ward, remove), remove},
+    };
+}
+
+QList<CommandSample> withdrawInviteSamples()
+{
+    AccessSampleWard sample = accessSampleWard();
+    CommandPtr withdraw = WithdrawInviteCommand::create(sample.laptop.fingerprint(),
+                                                        sample.ward.access().invites().first(), sample.ward.access());
+    return {
+        CommandSample{SampleCase::StartHolds, sample.ward, withdraw},
+        CommandSample{SampleCase::ResultHolds, runOn(sample.ward, withdraw), withdraw},
+    };
+}
+
+/// Carol made an admin; with two roles, it conflicts only once she is gone.
+QList<CommandSample> setRoleSamples()
+{
+    AccessSampleWard sample = accessSampleWard();
+    AccessUser carol = accessUserNamed(sample.ward, "Carol");
+    CommandPtr promote = SetRoleCommand::create(sample.laptop.fingerprint(), carol, AccessRole::Admin);
+    CommandPtr remove = RemoveUserCommand::create(sample.laptop.fingerprint(), carol);
+    return {
+        CommandSample{SampleCase::StartHolds, sample.ward, promote},
+        CommandSample{SampleCase::ResultHolds, runOn(sample.ward, promote), promote},
+        CommandSample{SampleCase::Conflicts, runOn(sample.ward, remove), promote},
+    };
+}
+
+QList<CommandSample> renameUserSamples()
+{
+    AccessSampleWard sample = accessSampleWard();
+    CommandPtr rename = RenameUserCommand::create(sample.laptop.fingerprint(), sample.ward.access(), "Alice Jones");
+    AccessUser renamedElsewhere = accessUserNamed(sample.ward, "Alice");
+    renamedElsewhere.setName("Alice Brown");
+    return {
+        CommandSample{SampleCase::StartHolds, sample.ward, rename},
+        CommandSample{SampleCase::ResultHolds, runOn(sample.ward, rename), rename},
+        CommandSample{SampleCase::Conflicts, withAccessUser(sample.ward, renamedElsewhere), rename},
+    };
+}
+
+QList<CommandSample> renameDeviceSamples()
+{
+    AccessSampleWard sample = accessSampleWard();
+    CommandPtr rename = RenameDeviceCommand::create(sample.laptop.fingerprint(), sample.ward.access(), "Work laptop");
+    AccessUser renamedElsewhere = accessUserNamed(sample.ward, "Alice");
+    QList<AccessDevice> devices = renamedElsewhere.devices();
+    devices[0].setName("Old laptop");
+    renamedElsewhere.setDevices(devices);
+    return {
+        CommandSample{SampleCase::StartHolds, sample.ward, rename},
+        CommandSample{SampleCase::ResultHolds, runOn(sample.ward, rename), rename},
+        CommandSample{SampleCase::Conflicts, withAccessUser(sample.ward, renamedElsewhere), rename},
+    };
+}
+
+/// Bob joining through his user invite, its result holding once his phone is on the list, then
+/// a tablet joining through a device invite Carol made. A join never conflicts.
+QList<CommandSample> joinSamples()
+{
+    AccessSampleWard sample = accessSampleWard();
+    Identity bobsPhone = Identity::generate();
+    CommandPtr userJoin = JoinCommand::create(sample.ward.access().invites().first(),
+                                              AccessDevice("Bob's phone", bobsPhone.publicKey(), bobsPhone.verifyKey()),
+                                              "Bob Brown", "Tanglewood Ward");
+
+    Identity carolsInvite = Identity::generate();
+    Identity carolsTablet = Identity::generate();
+    AccessInvite deviceInvite = AccessInvite::forDevice(accessUserNamed(sample.ward, "Carol").id(),
+                                                        carolsInvite.publicKey(), carolsInvite.verifyKey());
+    AccessList access = sample.ward.access();
+    access.addInvite(deviceInvite);
+    Document withDeviceInvite = sample.ward;
+    withDeviceInvite.setAccess(access);
+    CommandPtr deviceJoin = JoinCommand::create(
+        deviceInvite, AccessDevice("Carol's tablet", carolsTablet.publicKey(), carolsTablet.verifyKey()), QString(),
+        "Tanglewood Ward");
+    return {
+        CommandSample{SampleCase::StartHolds, sample.ward, userJoin},
+        CommandSample{SampleCase::ResultHolds, runOn(sample.ward, userJoin), userJoin},
+        CommandSample{SampleCase::StartHolds, withDeviceInvite, deviceJoin},
+    };
+}
+
 }  // namespace
 
 QList<CommandSample> CommandSamples::forType(const QString& type)
@@ -539,6 +708,38 @@ QList<CommandSample> CommandSamples::forType(const QString& type)
     if (type == ImportMinisteringCommand::TypeName)
     {
         return importMinisteringSamples();
+    }
+    if (type == InviteCommand::TypeName)
+    {
+        return inviteSamples();
+    }
+    if (type == RemoveUserCommand::TypeName)
+    {
+        return removeUserSamples();
+    }
+    if (type == RemoveDeviceCommand::TypeName)
+    {
+        return removeDeviceSamples();
+    }
+    if (type == WithdrawInviteCommand::TypeName)
+    {
+        return withdrawInviteSamples();
+    }
+    if (type == SetRoleCommand::TypeName)
+    {
+        return setRoleSamples();
+    }
+    if (type == RenameUserCommand::TypeName)
+    {
+        return renameUserSamples();
+    }
+    if (type == RenameDeviceCommand::TypeName)
+    {
+        return renameDeviceSamples();
+    }
+    if (type == JoinCommand::TypeName)
+    {
+        return joinSamples();
     }
     return {};
 }

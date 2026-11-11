@@ -4,11 +4,9 @@
 #include "Identity.h"
 
 #include <QJsonArray>
+#include <QObject>
 
-namespace
-{
-
-QString roleName(AccessRole role)
+QString accessRoleName(AccessRole role)
 {
     switch (role)
     {
@@ -20,12 +18,10 @@ QString roleName(AccessRole role)
     return QString();
 }
 
-AccessRole readRole(JsonReader& json, const QString& key)
+AccessRole readAccessRole(JsonReader& json, const QString& key)
 {
-    return json.word(key, QList<AccessRole>{AccessRole::Admin, AccessRole::Member}, &roleName);
+    return json.word(key, QList<AccessRole>{AccessRole::Admin, AccessRole::Member}, &accessRoleName);
 }
-
-}  // namespace
 
 // ============================================================================
 // AccessDevice
@@ -56,6 +52,11 @@ AccessDevice AccessDevice::fromJson(JsonReader json)
     return AccessDevice(name, publicKey, verifyKey);
 }
 
+QByteArray AccessDevice::fingerprint() const
+{
+    return Identity::fingerprintOf(m_publicKey, m_verifyKey);
+}
+
 bool AccessDevice::operator==(const AccessDevice& other) const
 {
     return m_name == other.m_name
@@ -80,7 +81,7 @@ QJsonObject AccessUser::toJson() const
     QJsonObject json;
     json["id"] = m_id.toString();
     json["name"] = m_name;
-    json["role"] = roleName(m_role);
+    json["role"] = accessRoleName(m_role);
     QJsonArray devices;
     for (const AccessDevice& device : m_devices)
     {
@@ -94,7 +95,7 @@ AccessUser AccessUser::fromJson(JsonReader json)
 {
     UserId id = UserId::fromBytes(json.bytes("id", Crypto::IdBytes));
     QString name = json.string("name");
-    AccessRole role = readRole(json, "role");
+    AccessRole role = readAccessRole(json, "role");
     QList<AccessDevice> devices;
     const QList<JsonReader> deviceReaders = json.objects("devices");
     for (const JsonReader& device : deviceReaders)
@@ -146,7 +147,7 @@ QJsonObject AccessInvite::toJson() const
     if (m_invitedUser.has_value())
     {
         json["for"] = QString("user");
-        json["role"] = roleName(m_invitedUser->role);
+        json["role"] = accessRoleName(m_invitedUser->role);
         json["label"] = m_invitedUser->label;
     }
     else
@@ -164,13 +165,18 @@ AccessInvite AccessInvite::fromJson(JsonReader json)
     QByteArray verifyKey = json.bytes("verifyKey", Crypto::KeyBytes);
     if (kind == "user")
     {
-        AccessRole role = readRole(json, "role");
+        AccessRole role = readAccessRole(json, "role");
         QString label = json.string("label");
         json.finish();
         return forUser(maker, role, label, publicKey, verifyKey);
     }
     json.finish();
     return forDevice(maker, publicKey, verifyKey);
+}
+
+QByteArray AccessInvite::fingerprint() const
+{
+    return Identity::fingerprintOf(m_publicKey, m_verifyKey);
 }
 
 bool AccessInvite::operator==(const AccessInvite& other) const
@@ -197,6 +203,11 @@ AccessList AccessList::founding(const UserId& user, const QString& userName, con
 {
     AccessDevice entry(deviceName, device.publicKey(), device.verifyKey());
     return AccessList({AccessUser(user, userName, AccessRole::Admin, {entry})}, {}, {});
+}
+
+QByteArray AccessList::formerKeyHash(const QByteArray& dataKey)
+{
+    return Crypto::hash(dataKey, Crypto::HashBytes, "wp-former-key");
 }
 
 QList<RecipientKeys> AccessList::recipients() const
@@ -227,6 +238,140 @@ std::optional<QByteArray> AccessList::verifyKeyOf(const QByteArray& fingerprint)
         }
     }
     return std::nullopt;
+}
+
+QSet<QByteArray> AccessList::recipientFingerprints() const
+{
+    QSet<QByteArray> recipients = deviceFingerprints();
+    for (const AccessInvite& invite : m_invites)
+    {
+        recipients.insert(invite.fingerprint());
+    }
+    return recipients;
+}
+
+QSet<QByteArray> AccessList::deviceFingerprints() const
+{
+    QSet<QByteArray> devices;
+    for (const AccessUser& user : m_users)
+    {
+        for (const AccessDevice& device : user.devices())
+        {
+            devices.insert(device.fingerprint());
+        }
+    }
+    return devices;
+}
+
+std::optional<AccessUser> AccessList::findUser(const UserId& id) const
+{
+    for (const AccessUser& user : m_users)
+    {
+        if (user.id() == id)
+        {
+            return user;
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<AccessUser> AccessList::userOfDevice(const QByteArray& device) const
+{
+    for (const AccessUser& user : m_users)
+    {
+        for (const AccessDevice& entry : user.devices())
+        {
+            if (entry.fingerprint() == device)
+            {
+                return user;
+            }
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<AccessDevice> AccessList::findDevice(const QByteArray& device) const
+{
+    for (const AccessUser& user : m_users)
+    {
+        for (const AccessDevice& entry : user.devices())
+        {
+            if (entry.fingerprint() == device)
+            {
+                return entry;
+            }
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<AccessInvite> AccessList::findInvite(const QByteArray& invite) const
+{
+    for (const AccessInvite& entry : m_invites)
+    {
+        if (entry.fingerprint() == invite)
+        {
+            return entry;
+        }
+    }
+    return std::nullopt;
+}
+
+QStringList AccessList::adminNames() const
+{
+    QStringList names;
+    for (const AccessUser& user : m_users)
+    {
+        if (user.role() == AccessRole::Admin)
+        {
+            names.append(user.name());
+        }
+    }
+    names.sort(Qt::CaseInsensitive);
+    return names;
+}
+
+QString AccessList::describeInvite(const AccessInvite& invite) const
+{
+    if (invite.invitedUser().has_value())
+    {
+        return QObject::tr("for %1").arg(invite.invitedUser()->label);
+    }
+    return QObject::tr("a device for %1").arg(findUser(invite.maker())->name());
+}
+
+void AccessList::setUser(const AccessUser& user)
+{
+    for (AccessUser& existing : m_users)
+    {
+        if (existing.id() == user.id())
+        {
+            existing = user;
+            return;
+        }
+    }
+    m_users.append(user);
+}
+
+void AccessList::removeUser(const UserId& id)
+{
+    m_users.removeIf([&id](const AccessUser& user) { return user.id() == id; });
+    m_invites.removeIf([&id](const AccessInvite& invite) { return invite.maker() == id; });
+}
+
+void AccessList::removeDevice(const QByteArray& device)
+{
+    for (AccessUser& user : m_users)
+    {
+        QList<AccessDevice> devices = user.devices();
+        devices.removeIf([&device](const AccessDevice& entry) { return entry.fingerprint() == device; });
+        user.setDevices(devices);
+    }
+}
+
+void AccessList::removeInvite(const QByteArray& invite)
+{
+    m_invites.removeIf([&invite](const AccessInvite& entry) { return entry.fingerprint() == invite; });
 }
 
 QJsonObject AccessList::toJson() const

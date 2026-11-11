@@ -1,4 +1,5 @@
 #include "CommandRegistry.h"
+#include "AccessCommands.h"
 #include "AddressCoordinatesCommands.h"
 #include "EmergencyAssetCommands.h"
 #include "EmergencyCommands.h"
@@ -32,6 +33,14 @@ const QList<CommandType>& CommandRegistry::types()
         {AddTaskCategoryCommand::TypeName, &AddTaskCategoryCommand::fromJson},
         {ImportWardDirectoryCommand::TypeName, &ImportWardDirectoryCommand::fromJson},
         {ImportMinisteringCommand::TypeName, &ImportMinisteringCommand::fromJson},
+        {InviteCommand::TypeName, &InviteCommand::fromJson},
+        {RemoveUserCommand::TypeName, &RemoveUserCommand::fromJson},
+        {RemoveDeviceCommand::TypeName, &RemoveDeviceCommand::fromJson},
+        {WithdrawInviteCommand::TypeName, &WithdrawInviteCommand::fromJson},
+        {SetRoleCommand::TypeName, &SetRoleCommand::fromJson},
+        {RenameUserCommand::TypeName, &RenameUserCommand::fromJson},
+        {RenameDeviceCommand::TypeName, &RenameDeviceCommand::fromJson},
+        {JoinCommand::TypeName, &JoinCommand::fromJson},
     };
     return types;
 }

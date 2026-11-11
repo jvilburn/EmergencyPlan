@@ -162,6 +162,10 @@ integers: the highest journal sequence number of that device the version include
 | Key | Type | Holds |
 |---|---|---|
 | `journal` | journal object | this device's commands not yet seen to land |
+| `heldRecipients` | array of fingerprints | the fingerprints the version this device holds seals the data key to, sorted; written when empty too |
+| `inviteSeeds` | array of 32-byte values | the seed of each open invite this device made, in the order it made them; omitted when empty |
+| `joinSeed` | 32 bytes | the seed of the invite this device joined through; omitted on a device that did not join through an invite |
+| `noLongerShared` | `true` | a version this device took left it out; omitted while the ward is this device's |
 
 A journal:
 
@@ -565,6 +569,71 @@ A ministering collection:
 | `districts` | array of district objects | in id order; written when empty too |
 | `groups` | array of group objects | in id order; written when empty too |
 
+`invite`:
+
+| Key | Type | Holds |
+|---|---|---|
+| `actor` | 16 bytes | the fingerprint of the device that made it |
+| `invite` | invite object (see *access*) | the invite it adds |
+
+`removeUser`:
+
+| Key | Type | Holds |
+|---|---|---|
+| `actor` | 16 bytes | the fingerprint of the device that made it |
+| `user` | 16 bytes | the id of the user it removes |
+
+`removeDevice`:
+
+| Key | Type | Holds |
+|---|---|---|
+| `actor` | 16 bytes | the fingerprint of the device that made it |
+| `device` | 16 bytes | the fingerprint of the device it removes |
+
+`withdrawInvite`:
+
+| Key | Type | Holds |
+|---|---|---|
+| `actor` | 16 bytes | the fingerprint of the device that made it |
+| `invite` | 16 bytes | the fingerprint of the invite it withdraws |
+
+`setRole`:
+
+| Key | Type | Holds |
+|---|---|---|
+| `actor` | 16 bytes | the fingerprint of the device that made it |
+| `user` | 16 bytes | the id of the user whose role it sets |
+| `role` | change of a word: `admin` or `member` | the role |
+
+`renameUser`:
+
+| Key | Type | Holds |
+|---|---|---|
+| `actor` | 16 bytes | the fingerprint of the device that made it, whose user it renames |
+| `name` | change of a string | the user's name |
+
+`renameDevice`:
+
+| Key | Type | Holds |
+|---|---|---|
+| `actor` | 16 bytes | the fingerprint of the device that made it, which it renames |
+| `name` | change of a string | the device's name |
+
+`join`:
+
+| Key | Type | Holds |
+|---|---|---|
+| `invite` | invite object (see *access*) | the invite it joins through, as the joining device read it |
+| `device` | device object (see *access*) | the joining device |
+| `user` | joining user object | the user it joins as; required when the invite's `for` is `user`, and refused when it is `device` |
+
+A joining user:
+
+| Key | Type | Holds |
+|---|---|---|
+| `id` | 16 bytes | the new user's id |
+| `name` | string | the name they gave |
+
 ## Header and access list agree
 
 Every recipient's fingerprint is computed from exactly one device's or invite's pair of public
@@ -592,7 +661,8 @@ unkeyed BLAKE2b of the header line's bytes, without its `\n`, and of the payload
 three are base64url. It verifies with the verify key of the device or open invite whose
 fingerprint is the header's `writer`, as the access list of the version the reader holds gives
 it. A reader refuses a file whose signature does not verify, or whose `writer` that access list
-does not name.
+does not name. A device that joined through an invite writes its versions as that invite, signed
+with the invite's keys, while the version it holds does not name the device.
 
 ## Invitation files
 

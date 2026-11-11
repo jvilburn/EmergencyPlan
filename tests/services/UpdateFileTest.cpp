@@ -439,7 +439,7 @@ void UpdateFileTest::writtenVersionDropsTheMarksOfDevicesNoLongerListed()
     QCOMPARE(alice.session().payload().landed, written);
 }
 
-void UpdateFileTest::versionUnderAnotherKeyMustNameTheHeldOne()
+void UpdateFileTest::versionUnderAnotherKeyMustShareAKeyWithTheHeldOne()
 {
     TestClient alice("Laptop");
     TestClient bob("Phone");
@@ -478,7 +478,7 @@ void UpdateFileTest::versionUnderAnotherKeyMustNameTheHeldOne()
     QCOMPARE(phoneOf(bob, TestWard::bobId()), QString("555-8888"));
 }
 
-void UpdateFileTest::versionThatLeavesThisDeviceOutChangesNothing()
+void UpdateFileTest::versionThatLeavesThisDeviceOutEndsItsShare()
 {
     TestClient alice("Laptop");
     TestClient bob("Phone");
@@ -492,7 +492,11 @@ void UpdateFileTest::versionThatLeavesThisDeviceOutChangesNothing()
     TakeResult result = alice.session().takeUpdate(updateOf(bob, document, 2, dataKey, withoutAlice, {}));
 
     QVERIFY(result.status == TakeStatus::NotNamed);
-    QVERIFY(heldBy(alice) == before);
+    QVERIFY(alice.session().isNoLongerShared());
+    QVERIFY(alice.session().version() == before.version);
+    QVERIFY(alice.session().document() == before.payload.ward);
+    QVERIFY(alice.reopen().status == OpenStatus::Opened);
+    QVERIFY(alice.session().isNoLongerShared());
 }
 
 void UpdateFileTest::updateOfAnotherWardOrFormatOrNotAnUpdateChangesNothing()

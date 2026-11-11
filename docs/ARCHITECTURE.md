@@ -325,6 +325,26 @@ public:
     // The journal replayed onto another version of the document
     ReplayResult replayOnto(const Document& version);
 
+    // The next version, written as an update file that this device then holds; an update
+    // file taken
+    QByteArray writeUpdate();
+    TakeResult takeUpdate(const QByteArray& file);
+
+    // An invite, its invitation, and joining from one
+    InviteResult invite(const std::optional<InvitedUser>& user);
+    QByteArray writeInvitation(const QByteArray& invite) const;
+    InvitedWard readInvitation(const QByteArray& file) const;
+    void join(const InvitedWard& invited, const QString& userName, const QString& deviceName);
+
+    // You have changes to share; the ward no longer this device's
+    bool hasChangesToShare() const;
+    bool isNoLongerShared() const;
+
+    // Renames across every ward this device holds
+    void renameDeviceEverywhere(const QString& deviceName);
+    void renameUserEverywhere(const QString& userName);
+    std::optional<QString> followUserName(const QString& yourName);
+
     // The ward's geocoding and ward and stake lookup
     AutomaticUpdates& automaticUpdates();
 
@@ -343,6 +363,36 @@ signals:
 - **Undo** builds the inverse of the command on top of the undo stack and runs it through the commit step; when it applies, the command moves to the redo stack. **Redo** runs that command again through the commit step and moves it back. An undo whose inverse conflicts or is refused leaves the command where it was.
 - **Automatic updates** (`AutomaticUpdates`: geocoding and ward and stake lookup) change the document outside the journal, since their results are derived data that is computed again whenever it is missing. They start when a ward opens (`run()`), when an update is taken, and after a command (or an undo or redo) applies that gives a family an address the table of address coordinates lacks, or gives the document a ward unit that lacks its details or names a stake the document lacks; the session hands each applied command to `commandApplied()`, and a replay on its own starts none. The family edit panel's *Look Up* asks `lookUp()` for the address it shows, which joins the batch as one more request, taken off the failed list, so a family saved at that address while the request is pending is mapped by its answer; every answer is also emitted as `answered`, and the panel fills its coordinate fields only while it still shows the address it looked up. A batch requests each address some family has that the table lacks, once, skipping addresses with no street and those on the failed list, and maps the families at each address as its result arrives, adding the entry and never replacing one already there. When its last request answers, the batch adds again every held result the document lacks, so a document replaced mid-batch loses none, then drops every entry no family's address uses, and emits `applied` once if the batch changed the table. Ward and stake lookups run one at a time and apply as each completes. Addresses and unit numbers that fail, and wards a lookup finds without a chapel, go on the failed list, and are not tried again until their text changes; the list is kept in memory for the open ward and starts empty whenever a ward is created or opened. A lookup that changes the document emits `documentChanged` and `applied` once; a batch emits `documentChanged` for each family it maps and `applied` once at its end; one that changes nothing emits neither.
 - **Typed coordinates** are a journalled command on the address's entry, `SetAddressCoordinatesCommand`, which sets the entry whatever it holds; its inverse, `RevertAddressCoordinatesCommand`, puts back what the entry held when the command was built, provided the entry still holds the typed value.
+- **Access-list changes** are commands (`AccessCommands`): `InviteCommand`, `RemoveUserCommand`,
+  `RemoveDeviceCommand`, `WithdrawInviteCommand`, `SetRoleCommand`, `RenameUserCommand`,
+  `RenameDeviceCommand` and `JoinCommand`. Each carries the fingerprint of the device that made
+  it, and its rule in `AccessRules` asks about that device's user in the version in front of it,
+  the first time and on replay. None is undoable.
+- **Sharing by files.** `writeUpdate` writes the next version, one above the version this device
+  holds, and this device then holds it. When its access list has lost anyone the held version
+  seals to (the device state keeps those recipients), it rotates: a fresh data key, and the old
+  key's hash appended to the former keys. A local save never rotates. `takeUpdate` takes a
+  version through the checks its comment lists; a version descends when it shares a key with
+  this device's copy, the key either is under or one either names among its former keys, so
+  update files that crossed a rotation still converge. A version that leaves this device out
+  makes the ward no longer this device's: the journal is dropped, every command is refused, and
+  the copy stays, read-only.
+- **Invites and joining.** `invite` keeps a fresh seed in the device state, while the access list
+  names its invite, and commits `InviteCommand`. `writeInvitation` writes an `InvitationFile`
+  carrying that seed and the next version, which this device does not hold, so its changes stay
+  to share. `readInvitation` reads an invitation's version with the invite's keys
+  (`Identity::fromInviteSeed`), and `join` takes it as a first download and commits
+  `JoinCommand` on it. The joined device keeps the seed for as long as it holds the ward: a
+  version that names the invite and not the device is read with it, and the join runs again on
+  it before the replay (`JoinCommand::rejoin`) and enters the journal. The device writes as the
+  invite while the version it holds does not name it. A version naming neither refuses the join
+  while the journal still holds it (*This invite has been used or withdrawn*), and is a removal
+  once it has landed.
+- **Changes to share** are journal entries above this device's own landed mark in the version
+  it holds.
+- **Renames** run in every ward the store holds that is still this device's: the open ward
+  through the session, each other through a session opened on it. `followUserName` takes a
+  user name another of this user's devices set, after a version is taken.
 
 ### Example Command
 

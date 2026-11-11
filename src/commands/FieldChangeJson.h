@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AccessList.h"
 #include "Address.h"
 #include "Birthday.h"
 #include "FieldChange.h"
@@ -27,6 +28,7 @@ QJsonValue toJsonValue(const Birthday& value);
 QJsonValue toJsonValue(const std::optional<Gender>& value);
 QJsonValue toJsonValue(const std::optional<PersonId>& value);
 QJsonValue toJsonValue(const std::optional<QDate>& value);
+QJsonValue toJsonValue(AccessRole value);
 
 /// The value of type T under key, read strictly.
 template<typename T>
@@ -52,6 +54,8 @@ template<>
 std::optional<PersonId> readValue<std::optional<PersonId>>(JsonReader& json, const QString& key);
 template<>
 std::optional<QDate> readValue<std::optional<QDate>>(JsonReader& json, const QString& key);
+template<>
+AccessRole readValue<AccessRole>(JsonReader& json, const QString& key);
 
 /// The ids added and the ids removed, each as a sorted array of id strings.
 QJsonObject peopleChangeToJson(const IdSetChange<PersonId>& change);
