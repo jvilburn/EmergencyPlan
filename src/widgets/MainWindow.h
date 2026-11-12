@@ -61,6 +61,10 @@ private slots:
     void onNewWard();
     void onOpenWard();
     void onShowInFolder();
+
+    /// Shows Who has access for the open ward.
+    void onWhoHasAccess();
+
     void onSendUpdate();
     void onOpenUpdate();
 

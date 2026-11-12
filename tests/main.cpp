@@ -34,6 +34,7 @@
 #include "WardListTest.h"
 #include "WardSessionSavingTest.h"
 #include "WardSessionTest.h"
+#include "WhoHasAccessDialogTest.h"
 
 #include <QApplication>
 #include <QTest>
@@ -71,6 +72,7 @@ int main(int argc, char* argv[])
     AppDataTest appDataTest(nullptr);
     AppSettingsTest appSettingsTest(nullptr);
     SettingsDialogTest settingsDialogTest(nullptr);
+    WhoHasAccessDialogTest whoHasAccessDialogTest(nullptr);
     WardListTest wardListTest(nullptr);
     DocumentMetadataTest documentMetadataTest(nullptr);
     SpecReaderTest specReaderTest(nullptr);
@@ -108,6 +110,7 @@ int main(int argc, char* argv[])
     failures += QTest::qExec(&appDataTest, argc, argv);
     failures += QTest::qExec(&appSettingsTest, argc, argv);
     failures += QTest::qExec(&settingsDialogTest, argc, argv);
+    failures += QTest::qExec(&whoHasAccessDialogTest, argc, argv);
     failures += QTest::qExec(&wardListTest, argc, argv);
     failures += QTest::qExec(&documentMetadataTest, argc, argv);
     failures += QTest::qExec(&specReaderTest, argc, argv);

@@ -43,6 +43,23 @@ With **Use the Ward Planning server** turned off in Settings, the members of a w
 - **Opening an update** - Double-click the file, drop it on the window, or use **File > Open Update...**. When another ward is open, the update's ward opens first. An update older than the one this device has is set aside with *You already have a newer update*.
 - **This ward is no longer shared with this device.** - Shown above the map when an update opened here leaves this device out. The copy stays on this device, read-only, until you delete it with **Delete this copy**, which then shows the ward list.
 
+### Who has access
+
+**File > Who Has Access...** lists the ward's users, each as *admin* or *member*, with their devices under them and this device marked *this device*, then the open invites, such as *for Bob* or *a device for Alice*. Select a row to see what you can do with it; only what your role allows is offered.
+
+- **Add a user** - Asks who the invitation is for, with **Make them an admin** (off unless you check it), then saves an invitation file, such as *Tanglewood Ward - for Bob.wardinvite*, where you choose, opens its folder with the file selected, and shows a message to send with it. Send both to that person by any channel you trust with the file: whoever opens the invitation first joins the ward. Only admins can add users; a member sees which admins to ask in place of the button.
+- **Add a device** - Saves an invitation for another of your own devices. Send it to yourself and open it on that device.
+- **Save invitation** - Saves the invitation of an open invite made on this device again.
+- **Withdraw invite** - Closes an open invite, so its invitation no longer joins. The person who made it, or any admin, can withdraw it.
+- **Remove** - Removes a user, with their devices and the invites they made. Admins only, and not yourself.
+- **Make admin** / **Make member** - Changes a user's role. Admins only; the only admin cannot become a member until someone else is an admin.
+- **Remove device** - Removes another of your own devices.
+- **Leave** and **Remove this device** - Need the Ward Planning server, so they are not available while it is turned off in Settings.
+
+Each of these is a change like any other: with the server turned off, it reaches the other members in the next update you send, and a removal takes effect on each device as that update reaches it. A user who joins sends an update to every member. Names change in **File > Settings**, not here.
+
+Roles are an agreement among the people who use the ward, to keep well-meaning users from sharing it more widely than intended. They are not a security measure: every member holds the whole ward and could share it.
+
 ---
 
 ## Application Layout

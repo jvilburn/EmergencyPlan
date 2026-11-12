@@ -277,6 +277,7 @@ set(WIDGET_SOURCES
     src/widgets/PeoplePickerDialog.cpp
     src/widgets/OpenWardDialog.cpp
     src/widgets/SettingsDialog.cpp
+    src/widgets/WhoHasAccessDialog.cpp
     src/widgets/FamilyListView.cpp
     src/widgets/shared/FilterBar.cpp
     src/widgets/shared/FlowLayout.cpp
@@ -319,6 +320,7 @@ set(WIDGET_HEADERS
     src/widgets/PeoplePickerDialog.h
     src/widgets/OpenWardDialog.h
     src/widgets/SettingsDialog.h
+    src/widgets/WhoHasAccessDialog.h
     src/widgets/FamilyListView.h
     src/widgets/shared/FilterBar.h
     src/widgets/shared/FlowLayout.h

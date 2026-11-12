@@ -32,6 +32,7 @@
 #include "ShowInFolder.h"
 #include "UpdateFile.h"
 #include "UserFolder.h"
+#include "WhoHasAccessDialog.h"
 
 #include <QCloseEvent>
 #include <QDesktopServices>
@@ -172,6 +173,7 @@ void MainWindow::setupMenus(bool developer)
     openWardAction->setShortcut(QKeySequence::Open);
 
     fileMenu->addAction(tr("Show in &Folder"), this, &MainWindow::onShowInFolder);
+    fileMenu->addAction(tr("Who Has &Access..."), this, &MainWindow::onWhoHasAccess);
 
     fileMenu->addSeparator();
 
@@ -367,6 +369,12 @@ void MainWindow::onOpenWard()
 void MainWindow::onShowInFolder()
 {
     ShowInFolder::reveal(DocumentManager::instance()->filePath());
+}
+
+void MainWindow::onWhoHasAccess()
+{
+    WhoHasAccessDialog dialog(DocumentManager::instance()->session(), *m_settings, this);
+    dialog.exec();
 }
 
 void MainWindow::onSendUpdate()
