@@ -55,6 +55,11 @@ public:
     /// automatic updates; otherwise the ward open before stays open.
     OpenResult openWard(const DocumentId& document);
 
+    /// Joins the ward invited carries, which readInvitation found Joinable, through the
+    /// session, naming this device deviceName and, for a user invite, its new user userName,
+    /// and starts its automatic updates.
+    void join(const InvitedWard& invited, const QString& userName, const QString& deviceName);
+
     const DocumentId& documentId() const { return m_session.documentId(); }
 
     /// The open ward's file.

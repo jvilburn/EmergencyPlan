@@ -27,27 +27,28 @@ int main(int argc, char *argv[])
     QCommandLineParser parser;
     QCommandLineOption developerOption("developer", QObject::tr("Adds the Debugging menu."));
     parser.addOption(developerOption);
-    parser.addPositionalArgument("update", QObject::tr("An update file to open."));
+    parser.addPositionalArgument("file", QObject::tr("An update or invitation file to open."));
     parser.process(app);
 
     // App data is named after the application, so it is found after the name is set. A launch
-    // that cannot take the instance lock hands its update file, or nothing, to the Ward
-    // Planning holding it and exits; the lock is taken before the key file is read, so two
+    // that cannot take the instance lock hands its update or invitation file, or nothing, to
+    // the Ward Planning holding it and exits; the lock is taken before the key file is read, so two
     // first starts never both make keys.
     AppData appData = AppData::standard();
     InstanceLock lock(appData.lockFilePath(), nullptr);
-    QString update;
+    QString file;
     if (!parser.positionalArguments().isEmpty())
     {
-        update = QFileInfo(parser.positionalArguments().first()).absoluteFilePath();
+        file = QFileInfo(parser.positionalArguments().first()).absoluteFilePath();
     }
     if (!lock.take())
     {
-        if (!lock.handOver(update) && !update.isEmpty())
+        if (!lock.handOver(file) && !file.isEmpty())
         {
             QMessageBox::warning(nullptr, QObject::tr("Ward Planning"),
-                                 QObject::tr("Ward Planning is already running but did not answer, so the update was "
-                                             "not opened. Open it there with File > Open Update."));
+                                 QObject::tr("Ward Planning is already running but did not answer, so the file was "
+                                             "not opened. Open it there with File > Open Update or File > Join a "
+                                             "Ward."));
         }
         return 0;
     }
@@ -101,9 +102,9 @@ int main(int argc, char *argv[])
     window.show();
     QObject::connect(&lock, &InstanceLock::handedOver, &window, &MainWindow::onHandedOver);
     lock.listen();
-    if (!update.isEmpty())
+    if (!file.isEmpty())
     {
-        window.openUpdateFile(update);
+        window.openFile(file);
     }
 
     return app.exec();

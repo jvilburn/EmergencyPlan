@@ -84,3 +84,9 @@ OpenResult DocumentManager::openWard(const DocumentId& document)
     }
     return result;
 }
+
+void DocumentManager::join(const InvitedWard& invited, const QString& userName, const QString& deviceName)
+{
+    m_session.join(invited, userName, deviceName);
+    m_session.automaticUpdates().run();
+}

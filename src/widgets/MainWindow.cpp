@@ -172,6 +172,7 @@ void MainWindow::setupMenus(bool developer)
     QAction* openWardAction = fileMenu->addAction(tr("&Open Ward..."), this, &MainWindow::onOpenWard);
     openWardAction->setShortcut(QKeySequence::Open);
 
+    fileMenu->addAction(tr("&Join a Ward..."), this, &MainWindow::joinWard);
     fileMenu->addAction(tr("Show in &Folder"), this, &MainWindow::onShowInFolder);
     fileMenu->addAction(tr("Who Has &Access..."), this, &MainWindow::onWhoHasAccess);
 
@@ -344,10 +345,23 @@ bool MainWindow::chooseWard()
         case WardListChoice::NewWard:
             createWard();
             return true;
+        case WardListChoice::Join:
+            if (joinWard())
+            {
+                return true;
+            }
+            break;
         case WardListChoice::Close:
             return false;
         }
     }
+}
+
+bool MainWindow::joinWard()
+{
+    QString path = QFileDialog::getOpenFileName(this, tr("Join a Ward"), UserFolder::standard().path(),
+                                                tr("Ward Planning invitations (*.wardinvite)"));
+    return !path.isEmpty() && openInvitationFile(path);
 }
 
 void MainWindow::onNewWard()
@@ -442,6 +456,18 @@ void MainWindow::updateSharing()
     }
 }
 
+void MainWindow::openFile(const QString& path)
+{
+    if (path.endsWith(".wardinvite"))
+    {
+        openInvitationFile(path);
+    }
+    else
+    {
+        openUpdateFile(path);
+    }
+}
+
 void MainWindow::onOpenUpdate()
 {
     QString path = QFileDialog::getOpenFileName(this, tr("Open Update"), UserFolder::standard().path(),
@@ -527,13 +553,7 @@ void MainWindow::openUpdateFile(const QString& path)
         return;
     }
 
-    // A name set on another of this user's devices becomes Your name here.
-    QString name = DocumentManager::instance()->session().followUserName(m_settings->userName());
-    if (!name.isEmpty())
-    {
-        m_settings->setUserName(name);
-    }
-
+    followUserName();
     switch (result.replay.status)
     {
     case ReplayStatus::FastForwarded:
@@ -543,6 +563,65 @@ void MainWindow::openUpdateFile(const QString& path)
     case ReplayStatus::Abandoned:
         showChangesToRedo(result.replay);
         break;
+    }
+}
+
+bool MainWindow::openInvitationFile(const QString& path)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        QMessageBox::warning(this, tr("Join a Ward"),
+                             tr("The file %1 could not be read.").arg(QDir::toNativeSeparators(path)));
+        return false;
+    }
+    InvitedWard invited = DocumentManager::instance()->session().readInvitation(file.readAll());
+    switch (invited.status)
+    {
+    case InvitationStatus::Joinable:
+        break;
+    case InvitationStatus::AlreadyHasAccess:
+        if (invited.document != DocumentManager::instance()->documentId()
+            && (!mayLeaveWard() || !openWard(invited.document)))
+        {
+            return false;
+        }
+        QMessageBox::information(this, tr("Join a Ward"),
+                                 tr("This device already has access to %1.").arg(invited.wardName));
+        return true;
+    case InvitationStatus::NotAnInvitation:
+        qWarning("An invitation did not read: %s", qPrintable(invited.problem));
+        QMessageBox::warning(this, tr("Join a Ward"), tr("This file is not a Ward Planning invitation."));
+        return false;
+    case InvitationStatus::Newer:
+        QMessageBox::warning(this, tr("Join a Ward"),
+                             tr("This ward was saved by a newer version of Ward Planning. Update to see the latest "
+                                "changes and share your work."));
+        return false;
+    }
+
+    QMessageBox::StandardButton answer = QMessageBox::question(
+        this, tr("Join a Ward"), tr("Join %1?").arg(invited.wardName), QMessageBox::Ok | QMessageBox::Cancel,
+        QMessageBox::Ok);
+    if (answer != QMessageBox::Ok || !mayLeaveWard())
+    {
+        return false;
+    }
+    DocumentManager::instance()->join(invited, m_settings->userName(), m_settings->deviceName());
+    m_settings->setLastWard(invited.document);
+    followUserName();
+    QMessageBox::information(this, tr("Join a Ward"),
+                             tr("You have joined %1. Send an update to every member of the ward so they see you.")
+                                 .arg(invited.wardName));
+    return true;
+}
+
+void MainWindow::followUserName()
+{
+    QString name = DocumentManager::instance()->session().followUserName(m_settings->userName());
+    if (!name.isEmpty())
+    {
+        m_settings->setUserName(name);
     }
 }
 
@@ -608,7 +687,8 @@ void MainWindow::showChangesToRedo(const ReplayResult& replay)
 void MainWindow::dragEnterEvent(QDragEnterEvent* event)
 {
     const QList<QUrl> urls = event->mimeData()->urls();
-    if (urls.size() == 1 && urls.first().isLocalFile() && urls.first().toLocalFile().endsWith(".wardupdate"))
+    if (urls.size() == 1 && urls.first().isLocalFile()
+        && (urls.first().toLocalFile().endsWith(".wardupdate") || urls.first().toLocalFile().endsWith(".wardinvite")))
     {
         event->acceptProposedAction();
     }
@@ -626,17 +706,17 @@ void MainWindow::onHandedOver(const QString& path)
     {
         // Opened from the event loop rather than inside the socket's signal, since opening
         // it asks the user questions.
-        QMetaObject::invokeMethod(this, "openUpdateFile", Qt::QueuedConnection, Q_ARG(QString, path));
+        QMetaObject::invokeMethod(this, "openFile", Qt::QueuedConnection, Q_ARG(QString, path));
     }
 }
 
 void MainWindow::dropEvent(QDropEvent* event)
 {
-    // The update opens once the drop has finished, so the window it was dragged from is not
+    // The file opens once the drop has finished, so the window it was dragged from is not
     // held while the user answers what opening it asks.
     QString path = event->mimeData()->urls().first().toLocalFile();
     event->acceptProposedAction();
-    QMetaObject::invokeMethod(this, "openUpdateFile", Qt::QueuedConnection, Q_ARG(QString, path));
+    QMetaObject::invokeMethod(this, "openFile", Qt::QueuedConnection, Q_ARG(QString, path));
 }
 
 void MainWindow::onExportDecryptedJson()

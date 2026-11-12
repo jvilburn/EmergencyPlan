@@ -13,6 +13,7 @@ Ward Planning is a desktop application for managing ward family data, ministerin
 - The first launch asks for a name for this device and for your name
 - **File > New Ward** (Ctrl+N) - Creates a ward on this device, under your name
 - **File > Open Ward** (Ctrl+O) - Lists the wards on this device by name; a ward with changes you have not yet sent is marked *changes to share*, and one no longer shared with this device is marked *no longer shared*
+- **File > Join a Ward** - Opens an invitation you were sent (see *Joining a ward*); the ward list offers **Join a Ward** too
 - **File > Show in Folder** - Opens the folder that holds the ward's file, with the file selected; only this ward's devices can open it
 - Each launch reopens the last ward; when there is none, or it does not open, the ward list shows instead
 
@@ -59,6 +60,15 @@ With **Use the Ward Planning server** turned off in Settings, the members of a w
 Each of these is a change like any other: with the server turned off, it reaches the other members in the next update you send, and a removal takes effect on each device as that update reaches it. A user who joins sends an update to every member. Names change in **File > Settings**, not here.
 
 Roles are an agreement among the people who use the ward, to keep well-meaning users from sharing it more widely than intended. They are not a security measure: every member holds the whole ward and could share it.
+
+### Joining a ward
+
+An invitation is a file, such as *Tanglewood Ward - for Bob.wardinvite*, that a member of the ward sends you.
+
+- **Opening the invitation** - Double-click the file, drop it on the window, or use **File > Join a Ward...** or **Join a Ward...** in the ward list. The app asks *Join Tanglewood Ward?*, with the ward's own name; on OK you join, as the device and, for an invitation to a new user, the user named in **File > Settings**, and the ward opens.
+- **Send an update after joining** - The other members see you only once they open an update from you, so joining shows *You have changes to share*. Send an update to every member of the ward.
+- **This device already has access** - An invitation to a ward this device already holds opens that ward, and the invitation stays unused.
+- **This invite has been used or withdrawn** - Shown when an update opened after joining shows that someone else joined with the same invitation first, or that it was withdrawn before your join reached the members. The ward is then no longer shared with this device. Ask the sender for a new invitation.
 
 ---
 

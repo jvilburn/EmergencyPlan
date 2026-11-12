@@ -15,6 +15,7 @@ enum class WardListChoice
 {
     Open,     ///< open the chosen ward
     NewWard,  ///< create a ward
+    Join,     ///< join a ward through an invitation
     Close     ///< nothing
 };
 
@@ -41,11 +42,13 @@ private slots:
     void onOpen();
     void onItemActivated(QListWidgetItem* item);
     void onNewWard();
+    void onJoin();
     void updateOpenButton();
 
 private:
-    /// The result exec answers when the user chooses New Ward.
+    /// The results exec answers when the user chooses New Ward or Join a Ward.
     static constexpr int NewWardResult = 2;
+    static constexpr int JoinResult = 3;
 
     /// Chooses the ward item names and closes the list with Open.
     void openItem(const QListWidgetItem* item);

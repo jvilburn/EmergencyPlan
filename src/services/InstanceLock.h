@@ -23,8 +23,8 @@ public:
     /// Starts taking handovers. The holder calls it once it can act on one.
     void listen();
 
-    /// Hands message to the process holding the lock: the update file this launch was opened
-    /// with, or empty for none. Waits a few seconds for a holder still starting up; false when
+    /// Hands message to the process holding the lock: the update or invitation file this
+    /// launch was opened with, or empty for none. Waits a few seconds for a holder still starting up; false when
     /// none took the message.
     bool handOver(const QString& message) const;
 

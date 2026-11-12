@@ -15,7 +15,7 @@ OpenWardDialog::OpenWardDialog(const QList<WardListEntry>& wards, QWidget* paren
     QVBoxLayout* layout = new QVBoxLayout(this);
     if (wards.isEmpty())
     {
-        layout->addWidget(new QLabel(tr("This device holds no wards yet. Create one with New Ward."), this));
+        layout->addWidget(new QLabel(tr("This device holds no wards yet. Create one with New Ward, or open an invitation with Join a Ward."), this));
     }
 
     m_list = new QListWidget(this);
@@ -47,12 +47,14 @@ OpenWardDialog::OpenWardDialog(const QList<WardListEntry>& wards, QWidget* paren
     QDialogButtonBox* buttons = new QDialogButtonBox(this);
     m_openButton = buttons->addButton(tr("Open"), QDialogButtonBox::AcceptRole);
     QPushButton* newWardButton = buttons->addButton(tr("New Ward..."), QDialogButtonBox::ActionRole);
+    QPushButton* joinButton = buttons->addButton(tr("Join a Ward..."), QDialogButtonBox::ActionRole);
     buttons->addButton(QDialogButtonBox::Close);
     layout->addWidget(buttons);
 
     connect(buttons, &QDialogButtonBox::accepted, this, &OpenWardDialog::onOpen);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     connect(newWardButton, &QPushButton::clicked, this, &OpenWardDialog::onNewWard);
+    connect(joinButton, &QPushButton::clicked, this, &OpenWardDialog::onJoin);
     connect(m_list, &QListWidget::itemActivated, this, &OpenWardDialog::onItemActivated);
     connect(m_list, &QListWidget::itemSelectionChanged, this, &OpenWardDialog::updateOpenButton);
 
@@ -71,6 +73,8 @@ WardListChoice OpenWardDialog::choose()
         return WardListChoice::Open;
     case NewWardResult:
         return WardListChoice::NewWard;
+    case JoinResult:
+        return WardListChoice::Join;
     default:
         return WardListChoice::Close;
     }
@@ -99,6 +103,11 @@ void OpenWardDialog::openItem(const QListWidgetItem* item)
 void OpenWardDialog::onNewWard()
 {
     done(NewWardResult);
+}
+
+void OpenWardDialog::onJoin()
+{
+    done(JoinResult);
 }
 
 void OpenWardDialog::updateOpenButton()

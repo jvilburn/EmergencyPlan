@@ -41,19 +41,19 @@ public:
     bool openStartingWard();
 
 public slots:
-    /// Takes the update file at path, opening its ward first when another is open, and tells
-    /// the user how it went.
-    void openUpdateFile(const QString& path);
+    /// Opens the file at path by its suffix: a .wardinvite as an invitation, anything else as
+    /// an update.
+    void openFile(const QString& path);
 
-    /// Another launch handed over path, its update file, or nothing: brings the window
-    /// forward and opens the update.
+    /// Another launch handed over path, its update or invitation file, or nothing: brings the
+    /// window forward and opens the file.
     void onHandedOver(const QString& path);
 
 protected:
     /// Closes only when mayLeaveWard agrees.
     void closeEvent(QCloseEvent* event) override;
 
-    /// Accepts a dragged update file, which a drop opens.
+    /// Accepts one dragged update or invitation file, which a drop opens.
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dropEvent(QDropEvent* event) override;
 
@@ -144,9 +144,27 @@ private:
     /// when it does not open.
     bool openWard(const DocumentId& document);
 
-    /// Shows the ward list until a ward opens or is created from it, or the user closes it.
-    /// Choosing the ward already open leaves it open as it is. False when the user closes it.
+    /// Shows the ward list until a ward opens, is created or is joined from it, or the user
+    /// closes it. Choosing the ward already open leaves it open as it is. False when the user
+    /// closes it.
     bool chooseWard();
+
+    /// Offers a file picker for an invitation and opens the one chosen. True when a ward
+    /// opened or was joined through it.
+    bool joinWard();
+
+    /// Takes the update file at path, opening its ward first when another is open, and tells
+    /// the user how it went.
+    void openUpdateFile(const QString& path);
+
+    /// Reads the invitation file at path: opens this device's own copy of its ward, or asks
+    /// to join the ward and joins it, and tells the user how it went. True when a ward opened
+    /// or was joined.
+    bool openInvitationFile(const QString& path);
+
+    /// Sets Your name from the open ward, where this device's user has another name there,
+    /// and renames the user in this device's other wards to match.
+    void followUserName();
 
     /// Writes the to-redo file of an abandoned replay and tells the user where it is, with an
     /// offer to open it, and who a removal among the changes left with access.
