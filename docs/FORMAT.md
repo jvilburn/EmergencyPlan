@@ -611,8 +611,14 @@ A ministering collection:
 | Key | Type | Holds |
 |---|---|---|
 | `actor` | 16 bytes | the fingerprint of the device that made it, whose user's details it sets |
-| `name` | change of a string | the user's name; omitted when unchanged |
-| `email` | change of a string | the user's email; omitted when unchanged |
+| `details` | change of a user details object | the user's name and email |
+
+A user details object:
+
+| Key | Type | Holds |
+|---|---|---|
+| `name` | string | the user's name |
+| `email` | string | the user's email; empty when they have none |
 
 `renameDevice`:
 

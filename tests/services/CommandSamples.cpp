@@ -561,18 +561,22 @@ QList<CommandSample> setRoleSamples()
     };
 }
 
-/// Alice's name and email both set; it conflicts once her email was set otherwise elsewhere.
+/// Carol's name and email set from her desktop; it conflicts once her details were set otherwise
+/// elsewhere, and once she is gone.
 QList<CommandSample> setUserDetailsSamples()
 {
     AccessSampleWard sample = accessSampleWard();
-    CommandPtr set = SetUserDetailsCommand::create(sample.laptop.fingerprint(), sample.ward.access(),
-                                                   {"Alice Jones", "alice@example.com"});
-    AccessUser setElsewhere = accessUserNamed(sample.ward, "Alice");
-    setElsewhere.setDetails({"Alice", "alice.smith@example.com"});
+    CommandPtr set = SetUserDetailsCommand::create(sample.desktop.fingerprint(), sample.ward.access(),
+                                                   {"Carol Jones", "carol@example.com"});
+    AccessUser carol = accessUserNamed(sample.ward, "Carol");
+    AccessUser setElsewhere = carol;
+    setElsewhere.setDetails({"Carol", "carol.smith@example.com"});
+    CommandPtr remove = RemoveUserCommand::create(sample.laptop.fingerprint(), carol);
     return {
         CommandSample{SampleCase::StartHolds, sample.ward, set},
         CommandSample{SampleCase::ResultHolds, runOn(sample.ward, set), set},
         CommandSample{SampleCase::Conflicts, withAccessUser(sample.ward, setElsewhere), set},
+        CommandSample{SampleCase::Conflicts, runOn(sample.ward, remove), set},
     };
 }
 

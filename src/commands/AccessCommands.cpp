@@ -7,7 +7,26 @@
 #include "Identity.h"
 
 #include <QObject>
-#include <QStringList>
+
+// JSON for the user details SetUserDetailsCommand changes, read and written through the
+// templates in FieldChangeJson.h: an object holding name and email.
+
+QJsonValue toJsonValue(const UserDetails& value)
+{
+    QJsonObject json;
+    json["name"] = value.name;
+    json["email"] = value.email;
+    return json;
+}
+
+template<>
+UserDetails readValue<UserDetails>(JsonReader& json, const QString& key)
+{
+    JsonReader details = json.object(key);
+    UserDetails value{details.string("name"), details.string("email")};
+    details.finish();
+    return value;
+}
 
 namespace
 {
@@ -315,45 +334,34 @@ CommandPtr SetUserDetailsCommand::create(const QByteArray& actor, const AccessLi
                                          const UserDetails& details)
 {
     UserDetails current = access.userOfDevice(actor)->details();
-    std::optional<FieldChange<QString>> name = changeBetween(current.name, details.name);
-    std::optional<FieldChange<QString>> email = changeBetween(current.email, details.email);
-    if (!name.has_value() && !email.has_value())
+    if (current == details)
     {
         return nullptr;
     }
-    QStringList lines;
-    if (name.has_value())
-    {
-        lines.append(QObject::tr("Name: %1").arg(details.name));
-    }
-    if (email.has_value())
-    {
-        lines.append(details.email.isEmpty() ? QObject::tr("No email") : QObject::tr("Email: %1").arg(details.email));
-    }
-    CommandDescription description(QObject::tr("Change your name or email"), lines);
-    return std::make_shared<SetUserDetailsCommand>(actor, name, email, description);
+    QString email = details.email.isEmpty() ? QObject::tr("No email") : QObject::tr("Email: %1").arg(details.email);
+    CommandDescription description(QObject::tr("Change your name or email"),
+                                   {QObject::tr("Name: %1").arg(details.name), email});
+    return std::make_shared<SetUserDetailsCommand>(actor, FieldChange<UserDetails>(current, details), description);
 }
 
-SetUserDetailsCommand::SetUserDetailsCommand(const QByteArray& actor, const std::optional<FieldChange<QString>>& name,
-                                             const std::optional<FieldChange<QString>>& email,
+SetUserDetailsCommand::SetUserDetailsCommand(const QByteArray& actor, const FieldChange<UserDetails>& details,
                                              const CommandDescription& description)
     : Command(description)
     , m_actor(actor)
-    , m_name(name)
-    , m_email(email)
+    , m_details(details)
 {
 }
 
 CommandOutcome SetUserDetailsCommand::execute(Document& document) const
 {
     AccessList access = document.access();
-    AccessUser user = *access.userOfDevice(m_actor);
-    if (!changeHolds(m_name, user.name()) || !changeHolds(m_email, user.email()))
+    std::optional<AccessUser> user = access.userOfDevice(m_actor);
+    if (!user.has_value() || !m_details.holds(user->details()))
     {
         return CommandOutcome::Conflicted;
     }
-    user.setDetails(UserDetails{changedValue(m_name, user.name()), changedValue(m_email, user.email())});
-    access.setUser(user);
+    user->setDetails(m_details.after());
+    access.setUser(*user);
     document.setAccess(access);
     return CommandOutcome::Applied;
 }
@@ -362,8 +370,7 @@ QJsonObject SetUserDetailsCommand::toJson() const
 {
     QJsonObject json;
     json["actor"] = Base64Url::encode(m_actor);
-    writeChange(json, "name", m_name);
-    writeChange(json, "email", m_email);
+    json["details"] = changeToJson(m_details);
     return json;
 }
 
@@ -375,10 +382,9 @@ DocumentChange SetUserDetailsCommand::documentChange() const
 CommandPtr SetUserDetailsCommand::fromJson(JsonReader json, const CommandDescription& description)
 {
     QByteArray actor = readActor(json);
-    std::optional<FieldChange<QString>> name = readChange<QString>(json, "name");
-    std::optional<FieldChange<QString>> email = readChange<QString>(json, "email");
+    FieldChange<UserDetails> details = changeFromJson<UserDetails>(json.object("details"));
     json.finish();
-    return std::make_shared<SetUserDetailsCommand>(actor, name, email, description);
+    return std::make_shared<SetUserDetailsCommand>(actor, details, description);
 }
 
 // ============================================================================

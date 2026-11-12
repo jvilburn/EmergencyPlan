@@ -16,7 +16,8 @@ public:
     SendFileDialog(const QString& title, const QString& text, const QString& path, QWidget* parent);
 
 protected:
-    /// Adds widget below the text, above the file.
+    /// Adds widget below the text and any widget added before it, above the file, left-aligned
+    /// at its size hint.
     void addAboveFile(QWidget* widget);
 
 private:

@@ -661,11 +661,19 @@ void readSetRoleFields(Fields fields)
     fields.done();
 }
 
+/// A user details object: the name and the email, empty when there is none.
+void userDetailsValue(Fields& owner, const std::string& key)
+{
+    Fields details = owner.object(key);
+    details.text("name");
+    details.text("email");
+    details.done();
+}
+
 void readSetUserDetailsFields(Fields fields)
 {
     fields.bytes("actor", FingerprintBytes);
-    readOptionalChange(fields, "name", textValue);
-    readOptionalChange(fields, "email", textValue);
+    readChange(fields.object("details"), userDetailsValue);
     fields.done();
 }
 

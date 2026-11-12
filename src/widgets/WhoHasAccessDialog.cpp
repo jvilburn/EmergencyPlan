@@ -62,7 +62,7 @@ WhoHasAccessDialog::WhoHasAccessDialog(WardSession& session, const AppSettings& 
     listRow->addLayout(rowActions);
     layout->addLayout(listRow);
 
-    layout->addWidget(new QLabel(tr("Names change in Settings."), this));
+    layout->addWidget(new QLabel(tr("Names and your email change in Settings."), this));
 
     m_wardActions = new QWidget(this);
     QHBoxLayout* wardRow = new QHBoxLayout(m_wardActions);

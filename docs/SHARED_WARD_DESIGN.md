@@ -839,7 +839,9 @@ converted.
   an email or text to the other members so they get your changes.* Below that it lists every
   user of the ward but this device's own, each by name and with their email where they have
   one, with *Copy Emails*, shown while any listed user has an email, which copies every listed
-  email, comma-separated, ready for an email's To line. It shows the update file as an icon
+  email, comma-separated, ready for an email's To line. When this device's user has other
+  devices in the ward, a line names them, comma-separated: *Also open this update on your
+  other devices: Phone, Tablet.* It shows the update file as an icon
   with its name, to drag into an email or message, with *Drag this into your email* beside
   it, and *Show in Folder*, which opens the folder holding it with the file selected, and
   *Done*. On a phone the platform's share sheet takes the drag's place. Each member sends to
@@ -2178,9 +2180,10 @@ Names and email in *Settings*, with no server:
   *Your name* and *Your email* to them and journals one command in each of its other wards
   that has either otherwise; a ward held only by the second device ends with the new name
   and email
-- *Send Update*'s dialog, in a ward of this device's user and two others, one with an email
-  and one without, lists the two others and no one else, and *Copy Emails* copies exactly
-  the one email
+- *Send Update*'s dialog, with this device's user between three others, two with an email
+  and one without, lists the three others and no one else, and *Copy Emails* copies exactly
+  the two emails, comma-separated; when this device's user has two other devices, its
+  reminder names exactly those two, and with no other device it has none
 
 The server switch, against the fake server:
 

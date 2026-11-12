@@ -110,5 +110,5 @@ SendFileDialog::SendFileDialog(const QString& title, const QString& text, const 
 
 void SendFileDialog::addAboveFile(QWidget* widget)
 {
-    m_aboveFile->addWidget(widget);
+    m_aboveFile->addWidget(widget, 0, Qt::AlignLeft);
 }

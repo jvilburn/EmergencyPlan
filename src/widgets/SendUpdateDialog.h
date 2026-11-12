@@ -16,7 +16,8 @@ struct OtherMembers
 };
 
 /// The update file just written, ready to send: what to do with it, the other members it goes
-/// to with Copy Emails while any has an email, and the file to drag into an email.
+/// to with Copy Emails while any has an email, a reminder naming this user's other devices
+/// when there are any, and the file to drag into an email.
 class SendUpdateDialog : public SendFileDialog
 {
     Q_OBJECT
@@ -27,4 +28,9 @@ public:
 
     /// The users of access other than the one holding the device self, as the dialog lists them.
     static OtherMembers otherMembers(const AccessList& access, const QByteArray& self);
+
+    /// The line reminding the user to open the update on their other devices, naming them
+    /// comma-separated in the access list's order; empty when the user holding the device self
+    /// has no other device.
+    static QString otherDevicesReminder(const AccessList& access, const QByteArray& self);
 };

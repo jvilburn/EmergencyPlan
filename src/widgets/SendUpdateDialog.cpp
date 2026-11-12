@@ -4,7 +4,6 @@
 #include <QGuiApplication>
 #include <QLabel>
 #include <QPushButton>
-#include <QVBoxLayout>
 
 SendUpdateDialog::SendUpdateDialog(const AccessList& access, const QByteArray& self, const QString& path,
                                    QWidget* parent)
@@ -14,26 +13,27 @@ SendUpdateDialog::SendUpdateDialog(const AccessList& access, const QByteArray& s
                      path, parent)
 {
     OtherMembers members = otherMembers(access, self);
-    if (members.lines.isEmpty())
+    if (!members.lines.isEmpty())
     {
-        return;
+        QLabel* list = new QLabel(members.lines.join("\n"), this);
+        list->setTextFormat(Qt::PlainText);
+        list->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        addAboveFile(list);
     }
-
-    QWidget* section = new QWidget(this);
-    QVBoxLayout* layout = new QVBoxLayout(section);
-    layout->setContentsMargins(0, 0, 0, 0);
-    QLabel* list = new QLabel(members.lines.join("\n"), section);
-    list->setTextFormat(Qt::PlainText);
-    list->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    layout->addWidget(list);
     if (!members.emails.isEmpty())
     {
-        QPushButton* copyEmails = new QPushButton(tr("Copy Emails"), section);
-        layout->addWidget(copyEmails, 0, Qt::AlignLeft);
+        QPushButton* copyEmails = new QPushButton(tr("Copy Emails"), this);
+        addAboveFile(copyEmails);
         QString emails = members.emails;
         connect(copyEmails, &QPushButton::clicked, this, [emails]() { QGuiApplication::clipboard()->setText(emails); });
     }
-    addAboveFile(section);
+    QString reminder = otherDevicesReminder(access, self);
+    if (!reminder.isEmpty())
+    {
+        QLabel* reminderLabel = new QLabel(reminder, this);
+        reminderLabel->setTextFormat(Qt::PlainText);
+        addAboveFile(reminderLabel);
+    }
 }
 
 OtherMembers SendUpdateDialog::otherMembers(const AccessList& access, const QByteArray& self)
@@ -57,4 +57,21 @@ OtherMembers SendUpdateDialog::otherMembers(const AccessList& access, const QByt
     }
     members.emails = emails.join(", ");
     return members;
+}
+
+QString SendUpdateDialog::otherDevicesReminder(const AccessList& access, const QByteArray& self)
+{
+    QStringList names;
+    for (const AccessDevice& device : access.userOfDevice(self)->devices())
+    {
+        if (device.fingerprint() != self)
+        {
+            names.append(device.name());
+        }
+    }
+    if (names.isEmpty())
+    {
+        return QString();
+    }
+    return tr("Also open this update on your other devices: %1.").arg(names.join(", "));
 }

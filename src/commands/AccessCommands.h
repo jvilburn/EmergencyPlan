@@ -143,9 +143,8 @@ private:
     AccessRole m_role;
 };
 
-/// Sets the name and email of the user of the device that made it, each judged as its own
-/// value, so a name set on one device and an email set on another both apply. It names no
-/// other user, so a device sets the details only of its own user.
+/// Sets the name and email of the user of the device that made it, judged as one value. It
+/// names no other user, so a device sets the details only of its own user.
 class SetUserDetailsCommand : public Command
 {
 public:
@@ -156,9 +155,8 @@ public:
     /// to do.
     static CommandPtr create(const QByteArray& actor, const AccessList& access, const UserDetails& details);
 
-    /// A change to the name, to the email, or to both.
-    SetUserDetailsCommand(const QByteArray& actor, const std::optional<FieldChange<QString>>& name,
-                          const std::optional<FieldChange<QString>>& email, const CommandDescription& description);
+    SetUserDetailsCommand(const QByteArray& actor, const FieldChange<UserDetails>& details,
+                          const CommandDescription& description);
 
     QString type() const override { return TypeName; }
     CommandOutcome execute(Document& document) const override;
@@ -169,8 +167,7 @@ public:
 
 private:
     QByteArray m_actor;
-    std::optional<FieldChange<QString>> m_name;
-    std::optional<FieldChange<QString>> m_email;
+    FieldChange<UserDetails> m_details;
 };
 
 /// Renames the device that made it, judged per value. It names no other device, so a device
