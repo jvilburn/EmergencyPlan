@@ -10,6 +10,6 @@ public:
     explicit WardListTest(QObject* parent);
 
 private slots:
-    void listNamesEachWardAndMarksChangesToShare();
+    void listNamesEachWardInOrder();
     void listMarksChangesToShareAndWardsNoLongerShared();
 };

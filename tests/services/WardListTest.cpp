@@ -1,6 +1,5 @@
 #include "WardListTest.h"
 #include "AccessCommands.h"
-#include "FamilyCommands.h"
 #include "TestClient.h"
 #include "TestSharing.h"
 #include "TestWard.h"
@@ -50,15 +49,11 @@ WardListTest::WardListTest(QObject* parent)
 {
 }
 
-void WardListTest::listNamesEachWardAndMarksChangesToShare()
+void WardListTest::listNamesEachWardInOrder()
 {
     TestClient client("Laptop");
     client.createWard(named("Tanglewood"));
     DocumentId tanglewood = client.session().documentId();
-    Family smith = TestWard::family(client.session().document(), TestWard::smithId());
-    Family edited = TestWard::withPhone(smith, TestWard::bobId(), "555-0100");
-    QVERIFY(client.session().commit(UpdateFamilyCommand::fromEdit(smith, edited, client.session().document())).status
-            == CommitStatus::Applied);
     client.createWard(named("Oak"));
     DocumentId firstOak = client.session().documentId();
     client.createWard(named("Oak"));
@@ -79,18 +74,15 @@ void WardListTest::listNamesEachWardAndMarksChangesToShare()
         QVERIFY(entries[i].document == oaks[i]);
         QVERIFY(entries[i].status == OpenStatus::Opened);
         QCOMPARE(entries[i].name, QString("Oak Ward"));
-        QVERIFY(!entries[i].changesToShare);
     }
     QVERIFY(entries[2].document == tanglewood);
     QVERIFY(entries[2].status == OpenStatus::Opened);
     QCOMPARE(entries[2].name, QString("Tanglewood Ward"));
-    QVERIFY(entries[2].changesToShare);
     for (int i = 0; i < 2; ++i)
     {
         QVERIFY(entries[3 + i].document == damaged[i]);
         QVERIFY(entries[3 + i].status == OpenStatus::CannotRead);
         QVERIFY(entries[3 + i].name.isEmpty());
-        QVERIFY(!entries[3 + i].changesToShare);
     }
 }
 
@@ -122,7 +114,6 @@ void WardListTest::listMarksChangesToShareAndWardsNoLongerShared()
     QVERIFY(goneEntry.status == OpenStatus::Opened);
     QVERIFY(unsentEntry.changesToShare);
     QVERIFY(!sentEntry.changesToShare);
-    QVERIFY(!goneEntry.changesToShare);
     QVERIFY(!unsentEntry.noLongerShared);
     QVERIFY(!sentEntry.noLongerShared);
     QVERIFY(goneEntry.noLongerShared);

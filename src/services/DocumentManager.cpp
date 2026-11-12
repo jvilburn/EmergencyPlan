@@ -78,7 +78,7 @@ void DocumentManager::createWard(const QString& userName, const QString& deviceN
 OpenResult DocumentManager::openWard(const DocumentId& document)
 {
     OpenResult result = m_session.openWard(document);
-    if (result.status == OpenStatus::Opened)
+    if (result.status == OpenStatus::Opened && !m_session.isNoLongerShared())
     {
         m_session.automaticUpdates().run();
     }

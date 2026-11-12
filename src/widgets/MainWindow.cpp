@@ -299,7 +299,7 @@ bool MainWindow::openStartingWard()
     }
 
     std::optional<DocumentId> lastWard = m_settings->lastWard();
-    if (lastWard && openWard(*lastWard))
+    if (lastWard && DocumentManager::instance()->holdsWard(*lastWard) && openWard(*lastWard))
     {
         return true;
     }
