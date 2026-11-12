@@ -7,6 +7,7 @@
 #include "Identity.h"
 
 #include <QObject>
+#include <QStringList>
 
 namespace
 {
@@ -307,61 +308,77 @@ CommandPtr SetRoleCommand::fromJson(JsonReader json, const CommandDescription& d
 }
 
 // ============================================================================
-// RenameUserCommand
+// SetUserDetailsCommand
 // ============================================================================
 
-CommandPtr RenameUserCommand::create(const QByteArray& actor, const AccessList& access, const QString& name)
+CommandPtr SetUserDetailsCommand::create(const QByteArray& actor, const AccessList& access,
+                                         const UserDetails& details)
 {
-    QString current = access.userOfDevice(actor)->name();
-    if (current == name)
+    UserDetails current = access.userOfDevice(actor)->details();
+    std::optional<FieldChange<QString>> name = changeBetween(current.name, details.name);
+    std::optional<FieldChange<QString>> email = changeBetween(current.email, details.email);
+    if (!name.has_value() && !email.has_value())
     {
         return nullptr;
     }
-    return std::make_shared<RenameUserCommand>(actor, FieldChange<QString>(current, name),
-                                               CommandDescription(QObject::tr("Rename yourself to %1").arg(name), {}));
+    QStringList lines;
+    if (name.has_value())
+    {
+        lines.append(QObject::tr("Name: %1").arg(details.name));
+    }
+    if (email.has_value())
+    {
+        lines.append(details.email.isEmpty() ? QObject::tr("No email") : QObject::tr("Email: %1").arg(details.email));
+    }
+    CommandDescription description(QObject::tr("Change your name or email"), lines);
+    return std::make_shared<SetUserDetailsCommand>(actor, name, email, description);
 }
 
-RenameUserCommand::RenameUserCommand(const QByteArray& actor, const FieldChange<QString>& name,
-                                     const CommandDescription& description)
+SetUserDetailsCommand::SetUserDetailsCommand(const QByteArray& actor, const std::optional<FieldChange<QString>>& name,
+                                             const std::optional<FieldChange<QString>>& email,
+                                             const CommandDescription& description)
     : Command(description)
     , m_actor(actor)
     , m_name(name)
+    , m_email(email)
 {
 }
 
-CommandOutcome RenameUserCommand::execute(Document& document) const
+CommandOutcome SetUserDetailsCommand::execute(Document& document) const
 {
     AccessList access = document.access();
     AccessUser user = *access.userOfDevice(m_actor);
-    if (!m_name.holds(user.name()))
+    if (!changeHolds(m_name, user.name()) || !changeHolds(m_email, user.email()))
     {
         return CommandOutcome::Conflicted;
     }
-    user.setName(m_name.after());
+    user.setDetails(UserDetails{changedValue(m_name, user.name()), changedValue(m_email, user.email())});
     access.setUser(user);
     document.setAccess(access);
     return CommandOutcome::Applied;
 }
 
-QJsonObject RenameUserCommand::toJson() const
+QJsonObject SetUserDetailsCommand::toJson() const
 {
     QJsonObject json;
     json["actor"] = Base64Url::encode(m_actor);
-    json["name"] = changeToJson(m_name);
+    writeChange(json, "name", m_name);
+    writeChange(json, "email", m_email);
     return json;
 }
 
-DocumentChange RenameUserCommand::documentChange() const
+DocumentChange SetUserDetailsCommand::documentChange() const
 {
     return DocumentChange::full();
 }
 
-CommandPtr RenameUserCommand::fromJson(JsonReader json, const CommandDescription& description)
+CommandPtr SetUserDetailsCommand::fromJson(JsonReader json, const CommandDescription& description)
 {
     QByteArray actor = readActor(json);
-    FieldChange<QString> name = changeFromJson<QString>(json.object("name"));
+    std::optional<FieldChange<QString>> name = readChange<QString>(json, "name");
+    std::optional<FieldChange<QString>> email = readChange<QString>(json, "email");
     json.finish();
-    return std::make_shared<RenameUserCommand>(actor, name, description);
+    return std::make_shared<SetUserDetailsCommand>(actor, name, email, description);
 }
 
 // ============================================================================
@@ -435,15 +452,15 @@ CommandPtr RenameDeviceCommand::fromJson(JsonReader json, const CommandDescripti
 // JoinCommand
 // ============================================================================
 
-CommandPtr JoinCommand::create(const AccessInvite& invite, const AccessDevice& device, const QString& userName,
+CommandPtr JoinCommand::create(const AccessInvite& invite, const AccessDevice& device, const UserDetails& user,
                                const QString& wardName)
 {
-    std::optional<JoiningUser> user;
+    std::optional<JoiningUser> joining;
     if (invite.invitedUser().has_value())
     {
-        user = JoiningUser{UserId::generate(), userName};
+        joining = JoiningUser{UserId::generate(), user};
     }
-    return std::make_shared<JoinCommand>(invite, device, user,
+    return std::make_shared<JoinCommand>(invite, device, joining,
                                          CommandDescription(QObject::tr("Join %1").arg(wardName), {}));
 }
 
@@ -454,7 +471,7 @@ CommandPtr JoinCommand::rejoin(const AccessInvite& invite, const AccessList& hel
     if (invite.invitedUser().has_value())
     {
         AccessUser joined = *held.userOfDevice(device);
-        user = JoiningUser{joined.id(), joined.name()};
+        user = JoiningUser{joined.id(), joined.details()};
     }
     return std::make_shared<JoinCommand>(invite, *held.findDevice(device), user,
                                          CommandDescription(QObject::tr("Join %1").arg(wardName), {}));
@@ -479,7 +496,7 @@ CommandOutcome JoinCommand::execute(Document& document) const
     access.removeInvite(m_invite.fingerprint());
     if (m_user.has_value())
     {
-        access.setUser(AccessUser(m_user->id, m_user->name, m_invite.invitedUser()->role, {m_device}));
+        access.setUser(AccessUser(m_user->id, m_user->details, m_invite.invitedUser()->role, {m_device}));
     }
     else
     {
@@ -507,7 +524,8 @@ QJsonObject JoinCommand::toJson() const
     {
         QJsonObject user;
         user["id"] = m_user->id.toString();
-        user["name"] = m_user->name;
+        user["name"] = m_user->details.name;
+        user["email"] = m_user->details.email;
         json["user"] = user;
     }
     return json;
@@ -528,8 +546,9 @@ CommandPtr JoinCommand::fromJson(JsonReader json, const CommandDescription& desc
         JsonReader userJson = json.object("user");
         UserId id = readUserId(userJson, "id");
         QString name = userJson.string("name");
+        QString email = userJson.string("email");
         userJson.finish();
-        user = JoiningUser{id, name};
+        user = JoiningUser{id, UserDetails{name, email}};
     }
     json.finish();
     return std::make_shared<JoinCommand>(invite, device, user, description);

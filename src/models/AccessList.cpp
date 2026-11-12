@@ -68,9 +68,10 @@ bool AccessDevice::operator==(const AccessDevice& other) const
 // AccessUser
 // ============================================================================
 
-AccessUser::AccessUser(const UserId& id, const QString& name, AccessRole role, const QList<AccessDevice>& devices)
+AccessUser::AccessUser(const UserId& id, const UserDetails& details, AccessRole role,
+                       const QList<AccessDevice>& devices)
     : m_id(id)
-    , m_name(name)
+    , m_details(details)
     , m_role(role)
     , m_devices(devices)
 {
@@ -80,7 +81,8 @@ QJsonObject AccessUser::toJson() const
 {
     QJsonObject json;
     json["id"] = m_id.toString();
-    json["name"] = m_name;
+    json["name"] = m_details.name;
+    json["email"] = m_details.email;
     json["role"] = accessRoleName(m_role);
     QJsonArray devices;
     for (const AccessDevice& device : m_devices)
@@ -95,6 +97,7 @@ AccessUser AccessUser::fromJson(JsonReader json)
 {
     UserId id = UserId::fromBytes(json.bytes("id", Crypto::IdBytes));
     QString name = json.string("name");
+    QString email = json.string("email");
     AccessRole role = readAccessRole(json, "role");
     QList<AccessDevice> devices;
     const QList<JsonReader> deviceReaders = json.objects("devices");
@@ -103,13 +106,13 @@ AccessUser AccessUser::fromJson(JsonReader json)
         devices.append(AccessDevice::fromJson(device));
     }
     json.finish();
-    return AccessUser(id, name, role, devices);
+    return AccessUser(id, UserDetails{name, email}, role, devices);
 }
 
 bool AccessUser::operator==(const AccessUser& other) const
 {
     return m_id == other.m_id
-        && m_name == other.m_name
+        && m_details == other.m_details
         && m_role == other.m_role
         && m_devices == other.m_devices;
 }
@@ -198,11 +201,11 @@ AccessList::AccessList(const QList<AccessUser>& users, const QList<AccessInvite>
 {
 }
 
-AccessList AccessList::founding(const UserId& user, const QString& userName, const QString& deviceName,
+AccessList AccessList::founding(const UserId& user, const UserDetails& details, const QString& deviceName,
                                 const Identity& device)
 {
     AccessDevice entry(deviceName, device.publicKey(), device.verifyKey());
-    return AccessList({AccessUser(user, userName, AccessRole::Admin, {entry})}, {}, {});
+    return AccessList({AccessUser(user, details, AccessRole::Admin, {entry})}, {}, {});
 }
 
 QByteArray AccessList::formerKeyHash(const QByteArray& dataKey)

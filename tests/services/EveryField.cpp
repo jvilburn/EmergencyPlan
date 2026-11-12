@@ -78,10 +78,10 @@ AccessList everyAccessField(const Identity& laptop, const Identity& phone)
     UserId carol = UserId::generate();
 
     QList<AccessUser> users = {
-        AccessUser(alice, "Alice Smith", AccessRole::Admin,
+        AccessUser(alice, {"Alice Smith", "alice@example.com"}, AccessRole::Admin,
                    {AccessDevice("Laptop", laptop.publicKey(), laptop.verifyKey()),
                     AccessDevice("Pixel 8", phone.publicKey(), phone.verifyKey())}),
-        AccessUser(carol, "Carol Jones", AccessRole::Member,
+        AccessUser(carol, {"Carol Jones", "carol@example.com"}, AccessRole::Member,
                    {AccessDevice("Desktop", desktop.publicKey(), desktop.verifyKey())}),
     };
     QList<AccessInvite> invites = {

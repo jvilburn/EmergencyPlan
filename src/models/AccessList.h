@@ -53,18 +53,31 @@ private:
     QByteArray m_verifyKey;
 };
 
-/// A user of the ward: their id within it, the name they gave, their role, and their devices.
+/// What a user gives of themselves: their name, and their email, empty when they have none.
+struct UserDetails
+{
+    QString name;
+    QString email;
+
+    bool operator==(const UserDetails& other) const { return name == other.name && email == other.email; }
+    bool operator!=(const UserDetails& other) const { return !(*this == other); }
+};
+
+/// A user of the ward: their id within it, the name and email they gave, their role, and their
+/// devices.
 class AccessUser
 {
 public:
-    AccessUser(const UserId& id, const QString& name, AccessRole role, const QList<AccessDevice>& devices);
+    AccessUser(const UserId& id, const UserDetails& details, AccessRole role, const QList<AccessDevice>& devices);
 
     const UserId& id() const { return m_id; }
-    const QString& name() const { return m_name; }
+    const UserDetails& details() const { return m_details; }
+    const QString& name() const { return m_details.name; }
+    const QString& email() const { return m_details.email; }
     AccessRole role() const { return m_role; }
     const QList<AccessDevice>& devices() const { return m_devices; }
 
-    void setName(const QString& name) { m_name = name; }
+    void setDetails(const UserDetails& details) { m_details = details; }
     void setRole(AccessRole role) { m_role = role; }
     void setDevices(const QList<AccessDevice>& devices) { m_devices = devices; }
 
@@ -76,7 +89,7 @@ public:
 
 private:
     UserId m_id;
-    QString m_name;
+    UserDetails m_details;
     AccessRole m_role;
     QList<AccessDevice> m_devices;
 };
@@ -143,7 +156,7 @@ public:
     AccessList(const QList<AccessUser>& users, const QList<AccessInvite>& invites, const QList<QByteArray>& formerKeys);
 
     /// A new ward's list: its creator, an admin, with this device and nobody else.
-    static AccessList founding(const UserId& user, const QString& userName, const QString& deviceName,
+    static AccessList founding(const UserId& user, const UserDetails& details, const QString& deviceName,
                                const Identity& device);
 
     /// What a former data key is kept as: 32-byte BLAKE2b of the key, personalized

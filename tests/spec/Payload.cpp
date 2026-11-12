@@ -568,6 +568,7 @@ void readUser(Fields fields, std::vector<PublicKeys>* keys)
 {
     fields.bytes("id", IdBytes);
     fields.text("name");
+    fields.text("email");
     fields.word("role", Roles);
     for (const Fields& device : fields.objects("devices"))
     {
@@ -660,7 +661,15 @@ void readSetRoleFields(Fields fields)
     fields.done();
 }
 
-void readRenameFields(Fields fields)
+void readSetUserDetailsFields(Fields fields)
+{
+    fields.bytes("actor", FingerprintBytes);
+    readOptionalChange(fields, "name", textValue);
+    readOptionalChange(fields, "email", textValue);
+    fields.done();
+}
+
+void readRenameDeviceFields(Fields fields)
 {
     fields.bytes("actor", FingerprintBytes);
     readChange(fields.object("name"), textValue);
@@ -677,6 +686,7 @@ void readJoinFields(Fields fields)
         Fields user = fields.object("user");
         user.bytes("id", IdBytes);
         user.text("name");
+        user.text("email");
         user.done();
     }
     fields.done();
@@ -716,8 +726,8 @@ const CommandType CommandTypes[] = {
     {"removeDevice", readRemoveDeviceFields},
     {"withdrawInvite", readWithdrawInviteFields},
     {"setRole", readSetRoleFields},
-    {"renameUser", readRenameFields},
-    {"renameDevice", readRenameFields},
+    {"setUserDetails", readSetUserDetailsFields},
+    {"renameDevice", readRenameDeviceFields},
     {"join", readJoinFields},
 };
 

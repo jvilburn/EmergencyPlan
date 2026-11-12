@@ -96,8 +96,8 @@ private:
     /// The user of the selected row, which is a user's.
     AccessUser selectedUser() const;
 
-    /// Writes the invitation of invite, one of invitesMadeHere, where the user chooses, shows
-    /// the message to send with it, and then shows it in its folder.
+    /// Writes the invitation of invite, one of invitesMadeHere, where the user chooses, then
+    /// shows the message to send with it and the file ready to drag into an email.
     void saveInvitation(const QByteArray& invite);
 
     WardSession& m_session;

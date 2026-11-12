@@ -4,7 +4,7 @@
 #include "AppSettings.h"
 #include "DocumentManager.h"
 #include "InvitationFile.h"
-#include "ShowInFolder.h"
+#include "SendFileDialog.h"
 #include "UserFolder.h"
 #include "WardSession.h"
 
@@ -383,10 +383,8 @@ void WhoHasAccessDialog::saveInvitation(const QByteArray& invite)
     }
     QString message = entry.invitedUser().has_value()
         ? tr("%1 has invited you to %2. Install Ward Planning, then open the attached invitation.")
-              .arg(m_session.ownUserName(), wardName)
+              .arg(m_session.ownUser().name(), wardName)
         : tr("Send this invitation to yourself and open it on your other device.");
-    QMessageBox box(QMessageBox::Information, tr("Save Invitation"), message, QMessageBox::Ok, this);
-    box.setTextInteractionFlags(Qt::TextSelectableByMouse);
-    box.exec();
-    ShowInFolder::reveal(path);
+    SendFileDialog dialog(tr("Save Invitation"), message, path, this);
+    dialog.exec();
 }

@@ -21,6 +21,7 @@
 #include "MinisteringPdfParserTest.h"
 #include "PersonJsonTest.h"
 #include "ReferenceCleanupTest.h"
+#include "SendUpdateDialogTest.h"
 #include "SettingsDialogTest.h"
 #include "SpecReaderTest.h"
 #include "StrictReadersTest.h"
@@ -72,6 +73,7 @@ int main(int argc, char* argv[])
     AppDataTest appDataTest(nullptr);
     AppSettingsTest appSettingsTest(nullptr);
     SettingsDialogTest settingsDialogTest(nullptr);
+    SendUpdateDialogTest sendUpdateDialogTest(nullptr);
     WhoHasAccessDialogTest whoHasAccessDialogTest(nullptr);
     WardListTest wardListTest(nullptr);
     DocumentMetadataTest documentMetadataTest(nullptr);
@@ -110,6 +112,7 @@ int main(int argc, char* argv[])
     failures += QTest::qExec(&appDataTest, argc, argv);
     failures += QTest::qExec(&appSettingsTest, argc, argv);
     failures += QTest::qExec(&settingsDialogTest, argc, argv);
+    failures += QTest::qExec(&sendUpdateDialogTest, argc, argv);
     failures += QTest::qExec(&whoHasAccessDialogTest, argc, argv);
     failures += QTest::qExec(&wardListTest, argc, argv);
     failures += QTest::qExec(&documentMetadataTest, argc, argv);

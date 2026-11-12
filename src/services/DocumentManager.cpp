@@ -69,9 +69,9 @@ EndResult DocumentManager::endEmergency(const QString& reportPath)
     return m_session.endEmergency(reportPath);
 }
 
-void DocumentManager::createWard(const QString& userName, const QString& deviceName)
+void DocumentManager::createWard(const UserDetails& user, const QString& deviceName)
 {
-    m_session.createWard(Document::empty(), userName, deviceName);
+    m_session.createWard(Document::empty(), user, deviceName);
     m_session.automaticUpdates().run();
 }
 
@@ -85,8 +85,8 @@ OpenResult DocumentManager::openWard(const DocumentId& document)
     return result;
 }
 
-void DocumentManager::join(const InvitedWard& invited, const QString& userName, const QString& deviceName)
+void DocumentManager::join(const InvitedWard& invited, const UserDetails& user, const QString& deviceName)
 {
-    m_session.join(invited, userName, deviceName);
+    m_session.join(invited, user, deviceName);
     m_session.automaticUpdates().run();
 }

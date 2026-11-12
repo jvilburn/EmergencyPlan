@@ -32,6 +32,12 @@ void AppSettings::setUserName(const QString& name)
     save();
 }
 
+void AppSettings::setEmail(const QString& email)
+{
+    m_json["email"] = email;
+    save();
+}
+
 std::optional<DocumentId> AppSettings::lastWard() const
 {
     if (!m_json.contains("lastWardId"))

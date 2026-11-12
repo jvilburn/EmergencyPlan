@@ -78,10 +78,10 @@ WardSession::WardSession(const Identity* identity, WardStore* store, Geocoder* g
     connect(&m_automaticUpdates, &AutomaticUpdates::applied, this, &WardSession::save);
 }
 
-void WardSession::createWard(const Document& content, const QString& userName, const QString& deviceName)
+void WardSession::createWard(const Document& content, const UserDetails& user, const QString& deviceName)
 {
     Document ward = content;
-    ward.setAccess(AccessList::founding(UserId::generate(), userName, deviceName, *m_identity));
+    ward.setAccess(AccessList::founding(UserId::generate(), user, deviceName, *m_identity));
     m_documentId = DocumentId::generate();
     m_version = VersionRank{1, m_identity->fingerprint()};
     m_dataKey = Crypto::randomBytes(Crypto::KeyBytes);
@@ -424,57 +424,58 @@ InvitedWard WardSession::readInvitation(const QByteArray& file) const
                        read.payload->ward.access().findInvite(keys.fingerprint()), wardName};
 }
 
-void WardSession::join(const InvitedWard& invited, const QString& userName, const QString& deviceName)
+void WardSession::join(const InvitedWard& invited, const UserDetails& user, const QString& deviceName)
 {
     takeFirstDownload(invited.document, *invited.version);
     m_device.joinSeed = invited.seed;
     AccessDevice device(deviceName, m_identity->publicKey(), m_identity->verifyKey());
-    commit(JoinCommand::create(*invited.invite, device, userName, invited.wardName));
+    commit(JoinCommand::create(*invited.invite, device, user, invited.wardName));
 }
 
-QString WardSession::ownUserName() const
+AccessUser WardSession::ownUser() const
 {
-    return m_document.access().userOfDevice(m_identity->fingerprint())->name();
+    return *m_document.access().userOfDevice(m_identity->fingerprint());
 }
 
 void WardSession::renameDeviceEverywhere(const QString& deviceName)
 {
-    renameEverywhere(&RenameDeviceCommand::create, deviceName);
+    const QByteArray& actor = m_identity->fingerprint();
+    commitEverywhere([&](const AccessList& access) { return RenameDeviceCommand::create(actor, access, deviceName); });
 }
 
-void WardSession::renameUserEverywhere(const QString& userName)
+void WardSession::setUserDetailsEverywhere(const UserDetails& details)
 {
-    renameEverywhere(&RenameUserCommand::create, userName);
+    const QByteArray& actor = m_identity->fingerprint();
+    commitEverywhere([&](const AccessList& access) { return SetUserDetailsCommand::create(actor, access, details); });
 }
 
-void WardSession::renameEverywhere(CommandPtr (*rename)(const QByteArray&, const AccessList&, const QString&),
-                                   const QString& name)
+void WardSession::commitEverywhere(const std::function<CommandPtr(const AccessList&)>& build)
 {
     const QList<DocumentId> documents = m_store->documents();
     for (const DocumentId& document : documents)
     {
         if (document == m_documentId)
         {
-            commit(rename(m_identity->fingerprint(), m_document.access(), name));
+            commit(build(m_document.access()));
             continue;
         }
         WardSession other(m_identity, m_store, m_geocoder, m_unitLookup, nullptr);
         if (other.openWard(document).status == OpenStatus::Opened)
         {
-            other.commit(rename(m_identity->fingerprint(), other.document().access(), name));
+            other.commit(build(other.document().access()));
         }
     }
 }
 
-QString WardSession::followUserName(const QString& yourName)
+std::optional<UserDetails> WardSession::followUserDetails(const UserDetails& yours)
 {
-    QString name = ownUserName();
-    if (name == yourName)
+    UserDetails details = ownUser().details();
+    if (details == yours)
     {
-        return QString();
+        return std::nullopt;
     }
-    renameUserEverywhere(name);
-    return name;
+    setUserDetailsEverywhere(details);
+    return details;
 }
 
 ReplayResult WardSession::replay(const Document& version)

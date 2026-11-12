@@ -130,6 +130,7 @@ A user:
 |---|---|---|
 | `id` | 16 bytes | the user's id within this ward |
 | `name` | string | the name they gave |
+| `email` | string | the email they gave; empty when they gave none |
 | `role` | word: `admin` or `member` | their role |
 | `devices` | array of device objects | their devices |
 
@@ -605,12 +606,13 @@ A ministering collection:
 | `user` | 16 bytes | the id of the user whose role it sets |
 | `role` | word: `admin` or `member` | the role it sets |
 
-`renameUser`:
+`setUserDetails`:
 
 | Key | Type | Holds |
 |---|---|---|
-| `actor` | 16 bytes | the fingerprint of the device that made it, whose user it renames |
-| `name` | change of a string | the user's name |
+| `actor` | 16 bytes | the fingerprint of the device that made it, whose user's details it sets |
+| `name` | change of a string | the user's name; omitted when unchanged |
+| `email` | change of a string | the user's email; omitted when unchanged |
 
 `renameDevice`:
 
@@ -633,6 +635,7 @@ A joining user:
 |---|---|---|
 | `id` | 16 bytes | the new user's id |
 | `name` | string | the name they gave |
+| `email` | string | the email they gave; empty when they gave none |
 
 ## Header and access list agree
 

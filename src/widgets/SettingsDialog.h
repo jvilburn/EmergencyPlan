@@ -13,9 +13,9 @@ class QLabel;
 class QLineEdit;
 class QPushButton;
 
-/// Settings: the server switch, this device's name, your name and the map home, as one short
-/// form holding the current values. It changes nothing itself; the caller reads what the user
-/// set once it is accepted.
+/// Settings: the server switch, this device's name, your name, your email and the map home, as
+/// one short form holding the current values. It changes nothing itself; the caller reads what
+/// the user set once it is accepted.
 class SettingsDialog : public QDialog
 {
     Q_OBJECT
@@ -31,6 +31,9 @@ public:
 
     /// Your name, trimmed.
     QString userName() const;
+
+    /// Your email, trimmed; empty when left empty.
+    QString email() const;
 
     /// The map home Use current view set, or none when it was not pressed.
     std::optional<Coordinates> mapHome() const { return m_mapHome; }
@@ -51,6 +54,7 @@ private:
     QCheckBox* m_useServer;
     QLineEdit* m_deviceName;
     QLineEdit* m_userName;
+    QLineEdit* m_email;
     QLabel* m_mapHomeLabel;
     QPushButton* m_okButton;
 };

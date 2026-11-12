@@ -260,7 +260,7 @@ WardPayload emptiestPayload(const Identity& device)
     ward.metadata().updateWard(Ward());
     ward.metadata().updateStake(Stake());
     ward.setEmergencyResponse(EmergencyResponse::create("Storm"));
-    ward.setAccess(AccessList::founding(UserId::generate(), "Alice", "Laptop", device));
+    ward.setAccess(AccessList::founding(UserId::generate(), {"Alice", ""}, "Laptop", device));
     return WardPayload{ward, {}, DeviceState()};
 }
 
@@ -302,7 +302,7 @@ QList<CommandPtr> sparsestCommands()
     Identity laptop = Identity::generate();
     Identity phone = Identity::generate();
     Identity invited = Identity::generate();
-    AccessUser alice(UserId::generate(), "Alice", AccessRole::Admin,
+    AccessUser alice(UserId::generate(), {"Alice", ""}, AccessRole::Admin,
                      {AccessDevice("Laptop", laptop.publicKey(), laptop.verifyKey()),
                       AccessDevice("Phone", phone.publicKey(), phone.verifyKey())});
     AccessList access({alice}, {}, {});
@@ -336,10 +336,10 @@ QList<CommandPtr> sparsestCommands()
         RemoveDeviceCommand::create(laptop.fingerprint(), alice.devices()[1]),
         WithdrawInviteCommand::create(laptop.fingerprint(), deviceInvite, access),
         SetRoleCommand::create(laptop.fingerprint(), alice, AccessRole::Member),
-        RenameUserCommand::create(laptop.fingerprint(), access, "Alice Jones"),
+        SetUserDetailsCommand::create(laptop.fingerprint(), access, {"Alice Jones", ""}),
         RenameDeviceCommand::create(laptop.fingerprint(), access, "Work laptop"),
-        JoinCommand::create(deviceInvite, AccessDevice("Tablet", phone.publicKey(), phone.verifyKey()), QString(),
-                            "Tanglewood Ward"),
+        JoinCommand::create(deviceInvite, AccessDevice("Tablet", phone.publicKey(), phone.verifyKey()),
+                            UserDetails(), "Tanglewood Ward"),
     };
 }
 

@@ -10,11 +10,11 @@ AccessList TestSharing::accessOf(const QList<TestClient*>& admins, const QList<T
     QList<AccessUser> users;
     for (const TestClient* client : admins)
     {
-        users.append(AccessUser(UserId::generate(), client->deviceName(), AccessRole::Admin, {client->device()}));
+        users.append(AccessUser(UserId::generate(), {client->deviceName(), ""}, AccessRole::Admin, {client->device()}));
     }
     for (const TestClient* client : members)
     {
-        users.append(AccessUser(UserId::generate(), client->deviceName(), AccessRole::Member, {client->device()}));
+        users.append(AccessUser(UserId::generate(), {client->deviceName(), ""}, AccessRole::Member, {client->device()}));
     }
     return AccessList(users, {}, {});
 }

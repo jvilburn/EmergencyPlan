@@ -47,18 +47,18 @@ public:
     /// Writes the report of the emergency in progress and ends it, through the session.
     EndResult endEmergency(const QString& reportPath);
 
-    /// Creates a ward of Document::empty(), whose access list names userName with this
-    /// device alone, named deviceName, and starts its automatic updates.
-    void createWard(const QString& userName, const QString& deviceName);
+    /// Creates a ward of Document::empty(), whose access list names a user with user's details
+    /// and this device alone, named deviceName, and starts its automatic updates.
+    void createWard(const UserDetails& user, const QString& deviceName);
 
     /// Opens the ward this device holds under document, and when it opens starts its
     /// automatic updates; otherwise the ward open before stays open.
     OpenResult openWard(const DocumentId& document);
 
     /// Joins the ward invited carries, which readInvitation found Joinable, through the
-    /// session, naming this device deviceName and, for a user invite, its new user userName,
-    /// and starts its automatic updates.
-    void join(const InvitedWard& invited, const QString& userName, const QString& deviceName);
+    /// session, naming this device deviceName and, for a user invite, giving its new user
+    /// user's details, and starts its automatic updates.
+    void join(const InvitedWard& invited, const UserDetails& user, const QString& deviceName);
 
     const DocumentId& documentId() const { return m_session.documentId(); }
 

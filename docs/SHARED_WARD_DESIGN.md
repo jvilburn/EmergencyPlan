@@ -163,6 +163,7 @@ This document uses its terms for precision; the interface uses these:
 | document | ward |
 | access list | *Who has access* |
 | user | user, or the user's name |
+| this device's user's name and email | *Your name* and *Your email*, in *Settings* |
 | device | device |
 | invite (user / device) | *Add a user* / *Add a device*, and the invitation and its message |
 | remove a user | *Remove* |
@@ -175,6 +176,7 @@ This document uses its terms for precision; the interface uses these:
 | journal, unpushed changes | *Your changes are saved here and will go up when the connection returns* |
 | entries no version this device holds carries, with the server off | *You have changes to share*; *Send Update* |
 | update file | *update*; *Send Update* |
+| every email the update's dialog lists, copied | *Copy Emails* |
 | the server switch | *Use the Ward Planning server*, in *Settings* |
 | no longer this device's | *This ward is no longer shared with this device* |
 
@@ -833,9 +835,15 @@ converted.
 - **Sending.** *Send Update* is offered only while the server is turned off in *Settings*
   (see *If the server goes away*). It writes the next version as an update file in the `Ward
   Planning` folder in the user's Documents, where to-redo files go, in place of an update of
-  that ward written the same day, and opens the platform's share sheet with it, or on a
-  desktop the folder holding it with the file selected. Each member sends to every other
-  member; a device learns of others' changes only from versions that reach it. The written
+  that ward written the same day, and then shows a dialog: *Your update is ready. Attach it to
+  an email or text to the other members so they get your changes.* Below that it lists every
+  user of the ward but this device's own, each by name and with their email where they have
+  one, with *Copy Emails*, shown while any listed user has an email, which copies every listed
+  email, comma-separated, ready for an email's To line. It shows the update file as an icon
+  with its name, to drag into an email or message, with *Drag this into your email* beside
+  it, and *Show in Folder*, which opens the folder holding it with the file selected, and
+  *Done*. On a phone the platform's share sheet takes the drag's place. Each member sends to
+  every other member; a device learns of others' changes only from versions that reach it. The written
   version becomes the one this device holds. Its journal entries stay until a version this
   device takes carries them, since a version written at the same time elsewhere can outrank
   it.
@@ -1090,7 +1098,7 @@ ministering, the emergency response and the access list. In particular:
   construction). A change of assignee sets the notification to none, since the new
   assignee has not been told.
 - **The access list** is new in its entirety. Invite, remove a user, remove a device,
-  withdraw an invite, set a role, rename yourself, rename this device and leave are
+  withdraw an invite, set a role, set your name and email, rename this device and leave are
   each a command, which is what lets an access
   change replay like any other. Join is a command too, run once by the joining device under
   the invite's key, and refused with *This invite has been used or withdrawn* when the
@@ -1203,7 +1211,7 @@ a command made when a rule allowed it can arrive where the rule does not. The ru
 - Anyone, admins included, uses *Remove device* only on their own devices; removing a user
   takes all of that user's.
 - A user cannot Remove themselves; Leave is how they go.
-- A device renames only itself and its own user.
+- A device renames only itself, and sets the name and email only of its own user.
 
 These are refusals rather than start conditions because what changed is somebody else's
 entry. When a step-down replays onto a ward whose other admin has left, the stepping-down
@@ -1352,6 +1360,7 @@ access:
   users:
     - id: <user id>
       name: "Alice Smith"
+      email: "alice@example.com"   (empty when she gave none)
       role: admin | member
       devices:
         - { name: "Laptop", publicKey, verifyKey }
@@ -1368,8 +1377,8 @@ names no recipient and which carries no payload. The server sees fingerprints on
 **User ids** are 128 random bits, made when someone creates a ward or joins it through
 *Add a user*, so they are per ward and distinct from the directory's `PersonId`, which
 names a ward member. A device joining through an *Add a device* invite takes the inviter's
-user id, name and role; one joining
-through an *Add a user* invite makes a new user with the name it gives. A user invite's
+user id, name, email and role; one joining
+through an *Add a user* invite makes a new user with the name and email it gives. A user invite's
 `label` is who the inviter made it for, so open invites can be told apart in the list; it
 is not carried onto the user. A device invite has no label and shows as *a device for* its
 maker's name: every open device invite a user made joins as one of that user's devices, so
@@ -1445,9 +1454,11 @@ seed for `crypto_box_seed_keypair`, and subkey 2 the seed for `crypto_sign_seed_
    line of JSON holding its own `format` integer and the seed, then the version that opened
    the invite, in a ward file's framing, whose header names the ward; an app that meets a higher
    `format` shows the newer-version notice, as for a ward file (see *File format*). The app
-   saves it where the user chooses and opens that folder with the file selected, ready to
-   attach to an email, drag onto a stick or send in a text, with a short message to go with
-   it:
+   saves it where the user chooses, then shows a dialog holding the short message to go with
+   it, which the user can select and copy, and the invitation as an icon with its name, to drag into an email or message, with *Drag this
+   into your email* beside it, *Show in Folder*, which opens the folder holding it with the
+   file selected, and *Done*. On a phone the platform's share sheet takes the drag's place.
+   The user attaches it to an email, copies it onto a stick or sends it in a text. The message:
 
    > Alice Smith has invited you to Tanglewood Ward. Install Ward Planning from
    > https://<server>/download, then open the attached invitation.
@@ -1470,8 +1481,8 @@ seed for `crypto_box_seed_keypair`, and subkey 2 the seed for `crypto_sign_seed_
    Otherwise: derive the invite keypair from the seed, unseal the data key with the invite's
    private key, validate as any download is validated, ask the user to confirm by the
    ward's name, then write the next version: the invite entry becomes a device entry, under
-   the inviter's user for a device invite, under a new user for a user invite, named by the
-   joiner. Its `writer` is the invite's fingerprint, and it is signed by the invite's
+   the inviter's user for a device invite, under a new user for a user invite, with the name
+   and email the joiner gives. Its `writer` is the invite's fingerprint, and it is signed by the invite's
    signing key, whose verify key the version it builds on names. The join goes out as any
    version does: with the server on, it is pushed, and joining needs a connection; with the
    server off, the app asks the new member to send an update to every member, since a device
@@ -1503,7 +1514,7 @@ The invitation is the gate. Whoever opens it first gets in, visibly, and can be 
 
 - **Who has access**: the access list, read from the open ward. Add a device, Add a user,
   Remove, Make admin / Make member, Withdraw invite, Save invitation (open invites this
-  device made), Leave, Remove device (own devices). Names change in *Settings*.
+  device made), Leave, Remove device (own devices). Names and your email change in *Settings*.
 - **Access notices**: the client diffs the access list between the version it last dismissed and
   the current one, one line per entry that differs: joined as member or admin, no longer
   has access, now an admin or a member, a device added or removed, an invite made or used.
@@ -1519,9 +1530,10 @@ The invitation is the gate. Whoever opens it first gets in, visibly, and can be 
   delete the copy, in a notice that stays until the user does. Coming back is by a new
   invitation, which joins as a first join does (see *Invites*).
 - **A second device of your own**: *Add a device*, send yourself the invitation, open it there.
-  The first-run screen asks for this device's name and the user's name; creating a ward
-  and joining through *Add a user* take both from *Settings*, and a device joining through
-  *Add a device* takes this device's name from *Settings* and its user's name from the ward.
+  The first-run screen asks for this device's name, the user's name and the user's email;
+  creating a ward and joining through *Add a user* take all three from *Settings*, and a
+  device joining through *Add a device* takes this device's name from *Settings* and its
+  user's name and email from the ward.
 - **Cleared app data, a reimaged profile or a replaced device** gives a fresh identity; wards come back by invite from
   another holder, or from your other device. The server keeps no index of who holds what, so
   there is no ward list to restore from it.
@@ -1722,11 +1734,15 @@ settings file:
   takes when it creates or joins a ward. Changing it renames this device in every ward it
   holds that is still its own and names it otherwise: each rename is a command in its
   ward's journal, and goes out as that ward's other changes do.
-- ***Your name***, which the first-run screen asks for. It is the name this device's user
-  takes when creating a ward or joining through *Add a user*. Changing it renames the user in every ward this device holds that
-  is still its own and names them otherwise, in the same way. **A rename made on another of
-  the user's devices reaches this one too**: taking a version in which this device's user
-  has a name other than *Your name* sets *Your name* to it, and renames the user in this device's other
+- ***Your name*** and ***Your email***, which the first-run screen asks for after this
+  device's name. The email may be left empty, since some members have none; the name may not.
+  They are the name and email this device's user takes when creating a ward or joining
+  through *Add a user*, and *Send Update* lists the email for the other members. Changing
+  either sets both for the user in every ward this device holds that is still its own and has
+  either otherwise: one command in each such ward's journal, which goes out as that ward's
+  other changes do. **A change made on another of the user's devices reaches this one too**:
+  taking a version in which this device's user has a name or email other than *Your name* or
+  *Your email* sets both to the version's, and sets them for the user in this device's other
   wards in the same way.
 - ***Map home***, where the map opens. The app first sets it from the device's approximate
   location; *Use current view* sets it to what the map shows.
@@ -2105,8 +2121,8 @@ The journal and replay, in `tests/services`:
   applies, serialises to the same entry it gave before it ran, and the same object executed
   next on a moved version conflicts and leaves that version untouched, which fails if
   `execute` captured anything
-- renaming yourself and one of your devices each reach every device by the ordinary path,
-  and renaming another user or their device is refused
+- setting your name and email, and renaming one of your devices, each reach every device by
+  the ordinary path, and changing another user's or renaming their device is refused
 - an access-list command replays: two admins removing different users both apply; removing the
   same user twice applies in full; two role changes to one user both apply, and the later
   one stands; a
@@ -2153,14 +2169,18 @@ Update files, in `tests/services`, with no server:
   it no longer lists; the second device learns *This invite has been used or withdrawn* when
   it takes the member's next version, and the first device takes that version
 
-Names in *Settings*, with no server:
+Names and email in *Settings*, with no server:
 
-- changing *This device's name* or *Your name* journals one rename in each ward this device
-  holds that names it otherwise, and none in a ward that already has the new name or is no
-  longer this device's
-- a second device of the same user, taking a version with the new user name, sets *Your
-  name* to it and journals the rename in each of its other wards that names the user
-  otherwise; a ward held only by the second device ends with the new name
+- changing *This device's name*, or *Your name* and *Your email*, journals one command in
+  each ward this device holds that has it otherwise, and none in a ward that already has the
+  new value or is no longer this device's
+- a second device of the same user, taking a version with the new user name and email, sets
+  *Your name* and *Your email* to them and journals one command in each of its other wards
+  that has either otherwise; a ward held only by the second device ends with the new name
+  and email
+- *Send Update*'s dialog, in a ward of this device's user and two others, one with an email
+  and one without, lists the two others and no one else, and *Copy Emails* copies exactly
+  the one email
 
 The server switch, against the fake server:
 

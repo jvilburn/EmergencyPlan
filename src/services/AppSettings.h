@@ -29,6 +29,11 @@ public:
     QString userName() const { return m_json.value("userName").toString(); }
     void setUserName(const QString& name);
 
+    /// Your email, which the first start asks for after Your name and the user may leave empty,
+    /// and which this device's user takes with Your name; empty until then.
+    QString email() const { return m_json.value("email").toString(); }
+    void setEmail(const QString& email);
+
     /// The ward open last, which the app opens when it starts.
     std::optional<DocumentId> lastWard() const;
     void setLastWard(const DocumentId& document);

@@ -162,7 +162,7 @@ void AccessTest::removalReplayedAfterThatUserAddedADeviceTakesTheNewDeviceToo()
     QVERIFY(made.commit.status == CommitStatus::Applied);
     QByteArray invitation = carol.session().writeInvitation(made.invite);
     QVERIFY(TestSharing::send(carol, {&bob}) == QList<TakeStatus>{TakeStatus::Taken});
-    carolsPhone.session().join(carolsPhone.session().readInvitation(invitation), QString(), "Carol's phone");
+    carolsPhone.session().join(carolsPhone.session().readInvitation(invitation), UserDetails(), "Carol's phone");
     QVERIFY(TestSharing::send(carolsPhone, {&bob}) == QList<TakeStatus>{TakeStatus::Taken});
     QCOMPARE(TestSharing::userNamed(bob, "Carol").devices().size(), qsizetype(2));
     QVERIFY(TestSharing::send(bob, {&carolsPhone, &alice}) == (QList<TakeStatus>{TakeStatus::Taken, TakeStatus::Taken}));
@@ -310,8 +310,8 @@ void AccessTest::removingAnotherDeviceOfYourOwnRotatesItOut()
 {
     TestClient laptop("Laptop");
     TestClient phone("Phone");
-    AccessList access({AccessUser(UserId::generate(), "Alice", AccessRole::Admin, {laptop.device(), phone.device()})},
-                      {}, {});
+    AccessList access(
+        {AccessUser(UserId::generate(), {"Alice", ""}, AccessRole::Admin, {laptop.device(), phone.device()})}, {}, {});
     TestSharing::share({&laptop, &phone}, access);
     QByteArray heldKey = TestSharing::keyOf(phone);
 
@@ -425,20 +425,22 @@ void AccessTest::renamesReachEveryDevice()
     TestClient bob("Bob");
     TestSharing::share({&alice, &bob}, TestSharing::accessOf({&alice, &bob}, {}));
     QByteArray actor = alice.identity().fingerprint();
-    QVERIFY(alice.session().commit(RenameUserCommand::create(actor, alice.session().document().access(), "Alice Smith"))
+    UserDetails details{"Alice Smith", "alice@example.com"};
+    QVERIFY(alice.session().commit(SetUserDetailsCommand::create(actor, alice.session().document().access(), details))
                 .status
             == CommitStatus::Applied);
     QVERIFY(alice.session()
                 .commit(RenameDeviceCommand::create(actor, alice.session().document().access(), "Alice's laptop"))
                 .status
             == CommitStatus::Applied);
-    QVERIFY(alice.session().commit(RenameUserCommand::create(actor, alice.session().document().access(), "Alice Smith"))
+    QVERIFY(alice.session().commit(SetUserDetailsCommand::create(actor, alice.session().document().access(), details))
                 .status
             == CommitStatus::NothingToDo);
 
     QVERIFY(TestSharing::send(alice, {&bob}) == QList<TakeStatus>{TakeStatus::Taken});
 
     AccessUser renamed = TestSharing::userNamed(bob, "Alice Smith");
+    QCOMPARE(renamed.email(), QString("alice@example.com"));
     QCOMPARE(renamed.devices().size(), qsizetype(1));
     QCOMPARE(renamed.devices()[0].name(), QString("Alice's laptop"));
     QCOMPARE(TestSharing::userNames(bob), (QStringList{"Alice Smith", "Bob"}));

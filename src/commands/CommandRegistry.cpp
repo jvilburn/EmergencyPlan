@@ -38,7 +38,7 @@ const QList<CommandType>& CommandRegistry::types()
         {RemoveDeviceCommand::TypeName, &RemoveDeviceCommand::fromJson},
         {WithdrawInviteCommand::TypeName, &WithdrawInviteCommand::fromJson},
         {SetRoleCommand::TypeName, &SetRoleCommand::fromJson},
-        {RenameUserCommand::TypeName, &RenameUserCommand::fromJson},
+        {SetUserDetailsCommand::TypeName, &SetUserDetailsCommand::fromJson},
         {RenameDeviceCommand::TypeName, &RenameDeviceCommand::fromJson},
         {JoinCommand::TypeName, &JoinCommand::fromJson},
     };

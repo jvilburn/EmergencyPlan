@@ -3,7 +3,7 @@
 #include <QObject>
 
 /// Users and devices invited and joined entirely through files, the changes-to-share rule
-/// through crossed updates, and names changed in Settings reaching every ward.
+/// through crossed updates, and names and email changed in Settings reaching every ward.
 class FileSharingTest : public QObject
 {
     Q_OBJECT
@@ -26,5 +26,5 @@ private slots:
     void addAUserIsForAdminsAndAnyoneAddsADevice();
     void changesToShareThroughCrossedUpdates();
     void renamingThisDeviceJournalsOneRenameInEachWardThatNamesItOtherwise();
-    void secondDeviceTakingTheNewUserNameFollowsIt();
+    void secondDeviceTakingTheNewUserDetailsFollowsThem();
 };

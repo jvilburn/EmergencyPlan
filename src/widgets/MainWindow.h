@@ -35,10 +35,11 @@ public:
     MainWindow(AppSettings* settings, bool developer, QWidget* parent);
     ~MainWindow();
 
-    /// Opens the ward the app starts on: on the first start, asks this device's name and your name; then
-    /// opens file, the update or invitation the app was started with, when there is one. When no ward
-    /// is open after that, opens the last ward, or, when there is none or it does not open, shows the
-    /// ward list. False when the user cancels, which quits the app.
+    /// Opens the ward the app starts on: on the first start, asks this device's name, then your
+    /// name and your email, which may be left empty; then opens file, the update or invitation
+    /// the app was started with, when there is one. When no ward is open after that, opens the
+    /// last ward, or, when there is none or it does not open, shows the ward list. False when
+    /// the user cancels, which quits the app.
     bool openStartingWard(const QString& file);
 
 public slots:
@@ -66,6 +67,8 @@ private slots:
     /// Shows Who has access for the open ward.
     void onWhoHasAccess();
 
+    /// Writes the open ward's next version as an update file in the user's folder, and shows it
+    /// ready to send to the other members.
     void onSendUpdate();
     void onOpenUpdate();
 
@@ -77,8 +80,8 @@ private slots:
     /// still this device's, and the share notice for the open ward.
     void updateSharing();
 
-    /// Shows Settings, and on OK saves what changed; a changed name renames this device or
-    /// its user in every ward this device holds.
+    /// Shows Settings, and on OK saves what changed; a changed name or email sets it for this
+    /// device or its user in every ward this device holds.
     void onSettings();
 
     void onExportDecryptedJson();
@@ -138,7 +141,11 @@ private:
     /// False when the user cancels, which leaves the panel as it is.
     bool settleUnsavedEdit();
 
-    /// Creates a ward under Your name on this device, which becomes the last ward.
+    /// Your name and Your email, from Settings.
+    UserDetails yourDetails() const;
+
+    /// Creates a ward under Your name and Your email on this device, which becomes the last
+    /// ward.
     void createWard();
 
     /// Opens the ward, which becomes the last ward; when it does not open, tells why. False
@@ -163,9 +170,9 @@ private:
     /// or was joined.
     bool openInvitationFile(const QString& path);
 
-    /// Sets Your name from the open ward, where this device's user has another name there,
-    /// and renames the user in this device's other wards to match.
-    void followUserName();
+    /// Sets Your name and Your email from the open ward, where this device's user has another
+    /// name or email there, and sets them for the user in this device's other wards to match.
+    void followUserDetails();
 
     /// Writes the to-redo file of an abandoned replay and tells the user where it is, with an
     /// offer to open it, and who a removal among the changes left with access.

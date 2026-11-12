@@ -467,10 +467,10 @@ AccessSampleWard accessSampleWard()
     Identity desktop = Identity::generate();
     Identity bobsInvite = Identity::generate();
     UserId alice = UserId::generate();
-    AccessList access({AccessUser(alice, "Alice", AccessRole::Admin,
+    AccessList access({AccessUser(alice, {"Alice", ""}, AccessRole::Admin,
                                   {AccessDevice("Laptop", laptop.publicKey(), laptop.verifyKey()),
                                    AccessDevice("Phone", phone.publicKey(), phone.verifyKey())}),
-                       AccessUser(UserId::generate(), "Carol", AccessRole::Member,
+                       AccessUser(UserId::generate(), {"Carol", ""}, AccessRole::Member,
                                   {AccessDevice("Desktop", desktop.publicKey(), desktop.verifyKey())})},
                       {AccessInvite::forUser(alice, AccessRole::Member, "Bob", bobsInvite.publicKey(),
                                              bobsInvite.verifyKey())},
@@ -561,16 +561,18 @@ QList<CommandSample> setRoleSamples()
     };
 }
 
-QList<CommandSample> renameUserSamples()
+/// Alice's name and email both set; it conflicts once her email was set otherwise elsewhere.
+QList<CommandSample> setUserDetailsSamples()
 {
     AccessSampleWard sample = accessSampleWard();
-    CommandPtr rename = RenameUserCommand::create(sample.laptop.fingerprint(), sample.ward.access(), "Alice Jones");
-    AccessUser renamedElsewhere = accessUserNamed(sample.ward, "Alice");
-    renamedElsewhere.setName("Alice Brown");
+    CommandPtr set = SetUserDetailsCommand::create(sample.laptop.fingerprint(), sample.ward.access(),
+                                                   {"Alice Jones", "alice@example.com"});
+    AccessUser setElsewhere = accessUserNamed(sample.ward, "Alice");
+    setElsewhere.setDetails({"Alice", "alice.smith@example.com"});
     return {
-        CommandSample{SampleCase::StartHolds, sample.ward, rename},
-        CommandSample{SampleCase::ResultHolds, runOn(sample.ward, rename), rename},
-        CommandSample{SampleCase::Conflicts, withAccessUser(sample.ward, renamedElsewhere), rename},
+        CommandSample{SampleCase::StartHolds, sample.ward, set},
+        CommandSample{SampleCase::ResultHolds, runOn(sample.ward, set), set},
+        CommandSample{SampleCase::Conflicts, withAccessUser(sample.ward, setElsewhere), set},
     };
 }
 
@@ -597,7 +599,7 @@ QList<CommandSample> joinSamples()
     Identity bobsPhone = Identity::generate();
     CommandPtr userJoin = JoinCommand::create(sample.ward.access().invites().first(),
                                               AccessDevice("Bob's phone", bobsPhone.publicKey(), bobsPhone.verifyKey()),
-                                              "Bob Brown", "Tanglewood Ward");
+                                              {"Bob Brown", "bob@example.com"}, "Tanglewood Ward");
 
     Identity carolsInvite = Identity::generate();
     Identity carolsTablet = Identity::generate();
@@ -608,8 +610,8 @@ QList<CommandSample> joinSamples()
     Document withDeviceInvite = sample.ward;
     withDeviceInvite.setAccess(access);
     CommandPtr deviceJoin = JoinCommand::create(
-        deviceInvite, AccessDevice("Carol's tablet", carolsTablet.publicKey(), carolsTablet.verifyKey()), QString(),
-        "Tanglewood Ward");
+        deviceInvite, AccessDevice("Carol's tablet", carolsTablet.publicKey(), carolsTablet.verifyKey()),
+        UserDetails(), "Tanglewood Ward");
     return {
         CommandSample{SampleCase::StartHolds, sample.ward, userJoin},
         CommandSample{SampleCase::ResultHolds, runOn(sample.ward, userJoin), userJoin},
@@ -729,9 +731,9 @@ QList<CommandSample> CommandSamples::forType(const QString& type)
     {
         return setRoleSamples();
     }
-    if (type == RenameUserCommand::TypeName)
+    if (type == SetUserDetailsCommand::TypeName)
     {
-        return renameUserSamples();
+        return setUserDetailsSamples();
     }
     if (type == RenameDeviceCommand::TypeName)
     {

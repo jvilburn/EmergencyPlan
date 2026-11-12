@@ -33,6 +33,8 @@ SettingsDialog::SettingsDialog(const AppSettings& settings, const Coordinates& c
     form->addRow(tr("This device's name"), m_deviceName);
     m_userName = new QLineEdit(settings.userName(), this);
     form->addRow(tr("Your name"), m_userName);
+    m_email = new QLineEdit(settings.email(), this);
+    form->addRow(tr("Your email"), m_email);
 
     QHBoxLayout* mapHomeRow = new QHBoxLayout();
     m_mapHomeLabel = new QLabel(this);
@@ -69,6 +71,11 @@ QString SettingsDialog::deviceName() const
 QString SettingsDialog::userName() const
 {
     return m_userName->text().trimmed();
+}
+
+QString SettingsDialog::email() const
+{
+    return m_email->text().trimmed();
 }
 
 void SettingsDialog::onUseCurrentView()

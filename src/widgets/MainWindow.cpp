@@ -27,6 +27,7 @@
 #include "MinisteringImportService.h"
 #include "GeoLocation.h"
 #include "OpenWardDialog.h"
+#include "SendUpdateDialog.h"
 #include "SettingsDialog.h"
 #include "ShareNotice.h"
 #include "ShowInFolder.h"
@@ -298,7 +299,17 @@ bool MainWindow::openStartingWard(const QString& file)
         {
             return false;
         }
+        QString email = QInputDialog::getText(this, tr("Ward Planning"),
+                                              tr("Your email, so other members can send you updates. Leave it "
+                                                 "empty if you have none."),
+                                              QLineEdit::Normal, QString(), &ok)
+                            .trimmed();
+        if (!ok)
+        {
+            return false;
+        }
         m_settings->setUserName(userName);
+        m_settings->setEmail(email);
     }
 
     if (!file.isEmpty() && openFile(file))
@@ -313,9 +324,14 @@ bool MainWindow::openStartingWard(const QString& file)
     return chooseWard();
 }
 
+UserDetails MainWindow::yourDetails() const
+{
+    return UserDetails{m_settings->userName(), m_settings->email()};
+}
+
 void MainWindow::createWard()
 {
-    DocumentManager::instance()->createWard(m_settings->userName(), m_settings->deviceName());
+    DocumentManager::instance()->createWard(yourDetails(), m_settings->deviceName());
     m_settings->setLastWard(DocumentManager::instance()->documentId());
 }
 
@@ -401,8 +417,7 @@ void MainWindow::onSendUpdate()
     {
         return;
     }
-    QString wardName = DocumentManager::instance()->document().wardName();
-    QString name = UpdateFile::fileName(wardName, QDate::currentDate());
+    QString name = UpdateFile::fileName(DocumentManager::instance()->document().wardName(), QDate::currentDate());
     QByteArray bytes = DocumentManager::instance()->writeUpdate();
     updateSharing();
     QString problem;
@@ -412,8 +427,9 @@ void MainWindow::onSendUpdate()
         QMessageBox::warning(this, tr("Send Update"), tr("The update could not be saved: %1.").arg(problem));
         return;
     }
-    ShowInFolder::reveal(path);
-    statusBar()->showMessage(tr("Send %1 to every other member of %2.").arg(name, wardName));
+    WardSession& session = DocumentManager::instance()->session();
+    SendUpdateDialog dialog(session.document().access(), session.deviceFingerprint(), path, this);
+    dialog.exec();
 }
 
 void MainWindow::onDeleteCopy()
@@ -554,7 +570,7 @@ bool MainWindow::openUpdateFile(const QString& path)
         return true;
     }
 
-    followUserName();
+    followUserDetails();
     switch (result.replay.status)
     {
     case ReplayStatus::FastForwarded:
@@ -609,21 +625,22 @@ bool MainWindow::openInvitationFile(const QString& path)
     {
         return false;
     }
-    DocumentManager::instance()->join(invited, m_settings->userName(), m_settings->deviceName());
+    DocumentManager::instance()->join(invited, yourDetails(), m_settings->deviceName());
     m_settings->setLastWard(invited.document);
-    followUserName();
+    followUserDetails();
     QMessageBox::information(this, tr("Join a Ward"),
                              tr("You have joined %1. Send an update to every member of the ward so they see you.")
                                  .arg(invited.wardName));
     return true;
 }
 
-void MainWindow::followUserName()
+void MainWindow::followUserDetails()
 {
-    QString name = DocumentManager::instance()->session().followUserName(m_settings->userName());
-    if (!name.isEmpty())
+    std::optional<UserDetails> followed = DocumentManager::instance()->session().followUserDetails(yourDetails());
+    if (followed.has_value())
     {
-        m_settings->setUserName(name);
+        m_settings->setUserName(followed->name);
+        m_settings->setEmail(followed->email);
     }
 }
 
@@ -641,10 +658,12 @@ void MainWindow::onSettings()
         m_settings->setDeviceName(dialog.deviceName());
         DocumentManager::instance()->session().renameDeviceEverywhere(dialog.deviceName());
     }
-    if (dialog.userName() != m_settings->userName())
+    UserDetails details{dialog.userName(), dialog.email()};
+    if (details != yourDetails())
     {
-        m_settings->setUserName(dialog.userName());
-        DocumentManager::instance()->session().renameUserEverywhere(dialog.userName());
+        m_settings->setUserName(details.name);
+        m_settings->setEmail(details.email);
+        DocumentManager::instance()->session().setUserDetailsEverywhere(details);
     }
     if (std::optional<Coordinates> home = dialog.mapHome())
     {

@@ -17,7 +17,7 @@ AccessDevice TestClient::device() const
 
 void TestClient::createWard(const Document& content)
 {
-    m_session->createWard(content, "Alice Smith", m_deviceName);
+    m_session->createWard(content, {"Alice Smith", ""}, m_deviceName);
 }
 
 void TestClient::takeWardOf(TestClient& other)
@@ -32,7 +32,7 @@ void TestClient::holdWard(const QList<TestClient*>& holders, const QList<TestCli
     QList<AccessUser> users;
     for (const TestClient* client : listed)
     {
-        users.append(AccessUser(UserId::generate(), client->deviceName(), AccessRole::Admin, {client->device()}));
+        users.append(AccessUser(UserId::generate(), {client->deviceName(), ""}, AccessRole::Admin, {client->device()}));
     }
     holdWard(holders, AccessList(users, {}, {}), *listed.first(), document, dataKey, content);
 }

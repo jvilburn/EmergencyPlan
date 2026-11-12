@@ -276,6 +276,8 @@ set(WIDGET_SOURCES
     src/widgets/UnmappedPanel.cpp
     src/widgets/PeoplePickerDialog.cpp
     src/widgets/OpenWardDialog.cpp
+    src/widgets/SendFileDialog.cpp
+    src/widgets/SendUpdateDialog.cpp
     src/widgets/SettingsDialog.cpp
     src/widgets/WhoHasAccessDialog.cpp
     src/widgets/FamilyListView.cpp
@@ -319,6 +321,8 @@ set(WIDGET_HEADERS
     src/widgets/UnmappedPanel.h
     src/widgets/PeoplePickerDialog.h
     src/widgets/OpenWardDialog.h
+    src/widgets/SendFileDialog.h
+    src/widgets/SendUpdateDialog.h
     src/widgets/SettingsDialog.h
     src/widgets/WhoHasAccessDialog.h
     src/widgets/FamilyListView.h

@@ -20,6 +20,7 @@
 #include <QSet>
 #include <QString>
 #include <QStringList>
+#include <functional>
 #include <optional>
 
 class Geocoder;
@@ -170,10 +171,10 @@ public:
 
     /// Creates a ward holding content under a fresh document id and data key, and saves it as
     /// its version 1, written by this device. Its access list, whatever content held, names
-    /// one user: userName, an admin under a new user id, with this device alone, named
-    /// deviceName. The journal, the undo and redo stacks, the rest of this device's state and
-    /// the failed list start empty.
-    void createWard(const Document& content, const QString& userName, const QString& deviceName);
+    /// one user: an admin with user's details under a new user id, with this device alone,
+    /// named deviceName. The journal, the undo and redo stacks, the rest of this device's
+    /// state and the failed list start empty.
+    void createWard(const Document& content, const UserDetails& user, const QString& deviceName);
 
     /// Opens the ward this device holds under document: its document with its access list,
     /// the version it holds, its landed marks and this device's state come from its local
@@ -289,12 +290,13 @@ public:
     /// this device's copy as a first download, replacing any copy held before, with nothing of
     /// that copy kept - under the version's key, with its landed marks and its recipients, and
     /// an empty journal counting on from this device's mark in it - and JoinCommand runs on it
-    /// through the commit step, naming this device deviceName and, for a user invite, its new
-    /// user userName. This device keeps the invite's seed for as long as it holds the ward.
-    void join(const InvitedWard& invited, const QString& userName, const QString& deviceName);
+    /// through the commit step, naming this device deviceName and, for a user invite, giving
+    /// its new user user's details. This device keeps the invite's seed for as long as it
+    /// holds the ward.
+    void join(const InvitedWard& invited, const UserDetails& user, const QString& deviceName);
 
-    /// The name of this device's user in the open ward.
-    QString ownUserName() const;
+    /// This device's user in the open ward.
+    AccessUser ownUser() const;
 
     /// Renames this device to deviceName in every ward the store holds that is still this
     /// device's and names it otherwise: the open ward through this session's commit step,
@@ -302,14 +304,14 @@ public:
     /// ward's journal.
     void renameDeviceEverywhere(const QString& deviceName);
 
-    /// Renames this device's user to userName in every ward the store holds that is still
-    /// this device's and names them otherwise, as renameDeviceEverywhere does.
-    void renameUserEverywhere(const QString& userName);
+    /// Sets this device's user's details to details in every ward the store holds that is
+    /// still this device's and holds them otherwise, as renameDeviceEverywhere does.
+    void setUserDetailsEverywhere(const UserDetails& details);
 
-    /// When this device's user in the open ward is named other than yourName, renames the
-    /// user to that name in every other ward this device holds that names them otherwise, and
-    /// answers the name, which is Your name from then on. Otherwise answers empty.
-    QString followUserName(const QString& yourName);
+    /// When this device's user in the open ward has details other than yours, sets them in
+    /// every other ward this device holds that holds them otherwise, and answers them, which
+    /// are Your name and Your email from then on. Otherwise answers none.
+    std::optional<UserDetails> followUserDetails(const UserDetails& yours);
 
 signals:
     /// The document changed, through a command, a replay, an open or an automatic update.
@@ -378,12 +380,11 @@ private:
     /// cleared, the copy kept read-only with the flag saved, so a device reopened still knows.
     void becomeNoLongerShared();
 
-    /// Commits, in every ward the store holds, the command rename builds from that ward's
-    /// access list for this device and name: the open ward through this session, each other
-    /// ward through a session opened on it here. A ward that names it so already gets no
-    /// command, and one that is no longer this device's refuses it.
-    void renameEverywhere(CommandPtr (*rename)(const QByteArray&, const AccessList&, const QString&),
-                          const QString& name);
+    /// Commits, in every ward the store holds, the command build makes from that ward's access
+    /// list: the open ward through this session, each other ward through a session opened on
+    /// it here. A ward where build makes none gets no command, and one that is no longer this
+    /// device's refuses it.
+    void commitEverywhere(const std::function<CommandPtr(const AccessList&)>& build);
 
     void replaceDocument(const Document& document);
     void clearUndoStack();

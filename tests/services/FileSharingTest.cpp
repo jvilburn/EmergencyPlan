@@ -101,7 +101,7 @@ void FileSharingTest::userInvitedAndJoinedEntirelyThroughFiles()
     QCOMPARE(invited.wardName, alice.session().document().wardName());
     QCOMPARE(invited.invite->invitedUser()->label, QString("Bob"));
 
-    bob.session().join(invited, "Bob Brown", "Bob's phone");
+    bob.session().join(invited, {"Bob Brown", ""}, "Bob's phone");
 
     QVERIFY(bob.session().documentId() == alice.session().documentId());
     AccessUser bobUser = TestSharing::userNamed(bob, "Bob Brown");
@@ -151,7 +151,7 @@ void FileSharingTest::memberVersionWrittenBeforeTakingTheJoinIsReadWithTheSeed()
     InviteResult made = alice.session().invite(InvitedUser{AccessRole::Member, "Bob"});
     QByteArray invitation = alice.session().writeInvitation(made.invite);
     QVERIFY(TestSharing::send(alice, {&carol}) == QList<TakeStatus>{TakeStatus::Taken});
-    bob.session().join(bob.session().readInvitation(invitation), "Bob Brown", "Bob's phone");
+    bob.session().join(bob.session().readInvitation(invitation), {"Bob Brown", ""}, "Bob's phone");
     UserId bobsId = TestSharing::userNamed(bob, "Bob Brown").id();
     // Carol writes before she has Bob's join: her version is sealed to the open invite, not to Bob.
     QVERIFY(TestSharing::commitBobsPhone(carol, "555-2222") == CommitStatus::Applied);
@@ -196,7 +196,7 @@ void FileSharingTest::versionFromAMemberWhoNeverTookTheJoinRunsTheJoinAgain()
     InviteResult made = alice.session().invite(InvitedUser{AccessRole::Member, "Bob"});
     QByteArray invitation = alice.session().writeInvitation(made.invite);
     QVERIFY(TestSharing::send(alice, {&carol, &dan}) == (QList<TakeStatus>{TakeStatus::Taken, TakeStatus::Taken}));
-    bob.session().join(bob.session().readInvitation(invitation), "Bob Brown", "Bob's phone");
+    bob.session().join(bob.session().readInvitation(invitation), {"Bob Brown", ""}, "Bob's phone");
     UserId bobsId = TestSharing::userNamed(bob, "Bob Brown").id();
     QVERIFY(TestSharing::send(bob, {&alice, &carol}) == (QList<TakeStatus>{TakeStatus::Taken, TakeStatus::Taken}));
     // Carol's 4 names Bob, and Bob takes it: his join has landed.
@@ -252,8 +252,8 @@ void FileSharingTest::sameInvitationUsedOnTwoDevices()
     TestSharing::share({&alice}, TestSharing::accessOf({&alice}, {}));
     InviteResult made = alice.session().invite(InvitedUser{AccessRole::Member, "Bob"});
     QByteArray invitation = alice.session().writeInvitation(made.invite);
-    phone.session().join(phone.session().readInvitation(invitation), "Bob", "Bob's phone");
-    tablet.session().join(tablet.session().readInvitation(invitation), "Bob", "Bob's tablet");
+    phone.session().join(phone.session().readInvitation(invitation), {"Bob", ""}, "Bob's phone");
+    tablet.session().join(tablet.session().readInvitation(invitation), {"Bob", ""}, "Bob's tablet");
     QByteArray phones = phone.session().writeUpdate();
     QByteArray tablets = tablet.session().writeUpdate();
 
@@ -301,7 +301,7 @@ void FileSharingTest::withdrawnInviteRotatesAndItsInvitationJoinsNothingLater()
     // The invitation still opens the version it carries, and joins nothing after it.
     InvitedWard invited = bob.session().readInvitation(invitation);
     QVERIFY(invited.status == InvitationStatus::Joinable);
-    bob.session().join(invited, "Bob Brown", "Bob's phone");
+    bob.session().join(invited, {"Bob Brown", ""}, "Bob's phone");
     QVERIFY(bob.session().takeUpdate(alices).status == TakeStatus::InviteUsedOrWithdrawn);
     QVERIFY(bob.session().isNoLongerShared());
 }
@@ -333,7 +333,7 @@ void FileSharingTest::invitationOpenedAgainOnTheDeviceThatJoinedThroughItKeepsIt
     TestSharing::share({&alice}, TestSharing::accessOf({&alice}, {}));
     InviteResult made = alice.session().invite(InvitedUser{AccessRole::Member, "Bob"});
     QByteArray invitation = alice.session().writeInvitation(made.invite);
-    bob.session().join(bob.session().readInvitation(invitation), "Bob Brown", "Bob's phone");
+    bob.session().join(bob.session().readInvitation(invitation), {"Bob Brown", ""}, "Bob's phone");
     QVERIFY(TestSharing::commitBobsPhone(bob, "555-2222") == CommitStatus::Applied);
     WardPayload bobBefore = bob.session().payload();
     VersionRank bobVersion = bob.session().version();
@@ -354,15 +354,16 @@ void FileSharingTest::deviceInviteJoinsAsOneOfItsMakersDevices()
 {
     TestClient laptop("Laptop");
     TestClient phone("Phone");
-    TestSharing::share({&laptop},
-                       AccessList({AccessUser(UserId::generate(), "Alice", AccessRole::Admin, {laptop.device()})}, {}, {}));
+    TestSharing::share({&laptop}, AccessList({AccessUser(UserId::generate(), {"Alice", "alice@example.com"},
+                                                         AccessRole::Admin, {laptop.device()})},
+                                             {}, {}));
     InviteResult made = laptop.session().invite(std::nullopt);
     AccessInvite invite = *laptop.session().document().access().findInvite(made.invite);
     QCOMPARE(laptop.session().document().access().describeInvite(invite), QString("a device for Alice"));
     QByteArray invitation = laptop.session().writeInvitation(made.invite);
 
     InvitedWard invited = phone.session().readInvitation(invitation);
-    phone.session().join(invited, QString(), "Phone");
+    phone.session().join(invited, UserDetails(), "Phone");
 
     QVERIFY(invited.status == InvitationStatus::Joinable);
     QVERIFY(!invited.invite->invitedUser().has_value());
@@ -370,8 +371,8 @@ void FileSharingTest::deviceInviteJoinsAsOneOfItsMakersDevices()
     QCOMPARE(alice.devices().size(), qsizetype(2));
     QCOMPARE(alice.devices()[1].name(), QString("Phone"));
     QCOMPARE(alice.devices()[1].fingerprint(), phone.identity().fingerprint());
-    QCOMPARE(phone.session().ownUserName(), QString("Alice"));
-    QCOMPARE(phone.session().followUserName(QString()), QString("Alice"));
+    QVERIFY(phone.session().ownUser().details() == UserDetails({"Alice", "alice@example.com"}));
+    QVERIFY(phone.session().followUserDetails(UserDetails()) == UserDetails({"Alice", "alice@example.com"}));
     QVERIFY(TestSharing::send(phone, {&laptop}) == QList<TakeStatus>{TakeStatus::Taken});
     QCOMPARE(TestSharing::userNamed(laptop, "Alice").devices().size(), qsizetype(2));
 }
@@ -478,7 +479,8 @@ void FileSharingTest::renamingThisDeviceJournalsOneRenameInEachWardThatNamesItOt
     DocumentId renamed = TestSharing::share({&laptop, &bob}, TestSharing::accessOf({&laptop, &bob}, {}));
     AccessDevice workLaptop("Work laptop", laptop.identity().publicKey(), laptop.identity().verifyKey());
     DocumentId alreadyNamed = TestSharing::share(
-        {&laptop}, AccessList({AccessUser(UserId::generate(), "Alice", AccessRole::Admin, {workLaptop})}, {}, {}));
+        {&laptop},
+        AccessList({AccessUser(UserId::generate(), {"Alice", ""}, AccessRole::Admin, {workLaptop})}, {}, {}));
     DocumentId gone = TestSharing::share({&laptop, &bob}, TestSharing::accessOf({&bob}, {&laptop}));
     QVERIFY(bob.session()
                 .commit(RemoveUserCommand::create(bob.identity().fingerprint(), TestSharing::userNamed(bob, "Laptop")))
@@ -508,40 +510,51 @@ void FileSharingTest::renamingThisDeviceJournalsOneRenameInEachWardThatNamesItOt
     QCOMPARE(bob.session().document().access().findDevice(self)->name(), QString("Work laptop"));
 }
 
-void FileSharingTest::secondDeviceTakingTheNewUserNameFollowsIt()
+void FileSharingTest::secondDeviceTakingTheNewUserDetailsFollowsThem()
 {
     TestClient laptop("Laptop");
     TestClient phone("Phone");
     TestClient carol("Carol");
-    DocumentId first = TestSharing::share(
-        {&laptop, &phone},
-        AccessList({AccessUser(UserId::generate(), "Alice", AccessRole::Admin, {laptop.device(), phone.device()})}, {},
-                   {}));
-    DocumentId second = TestSharing::share(
-        {&laptop, &phone},
-        AccessList({AccessUser(UserId::generate(), "Alice", AccessRole::Admin, {laptop.device(), phone.device()})}, {},
-                   {}));
+    AccessUser alice(UserId::generate(), {"Alice", ""}, AccessRole::Admin, {laptop.device(), phone.device()});
+    DocumentId first = TestSharing::share({&laptop, &phone}, AccessList({alice}, {}, {}));
+    DocumentId second = TestSharing::share({&laptop, &phone}, AccessList({alice}, {}, {}));
     DocumentId phoneOnly = TestSharing::share(
         {&phone, &carol},
-        AccessList({AccessUser(UserId::generate(), "Alice", AccessRole::Admin, {phone.device()}),
-                    AccessUser(UserId::generate(), "Carol", AccessRole::Member, {carol.device()})},
+        AccessList({AccessUser(UserId::generate(), {"Alice", ""}, AccessRole::Admin, {phone.device()}),
+                    AccessUser(UserId::generate(), {"Carol", ""}, AccessRole::Member, {carol.device()})},
                    {}, {}));
+    UserDetails changed{"Alice Jones", "alice@example.com"};
     QVERIFY(laptop.session().openWard(first).status == OpenStatus::Opened);
-    laptop.session().renameUserEverywhere("Alice Jones");
+
+    laptop.session().setUserDetailsEverywhere(changed);
+
+    // Set in Settings, the details reach every ward the laptop holds, one command in each.
+    QCOMPARE(laptop.session().journal().entries().size(), qsizetype(1));
+    QVERIFY(laptop.session().ownUser().details() == changed);
+    QVERIFY(laptop.session().openWard(second).status == OpenStatus::Opened);
+    QCOMPARE(laptop.session().journal().entries().size(), qsizetype(1));
+    QCOMPARE(laptop.session().journal().entries()[0].command["type"].toString(), QString("setUserDetails"));
+    QCOMPARE(laptop.session().ownUser().name(), QString("Alice Jones"));
+    QCOMPARE(laptop.session().ownUser().email(), QString("alice@example.com"));
+    QVERIFY(laptop.session().openWard(first).status == OpenStatus::Opened);
     QVERIFY(phone.session().openWard(first).status == OpenStatus::Opened);
     QVERIFY(TestSharing::send(laptop, {&phone}) == QList<TakeStatus>{TakeStatus::Taken});
-    QCOMPARE(phone.session().ownUserName(), QString("Alice Jones"));
+    QCOMPARE(phone.session().ownUser().name(), QString("Alice Jones"));
+    QCOMPARE(phone.session().ownUser().email(), QString("alice@example.com"));
 
-    QString followed = phone.session().followUserName("Alice");
+    std::optional<UserDetails> followed = phone.session().followUserDetails({"Alice", ""});
 
-    QCOMPARE(followed, QString("Alice Jones"));
+    QVERIFY(followed == changed);
     QVERIFY(phone.session().journal().isEmpty());
     QVERIFY(phone.session().openWard(second).status == OpenStatus::Opened);
     QCOMPARE(phone.session().journal().entries().size(), qsizetype(1));
-    QCOMPARE(phone.session().journal().entries()[0].command["type"].toString(), QString("renameUser"));
-    QCOMPARE(phone.session().ownUserName(), QString("Alice Jones"));
+    QCOMPARE(phone.session().journal().entries()[0].command["type"].toString(), QString("setUserDetails"));
+    QCOMPARE(phone.session().ownUser().name(), QString("Alice Jones"));
+    QCOMPARE(phone.session().ownUser().email(), QString("alice@example.com"));
     QVERIFY(phone.session().openWard(phoneOnly).status == OpenStatus::Opened);
-    QCOMPARE(phone.session().ownUserName(), QString("Alice Jones"));
+    QCOMPARE(phone.session().ownUser().name(), QString("Alice Jones"));
+    QCOMPARE(phone.session().ownUser().email(), QString("alice@example.com"));
     QCOMPARE(TestSharing::userNames(phone), (QStringList{"Alice Jones", "Carol"}));
-    QCOMPARE(phone.session().followUserName("Alice Jones"), QString());
+    QCOMPARE(TestSharing::userNamed(phone, "Carol").email(), QString());
+    QVERIFY(!phone.session().followUserDetails(changed).has_value());
 }

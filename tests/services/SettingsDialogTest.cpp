@@ -4,6 +4,7 @@
 #include "SettingsDialog.h"
 
 #include <QDialogButtonBox>
+#include <QHash>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QTemporaryDir>
@@ -21,15 +22,26 @@ void SettingsDialogTest::okIsEnabledOnlyWhileBothNamesAreNotEmpty()
     AppSettings settings(dir.filePath("settings.json"));
     settings.setDeviceName("Laptop");
     settings.setUserName("Alice Smith");
+    settings.setEmail("alice@example.com");
 
     SettingsDialog dialog(settings, Coordinates(40.2338, -111.6585), nullptr);
     QPushButton* ok = dialog.findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok);
-    QList<QLineEdit*> names = dialog.findChildren<QLineEdit*>();
-    QCOMPARE(names.size(), qsizetype(2));
-    QLineEdit* deviceName = names[0]->text() == "Laptop" ? names[0] : names[1];
-    QLineEdit* userName = names[0]->text() == "Laptop" ? names[1] : names[0];
-    QCOMPARE(userName->text(), QString("Alice Smith"));
+    QHash<QString, QLineEdit*> fields;
+    const QList<QLineEdit*> edits = dialog.findChildren<QLineEdit*>();
+    for (QLineEdit* edit : edits)
+    {
+        fields.insert(edit->text(), edit);
+    }
+    QCOMPARE(fields.size(), qsizetype(3));
+    QLineEdit* deviceName = fields.value("Laptop");
+    QLineEdit* userName = fields.value("Alice Smith");
+    QLineEdit* email = fields.value("alice@example.com");
+    QVERIFY(deviceName && userName && email);
     QVERIFY(ok->isEnabled());
+
+    email->clear();
+    QVERIFY(ok->isEnabled());
+    QCOMPARE(dialog.email(), QString());
 
     deviceName->clear();
     QVERIFY(!ok->isEnabled());
