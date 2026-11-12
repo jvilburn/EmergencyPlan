@@ -65,6 +65,10 @@ void WhoHasAccessDialogTest::removeAndRolesAreOfferedOnlyWhereTheRulesAllow()
     QVERIFY(alices.offeredActions().isEmpty());
     QVERIFY(select(alices, "Alice (this device)"));
     QVERIFY(alices.offeredActions() == QList<AccessAction>{AccessAction::RemoveThisDevice});
+    // Carol's device row, under her user row "Carol (member)".
+    QVERIFY(select(alices, "Carol"));
+    QCOMPARE(alices.findChild<QTreeWidget*>()->currentItem()->parent()->text(0), QString("Carol (member)"));
+    QVERIFY(alices.offeredActions().isEmpty());
 
     QVERIFY(select(carols, "Alice (admin)"));
     QVERIFY(carols.offeredActions().isEmpty());

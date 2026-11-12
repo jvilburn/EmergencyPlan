@@ -9,6 +9,7 @@
 #include <QString>
 
 class AppSettings;
+class QBoxLayout;
 class QLabel;
 class QPushButton;
 class QTreeWidget;
@@ -48,8 +49,8 @@ public:
     /// What a member sees in place of Add a user; empty when Add a user is offered.
     QString addUserNotice() const;
 
-    /// Makes an invite for the user named label, an admin when admin is set: its fingerprint,
-    /// or empty when label is empty once trimmed, which makes nothing.
+    /// Makes an invite for the user named label, an admin when admin is set: its fingerprint
+    /// when the invite applied; otherwise empty, and a blank label makes nothing.
     QByteArray addUser(const QString& label, bool admin);
 
 private slots:
@@ -85,15 +86,18 @@ private:
     /// Adds a row under parent, or at the top level when parent is null.
     QTreeWidgetItem* addRow(QTreeWidgetItem* parent, const QString& text, RowKind kind, const QByteArray& key);
 
-    /// The selected row's kind and key: Heading and empty when no row is selected.
-    RowKind selectedKind() const;
-    QByteArray selectedKey() const;
+    /// Adds to layout a button for action that runs slot, shown while action is offered.
+    void addActionButton(QBoxLayout* layout, AccessAction action, const QString& text,
+                         void (WhoHasAccessDialog::*slot)());
+
+    /// The selected row, or null when no row is selected.
+    QTreeWidgetItem* selectedRow() const;
 
     /// The user of the selected row, which is a user's.
     AccessUser selectedUser() const;
 
     /// Writes the invitation of invite, one of invitesMadeHere, where the user chooses, shows
-    /// it in its folder, and shows the message to send with it.
+    /// the message to send with it, and then shows it in its folder.
     void saveInvitation(const QByteArray& invite);
 
     WardSession& m_session;
@@ -101,7 +105,7 @@ private:
 
     QTreeWidget* m_list;
     QMap<AccessAction, QPushButton*> m_actionButtons;
-    QWidget* m_actions;  ///< Add a user, Add a device and Leave, disabled while the ward is no longer this device's
+    QWidget* m_wardActions;  ///< Add a user, Add a device and Leave, disabled while the ward is no longer this device's
     QPushButton* m_addUserButton;
     QLabel* m_addUserNotice;
 };

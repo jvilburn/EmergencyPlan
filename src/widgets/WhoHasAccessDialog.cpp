@@ -48,39 +48,35 @@ WhoHasAccessDialog::WhoHasAccessDialog(WardSession& session, const AppSettings& 
     listRow->addWidget(m_list, 1);
 
     QVBoxLayout* rowActions = new QVBoxLayout();
-    auto addActionButton = [&](AccessAction action, const QString& text, void (WhoHasAccessDialog::*slot)())
-    {
-        QPushButton* button = new QPushButton(text, this);
-        rowActions->addWidget(button);
-        m_actionButtons.insert(action, button);
-        connect(button, &QPushButton::clicked, this, slot);
-    };
-    addActionButton(AccessAction::Remove, tr("Remove"), &WhoHasAccessDialog::onRemove);
-    addActionButton(AccessAction::MakeAdmin, tr("Make admin"), &WhoHasAccessDialog::onMakeAdmin);
-    addActionButton(AccessAction::MakeMember, tr("Make member"), &WhoHasAccessDialog::onMakeMember);
-    addActionButton(AccessAction::RemoveDevice, tr("Remove device"), &WhoHasAccessDialog::onRemoveDevice);
-    addActionButton(AccessAction::RemoveThisDevice, tr("Remove this device"), &WhoHasAccessDialog::onRemoveThisDevice);
-    addActionButton(AccessAction::WithdrawInvite, tr("Withdraw invite"), &WhoHasAccessDialog::onWithdrawInvite);
-    addActionButton(AccessAction::SaveInvitation, tr("Save invitation"), &WhoHasAccessDialog::onSaveInvitation);
+    addActionButton(rowActions, AccessAction::Remove, tr("Remove"), &WhoHasAccessDialog::onRemove);
+    addActionButton(rowActions, AccessAction::MakeAdmin, tr("Make admin"), &WhoHasAccessDialog::onMakeAdmin);
+    addActionButton(rowActions, AccessAction::MakeMember, tr("Make member"), &WhoHasAccessDialog::onMakeMember);
+    addActionButton(rowActions, AccessAction::RemoveDevice, tr("Remove device"), &WhoHasAccessDialog::onRemoveDevice);
+    addActionButton(rowActions, AccessAction::RemoveThisDevice, tr("Remove this device"),
+                    &WhoHasAccessDialog::onRemoveThisDevice);
+    addActionButton(rowActions, AccessAction::WithdrawInvite, tr("Withdraw invite"),
+                    &WhoHasAccessDialog::onWithdrawInvite);
+    addActionButton(rowActions, AccessAction::SaveInvitation, tr("Save invitation"),
+                    &WhoHasAccessDialog::onSaveInvitation);
     rowActions->addStretch();
     listRow->addLayout(rowActions);
     layout->addLayout(listRow);
 
     layout->addWidget(new QLabel(tr("Names change in Settings."), this));
 
-    m_actions = new QWidget(this);
-    QHBoxLayout* wardActions = new QHBoxLayout(m_actions);
-    wardActions->setContentsMargins(0, 0, 0, 0);
-    m_addUserButton = new QPushButton(tr("Add a user"), m_actions);
-    m_addUserNotice = new QLabel(m_actions);
+    m_wardActions = new QWidget(this);
+    QHBoxLayout* wardRow = new QHBoxLayout(m_wardActions);
+    wardRow->setContentsMargins(0, 0, 0, 0);
+    m_addUserButton = new QPushButton(tr("Add a user"), m_wardActions);
+    m_addUserNotice = new QLabel(m_wardActions);
     m_addUserNotice->setWordWrap(true);
-    QPushButton* addDeviceButton = new QPushButton(tr("Add a device"), m_actions);
-    QPushButton* leaveButton = new QPushButton(tr("Leave"), m_actions);
-    wardActions->addWidget(m_addUserButton);
-    wardActions->addWidget(m_addUserNotice, 1);
-    wardActions->addWidget(addDeviceButton);
-    wardActions->addWidget(leaveButton);
-    layout->addWidget(m_actions);
+    QPushButton* addDeviceButton = new QPushButton(tr("Add a device"), m_wardActions);
+    QPushButton* leaveButton = new QPushButton(tr("Leave"), m_wardActions);
+    wardRow->addWidget(m_addUserButton);
+    wardRow->addWidget(m_addUserNotice, 1);
+    wardRow->addWidget(addDeviceButton);
+    wardRow->addWidget(leaveButton);
+    layout->addWidget(m_wardActions);
 
     QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
     layout->addWidget(buttons);
@@ -98,15 +94,16 @@ WhoHasAccessDialog::WhoHasAccessDialog(WardSession& session, const AppSettings& 
 QList<AccessAction> WhoHasAccessDialog::offeredActions() const
 {
     QList<AccessAction> actions;
-    if (m_session.isNoLongerShared())
+    QTreeWidgetItem* row = selectedRow();
+    if (m_session.isNoLongerShared() || !row)
     {
         return actions;
     }
 
     const AccessList& access = m_session.document().access();
     const QByteArray& actor = m_session.deviceFingerprint();
-    QByteArray key = selectedKey();
-    switch (selectedKind())
+    QByteArray key = row->data(0, KeyRole).toByteArray();
+    switch (static_cast<RowKind>(row->data(0, KindRole).toInt()))
     {
     case RowKind::Heading:
         break;
@@ -170,8 +167,9 @@ QByteArray WhoHasAccessDialog::addUser(const QString& label, bool admin)
 
 void WhoHasAccessDialog::rebuild()
 {
-    RowKind kind = selectedKind();
-    QByteArray key = selectedKey();
+    QTreeWidgetItem* selected = selectedRow();
+    QVariant kind = selected ? selected->data(0, KindRole) : QVariant();
+    QVariant key = selected ? selected->data(0, KeyRole) : QVariant();
     int scroll = m_list->verticalScrollBar()->value();
     m_list->clear();
 
@@ -200,11 +198,9 @@ void WhoHasAccessDialog::rebuild()
     }
     m_list->expandAll();
 
-    // With nothing selected the key is empty, as the heading's is, and nothing is selected again.
-    for (QTreeWidgetItemIterator it(m_list); *it && !key.isEmpty(); ++it)
+    for (QTreeWidgetItemIterator it(m_list); *it; ++it)
     {
-        if (static_cast<RowKind>((*it)->data(0, KindRole).toInt()) == kind
-            && (*it)->data(0, KeyRole).toByteArray() == key)
+        if ((*it)->data(0, KindRole) == kind && (*it)->data(0, KeyRole) == key)
         {
             m_list->setCurrentItem(*it);
             break;
@@ -225,7 +221,7 @@ void WhoHasAccessDialog::updateActions()
     m_addUserNotice->setText(notice);
     m_addUserNotice->setVisible(!notice.isEmpty());
     m_addUserButton->setVisible(notice.isEmpty());
-    m_actions->setEnabled(!m_session.isNoLongerShared());
+    m_wardActions->setEnabled(!m_session.isNoLongerShared());
 }
 
 void WhoHasAccessDialog::onAddUser()
@@ -288,12 +284,22 @@ void WhoHasAccessDialog::onRemoveThisDevice()
 
 void WhoHasAccessDialog::onSaveInvitation()
 {
-    saveInvitation(selectedKey());
+    saveInvitation(selectedRow()->data(0, KeyRole).toByteArray());
 }
 
 void WhoHasAccessDialog::onRemove()
 {
-    DocumentManager::instance()->executeCommand(RemoveUserCommand::create(m_session.deviceFingerprint(), selectedUser()));
+    AccessUser user = selectedUser();
+    QMessageBox ask(QMessageBox::Question, tr("Remove"),
+                    tr("Remove %1 from %2?").arg(user.name(), m_session.document().wardName()), QMessageBox::Cancel,
+                    this);
+    QPushButton* remove = ask.addButton(tr("Remove"), QMessageBox::DestructiveRole);
+    ask.exec();
+    if (ask.clickedButton() != remove)
+    {
+        return;
+    }
+    DocumentManager::instance()->executeCommand(RemoveUserCommand::create(m_session.deviceFingerprint(), user));
 }
 
 void WhoHasAccessDialog::onMakeAdmin()
@@ -310,14 +316,14 @@ void WhoHasAccessDialog::onMakeMember()
 
 void WhoHasAccessDialog::onRemoveDevice()
 {
-    AccessDevice device = *m_session.document().access().findDevice(selectedKey());
+    AccessDevice device = *m_session.document().access().findDevice(selectedRow()->data(0, KeyRole).toByteArray());
     DocumentManager::instance()->executeCommand(RemoveDeviceCommand::create(m_session.deviceFingerprint(), device));
 }
 
 void WhoHasAccessDialog::onWithdrawInvite()
 {
     const AccessList& access = m_session.document().access();
-    AccessInvite invite = *access.findInvite(selectedKey());
+    AccessInvite invite = *access.findInvite(selectedRow()->data(0, KeyRole).toByteArray());
     DocumentManager::instance()->executeCommand(
         WithdrawInviteCommand::create(m_session.deviceFingerprint(), invite, access));
 }
@@ -332,29 +338,25 @@ QTreeWidgetItem* WhoHasAccessDialog::addRow(QTreeWidgetItem* parent, const QStri
     return item;
 }
 
-WhoHasAccessDialog::RowKind WhoHasAccessDialog::selectedKind() const
+void WhoHasAccessDialog::addActionButton(QBoxLayout* layout, AccessAction action, const QString& text,
+                                         void (WhoHasAccessDialog::*slot)())
 {
-    QList<QTreeWidgetItem*> selected = m_list->selectedItems();
-    if (selected.isEmpty())
-    {
-        return RowKind::Heading;
-    }
-    return static_cast<RowKind>(selected.first()->data(0, KindRole).toInt());
+    QPushButton* button = new QPushButton(text, this);
+    layout->addWidget(button);
+    m_actionButtons.insert(action, button);
+    connect(button, &QPushButton::clicked, this, slot);
 }
 
-QByteArray WhoHasAccessDialog::selectedKey() const
+QTreeWidgetItem* WhoHasAccessDialog::selectedRow() const
 {
     QList<QTreeWidgetItem*> selected = m_list->selectedItems();
-    if (selected.isEmpty())
-    {
-        return QByteArray();
-    }
-    return selected.first()->data(0, KeyRole).toByteArray();
+    return selected.isEmpty() ? nullptr : selected.first();
 }
 
 AccessUser WhoHasAccessDialog::selectedUser() const
 {
-    return *m_session.document().access().findUser(UserId::fromString(QString::fromUtf8(selectedKey())));
+    QString id = QString::fromUtf8(selectedRow()->data(0, KeyRole).toByteArray());
+    return *m_session.document().access().findUser(UserId::fromString(id));
 }
 
 void WhoHasAccessDialog::saveInvitation(const QByteArray& invite)
@@ -362,8 +364,9 @@ void WhoHasAccessDialog::saveInvitation(const QByteArray& invite)
     const Document& document = m_session.document();
     QString wardName = document.wardName();
     AccessInvite entry = *document.access().findInvite(invite);
-    QString suggested = QDir(UserFolder::standard().path())
-                            .filePath(InvitationFile::fileName(wardName, document.access().describeInvite(entry)));
+    QString folder = UserFolder::standard().path();
+    QDir().mkpath(folder);
+    QString suggested = QDir(folder).filePath(InvitationFile::fileName(wardName, document.access().describeInvite(entry)));
     QString path = QFileDialog::getSaveFileName(this, tr("Save Invitation"), suggested,
                                                 tr("Ward Planning invitations (*.wardinvite)"));
     if (path.isEmpty())
@@ -378,14 +381,12 @@ void WhoHasAccessDialog::saveInvitation(const QByteArray& invite)
                              tr("The invitation could not be saved: %1.").arg(file.errorString()));
         return;
     }
-    ShowInFolder::reveal(path);
-
     QString message = entry.invitedUser().has_value()
-        ? tr("Send the invitation with this message:\n\n%1 has invited you to %2. Install Ward Planning, then open "
-             "the attached invitation.")
+        ? tr("%1 has invited you to %2. Install Ward Planning, then open the attached invitation.")
               .arg(m_session.ownUserName(), wardName)
         : tr("Send this invitation to yourself and open it on your other device.");
     QMessageBox box(QMessageBox::Information, tr("Save Invitation"), message, QMessageBox::Ok, this);
     box.setTextInteractionFlags(Qt::TextSelectableByMouse);
     box.exec();
+    ShowInFolder::reveal(path);
 }
