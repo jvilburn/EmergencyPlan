@@ -15,7 +15,11 @@ OpenWardDialog::OpenWardDialog(const QList<WardListEntry>& wards, QWidget* paren
     QVBoxLayout* layout = new QVBoxLayout(this);
     if (wards.isEmpty())
     {
-        layout->addWidget(new QLabel(tr("This device holds no wards yet. Create one with New Ward, or open an invitation with Join a Ward."), this));
+        QLabel* empty = new QLabel(
+            tr("This device holds no wards yet. Create one with New Ward, or open an invitation with Join a Ward."),
+            this);
+        empty->setWordWrap(true);
+        layout->addWidget(empty);
     }
 
     m_list = new QListWidget(this);

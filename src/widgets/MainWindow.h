@@ -36,14 +36,15 @@ public:
     ~MainWindow();
 
     /// Opens the ward the app starts on: on the first start, asks this device's name and your name; then
-    /// opens the last ward, or, when there is none or it does not open, shows the ward list.
-    /// False when the user cancels, which quits the app.
-    bool openStartingWard();
+    /// opens file, the update or invitation the app was started with, when there is one. When no ward
+    /// is open after that, opens the last ward, or, when there is none or it does not open, shows the
+    /// ward list. False when the user cancels, which quits the app.
+    bool openStartingWard(const QString& file);
 
 public slots:
     /// Opens the file at path by its suffix: a .wardinvite as an invitation, anything else as
-    /// an update.
-    void openFile(const QString& path);
+    /// an update. True when the file's ward is open after it.
+    bool openFile(const QString& path);
 
     /// Another launch handed over path, its update or invitation file, or nothing: brings the
     /// window forward and opens the file.
@@ -154,8 +155,8 @@ private:
     bool joinWard();
 
     /// Takes the update file at path, opening its ward first when another is open, and tells
-    /// the user how it went.
-    void openUpdateFile(const QString& path);
+    /// the user how it went. True when its ward is open after it.
+    bool openUpdateFile(const QString& path);
 
     /// Reads the invitation file at path: opens this device's own copy of its ward, or asks
     /// to join the ward and joins it, and tells the user how it went. True when a ward opened

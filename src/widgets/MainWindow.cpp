@@ -274,7 +274,7 @@ void MainWindow::setupConnections()
             this, &MainWindow::onGeocodingFinished);
 }
 
-bool MainWindow::openStartingWard()
+bool MainWindow::openStartingWard(const QString& file)
 {
     if (m_settings->deviceName().isEmpty())
     {
@@ -301,6 +301,10 @@ bool MainWindow::openStartingWard()
         m_settings->setUserName(userName);
     }
 
+    if (!file.isEmpty() && openFile(file))
+    {
+        return true;
+    }
     std::optional<DocumentId> lastWard = m_settings->lastWard();
     if (lastWard && DocumentManager::instance()->holdsWard(*lastWard) && openWard(*lastWard))
     {
@@ -456,16 +460,13 @@ void MainWindow::updateSharing()
     }
 }
 
-void MainWindow::openFile(const QString& path)
+bool MainWindow::openFile(const QString& path)
 {
     if (path.endsWith(".wardinvite"))
     {
-        openInvitationFile(path);
+        return openInvitationFile(path);
     }
-    else
-    {
-        openUpdateFile(path);
-    }
+    return openUpdateFile(path);
 }
 
 void MainWindow::onOpenUpdate()
@@ -478,14 +479,14 @@ void MainWindow::onOpenUpdate()
     }
 }
 
-void MainWindow::openUpdateFile(const QString& path)
+bool MainWindow::openUpdateFile(const QString& path)
 {
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly))
     {
         QMessageBox::warning(this, tr("Open Update"),
                              tr("The file %1 could not be read.").arg(QDir::toNativeSeparators(path)));
-        return;
+        return false;
     }
     QByteArray bytes = file.readAll();
     UpdateRead update = UpdateFile::read(bytes);
@@ -497,11 +498,11 @@ void MainWindow::openUpdateFile(const QString& path)
         QMessageBox::warning(this, tr("Open Update"),
                              tr("This ward was saved by a newer version of Ward Planning. Update to see the latest "
                                 "changes and share your work."));
-        return;
+        return false;
     case UpdateReadStatus::Unreadable:
         qWarning("An update did not read: %s", qPrintable(update.problem));
         QMessageBox::warning(this, tr("Open Update"), tr("This file is not a Ward Planning update."));
-        return;
+        return false;
     }
 
     DocumentId document = update.header->document();
@@ -510,11 +511,11 @@ void MainWindow::openUpdateFile(const QString& path)
         if (!DocumentManager::instance()->holdsWard(document))
         {
             QMessageBox::warning(this, tr("Open Update"), tr("This update is for a ward this device does not have."));
-            return;
+            return false;
         }
         if (!mayLeaveWard() || !openWard(document))
         {
-            return;
+            return false;
         }
     }
 
@@ -527,30 +528,30 @@ void MainWindow::openUpdateFile(const QString& path)
         break;
     case TakeStatus::NotNewer:
         QMessageBox::information(this, tr("Open Update"), tr("You already have a newer update."));
-        return;
+        return true;
     case TakeStatus::OtherWard:
         QMessageBox::warning(this, tr("Open Update"), tr("This update is for a ward this device does not have."));
-        return;
+        return true;
     case TakeStatus::UnknownWriter:
         QMessageBox::warning(this, tr("Open Update"),
                              tr("This update is from a device this copy of the ward does not list yet. Open the "
                                 "update from whoever added it first."));
-        return;
+        return true;
     case TakeStatus::NotNamed:
         QMessageBox::warning(this, tr("Open Update"), tr("This ward is no longer shared with this device."));
-        return;
+        return true;
     case TakeStatus::InviteUsedOrWithdrawn:
         QMessageBox::warning(this, tr("Open Update"), tr("This invite has been used or withdrawn. Ask the sender."));
-        return;
+        return true;
     case TakeStatus::Newer:
         QMessageBox::warning(this, tr("Open Update"),
                              tr("This ward was saved by a newer version of Ward Planning. Update to see the latest "
                                 "changes and share your work."));
-        return;
+        return true;
     case TakeStatus::Unreadable:
         qWarning("An update was not taken: %s", qPrintable(result.problem));
         QMessageBox::warning(this, tr("Open Update"), tr("This update could not be read. Nothing was changed."));
-        return;
+        return true;
     }
 
     followUserName();
@@ -564,6 +565,7 @@ void MainWindow::openUpdateFile(const QString& path)
         showChangesToRedo(result.replay);
         break;
     }
+    return true;
 }
 
 bool MainWindow::openInvitationFile(const QString& path)

@@ -95,17 +95,13 @@ int main(int argc, char *argv[])
 
     AppSettings settings(appData.settingsFilePath());
     MainWindow window(&settings, parser.isSet(developerOption), nullptr);
-    if (!window.openStartingWard())
+    if (!window.openStartingWard(file))
     {
         return 0;
     }
     window.show();
     QObject::connect(&lock, &InstanceLock::handedOver, &window, &MainWindow::onHandedOver);
     lock.listen();
-    if (!file.isEmpty())
-    {
-        window.openFile(file);
-    }
 
     return app.exec();
 }
