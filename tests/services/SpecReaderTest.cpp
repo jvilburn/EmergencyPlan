@@ -1,10 +1,13 @@
 #include "SpecReaderTest.h"
 #include "AppData.h"
+#include "Base64Url.h"
 #include "CommandRegistry.h"
 #include "Crypto.h"
 #include "EveryField.h"
 #include "FileWardStore.h"
+#include "InvitationFile.h"
 #include "KeyFile.h"
+#include "TestSharing.h"
 #include "UpdateFile.h"
 #include "WardFile.h"
 #include "WardFileEdits.h"
@@ -54,6 +57,13 @@ QStringList fieldsOf(const QJsonObject& json, const QString& type)
     return {};
 }
 
+/// Writes bytes to the file at path: true when all of them were written.
+bool putFile(const QString& path, const QByteArray& bytes)
+{
+    QFile file(path);
+    return file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size();
+}
+
 }  // namespace
 
 SpecReaderTest::SpecReaderTest(QObject* parent)
@@ -91,13 +101,21 @@ SpecReaderTest::Run SpecReaderTest::read(const DocumentId& document) const
 SpecReaderTest::Run SpecReaderTest::readUpdate(const DocumentId& document, const QByteArray& update) const
 {
     QString path = m_appData.filePath("received.wardupdate");
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly) || file.write(update) != update.size())
+    if (!putFile(path, update))
     {
         return Run{-1, QByteArray(), "the update file could not be written"};
     }
-    file.close();
     return runReader({m_appData.path(), document.toString(), path});
+}
+
+SpecReaderTest::Run SpecReaderTest::readInvitation(const QByteArray& invitation) const
+{
+    QString path = m_appData.filePath("received.wardinvite");
+    if (!putFile(path, invitation))
+    {
+        return Run{-1, QByteArray(), "the invitation file could not be written"};
+    }
+    return runReader({"--invitation", path});
 }
 
 QByteArray SpecReaderTest::phoneVersion() const
@@ -332,4 +350,48 @@ void SpecReaderTest::specReaderRefusesAnUpdateWhoseSignatureOrWriterFails()
     Run unlisted = readUpdate(m_document, UpdateFile::write(m_document, strangers, stranger));
     QCOMPARE(unlisted.exitCode, 1);
     QVERIFY2(unlisted.problem.contains("writer is not on the access list"), qPrintable(unlisted.problem));
+}
+
+void SpecReaderTest::specReaderReadsAnInvitationTheAppWrites()
+{
+    TestClient alice("Alice");
+    TestClient carol("Carol");
+    TestSharing::share({&alice, &carol}, TestSharing::accessOf({&alice}, {&carol}));
+    InviteResult made = alice.session().invite(InvitedUser{AccessRole::Member, "Bob"});
+    QVERIFY(made.commit.status == CommitStatus::Applied);
+    QByteArray invitation = alice.session().writeInvitation(made.invite);
+    InvitationRead split = InvitationFile::read(invitation);
+    QVERIFY(split.status == InvitationReadStatus::Read);
+    WardRead version = WardFile::read(split.version, Identity::fromInviteSeed(split.seed), PayloadKind::Version);
+    QVERIFY2(version.status == WardReadStatus::Read, qPrintable(version.problem));
+
+    Run run = readInvitation(invitation);
+
+    QVERIFY2(run.exitCode == 0, qPrintable(run.problem));
+    qsizetype boundary = run.output.indexOf('\n');
+    QVERIFY(boundary > 0);
+    QJsonParseError error;
+    QJsonDocument output = QJsonDocument::fromJson(run.output.left(boundary), &error);
+    QVERIFY2(error.error == QJsonParseError::NoError, qPrintable(error.errorString()));
+    QCOMPARE(output.object(), version.payload->toJson());
+    QCOMPARE(QString::fromUtf8(run.output.mid(boundary + 1)), Base64Url::encode(made.invite));
+}
+
+void SpecReaderTest::specReaderRefusesAnInvitationWhoseSeedOpensNothing()
+{
+    TestClient alice("Alice");
+    TestClient carol("Carol");
+    TestSharing::share({&alice, &carol}, TestSharing::accessOf({&alice}, {&carol}));
+    InviteResult made = alice.session().invite(InvitedUser{AccessRole::Member, "Bob"});
+    QByteArray invitation = alice.session().writeInvitation(made.invite);
+    Run unmutated = readInvitation(invitation);
+    QVERIFY2(unmutated.exitCode == 0, qPrintable(unmutated.problem));
+
+    QJsonObject line{{"format", InvitationFile::Format},
+                     {"seed", Base64Url::encode(Crypto::randomBytes(Crypto::KeyBytes))}};
+    Run run = readInvitation(QJsonDocument(line).toJson(QJsonDocument::Compact) + '\n'
+                             + TestSharing::versionIn(invitation));
+
+    QCOMPARE(run.exitCode, 1);
+    QVERIFY2(run.problem.contains("names no recipient with the reader's fingerprint"), qPrintable(run.problem));
 }

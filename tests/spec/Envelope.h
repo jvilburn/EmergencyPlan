@@ -13,7 +13,7 @@ public:
     NewerFormat() : std::runtime_error("the file is in a newer format") {}
 };
 
-/// A device's keys, from its key file.
+/// A device's keys, from its key file, or an invite's, from its seed.
 struct DeviceKeys
 {
     Bytes sealingPublic;  ///< X25519

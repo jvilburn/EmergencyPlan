@@ -127,7 +127,7 @@ Bytes unsealDataKey(const Header& header, const DeviceKeys& keys)
         }
         return dataKey;
     }
-    throw Refusal("the header names no recipient with this device's fingerprint");
+    throw Refusal("the header names no recipient with the reader's fingerprint");
 }
 
 std::string openPayload(const Header& header, const Bytes& dataKey, const std::string& payloadBytes)

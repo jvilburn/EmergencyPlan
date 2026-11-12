@@ -30,6 +30,8 @@ private slots:
     void specReaderRefusesAHeaderWithoutAVersion();
     void specReaderReadsAnUpdateFileTheAppWrites();
     void specReaderRefusesAnUpdateWhoseSignatureOrWriterFails();
+    void specReaderReadsAnInvitationTheAppWrites();
+    void specReaderRefusesAnInvitationWhoseSeedOpensNothing();
 
 private:
     /// What one run of the reader gave.
@@ -49,6 +51,9 @@ private:
     /// Runs the reader on the update file holding update, against the app data folder's
     /// ward of document.
     Run readUpdate(const DocumentId& document, const QByteArray& update) const;
+
+    /// Runs the reader on the invitation file holding invitation.
+    Run readInvitation(const QByteArray& invitation) const;
 
     /// The every-field payload without its device part, as version 5 written by the phone.
     QByteArray phoneVersion() const;
