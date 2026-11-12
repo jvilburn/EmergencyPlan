@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-/// A header whose format is above every version this reader knows.
+/// A file whose format is above every version this reader knows.
 class NewerFormat : public std::runtime_error
 {
 public:
@@ -47,6 +47,10 @@ Bytes fingerprintOf(const Bytes& sealingPublic, const Bytes& verifyKey);
 
 /// Unkeyed BLAKE2b-256 of text, with a zero salt and no personalization.
 Bytes hashOf(const std::string& text);
+
+/// The fields of line, a JSON object found at path whose format is read as docs/FORMAT.md's
+/// *Format versions* states, with format taken. Throws NewerFormat for a format above 1.
+Fields readFormatLine(const std::string& line, const std::string& path);
 
 /// The header line of file, read strictly, and the payload bytes after its newline. Throws
 /// NewerFormat for a format above 1.

@@ -65,15 +65,20 @@ void checkAgreement(const Header& header, const std::vector<PublicKeys>& keys)
     }
 }
 
-/// The payload of a file of document whose header and payload bytes are given, opened with
-/// keys and read as kind, with the public keys of its access list in access.
-nlohmann::json openFile(const Header& header, const std::string& payloadBytes, const std::string& document,
-                        const DeviceKeys& keys, PayloadKind kind, std::vector<PublicKeys>* access)
+/// Refuses a header that names a document other than document.
+void checkDocument(const Header& header, const std::string& document)
 {
     if (encode(header.document) != document)
     {
         throw Refusal("the header names another document");
     }
+}
+
+/// The payload of a file whose header and payload bytes are given, opened with keys and read
+/// as kind, with the public keys of its access list in access.
+nlohmann::json openFile(const Header& header, const std::string& payloadBytes, const DeviceKeys& keys,
+                        PayloadKind kind, std::vector<PublicKeys>* access)
+{
     if (header.recipients.empty())
     {
         throw Refusal("the header names no recipient, as only a deleted ward's final version does");
@@ -127,6 +132,7 @@ nlohmann::json readUpdate(const std::string& text, const std::string& document, 
     }
     std::string payloadBytes;
     Header header = readHeader(text.substr(boundary + 1), &payloadBytes);
+    checkDocument(header, document);
     std::optional<Bytes> verifyKey = verifyKeyOf(held, header.writer);
     if (!verifyKey.has_value())
     {
@@ -141,7 +147,7 @@ nlohmann::json readUpdate(const std::string& text, const std::string& document, 
         throw Refusal("the update's signature does not verify");
     }
     std::vector<PublicKeys> access;
-    return openFile(header, payloadBytes, document, keys, PayloadKind::Version, &access);
+    return openFile(header, payloadBytes, keys, PayloadKind::Version, &access);
 }
 
 /// The keys of the invite whose seed is seed: docs/FORMAT.md's *Invitation files*.
@@ -172,34 +178,14 @@ std::string readInvitation(const std::string& text)
     {
         throw Refusal("the invitation has no invitation line");
     }
-    nlohmann::json line = nlohmann::json::parse(text.substr(0, boundary), nullptr, false);
-    if (line.is_discarded() || !line.is_object())
-    {
-        throw Refusal("the invitation line is not a JSON object");
-    }
-    nlohmann::json::const_iterator format = line.find("format");
-    if (format == line.end() || !isInteger(*format))
-    {
-        throw Refusal("invitation.format is not an integer");
-    }
-    if (*format > 1)
-    {
-        throw NewerFormat();
-    }
-    Fields fields(line, "invitation");
-    if (fields.integer("format") != 1)
-    {
-        throw Refusal("invitation.format is not a version this reader knows");
-    }
+    Fields fields = readFormatLine(text.substr(0, boundary), "invitation");
     DeviceKeys keys = inviteKeys(fields.bytes("seed", KeyBytes));
     fields.done();
 
     std::string payloadBytes;
     Header header = readHeader(text.substr(boundary + 1), &payloadBytes);
     std::vector<PublicKeys> access;
-    // The header's document names the ward the invitation is to.
-    nlohmann::json payload =
-        openFile(header, payloadBytes, encode(header.document), keys, PayloadKind::Version, &access);
+    nlohmann::json payload = openFile(header, payloadBytes, keys, PayloadKind::Version, &access);
     return payload.dump() + "\n" + encode(fingerprintOf(keys.sealingPublic, keys.verifyKey));
 }
 
@@ -215,8 +201,9 @@ nlohmann::json run(const std::string& appData, const std::string& document, cons
 
     std::string payloadBytes;
     Header header = readHeader(readFile(appData + "/wards/" + document + ".wardplanning"), &payloadBytes);
+    checkDocument(header, document);
     std::vector<PublicKeys> held;
-    nlohmann::json payload = openFile(header, payloadBytes, document, keys, PayloadKind::LocalFile, &held);
+    nlohmann::json payload = openFile(header, payloadBytes, keys, PayloadKind::LocalFile, &held);
     if (updatePath.empty())
     {
         return payload;

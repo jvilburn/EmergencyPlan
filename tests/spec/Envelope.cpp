@@ -63,6 +63,26 @@ Bytes hashOf(const std::string& text)
     return hash;
 }
 
+Fields readFormatLine(const std::string& line, const std::string& path)
+{
+    nlohmann::json value = parse(line, "the " + path + " line");
+    nlohmann::json::const_iterator format = value.find("format");
+    if (format == value.end() || !isInteger(*format))
+    {
+        throw Refusal(path + ".format is not an integer");
+    }
+    if (*format > 1)
+    {
+        throw NewerFormat();
+    }
+    Fields fields(value, path);
+    if (fields.integer("format") != 1)
+    {
+        throw Refusal(path + ".format is not a version this reader knows");
+    }
+    return fields;
+}
+
 Header readHeader(const std::string& file, std::string* payloadBytes)
 {
     std::size_t boundary = file.find('\n');
@@ -74,21 +94,7 @@ Header readHeader(const std::string& file, std::string* payloadBytes)
     header.line = file.substr(0, boundary);
     *payloadBytes = file.substr(boundary + 1);
 
-    nlohmann::json value = parse(header.line, "the header");
-    nlohmann::json::const_iterator format = value.find("format");
-    if (format == value.end() || !isInteger(*format))
-    {
-        throw Refusal("header.format is not an integer");
-    }
-    if (*format > 1)
-    {
-        throw NewerFormat();
-    }
-    Fields fields(value, "header");
-    if (fields.integer("format") != 1)
-    {
-        throw Refusal("header.format is not a version this reader knows");
-    }
+    Fields fields = readFormatLine(header.line, "header");
     header.document = fields.bytes("document", IdBytes);
     header.number = fields.integer("number");
     if (header.number < 1)

@@ -674,6 +674,9 @@ names the invite among its recipients. The header's `document` names the ward.
 | `format` | integer | 1 |
 | `seed` | 32 bytes | the invite's seed |
 
+The line's `format` is read as the header's is, so a value above every version a reader knows
+is a newer format.
+
 The invite's keys come from the seed through `crypto_kdf_derive_from_key` with the context
 `wpinvite` and 32-byte subkeys: subkey 1 is the seed for `crypto_box_seed_keypair`, and subkey 2
 the seed for `crypto_sign_seed_keypair`. The invite's fingerprint is computed from that pair of

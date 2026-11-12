@@ -394,4 +394,9 @@ void SpecReaderTest::specReaderRefusesAnInvitationWhoseSeedOpensNothing()
 
     QCOMPARE(run.exitCode, 1);
     QVERIFY2(run.problem.contains("names no recipient with the reader's fingerprint"), qPrintable(run.problem));
+
+    line["format"] = 2;
+    Run newer = readInvitation(QJsonDocument(line).toJson(QJsonDocument::Compact) + '\n'
+                               + TestSharing::versionIn(invitation));
+    QCOMPARE(newer.exitCode, 2);
 }
