@@ -6,7 +6,8 @@
         "check": "wrangler types && tsc --noEmit",
         "test": "vitest run",
         "dev": "wrangler dev",
-        "deploy": "wrangler deploy"
+        "deploy": "wrangler deploy",
+        "live": "node --experimental-strip-types scripts/live.ts"
     },
     "dependencies": {
         "@noble/hashes": "2.4.0"
