@@ -18,6 +18,14 @@ export async function newDevice(): Promise<Device>
     return { publicKey, verifyKey, signingKey: pair.privateKey, fingerprint: encode(fingerprintOf(publicKey, verifyKey)) };
 }
 
+/** Two new devices, the one with the lower fingerprint first. */
+export async function newDevicesInOrder(): Promise<[Device, Device]>
+{
+    const first = await newDevice();
+    const second = await newDevice();
+    return first.fingerprint < second.fingerprint ? [first, second] : [second, first];
+}
+
 export function newDocument(): string
 {
     return encode(random(IdBytes));
@@ -29,21 +37,27 @@ export function random(length: number): Uint8Array
 }
 
 /** Version number of document, written by writer and sealed to recipients, with a payload of random bytes. */
-export function version(
-    document: string,
-    number: number,
-    writer: Device,
-    recipients: Device[],
-    payload: Uint8Array = random(64)): Uint8Array
+export function version(document: string, number: number, writer: Device, recipients: Device[]): Uint8Array
 {
-    return framed(JSON.stringify({
+    return framed(headerLine(document, number, writer, recipients), random(64));
+}
+
+/** A deleted ward's final version: a header naming no recipient, and no payload. */
+export function finalVersion(document: string, number: number, writer: Device): Uint8Array
+{
+    return framed(headerLine(document, number, writer, []), new Uint8Array(0));
+}
+
+function headerLine(document: string, number: number, writer: Device, recipients: Device[]): string
+{
+    return JSON.stringify({
         format: 1,
         document,
         number,
         writer: writer.fingerprint,
         nonce: encode(random(NonceBytes)),
         recipients: recipients.map((device) => ({ fingerprint: device.fingerprint, sealedKey: encode(random(SealedKeyBytes)) })),
-    }), payload);
+    });
 }
 
 /** A header line and a payload, framed as a body. */
@@ -54,6 +68,16 @@ export function framed(header: string, payload: Uint8Array): Uint8Array
     bytes.set(line);
     bytes.set(payload, line.length);
     return bytes;
+}
+
+/**
+ * The line a create or a push of body signs for document, whatever body's header line holds, so
+ * a body the server refuses can still arrive properly signed.
+ */
+export function lineOver(call: "create" | "push", document: string, body: Uint8Array): string
+{
+    const header = { document, number: 1, writer: "", recipients: [] };
+    return writeLine(call, { bytes: body, headerLength: body.indexOf(0x0a), header });
 }
 
 /** The `Ward-Signer` and `Ward-Signature` headers of device signing line. */
@@ -74,21 +98,34 @@ export function ward(document: string): DurableObjectStub
 
 const origin = "https://ward.test";
 
-/** A create of body, signed by device. */
-export async function post(device: Device, body: Uint8Array): Promise<Response>
+/** A create (`POST`) or a push (`PUT`) of body with headers, sent to document's ward. */
+export function send(method: "POST" | "PUT", document: string, headers: Record<string, string>, body: Uint8Array): Promise<Response>
 {
-    const parsed = readVersion(body);
-    const document = parsed === null ? newDocument() : parsed.header.document;
-    const headers = parsed === null ? {} : await signed(device, writeLine("create", parsed));
-    return ward(document).fetch(`${origin}/documents`, { method: "POST", headers, body });
+    const path = method === "POST" ? "/documents" : `/documents/${document}`;
+    return ward(document).fetch(`${origin}${path}`, { method, headers, body });
 }
 
-/** A push of body to document, signed by device. */
+/** A create of body, a well-formed version, signed by device. */
+export async function post(device: Device, body: Uint8Array): Promise<Response>
+{
+    const parsed = wellFormed(body);
+    return send("POST", parsed.header.document, await signed(device, writeLine("create", parsed)), body);
+}
+
+/** A push of body, a well-formed version, to document, signed by device. */
 export async function put(device: Device, document: string, body: Uint8Array): Promise<Response>
 {
+    return send("PUT", document, await signed(device, writeLine("push", wellFormed(body))), body);
+}
+
+function wellFormed(body: Uint8Array)
+{
     const parsed = readVersion(body);
-    const headers = parsed === null ? {} : await signed(device, writeLine("push", parsed));
-    return ward(document).fetch(`${origin}/documents/${document}`, { method: "PUT", headers, body });
+    if (parsed === null)
+    {
+        throw new Error("the body is not a well-formed version; send it with send()");
+    }
+    return parsed;
 }
 
 export function head(document: string): Promise<Response>
@@ -99,6 +136,12 @@ export function head(document: string): Promise<Response>
 export function get(document: string): Promise<Response>
 {
     return ward(document).fetch(`${origin}/documents/${document}`);
+}
+
+/** The bytes of the version the server holds. */
+export async function stored(document: string): Promise<Uint8Array>
+{
+    return new Uint8Array(await (await get(document)).arrayBuffer());
 }
 
 /** The fingerprints of devices, as a channel message lists them. */
@@ -123,19 +166,7 @@ export class Channel
 
     constructor(readonly socket: WebSocket)
     {
-        socket.addEventListener("message", (event) =>
-        {
-            const message = JSON.parse(event.data as string) as Presence;
-            const next = this.waiting.shift();
-            if (next !== undefined)
-            {
-                next(message);
-            }
-            else
-            {
-                this.messages.push(message);
-            }
-        });
+        socket.addEventListener("message", (event) => this.receive(event));
         this.closed = new Promise((resolve) => socket.addEventListener("close", (event) => resolve(event.code)));
         socket.accept();
     }
@@ -155,29 +186,54 @@ export class Channel
     {
         this.socket.close(1000, "Closed by the test");
     }
+
+    private receive(event: MessageEvent): void
+    {
+        const message = JSON.parse(event.data as string) as Presence;
+        const next = this.waiting.shift();
+        if (next !== undefined)
+        {
+            next(message);
+        }
+        else
+        {
+            this.messages.push(message);
+        }
+    }
 }
 
-/** Opens document's live channel as device, answering the refusal when it is refused. */
-export async function open(device: Device, document: string, line: string = channelLine(document)): Promise<Channel | Response>
+/** A request to open document's live channel, with headers. */
+export function connect(document: string, headers: Record<string, string>): Promise<Response>
 {
-    const response = await ward(document).fetch(`${origin}/documents/${document}/channel`, {
-        headers: { ...(await signed(device, line)), Upgrade: "websocket" },
-    });
-    return response.webSocket === null ? response : new Channel(response.webSocket);
+    return ward(document).fetch(`${origin}/documents/${document}/channel`, { headers });
 }
 
-/** Opens a channel that must be accepted. */
+/** Opens document's live channel as device, which must be accepted. */
 export async function opened(device: Device, document: string): Promise<Channel>
 {
-    const channel = await open(device, document);
-    if (!(channel instanceof Channel))
+    const response = await connect(document, { ...(await signed(device, channelLine(document))), Upgrade: "websocket" });
+    if (response.webSocket === null)
     {
-        throw new Error(`the channel was refused with ${channel.status}`);
+        throw new Error(`the channel was refused with ${response.status}`);
     }
-    return channel;
+    return new Channel(response.webSocket);
 }
 
-/** A ward whose version 2 its first device created, with every device named. */
+/** The status that refuses device opening document's live channel with a signature over line. */
+export async function refusal(device: Device, document: string, line: string): Promise<number>
+{
+    const response = await connect(document, { ...(await signed(device, line)), Upgrade: "websocket" });
+    if (response.webSocket !== null)
+    {
+        throw new Error("the channel was opened");
+    }
+    return response.status;
+}
+
+/**
+ * A ward on the server, with every device named. Its first device wrote version 1 when it made
+ * the ward, so the version it creates the ward on the server with is 2.
+ */
 export async function created(devices: Device[]): Promise<string>
 {
     const document = newDocument();

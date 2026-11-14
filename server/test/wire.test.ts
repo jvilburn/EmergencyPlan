@@ -19,7 +19,7 @@ function header(fields: Record<string, unknown>): string
     });
 }
 
-describe("known answers shared with the app", () =>
+describe("known answers", () =>
 {
     it("fingerprint", () =>
     {
@@ -91,6 +91,9 @@ describe("header", () =>
         expect(readHeader(header({ recipients: {} }))).toBeNull();
         expect(readHeader(header({ recipients: [{ fingerprint }] }))).toBeNull();
         expect(readHeader(header({ recipients: [{ fingerprint, sealedKey: "A".repeat(106) }] }))).toBeNull();
+        expect(readHeader(header({ recipients: [{ fingerprint: "A".repeat(21), sealedKey: "A".repeat(107) }] }))).toBeNull();
+        expect(readHeader(header({ recipients: [{ fingerprint, sealedKey: "A".repeat(107), extra: true }] }))).toBeNull();
+        expect(readHeader(header({ recipients: [null] }))).toBeNull();
         for (const key of ["format", "document", "number", "writer", "nonce", "recipients"])
         {
             const without = JSON.parse(header({}));
@@ -102,8 +105,8 @@ describe("header", () =>
     it("takes a number that is an integer of at least 1", () =>
     {
         expect(readHeader(header({ number: 1 }))?.number).toBe(1);
-        expect(readHeader(header({ number: 9007199254740991 }))?.number).toBe(9007199254740991);
-        for (const number of [0, -1, 1.5, "7", null, 9007199254740992])
+        expect(readHeader(header({ number: 2 ** 53 }))?.number).toBe(2 ** 53);
+        for (const number of [0, -1, 1.5, "7", null, 2 ** 54])
         {
             expect(readHeader(header({ number }))).toBeNull();
         }
@@ -116,6 +119,6 @@ describe("header", () =>
         expect(body?.headerLength).toBe(header({}).length);
         expect(readVersion(new TextEncoder().encode(header({})))).toBeNull();
         expect(readVersion(Uint8Array.of(0xff, 0x0a))).toBeNull();
-        expect(readVersion(framed("﻿" + header({}), payload))).toBeNull();
+        expect(readVersion(framed("\uFEFF" + header({}), payload))).toBeNull();
     });
 });

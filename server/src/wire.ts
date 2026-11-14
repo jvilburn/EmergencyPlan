@@ -8,6 +8,9 @@ export const SealedKeyBytes = 80;
 export const KeyBytes = 32;
 export const SignatureBytes = 64;
 
+/** The largest integer the format writes. */
+const MaxInteger = 2 ** 53;
+
 /** The one header format this server stores. A new format is supported here before any app writes it. */
 export const Format = 1;
 
@@ -63,8 +66,9 @@ export function readHeader(line: string): Header | null
     if (!hasExactly(json, ["format", "document", "number", "writer", "nonce", "recipients"])
         || json.format !== Format
         || decode(json.document, IdBytes) === null
-        || !Number.isSafeInteger(json.number)
+        || !Number.isInteger(json.number)
         || (json.number as number) < 1
+        || (json.number as number) > MaxInteger
         || decode(json.writer, FingerprintBytes) === null
         || decode(json.nonce, NonceBytes) === null
         || !Array.isArray(json.recipients))

@@ -7,8 +7,10 @@
     },
     "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Ward"] }],
     // Per address, per Cloudflare location, and approximate, which is what an abuse limit needs.
+    // The read limit lets 50 devices behind one address each fetch a version a second: every
+    // responder on a church's network, taking each version as it lands during an emergency.
     "ratelimits": [
         { "name": "CREATE_LIMIT", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } },
-        { "name": "READ_LIMIT", "namespace_id": "1002", "simple": { "limit": 600, "period": 60 } }
+        { "name": "READ_LIMIT", "namespace_id": "1002", "simple": { "limit": 3000, "period": 60 } }
     ]
 }

@@ -209,7 +209,7 @@ export class Ward extends DurableObject<Env>
 
     private store(version: Version): void
     {
-        const stored: Stored = { ...version, published: new Date().toISOString().replace(/\.\d{3}Z$/, "Z") };
+        const stored: Stored = { ...version, published: new Date().toISOString() };
         this.ctx.storage.kv.put(CurrentKey, stored);
     }
 }
