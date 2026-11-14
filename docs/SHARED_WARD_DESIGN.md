@@ -632,8 +632,8 @@ appear as present.
 
 | Header | On | Holds |
 |---|---|---|
-| `Ward-Signer` | `POST` and `PUT` requests | the signer's X25519 public key and Ed25519 verify key, joined by `.` |
-| `Ward-Signature` | `POST` and `PUT` requests | the Ed25519 signature of the signed line |
+| `Ward-Signer` | `POST` and `PUT` requests, and the request that opens the live channel | the signer's X25519 public key and Ed25519 verify key, joined by `.` |
+| `Ward-Signature` | `POST` and `PUT` requests, and the request that opens the live channel | the Ed25519 signature of the signed line |
 | `Ward-Published` | answers to `head` and `GET` | when the current version was published, ISO 8601 in UTC |
 
 The current version's number and its publisher are the header's `number` and `writer`.
@@ -2325,7 +2325,7 @@ domain sees ciphertext and fingerprints only.
 (registrar, Cloudflare, GitHub) and the platform code-signing credential in a password
 manager with
 emergency access, a second owner
-on the GitHub repository, a runbook in the repository covering deploy, data location,
+on the GitHub repository, a runbook, `server/README.md`, covering deploy, data location,
 restore and migrating to another host or domain, and a scheduled export of all ciphertext
 blobs to a second provider the successor controls. The export is ciphertext and fingerprints
 only, which is a smaller thing to hold carefully than a members list would be.
