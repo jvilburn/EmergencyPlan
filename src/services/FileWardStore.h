@@ -24,6 +24,9 @@ public:
 
     QString pathOf(const DocumentId& document) const;
 
+    /// The wards folder.
+    const QString& directory() const { return m_directory; }
+
 private:
     QString m_directory;
 };

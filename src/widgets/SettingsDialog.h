@@ -14,15 +14,17 @@ class QLineEdit;
 class QPushButton;
 
 /// Settings: the server switch, this device's name, your name, your email and the map home, as
-/// one short form holding the current values. It changes nothing itself; the caller reads what
-/// the user set once it is accepted.
+/// one short form holding the current values, and the wards folder, with a button that opens
+/// it. It changes nothing itself; the caller reads what the user set once it is accepted.
 class SettingsDialog : public QDialog
 {
     Q_OBJECT
 
 public:
-    /// currentView is what the map shows, which Use current view takes as the map home.
-    SettingsDialog(const AppSettings& settings, const Coordinates& currentView, QWidget* parent);
+    /// wardsFolder is the folder that holds this device's ward files. currentView is what the
+    /// map shows, which Use current view takes as the map home.
+    SettingsDialog(const AppSettings& settings, const QString& wardsFolder, const Coordinates& currentView,
+                   QWidget* parent);
 
     bool useServer() const;
 

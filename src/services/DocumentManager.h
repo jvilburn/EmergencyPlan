@@ -62,8 +62,8 @@ public:
 
     const DocumentId& documentId() const { return m_session.documentId(); }
 
-    /// The open ward's file.
-    QString filePath() const { return m_store->pathOf(documentId()); }
+    /// The folder that holds this device's ward files.
+    const QString& wardsFolder() const { return m_store->directory(); }
 
     /// Removes the open ward's file from the store. A failure says why in problem, as a clause
     /// with no final period.

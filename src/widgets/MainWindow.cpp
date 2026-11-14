@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "AccessRules.h"
 #include "AppSettings.h"
 #include "EmergencyBanner.h"
 #include "FamilyListView.h"
@@ -30,9 +31,9 @@
 #include "SendUpdateDialog.h"
 #include "SettingsDialog.h"
 #include "ShareNotice.h"
-#include "ShowInFolder.h"
 #include "UpdateFile.h"
 #include "UserFolder.h"
+#include "WardSharing.h"
 #include "WhoHasAccessDialog.h"
 
 #include <QCloseEvent>
@@ -170,17 +171,14 @@ void MainWindow::setupMenus(bool developer)
     m_newWardAction = fileMenu->addAction(tr("&New Ward..."), this, &MainWindow::onNewWard);
     m_newWardAction->setShortcut(QKeySequence::New);
 
-    QAction* openWardAction = fileMenu->addAction(tr("&Open Ward..."), this, &MainWindow::onOpenWard);
-    openWardAction->setShortcut(QKeySequence::Open);
-
-    fileMenu->addAction(tr("&Join a Ward..."), this, &MainWindow::joinWard);
-    fileMenu->addAction(tr("Show in &Folder"), this, &MainWindow::onShowInFolder);
-    fileMenu->addAction(tr("Who Has &Access..."), this, &MainWindow::onWhoHasAccess);
+    QAction* switchWardAction = fileMenu->addAction(tr("&Switch Ward..."), this, &MainWindow::onSwitchWard);
+    switchWardAction->setShortcut(QKeySequence::Open);
 
     fileMenu->addSeparator();
 
-    m_sendUpdateAction = fileMenu->addAction(tr("&Send Update"), this, &MainWindow::onSendUpdate);
+    fileMenu->addAction(tr("Open &Invitation..."), this, &MainWindow::openInvitation);
     fileMenu->addAction(tr("Open &Update..."), this, &MainWindow::onOpenUpdate);
+    m_sendUpdateAction = fileMenu->addAction(tr("Sen&d Update"), this, &MainWindow::onSendUpdate);
 
     fileMenu->addSeparator();
 
@@ -202,6 +200,14 @@ void MainWindow::setupMenus(bool developer)
 
     m_redoAction = editMenu->addAction(tr("&Redo"), this, &MainWindow::onRedo);
     m_redoAction->setShortcut(QKeySequence::Redo);
+
+    // Sharing menu
+    QMenu* sharingMenu = menuBar()->addMenu(tr("&Sharing"));
+
+    m_addUserAction = sharingMenu->addAction(tr("Add a &User..."), this, &MainWindow::onAddUser);
+    m_addDeviceAction = sharingMenu->addAction(tr("Add a &Device..."), this, &MainWindow::onAddDevice);
+    sharingMenu->addAction(tr("&Who Has Access..."), this, &MainWindow::onWhoHasAccess);
+    m_leaveWardAction = sharingMenu->addAction(tr("&Leave Ward..."), this, &MainWindow::onLeaveWard);
 
     // Emergency menu
     QMenu* emergencyMenu = menuBar()->addMenu(tr("E&mergency"));
@@ -365,8 +371,8 @@ bool MainWindow::chooseWard()
         case WardListChoice::NewWard:
             createWard();
             return true;
-        case WardListChoice::Join:
-            if (joinWard())
+        case WardListChoice::OpenInvitation:
+            if (openInvitation())
             {
                 return true;
             }
@@ -377,9 +383,9 @@ bool MainWindow::chooseWard()
     }
 }
 
-bool MainWindow::joinWard()
+bool MainWindow::openInvitation()
 {
-    QString path = QFileDialog::getOpenFileName(this, tr("Join a Ward"), UserFolder::standard().path(),
+    QString path = QFileDialog::getOpenFileName(this, tr("Open Invitation"), UserFolder::standard().path(),
                                                 tr("Ward Planning invitations (*.wardinvite)"));
     return !path.isEmpty() && openInvitationFile(path);
 }
@@ -392,7 +398,7 @@ void MainWindow::onNewWard()
     }
 }
 
-void MainWindow::onOpenWard()
+void MainWindow::onSwitchWard()
 {
     if (mayLeaveWard())
     {
@@ -400,9 +406,19 @@ void MainWindow::onOpenWard()
     }
 }
 
-void MainWindow::onShowInFolder()
+void MainWindow::onAddUser()
 {
-    ShowInFolder::reveal(DocumentManager::instance()->filePath());
+    WardSharing::addUser(DocumentManager::instance()->session(), *m_settings, this);
+}
+
+void MainWindow::onAddDevice()
+{
+    WardSharing::addDevice(DocumentManager::instance()->session(), *m_settings, this);
+}
+
+void MainWindow::onLeaveWard()
+{
+    WardSharing::leaveWard(*m_settings, this);
 }
 
 void MainWindow::onWhoHasAccess()
@@ -462,6 +478,11 @@ void MainWindow::updateSharing()
     bool serverOff = !m_settings->useServer();
     m_sendUpdateAction->setVisible(serverOff);
     m_sendUpdateAction->setEnabled(!session.isNoLongerShared());
+    m_addUserAction->setEnabled(
+        !session.isNoLongerShared()
+        && AccessRules::invite(session.document().access(), session.deviceFingerprint(), true).isEmpty());
+    m_addDeviceAction->setEnabled(!session.isNoLongerShared());
+    m_leaveWardAction->setEnabled(!session.isNoLongerShared());
     if (session.isNoLongerShared())
     {
         m_shareNotice->showNoLongerShared();
@@ -589,7 +610,7 @@ bool MainWindow::openInvitationFile(const QString& path)
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly))
     {
-        QMessageBox::warning(this, tr("Join a Ward"),
+        QMessageBox::warning(this, tr("Open Invitation"),
                              tr("The file %1 could not be read.").arg(QDir::toNativeSeparators(path)));
         return false;
     }
@@ -604,22 +625,22 @@ bool MainWindow::openInvitationFile(const QString& path)
         {
             return false;
         }
-        QMessageBox::information(this, tr("Join a Ward"),
+        QMessageBox::information(this, tr("Open Invitation"),
                                  tr("This device already has access to %1.").arg(invited.wardName));
         return true;
     case InvitationStatus::NotAnInvitation:
         qWarning("An invitation did not read: %s", qPrintable(invited.problem));
-        QMessageBox::warning(this, tr("Join a Ward"), tr("This file is not a Ward Planning invitation."));
+        QMessageBox::warning(this, tr("Open Invitation"), tr("This file is not a Ward Planning invitation."));
         return false;
     case InvitationStatus::Newer:
-        QMessageBox::warning(this, tr("Join a Ward"),
+        QMessageBox::warning(this, tr("Open Invitation"),
                              tr("This ward was saved by a newer version of Ward Planning. Update to see the latest "
                                 "changes and share your work."));
         return false;
     }
 
     QMessageBox::StandardButton answer = QMessageBox::question(
-        this, tr("Join a Ward"), tr("Join %1?").arg(invited.wardName), QMessageBox::Ok | QMessageBox::Cancel,
+        this, tr("Open Invitation"), tr("Join %1?").arg(invited.wardName), QMessageBox::Ok | QMessageBox::Cancel,
         QMessageBox::Ok);
     if (answer != QMessageBox::Ok || !mayLeaveWard())
     {
@@ -628,7 +649,7 @@ bool MainWindow::openInvitationFile(const QString& path)
     DocumentManager::instance()->join(invited, yourDetails(), m_settings->deviceName());
     m_settings->setLastWard(invited.document);
     followUserDetails();
-    QMessageBox::information(this, tr("Join a Ward"),
+    QMessageBox::information(this, tr("Open Invitation"),
                              tr("You have joined %1. Send an update to every member of the ward so they see you.")
                                  .arg(invited.wardName));
     return true;
@@ -646,7 +667,7 @@ void MainWindow::followUserDetails()
 
 void MainWindow::onSettings()
 {
-    SettingsDialog dialog(*m_settings, m_mapWidget->center(), this);
+    SettingsDialog dialog(*m_settings, DocumentManager::instance()->wardsFolder(), m_mapWidget->center(), this);
     if (dialog.exec() != QDialog::Accepted)
     {
         return;

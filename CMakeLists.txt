@@ -279,6 +279,7 @@ set(WIDGET_SOURCES
     src/widgets/SendFileDialog.cpp
     src/widgets/SendUpdateDialog.cpp
     src/widgets/SettingsDialog.cpp
+    src/widgets/WardSharing.cpp
     src/widgets/WhoHasAccessDialog.cpp
     src/widgets/FamilyListView.cpp
     src/widgets/shared/FilterBar.cpp
@@ -324,6 +325,7 @@ set(WIDGET_HEADERS
     src/widgets/SendFileDialog.h
     src/widgets/SendUpdateDialog.h
     src/widgets/SettingsDialog.h
+    src/widgets/WardSharing.h
     src/widgets/WhoHasAccessDialog.h
     src/widgets/FamilyListView.h
     src/widgets/shared/FilterBar.h

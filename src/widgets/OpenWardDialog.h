@@ -13,10 +13,10 @@ class QPushButton;
 /// What the user chose in the ward list.
 enum class WardListChoice
 {
-    Open,     ///< open the chosen ward
-    NewWard,  ///< create a ward
-    Join,     ///< join a ward through an invitation
-    Close     ///< nothing
+    Open,            ///< open the chosen ward
+    NewWard,         ///< create a ward
+    OpenInvitation,  ///< open an invitation file
+    Close            ///< nothing
 };
 
 /// The ward list: the wards this device holds, by name, with the ones no longer shared with
@@ -42,13 +42,13 @@ private slots:
     void onOpen();
     void onItemActivated(QListWidgetItem* item);
     void onNewWard();
-    void onJoin();
+    void onOpenInvitation();
     void updateOpenButton();
 
 private:
-    /// The results exec answers when the user chooses New Ward or Join a Ward.
+    /// The results exec answers when the user chooses New Ward or Open Invitation.
     static constexpr int NewWardResult = 2;
-    static constexpr int JoinResult = 3;
+    static constexpr int OpenInvitationResult = 3;
 
     /// Chooses the ward item names and closes the list with Open.
     void openItem(const QListWidgetItem* item);

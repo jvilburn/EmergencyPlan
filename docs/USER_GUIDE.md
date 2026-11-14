@@ -12,9 +12,8 @@ Ward Planning is a desktop application for managing ward family data, ministerin
 
 - The first launch asks for a name for this device, then your name and your email; you can leave the email empty if you have none
 - **File > New Ward** (Ctrl+N) - Creates a ward on this device, under your name and email
-- **File > Open Ward** (Ctrl+O) - Lists the wards on this device by name; a ward with changes you have not yet sent is marked *changes to share*, and one no longer shared with this device is marked *no longer shared*
-- **File > Join a Ward** - Opens an invitation you were sent (see *Joining a ward*); the ward list offers **Join a Ward** too
-- **File > Show in Folder** - Opens the folder that holds the ward's file, with the file selected; only this ward's devices can open it
+- **File > Switch Ward** (Ctrl+O) - Lists the wards on this device by name, to open another one; a ward with changes you have not yet sent is marked *changes to share*, and one no longer shared with this device is marked *no longer shared*. The list offers **New Ward** and **Open Invitation** too
+- **File > Open Invitation** - Opens an invitation you were sent (see *Joining a ward*)
 - Each launch reopens the last ward; when there is none, or it does not open, the ward list shows instead
 
 ### Importing Data
@@ -35,6 +34,7 @@ After importing, the app automatically geocodes addresses in the background (sho
 - **Your name** - The name you have in the wards you create or join, asked for at the first launch. Changing it renames you in every ward on this device. A new name set on another of your devices reaches this one in the updates you open.
 - **Your email** - The email you have in the wards you create or join, so other members can send you updates, asked for at the first launch after your name. It can be empty. It changes and reaches your other devices the same way as your name.
 - **Map home** - Where the map opens. The app first sets it from your approximate location; **Use current view** sets it to what the map shows now.
+- **Wards folder** - The folder that holds this device's ward files; **Show** opens it. Only a ward's own devices can open its file.
 
 ### Sharing updates
 
@@ -47,9 +47,9 @@ With **Use the Ward Planning server** turned off in Settings, the members of a w
 
 ### Who has access
 
-**File > Who Has Access...** lists the ward's users, each as *admin* or *member*, with their devices under them and this device marked *this device*, then the open invites, such as *for Bob* or *a device for Alice*. Select a row to see what you can do with it; only what your role allows is offered.
+**Sharing > Who Has Access...** lists the ward's users, each as *admin* or *member*, with their devices under them and this device marked *this device*, then the open invites, such as *for Bob* or *a device for Alice*. Select a row to see what you can do with it; only what your role allows is offered. **Add a user**, **Add a device** and **Leave** are below the list, and in the **Sharing** menu as **Add a User...**, **Add a Device...** and **Leave Ward...**.
 
-- **Add a user** - Asks who the invitation is for, with **Make them an admin** (off unless you check it), then saves an invitation file, such as *Tanglewood Ward - for Bob.wardinvite*, where you choose, and shows a message to send with it, which you can select and copy, and the invitation's icon, which you drag into your email or message to attach it; **Show in Folder** finds the file. Send both to that person by any channel you trust with the file: whoever opens the invitation first joins the ward. Only admins can add users; a member sees which admins to ask in place of the button.
+- **Add a user** - Asks who the invitation is for, with **Make them an admin** (off unless you check it), then saves an invitation file, such as *Tanglewood Ward - for Bob.wardinvite*, where you choose, and shows a message to send with it, which you can select and copy, and the invitation's icon, which you drag into your email or message to attach it; **Show in Folder** finds the file. Send both to that person by any channel you trust with the file: whoever opens the invitation first joins the ward. Only admins can add users; a member sees which admins to ask in place of the button, and **Sharing > Add a User...** is grayed out.
 - **Add a device** - Saves an invitation for another of your own devices. Send it to yourself and open it on that device.
 - **Save invitation** - Saves the invitation of an open invite made on this device again.
 - **Withdraw invite** - Closes an open invite, so its invitation no longer joins. The person who made it, or any admin, can withdraw it.
@@ -66,7 +66,7 @@ Roles are an agreement among the people who use the ward, to keep well-meaning u
 
 An invitation is a file, such as *Tanglewood Ward - for Bob.wardinvite*, that a member of the ward sends you.
 
-- **Opening the invitation** - Double-click the file, drop it on the window, or use **File > Join a Ward...** or **Join a Ward...** in the ward list. The app asks *Join Tanglewood Ward?*, with the ward's own name; on OK you join, as the device and, for an invitation to a new user, the user with the name and email in **File > Settings**, and the ward opens.
+- **Opening the invitation** - Double-click the file, drop it on the window, or use **File > Open Invitation...** or **Open Invitation...** in the ward list. The app asks *Join Tanglewood Ward?*, with the ward's own name; on OK you join, as the device and, for an invitation to a new user, the user with the name and email in **File > Settings**, and the ward opens.
 - **Send an update after joining** - The other members see you only once they open an update from you, so joining shows *You have changes to share*. Send an update to every member of the ward.
 - **This device already has access** - An invitation to a ward this device already holds opens that ward, and the invitation stays unused.
 - **This invite has been used or withdrawn** - Shown when an update opened after joining shows that someone else joined with the same invitation first, or that it was withdrawn before your join reached the members. The ward is then no longer shared with this device. Ask the sender for a new invitation.
@@ -77,7 +77,7 @@ An invitation is a file, such as *Tanglewood Ward - for Bob.wardinvite*, that a 
 
 ```
 +-----------------------------------------------+
-| File  Edit  Emergency                          |
+| File  Edit  Sharing  Emergency                 |
 +------------------+----------------------------+
 | [Families]       |                            |
 | [Ministering]    |                            |
@@ -243,7 +243,7 @@ If someone else ended the emergency while you were choosing, the app says so and
 | Action | Shortcut |
 |--------|----------|
 | New Ward | Ctrl+N |
-| Open Ward | Ctrl+O |
+| Switch Ward | Ctrl+O |
 | Undo | Ctrl+Z |
 | Redo | Ctrl+Y |
 | Quit | Ctrl+Q |

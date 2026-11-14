@@ -16,7 +16,7 @@ OpenWardDialog::OpenWardDialog(const QList<WardListEntry>& wards, QWidget* paren
     if (wards.isEmpty())
     {
         QLabel* empty = new QLabel(
-            tr("This device holds no wards yet. Create one with New Ward, or open an invitation with Join a Ward."),
+            tr("This device holds no wards yet. Create one with New Ward, or join one with Open Invitation."),
             this);
         empty->setWordWrap(true);
         layout->addWidget(empty);
@@ -51,14 +51,14 @@ OpenWardDialog::OpenWardDialog(const QList<WardListEntry>& wards, QWidget* paren
     QDialogButtonBox* buttons = new QDialogButtonBox(this);
     m_openButton = buttons->addButton(tr("Open"), QDialogButtonBox::AcceptRole);
     QPushButton* newWardButton = buttons->addButton(tr("New Ward..."), QDialogButtonBox::ActionRole);
-    QPushButton* joinButton = buttons->addButton(tr("Join a Ward..."), QDialogButtonBox::ActionRole);
+    QPushButton* openInvitationButton = buttons->addButton(tr("Open Invitation..."), QDialogButtonBox::ActionRole);
     buttons->addButton(QDialogButtonBox::Close);
     layout->addWidget(buttons);
 
     connect(buttons, &QDialogButtonBox::accepted, this, &OpenWardDialog::onOpen);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     connect(newWardButton, &QPushButton::clicked, this, &OpenWardDialog::onNewWard);
-    connect(joinButton, &QPushButton::clicked, this, &OpenWardDialog::onJoin);
+    connect(openInvitationButton, &QPushButton::clicked, this, &OpenWardDialog::onOpenInvitation);
     connect(m_list, &QListWidget::itemActivated, this, &OpenWardDialog::onItemActivated);
     connect(m_list, &QListWidget::itemSelectionChanged, this, &OpenWardDialog::updateOpenButton);
 
@@ -77,8 +77,8 @@ WardListChoice OpenWardDialog::choose()
         return WardListChoice::Open;
     case NewWardResult:
         return WardListChoice::NewWard;
-    case JoinResult:
-        return WardListChoice::Join;
+    case OpenInvitationResult:
+        return WardListChoice::OpenInvitation;
     default:
         return WardListChoice::Close;
     }
@@ -109,9 +109,9 @@ void OpenWardDialog::onNewWard()
     done(NewWardResult);
 }
 
-void OpenWardDialog::onJoin()
+void OpenWardDialog::onOpenInvitation()
 {
-    done(JoinResult);
+    done(OpenInvitationResult);
 }
 
 void OpenWardDialog::updateOpenButton()

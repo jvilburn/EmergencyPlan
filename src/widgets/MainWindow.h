@@ -61,8 +61,12 @@ protected:
 
 private slots:
     void onNewWard();
-    void onOpenWard();
-    void onShowInFolder();
+    void onSwitchWard();
+
+    /// WardSharing's actions on the open ward.
+    void onAddUser();
+    void onAddDevice();
+    void onLeaveWard();
 
     /// Shows Who has access for the open ward.
     void onWhoHasAccess();
@@ -76,8 +80,9 @@ private slots:
     /// the list closes the window.
     void onDeleteCopy();
 
-    /// Shows Send Update while the server is switched off, enabled while the open ward is
-    /// still this device's, and the share notice for the open ward.
+    /// Shows Send Update while the server is switched off. Enables it, Add a Device and Leave
+    /// Ward while the open ward is still this device's, and Add a User while AccessRules also
+    /// lets this device invite a user. Shows the share notice for the open ward.
     void updateSharing();
 
     /// Shows Settings, and on OK saves what changed; a changed name or email sets it for this
@@ -159,7 +164,7 @@ private:
 
     /// Offers a file picker for an invitation and opens the one chosen. True when a ward
     /// opened or was joined through it.
-    bool joinWard();
+    bool openInvitation();
 
     /// Takes the update file at path, opening its ward first when another is open, and tells
     /// the user how it went. True when its ward is open after it.
@@ -212,6 +217,9 @@ private:
     // Actions
     QAction* m_newWardAction;
     QAction* m_sendUpdateAction;
+    QAction* m_addUserAction;
+    QAction* m_addDeviceAction;
+    QAction* m_leaveWardAction;
     QAction* m_importPdfAction;
     QAction* m_importMinisteringPdfAction;
     QAction* m_startEmergencyAction;

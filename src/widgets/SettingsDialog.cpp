@@ -2,15 +2,19 @@
 #include "AppSettings.h"
 
 #include <QCheckBox>
+#include <QDesktopServices>
 #include <QDialogButtonBox>
+#include <QDir>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QUrl>
 #include <QVBoxLayout>
 
-SettingsDialog::SettingsDialog(const AppSettings& settings, const Coordinates& currentView, QWidget* parent)
+SettingsDialog::SettingsDialog(const AppSettings& settings, const QString& wardsFolder,
+                               const Coordinates& currentView, QWidget* parent)
     : QDialog(parent)
     , m_currentView(currentView)
 {
@@ -42,6 +46,15 @@ SettingsDialog::SettingsDialog(const AppSettings& settings, const Coordinates& c
     mapHomeRow->addWidget(m_mapHomeLabel, 1);
     mapHomeRow->addWidget(useCurrentView);
     form->addRow(tr("Map home"), mapHomeRow);
+
+    QHBoxLayout* wardsFolderRow = new QHBoxLayout();
+    QLabel* wardsFolderLabel = new QLabel(QDir::toNativeSeparators(wardsFolder), this);
+    wardsFolderLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    wardsFolderLabel->setWordWrap(true);
+    QPushButton* showWardsFolder = new QPushButton(tr("Show"), this);
+    wardsFolderRow->addWidget(wardsFolderLabel, 1);
+    wardsFolderRow->addWidget(showWardsFolder);
+    form->addRow(tr("Wards folder"), wardsFolderRow);
     layout->addLayout(form);
 
     QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
@@ -51,6 +64,8 @@ SettingsDialog::SettingsDialog(const AppSettings& settings, const Coordinates& c
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     connect(useCurrentView, &QPushButton::clicked, this, &SettingsDialog::onUseCurrentView);
+    connect(showWardsFolder, &QPushButton::clicked, this,
+            [wardsFolder]() { QDesktopServices::openUrl(QUrl::fromLocalFile(wardsFolder)); });
     connect(m_deviceName, &QLineEdit::textChanged, this, &SettingsDialog::updateOkButton);
     connect(m_userName, &QLineEdit::textChanged, this, &SettingsDialog::updateOkButton);
 

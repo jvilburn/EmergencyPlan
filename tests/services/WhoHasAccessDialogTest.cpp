@@ -1,6 +1,7 @@
 #include "WhoHasAccessDialogTest.h"
 #include "AppSettings.h"
 #include "TestSharing.h"
+#include "WardSharing.h"
 #include "WhoHasAccessDialog.h"
 
 #include <QTemporaryDir>
@@ -106,12 +107,12 @@ void WhoHasAccessDialogTest::addAUserWithNoAnswerMakesNoInvite()
     TestSharing::share({&alice, &carol}, TestSharing::accessOf({&alice}, {&carol}));
     WhoHasAccessDialog alices(alice.session(), settings, nullptr);
 
-    QVERIFY(alices.addUser(QString(), false).isEmpty());
-    QVERIFY(alices.addUser("   ", true).isEmpty());
+    QVERIFY(WardSharing::inviteUser(alice.session(), QString(), false).isEmpty());
+    QVERIFY(WardSharing::inviteUser(alice.session(), "   ", true).isEmpty());
     QVERIFY(alice.session().journal().isEmpty());
     QVERIFY(alice.session().invitesMadeHere().isEmpty());
 
-    QByteArray invite = alices.addUser(" Bob ", false);
+    QByteArray invite = WardSharing::inviteUser(alice.session(), " Bob ", false);
 
     QVERIFY(!invite.isEmpty());
     QCOMPARE(alice.session().journal().entries().size(), qsizetype(1));

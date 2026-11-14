@@ -3,21 +3,14 @@
 #include "AccessRules.h"
 #include "AppSettings.h"
 #include "DocumentManager.h"
-#include "InvitationFile.h"
-#include "SendFileDialog.h"
-#include "UserFolder.h"
 #include "WardSession.h"
+#include "WardSharing.h"
 
-#include <QCheckBox>
 #include <QDialogButtonBox>
-#include <QDir>
-#include <QFileDialog>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
-#include <QSaveFile>
 #include <QScrollBar>
 #include <QTreeWidget>
 #include <QTreeWidgetItemIterator>
@@ -155,16 +148,6 @@ QString WhoHasAccessDialog::addUserNotice() const
     return AccessRules::invite(m_session.document().access(), m_session.deviceFingerprint(), true);
 }
 
-QByteArray WhoHasAccessDialog::addUser(const QString& label, bool admin)
-{
-    QString name = label.trimmed();
-    if (name.isEmpty())
-    {
-        return QByteArray();
-    }
-    return m_session.invite(InvitedUser{admin ? AccessRole::Admin : AccessRole::Member, name}).invite;
-}
-
 void WhoHasAccessDialog::rebuild()
 {
     QTreeWidgetItem* selected = selectedRow();
@@ -226,52 +209,17 @@ void WhoHasAccessDialog::updateActions()
 
 void WhoHasAccessDialog::onAddUser()
 {
-    if (m_settings.useServer())
-    {
-        QMessageBox::information(this, tr("Add a User"), tr("Connect to the internet to invite someone."));
-        return;
-    }
-
-    QDialog ask(this);
-    ask.setWindowTitle(tr("Add a User"));
-    QVBoxLayout* layout = new QVBoxLayout(&ask);
-    layout->addWidget(new QLabel(tr("Who is this invitation for?"), &ask));
-    QLineEdit* label = new QLineEdit(&ask);
-    layout->addWidget(label);
-    QCheckBox* admin = new QCheckBox(tr("Make them an admin"), &ask);
-    layout->addWidget(admin);
-    QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &ask);
-    layout->addWidget(buttons);
-    connect(buttons, &QDialogButtonBox::accepted, &ask, &QDialog::accept);
-    connect(buttons, &QDialogButtonBox::rejected, &ask, &QDialog::reject);
-    if (ask.exec() != QDialog::Accepted)
-    {
-        return;
-    }
-
-    QByteArray invite = addUser(label->text(), admin->isChecked());
-    if (!invite.isEmpty())
-    {
-        saveInvitation(invite);
-    }
+    WardSharing::addUser(m_session, m_settings, this);
 }
 
 void WhoHasAccessDialog::onAddDevice()
 {
-    if (m_settings.useServer())
-    {
-        QMessageBox::information(this, tr("Add a Device"), tr("Connect to the internet to invite someone."));
-        return;
-    }
-    saveInvitation(m_session.invite(std::nullopt).invite);
+    WardSharing::addDevice(m_session, m_settings, this);
 }
 
 void WhoHasAccessDialog::onLeave()
 {
-    QString message = m_settings.useServer()
-        ? tr("Connect to the internet to leave this ward.")
-        : tr("Leaving a ward needs the Ward Planning server, which is turned off in Settings.");
-    QMessageBox::information(this, tr("Leave"), message);
+    WardSharing::leaveWard(m_settings, this);
 }
 
 void WhoHasAccessDialog::onRemoveThisDevice()
@@ -284,7 +232,7 @@ void WhoHasAccessDialog::onRemoveThisDevice()
 
 void WhoHasAccessDialog::onSaveInvitation()
 {
-    saveInvitation(selectedRow()->data(0, KeyRole).toByteArray());
+    WardSharing::saveInvitation(m_session, selectedRow()->data(0, KeyRole).toByteArray(), this);
 }
 
 void WhoHasAccessDialog::onRemove()
@@ -357,34 +305,4 @@ AccessUser WhoHasAccessDialog::selectedUser() const
 {
     QString id = QString::fromUtf8(selectedRow()->data(0, KeyRole).toByteArray());
     return *m_session.document().access().findUser(UserId::fromString(id));
-}
-
-void WhoHasAccessDialog::saveInvitation(const QByteArray& invite)
-{
-    const Document& document = m_session.document();
-    QString wardName = document.wardName();
-    AccessInvite entry = *document.access().findInvite(invite);
-    QString folder = UserFolder::standard().path();
-    QDir().mkpath(folder);
-    QString suggested = QDir(folder).filePath(InvitationFile::fileName(wardName, document.access().describeInvite(entry)));
-    QString path = QFileDialog::getSaveFileName(this, tr("Save Invitation"), suggested,
-                                                tr("Ward Planning invitations (*.wardinvite)"));
-    if (path.isEmpty())
-    {
-        return;
-    }
-
-    QSaveFile file(path);
-    if (!file.open(QIODevice::WriteOnly) || file.write(m_session.writeInvitation(invite)) < 0 || !file.commit())
-    {
-        QMessageBox::warning(this, tr("Save Invitation"),
-                             tr("The invitation could not be saved: %1.").arg(file.errorString()));
-        return;
-    }
-    QString message = entry.invitedUser().has_value()
-        ? tr("%1 has invited you to %2. Install Ward Planning, then open the attached invitation.")
-              .arg(m_session.ownUser().name(), wardName)
-        : tr("Send this invitation to yourself and open it on your other device.");
-    SendFileDialog dialog(tr("Save Invitation"), message, path, this);
-    dialog.exec();
 }

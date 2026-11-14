@@ -24,7 +24,7 @@ void SettingsDialogTest::okIsEnabledOnlyWhileBothNamesAreNotEmpty()
     settings.setUserName("Alice Smith");
     settings.setEmail("alice@example.com");
 
-    SettingsDialog dialog(settings, Coordinates(40.2338, -111.6585), nullptr);
+    SettingsDialog dialog(settings, dir.path(), Coordinates(40.2338, -111.6585), nullptr);
     QPushButton* ok = dialog.findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok);
     QHash<QString, QLineEdit*> fields;
     const QList<QLineEdit*> edits = dialog.findChildren<QLineEdit*>();

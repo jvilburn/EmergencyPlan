@@ -31,9 +31,10 @@ enum class AccessAction
 /// Who has access: the open ward's users, each with their role and devices, and its open
 /// invites, rebuilt from the session's document whenever it changes, keeping the selection.
 /// It offers each action on the selected row only where AccessRules allows it for this device,
-/// and runs each change through DocumentManager's commit step. Below the list it offers Add a
-/// user, or to a member the admins to ask, Add a device and Leave. A ward that is no longer this
-/// device's shows the list with no action offered and those three disabled.
+/// and runs each change through DocumentManager's commit step. Below the list it offers
+/// WardSharing's Add a user, or to a member the admins to ask, Add a device and Leave. A ward
+/// that is no longer this device's shows the list with no action offered and those three
+/// disabled.
 class WhoHasAccessDialog : public QDialog
 {
     Q_OBJECT
@@ -48,10 +49,6 @@ public:
 
     /// What a member sees in place of Add a user; empty when Add a user is offered.
     QString addUserNotice() const;
-
-    /// Makes an invite for the user named label, an admin when admin is set: its fingerprint
-    /// when the invite applied; otherwise empty, and a blank label makes nothing.
-    QByteArray addUser(const QString& label, bool admin);
 
 private slots:
     /// Lists the session's access list again, keeping the selected row and the scroll.
@@ -95,10 +92,6 @@ private:
 
     /// The user of the selected row, which is a user's.
     AccessUser selectedUser() const;
-
-    /// Writes the invitation of invite, one of invitesMadeHere, where the user chooses, then
-    /// shows the message to send with it and the file ready to drag into an email.
-    void saveInvitation(const QByteArray& invite);
 
     WardSession& m_session;
     const AppSettings& m_settings;
