@@ -1,0 +1,9 @@
+{
+    "name": "ward-planning-dev",
+    "main": "src/index.ts",
+    "compatibility_date": "2026-11-01",
+    "durable_objects": {
+        "bindings": [{ "name": "WARD", "class_name": "Ward" }]
+    },
+    "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Ward"] }]
+}
