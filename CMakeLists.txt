@@ -25,7 +25,6 @@ find_package(Qt6 REQUIRED COMPONENTS
     Widgets
     Network
     Svg
-    Pdf
     Concurrent
     PrintSupport
 )
@@ -415,7 +414,6 @@ target_link_libraries(WardPlanningLib PUBLIC
     Qt6::Widgets
     Qt6::Network
     Qt6::Svg
-    Qt6::Pdf
     Qt6::Concurrent
     Qt6::PrintSupport
     ${MUPDF_LIBRARY}

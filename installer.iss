@@ -48,7 +48,6 @@ Source: "build\bin\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "build\bin\Qt6Core.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "build\bin\Qt6Gui.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "build\bin\Qt6Network.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "build\bin\Qt6Pdf.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "build\bin\Qt6PrintSupport.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "build\bin\Qt6Svg.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "build\bin\Qt6Widgets.dll"; DestDir: "{app}"; Flags: ignoreversion

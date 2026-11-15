@@ -12,7 +12,7 @@
             "environment": [
                 {
                     "name": "PATH",
-                    "value": "C:/Qt/6.11.0/msvc2022_64/bin;${env:PATH}"
+                    "value": "C:/Qt/6.12.0/msvc2022_64/bin;${env:PATH}"
                 }
             ],
             "console": "integratedTerminal",
@@ -29,7 +29,7 @@
             "environment": [
                 {
                     "name": "PATH",
-                    "value": "C:/Qt/6.11.0/msvc2022_64/bin;${env:PATH}"
+                    "value": "C:/Qt/6.12.0/msvc2022_64/bin;${env:PATH}"
                 }
             ],
             "console": "integratedTerminal",
@@ -59,7 +59,7 @@
             "environment": [
                 {
                     "name": "PATH",
-                    "value": "C:/Qt/6.11.0/msvc2022_64/bin;${env:PATH}"
+                    "value": "C:/Qt/6.12.0/msvc2022_64/bin;${env:PATH}"
                 }
             ],
             "console": "integratedTerminal",
@@ -76,7 +76,7 @@
             "environment": [
                 {
                     "name": "PATH",
-                    "value": "C:/Qt/6.11.0/msvc2022_64/bin;${env:PATH}"
+                    "value": "C:/Qt/6.12.0/msvc2022_64/bin;${env:PATH}"
                 }
             ],
             "console": "integratedTerminal",
@@ -93,7 +93,7 @@
             "environment": [
                 {
                     "name": "PATH",
-                    "value": "C:/Qt/6.11.0/msvc2022_64/bin;${env:PATH}"
+                    "value": "C:/Qt/6.12.0/msvc2022_64/bin;${env:PATH}"
                 }
             ],
             "console": "integratedTerminal",

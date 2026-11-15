@@ -8,10 +8,10 @@
    - Install "Desktop development with C++" workload
    - Includes MSVC compiler and Windows SDK
 
-2. **Qt 6.11+**
+2. **Qt 6.12+**
    - Download from https://www.qt.io/download-qt-installer
    - Select: Qt 6.x.x > MSVC 2022 64-bit
-   - Required modules: Core, Gui, Widgets, Network, Svg, Pdf, Concurrent, PrintSupport, Test
+   - Required modules: Core, Gui, Widgets, Network, Svg, Concurrent, PrintSupport, Test
 
 3. **CMake 3.21+**
    - Download from https://cmake.org/download/
@@ -91,7 +91,7 @@ Update `CMAKE_PREFIX_PATH` in `CMakePresets.json` to match your Qt installation:
 
 ```json
 "cacheVariables": {
-    "CMAKE_PREFIX_PATH": "C:/Qt/6.11.0/msvc2022_64"
+    "CMAKE_PREFIX_PATH": "C:/Qt/6.12.0/msvc2022_64"
 }
 ```
 
@@ -119,7 +119,7 @@ Install Ninja:
 ### Build errors with Qt
 
 Ensure all required Qt modules are installed:
-- Core, Gui, Widgets, Network, Svg, Pdf, Concurrent, PrintSupport, Test
+- Core, Gui, Widgets, Network, Svg, Concurrent, PrintSupport, Test
 
 ### "Cannot open include file: 'type_traits'" (Windows)
 
