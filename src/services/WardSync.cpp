@@ -372,9 +372,11 @@ void WardSync::onLocalChange()
 
 void WardSync::onTold(const QSet<QByteArray>& present, qint64 version)
 {
-    if (present != m_present)
+    QSet<QByteArray> others = present;
+    others.remove(m_channelSigner);
+    if (others != m_present)
     {
-        m_present = present;
+        m_present = others;
         emit presenceChanged();
     }
     setConnected(true);

@@ -39,14 +39,21 @@ QString WardSharing::whatStopsSharing(const WardSync& sync)
     return QString();
 }
 
-QString WardSharing::whatStopsInviting(const WardSync& sync)
+QString WardSharing::whatStopsInviting(const WardSession& session, const WardSync& sync)
 {
-    if (sync.isSyncing())
+    if (session.isNoLongerShared())
     {
-        return QString();
+        return tr("This ward is no longer shared with this device.");
     }
-    bool noConnection = sync.problem() == SyncProblem::None || sync.problem() == SyncProblem::Unreachable;
-    return noConnection ? tr("Connect to the internet to invite someone.") : whatStopsSharing(sync);
+    if (session.savePending())
+    {
+        return tr("Your latest change could not be saved, so nothing can be shared yet.");
+    }
+    if (!sync.isConnected() || sync.problem() == SyncProblem::Unreachable)
+    {
+        return tr("Connect to the internet to invite someone.");
+    }
+    return whatStopsSharing(sync);
 }
 
 QByteArray WardSharing::inviteUser(WardSession& session, const QString& label, bool admin)
@@ -61,7 +68,7 @@ QByteArray WardSharing::inviteUser(WardSession& session, const QString& label, b
 
 void WardSharing::addUser(WardSession& session, const AppSettings& settings, WardSync& sync, QWidget* parent)
 {
-    QString stopped = settings.useServer() ? whatStopsInviting(sync) : QString();
+    QString stopped = settings.useServer() ? whatStopsInviting(session, sync) : QString();
     if (!stopped.isEmpty())
     {
         QMessageBox::information(parent, tr("Add a User"), stopped);
@@ -94,7 +101,7 @@ void WardSharing::addUser(WardSession& session, const AppSettings& settings, War
 
 void WardSharing::addDevice(WardSession& session, const AppSettings& settings, WardSync& sync, QWidget* parent)
 {
-    QString stopped = settings.useServer() ? whatStopsInviting(sync) : QString();
+    QString stopped = settings.useServer() ? whatStopsInviting(session, sync) : QString();
     if (!stopped.isEmpty())
     {
         QMessageBox::information(parent, tr("Add a Device"), stopped);
@@ -171,7 +178,7 @@ QByteArray WardSharing::fetchedInvitation(WardSession& session, WardSync& sync, 
         return wait.invitation();
     }
 
-    QString stopped = whatStopsInviting(sync);
+    QString stopped = whatStopsInviting(session, sync);
     if (!session.document().access().findInvite(invite).has_value())
     {
         stopped = tr("Your invite could not be created, because the ward changed first. Try again.");
@@ -191,6 +198,9 @@ InvitationWait::InvitationWait(const QByteArray& invite, QWidget* parent)
     setWindowTitle(tr("Save Invitation"));
     QVBoxLayout* layout = new QVBoxLayout(this);
     layout->addWidget(new QLabel(tr("Creating the invitation..."), this));
+    QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Cancel, this);
+    layout->addWidget(buttons);
+    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 }
 
 void InvitationWait::onInvitationFetched(const QByteArray& invite, const QByteArray& invitation)

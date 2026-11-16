@@ -23,15 +23,12 @@ QString nameOf(const AccessList& access, const QByteArray& fingerprint)
 }
 }  // namespace
 
-QStringList Presence::others(const AccessList& access, const QSet<QByteArray>& present, const QByteArray& own)
+QStringList Presence::others(const AccessList& access, const QSet<QByteArray>& present)
 {
     QStringList names;
     for (const QByteArray& fingerprint : present)
     {
-        if (fingerprint != own)
-        {
-            names.append(nameOf(access, fingerprint));
-        }
+        names.append(nameOf(access, fingerprint));
     }
     names.removeDuplicates();
     names.sort();

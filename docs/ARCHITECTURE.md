@@ -462,8 +462,9 @@ class DocumentManager : public QObject
     Q_OBJECT
 
 public:
-    // This device's identity and the store of its ward files; it owns neither
-    DocumentManager(const Identity* identity, FileWardStore* store, QObject* parent);
+    // This device's identity, the store of its ward files and the transport to the server;
+    // it owns none of them
+    DocumentManager(const Identity* identity, FileWardStore* store, Transport* transport, QObject* parent);
 
     const Document& document() const;  // the session's document
 
@@ -486,7 +487,16 @@ public:
     void join(const InvitedWard& invited, const UserDetails& user, const QString& deviceName);
 
     const DocumentId& documentId() const;
-    bool retryPendingSave();
+
+    // The open ward's sharing through the server, started and stopped with the switch
+    WardSync& sync();
+    void setUseServer(bool use);
+
+    // A failed save tried again, then what the open ward has to share
+    bool retryPending();
+
+    // An update file taken through the session, and then looked at against the server
+    TakeResult takeUpdate(const QByteArray& file);
 
     const QString& wardsFolder() const;   // the folder that holds this device's ward files
     bool removeOpenWard(QString* problem);  // removes the open ward's file from the store
@@ -498,6 +508,7 @@ signals:
     void undoStackChanged();                                  // forwarded from the session
     void saveFailed(const QString& problem);                  // forwarded from the session
     void commandNotApplied(const CommitResult& result);
+    void versionFetched(const TakeResult& result);            // forwarded from the sync
     void geocodingProgressChanged(int completed, int total);  // forwarded from the session
     void geocodingFinished();                                 // forwarded from the session
 };
@@ -511,7 +522,7 @@ signals:
 
 `Server` is the wire: each call (`create`, `push`, `head`, `fetch`, `openChannel`) becomes one request on a `Transport`, signed with a `SignedLine` where the server asks for a signature, and returns an object that emits its answer once. The app's `Transport` is `NetworkTransport`, HTTPS through `QNetworkAccessManager` and the channel through a `QWebSocket` that it pings every 30 seconds, to the address `NetworkTransport::BuiltInAddress`. The tests' is `FakeServer`.
 
-`MainWindow` shows what `WardSync` says. `updateSharing`, which also runs on `WardSync::stateChanged`, puts `WardSharing::whatStopsSharing` in the `ShareNotice` bar: a newer format on the server, a version that could not be read, a push the server did not take, or working offline. `updatePresence` names who else is here in a line above the map, from `Presence`, which turns the channel's fingerprints into names through the access list. `versionFetched` runs `afterTake`, as opening an update file does: *Your name* and *Your email* follow the ward's, and an abandoned replay hands the user its to-redo file. `DocumentManager::retryPending`, which the window calls when it regains focus and before leaving a ward, retries a failed save and then `WardSync::retry`. With the server on, `WardSharing` saves an invitation only while the ward is syncing, from `WardSync::fetchInvitation`, so the invitation carries the version the server holds.
+`MainWindow` shows what `WardSync` says. `updateSharing`, which also runs on `WardSync::stateChanged`, puts `WardSharing::whatStopsSharing` in the `ShareNotice` bar: a newer format on the server, a version that could not be read, a push the server did not take, or working offline. `updatePresence` names who else is here in a line above the map, from `Presence`, which turns the fingerprints of the other devices, as `WardSync::present` gives them, into names through the access list. `versionFetched` runs `afterTake`, as opening an update file does: *Your name* and *Your email* follow the ward's, and an abandoned replay hands the user its to-redo file; a fetched version that shows this device's invite was used or withdrawn says so. The window hears `versionFetched` and `saveFailed` through queued connections, so a message box opens only once the sync's own step is over. An update file taken with the server on is followed by a look (`DocumentManager::takeUpdate`). `DocumentManager::retryPending`, which the window calls when it regains focus and before leaving a ward, retries a failed save and then `WardSync::retry`. With the server on, `WardSharing` saves an invitation only while the ward is syncing, from `WardSync::fetchInvitation`, so the invitation carries the version the server holds.
 
 ### Geocoder and UnitLookup
 

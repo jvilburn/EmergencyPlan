@@ -242,10 +242,13 @@ void MainWindow::setupConnections()
             this, &MainWindow::updateUndoRedoActions);
     connect(DocumentManager::instance(), &DocumentManager::commandNotApplied,
             this, &MainWindow::onCommandNotApplied);
+    // A failed save and a fetched version can be told from inside the sharing's own step, so
+    // the window hears of them once that step is over, and a message box never holds it up.
+    qRegisterMetaType<TakeResult>();
     connect(DocumentManager::instance(), &DocumentManager::saveFailed,
-            this, &MainWindow::onSaveFailed);
+            this, &MainWindow::onSaveFailed, Qt::QueuedConnection);
     connect(DocumentManager::instance(), &DocumentManager::versionFetched,
-            this, &MainWindow::onVersionFetched);
+            this, &MainWindow::onVersionFetched, Qt::QueuedConnection);
     connect(&DocumentManager::instance()->sync(), &WardSync::stateChanged,
             this, &MainWindow::updateSharing);
     connect(&DocumentManager::instance()->sync(), &WardSync::presenceChanged,
@@ -521,16 +524,20 @@ void MainWindow::updateSharing()
 void MainWindow::updatePresence()
 {
     const WardSession& session = DocumentManager::instance()->session();
-    QStringList others = Presence::others(session.document().access(), DocumentManager::instance()->sync().present(),
-                                          session.writer().fingerprint());
+    QStringList others = Presence::others(session.document().access(), DocumentManager::instance()->sync().present());
     m_presenceLabel->setText(Presence::line(others));
     m_presenceLabel->setVisible(!others.isEmpty());
 }
 
 void MainWindow::onVersionFetched(const TakeResult& result)
 {
-    afterTake(result);
     updateSharing();
+    if (result.status == TakeStatus::InviteUsedOrWithdrawn)
+    {
+        QMessageBox::warning(this, tr("Ward Planning"), tr("This invite has been used or withdrawn. Ask the sender."));
+        return;
+    }
+    afterTake(result);
 }
 
 bool MainWindow::openFile(const QString& path)

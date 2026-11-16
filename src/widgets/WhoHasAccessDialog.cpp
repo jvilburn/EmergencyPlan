@@ -5,6 +5,7 @@
 #include "DocumentManager.h"
 #include "WardSession.h"
 #include "WardSharing.h"
+#include "WardSync.h"
 
 #include <QDialogButtonBox>
 #include <QHBoxLayout>
@@ -31,6 +32,7 @@ WhoHasAccessDialog::WhoHasAccessDialog(WardSession& session, const AppSettings& 
     , m_settings(settings)
     , m_sync(sync)
 {
+    connect(&m_sync, &WardSync::stateChanged, this, &WhoHasAccessDialog::updateActions);
     setWindowTitle(tr("Who Has Access"));
     resize(480, 360);
 
@@ -197,6 +199,8 @@ void WhoHasAccessDialog::rebuild()
 
 void WhoHasAccessDialog::updateActions()
 {
+    // Also called when the sharing's state changes: a removal the server tells of changes
+    // what is offered without changing the document.
     QList<AccessAction> offered = offeredActions();
     for (auto it = m_actionButtons.cbegin(); it != m_actionButtons.cend(); ++it)
     {

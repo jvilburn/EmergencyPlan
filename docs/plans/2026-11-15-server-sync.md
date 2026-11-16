@@ -71,7 +71,7 @@ What later tasks rely on:
 - `WardSync::fetchInvitation` answers through `invitationFetched` with an invitation carrying
   the server's version, once the look under way has ended, or with no bytes when the server did
   not answer, sharing stopped, or its version does not name the invite.
-- This device appears in `WardSync::present()` under `WardSession::writer()`'s fingerprint.
+- `WardSync::present()` is the other devices that have the ward open; this device is left out.
 
 ---
 

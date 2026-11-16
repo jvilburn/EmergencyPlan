@@ -97,8 +97,10 @@ public:
     /// The open ward's next version as an update file, through the session, which then holds it.
     QByteArray writeUpdate() { return m_session.writeUpdate(); }
 
-    /// Takes an update file of the open ward through the session.
-    TakeResult takeUpdate(const QByteArray& file) { return m_session.takeUpdate(file); }
+    /// Takes an update file of the open ward through the session. While the ward is shared
+    /// through the server, a look follows, which settles the version taken against the
+    /// server's.
+    TakeResult takeUpdate(const QByteArray& file);
 
 signals:
     /// A save failed after the one before it succeeded; told once until a save succeeds again.

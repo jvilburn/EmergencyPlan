@@ -78,9 +78,9 @@ public:
     /// save pending, and the ward still this device's.
     bool isSyncing() const;
 
-    /// The fingerprint of every device with the ward open, as the channel last said; empty
-    /// while it is closed. This device is among them under the fingerprint it signs with, the
-    /// session's writer(), which is its invite's until a version it holds names the device.
+    /// The fingerprint of every other device with the ward open, as the channel last said;
+    /// empty while it is closed. This device, which the server lists under the fingerprint
+    /// its channel was signed with, is left out.
     const QSet<QByteArray>& present() const { return m_present; }
 
 signals:

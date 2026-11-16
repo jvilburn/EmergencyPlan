@@ -96,6 +96,13 @@ bool DocumentManager::retryPending()
     return true;
 }
 
+TakeResult DocumentManager::takeUpdate(const QByteArray& file)
+{
+    TakeResult result = m_session.takeUpdate(file);
+    m_sync.look();
+    return result;
+}
+
 void DocumentManager::startSync()
 {
     if (m_useServer && !m_session.documentId().isNull())

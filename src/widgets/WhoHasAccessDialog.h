@@ -41,8 +41,8 @@ class WhoHasAccessDialog : public QDialog
     Q_OBJECT
 
 public:
-    /// session is the open ward's, and settings say whether the server is switched on.
-    /// session is the open ward's, and sync its sharing through the server.
+    /// session is the open ward's, settings say whether the server is switched on, and sync is
+    /// the ward's sharing through the server.
     WhoHasAccessDialog(WardSession& session, const AppSettings& settings, WardSync& sync, QWidget* parent);
 
     /// The actions offered on the selected row, in AccessAction's order; none with nothing

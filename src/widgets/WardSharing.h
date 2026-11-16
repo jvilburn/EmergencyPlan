@@ -47,8 +47,10 @@ public:
                                const QByteArray& invite, QWidget* parent);
 
 private:
-    /// Why no invitation can be made through the server now; empty while the ward is syncing.
-    static QString whatStopsInviting(const WardSync& sync);
+    /// Why no invitation can be made through the server now: the ward is no longer this
+    /// device's, its latest change is not saved, there is no connection, or what
+    /// whatStopsSharing says. Empty while the ward is syncing.
+    static QString whatStopsInviting(const WardSession& session, const WardSync& sync);
 
     /// The invitation of invite carrying the server's version, awaited behind a small dialog.
     /// Empty when there is none, after telling the user why unless they closed the dialog.
@@ -57,7 +59,7 @@ private:
 };
 
 /// The small dialog shown while an invitation is fetched from the server. It closes when the
-/// invitation for its invite arrives.
+/// invitation for its invite arrives, and Cancel gives up waiting.
 class InvitationWait : public QDialog
 {
     Q_OBJECT

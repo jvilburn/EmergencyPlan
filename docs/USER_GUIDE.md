@@ -31,7 +31,7 @@ After importing, the app automatically geocodes addresses in the background (sho
 
 - **Use the Ward Planning server** - Turn this off only if the Ward Planning server has shut down. Every member of your wards must turn it off too.
 - **This device's name** - The name this device has in your wards, asked for at the first launch. Changing it renames this device in every ward on this device.
-- **Your name** - The name you have in the wards you create or join, asked for at the first launch. Changing it renames you in every ward on this device. A new name set on another of your devices reaches this one in the updates you open.
+- **Your name** - The name you have in the wards you create or join, asked for at the first launch. Changing it renames you in every ward on this device. A new name set on another of your devices reaches this one as the ward updates.
 - **Your email** - The email you have in the wards you create or join, so other members can send you updates, asked for at the first launch after your name. It can be empty. It changes and reaches your other devices the same way as your name.
 - **Map home** - Where the map opens. The app first sets it from your approximate location; **Use current view** sets it to what the map shows now.
 - **Wards folder** - The folder that holds this device's ward files; **Show** opens it. Only a ward's own devices can open its file.
@@ -46,6 +46,7 @@ With **Use the Ward Planning server** turned on in Settings, the open ward share
 - **The ward on the server could not be read. Your copy is safe and you can keep working; sharing resumes when the server has a readable copy.**
 - **This ward was saved by a newer version of Ward Planning. Update to see the latest changes and share your work.** - Another member has a newer Ward Planning. Your changes stay on this device until you update.
 - **Changes that could not be applied** - When someone else changed the same thing first, your change is set aside and listed in a *To redo* file in the *Ward Planning* folder in Documents, which the app offers to open.
+- **This ward is no longer shared with this device.** - Shown above the map when you have been removed from the ward, or the ward has been deleted. The copy stays on this device, read-only, until you delete it with **Delete this copy**.
 - **Adding a user or a device** - **Add a user**, **Add a device** and **Save invitation** need the connection: the invitation is made from the ward as the server has it, after a moment showing *Creating the invitation...*.
 
 ### Sharing updates
@@ -79,9 +80,9 @@ Roles are an agreement among the people who use the ward, to keep well-meaning u
 An invitation is a file, such as *Tanglewood Ward - for Bob.wardinvite*, that a member of the ward sends you.
 
 - **Opening the invitation** - Double-click the file, drop it on the window, or use **File > Open Invitation...** or **Open Invitation...** in the ward list. The app asks *Join Tanglewood Ward?*, with the ward's own name; on OK you join, as the device and, for an invitation to a new user, the user with the name and email in **File > Settings**, and the ward opens.
-- **Send an update after joining** - The other members see you only once they open an update from you, so joining shows *You have changes to share*. Send an update to every member of the ward.
+- **Send an update after joining** - With the server turned off, the other members see you only once they open an update from you, so joining shows *You have changes to share*. Send an update to every member of the ward. With the server on, your join goes to them by itself.
 - **This device already has access** - An invitation to a ward this device already holds opens that ward, and the invitation stays unused.
-- **This invite has been used or withdrawn** - Shown when an update opened after joining shows that someone else joined with the same invitation first, or that it was withdrawn before your join reached the members. The ward is then no longer shared with this device. Ask the sender for a new invitation.
+- **This invite has been used or withdrawn** - Shown when the ward, as an update or the server brings it after you join, shows that someone else joined with the same invitation first, or that it was withdrawn before your join reached the members. The ward is then no longer shared with this device. Ask the sender for a new invitation.
 
 ---
 

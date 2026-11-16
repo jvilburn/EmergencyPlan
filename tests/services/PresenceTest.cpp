@@ -12,7 +12,7 @@ PresenceTest::PresenceTest(QObject* parent)
 {
 }
 
-void PresenceTest::othersLeavesOutThisDeviceAndNamesAUserOnce()
+void PresenceTest::othersNamesEachKindAndAUserOnce()
 {
     TestClient alice("Alice");
     TestClient bob("Bob");
@@ -30,17 +30,13 @@ void PresenceTest::othersLeavesOutThisDeviceAndNamesAUserOnce()
     QByteArray forADevice = alice.session().invite(std::nullopt).invite;
     QVERIFY(!forCarol.isEmpty() && !forADevice.isEmpty());
 
-    QSet<QByteArray> present{alice.identity().fingerprint(), bob.identity().fingerprint(),
-                             bobsPhone.identity().fingerprint(), forCarol, forADevice,
-                             stranger.identity().fingerprint()};
-    QStringList others = Presence::others(alice.session().document().access(), present, alice.identity().fingerprint());
+    QSet<QByteArray> present{bob.identity().fingerprint(), bobsPhone.identity().fingerprint(), forCarol,
+                             forADevice, stranger.identity().fingerprint()};
+    QStringList others = Presence::others(alice.session().document().access(), present);
 
     QCOMPARE(others, (QStringList{"Bob", "a device invitation", "a device that just joined",
                                   "someone with Carol's invitation"}));
-    // This device alone is no one else.
-    QVERIFY(Presence::others(alice.session().document().access(), {alice.identity().fingerprint()},
-                             alice.identity().fingerprint())
-                .isEmpty());
+    QVERIFY(Presence::others(alice.session().document().access(), {}).isEmpty());
 }
 
 void PresenceTest::lineJoinsNames()

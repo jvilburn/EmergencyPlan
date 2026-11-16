@@ -99,8 +99,9 @@ void ServerSyncTest::aNewWardIsCreatedOnTheServerAndConnected()
     // once the ward is created.
     QCOMPARE(server.calls("OPEN"), 2);
     QVERIFY(alice.sync().isSyncing());
-    QCOMPARE(alice.sync().present(), fingerprints({&alice}));
+    // The server lists her, and she is told of no one else.
     QCOMPARE(server.present(document), fingerprints({&alice}));
+    QVERIFY(alice.sync().present().isEmpty());
 }
 
 void ServerSyncTest::aNewWardIsConnectedThoughItsFirstChannelIsRefusedAfterTheCreateAnswers()
@@ -726,16 +727,19 @@ void ServerSyncTest::theChannelSaysWhoIsHere()
     TestClient carol("Carol", &server);
     DocumentId document = TestSharing::share({&alice, &bob}, TestSharing::accessOf({&alice, &bob}, {}));
     alice.startSync();
-    QCOMPARE(alice.sync().present(), fingerprints({&alice}));
+    QVERIFY(alice.sync().isConnected());
+    QVERIFY(alice.sync().present().isEmpty());
 
+    // Each is told of the other, and never of itself.
     bob.startSync();
-    QCOMPARE(alice.sync().present(), fingerprints({&alice, &bob}));
-    QCOMPARE(bob.sync().present(), fingerprints({&alice, &bob}));
+    QCOMPARE(server.present(document), fingerprints({&alice, &bob}));
+    QCOMPARE(alice.sync().present(), fingerprints({&bob}));
+    QCOMPARE(bob.sync().present(), fingerprints({&alice}));
     QVERIFY(bob.sync().isConnected());
 
     bob.sync().stop();
     server.settle();
-    QCOMPARE(alice.sync().present(), fingerprints({&alice}));
+    QVERIFY(alice.sync().present().isEmpty());
     QVERIFY(bob.sync().present().isEmpty());
     QVERIFY(!bob.sync().isConnected());
 
@@ -800,9 +804,8 @@ void ServerSyncTest::anInvitationCarriesTheServersVersionAndAnEditAfterItSurvive
     {
         QVERIFY(server.deliverNext());
     }
-    QVERIFY(bob.sync().present().contains(made.invite));
-    QVERIFY(alice.sync().present().contains(made.invite));
-    QVERIFY(!alice.sync().present().contains(bob.identity().fingerprint()));
+    QCOMPARE(alice.sync().present(), QSet<QByteArray>{made.invite});
+    QCOMPARE(bob.sync().present(), fingerprints({&alice}));
     server.settle();
 
     QCOMPARE(server.number(document), qint64(5));
@@ -816,7 +819,8 @@ void ServerSyncTest::anInvitationCarriesTheServersVersionAndAnEditAfterItSurvive
     // Bob's channel was opened as the invite, and again as his device once the join landed.
     QVERIFY(bob.sync().isSyncing());
     QCOMPARE(server.present(document), fingerprints({&alice, &bob}));
-    QCOMPARE(alice.sync().present(), fingerprints({&alice, &bob}));
+    QCOMPARE(alice.sync().present(), fingerprints({&bob}));
+    QCOMPARE(bob.sync().present(), fingerprints({&alice}));
 }
 
 void ServerSyncTest::anInvitationIsNotGivenWhileNothingCanBeShared()

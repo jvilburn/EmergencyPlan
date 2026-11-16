@@ -1478,7 +1478,10 @@ seed for `crypto_box_seed_keypair`, and subkey 2 the seed for `crypto_sign_seed_
    The device that made the invite keeps its seed in its device-local state, saved with the
    invite before the push, for as long as the access list it holds names that invite. So
    *Save invitation* on the open invite in *Who has access* writes the file again on that
-   device, carrying the version it holds, which names the invite while it is open. The seed
+   device. With the server on, the file carries the version the server holds, fetched while the
+   ward is syncing, so no invitation carries a version number the server may come to hold with
+   other content; with the server off, it carries the next version this device would write.
+   Either names the invite while it is open. The seed
    regenerates the invite's private
    keys, and it sits in the same encrypted file as the data key those keys unseal, so keeping
    it exposes nothing that file does not already hold.
@@ -1850,7 +1853,8 @@ version*).
 | An update that does not rank above the version held | You already have a newer update. |
 | An invitation opened while offline | Connect to the internet, then open the invitation again. |
 | Leave or Remove this device while offline | Connect to the internet to leave this ward. / Connect to the internet to remove this device. |
-| Add a user or Add a device while offline | Connect to the internet to invite someone. |
+| Add a user, Add a device or Save invitation while offline, with the server on | Connect to the internet to invite someone. |
+| Any of those three while the latest change is not saved | Your latest change could not be saved, so nothing can be shared yet. |
 | Any of those four with the server on, while connected but not syncing | The notice of the state that stops pushing, such as *This ward was saved by a newer version of Ward Planning...* |
 | Leave or Remove this device with the server off | Leaving a ward needs the Ward Planning server, which is turned off in Settings. / Removing this device needs the Ward Planning server, which is turned off in Settings. |
 | The invite's push loses to a conflict | Your invite could not be created, because the ward changed first. Try again. |

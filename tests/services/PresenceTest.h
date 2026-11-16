@@ -11,6 +11,6 @@ public:
     explicit PresenceTest(QObject* parent);
 
 private slots:
-    void othersLeavesOutThisDeviceAndNamesAUserOnce();
+    void othersNamesEachKindAndAUserOnce();
     void lineJoinsNames();
 };
