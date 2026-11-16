@@ -109,6 +109,8 @@ add_executable(WardPlanningTests
     server/FakeServer.cpp
     server/ServerSyncTest.h
     server/ServerSyncTest.cpp
+    server/ConformanceTest.h
+    server/ConformanceTest.cpp
 )
 
 target_include_directories(WardPlanningTests PRIVATE

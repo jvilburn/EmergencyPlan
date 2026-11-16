@@ -100,8 +100,23 @@ Add or edit the platform's entry in `src/releases.json`, then `npm run deploy`:
 `/releases/latest` serves the file as it is, and `/download` links each entry by its `name`. With
 no entries the page says no installer is available.
 
+## The conformance suite
+
+The app's tests hold one suite of what a server must do, `tests/server/ConformanceTest.cpp`. It
+runs against the app's in-process fake server in every test run, and against a real server when
+`WARD_PLANNING_SERVER_URL` names one:
+
+```
+set WARD_PLANNING_SERVER_URL=https://ward-planning-dev.ward-planning-server.workers.dev
+build\bin\WardPlanningTests.exe
+```
+
+Each run makes six create calls, inside the limit of ten a minute from one address, and leaves
+four wards on the server, one of them deleted. A disagreement between the two servers is fixed in
+whichever is wrong.
+
 ## Moving to another host
 
 A server that takes over at the same domain implements the wire in *What the server is* and *The
-live channel*, and holds every ward's `current` value. Reading those values out of this server
+live channel*, which the conformance suite checks, and holds every ward's `current` value. Reading those values out of this server
 takes an export, which is still to be built.

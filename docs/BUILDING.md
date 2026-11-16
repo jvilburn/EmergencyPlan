@@ -65,6 +65,25 @@ The build script:
 - Builds with Ninja
 - Deploys Qt DLLs with windeployqt
 
+### Running the tests (Windows)
+
+With `C:\Qt\6.12.0\msvc2022_64\bin` on `PATH`:
+
+```
+build\bin\WardPlanningTests.exe
+```
+
+Run from a script or a redirected shell, Qt Test prints only with `QT_FORCE_STDERR_LOGGING=1`
+set. The exit code is the number of failed test functions.
+
+The server conformance suite also runs against a real Ward Planning server when its address is
+given, as `server/README.md` describes:
+
+```
+set WARD_PLANNING_SERVER_URL=https://ward-planning-dev.ward-planning-server.workers.dev
+build\bin\WardPlanningTests.exe
+```
+
 ### macOS / Linux
 
 ```bash

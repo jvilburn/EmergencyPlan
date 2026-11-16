@@ -202,6 +202,7 @@ set(SERVICE_SOURCES
     src/services/SignedLine.cpp
     src/services/Server.cpp
     src/services/WardSync.cpp
+    src/services/NetworkTransport.cpp
     src/services/InvitationFile.cpp
     src/services/UserFolder.cpp
     src/services/InstanceLock.cpp
@@ -250,6 +251,7 @@ set(SERVICE_HEADERS
     src/services/Transport.h
     src/services/Server.h
     src/services/WardSync.h
+    src/services/NetworkTransport.h
     src/services/InvitationFile.h
     src/services/UserFolder.h
     src/services/InstanceLock.h

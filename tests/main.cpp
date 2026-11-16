@@ -8,7 +8,10 @@
 #include "FamilyEditPanelTest.h"
 #include "FamilyOrderTest.h"
 #include "FieldChangeTest.h"
+#include "ConformanceTest.h"
+#include "FakeServer.h"
 #include "FileSharingTest.h"
+#include "NetworkTransport.h"
 #include "ServerSyncTest.h"
 #include "SignedLineTest.h"
 #include "FileWardStoreTest.h"
@@ -130,5 +133,18 @@ int main(int argc, char* argv[])
     ServerSyncTest serverSyncTest(nullptr);
     failures += QTest::qExec(&signedLineTest, argc, argv);
     failures += QTest::qExec(&serverSyncTest, argc, argv);
+
+    // The conformance suite runs on the fake server always, and on the real one when its
+    // address is given.
+    FakeServer fakeServer;
+    ConformanceTest fakeConformance(&fakeServer, &fakeServer, nullptr);
+    failures += QTest::qExec(&fakeConformance, argc, argv);
+    QString realAddress = qEnvironmentVariable("WARD_PLANNING_SERVER_URL");
+    if (!realAddress.isEmpty())
+    {
+        NetworkTransport network(realAddress, nullptr);
+        ConformanceTest realConformance(&network, nullptr, nullptr);
+        failures += QTest::qExec(&realConformance, argc, argv);
+    }
     return failures;
 }

@@ -88,54 +88,8 @@ with `deliverNext` or `settle`. `TestClient` takes a `FakeServer` and has `sync(
 
 ## Task 3: `NetworkTransport`: HTTP and the WebSocket
 
-*The live channel* (the ping, a closed channel), *Hosting notes*.
-
-**Files:**
-- Create: `src/services/NetworkTransport.h`, `src/services/NetworkTransport.cpp`
-- Modify: `CMakeLists.txt`
-
-`NetworkTransport` is a `QObject` and a `Transport` over one `QNetworkAccessManager`:
-
-```cpp
-/// The app's transport: HTTPS and WebSocket to the Ward Planning server.
-class NetworkTransport : public QObject, public Transport
-{
-    Q_OBJECT
-
-public:
-    /// The server the app is built to use.
-    static constexpr char BuiltInAddress[] = "https://ward-planning-dev.ward-planning-server.workers.dev";
-
-    /// Sends to the server at address, such as BuiltInAddress.
-    NetworkTransport(const QString& address, QObject* parent);
-
-    TransportCall* send(const TransportRequest& request, QObject* parent) override;
-    TransportChannel* open(const TransportRequest& request, QObject* parent) override;
-};
-```
-
-- **`send`** returns a `NetworkCall`, a `TransportCall` that owns its `QNetworkReply`. It builds
-  a `QNetworkRequest` for `address + path` with the request's headers and a transfer timeout of
-  30 seconds (`setTransferTimeout`), sends it with `sendCustomRequest`, and on `finished` emits
-  `answered` with the HTTP status and the body, or `NoAnswer` when the reply has no status, then
-  deletes itself. Destroying the call aborts the request.
-- **`open`** returns a `NetworkChannel`, a `TransportChannel` over a `QWebSocket` it owns. It
-  opens `wss://` (or `ws://` for an `http://` address) with a `QNetworkRequest` carrying the
-  request's headers. `textMessageReceived` becomes `messageReceived`; `disconnected` and
-  `errorOccurred` become one `closed`, emitted once. Every 30 seconds it sends a ping, and a pong
-  that has not arrived when the next ping is due closes the socket, as *The live channel* asks.
-
-Qt 6.12's `QWebSocket` is newer than the executor's training data: read its documentation for
-`open(const QNetworkRequest&)`, `ping`, `pong` and `errorOccurred` before writing against them.
-
-No unit test: Task 5's conformance suite runs it against the live server.
-
-**Commit:**
-
-```bash
-git add src/services/NetworkTransport.h src/services/NetworkTransport.cpp CMakeLists.txt
-git commit -m "NetworkTransport carries the server's calls over HTTPS and its live channel over a WebSocket"
-```
+Done. `src/services/NetworkTransport.h` carries the calls over HTTPS and the channel over a
+WebSocket it pings every 30 seconds. The conformance suite runs it against the live server.
 
 ---
 
@@ -252,55 +206,9 @@ git commit -m "With the server on, the open ward syncs: the window says who else
 
 ## Task 5: The conformance suite, against the fake server and the real one
 
-*Testing* (the fake and the real server are checked against each other).
-
-**Files:**
-- Create: `tests/server/ConformanceTest.h`, `tests/server/ConformanceTest.cpp`
-- Modify: `tests/CMakeLists.txt`, `tests/main.cpp`
-- Modify: `server/README.md`, `docs/BUILDING.md`
-
-One suite written against `Server`, run twice by `tests/main.cpp`: on a `FakeServer`, always,
-and on a `NetworkTransport` at `WARD_PLANNING_SERVER_URL` when that is set. Each case waits for its
-answers through one helper, which settles the fake server and, for the real one, runs the
-event loop until the answer arrives or ten seconds pass. The versions are real ones, written by `WardFile::write`
-for identities the test makes.
-
-The suite makes three wards in all, so a run stays inside the server's limit of 10 creates a
-minute from one address:
-
-- `createAndRead`: a create is stored; a second create of the id is not; `head` is the header
-  line and `fetch` the exact bytes; a `head` and a `fetch` of an unknown id are `Missing`.
-- `whoMayWrite`: a push by a device the header does not name is not stored; one signed by a
-  named device that is not its `writer` is not stored; one whose header names another ward is
-  not stored; after each, `fetch` gives the bytes from before; the named writer's push is stored.
-- `onlyAHigherNumberIsKept`: a push of the current number by another named device is not stored
-  and the first stays; a lower number is not stored; a number two above is stored.
-- `removalAndDeletion`: a push that drops a device is stored, and that device's next push is
-  not; a final version with no recipients is stored, after which a push and a create of the id
-  are not.
-- `theChannel`: an open by a named device is told who is here and the number; a second device's
-  open is told to both; a stored push is told to both with its number; a push that drops a
-  device closes its channel; an open by a device the header does not name closes without a
-  message.
-
-Run it against the live server:
-
-```
-set WARD_PLANNING_SERVER_URL=https://ward-planning-dev.ward-planning-server.workers.dev
-build\bin\WardPlanningTests.exe
-```
-
-A disagreement is fixed in whichever of `FakeServer` and `server/` is wrong.
-
-`server/README.md` and `docs/BUILDING.md` each gain the two lines above, and what the suite
-leaves on the server: three wards, one of them deleted.
-
-**Commit:**
-
-```bash
-git add tests/server/ConformanceTest.h tests/server/ConformanceTest.cpp tests/CMakeLists.txt tests/main.cpp server/README.md docs/BUILDING.md
-git commit -m "One conformance suite runs against the fake server and, when its address is set, the real one"
-```
+Done, ahead of Task 4, so the window is built on a transport and a fake that the live server has
+checked. `tests/server/ConformanceTest.cpp` runs on the fake server in every test run and on the
+real one when `WARD_PLANNING_SERVER_URL` is set; `server/README.md` says how.
 
 ---
 
