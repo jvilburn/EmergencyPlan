@@ -68,7 +68,7 @@ WhoHasAccessDialog::WhoHasAccessDialog(WardSession& session, const AppSettings& 
     m_addUserNotice = new QLabel(m_wardActions);
     m_addUserNotice->setWordWrap(true);
     QPushButton* addDeviceButton = new QPushButton(tr("Add a device"), m_wardActions);
-    QPushButton* leaveButton = new QPushButton(tr("Leave"), m_wardActions);
+    QPushButton* leaveButton = new QPushButton(tr("Leave Ward..."), m_wardActions);
     wardRow->addWidget(m_addUserButton);
     wardRow->addWidget(m_addUserNotice, 1);
     wardRow->addWidget(addDeviceButton);

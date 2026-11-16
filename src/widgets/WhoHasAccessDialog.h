@@ -33,7 +33,7 @@ enum class AccessAction
 /// invites, rebuilt from the session's document whenever it changes, keeping the selection.
 /// It offers each action on the selected row only where AccessRules allows it for this device,
 /// and runs each change through DocumentManager's commit step. Below the list it offers
-/// WardSharing's Add a user, or to a member the admins to ask, Add a device and Leave. A ward
+/// WardSharing's Add a user, or to a member the admins to ask, Add a device and Leave Ward. A ward
 /// that is no longer this device's shows the list with no action offered and those three
 /// disabled.
 class WhoHasAccessDialog : public QDialog

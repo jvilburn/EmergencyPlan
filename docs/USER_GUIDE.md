@@ -60,7 +60,7 @@ With **Use the Ward Planning server** turned off in Settings, the members of a w
 
 ### Who has access
 
-**Sharing > Who Has Access...** lists the ward's users, each as *admin* or *member*, with their devices under them and this device marked *this device*, then the open invites, such as *for Bob* or *a device for Alice*. Select a row to see what you can do with it; only what your role allows is offered. **Add a user**, **Add a device** and **Leave** are below the list, and in the **Sharing** menu as **Add a User...**, **Add a Device...** and **Leave Ward...**.
+**Sharing > Who Has Access...** lists the ward's users, each as *admin* or *member*, with their devices under them and this device marked *this device*, then the open invites, such as *for Bob* or *a device for Alice*. Select a row to see what you can do with it; only what your role allows is offered. **Add a user**, **Add a device** and **Leave Ward...** are below the list, and in the **Sharing** menu as **Add a User...**, **Add a Device...** and **Leave Ward...**.
 
 - **Add a user** - Asks who the invitation is for, with **Make them an admin** (off unless you check it), then saves an invitation file, such as *Tanglewood Ward - for Bob.wardinvite*, where you choose, and then says *Your invitation for Bob is ready* over the message to pass on to that person, set apart in a box with **Copy Message**, and the invitation's icon, which you drag into your email or message to attach it; **Show in Folder** finds the file. Send both to that person by any channel you trust with the file: whoever opens the invitation first joins the ward. Only admins can add users; a member sees which admins to ask in place of the button, and **Sharing > Add a User...** is grayed out.
 - **Add a device** - Saves an invitation for another of your own devices. Send it to yourself and open it on that device.
@@ -69,7 +69,7 @@ With **Use the Ward Planning server** turned off in Settings, the members of a w
 - **Remove** - Removes a user, with their devices and the invites they made. Admins only, and not yourself.
 - **Make admin** / **Make member** - Changes a user's role. Admins only; the only admin cannot become a member until someone else is an admin.
 - **Remove device** - Removes another of your own devices.
-- **Leave** and **Remove this device** - Need the Ward Planning server, so they are not available while it is turned off in Settings.
+- **Leave Ward...** and **Remove this device** - Need the Ward Planning server, so they are not available while it is turned off in Settings.
 
 Each of these is a change like any other: with the server turned off, it reaches the other members in the next update you send, and a removal takes effect on each device as that update reaches it. A user who joins sends an update to every member. Names and your email change in **File > Settings**, not here.
 
