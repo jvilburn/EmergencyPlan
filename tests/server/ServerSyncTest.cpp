@@ -1,6 +1,7 @@
 #include "ServerSyncTest.h"
 
 #include "AccessCommands.h"
+#include "Base64Url.h"
 #include "Crypto.h"
 #include "FakeServer.h"
 #include "TestClient.h"
@@ -67,12 +68,22 @@ ServerSyncTest::ServerSyncTest(QObject* parent)
 {
 }
 
+void ServerSyncTest::aNewWardIsCreatedOnTheServerAndConnected_data()
+{
+    QTest::addColumn<bool>("repliesFirst");
+    QTest::newRow("events before the reply") << false;
+    QTest::newRow("the reply before events") << true;
+}
+
 void ServerSyncTest::aNewWardIsCreatedOnTheServerAndConnected()
 {
+    QFETCH(bool, repliesFirst);
     FakeServer server;
+    server.setRepliesFirst(repliesFirst);
     TestClient alice("Alice", &server);
     alice.createWard(TestWard::document());
     QVERIFY(!alice.session().isOnServer());
+    QSignalSpy fetched(&alice.sync(), &WardSync::versionFetched);
 
     alice.startSync();
 
@@ -80,14 +91,34 @@ void ServerSyncTest::aNewWardIsCreatedOnTheServerAndConnected()
     QCOMPARE(server.number(document), qint64(2));
     QCOMPARE(alice.session().version().number, qint64(2));
     QVERIFY(alice.session().isOnServer());
-    QVERIFY(alice.session().journal().isEmpty());
     QCOMPARE(server.calls("POST"), 1);
     QCOMPARE(server.calls("PUT"), 0);
+    // The stored create is held as it stands, with nothing fetched back.
+    QCOMPARE(fetched.size(), qsizetype(0));
     // The server refuses a channel to a ward it does not have, so the channel opens again
     // once the ward is created.
+    QCOMPARE(server.calls("OPEN"), 2);
     QVERIFY(alice.sync().isSyncing());
     QCOMPARE(alice.sync().present(), fingerprints({&alice}));
     QCOMPARE(server.present(document), fingerprints({&alice}));
+}
+
+void ServerSyncTest::aNewWardIsConnectedThoughItsFirstChannelIsRefusedAfterTheCreateAnswers()
+{
+    FakeServer server;
+    TestClient alice("Alice", &server);
+    alice.createWard(TestWard::document());
+
+    // The head and the create answer before the refusal of the channel opened at the start.
+    alice.sync().start();
+    QVERIFY(server.deliverNextReply());
+    QCOMPARE(server.calls("POST"), 1);
+    QVERIFY(server.deliverNextReply());
+    QVERIFY(alice.session().isOnServer());
+    server.settle();
+
+    QVERIFY(alice.sync().isSyncing());
+    QCOMPARE(server.present(alice.session().documentId()), fingerprints({&alice}));
 }
 
 void ServerSyncTest::aCreateWhoseAnswerIsLostIsSettledByTheNextLook()
@@ -95,19 +126,26 @@ void ServerSyncTest::aCreateWhoseAnswerIsLostIsSettledByTheNextLook()
     FakeServer server;
     TestClient alice("Alice", &server);
     alice.createWard(TestWard::document());
+    QVERIFY(TestSharing::commitBobsPhone(alice, "555-2222") == CommitStatus::Applied);
+    QCOMPARE(alice.session().journal().entries().size(), qsizetype(1));
+    QSignalSpy fetched(&alice.sync(), &WardSync::versionFetched);
     server.dropNextWriteReply();
 
     alice.startSync();
 
     DocumentId document = alice.session().documentId();
+    // The look found the create on the server and took it: its mark for Alice emptied the
+    // journal with nothing replayed, and nothing more was sent.
+    QCOMPARE(fetched.size(), qsizetype(1));
+    QVERIFY(fetched[0][0].value<TakeResult>().replay.status == ReplayStatus::FastForwarded);
+    QVERIFY(alice.session().journal().isEmpty());
+    QCOMPARE(TestSharing::bobsPhone(alice), QString("555-2222"));
     QCOMPARE(server.calls("POST"), 1);
-    QVERIFY(alice.session().isOnServer());
-    QVERIFY(alice.sync().problem() == SyncProblem::None);
-    QVERIFY(alice.sync().isSyncing());
-    // The look found the create on the server and took it, and nothing more was sent.
+    QCOMPARE(server.calls("PUT"), 0);
     QCOMPARE(server.number(document), qint64(2));
     QCOMPARE(alice.session().version().number, qint64(2));
-    QCOMPARE(server.calls("PUT"), 0);
+    QVERIFY(alice.session().isOnServer());
+    QVERIFY(alice.sync().isSyncing());
 }
 
 void ServerSyncTest::aWardTheServerNoLongerHasIsNoLongerShared()
@@ -133,23 +171,102 @@ void ServerSyncTest::aWardTheServerNoLongerHasIsNoLongerShared()
     QCOMPARE(server.number(document), qint64(0));
 }
 
+void ServerSyncTest::aCommandIsPushedAndTheOtherClientTakesIt_data()
+{
+    QTest::addColumn<bool>("repliesFirst");
+    QTest::newRow("events before the reply") << false;
+    QTest::newRow("the reply before events") << true;
+}
+
 void ServerSyncTest::aCommandIsPushedAndTheOtherClientTakesIt()
 {
+    QFETCH(bool, repliesFirst);
     FakeServer server;
+    server.setRepliesFirst(repliesFirst);
     TestClient alice("Alice", &server);
     TestClient bob("Bob", &server);
     DocumentId document = shared(server, {&alice, &bob});
     QCOMPARE(server.number(document), qint64(2));
     QCOMPARE(TestSharing::bobsPhone(bob), QString("555-1111"));
+    QSignalSpy alicesFetches(&alice.sync(), &WardSync::versionFetched);
+    QSignalSpy bobsFetches(&bob.sync(), &WardSync::versionFetched);
 
     QVERIFY(TestSharing::commitBobsPhone(alice, "555-2222") == CommitStatus::Applied);
     server.settle();
 
     QCOMPARE(server.number(document), qint64(3));
+    QCOMPARE(server.calls("PUT"), 1);
     QVERIFY(alice.session().journal().isEmpty());
+    // Alice holds the version she pushed, with nothing fetched back.
+    QCOMPARE(alicesFetches.size(), qsizetype(0));
     // Bob heard of it on his channel and fetched it; the test asked nothing of him.
+    QCOMPARE(bobsFetches.size(), qsizetype(1));
     QCOMPARE(TestSharing::bobsPhone(bob), QString("555-2222"));
     QVERIFY(bob.session().version() == alice.session().version());
+}
+
+void ServerSyncTest::anUpdateFileTakenWhileAPushIsOnItsWayIsSettledByALook()
+{
+    FakeServer server;
+    TestClient alice("Alice", &server);
+    TestClient bob("Bob", &server);
+    DocumentId document = shared(server, {&alice, &bob});
+    bob.sync().stop();
+    server.settle();
+    QVERIFY(commitAlicesPhone(bob, "555-7777") == CommitStatus::Applied);
+    bob.session().writeUpdate();
+    QByteArray bobs = bob.session().writeUpdate();
+    QCOMPARE(bob.session().version().number, qint64(4));
+
+    // Alice's push of version 3 is stored, and she takes Bob's file before its answer arrives.
+    QVERIFY(TestSharing::commitBobsPhone(alice, "555-2222") == CommitStatus::Applied);
+    QVERIFY(deliverUntil(server, "PUT", 1));
+    QCOMPARE(server.number(document), qint64(3));
+    QVERIFY(alice.session().takeUpdate(bobs).status == TakeStatus::Taken);
+    QCOMPARE(alice.session().version().number, qint64(4));
+    server.settle();
+
+    // She did not hold the push she no longer builds on; her next version went over it.
+    QCOMPARE(server.number(document), qint64(5));
+    QCOMPARE(alice.session().version().number, qint64(5));
+    QVERIFY(alice.session().journal().isEmpty());
+    bob.startSync();
+    for (TestClient* client : {&alice, &bob})
+    {
+        QCOMPARE(TestSharing::bobsPhone(*client), QString("555-2222"));
+        QCOMPARE(alicesPhone(*client), QString("555-7777"));
+    }
+}
+
+void ServerSyncTest::aPushLandedAndThenChangedByAnotherIsNotReplayed()
+{
+    FakeServer server;
+    TestClient alice("Alice", &server);
+    TestClient bob("Bob", &server);
+    DocumentId document = shared(server, {&alice, &bob});
+
+    // Alice's push is stored, and she goes away before its answer or any notice reaches her.
+    QVERIFY(TestSharing::commitBobsPhone(alice, "555-2222") == CommitStatus::Applied);
+    QVERIFY(deliverUntil(server, "PUT", 1));
+    alice.sync().stop();
+    server.settle();
+    QCOMPARE(alice.session().journal().entries().size(), qsizetype(1));
+    QCOMPARE(TestSharing::bobsPhone(bob), QString("555-2222"));
+    // Bob changes the same field on top of it.
+    QVERIFY(TestSharing::commitBobsPhone(bob, "555-3333") == CommitStatus::Applied);
+    server.settle();
+    QCOMPARE(server.number(document), qint64(4));
+    QSignalSpy fetched(&alice.sync(), &WardSync::versionFetched);
+
+    alice.startSync();
+
+    // Her entry had landed, so it is dropped by her mark and not replayed over Bob's value.
+    QCOMPARE(fetched.size(), qsizetype(1));
+    QVERIFY(fetched[0][0].value<TakeResult>().replay.status == ReplayStatus::FastForwarded);
+    QVERIFY(alice.session().journal().isEmpty());
+    QCOMPARE(TestSharing::bobsPhone(alice), QString("555-3333"));
+    QCOMPARE(TestSharing::bobsPhone(bob), QString("555-3333"));
+    QCOMPARE(server.number(document), qint64(4));
 }
 
 void ServerSyncTest::aCommandMadeWhileAPushIsOnItsWayGoesOutWithTheNext()
@@ -235,12 +352,13 @@ void ServerSyncTest::twoPushesOfOneNumberTheSecondReplaysAndPushesTheNext()
     server.setReachable(true);
     QSignalSpy fetched(&bob.sync(), &WardSync::versionFetched);
 
+    // Both read the head before either pushes, so both push version 3.
     alice.sync().retry();
-    server.settle();
-    QCOMPARE(server.number(document), qint64(3));
     bob.sync().retry();
     server.settle();
 
+    // The server kept Alice's and refused Bob's; he took hers, replayed, and pushed 4.
+    QCOMPARE(server.calls("PUT"), 3);
     QCOMPARE(fetched.size(), qsizetype(1));
     QVERIFY(fetched[0][0].value<TakeResult>().replay.status == ReplayStatus::Replayed);
     QCOMPARE(server.number(document), qint64(4));
@@ -300,6 +418,7 @@ void ServerSyncTest::anAutomaticUpdateIsPushedOnce()
 
     alice.geocoder().resolve(requests[0], ElmPosition);
     server.settle();
+    QCOMPARE(alice.session().document().addressCoordinates().size(), qsizetype(1));
     QCOMPARE(server.number(document), qint64(2));
     alice.geocoder().resolve(requests[1], ElmPosition);
     server.settle();
@@ -309,6 +428,29 @@ void ServerSyncTest::anAutomaticUpdateIsPushedOnce()
     QCOMPARE(server.number(document), qint64(3));
     QCOMPARE(bob.session().document().addressCoordinates().size(), qsizetype(2));
     QCOMPARE(bob.session().version().number, qint64(3));
+}
+
+void ServerSyncTest::anAutomaticUpdateWhoseAnswerIsLostIsNotPushedAgain()
+{
+    FakeServer server;
+    TestClient alice("Alice", &server);
+    TestClient bob("Bob", &server);
+    DocumentId document = shared(server, {&alice, &bob});
+    alice.session().automaticUpdates().run();
+    QStringList requests = alice.geocoder().requests();
+    QCOMPARE(requests.size(), qsizetype(2));
+    server.dropNextWriteReply();
+
+    alice.geocoder().resolve(requests[0], ElmPosition);
+    alice.geocoder().resolve(requests[1], ElmPosition);
+    server.settle();
+
+    // The push was stored; the look after the lost answer took it, and sent nothing more.
+    QCOMPARE(server.calls("PUT"), 1);
+    QCOMPARE(server.number(document), qint64(3));
+    QCOMPARE(alice.session().version().number, qint64(3));
+    QCOMPARE(alice.session().document().addressCoordinates().size(), qsizetype(2));
+    QCOMPARE(bob.session().document().addressCoordinates().size(), qsizetype(2));
 }
 
 void ServerSyncTest::aSaveThatFailsPushesNothing()
@@ -599,24 +741,32 @@ void ServerSyncTest::theChannelSaysWhoIsHere()
 
     // Carol holds a copy of the ward that names her, but the server's version does not, so
     // her channel is refused and nobody is told she is here.
-    Document withCarol = alice.session().document();
     AccessList access = TestSharing::accessOf({&alice, &bob, &carol}, {});
-    TestClient::holdWard({&carol}, access, alice, document, TestSharing::keyOf(alice), withCarol);
+    TestClient::holdWard({&carol}, access, alice, document, TestSharing::keyOf(alice), alice.session().document());
     QSignalSpy presence(&alice.sync(), &WardSync::presenceChanged);
+    int opens = server.calls("OPEN");
     carol.sync().start();
-    QVERIFY(deliverUntil(server, "OPEN", server.calls("OPEN")));
-    while (server.deliverNext() && !carol.sync().present().isEmpty())
-    {
-    }
+    QCOMPARE(server.calls("OPEN"), opens + 1);
+    server.settle();
     QVERIFY(!carol.sync().isConnected());
     QCOMPARE(server.present(document), fingerprints({&alice}));
     QCOMPARE(presence.size(), qsizetype(0));
-    carol.sync().stop();
+    // Her look then found that the server's version leaves her out.
+    QVERIFY(carol.session().isNoLongerShared());
+}
+
+void ServerSyncTest::anInvitationCarriesTheServersVersionAndAnEditAfterItSurvivesTheJoin_data()
+{
+    QTest::addColumn<bool>("repliesFirst");
+    QTest::newRow("events before the reply") << false;
+    QTest::newRow("the reply before events") << true;
 }
 
 void ServerSyncTest::anInvitationCarriesTheServersVersionAndAnEditAfterItSurvivesTheJoin()
 {
+    QFETCH(bool, repliesFirst);
     FakeServer server;
+    server.setRepliesFirst(repliesFirst);
     TestClient alice("Alice", &server);
     TestClient bob("Bob's phone", &server);
     DocumentId document = shared(server, {&alice});
@@ -644,7 +794,15 @@ void ServerSyncTest::anInvitationCarriesTheServersVersionAndAnEditAfterItSurvive
     InvitedWard invited = bob.session().readInvitation(invitation);
     QVERIFY2(invited.status == InvitationStatus::Joinable, qPrintable(invited.problem));
     bob.session().join(invited, {"Bob Brown", ""}, "Bob's phone");
-    bob.startSync();
+    // Until a version names his device, Bob signs as the invite, and is here under it.
+    bob.sync().start();
+    while (!bob.sync().isConnected())
+    {
+        QVERIFY(server.deliverNext());
+    }
+    QVERIFY(bob.sync().present().contains(made.invite));
+    QVERIFY(alice.sync().present().contains(made.invite));
+    QVERIFY(!alice.sync().present().contains(bob.identity().fingerprint()));
     server.settle();
 
     QCOMPARE(server.number(document), qint64(5));
@@ -695,7 +853,7 @@ void ServerSyncTest::anInvitationIsNotGivenWhileNothingCanBeShared()
     QVERIFY(invitations[2][1].toByteArray().isEmpty());
 }
 
-void ServerSyncTest::withTheServerOffNothingIsSent()
+void ServerSyncTest::aSyncThatIsNotStartedSendsNothing()
 {
     FakeServer server;
     TestClient alice("Alice", &server);
@@ -741,24 +899,61 @@ void ServerSyncTest::membersWhoTradedFilesTurnTheServerOn()
     FakeServer server;
     TestClient alice("Alice", &server);
     TestClient bob("Bob", &server);
-    DocumentId document = TestSharing::share({&alice, &bob}, TestSharing::accessOf({&alice, &bob}, {}));
+    DocumentId document = shared(server, {&alice, &bob});
+    alice.sync().stop();
+    bob.sync().stop();
+    server.settle();
+    // With the server off they trade files, and Alice ends two versions ahead of Bob.
     QVERIFY(TestSharing::commitBobsPhone(alice, "555-2222") == CommitStatus::Applied);
     QVERIFY(TestSharing::send(alice, {&bob}) == QList<TakeStatus>{TakeStatus::Taken});
     QVERIFY(commitAlicesPhone(bob, "555-7777") == CommitStatus::Applied);
     QVERIFY(TestSharing::send(bob, {&alice}) == QList<TakeStatus>{TakeStatus::Taken});
-    QCOMPARE(alice.session().version().number, qint64(3));
+    QVERIFY(TestSharing::commitBobsPhone(alice, "555-4444") == CommitStatus::Applied);
+    alice.session().writeUpdate();
+    alice.session().writeUpdate();
+    QCOMPARE(bob.session().version().number, qint64(4));
+    QCOMPARE(alice.session().version().number, qint64(6));
+    QCOMPARE(server.number(document), qint64(2));
 
-    // Neither has seen the ward on the server, so the first to look creates it there.
+    // Bob is first to look, and pushes over the older head.
     bob.startSync();
-    QCOMPARE(server.calls("POST"), 1);
-    QCOMPARE(server.number(document), qint64(4));
+    QCOMPARE(server.number(document), qint64(5));
+    QCOMPARE(server.calls("PUT"), 1);
+    // Alice holds a version that ranks above his, and pushes over it in turn; Bob takes hers.
     alice.startSync();
     server.settle();
 
-    QCOMPARE(server.calls("POST"), 1);
+    QCOMPARE(server.calls("PUT"), 2);
+    QCOMPARE(server.number(document), qint64(7));
     QVERIFY(alice.session().version() == bob.session().version());
     QVERIFY(alice.session().document() == bob.session().document());
-    QCOMPARE(TestSharing::bobsPhone(alice), QString("555-2222"));
-    QCOMPARE(alicesPhone(alice), QString("555-7777"));
+    QCOMPARE(TestSharing::bobsPhone(bob), QString("555-4444"));
+    QCOMPARE(alicesPhone(bob), QString("555-7777"));
+    QVERIFY(alice.sync().isSyncing() && bob.sync().isSyncing());
+}
+
+void ServerSyncTest::aWardSharedByFilesIsCreatedByTheFirstToLook()
+{
+    FakeServer server;
+    TestClient alice("Alice", &server);
+    TestClient bob("Bob", &server);
+    DocumentId document = TestSharing::share({&alice, &bob}, TestSharing::accessOf({&alice, &bob}, {}));
+    QVERIFY(TestSharing::commitBobsPhone(alice, "555-2222") == CommitStatus::Applied);
+    QVERIFY(TestSharing::send(alice, {&bob}) == QList<TakeStatus>{TakeStatus::Taken});
+    QCOMPARE(alice.session().version().number, qint64(2));
+
+    // Neither has seen the ward on the server, and both look before either create lands.
+    bob.sync().start();
+    alice.sync().start();
+    server.settle();
+
+    // The server kept Bob's create and refused Alice's, and she took his.
+    QCOMPARE(server.calls("POST"), 2);
+    QCOMPARE(server.calls("PUT"), 0);
+    QCOMPARE(server.number(document), qint64(3));
+    QVERIFY(server.version(document).contains(Base64Url::encode(bob.identity().fingerprint()).toLatin1()));
+    QVERIFY(alice.session().version() == bob.session().version());
+    QVERIFY(alice.session().document() == bob.session().document());
+    QCOMPARE(TestSharing::bobsPhone(bob), QString("555-2222"));
     QVERIFY(alice.sync().isSyncing() && bob.sync().isSyncing());
 }

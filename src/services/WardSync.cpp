@@ -175,7 +175,15 @@ void WardSync::onFetched(const ServerRead& version)
         break;
     }
 
+    // Taking a version replaces the document, so an automatic change made before it is either
+    // in that version or gone, and the run the take starts says so again if it finds work.
+    bool unjournalledChange = m_unjournalledChange;
+    m_unjournalledChange = false;
     TakeResult result = m_session->takeVersion(version.bytes);
+    if (result.status != TakeStatus::Taken)
+    {
+        m_unjournalledChange = m_unjournalledChange || unjournalledChange;
+    }
     emit versionFetched(result);
     switch (result.status)
     {
@@ -325,7 +333,7 @@ void WardSync::openChannel()
 
 void WardSync::freshenChannel()
 {
-    if (m_channel == nullptr || m_channelSigner != m_session->writer().fingerprint())
+    if (!m_connected || m_channelSigner != m_session->writer().fingerprint())
     {
         closeChannel();
         openChannel();

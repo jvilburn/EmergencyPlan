@@ -147,6 +147,7 @@ TransportCall* FakeServer::send(const TransportRequest& request, QObject* parent
 {
     m_calls.append(request.method);
     FakeCall* call = new FakeCall(parent);
+    qsizetype before = m_events.size();
     TransportReply reply = m_reachable ? handle(request) : status(TransportReply::NoAnswer);
     bool write = request.method == "POST" || request.method == "PUT";
     if (write && m_reachable && m_dropNextWriteReply)
@@ -154,7 +155,7 @@ TransportCall* FakeServer::send(const TransportRequest& request, QObject* parent
         m_dropNextWriteReply = false;
         reply = status(TransportReply::NoAnswer);
     }
-    m_events.append(Event{EventKind::Reply, call, reply, QByteArray()});
+    m_events.insert(m_repliesFirst ? before : m_events.size(), Event{EventKind::Reply, call, reply, QByteArray()});
     return call;
 }
 
@@ -216,26 +217,45 @@ bool FakeServer::deliverNext()
 {
     while (!m_events.isEmpty())
     {
-        Event event = m_events.takeFirst();
-        if (event.target.isNull())
+        if (deliver(m_events.takeFirst()))
         {
-            continue;
+            return true;
         }
-        switch (event.kind)
-        {
-        case EventKind::Reply:
-            static_cast<FakeCall*>(event.target.data())->answer(event.reply);
-            break;
-        case EventKind::Message:
-            static_cast<FakeChannel*>(event.target.data())->deliverMessage(event.message);
-            break;
-        case EventKind::Closed:
-            static_cast<FakeChannel*>(event.target.data())->deliverClosed();
-            break;
-        }
-        return true;
     }
     return false;
+}
+
+bool FakeServer::deliverNextReply()
+{
+    for (qsizetype i = 0; i < m_events.size(); ++i)
+    {
+        if (m_events[i].kind == EventKind::Reply && deliver(m_events.takeAt(i)))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool FakeServer::deliver(const Event& event)
+{
+    if (event.target.isNull())
+    {
+        return false;
+    }
+    switch (event.kind)
+    {
+    case EventKind::Reply:
+        static_cast<FakeCall*>(event.target.data())->answer(event.reply);
+        break;
+    case EventKind::Message:
+        static_cast<FakeChannel*>(event.target.data())->deliverMessage(event.message);
+        break;
+    case EventKind::Closed:
+        static_cast<FakeChannel*>(event.target.data())->deliverClosed();
+        break;
+    }
+    return true;
 }
 
 void FakeServer::settle()

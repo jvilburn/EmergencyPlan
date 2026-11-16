@@ -123,8 +123,8 @@ private:
     /// Closes the channel and forgets who is here.
     void closeChannel();
 
-    /// Opens the channel anew when it is closed or was signed by another writer than the
-    /// session's now. Called when the server may have just come to accept one: the ward is
+    /// Opens the channel anew when it is not connected or was signed by another writer than
+    /// the session's now. Called when the server may have just come to accept one: the ward is
     /// first seen there, a write is stored, or a version is taken. The server refuses a
     /// channel to a ward it does not have, and closes one signed by an invite once a version
     /// names the device in the invite's place.

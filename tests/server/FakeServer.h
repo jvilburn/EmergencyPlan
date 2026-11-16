@@ -18,9 +18,14 @@ class FakeChannel;
 /// each ward's channels. A test can make it misbehave.
 ///
 /// A request changes what the server holds as it is sent, and nothing is answered inside send
-/// or open: each reply and each channel event (a message, a close) joins one queue in the order
-/// the server produced it, and deliverNext or settle hands them over. So a test decides what
-/// has arrived when, with no timer and no event loop.
+/// or open: each reply and each channel event (a message, a close) joins one queue, and
+/// deliverNext, deliverNextReply or settle hands them over. So a test decides what has arrived
+/// when, with no timer and no event loop. The real server sends a write's reply and the channel
+/// events that write causes on separate connections, so either may arrive first:
+/// setRepliesFirst chooses.
+///
+/// It reads headers with the app's WardHeader, where the real server has its own reader; the
+/// conformance suite is what holds the two servers to one answer.
 class FakeServer : public Transport
 {
 public:
@@ -38,8 +43,16 @@ public:
     /// rules keep it, and gets no answer.
     void dropNextWriteReply() { m_dropNextWriteReply = true; }
 
+    /// A write's reply joins the queue ahead of the channel events the write causes when set,
+    /// and behind them otherwise, which is how it starts.
+    void setRepliesFirst(bool first) { m_repliesFirst = first; }
+
     /// Hands over the oldest reply or channel event that is waiting; false when none is.
     bool deliverNext();
+
+    /// Hands over the oldest reply that is waiting, ahead of any channel event queued before
+    /// it; false when none is.
+    bool deliverNextReply();
 
     /// Hands over every waiting reply and channel event, and those they lead to, until none
     /// is left.
@@ -87,6 +100,9 @@ private:
         QByteArray message;        ///< for a Message
     };
 
+    /// Hands event over, when what it is for still exists; false when it does not.
+    bool deliver(const Event& event);
+
     /// One ward: its current version and its open channels.
     struct Ward
     {
@@ -110,4 +126,5 @@ private:
     QList<QByteArray> m_calls;
     bool m_reachable = true;
     bool m_dropNextWriteReply = false;
+    bool m_repliesFirst = false;
 };

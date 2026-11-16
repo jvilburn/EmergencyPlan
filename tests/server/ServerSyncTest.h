@@ -13,18 +13,24 @@ public:
 
 private slots:
     // The first look
+    void aNewWardIsCreatedOnTheServerAndConnected_data();
     void aNewWardIsCreatedOnTheServerAndConnected();
+    void aNewWardIsConnectedThoughItsFirstChannelIsRefusedAfterTheCreateAnswers();
     void aCreateWhoseAnswerIsLostIsSettledByTheNextLook();
     void aWardTheServerNoLongerHasIsNoLongerShared();
 
     // Pushing
+    void aCommandIsPushedAndTheOtherClientTakesIt_data();
     void aCommandIsPushedAndTheOtherClientTakesIt();
+    void anUpdateFileTakenWhileAPushIsOnItsWayIsSettledByALook();
+    void aPushLandedAndThenChangedByAnotherIsNotReplayed();
     void aCommandMadeWhileAPushIsOnItsWayGoesOutWithTheNext();
     void aPushWhoseAnswerIsLostIsNotAppliedTwice();
     void aPushWhoseAnswerIsLostIsSettledAfterARestart();
     void twoPushesOfOneNumberTheSecondReplaysAndPushesTheNext();
     void aConflictAbandonsTheJournalAndTheNextCommandPushes();
     void anAutomaticUpdateIsPushedOnce();
+    void anAutomaticUpdateWhoseAnswerIsLostIsNotPushedAgain();
     void aSaveThatFailsPushesNothing();
     void aSaveThatFailsWhileALookIsOnItsWayIsNotPushed();
 
@@ -44,11 +50,13 @@ private slots:
     void theChannelSaysWhoIsHere();
 
     // Invitations
+    void anInvitationCarriesTheServersVersionAndAnEditAfterItSurvivesTheJoin_data();
     void anInvitationCarriesTheServersVersionAndAnEditAfterItSurvivesTheJoin();
     void anInvitationIsNotGivenWhileNothingCanBeShared();
 
     // The switch and update files
-    void withTheServerOffNothingIsSent();
+    void aSyncThatIsNotStartedSendsNothing();
     void anUpdateFileAboveTheHeadIsPushedOver();
     void membersWhoTradedFilesTurnTheServerOn();
+    void aWardSharedByFilesIsCreatedByTheFirstToLook();
 };

@@ -2,7 +2,8 @@
 
 #include <QObject>
 
-/// The signed lines' known answers, which server/test/wire.test.ts pins for the same inputs.
+/// The signed lines' known answers. server/test/wire.test.ts pins the create, push and channel
+/// lines for the same inputs; the update line is the app's alone.
 class SignedLineTest : public QObject
 {
     Q_OBJECT
