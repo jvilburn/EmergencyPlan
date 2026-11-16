@@ -19,16 +19,20 @@ void SendInvitationDialogTest::instructionsAddressTheInvitingUserAndTheMessageTh
     QCOMPARE(SendInvitationDialog::instructions("Paula"),
              QString("Your invitation for Paula is ready. Attach it to an email or text to Paula, with this "
                      "message:"));
-    QCOMPARE(SendInvitationDialog::message("John", "Tanglewood Ward"),
-             QString("John has invited you to Tanglewood Ward. Install Ward Planning, then open the attached "
-                     "invitation."));
+    QCOMPARE(SendInvitationDialog::message("John", "Tanglewood Ward", "https://example.test/download"),
+             QString("John has invited you to Tanglewood Ward.\n\n"
+                     "1. Download Ward Planning from https://example.test/download and run the installer.\n"
+                     "2. If Windows says \"Windows protected your PC\", click More info, then Run anyway.\n"
+                     "3. Open the attached invitation."));
 }
 
 void SendInvitationDialogTest::copyMessageCopiesTheMessageAlone()
 {
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
-    SendInvitationDialog dialog("Paula", "John", "Tanglewood Ward",
+    QString downloadPage = "https://example.test/download";
+    QString message = SendInvitationDialog::message("John", "Tanglewood Ward", downloadPage);
+    SendInvitationDialog dialog("Paula", "John", "Tanglewood Ward", downloadPage,
                                 dir.filePath("Tanglewood Ward - for Paula.wardinvite"), nullptr);
     QGuiApplication::clipboard()->setText("something else");
 
@@ -40,7 +44,7 @@ void SendInvitationDialogTest::copyMessageCopiesTheMessageAlone()
         shown.append(label->text());
     }
     QVERIFY(shown.contains(SendInvitationDialog::instructions("Paula")));
-    QVERIFY(shown.contains(SendInvitationDialog::message("John", "Tanglewood Ward")));
+    QVERIFY(shown.contains(message));
 
     QPushButton* copyMessage = nullptr;
     const QList<QPushButton*> buttons = dialog.findChildren<QPushButton*>();
@@ -54,5 +58,5 @@ void SendInvitationDialogTest::copyMessageCopiesTheMessageAlone()
     QVERIFY(copyMessage != nullptr);
     copyMessage->click();
 
-    QCOMPARE(QGuiApplication::clipboard()->text(), SendInvitationDialog::message("John", "Tanglewood Ward"));
+    QCOMPARE(QGuiApplication::clipboard()->text(), message);
 }

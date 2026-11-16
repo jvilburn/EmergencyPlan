@@ -1471,8 +1471,14 @@ seed for `crypto_box_seed_keypair`, and subkey 2 the seed for `crypto_sign_seed_
    file selected, and *Done*. On a phone the platform's share sheet takes the drag's place.
    The user attaches it to an email, copies it onto a stick or sends it in a text. The message:
 
-   > Alice Smith has invited you to Tanglewood Ward. Install Ward Planning from
-   > https://<server>/download, then open the attached invitation.
+   > Alice Smith has invited you to Tanglewood Ward.
+   >
+   > 1. Download Ward Planning from https://<server>/download and run the installer.
+   > 2. If Windows says "Windows protected your PC", click More info, then Run anyway.
+   > 3. Open the attached invitation.
+
+   The second step is there while the installer is unsigned, which is when Windows gives that
+   warning.
 
    The download link carries no secret, and no page the server serves ever holds the seed.
    The user sends the file by any channel they trust with it.

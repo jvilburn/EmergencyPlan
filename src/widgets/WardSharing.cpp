@@ -2,6 +2,7 @@
 
 #include "AppSettings.h"
 #include "InvitationFile.h"
+#include "NetworkTransport.h"
 #include "SendFileDialog.h"
 #include "SendInvitationDialog.h"
 #include "UserFolder.h"
@@ -156,7 +157,9 @@ void WardSharing::saveInvitation(WardSession& session, const AppSettings& settin
     }
     if (entry.invitedUser().has_value())
     {
-        SendInvitationDialog dialog(entry.invitedUser()->label, session.ownUser().name(), wardName, path, parent);
+        QString downloadPage = QString(NetworkTransport::BuiltInAddress) + "/download";
+        SendInvitationDialog dialog(entry.invitedUser()->label, session.ownUser().name(), wardName, downloadPage, path,
+                                    parent);
         dialog.exec();
         return;
     }

@@ -13,15 +13,18 @@ class SendInvitationDialog : public SendFileDialog
 
 public:
     /// invitee is who the invitation is for, as the inviting user named them; inviter is that
-    /// user's own name, wardName the ward's, and path the invitation file.
+    /// user's own name, wardName the ward's, downloadPage the address of the page that offers
+    /// the installers, and path the invitation file.
     SendInvitationDialog(const QString& invitee, const QString& inviter, const QString& wardName,
-                         const QString& path, QWidget* parent);
+                         const QString& downloadPage, const QString& path, QWidget* parent);
 
     /// What the dialog tells the inviting user to do, naming invitee.
     static QString instructions(const QString& invitee);
 
-    /// The message for the person invited, which Copy Message copies.
-    static QString message(const QString& inviter, const QString& wardName);
+    /// The message for the person invited, which Copy Message copies: who invited them to
+    /// which ward, then three numbered steps: download and install from downloadPage, get past
+    /// the warning Windows gives an installer it does not know, and open the invitation.
+    static QString message(const QString& inviter, const QString& wardName, const QString& downloadPage);
 
 private slots:
     void onCopyMessage();
