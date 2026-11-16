@@ -142,6 +142,7 @@ int main(int argc, char* argv[])
     QString realAddress = qEnvironmentVariable("WARD_PLANNING_SERVER_URL");
     if (!realAddress.isEmpty())
     {
+        qInfo("The conformance suite, against the server at %s", qPrintable(realAddress));
         NetworkTransport network(realAddress, nullptr);
         ConformanceTest realConformance(&network, nullptr, nullptr);
         failures += QTest::qExec(&realConformance, argc, argv);

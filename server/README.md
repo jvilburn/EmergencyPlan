@@ -104,16 +104,20 @@ no entries the page says no installer is available.
 
 The app's tests hold one suite of what a server must do, `tests/server/ConformanceTest.cpp`. It
 runs against the app's in-process fake server in every test run, and against a real server when
-`WARD_PLANNING_SERVER_URL` names one:
+`WARD_PLANNING_SERVER_URL` names one. For the local server `npm run dev` serves, whose wards stay
+on this machine under `.wrangler/`:
 
 ```
-set WARD_PLANNING_SERVER_URL=https://ward-planning-dev.ward-planning-server.workers.dev
+set WARD_PLANNING_SERVER_URL=http://localhost:8787
 build\bin\WardPlanningTests.exe
 ```
 
-Each run makes six create calls, inside the limit of ten a minute from one address, and leaves
-four wards on the server, one of them deleted. A disagreement between the two servers is fixed in
-whichever is wrong.
+For the deployed development Worker, set the address to
+`https://ward-planning-dev.ward-planning-server.workers.dev`.
+
+Each run makes eight create calls and leaves three wards on the server, one of them deleted. A
+deployed server allows ten creates a minute from one address, so a second run within the minute
+is refused with `429`. A disagreement between the two servers is fixed in whichever is wrong.
 
 ## Moving to another host
 

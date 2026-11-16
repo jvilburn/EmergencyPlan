@@ -77,10 +77,10 @@ Run from a script or a redirected shell, Qt Test prints only with `QT_FORCE_STDE
 set. The exit code is the number of failed test functions.
 
 The server conformance suite also runs against a real Ward Planning server when its address is
-given, as `server/README.md` describes:
+given, here the local one that `npm run dev` in `server/` serves; `server/README.md` says more:
 
 ```
-set WARD_PLANNING_SERVER_URL=https://ward-planning-dev.ward-planning-server.workers.dev
+set WARD_PLANNING_SERVER_URL=http://localhost:8787
 build\bin\WardPlanningTests.exe
 ```
 
