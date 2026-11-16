@@ -33,6 +33,10 @@ QJsonObject DeviceState::toJson() const
     {
         json["noLongerShared"] = true;
     }
+    if (onServer)
+    {
+        json["onServer"] = true;
+    }
     return json;
 }
 
@@ -45,6 +49,7 @@ DeviceState DeviceState::fromJson(JsonReader json)
     device.inviteSeeds = json.optionalBytesList("inviteSeeds", Crypto::KeyBytes);
     device.joinSeed = json.optionalBytes("joinSeed", Crypto::KeyBytes);
     device.noLongerShared = json.optionalFlag("noLongerShared");
+    device.onServer = json.optionalFlag("onServer");
     json.finish();
     return device;
 }
@@ -55,5 +60,6 @@ bool DeviceState::operator==(const DeviceState& other) const
         && heldRecipients == other.heldRecipients
         && inviteSeeds == other.inviteSeeds
         && joinSeed == other.joinSeed
-        && noLongerShared == other.noLongerShared;
+        && noLongerShared == other.noLongerShared
+        && onServer == other.onServer;
 }

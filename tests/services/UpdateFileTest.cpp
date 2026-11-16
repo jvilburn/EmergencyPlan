@@ -293,7 +293,10 @@ void UpdateFileTest::updateFromADeviceNotOnTheAccessListIsRefused()
     DocumentId document = DocumentId::generate();
     QByteArray dataKey = Crypto::randomBytes(Crypto::KeyBytes);
     TestClient::holdWard({&alice, &bob}, {&alice, &bob}, document, dataKey, TestWard::document());
-    TestClient::holdWard({&mallory}, {&alice, &bob, &mallory}, document, dataKey, TestWard::document());
+    // Mallory holds the ward under a key Alice's copy never had, so nothing shows she joined
+    // since Alice's copy.
+    QByteArray malloryKey = Crypto::randomBytes(Crypto::KeyBytes);
+    TestClient::holdWard({&mallory}, {&alice, &bob, &mallory}, document, malloryKey, TestWard::document());
     QVERIFY(commitPhone(mallory, TestWard::smithId(), TestWard::bobId(), "555-6666") == CommitStatus::Applied);
     QByteArray mallorys = mallory.session().writeUpdate();
     QVERIFY(WardFile::read(versionIn(mallorys), alice.identity(), PayloadKind::Version).status == WardReadStatus::Read);

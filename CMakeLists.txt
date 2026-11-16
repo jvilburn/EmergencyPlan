@@ -24,6 +24,7 @@ find_package(Qt6 REQUIRED COMPONENTS
     Gui
     Widgets
     Network
+    WebSockets
     Svg
     Concurrent
     PrintSupport
@@ -198,6 +199,9 @@ set(SERVICE_SOURCES
     src/services/WardList.cpp
     src/services/ShowInFolder.cpp
     src/services/UpdateFile.cpp
+    src/services/SignedLine.cpp
+    src/services/Server.cpp
+    src/services/WardSync.cpp
     src/services/InvitationFile.cpp
     src/services/UserFolder.cpp
     src/services/InstanceLock.cpp
@@ -242,6 +246,10 @@ set(SERVICE_HEADERS
     src/services/WardList.h
     src/services/ShowInFolder.h
     src/services/UpdateFile.h
+    src/services/SignedLine.h
+    src/services/Transport.h
+    src/services/Server.h
+    src/services/WardSync.h
     src/services/InvitationFile.h
     src/services/UserFolder.h
     src/services/InstanceLock.h
@@ -413,6 +421,7 @@ target_link_libraries(WardPlanningLib PUBLIC
     Qt6::Gui
     Qt6::Widgets
     Qt6::Network
+    Qt6::WebSockets
     Qt6::Svg
     Qt6::Concurrent
     Qt6::PrintSupport

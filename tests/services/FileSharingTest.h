@@ -18,6 +18,7 @@ private slots:
     void memberVersionWrittenBeforeTakingTheJoinIsReadWithTheSeed();
     void versionFromAMemberWhoNeverTookTheJoinRunsTheJoinAgain();
     void sameInvitationUsedOnTwoDevices();
+    void updateFromAMemberWhoJoinedSinceThisCopyIsTaken();
     void withdrawnInviteRotatesAndItsInvitationJoinsNothingLater();
     void invitationOpenedOnADeviceTheWardNamesJoinsNothing();
     void invitationOpenedAgainOnTheDeviceThatJoinedThroughItKeepsItsCopy();

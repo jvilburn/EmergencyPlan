@@ -75,7 +75,7 @@ WardSession::WardSession(const Identity* identity, WardStore* store, Geocoder* g
 {
     connect(&m_automaticUpdates, &AutomaticUpdates::documentChanged,
             this, &WardSession::documentChanged);
-    connect(&m_automaticUpdates, &AutomaticUpdates::applied, this, &WardSession::save);
+    connect(&m_automaticUpdates, &AutomaticUpdates::applied, this, &WardSession::onAutomaticUpdatesApplied);
 }
 
 void WardSession::createWard(const Document& content, const UserDetails& user, const QString& deviceName)
@@ -257,15 +257,26 @@ ReplayResult WardSession::replayOnto(const Document& version)
 QByteArray WardSession::writeUpdate()
 {
     NextVersion next = nextVersion();
-    AccessList access = m_document.access();
-    access.setFormerKeys(next.formerKeys);
-    m_document.setAccess(access);
-    m_version = next.version;
-    m_dataKey = next.dataKey;
-    m_landed = next.landed;
-    m_device.heldRecipients = next.recipients;
+    hold(next);
     save();
     return UpdateFile::write(m_documentId, next.bytes, next.writer);
+}
+
+void WardSession::holdPushed(const NextVersion& next)
+{
+    hold(next);
+    m_device.onServer = true;
+    m_device.journal.dropLanded(next.landed.value(m_identity->fingerprint()));
+    save();
+}
+
+void WardSession::sawOnServer()
+{
+    if (!m_device.onServer)
+    {
+        m_device.onServer = true;
+        save();
+    }
 }
 
 TakeResult WardSession::takeUpdate(const QByteArray& file)
@@ -285,21 +296,43 @@ TakeResult WardSession::takeUpdate(const QByteArray& file)
     {
         return notTaken(TakeStatus::OtherWard, QString());
     }
-    std::optional<QByteArray> verifyKey = m_document.access().verifyKeyOf(header.version().writer);
+    const QByteArray& writer = header.version().writer;
+    std::optional<QByteArray> verifyKey = m_document.access().verifyKeyOf(writer);
     if (!verifyKey.has_value())
     {
-        return notTaken(TakeStatus::UnknownWriter, QString());
+        std::optional<AccessList> newer = accessWrittenSinceThisCopy(writer, update.version);
+        if (!newer.has_value())
+        {
+            return notTaken(TakeStatus::UnknownWriter, QString());
+        }
+        verifyKey = newer->verifyKeyOf(writer);
     }
-    if (!UpdateFile::verifies(update, *verifyKey))
+    if (verifyKey.has_value() && !UpdateFile::verifies(update, *verifyKey))
     {
         return notTaken(TakeStatus::Unreadable, "the signature does not verify");
+    }
+    return takeVersion(update.version);
+}
+
+TakeResult WardSession::takeVersion(const QByteArray& version)
+{
+    WardRead read = readVersion(version);
+    if (!read.header.has_value())
+    {
+        // The header line did not parse: a newer format, or not a version at all.
+        TakeStatus status = read.status == WardReadStatus::Newer ? TakeStatus::Newer : TakeStatus::Unreadable;
+        return notTaken(status, read.problem);
+    }
+    const WardHeader& header = *read.header;
+    if (header.document() != m_documentId)
+    {
+        return notTaken(TakeStatus::OtherWard, QString());
     }
     if (!header.version().ranksAbove(m_version))
     {
         return notTaken(TakeStatus::NotNewer, QString());
     }
 
-    WardRead read = readVersion(update.version);
     switch (read.status)
     {
     case WardReadStatus::Read:
@@ -523,6 +556,7 @@ CommitResult WardSession::run(const Command& command)
     save();
     emit documentChanged(command.documentChange());
     m_automaticUpdates.commandApplied(command);
+    emit localChange();
     return result;
 }
 
@@ -604,7 +638,24 @@ void WardSession::save()
     }
 }
 
-WardSession::NextVersion WardSession::nextVersion() const
+void WardSession::hold(const NextVersion& next)
+{
+    AccessList access = m_document.access();
+    access.setFormerKeys(next.formerKeys);
+    m_document.setAccess(access);
+    m_version = next.version;
+    m_dataKey = next.dataKey;
+    m_landed = next.landed;
+    m_device.heldRecipients = next.recipients;
+}
+
+void WardSession::onAutomaticUpdatesApplied()
+{
+    save();
+    emit localChange();
+}
+
+NextVersion WardSession::nextVersion() const
 {
     Document document = m_document;
     AccessList access = document.access();
@@ -665,6 +716,26 @@ WardRead WardSession::readVersion(const QByteArray& version) const
         return WardFile::read(version, Identity::fromInviteSeed(*m_device.joinSeed), PayloadKind::Version);
     }
     return read;
+}
+
+std::optional<AccessList> WardSession::accessWrittenSinceThisCopy(const QByteArray& writer,
+                                                                  const QByteArray& version) const
+{
+    if (m_device.heldRecipients.contains(writer))
+    {
+        return std::nullopt;
+    }
+    WardRead read = readVersion(version);
+    if (read.status != WardReadStatus::Read)
+    {
+        return std::nullopt;
+    }
+    const AccessList& access = read.payload->ward.access();
+    if (!keyHistory(read.dataKey, access).contains(AccessList::formerKeyHash(m_dataKey)))
+    {
+        return std::nullopt;
+    }
+    return access;
 }
 
 void WardSession::takeFirstDownload(const DocumentId& document, const WardRead& version)

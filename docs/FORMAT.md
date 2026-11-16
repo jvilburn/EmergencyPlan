@@ -167,6 +167,7 @@ integers: the highest journal sequence number of that device the version include
 | `inviteSeeds` | array of 32-byte values | the seed of each open invite this device made, in the order it made them; omitted when empty |
 | `joinSeed` | 32 bytes | the seed of the invite this device joined through; omitted on a device that did not join through an invite |
 | `noLongerShared` | `true` | a version this device took left it out; omitted while the ward is this device's |
+| `onServer` | `true` | this device has seen the Ward Planning server hold the ward; omitted until then |
 
 A journal:
 
@@ -668,8 +669,11 @@ wardplanning-v1 update <document> <header hash> <payload hash>
 with single spaces, where `<document>` is the header's `document`, and the hashes are 32-byte
 unkeyed BLAKE2b of the header line's bytes, without its `\n`, and of the payload's bytes; all
 three are base64url. It verifies with the verify key of the device or open invite whose
-fingerprint is the header's `writer`, as the access list the reader holds gives it. A reader refuses a file whose signature does not verify, or whose `writer` that access list
-does not name. A device that joined through an invite writes its versions as that invite, signed
+fingerprint is the header's `writer`, as the access list the reader holds gives it. A reader refuses a file whose signature does not verify. A `writer` that access list does not
+name is accepted only when the version is under the data key of the reader's copy, or names that
+key's hash among its former keys, and the writer is not a recipient of the version the reader
+holds; the signature then verifies with the verify key the version's own access list gives the
+writer, where it gives one. A device that joined through an invite writes its versions as that invite, signed
 with the invite's keys, while the version it holds does not name the device.
 
 ## Invitation files

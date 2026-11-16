@@ -860,9 +860,16 @@ converted.
   takes it as a fetch would, opening its ward first when another is open. The ward must be one this device holds,
   or the file is refused with *This update is for a ward this device does not have*, and the
   signature must verify against the verify key the access list this device holds gives the
-  writer; a file from a device that list does not name is refused with
-  *This update is from a device this copy of the ward does not list yet. Open the update
-  from whoever added it first.* The checks under *Every edit is a version* then apply, the journal is trimmed by this device's landed mark, and the rest replays on
+  writer. A writer that list does not name is taken when it joined since this device's copy:
+  the version is under this copy's data key or names it among its former keys, which only
+  someone given that key or a later one can write, and the writer is not a recipient of the
+  version this device holds, as a device or invite this device has itself removed since would
+  be. Its signature is then checked against the verify key the version's own access list gives
+  the writer, where it gives one; a new member's first version is written by its invite, which
+  that list no longer holds, and the key alone vouches for it. So an update from a new member
+  can be opened before the update from whoever invited them. Any other file from a writer
+  the list does not name - someone removed, or an invitation already used or withdrawn - is
+  refused with *This update is from a device that is not listed in Who Has Access.* The checks under *Every edit is a version* then apply, the journal is trimmed by this device's landed mark, and the rest replays on
   top. A file that does not rank above the version held is set aside with *You already have
   a newer update*. With the server on, the next look settles it as any look does: a head that ranks below the version
   taken is pushed over (see *Every edit is a version*), and one that ranks above it is taken.
@@ -1839,7 +1846,7 @@ version*).
 | A file opened that is not an invitation | This file is not a Ward Planning invitation. |
 | A file opened that is not an update | This file is not a Ward Planning update. |
 | An update of a ward this device does not hold | This update is for a ward this device does not have. |
-| An update from a device this copy does not list | This update is from a device this copy of the ward does not list yet. Open the update from whoever added it first. |
+| An update from a device this copy does not list, which did not join since this copy | This update is from a device that is not listed in Who Has Access. |
 | An update that does not rank above the version held | You already have a newer update. |
 | An invitation opened while offline | Connect to the internet, then open the invitation again. |
 | Leave or Remove this device while offline | Connect to the internet to leave this ward. / Connect to the internet to remove this device. |
@@ -2150,8 +2157,11 @@ Update files, in `tests/services`, with no server:
   the other's 5 and replays, cleared by sending 6, and not shown again on the other device,
   whose journal still holds its entries after it sets the lower 5 aside
 - an update file that does not rank above the version held is set aside and changes
-  nothing; one whose signature does not verify, or whose writer the held access list does
-  not name, is refused
+  nothing; one whose signature does not verify is refused, and so is one whose writer the
+  held access list does not name, unless that writer joined since this copy
+- an update from a member who joined since this copy is taken by a device that never saw the
+  invite: the member's first update, written by the invite, and a later one, written by the
+  member's device, whose signature is checked against the update's own access list
 - after a removal reaches a device, an update file written by the removed device is
   refused, and the removed device cannot open the next version
 - a user invited and joined entirely through files: the invitation carries the version, the

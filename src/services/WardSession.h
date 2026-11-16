@@ -63,7 +63,7 @@ enum class TakeStatus
     Taken,                  ///< its version is now the one this device holds, with the journal replayed on it
     NotNewer,               ///< it does not rank above the version this device holds
     OtherWard,              ///< it is a version of a ward other than the open one
-    UnknownWriter,          ///< the access list this device holds names no device or invite as its writer
+    UnknownWriter,          ///< an update file only: its writer is not in the access list this device holds, and did not join since this copy
     NotNamed,               ///< it names no recipient, or others and not this device: the ward is no longer this device's
     InviteUsedOrWithdrawn,  ///< it names neither this device nor its invite while the journal still holds this device's join: the join is refused, and the ward is no longer this device's
     Newer,                  ///< a newer Ward Planning wrote it
@@ -139,6 +139,18 @@ struct InviteResult
 {
     CommitResult commit;
     QByteArray invite;  ///< the invite's fingerprint, when the commit applied
+};
+
+/// The next version a device writes, and what holding it changes.
+struct NextVersion
+{
+    QByteArray bytes;  ///< in a ward file's framing, with no device part
+    VersionRank version;
+    QByteArray dataKey;
+    QList<QByteArray> formerKeys;
+    QHash<QByteArray, qint64> landed;
+    QSet<QByteArray> recipients;
+    Identity writer;  ///< the header's writer, which signs the update file or the push
 };
 
 /// One open ward: its document, journal and undo stack, and the commit step and replay
@@ -248,22 +260,58 @@ public:
     /// device takes carries them.
     QByteArray writeUpdate();
 
-    /// Takes the version an update file carries, checked in this order: its format; that it
-    /// is a version of the open ward; that its signature verifies under the verify key the
-    /// access list this device holds gives its writer; that it ranks above the version this
-    /// device holds; that it names this device, or, for a device that joined through an
-    /// invite, that invite, which it then reads with; that the data key unseals and the payload
-    /// reads as a version whose access list the header matches; and that it descends from the
-    /// copy this device holds, by sharing a key with it: the key either is under, or one either
-    /// names among its former keys. A version that names neither ends this device's share: see
-    /// becomeNoLongerShared. A version that names the invite and not this device comes from a
-    /// member who has not taken the join, so the join runs on it again (JoinCommand::rejoin)
-    /// before anything replays, and enters the journal, so it goes out with the next update.
-    /// Taking it drops the journal entries its landed mark for this device covers, raising the
-    /// counter to that mark, replays the rest onto it as replayOnto does, and makes it the
-    /// version this device holds, under its data key, with its landed marks and its recipients.
-    /// Then it saves, and starts a run of the automatic updates for what the version lacks.
+    /// Takes the version an update file carries: the file's format, that it is a version of
+    /// the open ward, and that its signature verifies under the verify key the access list
+    /// this device holds gives its writer; then as takeVersion takes any version. A writer
+    /// that list does not name is taken when it joined since this copy: see
+    /// accessWrittenSinceThisCopy. The signature is then checked under the verify key the
+    /// version's own access list gives the writer, where it gives one; a new member's first
+    /// version is written by its invite, which that list no longer holds.
     TakeResult takeUpdate(const QByteArray& file);
+
+    /// Takes version, in a ward file's framing, checked in this order: its format; that it is
+    /// a version of the open ward; that it ranks above the version this device holds; that it
+    /// names this device, or, for a device that joined through an invite, that invite, which it
+    /// then reads with; that the data key unseals and the payload reads as a version whose
+    /// access list the header matches; and that it descends from the copy this device holds,
+    /// by sharing a key with it: the key either is under, or one either names among its former
+    /// keys. A version that names neither ends this device's share: see becomeNoLongerShared.
+    /// A version that names the invite and not this device comes from a member who has not
+    /// taken the join, so the join runs on it again (JoinCommand::rejoin) before anything
+    /// replays, and enters the journal, so it goes out with the next version. Taking it drops
+    /// the journal entries its landed mark for this device covers, raising the counter to that
+    /// mark, replays the rest onto it as replayOnto does, and makes it the version this device
+    /// holds, under its data key, with its landed marks and its recipients. Then it saves, and
+    /// starts a run of the automatic updates for what the version lacks.
+    TakeResult takeVersion(const QByteArray& version);
+
+    /// One above the version this device holds, written by writer(), holding the document,
+    /// its access list and the landed marks, with this device's set to its journal's last
+    /// sequence number and those of devices the access list no longer holds dropped. When
+    /// the access list has lost anyone the version this device holds seals to, it rotates: a
+    /// fresh data key, and the hash of the key this device holds appended to the former keys.
+    NextVersion nextVersion() const;
+
+    /// Who writes this device's next version and signs for it: the invite it joined through,
+    /// while the version it holds does not name this device, since a member who has not taken
+    /// the join lists the invite and not the device; otherwise this device.
+    Identity writer() const;
+
+    /// The server stored next, which nextVersion built from the version this device still
+    /// holds: this device now holds it, as after writeUpdate, and the journal drops the
+    /// entries it carries, since the server keeps one line of versions and this one is on it.
+    /// The ward is on the server from now on. Saves.
+    void holdPushed(const NextVersion& next);
+
+    /// True once this device has seen the server hold the ward.
+    bool isOnServer() const { return m_device.onServer; }
+
+    /// The server holds the ward: remembered, and saved when it is news.
+    void sawOnServer();
+
+    /// The ward is no longer this device's: unsent changes are dropped, the undo stacks
+    /// cleared, the copy kept read-only with the flag saved, so a device reopened still knows.
+    void becomeNoLongerShared();
 
     /// Makes an invite under a fresh seed, which this device's state keeps while the access
     /// list names the invite, and puts InviteCommand through the commit step: for user when it
@@ -321,19 +369,11 @@ signals:
     /// A save failed after the one before it succeeded; told once until a save succeeds again.
     void saveFailed(const QString& problem);
 
-private:
-    /// The next version this device writes, and what holding it changes.
-    struct NextVersion
-    {
-        QByteArray bytes;  ///< in a ward file's framing, with no device part
-        VersionRank version;
-        QByteArray dataKey;
-        QList<QByteArray> formerKeys;
-        QHash<QByteArray, qint64> landed;
-        QSet<QByteArray> recipients;
-        Identity writer;  ///< the header's writer, which signs the update file too
-    };
+    /// This device changed the ward and saved it: a command, an undo or a redo applied, or
+    /// an automatic update changed the document.
+    void localChange();
 
+private:
     CommitResult run(const Command& command);
 
     /// The replay replayOnto runs before it saves.
@@ -352,17 +392,12 @@ private:
     /// The name of each user a removal in the journal names whom access holds.
     QStringList stillHavingAccess(const AccessList& access) const;
 
-    /// One above the version this device holds, written by writer(), holding the document,
-    /// its access list and the landed marks, with this device's set to its journal's last
-    /// sequence number and those of devices the access list no longer holds dropped. When
-    /// the access list has lost anyone the version this device holds seals to, it rotates: a
-    /// fresh data key, and the hash of the key this device holds appended to the former keys.
-    NextVersion nextVersion() const;
+    /// This device now holds next: its number and writer, its data key, its former keys, its
+    /// landed marks and its recipients. Saves nothing.
+    void hold(const NextVersion& next);
 
-    /// Who writes this device's next version: the invite it joined through, while the version
-    /// it holds does not name this device, since a member who has not taken the join lists the
-    /// invite and not the device; otherwise this device.
-    Identity writer() const;
+    /// An automatic update changed the document: it is saved, and is a local change.
+    void onAutomaticUpdatesApplied();
 
     /// True while the journal holds this device's join: no version it took carries it yet.
     bool joinUnlanded() const;
@@ -371,14 +406,18 @@ private:
     /// version names that and not this device.
     WardRead readVersion(const QByteArray& version) const;
 
+    /// The access list of version, when version shows its writer, whom the access list this
+    /// device holds does not name, joined the ward since this device's copy: version is under
+    /// this copy's data key or names it among its former keys, which only someone given that
+    /// key or a later one can write, and writer is not a recipient of the version this device
+    /// holds, which a device or invite this device has itself removed since would be.
+    /// Otherwise none.
+    std::optional<AccessList> accessWrittenSinceThisCopy(const QByteArray& writer, const QByteArray& version) const;
+
     /// version, read, becomes this device's copy of document as it stands: its key, landed
     /// marks and recipients, a fresh device state whose counter starts at this device's mark
     /// in it, and empty undo stacks and failed list. Saves nothing.
     void takeFirstDownload(const DocumentId& document, const WardRead& version);
-
-    /// The ward is no longer this device's: unsent changes are dropped, the undo stacks
-    /// cleared, the copy kept read-only with the flag saved, so a device reopened still knows.
-    void becomeNoLongerShared();
 
     /// Commits, in every ward the store holds, the command build makes from that ward's access
     /// list: the open ward through this session, each other ward through a session opened on

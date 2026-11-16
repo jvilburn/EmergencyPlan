@@ -18,6 +18,7 @@ struct DeviceState
     QList<QByteArray> inviteSeeds;       ///< the seed of each open invite this device made, while the access list names it
     std::optional<QByteArray> joinSeed;  ///< the seed of the invite this device joined through, for as long as it holds the ward
     bool noLongerShared = false;         ///< a version this device took left it out, so its copy is read-only
+    bool onServer = false;               ///< this device has seen the server hold the ward
 
     QJsonObject toJson() const;
     static DeviceState fromJson(JsonReader json);

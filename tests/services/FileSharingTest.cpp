@@ -5,6 +5,7 @@
 #include "InvitationFile.h"
 #include "TestSharing.h"
 #include "TestWard.h"
+#include "UpdateFile.h"
 #include "WardFile.h"
 #include "WardFileEdits.h"
 
@@ -258,7 +259,8 @@ void FileSharingTest::sameInvitationUsedOnTwoDevices()
     QByteArray tablets = tablet.session().writeUpdate();
 
     QVERIFY(alice.session().takeUpdate(phones).status == TakeStatus::Taken);
-    // The tablet's join is written by the invite, which Alice's list no longer holds.
+    // The tablet's join is written by the invite, which Alice's list no longer holds, and it
+    // is not under the key Alice took with the phone's join, nor does it name that key.
     QVERIFY(alice.session().takeUpdate(tablets).status == TakeStatus::UnknownWriter);
     QCOMPARE(TestSharing::userNamed(alice, "Bob").devices()[0].fingerprint(), phone.identity().fingerprint());
 
@@ -269,6 +271,44 @@ void FileSharingTest::sameInvitationUsedOnTwoDevices()
     QVERIFY(tablet.session().isNoLongerShared());
     QVERIFY(phone.session().takeUpdate(alices).status == TakeStatus::Taken);
     QCOMPARE(TestSharing::bobsPhone(phone), QString("555-2222"));
+}
+
+void FileSharingTest::updateFromAMemberWhoJoinedSinceThisCopyIsTaken()
+{
+    TestClient alice("Alice");
+    TestClient carol("Carol");
+    TestClient dave("Dave");
+    TestClient bob("Bob's phone");
+    TestSharing::share({&alice, &carol, &dave}, TestSharing::accessOf({&alice}, {&carol, &dave}));
+    InviteResult made = alice.session().invite(InvitedUser{AccessRole::Member, "Bob"});
+    QByteArray invitation = alice.session().writeInvitation(made.invite);
+    bob.session().join(bob.session().readInvitation(invitation), {"Bob Brown", ""}, "Bob's phone");
+    QVERIFY(TestSharing::commitBobsPhone(bob, "555-2222") == CommitStatus::Applied);
+
+    // Carol never saw the invite. Bob's first update is written by it, so no list gives its
+    // verify key, and the key the update is under vouches for it.
+    QByteArray first = bob.session().writeUpdate();
+    QCOMPARE(writerOf(first), Base64Url::encode(made.invite));
+    QVERIFY(!carol.session().document().access().findInvite(made.invite).has_value());
+    TakeResult carols = carol.session().takeUpdate(first);
+    QVERIFY2(carols.status == TakeStatus::Taken, qPrintable(carols.problem));
+    QCOMPARE(TestSharing::bobsPhone(carol), QString("555-2222"));
+    QVERIFY(TestSharing::userNames(carol).contains("Bob Brown"));
+
+    // Dave saw neither the invite nor the join. Bob's second update is written by his device,
+    // whose verify key the update's own access list gives, so its signature is checked.
+    QVERIFY(TestSharing::commitBobsPhone(bob, "555-3333") == CommitStatus::Applied);
+    QByteArray second = bob.session().writeUpdate();
+    QCOMPARE(writerOf(second), Base64Url::encode(bob.identity().fingerprint()));
+    QByteArray signedByCarol = UpdateFile::write(alice.session().documentId(), TestSharing::versionIn(second),
+                                                 carol.identity());
+    WardPayload daveBefore = dave.session().payload();
+    QVERIFY(dave.session().takeUpdate(signedByCarol).status == TakeStatus::Unreadable);
+    QVERIFY(dave.session().payload() == daveBefore);
+    TakeResult daves = dave.session().takeUpdate(second);
+    QVERIFY2(daves.status == TakeStatus::Taken, qPrintable(daves.problem));
+    QCOMPARE(TestSharing::bobsPhone(dave), QString("555-3333"));
+    QVERIFY(TestSharing::userNames(dave).contains("Bob Brown"));
 }
 
 void FileSharingTest::withdrawnInviteRotatesAndItsInvitationJoinsNothingLater()

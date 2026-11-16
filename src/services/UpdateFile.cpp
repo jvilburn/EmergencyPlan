@@ -1,6 +1,7 @@
 #include "UpdateFile.h"
 #include "Base64Url.h"
 #include "Crypto.h"
+#include "SignedLine.h"
 
 namespace
 {
@@ -14,7 +15,7 @@ UpdateRead unreadable(const QString& problem)
 
 QByteArray UpdateFile::write(const DocumentId& document, const QByteArray& version, const Identity& writer)
 {
-    QByteArray signature = writer.sign(signedLine(document, version));
+    QByteArray signature = writer.sign(SignedLine::ofVersion(SignedCall::Update, document, version));
     return Base64Url::encode(signature).toLatin1() + '\n' + version;
 }
 
@@ -52,19 +53,11 @@ UpdateRead UpdateFile::read(const QByteArray& bytes)
 
 bool UpdateFile::verifies(const UpdateRead& update, const QByteArray& verifyKey)
 {
-    return Crypto::verify(update.signature, signedLine(update.header->document(), update.version), verifyKey);
+    QByteArray line = SignedLine::ofVersion(SignedCall::Update, update.header->document(), update.version);
+    return Crypto::verify(update.signature, line, verifyKey);
 }
 
 QString UpdateFile::fileName(const QString& wardName, const QDate& date)
 {
     return QString("%1 %2.wardupdate").arg(wardName, date.toString(Qt::ISODate));
-}
-
-QByteArray UpdateFile::signedLine(const DocumentId& document, const QByteArray& version)
-{
-    qsizetype boundary = version.indexOf('\n');
-    QByteArray headerHash = Crypto::hash(version.left(boundary), Crypto::HashBytes, QByteArray());
-    QByteArray payloadHash = Crypto::hash(version.mid(boundary + 1), Crypto::HashBytes, QByteArray());
-    return "wardplanning-v1 update " + document.toString().toLatin1() + ' ' + Base64Url::encode(headerHash).toLatin1()
-        + ' ' + Base64Url::encode(payloadHash).toLatin1();
 }

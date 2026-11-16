@@ -27,7 +27,7 @@ struct UpdateRead
 };
 
 /// A .wardupdate file: one line holding the writer's Ed25519 signature over the version's
-/// update line, one newline, then the version in a ward file's framing, with no device part.
+/// update line (SignedLine), one newline, then the version in a ward file's framing, with no device part.
 class UpdateFile
 {
 public:
@@ -44,10 +44,4 @@ public:
     /// The name an update of the ward named wardName, written on date, is saved under, such as
     /// Tanglewood Ward 2026-11-08.wardupdate.
     static QString fileName(const QString& wardName, const QDate& date);
-
-private:
-    /// The line a version of document is signed over:
-    /// wardplanning-v1 update <document> <header hash> <payload hash>, each hash BLAKE2b-256
-    /// of the bytes on its side of the version's first newline, all three in base64url.
-    static QByteArray signedLine(const DocumentId& document, const QByteArray& version);
 };

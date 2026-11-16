@@ -107,6 +107,7 @@ DeviceState everyDeviceField(const Identity& laptop, const Identity& phone)
     device.inviteSeeds = {Crypto::randomBytes(Crypto::KeyBytes)};
     device.joinSeed = Crypto::randomBytes(Crypto::KeyBytes);
     device.noLongerShared = true;
+    device.onServer = true;
     return device;
 }
 

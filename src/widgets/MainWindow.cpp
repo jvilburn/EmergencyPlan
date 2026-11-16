@@ -571,8 +571,7 @@ bool MainWindow::openUpdateFile(const QString& path)
         return true;
     case TakeStatus::UnknownWriter:
         QMessageBox::warning(this, tr("Open Update"),
-                             tr("This update is from a device this copy of the ward does not list yet. Open the "
-                                "update from whoever added it first."));
+                             tr("This update is from a device that is not listed in Who Has Access."));
         return true;
     case TakeStatus::NotNamed:
         QMessageBox::warning(this, tr("Open Update"), tr("This ward is no longer shared with this device."));

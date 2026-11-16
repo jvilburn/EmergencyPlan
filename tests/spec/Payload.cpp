@@ -798,6 +798,7 @@ void readDeviceState(Fields fields)
         throw Refusal(fields.pathOf("joinSeed") + " is not base64url of 32 bytes");
     }
     fields.optionalTrue("noLongerShared");
+    fields.optionalTrue("onServer");
     fields.done();
 }
 
