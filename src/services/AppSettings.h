@@ -16,8 +16,8 @@ class AppSettings
 public:
     explicit AppSettings(const QString& path);
 
-    /// Use the Ward Planning server: off unless the user turns it on.
-    bool useServer() const { return m_json.value("useServer").toBool(); }
+    /// Use the Ward Planning server: on unless the user turns it off.
+    bool useServer() const { return m_json.value("useServer").toBool(true); }
     void setUseServer(bool use);
 
     /// This device's name, which the first start asks for; empty until then.

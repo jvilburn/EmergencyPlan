@@ -26,7 +26,7 @@ is here*, *Every edit is a version*, *Which version wins*, *Saving*, *If the ser
 
 **What a second plan covers, and this one leaves as it is:** joining online with its lost-answer
 cases and *The server has no such ward*; Leave and *Remove this device*; the update check from
-`/releases/latest`; the server address override; and the switch being on by default. After this
+`/releases/latest`; and the server address override. The switch is on by default. After this
 plan, a join works as it does with the server off, and its version travels through the server by
 the ordinary path.
 

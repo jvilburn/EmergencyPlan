@@ -29,7 +29,7 @@ After importing, the app automatically geocodes addresses in the background (sho
 
 **File > Settings** holds settings for the whole app, on this device:
 
-- **Use the Ward Planning server** - Turn this off only if the Ward Planning server has shut down. Every member of your wards must turn it off too.
+- **Use the Ward Planning server** - On unless you turn it off: your wards share themselves through the server (see *Sharing through the server*). Turn this off only if the Ward Planning server has shut down. Every member of your wards must turn it off too.
 - **This device's name** - The name this device has in your wards, asked for at the first launch. Changing it renames this device in every ward on this device.
 - **Your name** - The name you have in the wards you create or join, asked for at the first launch. Changing it renames you in every ward on this device. A new name set on another of your devices reaches this one as the ward updates.
 - **Your email** - The email you have in the wards you create or join, so other members can send you updates, asked for at the first launch after your name. It can be empty. It changes and reaches your other devices the same way as your name.
@@ -38,7 +38,7 @@ After importing, the app automatically geocodes addresses in the background (sho
 
 ### Sharing through the server
 
-With **Use the Ward Planning server** turned on in Settings, the open ward shares itself: each change you make goes to the server as you make it, and each change another member makes arrives as they make it. Every member of the ward turns it on.
+With **Use the Ward Planning server** turned on in Settings, as it is unless you turn it off, the open ward shares itself: each change you make goes to the server as you make it, and each change another member makes arrives as they make it.
 
 - **Who else is here** - A line above the map names the other members who have the ward open now, such as *Alice Smith is also here*.
 - **Working offline. Your changes are saved here and will go up when the connection returns.** - Shown above the map while the server cannot be reached. Keep working; nothing is lost.

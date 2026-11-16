@@ -38,6 +38,7 @@ void WhoHasAccessDialogTest::memberSeesAskAnAdminInPlaceOfAddAUser()
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
     AppSettings settings(dir.filePath("settings.json"));
+    settings.setUseServer(false);
     FakeServer server;
     TestClient alice("Alice", &server);
     TestClient bob("Bob", &server);
@@ -56,6 +57,7 @@ void WhoHasAccessDialogTest::removeAndRolesAreOfferedOnlyWhereTheRulesAllow()
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
     AppSettings settings(dir.filePath("settings.json"));
+    settings.setUseServer(false);
     FakeServer server;
     TestClient alice("Alice", &server);
     TestClient carol("Carol", &server);
@@ -84,6 +86,7 @@ void WhoHasAccessDialogTest::saveInvitationIsOfferedOnlyForInvitesThisDeviceMade
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
     AppSettings settings(dir.filePath("settings.json"));
+    settings.setUseServer(false);
     FakeServer server;
     TestClient alice("Alice", &server);
     TestClient bob("Bob", &server);
@@ -107,6 +110,7 @@ void WhoHasAccessDialogTest::addAUserWithNoAnswerMakesNoInvite()
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
     AppSettings settings(dir.filePath("settings.json"));
+    settings.setUseServer(false);
     FakeServer server;
     TestClient alice("Alice", &server);
     TestClient carol("Carol", &server);
