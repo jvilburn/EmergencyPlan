@@ -412,6 +412,11 @@ QByteArray WardSession::writeInvitation(const QByteArray& invite) const
 QByteArray WardSession::invitationCarrying(const QByteArray& invite, const QByteArray& version) const
 {
     QByteArray seed = seedOf(invite);
+    if (seed.isEmpty())
+    {
+        // The invite is used or withdrawn, and its seed went with it.
+        return QByteArray();
+    }
     if (WardFile::read(version, Identity::fromInviteSeed(seed), PayloadKind::Version).status != WardReadStatus::Read)
     {
         return QByteArray();

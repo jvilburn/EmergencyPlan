@@ -108,12 +108,13 @@ private slots:
 
 private:
     /// A write on its way: the version sent, the version this device held when it was built,
-    /// and the head it went over.
+    /// the head it went over, and whether it carries a change the journal does not hold.
     struct Writing
     {
         NextVersion next;
         VersionRank base;
         VersionRank over;
+        bool unjournalledChange;
     };
 
     /// Opens the channel, signed by the session's writer.
@@ -121,6 +122,13 @@ private:
 
     /// Closes the channel and forgets who is here.
     void closeChannel();
+
+    /// Opens the channel anew when it is closed or was signed by another writer than the
+    /// session's now. Called when the server may have just come to accept one: the ward is
+    /// first seen there, a write is stored, or a version is taken. The server refuses a
+    /// channel to a ward it does not have, and closes one signed by an invite once a version
+    /// names the device in the invite's place.
+    void freshenChannel();
 
     /// Sends this device's next version over the head over: a create when over is NoHead, the
     /// server having no such ward, otherwise a push. A write the server did not store over
@@ -151,7 +159,9 @@ private:
     bool m_connected = false;
     bool m_looking = false;
     bool m_lookAsked = false;     ///< a look was asked for while one ran
-    bool m_changeUnsent = false;  ///< this device changed the ward since its last write was built
+    /// An automatic update changed the ward since the last write was built. Nothing in the
+    /// journal shows such a change, so this is what says it is still to share.
+    bool m_unjournalledChange = false;
     SyncProblem m_problem = SyncProblem::None;
     QSet<QByteArray> m_present;
     std::optional<Writing> m_writing;

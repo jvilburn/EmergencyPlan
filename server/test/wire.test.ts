@@ -19,11 +19,11 @@ function header(fields: Record<string, unknown>): string
     });
 }
 
-describe("known answers", () =>
+describe("known answers shared with the app", () =>
 {
     it("fingerprint", () =>
     {
-        // The app's IdentityTest pins the same value for the same keys.
+        // The app's IdentityTest pins the same value for the same keys, and its SignedLineTest the lines below.
         const publicKey = Uint8Array.from({ length: 32 }, (_, i) => i);
         const verifyKey = Uint8Array.from({ length: 32 }, (_, i) => 32 + i);
         expect(encode(fingerprintOf(publicKey, verifyKey))).toBe("YwoyV2kctuI1OuIvdMVNUQ");

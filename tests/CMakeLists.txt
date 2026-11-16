@@ -103,10 +103,17 @@ add_executable(WardPlanningTests
     services/FileSharingTest.cpp
     services/UserFolderTest.h
     services/UserFolderTest.cpp
+    services/SignedLineTest.h
+    services/SignedLineTest.cpp
+    server/FakeServer.h
+    server/FakeServer.cpp
+    server/ServerSyncTest.h
+    server/ServerSyncTest.cpp
 )
 
 target_include_directories(WardPlanningTests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/services
+    ${CMAKE_CURRENT_SOURCE_DIR}/server
 )
 
 target_link_libraries(WardPlanningTests PRIVATE

@@ -4,20 +4,34 @@
 #include "FakeUnitLookup.h"
 #include "FakeWardStore.h"
 #include "Identity.h"
+#include "Server.h"
 #include "WardSession.h"
+#include "WardSync.h"
 
 #include <QByteArray>
 #include <QList>
 #include <QString>
 #include <memory>
 
+class FakeServer;
+
 /// A full client for tests: one device, with its own identity, ward store, fakes and session,
-/// and nothing shared with any other client.
+/// and nothing shared with any other client but the server it is given.
 class TestClient
 {
 public:
-    /// A device named deviceName, with no ward open.
+    /// A device named deviceName, with no ward open and no server.
     explicit TestClient(const QString& deviceName);
+
+    /// A device named deviceName, with no ward open, which shares the ward it opens through
+    /// server once startSync is called.
+    TestClient(const QString& deviceName, FakeServer* server);
+
+    /// The sharing of the open ward through the server this client was given.
+    WardSync& sync() { return *m_sync; }
+
+    /// Starts sharing the open ward, and settles the server.
+    void startSync();
 
     WardSession& session() { return *m_session; }
     const Identity& identity() const { return m_identity; }
@@ -54,7 +68,7 @@ public:
                          const DocumentId& document, const QByteArray& dataKey, const Document& content);
 
     /// Closes the app and starts it again: a new session on the same identity and store,
-    /// opening the ward the old session had open.
+    /// opening the ward the old session had open, with its sharing stopped.
     OpenResult reopen();
 
 private:
@@ -64,4 +78,7 @@ private:
     FakeGeocoder m_geocoder;
     FakeUnitLookup m_unitLookup;
     std::unique_ptr<WardSession> m_session;
+    FakeServer* m_fakeServer;
+    std::unique_ptr<Server> m_server;
+    std::unique_ptr<WardSync> m_sync;  ///< declared after the session it works on
 };

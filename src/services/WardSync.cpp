@@ -41,7 +41,7 @@ void WardSync::stop()
     m_unstoredOver.reset();
     m_looking = false;
     m_lookAsked = false;
-    m_changeUnsent = false;
+    m_unjournalledChange = false;
     m_problem = SyncProblem::None;
     emit stateChanged();
     if (m_invitationWanted.has_value())
@@ -125,7 +125,11 @@ void WardSync::onHead(const ServerRead& head)
         break;
     }
 
-    m_session->sawOnServer();
+    if (!m_session->isOnServer())
+    {
+        m_session->sawOnServer();
+        freshenChannel();
+    }
     HeaderRead read = WardHeader::parse(head.bytes);
     switch (read.status)
     {
@@ -148,7 +152,7 @@ void WardSync::onHead(const ServerRead& head)
         m_call = fetch;
         return;
     }
-    if (theirs == m_session->version() && !m_changeUnsent && !m_session->hasChangesToShare())
+    if (theirs == m_session->version() && !m_unjournalledChange && !m_session->hasChangesToShare())
     {
         finish(SyncProblem::None);
         return;
@@ -177,6 +181,7 @@ void WardSync::onFetched(const ServerRead& version)
     {
     case TakeStatus::Taken:
         m_unstoredOver.reset();
+        freshenChannel();
         lookAgain();
         return;
     case TakeStatus::NotNewer:
@@ -211,8 +216,8 @@ void WardSync::write(const VersionRank& over)
         finish(SyncProblem::PushFault);
         return;
     }
-    m_changeUnsent = false;
-    m_writing = Writing{m_session->nextVersion(), m_session->version(), over};
+    m_writing = Writing{m_session->nextVersion(), m_session->version(), over, m_unjournalledChange};
+    m_unjournalledChange = false;
     const NextVersion& next = m_writing->next;
     ServerWrite* write = over == NoHead
         ? m_server->create(m_session->documentId(), next.bytes, next.writer, this)
@@ -228,7 +233,7 @@ void WardSync::onWritten(bool stored)
     m_writing.reset();
     if (!stored)
     {
-        m_changeUnsent = true;
+        m_unjournalledChange = m_unjournalledChange || writing.unjournalledChange;
         m_unstoredOver = writing.over;
         lookAgain();
         return;
@@ -242,14 +247,8 @@ void WardSync::onWritten(bool stored)
         return;
     }
     m_session->holdPushed(writing.next);
-    if (m_channel == nullptr || m_channelSigner != m_session->writer().fingerprint())
-    {
-        // The server refuses a channel to a ward it does not have yet, and closes one signed
-        // by an invite once a version names the device in the invite's place.
-        closeChannel();
-        openChannel();
-    }
-    if (m_changeUnsent || m_session->hasChangesToShare())
+    freshenChannel();
+    if (m_unjournalledChange || m_session->hasChangesToShare())
     {
         lookAgain();
         return;
@@ -324,6 +323,15 @@ void WardSync::openChannel()
     connect(m_channel, &ServerChannel::closed, this, &WardSync::onChannelClosed);
 }
 
+void WardSync::freshenChannel()
+{
+    if (m_channel == nullptr || m_channelSigner != m_session->writer().fingerprint())
+    {
+        closeChannel();
+        openChannel();
+    }
+}
+
 void WardSync::closeChannel()
 {
     if (m_channel != nullptr)
@@ -345,7 +353,12 @@ void WardSync::closeChannel()
 
 void WardSync::onLocalChange()
 {
-    m_changeUnsent = true;
+    if (!m_session->hasChangesToShare())
+    {
+        // A command leaves an entry in the journal, which says it is to share. An automatic
+        // update leaves none.
+        m_unjournalledChange = true;
+    }
     look();
 }
 

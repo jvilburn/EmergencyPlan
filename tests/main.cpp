@@ -9,6 +9,8 @@
 #include "FamilyOrderTest.h"
 #include "FieldChangeTest.h"
 #include "FileSharingTest.h"
+#include "ServerSyncTest.h"
+#include "SignedLineTest.h"
 #include "FileWardStoreTest.h"
 #include "FilterTest.h"
 #include "IdentityTest.h"
@@ -124,5 +126,9 @@ int main(int argc, char* argv[])
     failures += QTest::qExec(&treeViewStateTest, argc, argv);
     failures += QTest::qExec(&ministeringPdfParserTest, argc, argv);
     failures += QTest::qExec(&tileCacheTest, argc, argv);
+    SignedLineTest signedLineTest(nullptr);
+    ServerSyncTest serverSyncTest(nullptr);
+    failures += QTest::qExec(&signedLineTest, argc, argv);
+    failures += QTest::qExec(&serverSyncTest, argc, argv);
     return failures;
 }

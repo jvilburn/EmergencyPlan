@@ -1,13 +1,32 @@
 #include "TestClient.h"
+
+#include "FakeServer.h"
 #include "WardFile.h"
 
 TestClient::TestClient(const QString& deviceName)
+    : TestClient(deviceName, nullptr)
+{
+}
+
+TestClient::TestClient(const QString& deviceName, FakeServer* server)
     : m_deviceName(deviceName)
     , m_identity(Identity::generate())
     , m_geocoder(nullptr)
     , m_unitLookup(nullptr)
     , m_session(std::make_unique<WardSession>(&m_identity, &m_store, &m_geocoder, &m_unitLookup, nullptr))
+    , m_fakeServer(server)
 {
+    if (server != nullptr)
+    {
+        m_server = std::make_unique<Server>(server);
+        m_sync = std::make_unique<WardSync>(m_session.get(), m_server.get(), nullptr);
+    }
+}
+
+void TestClient::startSync()
+{
+    m_sync->start();
+    m_fakeServer->settle();
 }
 
 AccessDevice TestClient::device() const
@@ -60,6 +79,11 @@ void TestClient::holdWard(const QList<TestClient*>& holders, const AccessList& a
 OpenResult TestClient::reopen()
 {
     DocumentId document = m_session->documentId();
+    m_sync.reset();
     m_session = std::make_unique<WardSession>(&m_identity, &m_store, &m_geocoder, &m_unitLookup, nullptr);
+    if (m_server)
+    {
+        m_sync = std::make_unique<WardSync>(m_session.get(), m_server.get(), nullptr);
+    }
     return m_session->openWard(document);
 }
