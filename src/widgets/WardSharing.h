@@ -40,7 +40,8 @@ public:
     static void leaveWard(const AppSettings& settings, QWidget* parent);
 
     /// Writes the invitation of invite, one of invitesMadeHere, where the user chooses, then
-    /// shows the message to send with it and the file ready to drag into an email. With the
+    /// shows what to do with it and the file ready to drag into an email: for a new user, the
+    /// message to pass on to them (SendInvitationDialog). With the
     /// server in use the invitation carries the version the server holds, fetched once the
     /// invite's own version has reached it; otherwise it is written at once.
     static void saveInvitation(WardSession& session, const AppSettings& settings, WardSync& sync,

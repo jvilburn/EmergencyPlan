@@ -1463,9 +1463,11 @@ seed for `crypto_box_seed_keypair`, and subkey 2 the seed for `crypto_sign_seed_
    line of JSON holding its own `format` integer and the seed, then the version that opened
    the invite, in a ward file's framing, whose header names the ward; an app that meets a higher
    `format` shows the newer-version notice, as for a ward file (see *File format*). The app
-   saves it where the user chooses, then shows a dialog holding the short message to go with
-   it, which the user can select and copy, and the invitation as an icon with its name, to drag into an email or message, with *Drag this
-   into your email* beside it, *Show in Folder*, which opens the folder holding it with the
+   saves it where the user chooses, then shows a dialog that speaks to the inviting user -
+   *Your invitation for Bob is ready. Attach it to an email or text to Bob, with this message:* -
+   over the short message to go with it, set apart in a box since it is the invited person's to
+   read, with *Copy Message*, and the invitation as an icon with its name, to drag into an email
+   or message, with *Drag this into your email* beside it, *Show in Folder*, which opens the folder holding it with the
    file selected, and *Done*. On a phone the platform's share sheet takes the drag's place.
    The user attaches it to an email, copies it onto a stick or sends it in a text. The message:
 

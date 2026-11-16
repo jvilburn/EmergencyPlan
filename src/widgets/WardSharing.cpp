@@ -3,6 +3,7 @@
 #include "AppSettings.h"
 #include "InvitationFile.h"
 #include "SendFileDialog.h"
+#include "SendInvitationDialog.h"
 #include "UserFolder.h"
 #include "WardSession.h"
 #include "WardSync.h"
@@ -153,11 +154,15 @@ void WardSharing::saveInvitation(WardSession& session, const AppSettings& settin
                              tr("The invitation could not be saved: %1.").arg(file.errorString()));
         return;
     }
-    QString message = entry.invitedUser().has_value()
-        ? tr("%1 has invited you to %2. Install Ward Planning, then open the attached invitation.")
-              .arg(session.ownUser().name(), wardName)
-        : tr("Send this invitation to yourself and open it on your other device.");
-    SendFileDialog dialog(tr("Save Invitation"), message, path, parent);
+    if (entry.invitedUser().has_value())
+    {
+        SendInvitationDialog dialog(entry.invitedUser()->label, session.ownUser().name(), wardName, path, parent);
+        dialog.exec();
+        return;
+    }
+    SendFileDialog dialog(tr("Save Invitation"),
+                          tr("Your invitation is ready. Send it to yourself and open it on your other device."), path,
+                          parent);
     dialog.exec();
 }
 

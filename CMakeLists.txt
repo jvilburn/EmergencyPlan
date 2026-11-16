@@ -289,6 +289,7 @@ set(WIDGET_SOURCES
     src/widgets/OpenWardDialog.cpp
     src/widgets/SendFileDialog.cpp
     src/widgets/SendUpdateDialog.cpp
+    src/widgets/SendInvitationDialog.cpp
     src/widgets/SettingsDialog.cpp
     src/widgets/WardSharing.cpp
     src/widgets/WhoHasAccessDialog.cpp
@@ -335,6 +336,7 @@ set(WIDGET_HEADERS
     src/widgets/OpenWardDialog.h
     src/widgets/SendFileDialog.h
     src/widgets/SendUpdateDialog.h
+    src/widgets/SendInvitationDialog.h
     src/widgets/SettingsDialog.h
     src/widgets/WardSharing.h
     src/widgets/WhoHasAccessDialog.h

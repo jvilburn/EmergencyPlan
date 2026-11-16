@@ -83,6 +83,8 @@ add_executable(WardPlanningTests
     services/AppSettingsTest.cpp
     services/SendUpdateDialogTest.h
     services/SendUpdateDialogTest.cpp
+    services/SendInvitationDialogTest.h
+    services/SendInvitationDialogTest.cpp
     services/SettingsDialogTest.h
     services/SettingsDialogTest.cpp
     services/WhoHasAccessDialogTest.h

@@ -27,6 +27,7 @@
 #include "MinisteringPdfParserTest.h"
 #include "PersonJsonTest.h"
 #include "ReferenceCleanupTest.h"
+#include "SendInvitationDialogTest.h"
 #include "SendUpdateDialogTest.h"
 #include "SettingsDialogTest.h"
 #include "SpecReaderTest.h"
@@ -130,9 +131,11 @@ int main(int argc, char* argv[])
     failures += QTest::qExec(&treeViewStateTest, argc, argv);
     failures += QTest::qExec(&ministeringPdfParserTest, argc, argv);
     failures += QTest::qExec(&tileCacheTest, argc, argv);
+    SendInvitationDialogTest sendInvitationDialogTest(nullptr);
     SignedLineTest signedLineTest(nullptr);
     PresenceTest presenceTest(nullptr);
     ServerSyncTest serverSyncTest(nullptr);
+    failures += QTest::qExec(&sendInvitationDialogTest, argc, argv);
     failures += QTest::qExec(&signedLineTest, argc, argv);
     failures += QTest::qExec(&presenceTest, argc, argv);
     failures += QTest::qExec(&serverSyncTest, argc, argv);
