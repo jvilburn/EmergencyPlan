@@ -44,13 +44,9 @@ Source: "LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 ; Main executable
 Source: "build\bin\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 
-; Qt DLLs (release builds have no 'd' suffix)
-Source: "build\bin\Qt6Core.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "build\bin\Qt6Gui.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "build\bin\Qt6Network.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "build\bin\Qt6PrintSupport.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "build\bin\Qt6Svg.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "build\bin\Qt6Widgets.dll"; DestDir: "{app}"; Flags: ignoreversion
+; Every Qt DLL windeployqt put beside the executable. The build folder must hold a release
+; build alone: a debug build's DLLs, left from before, would be packed too.
+Source: "build\bin\Qt6*.dll"; DestDir: "{app}"; Flags: ignoreversion
 
 ; System DLLs deployed by windeployqt
 Source: "build\bin\d3dcompiler_47.dll"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
