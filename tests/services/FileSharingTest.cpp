@@ -346,7 +346,7 @@ void FileSharingTest::invitationOpenedAgainOnTheDeviceThatJoinedThroughItKeepsIt
     QVERIFY(bob.session().payload() == bobBefore);
     QCOMPARE(bob.session().journal().entries().size(), qsizetype(2));
     QVERIFY(bob.session().version() == bobVersion);
-    QCOMPARE(bobVersion.writer, made.invite);
+    QCOMPARE(bob.session().writer().fingerprint(), made.invite);
     QCOMPARE(TestSharing::bobsPhone(bob), QString("555-2222"));
 }
 

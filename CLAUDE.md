@@ -22,7 +22,9 @@ See [CODING_STYLE.md](docs/CODING_STYLE.md) for complete details:
 - **Generator**: Ninja
 - **Qt Version**: 6.12.0 (msvc2022_64)
 - **Build**: Use **Ctrl+Shift+B** in VS Code, or run `build.bat` directly
-- **Testing**: User builds and runs the app manually - do NOT attempt to build/run from Claude
+- **Building from Claude**: `cmd //c "build.bat > build_claude.log 2>&1"` from the Bash tool, then read the log and delete it
+- **Tests**: Claude builds and runs them. With `C:\Qt\6.12.0\msvc2022_64\bin` on `PATH`, run `QT_FORCE_STDERR_LOGGING=1 ./build/bin/WardPlanningTests.exe > "$TEMP/wp-apptests.log" 2>&1`; Qt Test prints to a redirected stdout only with that variable set. The exit code is the number of failed test functions, and each failure is a `FAIL!` line in the log
+- **Running the app**: the user runs the app and tests it by hand
 
 **IMPORTANT**: Do NOT run cmake builds from Git Bash or MSYS terminals. The MSVC environment is not set up in those shells, causing errors like "Cannot open include file: 'type_traits'". Use `build.bat` instead, which sets up the Visual Studio environment properly.
 

@@ -183,7 +183,11 @@ void AccessTest::removalReplayedAfterThatUserMadeAnInviteWithdrawsIt()
     InviteResult made = carol.session().invite(std::nullopt);
     QVERIFY(made.commit.status == CommitStatus::Applied);
     QByteArray invitation = carol.session().writeInvitation(made.invite);
-    QVERIFY(TestSharing::send(carol, {&alice}) == QList<TakeStatus>{TakeStatus::Taken});
+    // Alice has removed Carol, so she refuses Carol's own file; the invite reaches her in Bob's.
+    QVERIFY(TestSharing::send(carol, {&alice, &bob})
+            == (QList<TakeStatus>{TakeStatus::UnknownWriter, TakeStatus::Taken}));
+    QVERIFY(bob.session().document().access().findInvite(made.invite).has_value());
+    QVERIFY(TestSharing::send(bob, {&alice}) == QList<TakeStatus>{TakeStatus::Taken});
 
     QCOMPARE(TestSharing::userNames(alice), (QStringList{"Alice", "Bob"}));
     QVERIFY(alice.session().document().access().invites().isEmpty());
