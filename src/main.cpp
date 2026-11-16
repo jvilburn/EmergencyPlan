@@ -12,6 +12,7 @@
 #include "DocumentManager.h"
 #include "EmergencyManager.h"
 #include "FileWardStore.h"
+#include "NetworkTransport.h"
 #include "InstanceLock.h"
 #include "KeyFile.h"
 #include "MainWindow.h"
@@ -85,7 +86,8 @@ int main(int argc, char *argv[])
 
     // Initialize core services (singletons)
     FileWardStore store(appData.wardsDirectory());
-    DocumentManager documentManager(&*keys.identity, &store, nullptr);
+    NetworkTransport transport(NetworkTransport::BuiltInAddress, nullptr);
+    DocumentManager documentManager(&*keys.identity, &store, &transport, nullptr);
     EmergencyManager emergencyManager(nullptr);
 
     // Initialize tile service for map rendering
@@ -99,6 +101,7 @@ int main(int argc, char *argv[])
     {
         return 0;
     }
+    documentManager.setUseServer(settings.useServer());
     window.show();
     QObject::connect(&lock, &InstanceLock::handedOver, &window, &MainWindow::onHandedOver);
     lock.listen();

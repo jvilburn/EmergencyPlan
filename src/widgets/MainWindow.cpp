@@ -1,4 +1,6 @@
 #include "MainWindow.h"
+#include "Presence.h"
+#include "WardSync.h"
 #include "AccessRules.h"
 #include "AppSettings.h"
 #include "EmergencyBanner.h"
@@ -93,10 +95,14 @@ void MainWindow::setupUi()
 
     m_emergencyBanner = new EmergencyBanner(centralContainer);
     m_shareNotice = new ShareNotice(centralContainer);
+    m_presenceLabel = new QLabel(centralContainer);
+    m_presenceLabel->setContentsMargins(6, 2, 6, 2);
+    m_presenceLabel->hide();
     m_splitter = new QSplitter(Qt::Horizontal, centralContainer);
 
     centralLayout->addWidget(m_emergencyBanner);
     centralLayout->addWidget(m_shareNotice);
+    centralLayout->addWidget(m_presenceLabel);
     centralLayout->addWidget(m_splitter, 1);
     setCentralWidget(centralContainer);
 
@@ -238,6 +244,12 @@ void MainWindow::setupConnections()
             this, &MainWindow::onCommandNotApplied);
     connect(DocumentManager::instance(), &DocumentManager::saveFailed,
             this, &MainWindow::onSaveFailed);
+    connect(DocumentManager::instance(), &DocumentManager::versionFetched,
+            this, &MainWindow::onVersionFetched);
+    connect(&DocumentManager::instance()->sync(), &WardSync::stateChanged,
+            this, &MainWindow::updateSharing);
+    connect(&DocumentManager::instance()->sync(), &WardSync::presenceChanged,
+            this, &MainWindow::updatePresence);
     connect(qApp, &QGuiApplication::applicationStateChanged,
             this, &MainWindow::onApplicationStateChanged);
     connect(m_shareNotice, &ShareNotice::sendUpdateRequested,
@@ -408,12 +420,14 @@ void MainWindow::onSwitchWard()
 
 void MainWindow::onAddUser()
 {
-    WardSharing::addUser(DocumentManager::instance()->session(), *m_settings, this);
+    WardSharing::addUser(DocumentManager::instance()->session(), *m_settings, DocumentManager::instance()->sync(),
+                         this);
 }
 
 void MainWindow::onAddDevice()
 {
-    WardSharing::addDevice(DocumentManager::instance()->session(), *m_settings, this);
+    WardSharing::addDevice(DocumentManager::instance()->session(), *m_settings, DocumentManager::instance()->sync(),
+                           this);
 }
 
 void MainWindow::onLeaveWard()
@@ -423,7 +437,8 @@ void MainWindow::onLeaveWard()
 
 void MainWindow::onWhoHasAccess()
 {
-    WhoHasAccessDialog dialog(DocumentManager::instance()->session(), *m_settings, this);
+    WhoHasAccessDialog dialog(DocumentManager::instance()->session(), *m_settings,
+                              DocumentManager::instance()->sync(), this);
     dialog.exec();
 }
 
@@ -483,6 +498,7 @@ void MainWindow::updateSharing()
         && AccessRules::invite(session.document().access(), session.deviceFingerprint(), true).isEmpty());
     m_addDeviceAction->setEnabled(!session.isNoLongerShared());
     m_leaveWardAction->setEnabled(!session.isNoLongerShared());
+    QString stopped = serverOff ? QString() : WardSharing::whatStopsSharing(DocumentManager::instance()->sync());
     if (session.isNoLongerShared())
     {
         m_shareNotice->showNoLongerShared();
@@ -491,10 +507,30 @@ void MainWindow::updateSharing()
     {
         m_shareNotice->showChangesToShare();
     }
+    else if (!stopped.isEmpty())
+    {
+        m_shareNotice->showMessage(stopped);
+    }
     else
     {
         m_shareNotice->clearNotice();
     }
+    updatePresence();
+}
+
+void MainWindow::updatePresence()
+{
+    const WardSession& session = DocumentManager::instance()->session();
+    QStringList others = Presence::others(session.document().access(), DocumentManager::instance()->sync().present(),
+                                          session.writer().fingerprint());
+    m_presenceLabel->setText(Presence::line(others));
+    m_presenceLabel->setVisible(!others.isEmpty());
+}
+
+void MainWindow::onVersionFetched(const TakeResult& result)
+{
+    afterTake(result);
+    updateSharing();
 }
 
 bool MainWindow::openFile(const QString& path)
@@ -590,16 +626,10 @@ bool MainWindow::openUpdateFile(const QString& path)
         return true;
     }
 
-    followUserDetails();
-    switch (result.replay.status)
+    afterTake(result);
+    if (result.replay.status != ReplayStatus::Abandoned)
     {
-    case ReplayStatus::FastForwarded:
-    case ReplayStatus::Replayed:
         QMessageBox::information(this, tr("Open Update"), tr("The update has been added to %1.").arg(wardName));
-        break;
-    case ReplayStatus::Abandoned:
-        showChangesToRedo(result.replay);
-        break;
     }
     return true;
 }
@@ -648,10 +678,24 @@ bool MainWindow::openInvitationFile(const QString& path)
     DocumentManager::instance()->join(invited, yourDetails(), m_settings->deviceName());
     m_settings->setLastWard(invited.document);
     followUserDetails();
-    QMessageBox::information(this, tr("Open Invitation"),
-                             tr("You have joined %1. Send an update to every member of the ward so they see you.")
-                                 .arg(invited.wardName));
+    QString joined = m_settings->useServer()
+        ? tr("You have joined %1.")
+        : tr("You have joined %1. Send an update to every member of the ward so they see you.");
+    QMessageBox::information(this, tr("Open Invitation"), joined.arg(invited.wardName));
     return true;
+}
+
+void MainWindow::afterTake(const TakeResult& result)
+{
+    if (result.status != TakeStatus::Taken)
+    {
+        return;
+    }
+    followUserDetails();
+    if (result.replay.status == ReplayStatus::Abandoned)
+    {
+        showChangesToRedo(result.replay);
+    }
 }
 
 void MainWindow::followUserDetails()
@@ -673,6 +717,7 @@ void MainWindow::onSettings()
     }
 
     m_settings->setUseServer(dialog.useServer());
+    DocumentManager::instance()->setUseServer(dialog.useServer());
     if (dialog.deviceName() != m_settings->deviceName())
     {
         m_settings->setDeviceName(dialog.deviceName());
@@ -794,7 +839,7 @@ bool MainWindow::mayLeaveWard()
 
 bool MainWindow::unsavedChangesMayBeLost()
 {
-    if (DocumentManager::instance()->retryPendingSave())
+    if (DocumentManager::instance()->retryPending())
     {
         return true;
     }
@@ -826,7 +871,7 @@ void MainWindow::onApplicationStateChanged(Qt::ApplicationState state)
 {
     if (state == Qt::ApplicationActive)
     {
-        DocumentManager::instance()->retryPendingSave();
+        DocumentManager::instance()->retryPending();
     }
 }
 

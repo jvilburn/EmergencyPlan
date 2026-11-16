@@ -85,6 +85,13 @@ private slots:
     /// lets this device invite a user. Shows the share notice for the open ward.
     void updateSharing();
 
+    /// Says who else has the open ward open, above the map; nothing while no one else has.
+    void updatePresence();
+
+    /// A version from the server was put to the open ward: what follows a take, and the
+    /// sharing notices.
+    void onVersionFetched(const TakeResult& result);
+
     /// Shows Settings, and on OK saves what changed; a changed name or email sets it for this
     /// device or its user in every ward this device holds.
     void onSettings();
@@ -179,6 +186,11 @@ private:
     /// name or email there, and sets them for the user in this device's other wards to match.
     void followUserDetails();
 
+    /// What follows a take, from an update file or the server: when the version was taken,
+    /// Your name and Your email follow the ward's, and a replay that was abandoned hands the
+    /// user what to redo.
+    void afterTake(const TakeResult& result);
+
     /// Writes the to-redo file of an abandoned replay and tells the user where it is, with an
     /// offer to open it, and who a removal among the changes left with access.
     void showChangesToRedo(const ReplayResult& replay);
@@ -201,6 +213,7 @@ private:
     QSplitter* m_splitter;
     EmergencyBanner* m_emergencyBanner;
     ShareNotice* m_shareNotice;
+    QLabel* m_presenceLabel;
     SidebarWidget* m_sidebarTabs;
     FamilyListView* m_familyListView;
     MinisteringView* m_ministeringView;

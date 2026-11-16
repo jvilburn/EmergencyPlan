@@ -36,6 +36,18 @@ After importing, the app automatically geocodes addresses in the background (sho
 - **Map home** - Where the map opens. The app first sets it from your approximate location; **Use current view** sets it to what the map shows now.
 - **Wards folder** - The folder that holds this device's ward files; **Show** opens it. Only a ward's own devices can open its file.
 
+### Sharing through the server
+
+With **Use the Ward Planning server** turned on in Settings, the open ward shares itself: each change you make goes to the server as you make it, and each change another member makes arrives as they make it. Every member of the ward turns it on.
+
+- **Who else is here** - A line above the map names the other members who have the ward open now, such as *Alice Smith is also here*.
+- **Working offline. Your changes are saved here and will go up when the connection returns.** - Shown above the map while the server cannot be reached. Keep working; nothing is lost.
+- **Your changes could not be shared right now. They are saved here.** - The server answered but did not take your changes. The app tries again by itself.
+- **The ward on the server could not be read. Your copy is safe and you can keep working; sharing resumes when the server has a readable copy.**
+- **This ward was saved by a newer version of Ward Planning. Update to see the latest changes and share your work.** - Another member has a newer Ward Planning. Your changes stay on this device until you update.
+- **Changes that could not be applied** - When someone else changed the same thing first, your change is set aside and listed in a *To redo* file in the *Ward Planning* folder in Documents, which the app offers to open.
+- **Adding a user or a device** - **Add a user**, **Add a device** and **Save invitation** need the connection: the invitation is made from the ward as the server has it, after a moment showing *Creating the invitation...*.
+
 ### Sharing updates
 
 With **Use the Ward Planning server** turned off in Settings, the members of a ward share their changes by sending each other updates:

@@ -12,6 +12,7 @@
 #include "FakeServer.h"
 #include "FileSharingTest.h"
 #include "NetworkTransport.h"
+#include "PresenceTest.h"
 #include "ServerSyncTest.h"
 #include "SignedLineTest.h"
 #include "FileWardStoreTest.h"
@@ -130,8 +131,10 @@ int main(int argc, char* argv[])
     failures += QTest::qExec(&ministeringPdfParserTest, argc, argv);
     failures += QTest::qExec(&tileCacheTest, argc, argv);
     SignedLineTest signedLineTest(nullptr);
+    PresenceTest presenceTest(nullptr);
     ServerSyncTest serverSyncTest(nullptr);
     failures += QTest::qExec(&signedLineTest, argc, argv);
+    failures += QTest::qExec(&presenceTest, argc, argv);
     failures += QTest::qExec(&serverSyncTest, argc, argv);
 
     // The conformance suite runs on the fake server always, and on the real one when its

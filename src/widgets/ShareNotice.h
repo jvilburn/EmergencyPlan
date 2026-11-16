@@ -6,8 +6,8 @@ class QLabel;
 class QPushButton;
 
 /// The bar across the window that says what to do about sharing the open ward: that it is no
-/// longer shared with this device, with Delete this copy, or that it has changes to share,
-/// with Send Update.
+/// longer shared with this device, with Delete this copy; that it has changes to share, with
+/// Send Update; or what stops its sharing through the server, with nothing to press.
 class ShareNotice : public QFrame
 {
     Q_OBJECT
@@ -20,6 +20,9 @@ public:
 
     /// Shows that there are changes to share, offering Send Update.
     void showChangesToShare();
+
+    /// Shows message, with no button.
+    void showMessage(const QString& message);
 
     void clearNotice();
 

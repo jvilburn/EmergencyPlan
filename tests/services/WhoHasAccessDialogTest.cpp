@@ -1,4 +1,6 @@
 #include "WhoHasAccessDialogTest.h"
+
+#include "FakeServer.h"
 #include "AppSettings.h"
 #include "TestSharing.h"
 #include "WardSharing.h"
@@ -36,13 +38,14 @@ void WhoHasAccessDialogTest::memberSeesAskAnAdminInPlaceOfAddAUser()
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
     AppSettings settings(dir.filePath("settings.json"));
-    TestClient alice("Alice");
-    TestClient bob("Bob");
-    TestClient carol("Carol");
+    FakeServer server;
+    TestClient alice("Alice", &server);
+    TestClient bob("Bob", &server);
+    TestClient carol("Carol", &server);
     TestSharing::share({&alice, &carol}, TestSharing::accessOf({&alice, &bob}, {&carol}));
 
-    WhoHasAccessDialog carols(carol.session(), settings, nullptr);
-    WhoHasAccessDialog alices(alice.session(), settings, nullptr);
+    WhoHasAccessDialog carols(carol.session(), settings, carol.sync(), nullptr);
+    WhoHasAccessDialog alices(alice.session(), settings, alice.sync(), nullptr);
 
     QCOMPARE(carols.addUserNotice(), QString("To add or remove users, ask an admin: Alice, Bob"));
     QCOMPARE(alices.addUserNotice(), QString());
@@ -53,11 +56,12 @@ void WhoHasAccessDialogTest::removeAndRolesAreOfferedOnlyWhereTheRulesAllow()
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
     AppSettings settings(dir.filePath("settings.json"));
-    TestClient alice("Alice");
-    TestClient carol("Carol");
+    FakeServer server;
+    TestClient alice("Alice", &server);
+    TestClient carol("Carol", &server);
     TestSharing::share({&alice, &carol}, TestSharing::accessOf({&alice}, {&carol}));
-    WhoHasAccessDialog alices(alice.session(), settings, nullptr);
-    WhoHasAccessDialog carols(carol.session(), settings, nullptr);
+    WhoHasAccessDialog alices(alice.session(), settings, alice.sync(), nullptr);
+    WhoHasAccessDialog carols(carol.session(), settings, carol.sync(), nullptr);
 
     QVERIFY(alices.offeredActions().isEmpty());
     QVERIFY(select(alices, "Carol (member)"));
@@ -80,12 +84,13 @@ void WhoHasAccessDialogTest::saveInvitationIsOfferedOnlyForInvitesThisDeviceMade
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
     AppSettings settings(dir.filePath("settings.json"));
-    TestClient alice("Alice");
-    TestClient bob("Bob");
+    FakeServer server;
+    TestClient alice("Alice", &server);
+    TestClient bob("Bob", &server);
     TestSharing::share({&alice, &bob}, TestSharing::accessOf({&alice, &bob}, {}));
     QVERIFY(bob.session().invite(InvitedUser{AccessRole::Member, "Dan"}).commit.status == CommitStatus::Applied);
     QVERIFY(TestSharing::send(bob, {&alice}) == QList<TakeStatus>{TakeStatus::Taken});
-    WhoHasAccessDialog alices(alice.session(), settings, nullptr);
+    WhoHasAccessDialog alices(alice.session(), settings, alice.sync(), nullptr);
 
     // Made after the dialog opened: the list rebuilds and shows it.
     QVERIFY(alice.session().invite(InvitedUser{AccessRole::Member, "Eve"}).commit.status == CommitStatus::Applied);
@@ -102,10 +107,11 @@ void WhoHasAccessDialogTest::addAUserWithNoAnswerMakesNoInvite()
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
     AppSettings settings(dir.filePath("settings.json"));
-    TestClient alice("Alice");
-    TestClient carol("Carol");
+    FakeServer server;
+    TestClient alice("Alice", &server);
+    TestClient carol("Carol", &server);
     TestSharing::share({&alice, &carol}, TestSharing::accessOf({&alice}, {&carol}));
-    WhoHasAccessDialog alices(alice.session(), settings, nullptr);
+    WhoHasAccessDialog alices(alice.session(), settings, alice.sync(), nullptr);
 
     QVERIFY(WardSharing::inviteUser(alice.session(), QString(), false).isEmpty());
     QVERIFY(WardSharing::inviteUser(alice.session(), "   ", true).isEmpty());

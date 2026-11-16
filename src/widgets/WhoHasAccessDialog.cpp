@@ -24,10 +24,12 @@ constexpr int KeyRole = Qt::UserRole + 1;
 
 }  // namespace
 
-WhoHasAccessDialog::WhoHasAccessDialog(WardSession& session, const AppSettings& settings, QWidget* parent)
+WhoHasAccessDialog::WhoHasAccessDialog(WardSession& session, const AppSettings& settings, WardSync& sync,
+                                       QWidget* parent)
     : QDialog(parent)
     , m_session(session)
     , m_settings(settings)
+    , m_sync(sync)
 {
     setWindowTitle(tr("Who Has Access"));
     resize(480, 360);
@@ -209,12 +211,12 @@ void WhoHasAccessDialog::updateActions()
 
 void WhoHasAccessDialog::onAddUser()
 {
-    WardSharing::addUser(m_session, m_settings, this);
+    WardSharing::addUser(m_session, m_settings, m_sync, this);
 }
 
 void WhoHasAccessDialog::onAddDevice()
 {
-    WardSharing::addDevice(m_session, m_settings, this);
+    WardSharing::addDevice(m_session, m_settings, m_sync, this);
 }
 
 void WhoHasAccessDialog::onLeave()
@@ -232,7 +234,7 @@ void WhoHasAccessDialog::onRemoveThisDevice()
 
 void WhoHasAccessDialog::onSaveInvitation()
 {
-    WardSharing::saveInvitation(m_session, selectedRow()->data(0, KeyRole).toByteArray(), this);
+    WardSharing::saveInvitation(m_session, m_settings, m_sync, selectedRow()->data(0, KeyRole).toByteArray(), this);
 }
 
 void WhoHasAccessDialog::onRemove()

@@ -33,6 +33,7 @@ void ShareNotice::showNoLongerShared()
     m_offersDelete = true;
     m_label->setText(tr("This ward is no longer shared with this device."));
     m_button->setText(tr("Delete this copy"));
+    m_button->show();
     show();
 }
 
@@ -41,6 +42,14 @@ void ShareNotice::showChangesToShare()
     m_offersDelete = false;
     m_label->setText(tr("You have changes to share"));
     m_button->setText(tr("Send Update"));
+    m_button->show();
+    show();
+}
+
+void ShareNotice::showMessage(const QString& message)
+{
+    m_label->setText(message);
+    m_button->hide();
     show();
 }
 

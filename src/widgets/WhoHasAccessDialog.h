@@ -9,6 +9,7 @@
 #include <QString>
 
 class AppSettings;
+class WardSync;
 class QBoxLayout;
 class QLabel;
 class QPushButton;
@@ -41,7 +42,8 @@ class WhoHasAccessDialog : public QDialog
 
 public:
     /// session is the open ward's, and settings say whether the server is switched on.
-    WhoHasAccessDialog(WardSession& session, const AppSettings& settings, QWidget* parent);
+    /// session is the open ward's, and sync its sharing through the server.
+    WhoHasAccessDialog(WardSession& session, const AppSettings& settings, WardSync& sync, QWidget* parent);
 
     /// The actions offered on the selected row, in AccessAction's order; none with nothing
     /// selected, or while the ward is no longer this device's.
@@ -95,6 +97,7 @@ private:
 
     WardSession& m_session;
     const AppSettings& m_settings;
+    WardSync& m_sync;
 
     QTreeWidget* m_list;
     QMap<AccessAction, QPushButton*> m_actionButtons;

@@ -1896,19 +1896,20 @@ lock function. `tests/spec` is a third, a reader of the format built without Qt 
 the app's code, from `nlohmann-json`, `zlib` and `libsodium`, so that it shows the specification complete rather than the app agreeing
 with itself.
 
-- **The server interface** is one abstract class in the client with the calls the app
-  makes: create, head, fetch, push, open channel, and latest release. `HttpServer`
-  implements it over a transport that carries method, path, headers and body out, and
-  status, headers and body back. The app's transport is HTTP; the tests' is `FakeServer`,
-  in process, so every client test runs `HttpServer`'s wire encoding too. `FakeServer`
-  holds versions in memory and can drop a reply after storing a write, delay a notice,
-  refuse to answer, serve a chosen version (an older one, or another ward's under this
-  ward's id), and answer `404` for a ward it held.
+- **The server's calls** are one class in the client, `Server`: create, head, fetch, push
+  and open channel. It turns each into a request on a `Transport`, which carries method,
+  path, headers and body out, and status and body back. The app's transport is
+  `NetworkTransport`, over HTTPS and a WebSocket; the tests' is `FakeServer`, in process, so
+  every client test runs `Server`'s wire encoding too. `FakeServer` holds versions in memory
+  and hands over each reply and channel event only when a test asks, in either order; it can
+  drop a reply after storing a write, refuse to answer, serve a chosen version (an older
+  one, or another ward's under this ward's id), and answer `404` for a ward it held.
 - **A test client** is a full client - its own identity, app data directory, document,
   journal and undo stack - so a multi-user test is two or three of them against one
-  `FakeServer`, driven step by step with no timers. The document, journal, sync and replay
-  live in a `WardSession` class with no global state, which a test creates as many of as it
-  needs; the app holds one session for the interface.
+  `FakeServer`, driven step by step with no timers. The document, journal and replay live
+  in a `WardSession` class, and its sharing through the server in a `WardSync` beside it,
+  neither with global state, so a test creates as many of each as it needs; the app holds
+  one of each for the interface.
 - **Each registered command type has a sample.** Each type registered for `fromJson` also
   registers a sample instance with a document for each outcome the type can give: one where
   its start condition holds, and, where the type has them, one where its result already

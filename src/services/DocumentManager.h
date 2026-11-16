@@ -5,12 +5,16 @@
 #include "Document.h"
 #include "DocumentChange.h"
 #include "FileWardStore.h"
+#include "Server.h"
+#include "Transport.h"
 #include "WardList.h"
 #include "WardSession.h"
+#include "WardSync.h"
 
 /// The app's one open ward: a thin wrapper over its WardSession, which saves every change
-/// through this device's identity into the store of ward files, and the list of the wards
-/// that store holds.
+/// through this device's identity into the store of ward files, the WardSync that shares the
+/// open ward through the server while the server is in use, and the list of the wards the
+/// store holds.
 class DocumentManager : public QObject
 {
     Q_OBJECT
@@ -18,8 +22,9 @@ class DocumentManager : public QObject
     Q_PROPERTY(bool canRedo READ canRedo NOTIFY undoStackChanged)
 
 public:
-    /// identity is this device's, and store holds its ward files; it owns neither.
-    DocumentManager(const Identity* identity, FileWardStore* store, QObject* parent);
+    /// identity is this device's, store holds its ward files, and transport reaches the Ward
+    /// Planning server; it owns none of them.
+    DocumentManager(const Identity* identity, FileWardStore* store, Transport* transport, QObject* parent);
 
     /// Global accessor. Valid after construction.
     static DocumentManager* instance();
@@ -30,6 +35,13 @@ public:
 
     /// The open ward's session, for the calls this wrapper does not forward.
     WardSession& session() { return m_session; }
+
+    /// The sharing of the open ward through the server, which runs while the server is in use
+    /// and a ward is open.
+    WardSync& sync() { return m_sync; }
+
+    /// Use the Ward Planning server, or stop using it: the open ward's sharing starts or stops.
+    void setUseServer(bool use);
 
     /// Runs the command through the session's commit step. A command that conflicted or was
     /// refused emits commandNotApplied.
@@ -78,8 +90,9 @@ public:
     /// True when the store holds a file for the ward document.
     bool holdsWard(const DocumentId& document) const { return m_store->documents().contains(document); }
 
-    /// Saves again when a save is pending; true when nothing is left unsaved.
-    bool retryPendingSave() { return m_session.retryPendingSave(); }
+    /// Tries again whatever is pending: a failed save first, then, when nothing is left
+    /// unsaved, what the open ward has to share. True when nothing is left unsaved.
+    bool retryPending();
 
     /// The open ward's next version as an update file, through the session, which then holds it.
     QByteArray writeUpdate() { return m_session.writeUpdate(); }
@@ -95,6 +108,9 @@ signals:
     void undoStackChanged();
     void commandNotApplied(const CommitResult& result);
 
+    /// A version fetched from the server was put to the session, which answered result.
+    void versionFetched(const TakeResult& result);
+
     /// The session's geocoding batch: its progress, and its last request answering.
     void geocodingProgressChanged(int completed, int total);
     void geocodingFinished();
@@ -104,9 +120,15 @@ private:
     /// commandNotApplied.
     void afterCommit(const CommitResult& result);
 
+    /// Starts sharing the open ward when the server is in use and a ward is open.
+    void startSync();
+
     const Identity* m_identity;
     FileWardStore* m_store;
     WardSession m_session;
+    Server m_server;
+    WardSync m_sync;  ///< declared after the session and the server it works on
+    bool m_useServer = false;
 
     static DocumentManager* s_instance;
 };
