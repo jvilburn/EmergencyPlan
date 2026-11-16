@@ -57,7 +57,7 @@ struct ReplayResult
     QStringList stillHaveAccess;  ///< when status is Abandoned, each user an abandoned removal named whom the version holds
 };
 
-/// Whether an update file was taken.
+/// Whether a version, from an update file or the server, was taken.
 enum class TakeStatus
 {
     Taken,                  ///< its version is now the one this device holds, with the journal replayed on it
@@ -70,10 +70,10 @@ enum class TakeStatus
     Unreadable              ///< it fails another check; problem says which
 };
 
-/// How taking an update file ended. NotNamed and InviteUsedOrWithdrawn end this device's share
-/// of the ward; every status but those and Taken changes nothing. When it was taken, a replay
+/// How taking a version ended. NotNamed and InviteUsedOrWithdrawn end this device's share of
+/// the ward; every status but those and Taken changes nothing. When it was taken, a replay
 /// that is Replayed put this device's own changes on top, which the other devices lack until
-/// it sends an update.
+/// this device's next version reaches them.
 struct TakeResult
 {
     TakeStatus status;
@@ -323,10 +323,16 @@ public:
     /// can write an invitation for.
     QSet<QByteArray> invitesMadeHere() const;
 
-    /// An invitation for invite, one of invitesMadeHere: its seed and the version nextVersion
-    /// would write, which names the invite while it is open. This device does not hold that
-    /// version, so its changes stay to share until it sends an update.
+    /// An invitation for invite, one of invitesMadeHere, for a ward shared by files: its seed
+    /// and the version nextVersion would write, which names the invite while it is open. This
+    /// device does not hold that version, so its changes stay to share until it sends an update.
     QByteArray writeInvitation(const QByteArray& invite) const;
+
+    /// An invitation for invite, one of invitesMadeHere, carrying version, the ward's current
+    /// version as the server has it: its seed and that version. Empty when version does not
+    /// name the invite, as before the invite's own version has reached the server and after
+    /// the invite is used or withdrawn.
+    QByteArray invitationCarrying(const QByteArray& invite, const QByteArray& version) const;
 
     /// What file holds as an invitation, read by this device: its line, then its version read
     /// as the invite its seed gives. It is AlreadyHasAccess when this device holds the version's
@@ -369,8 +375,8 @@ signals:
     /// A save failed after the one before it succeeded; told once until a save succeeds again.
     void saveFailed(const QString& problem);
 
-    /// This device changed the ward and saved it: a command, an undo or a redo applied, or
-    /// an automatic update changed the document.
+    /// This device changed the ward: a command, an undo or a redo applied, or an automatic
+    /// update changed the document. The save that follows each may have failed.
     void localChange();
 
 private:
@@ -405,6 +411,9 @@ private:
     /// version read as this device, or as the invite this device joined through when the
     /// version names that and not this device.
     WardRead readVersion(const QByteArray& version) const;
+
+    /// The seed of invite, one of invitesMadeHere.
+    QByteArray seedOf(const QByteArray& invite) const;
 
     /// The access list of version, when version shows its writer, whom the access list this
     /// device holds does not name, joined the ward since this device's copy: version is under

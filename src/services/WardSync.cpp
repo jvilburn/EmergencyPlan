@@ -1,5 +1,11 @@
 #include "WardSync.h"
 
+namespace
+{
+/// The head of a ward the server does not have: no version.
+const VersionRank NoHead;
+}  // namespace
+
 WardSync::WardSync(WardSession* session, Server* server, QObject* parent)
     : QObject(parent)
     , m_session(session)
@@ -28,25 +34,22 @@ void WardSync::stop()
     m_retryTimer.stop();
     delete m_call;
     m_call = nullptr;
-    if (m_channel != nullptr)
-    {
-        // A message on the channel can be what leads here, so the channel is closed now and
-        // deleted once its signal has returned.
-        m_channel->close();
-        m_channel->disconnect(this);
-        m_channel->deleteLater();
-        m_channel = nullptr;
-    }
+    delete m_invitationCall;
+    m_invitationCall = nullptr;
+    closeChannel();
     m_writing.reset();
     m_unstoredOver.reset();
     m_looking = false;
     m_lookAsked = false;
     m_changeUnsent = false;
     m_problem = SyncProblem::None;
-    m_present.clear();
-    emit presenceChanged();
-    setConnected(false);
     emit stateChanged();
+    if (m_invitationWanted.has_value())
+    {
+        QByteArray invite = *m_invitationWanted;
+        m_invitationWanted.reset();
+        emit invitationFetched(invite, QByteArray());
+    }
 }
 
 void WardSync::retry()
@@ -86,15 +89,19 @@ void WardSync::look()
         m_lookAsked = true;
         return;
     }
-    if (!m_session->retryPendingSave())
-    {
-        emit stateChanged();
-        return;
-    }
     m_looking = true;
     ServerReading* head = m_server->head(m_session->documentId(), this);
     connect(head, &ServerReading::answered, this, &WardSync::onHead);
     m_call = head;
+}
+
+void WardSync::fetchInvitation(const QByteArray& invite)
+{
+    m_invitationWanted = invite;
+    if (!m_looking)
+    {
+        startInvitationFetch();
+    }
 }
 
 void WardSync::onHead(const ServerRead& head)
@@ -109,10 +116,10 @@ void WardSync::onHead(const ServerRead& head)
         if (m_session->isOnServer())
         {
             m_session->becomeNoLongerShared();
-            finish(SyncProblem::None);
+            stop();
             return;
         }
-        write(true, VersionRank());
+        write(NoHead);
         return;
     case ServerReadStatus::Found:
         break;
@@ -146,7 +153,7 @@ void WardSync::onHead(const ServerRead& head)
         finish(SyncProblem::None);
         return;
     }
-    write(false, theirs);
+    write(theirs);
 }
 
 void WardSync::onFetched(const ServerRead& version)
@@ -173,9 +180,11 @@ void WardSync::onFetched(const ServerRead& version)
         lookAgain();
         return;
     case TakeStatus::NotNewer:
+        finish(SyncProblem::None);
+        return;
     case TakeStatus::NotNamed:
     case TakeStatus::InviteUsedOrWithdrawn:
-        finish(SyncProblem::None);
+        stop();
         return;
     case TakeStatus::Newer:
         finish(SyncProblem::NewerFormat);
@@ -189,8 +198,13 @@ void WardSync::onFetched(const ServerRead& version)
     }
 }
 
-void WardSync::write(bool create, const VersionRank& over)
+void WardSync::write(const VersionRank& over)
 {
+    if (!m_session->retryPendingSave())
+    {
+        finish(SyncProblem::None);
+        return;
+    }
     if (m_unstoredOver.has_value() && *m_unstoredOver == over)
     {
         m_unstoredOver.reset();
@@ -200,7 +214,7 @@ void WardSync::write(bool create, const VersionRank& over)
     m_changeUnsent = false;
     m_writing = Writing{m_session->nextVersion(), m_session->version(), over};
     const NextVersion& next = m_writing->next;
-    ServerWrite* write = create
+    ServerWrite* write = over == NoHead
         ? m_server->create(m_session->documentId(), next.bytes, next.writer, this)
         : m_server->push(m_session->documentId(), next.bytes, next.writer, this);
     connect(write, &ServerWrite::answered, this, &WardSync::onWritten);
@@ -228,6 +242,13 @@ void WardSync::onWritten(bool stored)
         return;
     }
     m_session->holdPushed(writing.next);
+    if (m_channel == nullptr || m_channelSigner != m_session->writer().fingerprint())
+    {
+        // The server refuses a channel to a ward it does not have yet, and closes one signed
+        // by an invite once a version names the device in the invite's place.
+        closeChannel();
+        openChannel();
+    }
     if (m_changeUnsent || m_session->hasChangesToShare())
     {
         lookAgain();
@@ -240,11 +261,22 @@ void WardSync::finish(SyncProblem problem)
 {
     m_looking = false;
     m_problem = problem;
+    if (problem == SyncProblem::Unreachable)
+    {
+        // Nothing says whether the server stored the last write, so the next look sends again
+        // over a head that has not moved.
+        m_unstoredOver.reset();
+    }
     emit stateChanged();
     if (m_lookAsked)
     {
         m_lookAsked = false;
         look();
+        return;
+    }
+    if (m_invitationWanted.has_value())
+    {
+        startInvitationFetch();
     }
 }
 
@@ -255,11 +287,60 @@ void WardSync::lookAgain()
     look();
 }
 
+void WardSync::startInvitationFetch()
+{
+    if (!m_running || m_problem != SyncProblem::None || m_session->savePending())
+    {
+        QByteArray invite = *m_invitationWanted;
+        m_invitationWanted.reset();
+        emit invitationFetched(invite, QByteArray());
+        return;
+    }
+    delete m_invitationCall;
+    ServerReading* fetch = m_server->fetch(m_session->documentId(), this);
+    connect(fetch, &ServerReading::answered, this, &WardSync::onInvitationVersionFetched);
+    m_invitationCall = fetch;
+}
+
+void WardSync::onInvitationVersionFetched(const ServerRead& version)
+{
+    m_invitationCall = nullptr;
+    QByteArray invite = *m_invitationWanted;
+    m_invitationWanted.reset();
+    QByteArray invitation;
+    if (version.status == ServerReadStatus::Found)
+    {
+        invitation = m_session->invitationCarrying(invite, version.bytes);
+    }
+    emit invitationFetched(invite, invitation);
+}
+
 void WardSync::openChannel()
 {
-    m_channel = m_server->openChannel(m_session->documentId(), m_session->writer(), this);
+    Identity signer = m_session->writer();
+    m_channelSigner = signer.fingerprint();
+    m_channel = m_server->openChannel(m_session->documentId(), signer, this);
     connect(m_channel, &ServerChannel::told, this, &WardSync::onTold);
     connect(m_channel, &ServerChannel::closed, this, &WardSync::onChannelClosed);
+}
+
+void WardSync::closeChannel()
+{
+    if (m_channel != nullptr)
+    {
+        // A message on the channel can be what leads here, so the channel is closed now and
+        // deleted once its signal has returned.
+        m_channel->close();
+        m_channel->disconnect(this);
+        m_channel->deleteLater();
+        m_channel = nullptr;
+    }
+    if (!m_present.isEmpty())
+    {
+        m_present.clear();
+        emit presenceChanged();
+    }
+    setConnected(false);
 }
 
 void WardSync::onLocalChange()
@@ -284,11 +365,7 @@ void WardSync::onTold(const QSet<QByteArray>& present, qint64 version)
 
 void WardSync::onChannelClosed()
 {
-    m_channel->deleteLater();
-    m_channel = nullptr;
-    m_present.clear();
-    emit presenceChanged();
-    setConnected(false);
+    closeChannel();
     look();
 }
 

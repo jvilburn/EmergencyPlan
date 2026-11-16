@@ -406,15 +406,29 @@ QSet<QByteArray> WardSession::invitesMadeHere() const
 
 QByteArray WardSession::writeInvitation(const QByteArray& invite) const
 {
-    QByteArray seed;
-    for (const QByteArray& candidate : m_device.inviteSeeds)
+    return InvitationFile::write(seedOf(invite), nextVersion().bytes);
+}
+
+QByteArray WardSession::invitationCarrying(const QByteArray& invite, const QByteArray& version) const
+{
+    QByteArray seed = seedOf(invite);
+    if (WardFile::read(version, Identity::fromInviteSeed(seed), PayloadKind::Version).status != WardReadStatus::Read)
     {
-        if (Identity::fromInviteSeed(candidate).fingerprint() == invite)
+        return QByteArray();
+    }
+    return InvitationFile::write(seed, version);
+}
+
+QByteArray WardSession::seedOf(const QByteArray& invite) const
+{
+    for (const QByteArray& seed : m_device.inviteSeeds)
+    {
+        if (Identity::fromInviteSeed(seed).fingerprint() == invite)
         {
-            seed = candidate;
+            return seed;
         }
     }
-    return InvitationFile::write(seed, nextVersion().bytes);
+    return QByteArray();
 }
 
 InvitedWard WardSession::readInvitation(const QByteArray& file) const

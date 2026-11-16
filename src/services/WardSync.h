@@ -32,7 +32,9 @@ enum class SyncProblem
 /// head says what happened: a newer head is taken and replayed onto, and a head that has not
 /// moved is a fault, left for the next retry. One look runs at a time, with one call to the
 /// server on its way; asking for a look while one runs makes it look once more when it ends.
-/// A save that is pending is tried first, and nothing is pushed while it fails.
+/// A write is built only from what is saved: a save that is pending is tried first, and while
+/// it fails nothing is written. A look that finds the ward is no longer this device's stops
+/// the sharing.
 ///
 /// It holds the ward's live channel while it runs. Each message says who is here and the
 /// server's version number, and a number above this device's asks for a look. A channel that
@@ -49,8 +51,8 @@ public:
     /// longer this device's is not started.
     void start();
 
-    /// Stops: the channel closes, and the call on its way is dropped with its answer. Before
-    /// the session opens another ward, and when the server is turned off.
+    /// Stops: the channel closes, and the calls on their way are dropped with their answers.
+    /// Before the session opens another ward, and when the server is turned off.
     void stop();
 
     /// Opens the channel when it is closed, and looks, which tries again whatever is pending.
@@ -58,6 +60,12 @@ public:
 
     /// Looks, as the class comment describes. Does nothing while stopped.
     void look();
+
+    /// Asks for an invitation for invite, one of the session's invitesMadeHere, that carries
+    /// the ward's version as the server has it, so whoever joins through it starts from a
+    /// version the server holds. The look under way, with the pushes it makes, ends first.
+    /// invitationFetched answers.
+    void fetchInvitation(const QByteArray& invite);
 
     bool isRunning() const { return m_running; }
 
@@ -70,8 +78,9 @@ public:
     /// save pending, and the ward still this device's.
     bool isSyncing() const;
 
-    /// The fingerprint of every device with the ward open, this device among them, as the
-    /// channel last said; empty while it is closed.
+    /// The fingerprint of every device with the ward open, as the channel last said; empty
+    /// while it is closed. This device is among them under the fingerprint it signs with, the
+    /// session's writer(), which is its invite's until a version it holds names the device.
     const QSet<QByteArray>& present() const { return m_present; }
 
 signals:
@@ -83,18 +92,23 @@ signals:
     /// A version fetched from the server was put to the session, which answered result.
     void versionFetched(const TakeResult& result);
 
+    /// The answer to fetchInvitation: the invitation's bytes, or none when the server did not
+    /// answer, sharing stopped, or its version does not name the invite.
+    void invitationFetched(const QByteArray& invite, const QByteArray& invitation);
+
 private slots:
     void onLocalChange();
     void onHead(const ServerRead& head);
     void onFetched(const ServerRead& version);
     void onWritten(bool stored);
+    void onInvitationVersionFetched(const ServerRead& version);
     void onTold(const QSet<QByteArray>& present, qint64 version);
     void onChannelClosed();
     void onRetryTimer();
 
 private:
     /// A write on its way: the version sent, the version this device held when it was built,
-    /// and the head it went over, which is no version when the server had none.
+    /// and the head it went over.
     struct Writing
     {
         NextVersion next;
@@ -102,25 +116,36 @@ private:
         VersionRank over;
     };
 
+    /// Opens the channel, signed by the session's writer.
     void openChannel();
 
-    /// Sends this device's next version over the head over: a create when the server has no
-    /// such ward, otherwise a push. A write the server did not store over this same head is
-    /// not sent again; that is the fault.
-    void write(bool create, const VersionRank& over);
+    /// Closes the channel and forgets who is here.
+    void closeChannel();
 
-    /// Ends the look with problem, and looks once more when one was asked for meanwhile.
+    /// Sends this device's next version over the head over: a create when over is NoHead, the
+    /// server having no such ward, otherwise a push. A write the server did not store over
+    /// this same head is not sent again; that is the fault.
+    void write(const VersionRank& over);
+
+    /// Ends the look with problem. Then looks once more when one was asked for meanwhile, and
+    /// otherwise fetches the invitation that was asked for.
     void finish(SyncProblem problem);
 
     /// Ends the look and starts another at once.
     void lookAgain();
+
+    /// Fetches the server's version for the invitation asked for, or answers none when
+    /// something stops the sharing.
+    void startInvitationFetch();
 
     void setConnected(bool connected);
 
     WardSession* m_session;
     Server* m_server;
     ServerChannel* m_channel = nullptr;
+    QByteArray m_channelSigner;   ///< the fingerprint the channel was opened under
     QObject* m_call = nullptr;    ///< the look's call on its way, which deletes itself once answered
+    QObject* m_invitationCall = nullptr;  ///< the invitation's fetch on its way
     QTimer m_retryTimer;
     bool m_running = false;
     bool m_connected = false;
@@ -133,6 +158,9 @@ private:
 
     /// The head a write went over that the server did not store.
     std::optional<VersionRank> m_unstoredOver;
+
+    /// The invite an invitation was asked for and not yet answered.
+    std::optional<QByteArray> m_invitationWanted;
 
     static constexpr int RetryMilliseconds = 30000;
 };
