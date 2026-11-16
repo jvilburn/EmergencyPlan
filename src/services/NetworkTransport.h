@@ -27,9 +27,9 @@ private:
     QNetworkReply* m_reply;
 };
 
-/// A WebSocket to the server. It pings every 30 seconds once connected, and a pong that has
-/// not arrived when the next ping is due closes it, as a connection that died silently would
-/// otherwise look open.
+/// A WebSocket to the server. It pings every 30 seconds, and a pong that has not arrived when
+/// the next ping is due closes it, as a connection that died silently would otherwise look
+/// open. An open that has not connected when the first ping is due is closed the same way.
 class NetworkChannel : public TransportChannel
 {
     Q_OBJECT
@@ -50,9 +50,9 @@ private slots:
     void onGone();
 
 private:
+    QTimer m_pingTimer;   ///< declared before the socket, whose destruction can still report a close
     QWebSocket m_socket;
-    QTimer m_pingTimer;
-    bool m_awaitingPong = false;
+    bool m_awaitingPong = false;  ///< a ping, or the open itself, has not been answered yet
     bool m_gone = false;  ///< closed has been emitted, or this side closed the socket
 
     static constexpr int PingMilliseconds = 30000;

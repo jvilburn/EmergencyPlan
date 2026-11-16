@@ -10,10 +10,21 @@ NetworkCall::NetworkCall(QNetworkReply* reply, QObject* parent)
 
 void NetworkCall::onFinished()
 {
-    // A reply with no HTTP status, as from a connection that failed or timed out, reads as 0,
-    // which is NoAnswer.
-    int status = m_reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-    emit answered(TransportReply{status, m_reply->readAll()});
+    // Qt numbers the errors of the network and of a proxy below those an HTTP status gives.
+    // After one of them the reply may hold a status and part of a body, from before the
+    // connection failed or timed out, which is no answer.
+    QNetworkReply::NetworkError error = m_reply->error();
+    bool connectionFailed = error != QNetworkReply::NoError && error <= QNetworkReply::UnknownProxyError;
+    if (connectionFailed)
+    {
+        emit answered(TransportReply{TransportReply::NoAnswer, QByteArray()});
+    }
+    else
+    {
+        // A reply with no HTTP status reads as 0, which is NoAnswer.
+        int status = m_reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        emit answered(TransportReply{status, m_reply->readAll()});
+    }
     deleteLater();
 }
 
@@ -28,6 +39,10 @@ NetworkChannel::NetworkChannel(const QNetworkRequest& request, QObject* parent)
     connect(&m_socket, &QWebSocket::disconnected, this, &NetworkChannel::onGone);
     connect(&m_socket, &QWebSocket::errorOccurred, this, &NetworkChannel::onGone);
     m_socket.open(request);
+    // The open is awaited as a pong is, so one that has not connected when the first ping is
+    // due is given up.
+    m_awaitingPong = true;
+    m_pingTimer.start();
 }
 
 void NetworkChannel::close()
@@ -39,7 +54,7 @@ void NetworkChannel::close()
 
 void NetworkChannel::onConnected()
 {
-    m_pingTimer.start();
+    m_awaitingPong = false;
 }
 
 void NetworkChannel::onTextMessageReceived(const QString& message)
