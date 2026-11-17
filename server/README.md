@@ -7,8 +7,8 @@ fingerprints only.
 
 ## Layout
 
-- `src/index.ts`: the Worker. Limits each address, serves `/releases/latest` and `/download`, and
-  hands each `/documents` call to the ward's object.
+- `src/index.ts`: the Worker. Limits each address, serves `/releases/latest`, `/download`, `/join`
+  and `/installer/{platform}`, and hands each `/documents` call to the ward's object.
 - `src/ward.ts`: the `Ward` Durable Object, one per ward: the current version, replaced only by a
   higher-numbered one, and the live channels.
 - `src/wire.ts`: base64url, the header, a version's framing, the signer, the signed lines, the
@@ -85,6 +85,12 @@ A channel open (`GET /documents/{id}/channel`):
 - `403`: the signature does not verify, or the current header does not name the signer.
 - `101`: opened.
 
+The join page and the installer:
+
+- `GET /join`: `200`, the same page for every invitation.
+- `GET /installer/{platform}`: `404` for a platform `releases.json` does not list, `502` when the
+  release's file cannot be had, `200` with the file. It counts against the address's read limit.
+
 ## Where the data is
 
 Each ward is one `Ward` object, named by its document id (`idFromName`), in the Worker's `WARD`
@@ -104,6 +110,11 @@ Add or edit the platform's entry in `src/releases.json`, then `npm run deploy`:
 
 `/releases/latest` serves the file as it is, and `/download` links each entry by its `name`. With
 no entries the page says no installer is available.
+
+The `windows` entry is also the installer the join page hands to people opening an invitation
+link. It has to be a release whose installer reads the invitation from its file name, which
+2.0.0-beta.2 is the first to do, and the page promises what that release does. So a release
+and its `releases.json` entry are deployed together.
 
 ## The conformance suite
 

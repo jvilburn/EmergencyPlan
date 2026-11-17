@@ -1,9 +1,9 @@
 import { exports } from "cloudflare:workers";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { downloadPage } from "../src/download";
-import { joinPage } from "../src/join";
+import { InvitationPattern, joinPage } from "../src/join";
 import releases from "../src/releases.json";
-import { channelLine, readVersion, writeLine } from "../src/wire";
+import { IdBytes, KeyBytes, channelLine, encode, readVersion, writeLine } from "../src/wire";
 import { Channel, Device, framed, newDevice, newDocument, random, signed, version } from "./clients";
 
 const origin = "https://ward.test";
@@ -147,9 +147,27 @@ describe("joining through a link", () =>
 
         // The page reads the invitation from the part of the link the browser keeps to itself.
         expect(page).toContain("location.hash");
+        expect(page).toContain(`new RegExp(${JSON.stringify(InvitationPattern)})`);
         expect(page).toContain('"WardPlanning-Setup-" + invitation + ".exe"');
         expect(page).toContain('href="/installer/windows"');
         expect(page).toContain("Run anyway");
+        expect(page).toContain("Open this link on your Windows computer");
+        expect(page).toContain('<p id="incomplete" hidden>This invitation link is not complete.');
+    });
+
+    it("reads as an invitation exactly a ward's id, a dot and a seed, as the app writes them", () =>
+    {
+        const pattern = new RegExp(InvitationPattern);
+        const invitation = `${encode(random(IdBytes))}.${encode(random(KeyBytes))}`;
+        expect(invitation.length).toBe(66);
+        expect(pattern.test(invitation)).toBe(true);
+
+        expect(pattern.test(invitation.slice(0, 65))).toBe(false);
+        expect(pattern.test(invitation.slice(1))).toBe(false);
+        expect(pattern.test(invitation + "A")).toBe(false);
+        expect(pattern.test(invitation.replace(".", "_"))).toBe(false);
+        expect(pattern.test(invitation.replace(/.$/, "+"))).toBe(false);
+        expect(pattern.test("")).toBe(false);
     });
 
     it("offers no download while there is no Windows release", async () =>
@@ -178,7 +196,13 @@ describe("joining through a link", () =>
     it("answers 404 for a platform with no release, and 502 when the release's file cannot be had", async () =>
     {
         expect((await fromAddress("192.0.2.22", "/installer/amiga", {})).status).toBe(404);
-        vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(null, { status: 404 }));
+        expect((await fromAddress("192.0.2.22", "/installer/constructor", {})).status).toBe(404);
+        const upstream = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(null, { status: 404 }));
+        expect((await fromAddress("192.0.2.22", "/installer/windows", {})).status).toBe(502);
+        upstream.mockImplementation(async () =>
+        {
+            throw new Error("the connection was reset");
+        });
         expect((await fromAddress("192.0.2.22", "/installer/windows", {})).status).toBe(502);
     });
 });

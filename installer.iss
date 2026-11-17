@@ -137,7 +137,7 @@ begin
   Installed := InstalledSameVersion();
   if (InvitationCode() <> '') and (Installed <> '') then
   begin
-    Exec(Installed, '--join ' + InvitationCode(), '', SW_SHOWNORMAL, ewNoWait, ResultCode);
+    ExecAsOriginalUser(Installed, '--join ' + InvitationCode(), '', SW_SHOWNORMAL, ewNoWait, ResultCode);
     Result := False;
   end;
 end;

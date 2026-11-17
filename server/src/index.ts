@@ -32,8 +32,8 @@ export default {
                 return joinPage(releases);
             case "installer":
             {
-                const release = (releases as Record<string, Release>)[route.platform];
-                return release === undefined ? status(404) : installer(release);
+                const platforms: Record<string, Release> = releases;
+                return Object.hasOwn(platforms, route.platform) ? installer(platforms[route.platform]) : status(404);
             }
             case "create":
             {

@@ -1,4 +1,4 @@
-// Included in the installer's [Code] section, and in the probe that tests it.
+// Included in the installer's [Code] section.
 
 function IsCodeCharacter(C: Char): Boolean;
 begin
@@ -6,33 +6,36 @@ begin
     or (C = '-') or (C = '_');
 end;
 
+// True when the 66 characters of Name from Start are an invitation code: a document id of 22
+// characters, a dot and a seed of 43, all base64url.
+function IsCodeAt(Name: String; Start: Integer): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  if Name[Start + 22] <> '.' then
+    Exit;
+  for I := 0 to 65 do
+    if (I <> 22) and not IsCodeCharacter(Name[Start + I]) then
+      Exit;
+  Result := True;
+end;
+
 // The invitation code in the installer's own file name, as the server's join page names the
-// download: WardPlanning-Setup-<document>.<seed>.exe, a document id of 22 characters, a dot
-// and a seed of 43, all base64url. A browser may have added " (1)" before the extension.
-// Empty when the name carries none.
+// download: WardPlanning-Setup-<document>.<seed>.exe. It is found wherever it sits in the
+// name, so what a browser adds for a second download of one name, such as " (1)" or "(1)",
+// is passed over. Empty when the name carries none.
 function InvitationCode(): String;
 var
   Name: String;
-  I, P: Integer;
+  Start: Integer;
 begin
   Result := '';
   Name := ExtractFileName(ExpandConstant('{srcexe}'));
-  Name := Copy(Name, 1, Length(Name) - Length(ExtractFileExt(Name)));
-  if (Length(Name) > 4) and (Name[Length(Name)] = ')') then
-  begin
-    P := Length(Name) - 1;
-    while (P > 1) and (Name[P] >= '0') and (Name[P] <= '9') do
-      P := P - 1;
-    if (P > 2) and (Name[P] = '(') and (Name[P - 1] = ' ') then
-      Name := Copy(Name, 1, P - 2);
-  end;
-  if Length(Name) < 66 then
-    Exit;
-  Name := Copy(Name, Length(Name) - 65, 66);
-  if Name[23] <> '.' then
-    Exit;
-  for I := 1 to 66 do
-    if (I <> 23) and not IsCodeCharacter(Name[I]) then
+  for Start := Length(Name) - 65 downto 1 do
+    if IsCodeAt(Name, Start) then
+    begin
+      Result := Copy(Name, Start, 66);
       Exit;
-  Result := Name;
+    end;
 end;

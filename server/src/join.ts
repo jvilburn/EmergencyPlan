@@ -1,16 +1,26 @@
 import { Release } from "./download";
 
 /**
+ * What an invitation looks like after the # of its link: a ward's document id of 22 characters,
+ * a dot and the invite's seed of 43, all base64url. The app writes it (InvitationLink::code) and
+ * the installer finds it in its own file name (packaging/windows/invitation.iss).
+ */
+export const InvitationPattern = "^[A-Za-z0-9_-]{22}\\.[A-Za-z0-9_-]{43}$";
+
+/**
  * The page an invitation link opens. The invitation is the part of the link after the #, which
  * a browser keeps to itself, so this page is the same for every invitation and the server never
  * sees one. Its script reads the invitation in the browser and names the installer's download
- * after it, and the installer hands the invitation on to the app from its own file name.
+ * after it, and the installer hands the invitation on to the app from its own file name. A link
+ * whose invitation does not read, as one cut short in an email, is told so in place of a
+ * download that would join nothing.
  */
 export function joinPage(releases: Record<string, Release>): Response
 {
     const offer = releases.windows === undefined
         ? "<p>No installer is available yet.</p>"
-        : `<p><a id="download" href="/installer/windows" download="WardPlanning-Setup.exe">Download Ward Planning for Windows</a></p>
+        : `<p>Ward Planning runs on Windows. Open this link on your Windows computer.</p>
+<p><a id="download" href="/installer/windows" download="WardPlanning-Setup.exe">Download Ward Planning for Windows</a></p>
 <ol>
 <li>Click the download, then open the file once it has downloaded.</li>
 <li>If Windows says "Windows protected your PC", click <b>More info</b>, then <b>Run anyway</b>.</li>
@@ -27,20 +37,27 @@ export function joinPage(releases: Record<string, Release>): Response
 <body>
 <h1>Ward Planning</h1>
 <p id="invited" hidden>You have been invited to share a ward in Ward Planning.</p>
+<p id="incomplete" hidden>This invitation link is not complete. Ask the sender to send it again.</p>
+<div id="offer">
 ${offer}
+</div>
 <script>
-// The invitation: a ward's id of 22 characters, a dot and a key of 43, as the link carries it.
 const invitation = location.hash.slice(1);
 const download = document.getElementById("download");
-if (/^[A-Za-z0-9_-]{22}\\.[A-Za-z0-9_-]{43}$/.test(invitation))
+if (new RegExp(${JSON.stringify(InvitationPattern)}).test(invitation))
 {
     document.getElementById("invited").hidden = false;
     if (download !== null)
     {
         download.download = "WardPlanning-Setup-" + invitation + ".exe";
         document.getElementById("last").textContent =
-            "Ward Planning installs, opens, and asks whether to join the ward. Click OK.";
+            "Ward Planning installs and opens. It asks your name, then asks whether to join the ward.";
     }
+}
+else if (invitation !== "")
+{
+    document.getElementById("incomplete").hidden = false;
+    document.getElementById("offer").hidden = true;
 }
 </script>
 </body>
@@ -52,11 +69,19 @@ if (/^[A-Za-z0-9_-]{22}\\.[A-Za-z0-9_-]{43}$/.test(invitation))
 /**
  * The installer of a platform's current release, passed through from where the release keeps
  * it, so a page of this server can name the download. It sends no file name of its own, which
- * would take the place of the one the page gives.
+ * would take the place of the one the page gives. 502 when the release's file cannot be had.
  */
 export async function installer(release: Release): Promise<Response>
 {
-    const upstream = await fetch(release.url);
+    let upstream: Response;
+    try
+    {
+        upstream = await fetch(release.url);
+    }
+    catch
+    {
+        return new Response(null, { status: 502 });
+    }
     if (!upstream.ok)
     {
         return new Response(null, { status: 502 });
