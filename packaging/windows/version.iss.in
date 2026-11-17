@@ -1,1 +1,1 @@
-#define MyAppVersion "@PROJECT_VERSION@"
+#define MyAppVersion "@WARD_PLANNING_VERSION_TEXT@"

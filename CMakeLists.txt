@@ -6,6 +6,16 @@ project(WardPlanning
     LANGUAGES CXX
 )
 
+# The version as people see it: the project's version, and for a release ahead of it, such as a
+# beta, that release's label. Each release has its own, which is how the installer tells one
+# from another.
+set(WARD_PLANNING_RELEASE_LABEL "beta.2")
+if(WARD_PLANNING_RELEASE_LABEL)
+    set(WARD_PLANNING_VERSION_TEXT "${PROJECT_VERSION}-${WARD_PLANNING_RELEASE_LABEL}")
+else()
+    set(WARD_PLANNING_VERSION_TEXT "${PROJECT_VERSION}")
+endif()
+
 # ============================================================================
 # C++ Standard Configuration
 # ============================================================================
@@ -204,6 +214,7 @@ set(SERVICE_SOURCES
     src/services/WardSync.cpp
     src/services/NetworkTransport.cpp
     src/services/Presence.cpp
+    src/services/InvitationLink.cpp
     src/services/InvitationFile.cpp
     src/services/UserFolder.cpp
     src/services/InstanceLock.cpp
@@ -254,6 +265,7 @@ set(SERVICE_HEADERS
     src/services/WardSync.h
     src/services/NetworkTransport.h
     src/services/Presence.h
+    src/services/InvitationLink.h
     src/services/InvitationFile.h
     src/services/UserFolder.h
     src/services/InstanceLock.h
@@ -290,6 +302,8 @@ set(WIDGET_SOURCES
     src/widgets/SendFileDialog.cpp
     src/widgets/SendUpdateDialog.cpp
     src/widgets/SendInvitationDialog.cpp
+    src/widgets/SendLinkDialog.cpp
+    src/widgets/ServerWaitDialog.cpp
     src/widgets/SettingsDialog.cpp
     src/widgets/WardSharing.cpp
     src/widgets/WhoHasAccessDialog.cpp
@@ -337,6 +351,8 @@ set(WIDGET_HEADERS
     src/widgets/SendFileDialog.h
     src/widgets/SendUpdateDialog.h
     src/widgets/SendInvitationDialog.h
+    src/widgets/SendLinkDialog.h
+    src/widgets/ServerWaitDialog.h
     src/widgets/SettingsDialog.h
     src/widgets/WardSharing.h
     src/widgets/WhoHasAccessDialog.h
@@ -563,7 +579,7 @@ endif()
 
 # --- Cross-platform definitions ---
 target_compile_definitions(WardPlanning PRIVATE
-    WARD_PLANNING_VERSION="${PROJECT_VERSION}"
+    WARD_PLANNING_VERSION="${WARD_PLANNING_VERSION_TEXT}"
 )
 
 # ============================================================================
@@ -596,7 +612,7 @@ endif()
 # ============================================================================
 message(STATUS "")
 message(STATUS "=== Ward Planning Configuration ===")
-message(STATUS "  Version: ${PROJECT_VERSION}")
+message(STATUS "  Version: ${WARD_PLANNING_VERSION_TEXT}")
 message(STATUS "  C++ Standard: ${CMAKE_CXX_STANDARD}")
 message(STATUS "  Qt Version: ${Qt6_VERSION}")
 message(STATUS "  Build Type: ${CMAKE_BUILD_TYPE}")

@@ -1,5 +1,8 @@
 #include "MainWindow.h"
+#include "InvitationFile.h"
+#include "InvitationLink.h"
 #include "Presence.h"
+#include "ServerWaitDialog.h"
 #include "WardSync.h"
 #include "AccessRules.h"
 #include "AppSettings.h"
@@ -542,6 +545,10 @@ void MainWindow::onVersionFetched(const TakeResult& result)
 
 bool MainWindow::openFile(const QString& path)
 {
+    if (path.startsWith(JoinPrefix))
+    {
+        return openInvitationCode(path.mid(int(qstrlen(JoinPrefix))));
+    }
     if (path.endsWith(".wardinvite"))
     {
         return openInvitationFile(path);
@@ -650,7 +657,52 @@ bool MainWindow::openInvitationFile(const QString& path)
                              tr("The file %1 could not be read.").arg(QDir::toNativeSeparators(path)));
         return false;
     }
-    InvitedWard invited = DocumentManager::instance()->session().readInvitation(file.readAll());
+    return joinThroughInvitation(file.readAll(), tr("This file is not a Ward Planning invitation."));
+}
+
+bool MainWindow::openInvitationCode(const QString& code)
+{
+    std::optional<InvitationCode> invitation = InvitationLink::parse(code);
+    if (!invitation.has_value())
+    {
+        QMessageBox::warning(this, tr("Open Invitation"),
+                             tr("This invitation link is not complete. Ask the sender to send it again."));
+        return false;
+    }
+    if (!m_settings->useServer())
+    {
+        QMessageBox::warning(this, tr("Open Invitation"),
+                             tr("This invitation needs the Ward Planning server. Turn on Use the Ward Planning "
+                                "server in File > Settings, then click the invitation link again."));
+        return false;
+    }
+
+    ServerWaitDialog wait(DocumentManager::instance()->fetchWard(invitation->document, nullptr), tr("Open Invitation"),
+                          tr("Getting your invitation..."), this);
+    if (wait.exec() != QDialog::Accepted)
+    {
+        return false;
+    }
+    switch (wait.answer().status)
+    {
+    case ServerReadStatus::Found:
+        break;
+    case ServerReadStatus::Missing:
+        QMessageBox::warning(this, tr("Open Invitation"),
+                             tr("The server has no such ward. Ask the sender for a new invitation."));
+        return false;
+    case ServerReadStatus::NoAnswer:
+        QMessageBox::warning(this, tr("Open Invitation"),
+                             tr("Connect to the internet, then click the invitation link again."));
+        return false;
+    }
+    return joinThroughInvitation(InvitationFile::write(invitation->seed, wait.answer().bytes),
+                          tr("This invite has been used or withdrawn. Ask the sender."));
+}
+
+bool MainWindow::joinThroughInvitation(const QByteArray& invitation, const QString& notAnInvitation)
+{
+    InvitedWard invited = DocumentManager::instance()->session().readInvitation(invitation);
     switch (invited.status)
     {
     case InvitationStatus::Joinable:
@@ -666,7 +718,7 @@ bool MainWindow::openInvitationFile(const QString& path)
         return true;
     case InvitationStatus::NotAnInvitation:
         qWarning("An invitation did not read: %s", qPrintable(invited.problem));
-        QMessageBox::warning(this, tr("Open Invitation"), tr("This file is not a Ward Planning invitation."));
+        QMessageBox::warning(this, tr("Open Invitation"), notAnInvitation);
         return false;
     case InvitationStatus::Newer:
         QMessageBox::warning(this, tr("Open Invitation"),

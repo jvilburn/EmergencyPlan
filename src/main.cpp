@@ -28,6 +28,8 @@ int main(int argc, char *argv[])
     QCommandLineParser parser;
     QCommandLineOption developerOption("developer", QObject::tr("Adds the Debugging menu."));
     parser.addOption(developerOption);
+    QCommandLineOption joinOption("join", QObject::tr("Joins the ward an invitation code names."), "code");
+    parser.addOption(joinOption);
     parser.addPositionalArgument("file", QObject::tr("An update or invitation file to open."));
     parser.process(app);
 
@@ -38,7 +40,12 @@ int main(int argc, char *argv[])
     AppData appData = AppData::standard();
     InstanceLock lock(appData.lockFilePath(), nullptr);
     QString file;
-    if (!parser.positionalArguments().isEmpty())
+    if (parser.isSet(joinOption))
+    {
+        // An invitation code travels where a file's path does, marked as a code.
+        file = MainWindow::JoinPrefix + parser.value(joinOption);
+    }
+    else if (!parser.positionalArguments().isEmpty())
     {
         file = QFileInfo(parser.positionalArguments().first()).absoluteFilePath();
     }

@@ -4,6 +4,8 @@
 #include "Base64Url.h"
 #include "Crypto.h"
 #include "FakeServer.h"
+#include "InvitationFile.h"
+#include "InvitationLink.h"
 #include "TestClient.h"
 #include "TestSharing.h"
 #include "TestWard.h"
@@ -855,6 +857,44 @@ void ServerSyncTest::anInvitationIsNotGivenWhileNothingCanBeShared()
     server.settle();
     QCOMPARE(invitations.size(), qsizetype(3));
     QVERIFY(invitations[2][1].toByteArray().isEmpty());
+}
+
+void ServerSyncTest::anInvitationCodeJoinsFromTheServersVersion()
+{
+    FakeServer server;
+    TestClient alice("Alice", &server);
+    TestClient bob("Bob's phone", &server);
+    DocumentId document = shared(server, {&alice});
+    InviteResult made = alice.session().invite(InvitedUser{AccessRole::Member, "Bob"});
+    server.settle();
+    QCOMPARE(server.number(document), qint64(3));
+
+    // The link carries only the code; Bob's app gets the version from the server.
+    QString code = alice.session().invitationCode(made.invite);
+    std::optional<InvitationCode> parsed = InvitationLink::parse(code);
+    QVERIFY(parsed.has_value());
+    QVERIFY(parsed->document == document);
+    QVERIFY(TestSharing::commitBobsPhone(alice, "555-2222") == CommitStatus::Applied);
+    server.settle();
+    InvitedWard invited = bob.session().readInvitation(InvitationFile::write(parsed->seed, server.version(parsed->document)));
+    QVERIFY2(invited.status == InvitationStatus::Joinable, qPrintable(invited.problem));
+    QCOMPARE(invited.wardName, alice.session().document().wardName());
+    bob.session().join(invited, {"Bob Brown", ""}, "Bob's phone");
+    bob.startSync();
+    server.settle();
+
+    QCOMPARE(server.number(document), qint64(5));
+    for (TestClient* client : {&alice, &bob})
+    {
+        QVERIFY(TestSharing::userNames(*client).contains("Bob Brown"));
+        QCOMPARE(TestSharing::bobsPhone(*client), QString("555-2222"));
+        QVERIFY(client->session().journal().isEmpty());
+    }
+    // Used, the invite has no code, and its old code joins nothing.
+    QVERIFY(alice.session().invitationCode(made.invite).isEmpty());
+    TestClient carol("Carol", &server);
+    InvitedWard late = carol.session().readInvitation(InvitationFile::write(parsed->seed, server.version(document)));
+    QVERIFY(late.status == InvitationStatus::NotAnInvitation);
 }
 
 void ServerSyncTest::aSyncThatIsNotStartedSendsNothing()

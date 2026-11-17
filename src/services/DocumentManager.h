@@ -43,6 +43,11 @@ public:
     /// Use the Ward Planning server, or stop using it: the open ward's sharing starts or stops.
     void setUseServer(bool use);
 
+    /// Asks the server for the current version of the ward document, which need not be one
+    /// this device holds, as joining through an invitation link does. The reading is a child
+    /// of parent.
+    ServerReading* fetchWard(const DocumentId& document, QObject* parent) { return m_server.fetch(document, parent); }
+
     /// Runs the command through the session's commit step. A command that conflicted or was
     /// refused emits commandNotApplied.
     CommitResult executeCommand(CommandPtr command);

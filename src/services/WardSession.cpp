@@ -4,6 +4,7 @@
 #include "Crypto.h"
 #include "EmergencyCommands.h"
 #include "InvitationFile.h"
+#include "InvitationLink.h"
 #include "ReportGenerator.h"
 #include "UpdateFile.h"
 
@@ -407,6 +408,12 @@ QSet<QByteArray> WardSession::invitesMadeHere() const
 QByteArray WardSession::writeInvitation(const QByteArray& invite) const
 {
     return InvitationFile::write(seedOf(invite), nextVersion().bytes);
+}
+
+QString WardSession::invitationCode(const QByteArray& invite) const
+{
+    QByteArray seed = seedOf(invite);
+    return seed.isEmpty() ? QString() : InvitationLink::code(m_documentId, seed);
 }
 
 QByteArray WardSession::invitationCarrying(const QByteArray& invite, const QByteArray& version) const

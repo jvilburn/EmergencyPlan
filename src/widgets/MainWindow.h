@@ -30,6 +30,10 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
+    /// What a starting argument or a handover begins with when it is an invitation code and
+    /// not a file: join:<code>.
+    static constexpr char JoinPrefix[] = "join:";
+
     /// settings are the app's own settings, which the window does not own. developer adds the
     /// Debugging menu.
     MainWindow(AppSettings* settings, bool developer, QWidget* parent);
@@ -185,6 +189,15 @@ private:
     /// Sets Your name and Your email from the open ward, where this device's user has another
     /// name or email there, and sets them for the user in this device's other wards to match.
     void followUserDetails();
+
+    /// Joins through an invitation code, as a link carries it: fetches the ward's version from
+    /// the server and opens it as an invitation. True when a ward opened or was joined.
+    bool openInvitationCode(const QString& code);
+
+    /// Reads invitation, the bytes of an invitation file, and joins its ward once the user
+    /// confirms it by name; notAnInvitation is what the user is told when it does not read
+    /// as one. True when a ward opened or was joined.
+    bool joinThroughInvitation(const QByteArray& invitation, const QString& notAnInvitation);
 
     /// What follows a take, from an update file or the server: when the version was taken,
     /// Your name and Your email follow the ward's, and a replay that was abandoned hands the

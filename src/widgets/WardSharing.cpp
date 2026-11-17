@@ -2,9 +2,11 @@
 
 #include "AppSettings.h"
 #include "InvitationFile.h"
+#include "InvitationLink.h"
 #include "NetworkTransport.h"
 #include "SendFileDialog.h"
 #include "SendInvitationDialog.h"
+#include "SendLinkDialog.h"
 #include "UserFolder.h"
 #include "WardSession.h"
 #include "WardSync.h"
@@ -127,13 +129,17 @@ void WardSharing::leaveWard(const AppSettings& settings, QWidget* parent)
 void WardSharing::saveInvitation(WardSession& session, const AppSettings& settings, WardSync& sync,
                                  const QByteArray& invite, QWidget* parent)
 {
-    QByteArray invitation = settings.useServer()
-        ? fetchedInvitation(session, sync, invite, parent)
-        : session.writeInvitation(invite);
-    if (invitation.isEmpty())
+    if (settings.useServer())
     {
+        // The link is given only once the server holds a version that names the invite, which
+        // the fetched invitation shows.
+        if (!fetchedInvitation(session, sync, invite, parent).isEmpty())
+        {
+            showLink(session, invite, parent);
+        }
         return;
     }
+    QByteArray invitation = session.writeInvitation(invite);
 
     const Document& document = session.document();
     QString wardName = document.wardName();
@@ -166,6 +172,23 @@ void WardSharing::saveInvitation(WardSession& session, const AppSettings& settin
     SendFileDialog dialog(tr("Save Invitation"),
                           tr("Your invitation is ready. Send it to yourself and open it on your other device."), path,
                           parent);
+    dialog.exec();
+}
+
+void WardSharing::showLink(WardSession& session, const QByteArray& invite, QWidget* parent)
+{
+    const Document& document = session.document();
+    AccessInvite entry = *document.access().findInvite(invite);
+    QString link = InvitationLink::link(NetworkTransport::BuiltInAddress, session.invitationCode(invite));
+    if (entry.invitedUser().has_value())
+    {
+        SendLinkDialog dialog(SendLinkDialog::userInstructions(entry.invitedUser()->label),
+                              SendLinkDialog::userMessage(session.ownUser().name(), document.wardName(), link),
+                              parent);
+        dialog.exec();
+        return;
+    }
+    SendLinkDialog dialog(SendLinkDialog::deviceInstructions(), link, parent);
     dialog.exec();
 }
 

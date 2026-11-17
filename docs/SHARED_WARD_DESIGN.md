@@ -1459,7 +1459,24 @@ seed for `crypto_box_seed_keypair`, and subkey 2 the seed for `crypto_sign_seed_
    *Update files*); the update the inviter sends lets the other members' versions keep the
    invite open until the new member's join reaches them.
 
-   **The invitation is a small file**, such as `Tanglewood Ward - for Bob.wardinvite`: one
+   **With the server on, the invitation is a link**,
+   `https://<server>/join#<document id>.<seed>`, given once the version naming the invite is
+   on the server, in a dialog that speaks to the inviting user - *Your invitation for Bob is
+   ready. Send Bob this message, by email or text:* - over the message to pass on, set apart
+   in a box with *Copy Message*: *Alice Smith has invited you to Tanglewood Ward in Ward
+   Planning. Click to join:* and the link. A browser keeps what follows the `#` to itself, so
+   the server serves one join page for every invitation, and no request to it carries a seed.
+   The page's script names the installer's download after the invitation,
+   `WardPlanning-Setup-<document id>.<seed>.exe`. The installer reads the invitation from its
+   own file name: where this same version of Ward Planning is installed already, it starts
+   the app with the invitation and installs nothing; otherwise it installs and then starts
+   the app with it. The app fetches the ward's current version from the server, reads it with
+   the invite's keys, and asks *Join Tanglewood Ward?* as for an invitation file. Whoever
+   holds the link can join, as whoever holds an invitation file can. For another of the
+   user's own devices the dialog says *Your invitation is ready. Open this link on your other
+   device:* over the link.
+
+   **With the server off, the invitation is a small file**, such as `Tanglewood Ward - for Bob.wardinvite`: one
    line of JSON holding its own `format` integer and the seed, then the version that opened
    the invite, in a ward file's framing, whose header names the ward; an app that meets a higher
    `format` shows the newer-version notice, as for a ward file (see *File format*). The app
@@ -1480,16 +1497,17 @@ seed for `crypto_box_seed_keypair`, and subkey 2 the seed for `crypto_sign_seed_
    The second step is there while the installer is unsigned, which is when Windows gives that
    warning.
 
-   The download link carries no secret, and no page the server serves ever holds the seed.
-   The user sends the file by any channel they trust with it.
+   The file's download link carries no secret, and the join page a link opens is the same for
+   every invitation, its seed read only in the browser. The user sends the link or the file
+   by any channel they trust with it.
 
    The device that made the invite keeps its seed in its device-local state, saved with the
    invite before the push, for as long as the access list it holds names that invite. So
-   *Save invitation* on the open invite in *Who has access* writes the file again on that
-   device. With the server on, the file carries the version the server holds, fetched while the
-   ward is syncing, so no invitation carries a version number the server may come to hold with
-   other content; with the server off, it carries the next version this device would write.
-   Either names the invite while it is open. The seed
+   *Save invitation* on the open invite in *Who has access* gives the invitation again on
+   that device. With the server on, it shows the link again, once the server is seen to hold
+   a version naming the invite, which only happens while the ward is syncing; with the server
+   off, it writes the file again, carrying the next version this device would write, which
+   names the invite while it is open. The seed
    regenerates the invite's private
    keys, and it sits in the same encrypted file as the data key those keys unseal, so keeping
    it exposes nothing that file does not already hold.
@@ -1724,6 +1742,11 @@ ward.
 
 ## Receiving an invitation
 
+**With the server on, an invitation is a link, and clicking it leads to joining**: the join
+page, the installer it downloads, and the app the installer starts carry the invitation between
+them (see *Invites*), so the person invited saves and opens no file of their own. The rest of
+this section is the invitation file, which sharing with the server off uses.
+
 **Opening an invitation joins.** The installer registers the `.wardinvite` and `.wardupdate` types, so
 double-clicking an invitation opens Ward Planning on it. Dropping one onto the app's window
 does the same, and *Join a ward*, prominent on the first-run screen where a new user with no
@@ -1859,7 +1882,10 @@ version*).
 | An update of a ward this device does not hold | This update is for a ward this device does not have. |
 | An update from a device this copy does not list, which did not join since this copy | This update is from a device that is not listed in Who Has Access. |
 | An update that does not rank above the version held | You already have a newer update. |
-| An invitation opened while offline | Connect to the internet, then open the invitation again. |
+| An invitation opened while offline | Connect to the internet, then open the invitation again. For a link: Connect to the internet, then click the invitation link again. |
+| An invitation link with a code that does not read | This invitation link is not complete. Ask the sender to send it again. |
+| An invitation link opened with the server turned off | This invitation needs the Ward Planning server. Turn on Use the Ward Planning server in File > Settings, then click the invitation link again. |
+| An invitation link whose invite the server's version no longer names | This invite has been used or withdrawn. Ask the sender. |
 | Leave or Remove this device while offline | Connect to the internet to leave this ward. / Connect to the internet to remove this device. |
 | Add a user, Add a device or Save invitation while offline, with the server on | Connect to the internet to invite someone. |
 | Any of those three while the latest change is not saved | Your latest change could not be saved, so nothing can be shared yet. |

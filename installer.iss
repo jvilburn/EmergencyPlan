@@ -5,11 +5,12 @@
 #include "build\version.iss"
 
 #define MyAppName "Ward Planning"
+#define MyAppId "B7E3F2A1-5C8D-4F6E-9A2B-1D3E5F7A9C0B"
 #define MyAppPublisher "Ward Planning Contributors"
 #define MyAppExeName "WardPlanning.exe"
 
 [Setup]
-AppId={{B7E3F2A1-5C8D-4F6E-9A2B-1D3E5F7A9C0B}
+AppId={{{#MyAppId}}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
@@ -92,10 +93,55 @@ Root: HKA; Subkey: "Software\Classes\WardPlanning.Invitation"; ValueType: string
 Root: HKA; Subkey: "Software\Classes\WardPlanning.Invitation\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"
 Root: HKA; Subkey: "Software\Classes\WardPlanning.Invitation\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
 
+; Started with the invitation the installer's file name carries, when it carries one, so
+; installing from an invitation link leads straight to joining
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Parameters: "{code:JoinParameters}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
+#include "packaging\windows\invitation.iss"
+
+// The parameters the app starts with after installing: the invitation, when there is one.
+function JoinParameters(Param: String): String;
+begin
+  Result := '';
+  if InvitationCode() <> '' then
+    Result := '--join ' + InvitationCode();
+end;
+
+// Where this same version of Ward Planning is installed, read from the uninstall entry this
+// installer writes; empty when it is not installed, or another version is.
+function InstalledSameVersion(): String;
+var
+  Key, Version, Location: String;
+begin
+  Result := '';
+  Key := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{{#MyAppId}}_is1';
+  if not (RegQueryStringValue(HKCU, Key, 'DisplayVersion', Version)
+          and RegQueryStringValue(HKCU, Key, 'InstallLocation', Location)) then
+    if not (RegQueryStringValue(HKLM, Key, 'DisplayVersion', Version)
+            and RegQueryStringValue(HKLM, Key, 'InstallLocation', Location)) then
+      Exit;
+  if (Version = '{#MyAppVersion}') and FileExists(AddBackslash(Location) + '{#MyAppExeName}') then
+    Result := AddBackslash(Location) + '{#MyAppExeName}';
+end;
+
+// An invitation opened where this version is already installed joins at once: the installed
+// app is started with the invitation, and nothing is installed again.
+function InitializeSetup(): Boolean;
+var
+  Installed: String;
+  ResultCode: Integer;
+begin
+  Result := True;
+  Installed := InstalledSameVersion();
+  if (InvitationCode() <> '') and (Installed <> '') then
+  begin
+    Exec(Installed, '--join ' + InvitationCode(), '', SW_SHOWNORMAL, ewNoWait, ResultCode);
+    Result := False;
+  end;
+end;
+
 // An upgrade removes the .emergencyplan association an older release registered;
 // ChangesAssociations tells the shell it is gone.
 procedure CurStepChanged(CurStep: TSetupStep);

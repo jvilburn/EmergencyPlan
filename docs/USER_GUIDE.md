@@ -47,7 +47,8 @@ With **Use the Ward Planning server** turned on in Settings, as it is unless you
 - **This ward was saved by a newer version of Ward Planning. Update to see the latest changes and share your work.** - Another member has a newer Ward Planning. Your changes stay on this device until you update.
 - **Changes that could not be applied** - When someone else changed the same thing first, your change is set aside and listed in a *To redo* file in the *Ward Planning* folder in Documents, which the app offers to open.
 - **This ward is no longer shared with this device.** - Shown above the map when you have been removed from the ward, or the ward has been deleted. The copy stays on this device, read-only, until you delete it with **Delete this copy**.
-- **Adding a user or a device** - **Add a user**, **Add a device** and **Save invitation** need the connection: the invitation is made from the ward as the server has it, after a moment showing *Creating the invitation...*.
+- **Adding a user or a device** - **Add a user**, **Add a device** and **Save invitation** need the connection. After a moment showing *Creating the invitation...*, the app shows the message to send, which holds a link, with **Copy Message**. Paste it into an email or text to that person. For your own other device, it shows the link to open there.
+- **Joining from a link** - The person invited clicks the link, downloads Ward Planning from the page it opens, and runs the download. Ward Planning installs, opens, and asks *Join Tanglewood Ward?* There is no file for them to save or open. If Ward Planning is already installed, the same download opens it and asks the same question. Whoever has the link can join, once, so send it only to the person it is for.
 
 ### Sharing updates
 
@@ -77,7 +78,7 @@ Roles are an agreement among the people who use the ward, to keep well-meaning u
 
 ### Joining a ward
 
-An invitation is a file, such as *Tanglewood Ward - for Bob.wardinvite*, that a member of the ward sends you.
+With the server turned on, an invitation is a link (see *Sharing through the server*). With it turned off, an invitation is a file, such as *Tanglewood Ward - for Bob.wardinvite*, that a member of the ward sends you.
 
 - **Opening the invitation** - Double-click the file, drop it on the window, or use **File > Open Invitation...** or **Open Invitation...** in the ward list. The app asks *Join Tanglewood Ward?*, with the ward's own name; on OK you join, as the device and, for an invitation to a new user, the user with the name and email in **File > Settings**, and the ward opens.
 - **Send an update after joining** - With the server turned off, the other members see you only once they open an update from you, so joining shows *You have changes to share*. Send an update to every member of the ward. With the server on, your join goes to them by itself.

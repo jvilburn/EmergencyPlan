@@ -328,6 +328,10 @@ public:
     /// device does not hold that version, so its changes stay to share until it sends an update.
     QByteArray writeInvitation(const QByteArray& invite) const;
 
+    /// The invitation code of invite, one of invitesMadeHere, as InvitationLink writes it:
+    /// which ward, and the invite's seed. Empty once the invite is used or withdrawn.
+    QString invitationCode(const QByteArray& invite) const;
+
     /// An invitation for invite, one of invitesMadeHere, carrying version, the ward's current
     /// version as the server has it: its seed and that version. Empty when version does not
     /// name the invite, as before the invite's own version has reached the server and after

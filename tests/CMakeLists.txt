@@ -109,6 +109,8 @@ add_executable(WardPlanningTests
     services/SignedLineTest.cpp
     services/PresenceTest.h
     services/PresenceTest.cpp
+    services/InvitationLinkTest.h
+    services/InvitationLinkTest.cpp
     server/FakeServer.h
     server/FakeServer.cpp
     server/ServerSyncTest.h

@@ -53,6 +53,7 @@ private slots:
     void anInvitationCarriesTheServersVersionAndAnEditAfterItSurvivesTheJoin_data();
     void anInvitationCarriesTheServersVersionAndAnEditAfterItSurvivesTheJoin();
     void anInvitationIsNotGivenWhileNothingCanBeShared();
+    void anInvitationCodeJoinsFromTheServersVersion();
 
     // The switch and update files
     void aSyncThatIsNotStartedSendsNothing();

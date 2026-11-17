@@ -39,11 +39,11 @@ public:
     /// Tells the user what leaving the ward needs.
     static void leaveWard(const AppSettings& settings, QWidget* parent);
 
-    /// Writes the invitation of invite, one of invitesMadeHere, where the user chooses, then
-    /// shows what to do with it and the file ready to drag into an email: for a new user, the
-    /// message to pass on to them (SendInvitationDialog). With the
-    /// server in use the invitation carries the version the server holds, fetched once the
-    /// invite's own version has reached it; otherwise it is written at once.
+    /// Hands the user the invitation of invite, one of invitesMadeHere. With the server in
+    /// use it is a link, shown with the message to pass on once the invite's own version has
+    /// reached the server (SendLinkDialog). Otherwise it is a file, written where the user
+    /// chooses and then shown ready to drag into an email (SendInvitationDialog for a new
+    /// user).
     static void saveInvitation(WardSession& session, const AppSettings& settings, WardSync& sync,
                                const QByteArray& invite, QWidget* parent);
 
@@ -52,6 +52,9 @@ private:
     /// device's, its latest change is not saved, there is no connection, or what
     /// whatStopsSharing says. Empty while the ward is syncing.
     static QString whatStopsInviting(const WardSession& session, const WardSync& sync);
+
+    /// Shows the link of invite with the message to pass on.
+    static void showLink(WardSession& session, const QByteArray& invite, QWidget* parent);
 
     /// The invitation of invite carrying the server's version, awaited behind a small dialog.
     /// Empty when there is none, after telling the user why unless they closed the dialog.
