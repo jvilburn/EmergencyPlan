@@ -1,4 +1,5 @@
-import { downloadPage } from "./download";
+import { Release, downloadPage } from "./download";
+import { installer, joinPage } from "./join";
 import releases from "./releases.json";
 import { Route, readVersion, routeOf, status } from "./wire";
 
@@ -27,6 +28,13 @@ export default {
                 return Response.json(releases);
             case "download":
                 return downloadPage(releases);
+            case "join":
+                return joinPage(releases);
+            case "installer":
+            {
+                const release = (releases as Record<string, Release>)[route.platform];
+                return release === undefined ? status(404) : installer(release);
+            }
             case "create":
             {
                 const bytes = new Uint8Array(await request.arrayBuffer());
@@ -44,7 +52,7 @@ export default {
 } satisfies ExportedHandler<Env>;
 
 /**
- * The limit a call counts against: creating a document, or reading one. A push or a channel open
+ * The limit a call counts against: creating a document, or reading one or an installer. A push or a channel open
  * stores and reveals nothing unless the Ward verifies its signer, so neither is limited.
  */
 function limitOf(route: Route, env: Env): RateLimit | null
@@ -55,6 +63,7 @@ function limitOf(route: Route, env: Env): RateLimit | null
             return env.CREATE_LIMIT;
         case "head":
         case "version":
+        case "installer":
             return env.READ_LIMIT;
         default:
             return null;

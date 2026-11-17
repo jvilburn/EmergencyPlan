@@ -12,5 +12,17 @@
     "ratelimits": [
         { "name": "CREATE_LIMIT", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } },
         { "name": "READ_LIMIT", "namespace_id": "1002", "simple": { "limit": 3000, "period": 60 } }
-    ]
+    ],
+    // What the tests run: the same Worker with a read limit small enough to reach in a moment.
+    "env": {
+        "test": {
+            "durable_objects": {
+                "bindings": [{ "name": "WARD", "class_name": "Ward" }]
+            },
+            "ratelimits": [
+                { "name": "CREATE_LIMIT", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } },
+                { "name": "READ_LIMIT", "namespace_id": "1002", "simple": { "limit": 50, "period": 60 } }
+            ]
+        }
+    }
 }

@@ -198,7 +198,9 @@ export type Route =
     | { kind: "push"; document: string }
     | { kind: "channel"; document: string }
     | { kind: "releases" }
-    | { kind: "download" };
+    | { kind: "download" }
+    | { kind: "join" }
+    | { kind: "installer"; platform: string };
 
 export function routeOf(method: string, path: string): Route | null
 {
@@ -214,6 +216,14 @@ export function routeOf(method: string, path: string): Route | null
     if (method === "GET" && path === "/download")
     {
         return { kind: "download" };
+    }
+    if (method === "GET" && path === "/join")
+    {
+        return { kind: "join" };
+    }
+    if (method === "GET" && parts.length === 3 && parts[1] === "installer")
+    {
+        return { kind: "installer", platform: parts[2] };
     }
     if (parts.length === 3 && parts[1] === "documents" && method === "GET")
     {

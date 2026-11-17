@@ -1,6 +1,7 @@
 import { exports } from "cloudflare:workers";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { downloadPage } from "../src/download";
+import { joinPage } from "../src/join";
 import releases from "../src/releases.json";
 import { channelLine, readVersion, writeLine } from "../src/wire";
 import { Channel, Device, framed, newDevice, newDocument, random, signed, version } from "./clients";
@@ -88,10 +89,10 @@ describe("limits by address", () =>
         expect((await create("198.51.100.2", alice, newDocument())).status).toBe(201);
     });
 
-    it("refuses an address's reads past three thousand in a minute with 429, and still takes its pushes", async () =>
+    it("refuses an address's reads past its limit, fifty a minute as the tests run, with 429, and still takes its pushes", async () =>
     {
         const document = newDocument();
-        const reads = await Promise.all(Array.from({ length: 3000 }, () => fromAddress("203.0.113.1", `/documents/${document}/head`, {})));
+        const reads = await Promise.all(Array.from({ length: 50 }, () => fromAddress("203.0.113.1", `/documents/${document}/head`, {})));
         expect(reads.every((read) => read.status === 404)).toBe(true);
         expect((await fromAddress("203.0.113.1", `/documents/${document}`, {})).status).toBe(429);
         expect((await fromAddress("203.0.113.1", `/documents/${document}`, { method: "PUT", body: "x" })).status).toBe(400);
@@ -126,5 +127,58 @@ describe("releases", () =>
         const empty = await downloadPage({}).text();
         expect(empty).toContain("<p>No installer is available yet.</p>");
         expect(empty).not.toContain("<li>");
+    });
+});
+
+describe("joining through a link", () =>
+{
+    afterEach(() =>
+    {
+        vi.restoreAllMocks();
+    });
+
+    it("serves one join page for every invitation, which names the download after the invitation in the browser", async () =>
+    {
+        const answer = await fromAddress("192.0.2.20", "/join", {});
+        expect(answer.status).toBe(200);
+        expect(answer.headers.get("Content-Type")).toBe("text/html; charset=utf-8");
+        const page = await answer.text();
+        expect(page).toBe(await joinPage(releases).text());
+
+        // The page reads the invitation from the part of the link the browser keeps to itself.
+        expect(page).toContain("location.hash");
+        expect(page).toContain('"WardPlanning-Setup-" + invitation + ".exe"');
+        expect(page).toContain('href="/installer/windows"');
+        expect(page).toContain("Run anyway");
+    });
+
+    it("offers no download while there is no Windows release", async () =>
+    {
+        const page = await joinPage({}).text();
+        expect(page).toContain("No installer is available yet.");
+        expect(page).not.toContain("/installer/windows");
+    });
+
+    it("passes a platform's installer through, with no file name of its own", async () =>
+    {
+        const bytes = new Uint8Array([77, 90, 1, 2, 3]);
+        // The answer is made when the Worker asks, so its body belongs to the Worker's request.
+        const upstream = vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+            new Response(bytes, { headers: { "Content-Length": "5", "Content-Disposition": "attachment; filename=other.exe" } }));
+
+        const answer = await fromAddress("192.0.2.21", "/installer/windows", {});
+
+        expect(answer.status).toBe(200);
+        expect(new Uint8Array(await answer.arrayBuffer())).toEqual(bytes);
+        expect(answer.headers.get("Content-Type")).toBe("application/octet-stream");
+        expect(answer.headers.get("Content-Disposition")).toBeNull();
+        expect(upstream).toHaveBeenCalledWith((releases as Record<string, { url: string }>).windows.url);
+    });
+
+    it("answers 404 for a platform with no release, and 502 when the release's file cannot be had", async () =>
+    {
+        expect((await fromAddress("192.0.2.22", "/installer/amiga", {})).status).toBe(404);
+        vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(null, { status: 404 }));
+        expect((await fromAddress("192.0.2.22", "/installer/windows", {})).status).toBe(502);
     });
 });
