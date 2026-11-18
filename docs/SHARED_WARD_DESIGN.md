@@ -74,7 +74,7 @@ Two related ideas surfaced during design and are deferred to their own work:
 | Key model | Envelope encryption, one data key per document, sealed to each device |
 | Key generation | Silent, only when no key file exists. No user-visible key material. |
 | Server authentication | None. Each write and each channel carries an Ed25519 signature the current header admits, or for a new document its own header. |
-| Joining | A one-time invitation file, opened in the app |
+| Joining | A one-time invitation, opened in the app: a link with the server on, a file with it off |
 | Roles | Admin or member, held in the access list, a convention among honest clients |
 | Who may add | An admin adds a user; anyone adds their own devices |
 | Who may remove | An admin removes a user; anyone removes their own devices, or leaves |
@@ -437,8 +437,8 @@ reaches members only while the old address still answers; continuity keeps the d
 members as a release they install by hand.
 
 The override is app-wide, and an invitation works only between apps using the same server:
-joining looks the document id up on this app's own server. An invitation carries no server,
-so none can send a new member to a server of an attacker's making at the one moment its
+joining looks the document id up on this app's own server. The app takes only the code from an invitation and looks the ward up on its own server,
+so no invitation can send a new member to a server of an attacker's making at the one moment its
 first download is taken as it stands (see *Threat model*). Testers and self-hosters set the override on every app that shares their wards.
 
 **One id for the document's whole life.** The id names the local file, keys the local
@@ -1133,8 +1133,8 @@ ministering, the emergency response and the access list. In particular:
 - **The app is named Ward Planning** in every name a user or the system sees. The installer
   upgrades the old install in place. App data and the tile cache follow the name, so both
   move; nothing is carried over from the old directories (see *Earlier versions*), and the
-  tile cache refills as maps are viewed. The one file type registered with the system is
-  `.wardinvite` (see *Receiving an invitation*).
+  tile cache refills as maps are viewed. The file types registered with the system are
+  `.wardinvite` and `.wardupdate` (see *Receiving an invitation*).
 - **Receiving an invitation**: opening a `.wardinvite` file, and the instance lock that
   hands an invitation to the app already running (see *Receiving an invitation*).
 - **`docs/FORMAT.md` is new**, written with the code since the models change in this work.
@@ -1770,7 +1770,7 @@ this section is the invitation file, which sharing with the server off uses.
 
 **Opening an invitation joins.** The installer registers the `.wardinvite` and `.wardupdate` types, so
 double-clicking an invitation opens Ward Planning on it. Dropping one onto the app's window
-does the same, and *Join a ward*, prominent on the first-run screen where a new user with no
+does the same, and *Open Invitation...*, prominent on the first-run screen where a new user with no
 wards lands and in the ward list too, offers a file picker. The app reads the seed and the
 version from the file, unseals the ward with the invite's key, and asks *Open Tanglewood
 Ward on this computer?* with the ward's own name, read from the ward rather than from the file's name;

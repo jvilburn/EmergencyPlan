@@ -14,4 +14,5 @@ private slots:
     void codeRoundTripsAndTheLinkCarriesItAfterTheHash();
     void parseRefusesWhatIsNotACode();
     void messagesSpeakToTheRightPerson();
+    void theButtonCopiesTheMessageAlone();
 };

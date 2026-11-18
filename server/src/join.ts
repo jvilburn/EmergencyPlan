@@ -103,7 +103,8 @@ if (link !== null)
     {
         download.download = downloadName(link.invitation, link.ward);
         document.getElementById("last").textContent =
-            "Ward Planning installs and opens. It asks your name, then asks whether to open "
+            "Ward Planning installs and opens. It asks for a name for this computer, your name and your email, "
+            + "then asks whether to open "
             + (link.ward !== "" ? link.ward : "the ward") + ".";
     }
 }

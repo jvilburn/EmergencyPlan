@@ -81,7 +81,7 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 ; An update file opens in Ward Planning, which takes it into its ward; an invitation opens in
-; Ward Planning, which joins its ward
+; Ward Planning, which opens its ward
 [Registry]
 Root: HKA; Subkey: "Software\Classes\.wardupdate"; ValueType: string; ValueName: ""; ValueData: "WardPlanning.Update"; Flags: uninsdeletevalue
 Root: HKA; Subkey: "Software\Classes\WardPlanning.Update"; ValueType: string; ValueName: ""; ValueData: "Ward Planning update"; Flags: uninsdeletekey
@@ -114,7 +114,8 @@ end;
 
 // The invitation the installer's file name carries is left in Ward Planning's app data, where
 // the app finds it each time it starts until it has asked about it (AppData::invitationFilePath).
-// So installing from an invitation link leads to joining whenever the app first starts. Where
+// So an invitation link leads to its ward the next time the app starts and has the user's
+// details, whether the installer starts it or the user does later. Where
 // this version is already installed, the app is started and nothing is installed again.
 function InitializeSetup(): Boolean;
 var

@@ -897,7 +897,6 @@ void ServerSyncTest::anInvitationCodeJoinsFromTheServersVersion()
     InvitedWard again = bob.session().readInvitation(parsed->seed, server.version(document));
     QVERIFY(again.status == InvitationStatus::AlreadyHasAccess);
     QVERIFY(again.document == document);
-    QCOMPARE(again.wardName, alice.session().document().wardName());
     TestClient carol("Carol", &server);
     InvitedWard late = carol.session().readInvitation(parsed->seed, server.version(document));
     QVERIFY(late.status == InvitationStatus::UsedOrWithdrawn);

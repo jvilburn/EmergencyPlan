@@ -8,7 +8,8 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
-SendLinkDialog::SendLinkDialog(const QString& instructions, const QString& message, QWidget* parent)
+SendLinkDialog::SendLinkDialog(const QString& instructions, const QString& message, const QString& copyLabel,
+                               QWidget* parent)
     : QDialog(parent)
     , m_message(message)
 {
@@ -31,7 +32,7 @@ SendLinkDialog::SendLinkDialog(const QString& instructions, const QString& messa
     boxLayout->addWidget(messageLabel);
     layout->addWidget(box);
 
-    QPushButton* copyMessage = new QPushButton(tr("Copy Message"), this);
+    QPushButton* copyMessage = new QPushButton(copyLabel, this);
     QPushButton* done = new QPushButton(tr("Done"), this);
     copyMessage->setDefault(true);
     QHBoxLayout* buttons = new QHBoxLayout();

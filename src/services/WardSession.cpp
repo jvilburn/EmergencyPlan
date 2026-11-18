@@ -416,15 +416,10 @@ QString WardSession::invitationCode(const QByteArray& invite) const
     return seed.isEmpty() ? QString() : InvitationLink::code(m_documentId, seed);
 }
 
-bool WardSession::versionNamesInvite(const QByteArray& invite, const QByteArray& version) const
+bool WardSession::holdsAsItsOwn(const DocumentId& document) const
 {
-    QByteArray seed = seedOf(invite);
-    if (seed.isEmpty())
-    {
-        // The invite is used or withdrawn, and its seed went with it.
-        return false;
-    }
-    return WardFile::read(version, Identity::fromInviteSeed(seed), PayloadKind::Version).status == WardReadStatus::Read;
+    LocalRead local = readLocal(*m_store, *m_identity, document);
+    return local.result.status == OpenStatus::Opened && !local.payload->device->noLongerShared;
 }
 
 QByteArray WardSession::seedOf(const QByteArray& invite) const
@@ -459,14 +454,10 @@ InvitedWard WardSession::readInvitation(const QByteArray& seed, const QByteArray
     // A device that holds the ward as its own has nothing to join, and once its join has
     // landed the version no longer opens for the invite, so its own copy is looked for first.
     HeaderRead header = WardHeader::parse(version.left(version.indexOf('\n')));
-    if (header.status == HeaderStatus::Read)
+    if (header.status == HeaderStatus::Read && holdsAsItsOwn(header.header->document()))
     {
-        LocalRead local = readLocal(*m_store, *m_identity, header.header->document());
-        if (local.result.status == OpenStatus::Opened && !local.payload->device->noLongerShared)
-        {
-            return InvitedWard{InvitationStatus::AlreadyHasAccess, QString(), header.header->document(), QByteArray(),
-                               std::nullopt, std::nullopt, local.payload->ward.wardName()};
-        }
+        return InvitedWard{InvitationStatus::AlreadyHasAccess, QString(), header.header->document(), QByteArray(),
+                           std::nullopt, std::nullopt, QString()};
     }
 
     Identity keys = Identity::fromInviteSeed(seed);

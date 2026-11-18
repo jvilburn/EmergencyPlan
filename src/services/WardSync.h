@@ -61,9 +61,9 @@ public:
     /// Looks, as the class comment describes. Does nothing while stopped.
     void look();
 
-    /// Asks whether the server's version of the ward names invite, one of the session's
-    /// invitesMadeHere, which is when its link can be handed out: whoever opens the link
-    /// joins from the server's version. The look under way, with the pushes it makes, ends
+    /// Asks whether the server's version of the ward names invite, an invite's fingerprint:
+    /// whether its header seals the ward's key to the invite. That is when the invite's link
+    /// can be handed out, since whoever opens the link joins from the server's version. The look under way, with the pushes it makes, ends
     /// first. inviteConfirmed answers.
     void confirmInvite(const QByteArray& invite);
 
@@ -101,7 +101,7 @@ private slots:
     void onHead(const ServerRead& head);
     void onFetched(const ServerRead& version);
     void onWritten(bool stored);
-    void onInviteVersionFetched(const ServerRead& version);
+    void onInviteHead(const ServerRead& head);
     void onTold(const QSet<QByteArray>& present, qint64 version);
     void onChannelClosed();
     void onRetryTimer();
@@ -153,7 +153,7 @@ private:
     ServerChannel* m_channel = nullptr;
     QByteArray m_channelSigner;   ///< the fingerprint the channel was opened under
     QObject* m_call = nullptr;    ///< the look's call on its way, which deletes itself once answered
-    QObject* m_inviteCall = nullptr;  ///< the fetch for the invite asked about, on its way
+    QObject* m_inviteCall = nullptr;  ///< the head asked for the invite being confirmed, on its way
     QTimer m_retryTimer;
     bool m_running = false;
     bool m_connected = false;

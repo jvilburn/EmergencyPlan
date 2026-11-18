@@ -4,15 +4,16 @@
 #include <QString>
 
 /// An invitation link ready to send: what the inviting user does with it, then the message to
-/// pass on, set apart in a box since it is for someone else to read, with Copy Message and
-/// Done.
+/// pass on, set apart in a box since it is for someone else to read, with a button that copies
+/// it and Done.
 class SendLinkDialog : public QDialog
 {
     Q_OBJECT
 
 public:
-    /// instructions speak to the inviting user, and message is what Copy Message copies.
-    SendLinkDialog(const QString& instructions, const QString& message, QWidget* parent);
+    /// instructions speak to the inviting user, and message is what the button named copyLabel
+    /// copies: Copy Message for a message to pass on, Copy Link for a link alone.
+    SendLinkDialog(const QString& instructions, const QString& message, const QString& copyLabel, QWidget* parent);
 
     /// What the inviting user is told for an invitation to invitee, a new user.
     static QString userInstructions(const QString& invitee);

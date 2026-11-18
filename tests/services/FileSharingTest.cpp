@@ -359,7 +359,7 @@ void FileSharingTest::invitationOpenedOnADeviceTheWardNamesJoinsNothing()
     InvitedWard invited = carol.session().readInvitation(invitation);
 
     QVERIFY(invited.status == InvitationStatus::AlreadyHasAccess);
-    QCOMPARE(invited.wardName, alice.session().document().wardName());
+    QVERIFY(invited.document == alice.session().documentId());
     QVERIFY(carol.session().openWard(invited.document).status == OpenStatus::Opened);
     QVERIFY(carol.session().payload() == carolBefore);
     QVERIFY(carol.session().version() == carolVersion);

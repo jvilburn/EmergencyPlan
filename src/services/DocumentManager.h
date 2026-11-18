@@ -95,9 +95,8 @@ public:
     /// True when the store holds a file for the ward document.
     bool holdsWard(const DocumentId& document) const { return m_store->documents().contains(document); }
 
-    /// True when this device holds the ward document as its own: its file opens here, and the
-    /// ward is still shared with this device.
-    bool holdsWardAsItsOwn(const DocumentId& document) const;
+    /// True when this device holds the ward document as its own (WardSession::holdsAsItsOwn).
+    bool holdsWardAsItsOwn(const DocumentId& document) const { return m_session.holdsAsItsOwn(document); }
 
     /// Tries again whatever is pending: a failed save first, then, when nothing is left
     /// unsaved, what the open ward has to share. True when nothing is left unsaved.

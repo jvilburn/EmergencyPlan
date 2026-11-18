@@ -5,6 +5,9 @@
 #include "InvitationLink.h"
 #include "SendLinkDialog.h"
 
+#include <QClipboard>
+#include <QGuiApplication>
+#include <QPushButton>
 #include <QTest>
 
 InvitationLinkTest::InvitationLinkTest(QObject* parent)
@@ -54,4 +57,24 @@ void InvitationLinkTest::messagesSpeakToTheRightPerson()
                      "https://example.test/open#abc"));
     QCOMPARE(SendLinkDialog::deviceInstructions(),
              QString("Your invitation is ready. Open this link on your other device:"));
+}
+
+void InvitationLinkTest::theButtonCopiesTheMessageAlone()
+{
+    SendLinkDialog dialog(SendLinkDialog::deviceInstructions(), "https://example.test/open#abc", "Copy Link", nullptr);
+    QGuiApplication::clipboard()->setText("something else");
+
+    QPushButton* copy = nullptr;
+    const QList<QPushButton*> buttons = dialog.findChildren<QPushButton*>();
+    for (QPushButton* button : buttons)
+    {
+        if (button->text() == "Copy Link")
+        {
+            copy = button;
+        }
+    }
+    QVERIFY(copy != nullptr);
+    copy->click();
+
+    QCOMPARE(QGuiApplication::clipboard()->text(), QString("https://example.test/open#abc"));
 }

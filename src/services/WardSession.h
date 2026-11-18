@@ -132,7 +132,7 @@ struct InvitedWard
     QByteArray seed;                     ///< when Joinable
     std::optional<WardRead> version;     ///< when Joinable: the version it carries, read
     std::optional<AccessInvite> invite;  ///< when Joinable: the open invite it joins through
-    QString wardName;                    ///< when Joinable or AlreadyHasAccess
+    QString wardName;                    ///< when Joinable
 };
 
 /// How making an invite ended.
@@ -333,10 +333,9 @@ public:
     /// which ward, and the invite's seed. Empty once the invite is used or withdrawn.
     QString invitationCode(const QByteArray& invite) const;
 
-    /// True when version, the ward's current version as the server has it, names invite, one
-    /// of invitesMadeHere, so someone opening the invite's link can join. False before the
-    /// invite's own version has reached the server, and once the invite is used or withdrawn.
-    bool versionNamesInvite(const QByteArray& invite, const QByteArray& version) const;
+    /// True when this device holds the ward document as its own: its file opens here, and the
+    /// ward is still shared with this device.
+    bool holdsAsItsOwn(const DocumentId& document) const;
 
     /// What file, an invitation file, holds: its line, then as readInvitation reads a seed
     /// and a version. Changes nothing.

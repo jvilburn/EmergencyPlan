@@ -18,8 +18,9 @@ fingerprints only.
   invitation is the part of the link after the `#`, which no browser sends, so the page is the
   same for every invitation: its script names the download after the ward and the invitation,
   as `WardPlanning-Tanglewood-<invitation>.exe`, and the installer reads the invitation from
-  its own file name. The ward's name follows the invitation in the link, for the person to read. `/installer/{platform}` passes the release's file
-  through from where `releases.json` says it is, so this site can name the download.
+  its own file name. The ward's name follows the invitation in the link, for the person to
+  read. `/installer/{platform}` passes the release's file through from where `releases.json`
+  says it is, so this site can name the download.
 - `src/releases.json`: each platform's current release.
 - `test/`: Vitest tests that run inside workerd.
 - `scripts/live.ts`: a check of a deployed server, run with `npm run live`.

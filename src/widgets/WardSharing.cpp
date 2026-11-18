@@ -184,11 +184,11 @@ void WardSharing::showLink(WardSession& session, const QByteArray& invite, QWidg
     {
         SendLinkDialog dialog(SendLinkDialog::userInstructions(entry.invitedUser()->label),
                               SendLinkDialog::userMessage(session.ownUser().name(), document.wardName(), link),
-                              parent);
+                              tr("Copy Message"), parent);
         dialog.exec();
         return;
     }
-    SendLinkDialog dialog(SendLinkDialog::deviceInstructions(), link, parent);
+    SendLinkDialog dialog(SendLinkDialog::deviceInstructions(), link, tr("Copy Link"), parent);
     dialog.exec();
 }
 
