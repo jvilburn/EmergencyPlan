@@ -50,7 +50,7 @@ QString SendLinkDialog::userInstructions(const QString& invitee)
 
 QString SendLinkDialog::userMessage(const QString& inviter, const QString& wardName, const QString& link)
 {
-    return tr("%1 has invited you to %2 in Ward Planning. Click to join:\n%3").arg(inviter, wardName, link);
+    return tr("%1 is sharing %2 with you in Ward Planning. Click to open it:\n%3").arg(inviter, wardName, link);
 }
 
 QString SendLinkDialog::deviceInstructions()

@@ -36,7 +36,7 @@ QString SendInvitationDialog::instructions(const QString& invitee)
 
 QString SendInvitationDialog::message(const QString& inviter, const QString& wardName, const QString& downloadPage)
 {
-    return tr("%1 has invited you to %2.\n\n"
+    return tr("%1 is sharing %2 with you in Ward Planning.\n\n"
               "1. Download Ward Planning from %3 and run the installer.\n"
               "2. If Windows says \"Windows protected your PC\", click More info, then Run anyway.\n"
               "3. Open the attached invitation.")

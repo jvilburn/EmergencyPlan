@@ -13,7 +13,7 @@ Ward Planning is a desktop application for managing ward family data, ministerin
 - The first launch asks for a name for this device, then your name and your email; you can leave the email empty if you have none
 - **File > New Ward** (Ctrl+N) - Creates a ward on this device, under your name and email
 - **File > Switch Ward** (Ctrl+O) - Lists the wards on this device by name, to open another one; a ward with changes you have not yet sent is marked *changes to share*, and one no longer shared with this device is marked *no longer shared*. The list offers **New Ward** and **Open Invitation** too
-- **File > Open Invitation** - Opens an invitation you were sent (see *Joining a ward*)
+- **File > Open Invitation** - Opens an invitation you were sent (see *Opening a shared ward*)
 - Each launch reopens the last ward; when there is none, or it does not open, the ward list shows instead
 
 ### Importing Data
@@ -48,7 +48,7 @@ With **Use the Ward Planning server** turned on in Settings, as it is unless you
 - **Changes that could not be applied** - When someone else changed the same thing first, your change is set aside and listed in a *To redo* file in the *Ward Planning* folder in Documents, which the app offers to open.
 - **This ward is no longer shared with this device.** - Shown above the map when you have been removed from the ward, or the ward has been deleted. The copy stays on this device, read-only, until you delete it with **Delete this copy**.
 - **Adding a user or a device** - **Add a user**, **Add a device** and **Save invitation** need the connection. After a moment showing *Creating the invitation...*, the app shows the message to send, which holds a link, with **Copy Message**. Paste it into an email or text to that person. For your own other device, it shows the link to open there.
-- **Joining from a link** - The person invited clicks the link, downloads Ward Planning from the page it opens, and runs the download. Ward Planning installs, opens, and asks *Join Tanglewood Ward?* There is no file for them to save or open. If they close the installer without starting Ward Planning, it asks the next time they open it. If this version of Ward Planning is already installed, the same download opens it and asks the same question; otherwise it updates Ward Planning first. Whoever has the link can join, once, so send it only to the person it is for.
+- **Opening from a link** - The person invited clicks the link, downloads Ward Planning from the page it opens, and runs the download. Ward Planning installs, opens, and asks *Open Tanglewood Ward on this computer?* There is no file for them to save or open. If they close the installer without starting Ward Planning, it asks the next time they open it. If this version of Ward Planning is already installed, the same download opens it and asks the same question; otherwise it updates Ward Planning first. Whoever has the link can join, once, so send it only to the person it is for.
 
 ### Sharing updates
 
@@ -76,11 +76,11 @@ Each of these is a change like any other: with the server turned off, it reaches
 
 Roles are an agreement among the people who use the ward, to keep well-meaning users from sharing it more widely than intended. They are not a security measure: every member holds the whole ward and could share it.
 
-### Joining a ward
+### Opening a shared ward
 
 With the server turned on, an invitation is a link (see *Sharing through the server*). With it turned off, an invitation is a file, such as *Tanglewood Ward - for Bob.wardinvite*, that a member of the ward sends you.
 
-- **Opening the invitation** - Double-click the file, drop it on the window, or use **File > Open Invitation...** or **Open Invitation...** in the ward list. The app asks *Join Tanglewood Ward?*, with the ward's own name; on OK you join, as the device and, for an invitation to a new user, the user with the name and email in **File > Settings**, and the ward opens.
+- **Opening the invitation** - Double-click the file, drop it on the window, or use **File > Open Invitation...** or **Open Invitation...** in the ward list. The app asks *Open Tanglewood Ward on this computer?*, with the ward's own name; on OK you join, as the device and, for an invitation to a new user, the user with the name and email in **File > Settings**, and the ward opens.
 - **Send an update after joining** - With the server turned off, the other members see you only once they open an update from you, so joining shows *You have changes to share*. Send an update to every member of the ward. With the server on, your join goes to them by itself.
 - **This device already has access** - An invitation to a ward this device already holds opens that ward, and the invitation stays unused.
 - **This invite has been used or withdrawn** - Shown when the ward, as an update or the server brings it after you join, shows that someone else joined with the same invitation first, or that it was withdrawn before your join reached the members. The ward is then no longer shared with this device. Ask the sender for a new invitation.

@@ -607,7 +607,7 @@ The server keeps no counter of its own.
 | the live channel | a key holder | Open while the ward is open. Carries presence and version notices. |
 | `GET /releases/latest` | anyone | The current app version per platform, with each installer's download address. |
 | `GET /download` | anyone | A web page offering the installers, for people who do not have the app yet. |
-| `GET /join` | anyone | The page an invitation link opens, the same for every invitation (see *Invites*). |
+| `GET /open` | anyone | The page an invitation link opens, the same for every invitation (see *Invites*). |
 | `GET /installer/{platform}` | anyone | The platform's current installer, passed through so the join page can name its download. |
 
 **Signed requests.** A write carries the signer's two public keys and an Ed25519 signature
@@ -1466,14 +1466,15 @@ seed for `crypto_box_seed_keypair`, and subkey 2 the seed for `crypto_sign_seed_
    invite open until the new member's join reaches them.
 
    **With the server on, the invitation is a link**,
-   `https://<server>/join#<document id>.<seed>.<ward name>`, given once the version naming the invite is
+   `https://<server>/open#<document id>.<seed>.<ward name>`, given once the version naming the invite is
    on the server, in a dialog that speaks to the inviting user - *Your invitation for Bob is
    ready. Send Bob this message, by email or text:* - over the message to pass on, set apart
-   in a box with *Copy Message*: *Alice Smith has invited you to Tanglewood Ward in Ward
-   Planning. Click to join:* and the link. A browser keeps what follows the `#` to itself, so
+   in a box with *Copy Message*: *Alice Smith is sharing Tanglewood Ward with you in
+   Ward Planning. Click to open it:* and the link. A browser keeps what follows the `#` to itself, so
    the server serves one join page for every invitation, and no request to it carries a seed.
    The ward's name, percent-encoded, is there for the person to read and decides nothing:
-   the page greets with it, *You have been invited to Tanglewood Ward in Ward Planning.*
+   the page greets with it, *Tanglewood Ward has been shared with you in Ward Planning.*,
+   over one button, *Download Ward Planning for Windows*, and the steps that follow it.
    The page's script names the installer's download after the ward and the invitation,
    `WardPlanning-Tanglewood-<document id>.<seed>.exe`, with the letters and digits of the
    ward's name less a closing *Ward*; a link whose invitation does not read, as
@@ -1487,8 +1488,8 @@ seed for `crypto_box_seed_keypair`, and subkey 2 the seed for `crypto_sign_seed_
    invitation; a launch that finds Ward Planning already running hands the invitation to
    it. So the invitation is opened by whichever start of the app first gets that far,
    whether the installer's or one the user makes later. The app fetches the ward's current
-   version from the server, reads it with the invite's keys, and asks *Join Tanglewood
-   Ward?* as for an invitation file. Whoever holds the link can join, as whoever holds an
+   version from the server, reads it with the invite's keys, and asks *Open Tanglewood
+   Ward on this computer?* as for an invitation file. Whoever holds the link can join, as whoever holds an
    invitation file can. For another of the user's own devices the dialog says *Your
    invitation is ready. Open this link on your other device:* over the link.
 
@@ -1508,7 +1509,7 @@ seed for `crypto_box_seed_keypair`, and subkey 2 the seed for `crypto_sign_seed_
    file selected, and *Done*. On a phone the platform's share sheet takes the drag's place.
    The user attaches it to an email, copies it onto a stick or sends it in a text. The message:
 
-   > Alice Smith has invited you to Tanglewood Ward.
+   > Alice Smith is sharing Tanglewood Ward with you in Ward Planning.
    >
    > 1. Download Ward Planning from https://<server>/download and run the installer.
    > 2. If Windows says "Windows protected your PC", click More info, then Run anyway.
@@ -1771,8 +1772,8 @@ this section is the invitation file, which sharing with the server off uses.
 double-clicking an invitation opens Ward Planning on it. Dropping one onto the app's window
 does the same, and *Join a ward*, prominent on the first-run screen where a new user with no
 wards lands and in the ward list too, offers a file picker. The app reads the seed and the
-version from the file, unseals the ward with the invite's key, and asks *Join Tanglewood
-Ward?* with the ward's own name, read from the ward rather than from the file's name;
+version from the file, unseals the ward with the invite's key, and asks *Open Tanglewood
+Ward on this computer?* with the ward's own name, read from the ward rather than from the file's name;
 confirming runs the join (see *Invites*). Nothing is typed, pasted or
 copied. An update file opens the same ways (see *Update files*).
 

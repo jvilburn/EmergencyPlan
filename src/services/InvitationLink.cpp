@@ -28,5 +28,5 @@ std::optional<InvitationCode> InvitationLink::parse(const QString& code)
 
 QString InvitationLink::link(const QString& serverAddress, const QString& code, const QString& wardName)
 {
-    return serverAddress + "/join#" + code + '.' + QString::fromLatin1(QUrl::toPercentEncoding(wardName));
+    return serverAddress + "/open#" + code + '.' + QString::fromLatin1(QUrl::toPercentEncoding(wardName));
 }

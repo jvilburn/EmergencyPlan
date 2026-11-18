@@ -139,7 +139,8 @@ describe("joining through a link", () =>
 
     it("serves one join page for every invitation, which names the download after the invitation in the browser", async () =>
     {
-        const answer = await fromAddress("192.0.2.20", "/join", {});
+        expect((await fromAddress("192.0.2.20", "/join", {})).status).toBe(404);
+        const answer = await fromAddress("192.0.2.20", "/open", {});
         expect(answer.status).toBe(200);
         expect(answer.headers.get("Content-Type")).toBe("text/html; charset=utf-8");
         const page = await answer.text();
@@ -151,7 +152,8 @@ describe("joining through a link", () =>
         expect(page).toContain(`const readLink = (${readLink.toString()});`);
         expect(page).toContain(`const downloadName = (${downloadName.toString()});`);
         expect(page).toContain("download.download = downloadName(link.invitation, link.ward);");
-        expect(page).toContain('"You have been invited to " + link.ward + " in Ward Planning."');
+        expect(page).toContain('link.ward + " has been shared with you in Ward Planning."');
+        expect(page).toContain('It asks your name, then asks whether to open "');
         expect(page).toContain('href="/installer/windows"');
         expect(page).toContain("Run anyway");
         expect(page).toContain("Open this link on your Windows computer");

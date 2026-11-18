@@ -20,7 +20,7 @@ void SendInvitationDialogTest::instructionsAddressTheInvitingUserAndTheMessageTh
              QString("Your invitation for Paula is ready. Attach it to an email or text to Paula, with this "
                      "message:"));
     QCOMPARE(SendInvitationDialog::message("John", "Tanglewood Ward", "https://example.test/download"),
-             QString("John has invited you to Tanglewood Ward.\n\n"
+             QString("John is sharing Tanglewood Ward with you in Ward Planning.\n\n"
                      "1. Download Ward Planning from https://example.test/download and run the installer.\n"
                      "2. If Windows says \"Windows protected your PC\", click More info, then Run anyway.\n"
                      "3. Open the attached invitation."));

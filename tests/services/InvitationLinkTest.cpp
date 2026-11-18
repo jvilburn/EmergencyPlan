@@ -26,9 +26,9 @@ void InvitationLinkTest::codeRoundTripsAndTheLinkCarriesItAfterTheHash()
     QVERIFY(parsed->document == document);
     QCOMPARE(parsed->seed, seed);
     QCOMPARE(InvitationLink::link("https://example.test", code, "Tanglewood Ward"),
-             "https://example.test/join#" + code + ".Tanglewood%20Ward");
+             "https://example.test/open#" + code + ".Tanglewood%20Ward");
     QCOMPARE(InvitationLink::link("https://example.test", code, "St. George (YSA) #2"),
-             "https://example.test/join#" + code + ".St.%20George%20%28YSA%29%20%232");
+             "https://example.test/open#" + code + ".St.%20George%20%28YSA%29%20%232");
 }
 
 void InvitationLinkTest::parseRefusesWhatIsNotACode()
@@ -42,16 +42,16 @@ void InvitationLinkTest::parseRefusesWhatIsNotACode()
     QVERIFY(!InvitationLink::parse(QString(code).replace('.', '_')).has_value());
     QVERIFY(!InvitationLink::parse(code + "." + code).has_value());
     QVERIFY(!InvitationLink::parse(QString(code).replace(30, 1, "!")).has_value());
-    QVERIFY(!InvitationLink::parse("https://example.test/join#" + code).has_value());
+    QVERIFY(!InvitationLink::parse("https://example.test/open#" + code).has_value());
 }
 
 void InvitationLinkTest::messagesSpeakToTheRightPerson()
 {
     QCOMPARE(SendLinkDialog::userInstructions("Paula"),
              QString("Your invitation for Paula is ready. Send Paula this message, by email or text:"));
-    QCOMPARE(SendLinkDialog::userMessage("John", "Tanglewood Ward", "https://example.test/join#abc"),
-             QString("John has invited you to Tanglewood Ward in Ward Planning. Click to join:\n"
-                     "https://example.test/join#abc"));
+    QCOMPARE(SendLinkDialog::userMessage("John", "Tanglewood Ward", "https://example.test/open#abc"),
+             QString("John is sharing Tanglewood Ward with you in Ward Planning. Click to open it:\n"
+                     "https://example.test/open#abc"));
     QCOMPARE(SendLinkDialog::deviceInstructions(),
              QString("Your invitation is ready. Open this link on your other device:"));
 }

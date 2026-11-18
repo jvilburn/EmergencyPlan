@@ -758,7 +758,7 @@ bool MainWindow::joinInvited(const InvitedWard& invited)
     }
 
     QMessageBox::StandardButton answer = QMessageBox::question(
-        this, tr("Open Invitation"), tr("Join %1?").arg(invited.wardName), QMessageBox::Ok | QMessageBox::Cancel,
+        this, tr("Open Invitation"), tr("Open %1 on this computer?").arg(invited.wardName), QMessageBox::Ok | QMessageBox::Cancel,
         QMessageBox::Ok);
     if (answer != QMessageBox::Ok || !mayLeaveWard())
     {
@@ -768,8 +768,8 @@ bool MainWindow::joinInvited(const InvitedWard& invited)
     m_settings->setLastWard(invited.document);
     followUserDetails();
     QString joined = m_settings->useServer()
-        ? tr("You have joined %1.")
-        : tr("You have joined %1. Send an update to every member of the ward so they see you.");
+        ? tr("%1 is now on this computer.")
+        : tr("%1 is now on this computer. Send an update to every member of the ward so they see you.");
     QMessageBox::information(this, tr("Open Invitation"), joined.arg(invited.wardName));
     return true;
 }

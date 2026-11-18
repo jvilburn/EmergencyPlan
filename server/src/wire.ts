@@ -217,7 +217,7 @@ export function routeOf(method: string, path: string): Route | null
     {
         return { kind: "download" };
     }
-    if (method === "GET" && path === "/join")
+    if (method === "GET" && path === "/open")
     {
         return { kind: "join" };
     }

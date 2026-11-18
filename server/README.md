@@ -7,7 +7,7 @@ fingerprints only.
 
 ## Layout
 
-- `src/index.ts`: the Worker. Limits each address, serves `/releases/latest`, `/download`, `/join`
+- `src/index.ts`: the Worker. Limits each address, serves `/releases/latest`, `/download`, `/open`
   and `/installer/{platform}`, and hands each `/documents` call to the ward's object.
 - `src/ward.ts`: the `Ward` Durable Object, one per ward: the current version, replaced only by a
   higher-numbered one, and the live channels.
@@ -88,7 +88,7 @@ A channel open (`GET /documents/{id}/channel`):
 
 The join page and the installer:
 
-- `GET /join`: `200`, the same page for every invitation.
+- `GET /open`: `200`, the same page for every invitation.
 - `GET /installer/{platform}`: `404` for a platform `releases.json` does not list, `502` when the
   release's file cannot be had, `200` with the file. It counts against the address's read limit.
 

@@ -69,11 +69,18 @@ export function joinPage(releases: Record<string, Release>): Response
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<title>Join a ward in Ward Planning</title>
+<title>A ward shared with you in Ward Planning</title>
+<style>
+body { font-family: system-ui, sans-serif; max-width: 34em; margin: 2em auto; padding: 0 1em; line-height: 1.5; }
+#invited { font-size: 1.2em; font-weight: bold; }
+#download { display: inline-block; padding: 0.7em 1.4em; border-radius: 0.4em; background: #1f5fa8; color: #ffffff;
+    font-weight: bold; text-decoration: none; }
+li { margin-bottom: 0.4em; }
+</style>
 </head>
 <body>
 <h1>Ward Planning</h1>
-<p id="invited" hidden>You have been invited to share a ward in Ward Planning.</p>
+<p id="invited" hidden>A ward has been shared with you in Ward Planning.</p>
 <p id="incomplete" hidden>This invitation link is not complete. Ask the sender to send it again.</p>
 <div id="offer">
 ${offer}
@@ -89,14 +96,15 @@ if (link !== null)
     const invited = document.getElementById("invited");
     if (link.ward !== "")
     {
-        invited.textContent = "You have been invited to " + link.ward + " in Ward Planning.";
+        invited.textContent = link.ward + " has been shared with you in Ward Planning.";
     }
     invited.hidden = false;
     if (download !== null)
     {
         download.download = downloadName(link.invitation, link.ward);
         document.getElementById("last").textContent =
-            "Ward Planning installs and opens. It asks your name, then asks whether to join the ward.";
+            "Ward Planning installs and opens. It asks your name, then asks whether to open "
+            + (link.ward !== "" ? link.ward : "the ward") + ".";
     }
 }
 else if (hash !== "")
