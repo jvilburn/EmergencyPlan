@@ -8,6 +8,43 @@ import { Release } from "./download";
 export const InvitationPattern = "^[A-Za-z0-9_-]{22}\\.[A-Za-z0-9_-]{43}$";
 
 /**
+ * What a link carries after its #: the invitation, then a dot and the ward's name,
+ * percent-encoded, which is there for the person to read and decides nothing. Null when the
+ * invitation does not read. The join page runs this in the browser, from this function's own
+ * text, so it uses nothing outside itself.
+ */
+export function readLink(hash: string, pattern: string): { invitation: string; ward: string } | null
+{
+    const invitation = hash.slice(0, 66);
+    if (!new RegExp(pattern).test(invitation) || (hash.length > 66 && hash[66] !== "."))
+    {
+        return null;
+    }
+    let ward = "";
+    try
+    {
+        ward = decodeURIComponent(hash.slice(67));
+    }
+    catch
+    {
+        ward = "";
+    }
+    return { invitation, ward };
+}
+
+/**
+ * The name the installer is downloaded under: WardPlanning, the ward's name without a closing
+ * "Ward", and the invitation, as WardPlanning-Tanglewood-<invitation>.exe. Of the ward's name
+ * only letters and digits are kept, so the one dot before .exe is the invitation's own, which is
+ * how the installer finds the invitation. The join page runs this in the browser, as readLink.
+ */
+export function downloadName(invitation: string, ward: string): string
+{
+    const label = ward.replace(/\s+ward\s*$/i, "").replace(/[^A-Za-z0-9]+/g, "-").slice(0, 40).replace(/^-+|-+$/g, "");
+    return "WardPlanning-" + (label === "" ? "Setup" : label) + "-" + invitation + ".exe";
+}
+
+/**
  * The page an invitation link opens. The invitation is the part of the link after the #, which
  * a browser keeps to itself, so this page is the same for every invitation and the server never
  * sees one. Its script reads the invitation in the browser and names the installer's download
@@ -42,19 +79,27 @@ export function joinPage(releases: Record<string, Release>): Response
 ${offer}
 </div>
 <script>
-const invitation = location.hash.slice(1);
+const readLink = (${readLink.toString()});
+const downloadName = (${downloadName.toString()});
+const hash = location.hash.slice(1);
+const link = readLink(hash, ${JSON.stringify(InvitationPattern)});
 const download = document.getElementById("download");
-if (new RegExp(${JSON.stringify(InvitationPattern)}).test(invitation))
+if (link !== null)
 {
-    document.getElementById("invited").hidden = false;
+    const invited = document.getElementById("invited");
+    if (link.ward !== "")
+    {
+        invited.textContent = "You have been invited to " + link.ward + " in Ward Planning.";
+    }
+    invited.hidden = false;
     if (download !== null)
     {
-        download.download = "WardPlanning-Setup-" + invitation + ".exe";
+        download.download = downloadName(link.invitation, link.ward);
         document.getElementById("last").textContent =
             "Ward Planning installs and opens. It asks your name, then asks whether to join the ward.";
     }
 }
-else if (invitation !== "")
+else if (hash !== "")
 {
     document.getElementById("incomplete").hidden = false;
     document.getElementById("offer").hidden = true;

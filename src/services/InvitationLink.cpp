@@ -3,6 +3,8 @@
 #include "Base64Url.h"
 #include "Crypto.h"
 
+#include <QUrl>
+
 QString InvitationLink::code(const DocumentId& document, const QByteArray& seed)
 {
     return document.toString() + '.' + Base64Url::encode(seed);
@@ -24,7 +26,7 @@ std::optional<InvitationCode> InvitationLink::parse(const QString& code)
     return InvitationCode{DocumentId::fromString(parts[0]), *seed};
 }
 
-QString InvitationLink::link(const QString& serverAddress, const QString& code)
+QString InvitationLink::link(const QString& serverAddress, const QString& code, const QString& wardName)
 {
-    return serverAddress + "/join#" + code;
+    return serverAddress + "/join#" + code + '.' + QString::fromLatin1(QUrl::toPercentEncoding(wardName));
 }

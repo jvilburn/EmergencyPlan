@@ -1466,14 +1466,17 @@ seed for `crypto_box_seed_keypair`, and subkey 2 the seed for `crypto_sign_seed_
    invite open until the new member's join reaches them.
 
    **With the server on, the invitation is a link**,
-   `https://<server>/join#<document id>.<seed>`, given once the version naming the invite is
+   `https://<server>/join#<document id>.<seed>.<ward name>`, given once the version naming the invite is
    on the server, in a dialog that speaks to the inviting user - *Your invitation for Bob is
    ready. Send Bob this message, by email or text:* - over the message to pass on, set apart
    in a box with *Copy Message*: *Alice Smith has invited you to Tanglewood Ward in Ward
    Planning. Click to join:* and the link. A browser keeps what follows the `#` to itself, so
    the server serves one join page for every invitation, and no request to it carries a seed.
-   The page's script names the installer's download after the invitation,
-   `WardPlanning-Setup-<document id>.<seed>.exe`; a link whose invitation does not read, as
+   The ward's name, percent-encoded, is there for the person to read and decides nothing:
+   the page greets with it, *You have been invited to Tanglewood Ward in Ward Planning.*
+   The page's script names the installer's download after the ward and the invitation,
+   `WardPlanning-Tanglewood-<document id>.<seed>.exe`, with the letters and digits of the
+   ward's name less a closing *Ward*; a link whose invitation does not read, as
    one cut short in an email, gets *This invitation link is not complete. Ask the sender to
    send it again.* on the page in place of a download. The installer reads the invitation
    from its own file name and leaves it in the app's local data, as the file `invitation`.

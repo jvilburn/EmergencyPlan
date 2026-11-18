@@ -178,7 +178,8 @@ void WardSharing::showLink(WardSession& session, const QByteArray& invite, QWidg
 {
     const Document& document = session.document();
     AccessInvite entry = *document.access().findInvite(invite);
-    QString link = InvitationLink::link(NetworkTransport::BuiltInAddress, session.invitationCode(invite));
+    QString link = InvitationLink::link(NetworkTransport::BuiltInAddress, session.invitationCode(invite),
+                                        document.wardName());
     if (entry.invitedUser().has_value())
     {
         SendLinkDialog dialog(SendLinkDialog::userInstructions(entry.invitedUser()->label),

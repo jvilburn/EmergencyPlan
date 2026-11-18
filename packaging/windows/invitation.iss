@@ -22,7 +22,7 @@ begin
 end;
 
 // The invitation code in the installer's own file name, as the server's join page names the
-// download: WardPlanning-Setup-<document>.<seed>.exe. It is found wherever it sits in the
+// download: WardPlanning-Tanglewood-<document>.<seed>.exe. It is found wherever it sits in the
 // name, so what a browser adds for a second download of one name, such as " (1)" or "(1)",
 // is passed over. Empty when the name carries none.
 function InvitationCode(): String;

@@ -1,7 +1,7 @@
 import { exports } from "cloudflare:workers";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { downloadPage } from "../src/download";
-import { InvitationPattern, joinPage } from "../src/join";
+import { InvitationPattern, downloadName, joinPage, readLink } from "../src/join";
 import releases from "../src/releases.json";
 import { IdBytes, KeyBytes, channelLine, encode, readVersion, writeLine } from "../src/wire";
 import { Channel, Device, framed, newDevice, newDocument, random, signed, version } from "./clients";
@@ -147,8 +147,11 @@ describe("joining through a link", () =>
 
         // The page reads the invitation from the part of the link the browser keeps to itself.
         expect(page).toContain("location.hash");
-        expect(page).toContain(`new RegExp(${JSON.stringify(InvitationPattern)})`);
-        expect(page).toContain('"WardPlanning-Setup-" + invitation + ".exe"');
+        expect(page).toContain(`readLink(hash, ${JSON.stringify(InvitationPattern)})`);
+        expect(page).toContain(`const readLink = (${readLink.toString()});`);
+        expect(page).toContain(`const downloadName = (${downloadName.toString()});`);
+        expect(page).toContain("download.download = downloadName(link.invitation, link.ward);");
+        expect(page).toContain('"You have been invited to " + link.ward + " in Ward Planning."');
         expect(page).toContain('href="/installer/windows"');
         expect(page).toContain("Run anyway");
         expect(page).toContain("Open this link on your Windows computer");
@@ -168,6 +171,31 @@ describe("joining through a link", () =>
         expect(pattern.test(invitation.replace(".", "_"))).toBe(false);
         expect(pattern.test(invitation.replace(/.$/, "+"))).toBe(false);
         expect(pattern.test("")).toBe(false);
+    });
+
+    it("reads a link's invitation and its ward's name, and names the download after both", () =>
+    {
+        const invitation = `${encode(random(IdBytes))}.${encode(random(KeyBytes))}`;
+
+        expect(readLink(`${invitation}.Tanglewood%20Ward`, InvitationPattern)).toEqual({ invitation, ward: "Tanglewood Ward" });
+        expect(readLink(invitation, InvitationPattern)).toEqual({ invitation, ward: "" });
+        // A name that does not decode is left out; the invitation still reads.
+        expect(readLink(`${invitation}.Tanglewood%2`, InvitationPattern)).toEqual({ invitation, ward: "" });
+        expect(readLink(invitation.slice(0, 65), InvitationPattern)).toBeNull();
+        expect(readLink(`${invitation}A`, InvitationPattern)).toBeNull();
+        expect(readLink("", InvitationPattern)).toBeNull();
+
+        expect(downloadName(invitation, "Tanglewood Ward")).toBe(`WardPlanning-Tanglewood-${invitation}.exe`);
+        expect(downloadName(invitation, "Maple 2nd ward ")).toBe(`WardPlanning-Maple-2nd-${invitation}.exe`);
+        expect(downloadName(invitation, "Maple Branch")).toBe(`WardPlanning-Maple-Branch-${invitation}.exe`);
+        expect(downloadName(invitation, "St. George (YSA) Ward")).toBe(`WardPlanning-St-George-YSA-${invitation}.exe`);
+        expect(downloadName(invitation, "")).toBe(`WardPlanning-Setup-${invitation}.exe`);
+        expect(downloadName(invitation, "Ward")).toBe(`WardPlanning-Ward-${invitation}.exe`);
+        // The installer finds the invitation by its dot, so the name brings none of its own.
+        const long = downloadName(invitation, "A.B.C ".repeat(30));
+        expect(long.split(".").length).toBe(3);
+        expect(long.length).toBeLessThanOrEqual("WardPlanning-".length + 40 + 1 + 66 + 4);
+        expect(long.endsWith(`-${invitation}.exe`)).toBe(true);
     });
 
     it("offers no download while there is no Windows release", async () =>

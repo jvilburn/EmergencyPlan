@@ -25,7 +25,10 @@ void InvitationLinkTest::codeRoundTripsAndTheLinkCarriesItAfterTheHash()
     QVERIFY(parsed.has_value());
     QVERIFY(parsed->document == document);
     QCOMPARE(parsed->seed, seed);
-    QCOMPARE(InvitationLink::link("https://example.test", code), "https://example.test/join#" + code);
+    QCOMPARE(InvitationLink::link("https://example.test", code, "Tanglewood Ward"),
+             "https://example.test/join#" + code + ".Tanglewood%20Ward");
+    QCOMPARE(InvitationLink::link("https://example.test", code, "St. George (YSA) #2"),
+             "https://example.test/join#" + code + ".St.%20George%20%28YSA%29%20%232");
 }
 
 void InvitationLinkTest::parseRefusesWhatIsNotACode()

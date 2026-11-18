@@ -16,8 +16,9 @@ fingerprints only.
 - `src/download.ts`: the download page.
 - `src/join.ts`: the page an invitation link opens, and the installer it downloads. The
   invitation is the part of the link after the `#`, which no browser sends, so the page is the
-  same for every invitation: its script names the download after the invitation, and the
-  installer reads it from its own file name. `/installer/{platform}` passes the release's file
+  same for every invitation: its script names the download after the ward and the invitation,
+  as `WardPlanning-Tanglewood-<invitation>.exe`, and the installer reads the invitation from
+  its own file name. The ward's name follows the invitation in the link, for the person to read. `/installer/{platform}` passes the release's file
   through from where `releases.json` says it is, so this site can name the download.
 - `src/releases.json`: each platform's current release.
 - `test/`: Vitest tests that run inside workerd.
