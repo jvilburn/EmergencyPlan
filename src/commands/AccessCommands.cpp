@@ -467,7 +467,7 @@ CommandPtr JoinCommand::create(const AccessInvite& invite, const AccessDevice& d
         joining = JoiningUser{UserId::generate(), user};
     }
     return std::make_shared<JoinCommand>(invite, device, joining,
-                                         CommandDescription(QObject::tr("Join %1").arg(wardName), {}));
+                                         CommandDescription(QObject::tr("Open %1 on this computer").arg(wardName), {}));
 }
 
 CommandPtr JoinCommand::rejoin(const AccessInvite& invite, const AccessList& held, const QByteArray& device,
@@ -480,7 +480,7 @@ CommandPtr JoinCommand::rejoin(const AccessInvite& invite, const AccessList& hel
         user = JoiningUser{joined.id(), joined.details()};
     }
     return std::make_shared<JoinCommand>(invite, *held.findDevice(device), user,
-                                         CommandDescription(QObject::tr("Join %1").arg(wardName), {}));
+                                         CommandDescription(QObject::tr("Open %1 on this computer").arg(wardName), {}));
 }
 
 JoinCommand::JoinCommand(const AccessInvite& invite, const AccessDevice& device,
