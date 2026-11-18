@@ -30,8 +30,8 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    /// What a starting argument or a handover begins with when it is an invitation code and
-    /// not a file: join:<code>.
+    /// What the path given to openStartingWard, openFile or onHandedOver begins with when it is
+    /// an invitation link's code and not a file: join:<code>.
     static constexpr char JoinPrefix[] = "join:";
 
     /// settings are the app's own settings, which the window does not own. developer adds the
@@ -39,20 +39,24 @@ public:
     MainWindow(AppSettings* settings, bool developer, QWidget* parent);
     ~MainWindow();
 
-    /// Opens the ward the app starts on: on the first start, asks this device's name, then your
-    /// name and your email, which may be left empty; then opens file, the update or invitation
-    /// the app was started with, when there is one. When no ward is open after that, opens the
+    /// On the first start, asks this device's name, then your name and your email, which may
+    /// be left empty. False when the user cancels, which quits the app.
+    bool askYourDetails();
+
+    /// Opens the ward the app starts on: opens file, the update, invitation file or invitation
+    /// code the app starts with, when there is one. When no ward is open after that, opens the
     /// last ward, or, when there is none or it does not open, shows the ward list. False when
     /// the user cancels, which quits the app.
     bool openStartingWard(const QString& file);
 
 public slots:
-    /// Opens the file at path by its suffix: a .wardinvite as an invitation, anything else as
-    /// an update. True when the file's ward is open after it.
+    /// Opens what path names: an invitation code after JoinPrefix, or the file at path by its
+    /// suffix, a .wardinvite as an invitation and anything else as an update. True when its
+    /// ward is open after it.
     bool openFile(const QString& path);
 
-    /// Another launch handed over path, its update or invitation file, or nothing: brings the
-    /// window forward and opens the file.
+    /// Another launch handed over path, its update, invitation file or invitation code, or
+    /// nothing: brings the window forward and opens it.
     void onHandedOver(const QString& path);
 
 protected:
@@ -194,10 +198,14 @@ private:
     /// the server and opens it as an invitation. True when a ward opened or was joined.
     bool openInvitationCode(const QString& code);
 
-    /// Reads invitation, the bytes of an invitation file, and joins its ward once the user
-    /// confirms it by name; notAnInvitation is what the user is told when it does not read
-    /// as one. True when a ward opened or was joined.
-    bool joinThroughInvitation(const QByteArray& invitation, const QString& notAnInvitation);
+    /// Joins the ward invited holds, as the session read it from an invitation file or a
+    /// link's code, once the user confirms it by name, or says why there is nothing to join.
+    /// True when a ward opened or was joined.
+    bool joinInvited(const InvitedWard& invited);
+
+    /// Opens the ward document, which this device holds as its own, and says the device
+    /// already has access to it. True when it is open.
+    bool openWardAlreadyHeld(const DocumentId& document);
 
     /// What follows a take, from an update file or the server: when the version was taken,
     /// Your name and Your email follow the ward's, and a replay that was abandoned hands the

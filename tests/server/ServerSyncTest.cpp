@@ -4,7 +4,6 @@
 #include "Base64Url.h"
 #include "Crypto.h"
 #include "FakeServer.h"
-#include "InvitationFile.h"
 #include "InvitationLink.h"
 #include "TestClient.h"
 #include "TestSharing.h"
@@ -761,14 +760,14 @@ void ServerSyncTest::theChannelSaysWhoIsHere()
     QVERIFY(carol.session().isNoLongerShared());
 }
 
-void ServerSyncTest::anInvitationCarriesTheServersVersionAndAnEditAfterItSurvivesTheJoin_data()
+void ServerSyncTest::anInviteIsConfirmedOnceTheServerNamesItAndAnEditAfterItSurvivesTheJoin_data()
 {
     QTest::addColumn<bool>("repliesFirst");
     QTest::newRow("events before the reply") << false;
     QTest::newRow("the reply before events") << true;
 }
 
-void ServerSyncTest::anInvitationCarriesTheServersVersionAndAnEditAfterItSurvivesTheJoin()
+void ServerSyncTest::anInviteIsConfirmedOnceTheServerNamesItAndAnEditAfterItSurvivesTheJoin()
 {
     QFETCH(bool, repliesFirst);
     FakeServer server;
@@ -776,28 +775,29 @@ void ServerSyncTest::anInvitationCarriesTheServersVersionAndAnEditAfterItSurvive
     TestClient alice("Alice", &server);
     TestClient bob("Bob's phone", &server);
     DocumentId document = shared(server, {&alice});
-    QSignalSpy invitations(&alice.sync(), &WardSync::invitationFetched);
+    QSignalSpy confirmations(&alice.sync(), &WardSync::inviteConfirmed);
 
     InviteResult made = alice.session().invite(InvitedUser{AccessRole::Member, "Bob"});
     QVERIFY(made.commit.status == CommitStatus::Applied);
-    alice.sync().fetchInvitation(made.invite);
-    // The invite's push is still on its way, so there is no invitation yet.
-    QCOMPARE(invitations.size(), qsizetype(0));
+    std::optional<InvitationCode> code = InvitationLink::parse(alice.session().invitationCode(made.invite));
+    QVERIFY(code.has_value());
+    alice.sync().confirmInvite(made.invite);
+    // The invite's push is still on its way, so there is no answer yet.
+    QCOMPARE(confirmations.size(), qsizetype(0));
     QCOMPARE(server.number(document), qint64(2));
     server.settle();
 
-    QCOMPARE(invitations.size(), qsizetype(1));
-    QCOMPARE(invitations[0][0].toByteArray(), made.invite);
-    QByteArray invitation = invitations[0][1].toByteArray();
+    QCOMPARE(confirmations.size(), qsizetype(1));
+    QCOMPARE(confirmations[0][0].toByteArray(), made.invite);
+    QCOMPARE(confirmations[0][1].toBool(), true);
     QCOMPARE(server.number(document), qint64(3));
-    QCOMPARE(TestSharing::versionIn(invitation), server.version(document));
 
-    // Alice makes one more edit, so the head is one above the invitation's version.
+    // Alice makes one more edit, so the head is one above the version that first named the invite.
     QVERIFY(TestSharing::commitBobsPhone(alice, "555-2222") == CommitStatus::Applied);
     server.settle();
     QCOMPARE(server.number(document), qint64(4));
 
-    InvitedWard invited = bob.session().readInvitation(invitation);
+    InvitedWard invited = bob.session().readInvitation(code->seed, server.version(document));
     QVERIFY2(invited.status == InvitationStatus::Joinable, qPrintable(invited.problem));
     bob.session().join(invited, {"Bob Brown", ""}, "Bob's phone");
     // Until a version names his device, Bob signs as the invite, and is here under it.
@@ -825,38 +825,39 @@ void ServerSyncTest::anInvitationCarriesTheServersVersionAndAnEditAfterItSurvive
     QCOMPARE(bob.sync().present(), fingerprints({&alice}));
 }
 
-void ServerSyncTest::anInvitationIsNotGivenWhileNothingCanBeShared()
+void ServerSyncTest::anInviteIsNotConfirmedWhileNothingCanBeShared()
 {
     FakeServer server;
     TestClient alice("Alice", &server);
     shared(server, {&alice});
     InviteResult made = alice.session().invite(InvitedUser{AccessRole::Member, "Bob"});
     server.settle();
-    QSignalSpy invitations(&alice.sync(), &WardSync::invitationFetched);
+    QSignalSpy confirmations(&alice.sync(), &WardSync::inviteConfirmed);
 
     server.setReachable(false);
     server.settle();
-    alice.sync().fetchInvitation(made.invite);
-    QCOMPARE(invitations.size(), qsizetype(1));
-    QVERIFY(invitations[0][1].toByteArray().isEmpty());
+    alice.sync().confirmInvite(made.invite);
+    QCOMPARE(confirmations.size(), qsizetype(1));
+    QCOMPARE(confirmations[0][1].toBool(), false);
 
-    // Reachable again, the invitation is given; once the invite is withdrawn, it is not.
+    // Reachable again, the invite is confirmed; once it is withdrawn, it is not.
     server.setReachable(true);
     alice.sync().retry();
     server.settle();
-    alice.sync().fetchInvitation(made.invite);
+    alice.sync().confirmInvite(made.invite);
     server.settle();
-    QCOMPARE(invitations.size(), qsizetype(2));
-    QVERIFY(!invitations[1][1].toByteArray().isEmpty());
+    QCOMPARE(confirmations.size(), qsizetype(2));
+    QCOMPARE(confirmations[1][0].toByteArray(), made.invite);
+    QCOMPARE(confirmations[1][1].toBool(), true);
 
     AccessInvite invite = *alice.session().document().access().findInvite(made.invite);
     CommandPtr withdrawal = WithdrawInviteCommand::create(alice.identity().fingerprint(), invite,
                                                           alice.session().document().access());
     QVERIFY(alice.session().commit(withdrawal).status == CommitStatus::Applied);
-    alice.sync().fetchInvitation(made.invite);
+    alice.sync().confirmInvite(made.invite);
     server.settle();
-    QCOMPARE(invitations.size(), qsizetype(3));
-    QVERIFY(invitations[2][1].toByteArray().isEmpty());
+    QCOMPARE(confirmations.size(), qsizetype(3));
+    QCOMPARE(confirmations[2][1].toBool(), false);
 }
 
 void ServerSyncTest::anInvitationCodeJoinsFromTheServersVersion()
@@ -876,7 +877,7 @@ void ServerSyncTest::anInvitationCodeJoinsFromTheServersVersion()
     QVERIFY(parsed->document == document);
     QVERIFY(TestSharing::commitBobsPhone(alice, "555-2222") == CommitStatus::Applied);
     server.settle();
-    InvitedWard invited = bob.session().readInvitation(InvitationFile::write(parsed->seed, server.version(parsed->document)));
+    InvitedWard invited = bob.session().readInvitation(parsed->seed, server.version(parsed->document));
     QVERIFY2(invited.status == InvitationStatus::Joinable, qPrintable(invited.problem));
     QCOMPARE(invited.wardName, alice.session().document().wardName());
     bob.session().join(invited, {"Bob Brown", ""}, "Bob's phone");
@@ -890,11 +891,16 @@ void ServerSyncTest::anInvitationCodeJoinsFromTheServersVersion()
         QCOMPARE(TestSharing::bobsPhone(*client), QString("555-2222"));
         QVERIFY(client->session().journal().isEmpty());
     }
-    // Used, the invite has no code, and its old code joins nothing.
+    // Used, the invite has no code. Its old code opens Bob's own copy for Bob, who often runs
+    // the download again, and tells anyone else the invite is used.
     QVERIFY(alice.session().invitationCode(made.invite).isEmpty());
+    InvitedWard again = bob.session().readInvitation(parsed->seed, server.version(document));
+    QVERIFY(again.status == InvitationStatus::AlreadyHasAccess);
+    QVERIFY(again.document == document);
+    QCOMPARE(again.wardName, alice.session().document().wardName());
     TestClient carol("Carol", &server);
-    InvitedWard late = carol.session().readInvitation(InvitationFile::write(parsed->seed, server.version(document)));
-    QVERIFY(late.status == InvitationStatus::NotAnInvitation);
+    InvitedWard late = carol.session().readInvitation(parsed->seed, server.version(document));
+    QVERIFY(late.status == InvitationStatus::UsedOrWithdrawn);
 }
 
 void ServerSyncTest::aSyncThatIsNotStartedSendsNothing()

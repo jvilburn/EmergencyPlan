@@ -61,11 +61,11 @@ public:
     /// Looks, as the class comment describes. Does nothing while stopped.
     void look();
 
-    /// Asks for an invitation for invite, one of the session's invitesMadeHere, that carries
-    /// the ward's version as the server has it, so whoever joins through it starts from a
-    /// version the server holds. The look under way, with the pushes it makes, ends first.
-    /// invitationFetched answers.
-    void fetchInvitation(const QByteArray& invite);
+    /// Asks whether the server's version of the ward names invite, one of the session's
+    /// invitesMadeHere, which is when its link can be handed out: whoever opens the link
+    /// joins from the server's version. The look under way, with the pushes it makes, ends
+    /// first. inviteConfirmed answers.
+    void confirmInvite(const QByteArray& invite);
 
     bool isRunning() const { return m_running; }
 
@@ -92,16 +92,16 @@ signals:
     /// A version fetched from the server was put to the session, which answered result.
     void versionFetched(const TakeResult& result);
 
-    /// The answer to fetchInvitation: the invitation's bytes, or none when the server did not
-    /// answer, sharing stopped, or its version does not name the invite.
-    void invitationFetched(const QByteArray& invite, const QByteArray& invitation);
+    /// The answer to confirmInvite: whether the server's version names the invite. It does
+    /// not when the server did not answer, sharing stopped, or the invite is not in it.
+    void inviteConfirmed(const QByteArray& invite, bool onServer);
 
 private slots:
     void onLocalChange();
     void onHead(const ServerRead& head);
     void onFetched(const ServerRead& version);
     void onWritten(bool stored);
-    void onInvitationVersionFetched(const ServerRead& version);
+    void onInviteVersionFetched(const ServerRead& version);
     void onTold(const QSet<QByteArray>& present, qint64 version);
     void onChannelClosed();
     void onRetryTimer();
@@ -142,9 +142,9 @@ private:
     /// Ends the look and starts another at once.
     void lookAgain();
 
-    /// Fetches the server's version for the invitation asked for, or answers none when
-    /// something stops the sharing.
-    void startInvitationFetch();
+    /// Fetches the server's version for the invite asked about, or answers that it is not
+    /// there when something stops the sharing.
+    void startInviteCheck();
 
     void setConnected(bool connected);
 
@@ -153,7 +153,7 @@ private:
     ServerChannel* m_channel = nullptr;
     QByteArray m_channelSigner;   ///< the fingerprint the channel was opened under
     QObject* m_call = nullptr;    ///< the look's call on its way, which deletes itself once answered
-    QObject* m_invitationCall = nullptr;  ///< the invitation's fetch on its way
+    QObject* m_inviteCall = nullptr;  ///< the fetch for the invite asked about, on its way
     QTimer m_retryTimer;
     bool m_running = false;
     bool m_connected = false;
@@ -169,8 +169,8 @@ private:
     /// The head a write went over that the server did not store.
     std::optional<VersionRank> m_unstoredOver;
 
-    /// The invite an invitation was asked for and not yet answered.
-    std::optional<QByteArray> m_invitationWanted;
+    /// The invite asked about and not yet answered.
+    std::optional<QByteArray> m_inviteToConfirm;
 
     static constexpr int RetryMilliseconds = 30000;
 };

@@ -131,9 +131,8 @@ void WardSharing::saveInvitation(WardSession& session, const AppSettings& settin
 {
     if (settings.useServer())
     {
-        // The link is given only once the server holds a version that names the invite, which
-        // the fetched invitation shows.
-        if (!fetchedInvitation(session, sync, invite, parent).isEmpty())
+        // The link is given only once the server holds a version that names the invite.
+        if (inviteReachedServer(session, sync, invite, parent))
         {
             showLink(session, invite, parent);
         }
@@ -192,21 +191,20 @@ void WardSharing::showLink(WardSession& session, const QByteArray& invite, QWidg
     dialog.exec();
 }
 
-QByteArray WardSharing::fetchedInvitation(WardSession& session, WardSync& sync, const QByteArray& invite,
-                                          QWidget* parent)
+bool WardSharing::inviteReachedServer(WardSession& session, WardSync& sync, const QByteArray& invite, QWidget* parent)
 {
     InvitationWait wait(invite, parent);
-    QObject::connect(&sync, &WardSync::invitationFetched, &wait, &InvitationWait::onInvitationFetched);
-    sync.fetchInvitation(invite);
+    QObject::connect(&sync, &WardSync::inviteConfirmed, &wait, &InvitationWait::onInviteConfirmed);
+    sync.confirmInvite(invite);
     // The answer has come already when something stops the sharing; otherwise the dialog
-    // waits for it, and closing the dialog gives up on it.
+    // waits for it, and Cancel gives up on it.
     if (!wait.isAnswered() && wait.exec() != QDialog::Accepted)
     {
-        return QByteArray();
+        return false;
     }
-    if (!wait.invitation().isEmpty())
+    if (wait.isOnServer())
     {
-        return wait.invitation();
+        return true;
     }
 
     QString stopped = whatStopsInviting(session, sync);
@@ -218,15 +216,15 @@ QByteArray WardSharing::fetchedInvitation(WardSession& session, WardSync& sync, 
     {
         stopped = tr("The invitation could not be created right now. Try again.");
     }
-    QMessageBox::information(parent, tr("Save Invitation"), stopped);
-    return QByteArray();
+    QMessageBox::information(parent, tr("Invitation"), stopped);
+    return false;
 }
 
 InvitationWait::InvitationWait(const QByteArray& invite, QWidget* parent)
     : QDialog(parent)
     , m_invite(invite)
 {
-    setWindowTitle(tr("Save Invitation"));
+    setWindowTitle(tr("Invitation"));
     QVBoxLayout* layout = new QVBoxLayout(this);
     layout->addWidget(new QLabel(tr("Creating the invitation..."), this));
     QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Cancel, this);
@@ -234,13 +232,13 @@ InvitationWait::InvitationWait(const QByteArray& invite, QWidget* parent)
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 }
 
-void InvitationWait::onInvitationFetched(const QByteArray& invite, const QByteArray& invitation)
+void InvitationWait::onInviteConfirmed(const QByteArray& invite, bool onServer)
 {
     if (invite != m_invite)
     {
         return;
     }
     m_answered = true;
-    m_invitation = invitation;
+    m_onServer = onServer;
     accept();
 }

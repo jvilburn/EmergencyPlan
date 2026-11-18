@@ -299,15 +299,16 @@ void MainWindow::setupConnections()
             this, &MainWindow::onGeocodingFinished);
 }
 
-bool MainWindow::openStartingWard(const QString& file)
+bool MainWindow::askYourDetails()
 {
-    if (m_settings->deviceName().isEmpty())
+    // A name left empty is asked for again; Cancel is what leaves.
+    while (m_settings->deviceName().isEmpty())
     {
         bool ok = false;
         QString deviceName = QInputDialog::getText(this, tr("Ward Planning"), tr("Name this device"),
                                                    QLineEdit::Normal, QSysInfo::machineHostName(), &ok)
                                  .trimmed();
-        if (!ok || deviceName.isEmpty())
+        if (!ok)
         {
             return false;
         }
@@ -316,12 +317,16 @@ bool MainWindow::openStartingWard(const QString& file)
     if (m_settings->userName().isEmpty())
     {
         bool ok = false;
-        QString userName = QInputDialog::getText(this, tr("Ward Planning"), tr("Your name"), QLineEdit::Normal,
-                                                 QString(), &ok)
-                               .trimmed();
-        if (!ok || userName.isEmpty())
+        QString userName;
+        while (userName.isEmpty())
         {
-            return false;
+            userName = QInputDialog::getText(this, tr("Ward Planning"), tr("Your name"), QLineEdit::Normal,
+                                             QString(), &ok)
+                           .trimmed();
+            if (!ok)
+            {
+                return false;
+            }
         }
         QString email = QInputDialog::getText(this, tr("Ward Planning"),
                                               tr("Your email, so other members can send you updates. Leave it "
@@ -335,7 +340,11 @@ bool MainWindow::openStartingWard(const QString& file)
         m_settings->setUserName(userName);
         m_settings->setEmail(email);
     }
+    return true;
+}
 
+bool MainWindow::openStartingWard(const QString& file)
+{
     if (!file.isEmpty() && openFile(file))
     {
         return true;
@@ -657,7 +666,7 @@ bool MainWindow::openInvitationFile(const QString& path)
                              tr("The file %1 could not be read.").arg(QDir::toNativeSeparators(path)));
         return false;
     }
-    return joinThroughInvitation(file.readAll(), tr("This file is not a Ward Planning invitation."));
+    return joinInvited(DocumentManager::instance()->session().readInvitation(file.readAll()));
 }
 
 bool MainWindow::openInvitationCode(const QString& code)
@@ -669,6 +678,12 @@ bool MainWindow::openInvitationCode(const QString& code)
                              tr("This invitation link is not complete. Ask the sender to send it again."));
         return false;
     }
+    // Someone who has joined often runs the download again to start Ward Planning. Their ward
+    // opens, with nothing asked of the server.
+    if (DocumentManager::instance()->holdsWardAsItsOwn(invitation->document))
+    {
+        return openWardAlreadyHeld(invitation->document);
+    }
     if (!m_settings->useServer())
     {
         QMessageBox::warning(this, tr("Open Invitation"),
@@ -677,48 +692,63 @@ bool MainWindow::openInvitationCode(const QString& code)
         return false;
     }
 
-    ServerWaitDialog wait(DocumentManager::instance()->fetchWard(invitation->document, nullptr), tr("Open Invitation"),
-                          tr("Getting your invitation..."), this);
-    if (wait.exec() != QDialog::Accepted)
+    while (true)
     {
-        return false;
+        ServerWaitDialog wait(DocumentManager::instance()->fetchWard(invitation->document, nullptr),
+                              tr("Open Invitation"), tr("Getting your invitation..."), this);
+        if (wait.exec() != QDialog::Accepted)
+        {
+            return false;
+        }
+        switch (wait.answer().status)
+        {
+        case ServerReadStatus::Found:
+            return joinInvited(
+                DocumentManager::instance()->session().readInvitation(invitation->seed, wait.answer().bytes));
+        case ServerReadStatus::Missing:
+            QMessageBox::warning(this, tr("Open Invitation"),
+                                 tr("The server has no such ward. Ask the sender for a new invitation."));
+            return false;
+        case ServerReadStatus::NoAnswer:
+            break;
+        }
+        QMessageBox::StandardButton again = QMessageBox::warning(
+            this, tr("Open Invitation"),
+            tr("Ward Planning could not reach its server. Connect to the internet, then click Retry."),
+            QMessageBox::Retry | QMessageBox::Cancel, QMessageBox::Retry);
+        if (again != QMessageBox::Retry)
+        {
+            return false;
+        }
     }
-    switch (wait.answer().status)
-    {
-    case ServerReadStatus::Found:
-        break;
-    case ServerReadStatus::Missing:
-        QMessageBox::warning(this, tr("Open Invitation"),
-                             tr("The server has no such ward. Ask the sender for a new invitation."));
-        return false;
-    case ServerReadStatus::NoAnswer:
-        QMessageBox::warning(this, tr("Open Invitation"),
-                             tr("Connect to the internet, then click the invitation link again."));
-        return false;
-    }
-    return joinThroughInvitation(InvitationFile::write(invitation->seed, wait.answer().bytes),
-                          tr("This invite has been used or withdrawn. Ask the sender."));
 }
 
-bool MainWindow::joinThroughInvitation(const QByteArray& invitation, const QString& notAnInvitation)
+bool MainWindow::openWardAlreadyHeld(const DocumentId& document)
 {
-    InvitedWard invited = DocumentManager::instance()->session().readInvitation(invitation);
+    if (document != DocumentManager::instance()->documentId() && (!mayLeaveWard() || !openWard(document)))
+    {
+        return false;
+    }
+    QMessageBox::information(this, tr("Open Invitation"),
+                             tr("This device already has access to %1.")
+                                 .arg(DocumentManager::instance()->document().wardName()));
+    return true;
+}
+
+bool MainWindow::joinInvited(const InvitedWard& invited)
+{
     switch (invited.status)
     {
     case InvitationStatus::Joinable:
         break;
     case InvitationStatus::AlreadyHasAccess:
-        if (invited.document != DocumentManager::instance()->documentId()
-            && (!mayLeaveWard() || !openWard(invited.document)))
-        {
-            return false;
-        }
-        QMessageBox::information(this, tr("Open Invitation"),
-                                 tr("This device already has access to %1.").arg(invited.wardName));
-        return true;
+        return openWardAlreadyHeld(invited.document);
+    case InvitationStatus::UsedOrWithdrawn:
+        QMessageBox::warning(this, tr("Open Invitation"), tr("This invite has been used or withdrawn. Ask the sender."));
+        return false;
     case InvitationStatus::NotAnInvitation:
         qWarning("An invitation did not read: %s", qPrintable(invited.problem));
-        QMessageBox::warning(this, tr("Open Invitation"), notAnInvitation);
+        QMessageBox::warning(this, tr("Open Invitation"), tr("This is not a Ward Planning invitation."));
         return false;
     case InvitationStatus::Newer:
         QMessageBox::warning(this, tr("Open Invitation"),

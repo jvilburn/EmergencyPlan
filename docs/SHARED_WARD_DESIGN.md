@@ -282,6 +282,10 @@ is visible and removable, which is the accepted answer at this threat level.
 **Accepted: a new member's first install trusts the server's download page**, as their
 first download trusts the server.
 
+**Accepted: an invitation link trusts the server's join page.** The link's seed is read by
+the join page's script, and its installer is served by the server, on every click; a hostile
+operator could change either.
+
 **Accepted: a device's first download is taken as it stands.** A device holding no
 readable version of a ward - newly joined, after its app data was cleared, or with a local
 file it cannot read - has nothing for the first version to descend from, so a hostile operator could hand it a ward of its own
@@ -603,6 +607,8 @@ The server keeps no counter of its own.
 | the live channel | a key holder | Open while the ward is open. Carries presence and version notices. |
 | `GET /releases/latest` | anyone | The current app version per platform, with each installer's download address. |
 | `GET /download` | anyone | A web page offering the installers, for people who do not have the app yet. |
+| `GET /join` | anyone | The page an invitation link opens, the same for every invitation (see *Invites*). |
+| `GET /installer/{platform}` | anyone | The platform's current installer, passed through so the join page can name its download. |
 
 **Signed requests.** A write carries the signer's two public keys and an Ed25519 signature
 over one UTF-8 line:
@@ -1467,14 +1473,25 @@ seed for `crypto_box_seed_keypair`, and subkey 2 the seed for `crypto_sign_seed_
    Planning. Click to join:* and the link. A browser keeps what follows the `#` to itself, so
    the server serves one join page for every invitation, and no request to it carries a seed.
    The page's script names the installer's download after the invitation,
-   `WardPlanning-Setup-<document id>.<seed>.exe`. The installer reads the invitation from its
-   own file name: where this same version of Ward Planning is installed already, it starts
-   the app with the invitation and installs nothing; otherwise it installs and then starts
-   the app with it. The app fetches the ward's current version from the server, reads it with
-   the invite's keys, and asks *Join Tanglewood Ward?* as for an invitation file. Whoever
-   holds the link can join, as whoever holds an invitation file can. For another of the
-   user's own devices the dialog says *Your invitation is ready. Open this link on your other
-   device:* over the link.
+   `WardPlanning-Setup-<document id>.<seed>.exe`; a link whose invitation does not read, as
+   one cut short in an email, gets *This invitation link is not complete. Ask the sender to
+   send it again.* on the page in place of a download. The installer reads the invitation
+   from its own file name and leaves it in the app's local data, as the file `invitation`.
+   Where this same version of Ward Planning is installed already, it then starts the app
+   and installs nothing; otherwise it installs, for the current Windows user, and offers to
+   start the app. Each time the app starts with no file to open, it looks for that waiting
+   invitation, and removes it once the user's name is known and a window has the
+   invitation; a launch that finds Ward Planning already running hands the invitation to
+   it. So the invitation is opened by whichever start of the app first gets that far,
+   whether the installer's or one the user makes later. The app fetches the ward's current
+   version from the server, reads it with the invite's keys, and asks *Join Tanglewood
+   Ward?* as for an invitation file. Whoever holds the link can join, as whoever holds an
+   invitation file can. For another of the user's own devices the dialog says *Your
+   invitation is ready. Open this link on your other device:* over the link.
+
+   Carrying the invitation in the installer's file name is how Windows receives a link. A
+   Mac's installer and a phone's store carry nothing from the page, so those apps receive
+   the link itself, registered to open in the app.
 
    **With the server off, the invitation is a small file**, such as `Tanglewood Ward - for Bob.wardinvite`: one
    line of JSON holding its own `format` integer and the seed, then the version that opened
@@ -1743,7 +1760,7 @@ ward.
 ## Receiving an invitation
 
 **With the server on, an invitation is a link, and clicking it leads to joining**: the join
-page, the installer it downloads, and the app the installer starts carry the invitation between
+page, the installer it downloads, and the app, when it next starts, carry the invitation between
 them (see *Invites*), so the person invited saves and opens no file of their own. The rest of
 this section is the invitation file, which sharing with the server off uses.
 
@@ -1877,15 +1894,16 @@ version*).
 | An invitation already used or withdrawn | This invite has been used or withdrawn. Ask the sender. |
 | An invitation opened on a device that holds the ward as its own | This device already has access to Tanglewood Ward. |
 | An invitation for a ward the server does not have | The server has no such ward. Ask the sender for a new invitation. |
-| A file opened that is not an invitation | This file is not a Ward Planning invitation. |
+| A file opened that is not an invitation | This is not a Ward Planning invitation. |
 | A file opened that is not an update | This file is not a Ward Planning update. |
 | An update of a ward this device does not hold | This update is for a ward this device does not have. |
 | An update from a device this copy does not list, which did not join since this copy | This update is from a device that is not listed in Who Has Access. |
 | An update that does not rank above the version held | You already have a newer update. |
-| An invitation opened while offline | Connect to the internet, then open the invitation again. For a link: Connect to the internet, then click the invitation link again. |
-| An invitation link with a code that does not read | This invitation link is not complete. Ask the sender to send it again. |
+| An invitation link opened while offline | Ward Planning could not reach its server. Connect to the internet, then click Retry. |
+| An invitation link with a code that does not read | This invitation link is not complete. Ask the sender to send it again. Shown by the join page, and by the app for a code that reaches it. |
 | An invitation link opened with the server turned off | This invitation needs the Ward Planning server. Turn on Use the Ward Planning server in File > Settings, then click the invitation link again. |
-| An invitation link whose invite the server's version no longer names | This invite has been used or withdrawn. Ask the sender. |
+| An invitation link, on a device that does not hold the ward as its own, whose invite the server's version does not name | This invite has been used or withdrawn. Ask the sender. |
+| A waiting invitation that the Ward Planning already running did not take | Ward Planning is already open but did not answer, so your invitation was not opened. Close Ward Planning, then open it again. |
 | Leave or Remove this device while offline | Connect to the internet to leave this ward. / Connect to the internet to remove this device. |
 | Add a user, Add a device or Save invitation while offline, with the server on | Connect to the internet to invite someone. |
 | Any of those three while the latest change is not saved | Your latest change could not be saved, so nothing can be shared yet. |

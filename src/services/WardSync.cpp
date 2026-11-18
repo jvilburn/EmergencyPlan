@@ -34,8 +34,8 @@ void WardSync::stop()
     m_retryTimer.stop();
     delete m_call;
     m_call = nullptr;
-    delete m_invitationCall;
-    m_invitationCall = nullptr;
+    delete m_inviteCall;
+    m_inviteCall = nullptr;
     closeChannel();
     m_writing.reset();
     m_unstoredOver.reset();
@@ -44,11 +44,11 @@ void WardSync::stop()
     m_unjournalledChange = false;
     m_problem = SyncProblem::None;
     emit stateChanged();
-    if (m_invitationWanted.has_value())
+    if (m_inviteToConfirm.has_value())
     {
-        QByteArray invite = *m_invitationWanted;
-        m_invitationWanted.reset();
-        emit invitationFetched(invite, QByteArray());
+        QByteArray invite = *m_inviteToConfirm;
+        m_inviteToConfirm.reset();
+        emit inviteConfirmed(invite, false);
     }
 }
 
@@ -95,12 +95,12 @@ void WardSync::look()
     m_call = head;
 }
 
-void WardSync::fetchInvitation(const QByteArray& invite)
+void WardSync::confirmInvite(const QByteArray& invite)
 {
-    m_invitationWanted = invite;
+    m_inviteToConfirm = invite;
     if (!m_looking)
     {
-        startInvitationFetch();
+        startInviteCheck();
     }
 }
 
@@ -281,9 +281,9 @@ void WardSync::finish(SyncProblem problem)
         look();
         return;
     }
-    if (m_invitationWanted.has_value())
+    if (m_inviteToConfirm.has_value())
     {
-        startInvitationFetch();
+        startInviteCheck();
     }
 }
 
@@ -294,32 +294,28 @@ void WardSync::lookAgain()
     look();
 }
 
-void WardSync::startInvitationFetch()
+void WardSync::startInviteCheck()
 {
     if (!m_running || m_problem != SyncProblem::None || m_session->savePending())
     {
-        QByteArray invite = *m_invitationWanted;
-        m_invitationWanted.reset();
-        emit invitationFetched(invite, QByteArray());
+        QByteArray invite = *m_inviteToConfirm;
+        m_inviteToConfirm.reset();
+        emit inviteConfirmed(invite, false);
         return;
     }
-    delete m_invitationCall;
+    delete m_inviteCall;
     ServerReading* fetch = m_server->fetch(m_session->documentId(), this);
-    connect(fetch, &ServerReading::answered, this, &WardSync::onInvitationVersionFetched);
-    m_invitationCall = fetch;
+    connect(fetch, &ServerReading::answered, this, &WardSync::onInviteVersionFetched);
+    m_inviteCall = fetch;
 }
 
-void WardSync::onInvitationVersionFetched(const ServerRead& version)
+void WardSync::onInviteVersionFetched(const ServerRead& version)
 {
-    m_invitationCall = nullptr;
-    QByteArray invite = *m_invitationWanted;
-    m_invitationWanted.reset();
-    QByteArray invitation;
-    if (version.status == ServerReadStatus::Found)
-    {
-        invitation = m_session->invitationCarrying(invite, version.bytes);
-    }
-    emit invitationFetched(invite, invitation);
+    m_inviteCall = nullptr;
+    QByteArray invite = *m_inviteToConfirm;
+    m_inviteToConfirm.reset();
+    emit inviteConfirmed(invite, version.status == ServerReadStatus::Found
+                                     && m_session->versionNamesInvite(invite, version.bytes));
 }
 
 void WardSync::openChannel()

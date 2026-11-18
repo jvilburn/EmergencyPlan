@@ -29,7 +29,6 @@ WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
-PrivilegesRequiredOverridesAllowed=dialog
 ChangesAssociations=yes
 
 [Languages]
@@ -93,21 +92,11 @@ Root: HKA; Subkey: "Software\Classes\WardPlanning.Invitation"; ValueType: string
 Root: HKA; Subkey: "Software\Classes\WardPlanning.Invitation\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"
 Root: HKA; Subkey: "Software\Classes\WardPlanning.Invitation\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
 
-; Started with the invitation the installer's file name carries, when it carries one, so
-; installing from an invitation link leads straight to joining
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Parameters: "{code:JoinParameters}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
 #include "packaging\windows\invitation.iss"
-
-// The parameters the app starts with after installing: the invitation, when there is one.
-function JoinParameters(Param: String): String;
-begin
-  Result := '';
-  if InvitationCode() <> '' then
-    Result := '--join ' + InvitationCode();
-end;
 
 // Where this same version of Ward Planning is installed, read from the uninstall entry this
 // installer writes; empty when it is not installed, or another version is.
@@ -117,27 +106,31 @@ var
 begin
   Result := '';
   Key := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{{#MyAppId}}_is1';
-  if not (RegQueryStringValue(HKCU, Key, 'DisplayVersion', Version)
-          and RegQueryStringValue(HKCU, Key, 'InstallLocation', Location)) then
-    if not (RegQueryStringValue(HKLM, Key, 'DisplayVersion', Version)
-            and RegQueryStringValue(HKLM, Key, 'InstallLocation', Location)) then
-      Exit;
-  if (Version = '{#MyAppVersion}') and FileExists(AddBackslash(Location) + '{#MyAppExeName}') then
+  if RegQueryStringValue(HKCU, Key, 'DisplayVersion', Version)
+     and RegQueryStringValue(HKCU, Key, 'InstallLocation', Location)
+     and (Version = '{#MyAppVersion}') and FileExists(AddBackslash(Location) + '{#MyAppExeName}') then
     Result := AddBackslash(Location) + '{#MyAppExeName}';
 end;
 
-// An invitation opened where this version is already installed joins at once: the installed
-// app is started with the invitation, and nothing is installed again.
+// The invitation the installer's file name carries is left in Ward Planning's app data, where
+// the app finds it each time it starts until it has asked about it (AppData::invitationFilePath).
+// So installing from an invitation link leads to joining whenever the app first starts. Where
+// this version is already installed, the app is started and nothing is installed again.
 function InitializeSetup(): Boolean;
 var
-  Installed: String;
+  Folder, Installed: String;
   ResultCode: Integer;
 begin
   Result := True;
+  if InvitationCode() = '' then
+    Exit;
+  Folder := ExpandConstant('{localappdata}\{#MyAppName}');
+  ForceDirectories(Folder);
+  SaveStringToFile(Folder + '\invitation', InvitationCode(), False);
   Installed := InstalledSameVersion();
-  if (InvitationCode() <> '') and (Installed <> '') then
+  if Installed <> '' then
   begin
-    ExecAsOriginalUser(Installed, '--join ' + InvitationCode(), '', SW_SHOWNORMAL, ewNoWait, ResultCode);
+    Exec(Installed, '', '', SW_SHOWNORMAL, ewNoWait, ResultCode);
     Result := False;
   end;
 end;

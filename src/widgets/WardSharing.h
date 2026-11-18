@@ -56,14 +56,14 @@ private:
     /// Shows the link of invite with the message to pass on.
     static void showLink(WardSession& session, const QByteArray& invite, QWidget* parent);
 
-    /// The invitation of invite carrying the server's version, awaited behind a small dialog.
-    /// Empty when there is none, after telling the user why unless they closed the dialog.
-    static QByteArray fetchedInvitation(WardSession& session, WardSync& sync, const QByteArray& invite,
-                                        QWidget* parent);
+    /// Waits, behind a small dialog, to hear that the server's version names invite, which is
+    /// when its link works. False when it does not, after telling the user why unless they
+    /// gave up waiting.
+    static bool inviteReachedServer(WardSession& session, WardSync& sync, const QByteArray& invite, QWidget* parent);
 };
 
-/// The small dialog shown while an invitation is fetched from the server. It closes when the
-/// invitation for its invite arrives, and Cancel gives up waiting.
+/// The small dialog shown until the server is seen to hold a new invite. It closes when the
+/// answer for its invite arrives, and Cancel gives up waiting.
 class InvitationWait : public QDialog
 {
     Q_OBJECT
@@ -74,14 +74,14 @@ public:
     /// True once the server's answer for the invite has arrived.
     bool isAnswered() const { return m_answered; }
 
-    /// The invitation's bytes; empty when there is none.
-    const QByteArray& invitation() const { return m_invitation; }
+    /// True when the answer was that the server's version names the invite.
+    bool isOnServer() const { return m_onServer; }
 
 public slots:
-    void onInvitationFetched(const QByteArray& invite, const QByteArray& invitation);
+    void onInviteConfirmed(const QByteArray& invite, bool onServer);
 
 private:
     QByteArray m_invite;
-    QByteArray m_invitation;
     bool m_answered = false;
+    bool m_onServer = false;
 };

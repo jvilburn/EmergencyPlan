@@ -103,6 +103,12 @@ TakeResult DocumentManager::takeUpdate(const QByteArray& file)
     return result;
 }
 
+bool DocumentManager::holdsWardAsItsOwn(const DocumentId& document) const
+{
+    LocalRead local = WardSession::readLocal(*m_store, *m_identity, document);
+    return local.result.status == OpenStatus::Opened && !local.payload->device->noLongerShared;
+}
+
 void DocumentManager::startSync()
 {
     if (m_useServer && !m_session.documentId().isNull())

@@ -2,8 +2,8 @@
 
 #include <QString>
 
-/// Where Ward Planning keeps its files: the ward files, the device keys, the settings and the
-/// instance lock, in local, non-roaming app data. The ward files and the keys are sibling
+/// Where Ward Planning keeps its files: the ward files, the device keys, the settings, the
+/// instance lock and an invitation waiting to be opened, in local, non-roaming app data. The ward files and the keys are sibling
 /// folders, so the folder that holds the ward files holds no key.
 class AppData
 {
@@ -18,6 +18,10 @@ public:
     QString keyFilePath() const { return keysDirectory() + "/device.key"; }
     QString settingsFilePath() const { return m_root + "/settings.json"; }
     QString lockFilePath() const { return m_root + "/instance.lock"; }
+
+    /// The code of an invitation link, left by the installer the link's page downloads, which
+    /// reads it from its own file name (installer.iss).
+    QString invitationFilePath() const { return m_root + "/invitation"; }
 
 private:
     QString m_root;

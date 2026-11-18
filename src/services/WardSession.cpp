@@ -416,19 +416,15 @@ QString WardSession::invitationCode(const QByteArray& invite) const
     return seed.isEmpty() ? QString() : InvitationLink::code(m_documentId, seed);
 }
 
-QByteArray WardSession::invitationCarrying(const QByteArray& invite, const QByteArray& version) const
+bool WardSession::versionNamesInvite(const QByteArray& invite, const QByteArray& version) const
 {
     QByteArray seed = seedOf(invite);
     if (seed.isEmpty())
     {
         // The invite is used or withdrawn, and its seed went with it.
-        return QByteArray();
+        return false;
     }
-    if (WardFile::read(version, Identity::fromInviteSeed(seed), PayloadKind::Version).status != WardReadStatus::Read)
-    {
-        return QByteArray();
-    }
-    return InvitationFile::write(seed, version);
+    return WardFile::read(version, Identity::fromInviteSeed(seed), PayloadKind::Version).status == WardReadStatus::Read;
 }
 
 QByteArray WardSession::seedOf(const QByteArray& invite) const
@@ -455,9 +451,26 @@ InvitedWard WardSession::readInvitation(const QByteArray& file) const
     case InvitationReadStatus::NotAnInvitation:
         return notJoinable(InvitationStatus::NotAnInvitation, invitation.problem);
     }
+    return readInvitation(invitation.seed, invitation.version);
+}
 
-    Identity keys = Identity::fromInviteSeed(invitation.seed);
-    WardRead read = WardFile::read(invitation.version, keys, PayloadKind::Version);
+InvitedWard WardSession::readInvitation(const QByteArray& seed, const QByteArray& version) const
+{
+    // A device that holds the ward as its own has nothing to join, and once its join has
+    // landed the version no longer opens for the invite, so its own copy is looked for first.
+    HeaderRead header = WardHeader::parse(version.left(version.indexOf('\n')));
+    if (header.status == HeaderStatus::Read)
+    {
+        LocalRead local = readLocal(*m_store, *m_identity, header.header->document());
+        if (local.result.status == OpenStatus::Opened && !local.payload->device->noLongerShared)
+        {
+            return InvitedWard{InvitationStatus::AlreadyHasAccess, QString(), header.header->document(), QByteArray(),
+                               std::nullopt, std::nullopt, local.payload->ward.wardName()};
+        }
+    }
+
+    Identity keys = Identity::fromInviteSeed(seed);
+    WardRead read = WardFile::read(version, keys, PayloadKind::Version);
     switch (read.status)
     {
     case WardReadStatus::Read:
@@ -468,19 +481,10 @@ InvitedWard WardSession::readInvitation(const QByteArray& file) const
         return notJoinable(InvitationStatus::NotAnInvitation, read.problem);
     case WardReadStatus::Deleted:
     case WardReadStatus::NotNamed:
-        return notJoinable(InvitationStatus::NotAnInvitation, "the version does not name the invite");
+        return notJoinable(InvitationStatus::UsedOrWithdrawn, QString());
     }
-
-    const DocumentId& document = read.header->document();
-    QString wardName = read.payload->ward.wardName();
-    LocalRead local = readLocal(*m_store, *m_identity, document);
-    if (local.result.status == OpenStatus::Opened && !local.payload->device->noLongerShared)
-    {
-        return InvitedWard{InvitationStatus::AlreadyHasAccess, QString(), document, QByteArray(), std::nullopt,
-                           std::nullopt, wardName};
-    }
-    return InvitedWard{InvitationStatus::Joinable, QString(), document, invitation.seed, read,
-                       read.payload->ward.access().findInvite(keys.fingerprint()), wardName};
+    return InvitedWard{InvitationStatus::Joinable, QString(), read.header->document(), seed, read,
+                       read.payload->ward.access().findInvite(keys.fingerprint()), read.payload->ward.wardName()};
 }
 
 void WardSession::join(const InvitedWard& invited, const UserDetails& user, const QString& deviceName)

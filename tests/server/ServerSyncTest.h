@@ -50,9 +50,9 @@ private slots:
     void theChannelSaysWhoIsHere();
 
     // Invitations
-    void anInvitationCarriesTheServersVersionAndAnEditAfterItSurvivesTheJoin_data();
-    void anInvitationCarriesTheServersVersionAndAnEditAfterItSurvivesTheJoin();
-    void anInvitationIsNotGivenWhileNothingCanBeShared();
+    void anInviteIsConfirmedOnceTheServerNamesItAndAnEditAfterItSurvivesTheJoin_data();
+    void anInviteIsConfirmedOnceTheServerNamesItAndAnEditAfterItSurvivesTheJoin();
+    void anInviteIsNotConfirmedWhileNothingCanBeShared();
     void anInvitationCodeJoinsFromTheServersVersion();
 
     // The switch and update files

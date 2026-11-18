@@ -118,6 +118,7 @@ enum class InvitationStatus
 {
     Joinable,          ///< this device can join through its invite
     AlreadyHasAccess,  ///< this device holds the ward as its own
+    UsedOrWithdrawn,   ///< its version names neither the invite nor anyone the invite opens it for
     NotAnInvitation,   ///< the file is not an invitation, or its version fails a check; problem says which
     Newer              ///< a newer Ward Planning wrote it
 };
@@ -332,17 +333,23 @@ public:
     /// which ward, and the invite's seed. Empty once the invite is used or withdrawn.
     QString invitationCode(const QByteArray& invite) const;
 
-    /// An invitation for invite, one of invitesMadeHere, carrying version, the ward's current
-    /// version as the server has it: its seed and that version. Empty when version does not
-    /// name the invite, as before the invite's own version has reached the server and after
-    /// the invite is used or withdrawn.
-    QByteArray invitationCarrying(const QByteArray& invite, const QByteArray& version) const;
+    /// True when version, the ward's current version as the server has it, names invite, one
+    /// of invitesMadeHere, so someone opening the invite's link can join. False before the
+    /// invite's own version has reached the server, and once the invite is used or withdrawn.
+    bool versionNamesInvite(const QByteArray& invite, const QByteArray& version) const;
 
-    /// What file holds as an invitation, read by this device: its line, then its version read
-    /// as the invite its seed gives. It is AlreadyHasAccess when this device holds the version's
-    /// ward as its own: its copy opens and is still this device's. The caller then opens that
-    /// copy with openWard. Otherwise it is Joinable. Changes nothing.
+    /// What file, an invitation file, holds: its line, then as readInvitation reads a seed
+    /// and a version. Changes nothing.
     InvitedWard readInvitation(const QByteArray& file) const;
+
+    /// What an invite's seed and a version of a ward hold as an invitation, read by this
+    /// device, whether they came in an invitation file or as a link's code and the server's
+    /// version. It is AlreadyHasAccess when this device holds the version's ward as its own:
+    /// its copy opens and is still this device's, whatever the version says, and the caller
+    /// then opens that copy with openWard. Otherwise the version is read as the invite: it is
+    /// Joinable when it names the invite, and UsedOrWithdrawn when it does not. Changes
+    /// nothing.
+    InvitedWard readInvitation(const QByteArray& seed, const QByteArray& version) const;
 
     /// Joins the ward invited carries, which readInvitation found Joinable: its version becomes
     /// this device's copy as a first download, replacing any copy held before, with nothing of
