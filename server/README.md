@@ -40,8 +40,8 @@ From `server/`:
 `wrangler.jsonc` configures one Worker, the development Worker `ward-planning-dev`.
 
 - `npx wrangler login`, once per machine, as an account member.
-- `npm run deploy` publishes it at `https://ward-planning-dev.ward-planning-server.workers.dev`.
-- `npm run live -- https://ward-planning-dev.ward-planning-server.workers.dev` runs one ward
+- `npm run deploy` publishes it at `https://ward-planning-dev.oss-storage.workers.dev`.
+- `npm run live -- https://ward-planning-dev.oss-storage.workers.dev` runs one ward
   through the deployed server: a create, a fetch, a channel held through a push, and a delete. It
   prints a line per check, and leaves that one deleted ward on the server.
 - `npx wrangler tail` streams its logs.
@@ -131,7 +131,7 @@ build\bin\WardPlanningTests.exe
 ```
 
 For the deployed development Worker, set the address to
-`https://ward-planning-dev.ward-planning-server.workers.dev`.
+`https://ward-planning-dev.oss-storage.workers.dev`.
 
 Each run makes eight create calls and leaves three wards on the server, one of them deleted. A
 deployed server allows ten creates a minute from one address, so a second run within the minute

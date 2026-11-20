@@ -9,7 +9,7 @@ project(WardPlanning
 # The version as people see it: the project's version, and for a release ahead of it, such as a
 # beta, that release's label. Each release has its own, which is how the installer tells one
 # from another.
-set(WARD_PLANNING_RELEASE_LABEL "beta.2")
+set(WARD_PLANNING_RELEASE_LABEL "beta.3")
 if(WARD_PLANNING_RELEASE_LABEL)
     set(WARD_PLANNING_VERSION_TEXT "${PROJECT_VERSION}-${WARD_PLANNING_RELEASE_LABEL}")
 else()

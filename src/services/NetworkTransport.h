@@ -65,7 +65,7 @@ class NetworkTransport : public QObject, public Transport
 
 public:
     /// The server the app is built to use.
-    static constexpr char BuiltInAddress[] = "https://ward-planning-dev.ward-planning-server.workers.dev";
+    static constexpr char BuiltInAddress[] = "https://ward-planning-dev.oss-storage.workers.dev";
 
     /// Sends to the server at address, such as BuiltInAddress, which has no final slash.
     NetworkTransport(const QString& address, QObject* parent);
