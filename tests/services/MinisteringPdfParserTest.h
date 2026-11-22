@@ -5,7 +5,7 @@
 /// The ministering PDF parser reads, from pages laid out as the church's export lays them
 /// out, each companionship's ministers with their contact details, the households or
 /// sisters they minister to with each member's gender and birthday, and companionships on
-/// every page of a long list.
+/// every page of a long list. A page laid out any other way is refused.
 class MinisteringPdfParserTest : public QObject
 {
     Q_OBJECT
@@ -18,4 +18,5 @@ private slots:
     void reliefSocietyCompanionshipMinistersToTheSisterItNames();
     void companionshipsOnEveryPageOfALongListStayApart();
     void presidencyMembersAreCreatedWithTheListsGender();
+    void aPageLaidOutAnyOtherWayIsRefused();
 };

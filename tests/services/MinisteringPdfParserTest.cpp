@@ -20,18 +20,25 @@ PdfTextField text(const QString& value, double left, double y, bool bold = false
     return PdfTextField(value, left, left + 60, y, size, bold);
 }
 
+/// The footer of page number, dated 21 Sep 2025: one field holding the date, the church's
+/// notice and the page number.
+PdfTextField footer(int number)
+{
+    return text(QString("21 Sep 2025For Church Use Only (c) 2025 by Intellectual Reserve, Inc. All rights reserved.%1")
+                    .arg(number),
+                17.0, 770.6, false, 8.0f);
+}
+
 /// A page's header and footer, around content, dated 21 Sep 2025.
 QList<PdfTextField> page(int number, const QList<PdfTextField>& content)
 {
     QList<PdfTextField> fields = {
-        text("Ministering Assignments", 17.3, 23.0, false, 9.6f),
-        text("Tanglewood Ward (181048)", 477.4, 23.0, false, 9.6f),
-        text("Winston-Salem North Carolina Stake (510033)", 397.6, 34.5, false, 9.6f),
+        text("Tanglewood Ward (181048)", 483.4, 19.6, false, 10.0f),
+        text("Ministering Assignments", 17.0, 25.6, false, 10.0f),
+        text("Winston-Salem North Carolina Stake (510033)", 407.1, 31.6, false, 10.0f),
     };
     fields.append(content);
-    fields.append(text(QString::number(number), 17.3, 766.8, false, 7.7f));
-    fields.append(text("For Church Use Only (c) 2025 by Intellectual Reserve, Inc.", 175.8, 766.8, false, 7.7f));
-    fields.append(text("21 Sep 2025", 551.7, 766.8, false, 7.7f));
+    fields.append(footer(number));
     return fields;
 }
 
@@ -118,6 +125,8 @@ void MinisteringPdfParserTest::eldersQuorumCompanionshipReadsMinistersAndHouseho
     QVERIFY(!result.isRSFormat);
     QCOMPARE(result.wardName, QString("Tanglewood Ward"));
     QCOMPARE(result.wardUnitNumber, QString("181048"));
+    QCOMPARE(result.stakeName, QString("Winston-Salem North Carolina Stake"));
+    QCOMPARE(result.stakeUnitNumber, QString("510033"));
     QCOMPARE(result.documentDate, QDate(2025, 9, 21));
     QCOMPARE(result.groups.size(), qsizetype(1));
     const MinisteringGroup& group = *result.groups.begin();
@@ -277,5 +286,48 @@ void MinisteringPdfParserTest::presidencyMembersAreCreatedWithTheListsGender()
         }
         QVERIFY(leader.has_value());
         QVERIFY2(leader->gender() == Gender::Male, qPrintable(each.name()));
+    }
+}
+
+void MinisteringPdfParserTest::aPageLaidOutAnyOtherWayIsRefused()
+{
+    QList<PdfTextField> content = districtStart("District 1");
+    content.append({
+        text("Flake, Andrew", MinisterX, 165.4, true),
+        text("Edwards", FamilyX, 169.3, true),
+        text("Edwards, Debra", ParentX, 170.0),
+        text("Female", GenderX, 170.0),
+        text("6 May", BirthdayX, 170.0),
+        separator(226.0),
+    });
+    PdfTextField ward = text("Tanglewood Ward (181048)", 483.4, 19.6, false, 10.0f);
+    PdfTextField title = text("Ministering Assignments", 17.0, 25.6, false, 10.0f);
+    PdfTextField stake = text("Winston-Salem North Carolina Stake (510033)", 407.1, 31.6, false, 10.0f);
+    QString notice = "For Church Use Only (c) 2025 by Intellectual Reserve, Inc. All rights reserved.";
+
+    // The page as the church lays it out is read.
+    QList<PdfTextField> good = QList<PdfTextField>{ward, title, stake} + content + QList<PdfTextField>{footer(1)};
+    QVERIFY(MinisteringPdfParser::parseFields({good}).success);
+
+    QList<QList<PdfTextField>> others = {
+        // The title ahead of the ward line
+        QList<PdfTextField>{title, ward, stake} + content + QList<PdfTextField>{footer(1)},
+        // The header without its stake line
+        QList<PdfTextField>{ward, title} + content + QList<PdfTextField>{footer(1)},
+        // The footer as three fields: the page number, the notice and the date
+        QList<PdfTextField>{ward, title, stake} + content
+            + QList<PdfTextField>{text("1", 17.3, 766.8), text(notice, 175.8, 766.8), text("21 Sep 2025", 551.7, 766.8)},
+        // The footer without its page number
+        QList<PdfTextField>{ward, title, stake} + content + QList<PdfTextField>{text("21 Sep 2025" + notice, 17.0, 770.6)},
+        // The footer with its date after the notice
+        QList<PdfTextField>{ward, title, stake} + content + QList<PdfTextField>{text(notice + "21 Sep 2025", 17.0, 770.6)},
+        // A date that is no day of the year
+        QList<PdfTextField>{ward, title, stake} + content + QList<PdfTextField>{text("31 Feb 2025" + notice + "1", 17.0, 770.6)},
+    };
+    for (const QList<PdfTextField>& other : others)
+    {
+        MinisteringPdfParser::ParseResult result = MinisteringPdfParser::parseFields({other});
+        QVERIFY(!result.success);
+        QCOMPARE(result.errors, QStringList{"Not a Ministering PDF"});
     }
 }

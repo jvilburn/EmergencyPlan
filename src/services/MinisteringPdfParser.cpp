@@ -26,6 +26,9 @@ namespace
     constexpr double Y_GROUP_TOLERANCE = 2.0;  // Max Y difference for same-line grouping
     constexpr double PARENT_CHILD_THRESHOLD = 8.0;  // X indent cutoff for parent vs child (children ~13pts indented)
 
+    // A page starts with its three header fields
+    constexpr int HEADER_FIELD_COUNT = 3;
+
     // Content detection thresholds
     constexpr int DOT_SEPARATOR_MIN_COUNT = 10;  // Minimum dots to identify separator line
     constexpr float FONT_SIZE_TOLERANCE = 1.0f;  // Max difference for font size matching
@@ -34,9 +37,13 @@ namespace
     // Regex Patterns (module-level for thread safety)
     // ============================================================================
 
-    // Matches footer date like "21 Sep 2025"
-    const QRegularExpression DATE_PATTERN(
-        R"(^(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})$)");
+    // A page's footer, one field: the date, the church's notice and the page number, like
+    // "22 Nov 2026For Church Use Only (c) 2026 by Intellectual Reserve, Inc. All rights reserved.3"
+    const QRegularExpression FOOTER_PATTERN(
+        R"(^(\d{1,2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{4})For Church Use Only .+\.\d+$)");
+
+    // A header line naming a unit, like "Tanglewood Ward (181048)"
+    const QRegularExpression UNIT_PATTERN(R"(^.+ \(\d+\)$)");
 
     // Month name to number mapping
     const QHash<QString, int> MONTH_MAP = {
@@ -75,36 +82,40 @@ namespace
         return rows;
     }
 
-    /// Where a page's header and footer are: the "Ministering Assignments" field, followed
-    /// by the ward and stake lines, and the "For Church Use Only" field, after the page
-    /// number. None when the page lacks either.
-    struct PageMarkers
+    /// What frames a page's content, as the church's export lays a page out: its first three
+    /// fields are the ward line, the "Ministering Assignments" title and the stake line, and
+    /// its last field is the footer.
+    struct PageFrame
     {
-        int header;
-        int footer;
+        QString ward;
+        QString stake;
+        QDate date;
     };
 
-    std::optional<PageMarkers> findPageMarkers(const QList<PdfTextField>& fields)
+    /// The frame of a page, or none when the page is laid out any other way.
+    std::optional<PageFrame> readPageFrame(const QList<PdfTextField>& fields)
     {
-        std::optional<int> header;
-        std::optional<int> footer;
-        for (int i = 0; i < fields.size(); ++i)
-        {
-            QString text = fields[i].text().trimmed();
-            if (!header.has_value() && text == "Ministering Assignments")
-            {
-                header = i;
-            }
-            if (text.contains("For Church Use Only"))
-            {
-                footer = i;
-            }
-        }
-        if (!header.has_value() || !footer.has_value())
+        if (fields.size() <= HEADER_FIELD_COUNT)
         {
             return std::nullopt;
         }
-        return PageMarkers{*header, *footer};
+        QString ward = fields[0].text().trimmed();
+        QString title = fields[1].text().trimmed();
+        QString stake = fields[2].text().trimmed();
+        QRegularExpressionMatch footer = FOOTER_PATTERN.match(fields.last().text().trimmed());
+        if (!UNIT_PATTERN.match(ward).hasMatch()
+            || title != "Ministering Assignments"
+            || !UNIT_PATTERN.match(stake).hasMatch()
+            || !footer.hasMatch())
+        {
+            return std::nullopt;
+        }
+        QDate date(footer.captured(3).toInt(), MONTH_MAP.value(footer.captured(2)), footer.captured(1).toInt());
+        if (!date.isValid())
+        {
+            return std::nullopt;
+        }
+        return PageFrame{ward, stake, date};
     }
 
     // ============================================================================
@@ -428,23 +439,6 @@ namespace
         {
             name = unitText.trimmed();
         }
-    }
-
-    // Parse date from footer like "21 Sep 2025"
-    QDate parseFooterDate(const QString& text)
-    {
-        QRegularExpressionMatch match = DATE_PATTERN.match(text.trimmed());
-        if (match.hasMatch())
-        {
-            int day = match.captured(1).toInt();
-            int month = MONTH_MAP.value(match.captured(2), 0);
-            int year = match.captured(3).toInt();
-            if (month > 0)
-            {
-                return QDate(year, month, day);
-            }
-        }
-        return QDate();
     }
 
     // ============================================================================
@@ -922,33 +916,22 @@ MinisteringPdfParser::ParseResult MinisteringPdfParser::parseFields(QList<QList<
             continue;
         }
 
-        std::optional<PageMarkers> markers = findPageMarkers(pageFields);
-        if (!markers.has_value())
+        std::optional<PageFrame> frame = readPageFrame(pageFields);
+        if (!frame.has_value())
         {
             result.errors.append(QObject::tr("Not a Ministering PDF"));
             return result;
         }
-        // The content lies between the header's ward and stake lines and the footer's page
-        // number.
-        int contentStart = markers->header + 3;
-        int contentEnd = markers->footer - 1;
+        // The content lies between the header's three fields and the footer.
+        int contentStart = HEADER_FIELD_COUNT;
+        int contentEnd = pageFields.size() - 1;
 
-        // Extract metadata from first page header/footer
-        if (pageNum == 0)
+        // The list's ward, stake and date, from its first page
+        if (!result.documentDate.isValid())
         {
-            parseHeaderInfo(pageFields[markers->header + 1].text(), result.wardName, result.wardUnitNumber);
-            parseHeaderInfo(pageFields[markers->header + 2].text(), result.stakeName, result.stakeUnitNumber);
-
-            // Find date in footer
-            for (int i = contentEnd; i < pageFields.size(); ++i)
-            {
-                QDate date = parseFooterDate(pageFields[i].text());
-                if (date.isValid())
-                {
-                    result.documentDate = date;
-                    break;
-                }
-            }
+            parseHeaderInfo(frame->ward, result.wardName, result.wardUnitNumber);
+            parseHeaderInfo(frame->stake, result.stakeName, result.stakeUnitNumber);
+            result.documentDate = frame->date;
         }
 
         // The next page's content goes below this one's, so Y-based grouping and merging
@@ -969,12 +952,6 @@ MinisteringPdfParser::ParseResult MinisteringPdfParser::parseFields(QList<QList<
     if (allContentFields.isEmpty())
     {
         result.errors.append(QObject::tr("No content found in PDF"));
-        return result;
-    }
-
-    if (!result.documentDate.isValid())
-    {
-        result.errors.append(QObject::tr("Could not parse document date from PDF footer"));
         return result;
     }
 

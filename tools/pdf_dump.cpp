@@ -92,7 +92,7 @@ void dumpFields(const QString& pdfPath, QTextStream& out)
                        .arg(field.right(), 6, 'f', 1)
                        .arg(field.fontSize(), 5, 'f', 1)
                        .arg(field.bold() ? "Y" : "N", 4)
-                       .arg(field.text().left(60));
+                       .arg(field.text());
         }
 
         out << "\n";

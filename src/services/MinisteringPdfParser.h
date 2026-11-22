@@ -32,7 +32,7 @@ namespace MinisteringPdfParser
         QString wardUnitNumber;
         QString stakeName;
         QString stakeUnitNumber;
-        QDate documentDate;  // From page footer (e.g., "21 Sep 2025")
+        QDate documentDate;  // From the page footer, which starts with it (e.g., "22 Nov 2026")
 
         QStringList errors;  // Fatal parsing errors
     };
