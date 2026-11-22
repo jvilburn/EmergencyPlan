@@ -48,6 +48,9 @@ public:
     /// of parent.
     ServerReading* fetchWard(const DocumentId& document, QObject* parent) { return m_server.fetch(document, parent); }
 
+    /// Asks the server for each platform's current release. The reading is a child of parent.
+    ServerReading* fetchReleases(QObject* parent) { return m_server.releases(parent); }
+
     /// Runs the command through the session's commit step. A command that conflicted or was
     /// refused emits commandNotApplied.
     CommitResult executeCommand(CommandPtr command);

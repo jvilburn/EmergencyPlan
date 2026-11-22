@@ -1,8 +1,13 @@
-/** The current release of one platform: the platform's name, its version and its installer's download address. */
+/**
+ * The current release of one platform: the platform's name, its version as people read it, its
+ * number, which counts the releases and is how the app tells a later release from its own, and
+ * its installer's download address.
+ */
 export interface Release
 {
     name: string;
     version: string;
+    number: number;
     url: string;
 }
 

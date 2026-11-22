@@ -3,6 +3,8 @@
 #include "InvitationLink.h"
 #include "Presence.h"
 #include "ServerWaitDialog.h"
+#include "UpdateCheck.h"
+#include "UpdateDownloadDialog.h"
 #include "WardSync.h"
 #include "AccessRules.h"
 #include "AppSettings.h"
@@ -41,6 +43,7 @@
 #include "WardSharing.h"
 #include "WhoHasAccessDialog.h"
 
+#include <QApplication>
 #include <QCloseEvent>
 #include <QDesktopServices>
 #include <QDragEnterEvent>
@@ -57,6 +60,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QLabel>
+#include <QProcess>
 #include <QProgressBar>
 #include <QStandardPaths>
 #include <QSysInfo>
@@ -867,6 +871,63 @@ void MainWindow::dragEnterEvent(QDragEnterEvent* event)
     {
         event->acceptProposedAction();
     }
+}
+
+void MainWindow::checkForUpdate(int runningNumber)
+{
+    if (!m_settings->useServer())
+    {
+        return;
+    }
+    m_runningRelease = runningNumber;
+    ServerReading* releases = DocumentManager::instance()->fetchReleases(this);
+    connect(releases, &ServerReading::answered, this, &MainWindow::onReleasesFetched);
+}
+
+void MainWindow::onReleasesFetched(const ServerRead& releases)
+{
+    if (releases.status != ServerReadStatus::Found)
+    {
+        return;
+    }
+    m_laterRelease = UpdateCheck::later(releases.bytes, UpdateCheck::platform(), m_runningRelease);
+    if (m_laterRelease.has_value())
+    {
+        // Offered from the event loop rather than inside the reading's signal, since the
+        // offer asks the user a question.
+        QMetaObject::invokeMethod(this, "offerUpdate", Qt::QueuedConnection);
+    }
+}
+
+void MainWindow::offerUpdate()
+{
+    QMessageBox offer(QMessageBox::Question, tr("Update"),
+                      tr("Ward Planning %1 is available. Update now?").arg(m_laterRelease->version),
+                      QMessageBox::NoButton, this);
+    QPushButton* updateNow = offer.addButton(tr("Update Now"), QMessageBox::AcceptRole);
+    offer.addButton(tr("Later"), QMessageBox::RejectRole);
+    offer.setDefaultButton(updateNow);
+    offer.exec();
+    if (offer.clickedButton() != updateNow || !mayLeaveWard())
+    {
+        return;
+    }
+
+    UpdateDownloadDialog download(*m_laterRelease, this);
+    if (download.exec() != QDialog::Accepted)
+    {
+        return;
+    }
+    // The installer runs with its progress alone, installs over this copy, and starts the app
+    // again (installer.iss).
+    if (!QProcess::startDetached(download.installerPath(), {"/SILENT"}))
+    {
+        QMessageBox::warning(this, tr("Update"),
+                             tr("The update could not be started. Ward Planning will offer it again the next "
+                                "time it starts."));
+        return;
+    }
+    QApplication::quit();
 }
 
 void MainWindow::onHandedOver(const QString& path)

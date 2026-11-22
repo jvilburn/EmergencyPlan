@@ -3,9 +3,12 @@
 #include <QMainWindow>
 #include <QSplitter>
 #include <QString>
+#include <optional>
 
 #include "DocumentChange.h"
 #include "Id.h"
+#include "Server.h"
+#include "UpdateCheck.h"
 #include "WardSession.h"
 
 class QLabel;
@@ -49,6 +52,11 @@ public:
     /// the user cancels, which quits the app.
     bool openStartingWard(const QString& file);
 
+    /// Asks the server, when the app uses it, whether it lists a release later than this one,
+    /// which is release number runningNumber. When it does, the user is asked whether to
+    /// update now: the installer is downloaded and started, and the app closes for it.
+    void checkForUpdate(int runningNumber);
+
 public slots:
     /// Opens what path names: an invitation code after JoinPrefix, or the file at path by its
     /// suffix, a .wardinvite as an invitation and anything else as an update. True when its
@@ -58,6 +66,10 @@ public slots:
     /// Another launch handed over path, its update, invitation file or invitation code, or
     /// nothing: brings the window forward and opens it.
     void onHandedOver(const QString& path);
+
+private slots:
+    void onReleasesFetched(const ServerRead& releases);
+    void offerUpdate();
 
 protected:
     /// Closes only when mayLeaveWard agrees.
@@ -229,6 +241,8 @@ private:
     static QString defaultReportPath(const EmergencyResponse& response);
 
     AppSettings* m_settings;
+    int m_runningRelease = 0;                  ///< this app's release number, once checkForUpdate has it
+    std::optional<Release> m_laterRelease;     ///< the release the server lists, when it is later than this one
 
     // Widgets
     QSplitter* m_splitter;

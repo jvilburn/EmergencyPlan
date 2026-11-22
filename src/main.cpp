@@ -153,6 +153,7 @@ int main(int argc, char *argv[])
     window.show();
     QObject::connect(&lock, &InstanceLock::handedOver, &window, &MainWindow::onHandedOver);
     lock.listen();
+    window.checkForUpdate(WARD_PLANNING_RELEASE_NUMBER);
 
     return app.exec();
 }

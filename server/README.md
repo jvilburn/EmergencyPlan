@@ -106,9 +106,13 @@ Add or edit the platform's entry in `src/releases.json`, then `npm run deploy`:
 
 ```json
 {
-    "windows": { "name": "Windows", "version": "2.0.0", "url": "https://.../setup.exe" }
+    "windows": { "name": "Windows", "version": "2.0.0", "number": 7, "url": "https://.../setup.exe" }
 }
 ```
+
+`number` counts the releases: each release's is one above the last, and the build states the
+same number (`WARD_PLANNING_RELEASE_NUMBER` in `CMakeLists.txt`). A running app offers the
+listed release as an update when its number is above the app's own.
 
 `/releases/latest` serves the file as it is, and `/download` links each entry by its `name`. With
 no entries the page says no installer is available.

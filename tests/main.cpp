@@ -14,6 +14,7 @@
 #include "InvitationLinkTest.h"
 #include "NetworkTransport.h"
 #include "PresenceTest.h"
+#include "UpdateCheckTest.h"
 #include "ServerSyncTest.h"
 #include "SignedLineTest.h"
 #include "FileWardStoreTest.h"
@@ -136,11 +137,13 @@ int main(int argc, char* argv[])
     SignedLineTest signedLineTest(nullptr);
     PresenceTest presenceTest(nullptr);
     InvitationLinkTest invitationLinkTest(nullptr);
+    UpdateCheckTest updateCheckTest(nullptr);
     ServerSyncTest serverSyncTest(nullptr);
     failures += QTest::qExec(&sendInvitationDialogTest, argc, argv);
     failures += QTest::qExec(&signedLineTest, argc, argv);
     failures += QTest::qExec(&presenceTest, argc, argv);
     failures += QTest::qExec(&invitationLinkTest, argc, argv);
+    failures += QTest::qExec(&updateCheckTest, argc, argv);
     failures += QTest::qExec(&serverSyncTest, argc, argv);
 
     // The conformance suite runs on the fake server always, and on the real one when its

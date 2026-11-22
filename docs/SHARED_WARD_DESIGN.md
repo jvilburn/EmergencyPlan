@@ -280,7 +280,8 @@ way the real recipient finds their invitation already used and says so. In both 
 is visible and removable, which is the accepted answer at this threat level.
 
 **Accepted: a new member's first install trusts the server's download page**, as their
-first download trusts the server.
+first download trusts the server. An update is the same trust again: the app runs the
+installer the server lists.
 
 **Accepted: an invitation link trusts the server's join page.** The link's seed is read by
 the join page's script, and its installer is served by the server, on every click; a hostile
@@ -1122,14 +1123,20 @@ ministering, the emergency response and the access list. In particular:
   registry, so a journal entry reaches disk and comes back as the command it was; every
   `UndoableCommand` has an `inverse` in place of an undo; and every command is saved as it is made,
   so nothing is ever unsaved and the app has no unsaved state to track.
-- **The update check**: on start, the app reads the server's `GET /releases/latest` and,
-  when it is newer than the running version, shows a dismissible notice offering the
-  download. Installers are published to the server, which serves them and the download
-  page. **Installers carry platform code signing** - Authenticode on Windows, notarisation
+- **The update check**: on start, with the server on, the app reads the server's
+  `GET /releases/latest` and, when it lists a later release for the platform, asks *Ward
+  Planning 2.0.0-beta.5 is available. Update now?* with *Update Now* and *Later*. *Update
+  Now* downloads the release's installer behind a progress bar, starts it, and closes the
+  app; the installer, run without its wizard, installs over the running copy and starts the
+  app again. *Later* leaves the question for the next start. Installers are published to the
+  server, which lists them and serves the download page. **Installers carry platform code signing** - Authenticode on Windows, notarisation
   on macOS where it ships - so the operating system runs them, first install and update
   alike, without warning a casual user away. The app's version is stated once, in the build, and reaches the running app and the
-  installer from there. Versions compare numerically, part by part, so 1.10.0 is newer than
-  1.9.0.
+  installer from there. Beside it the build states the release's number, which counts the
+  releases, each one above the last, and the server lists each release's number with its
+  version. A release is later than the running app when its number is higher; the version
+  is for people to read and orders nothing, so a server pointed back at an earlier release
+  offers it to no one.
 - **The app is named Ward Planning** in every name a user or the system sees. The installer
   upgrades the old install in place. App data and the tile cache follow the name, so both
   move; nothing is carried over from the old directories (see *Earlier versions*), and the

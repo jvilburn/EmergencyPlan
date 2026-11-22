@@ -117,8 +117,8 @@ describe("releases", () =>
     it("links each platform's installer on the download page, or says there is none", async () =>
     {
         const page = await downloadPage({
-            windows: { name: "Windows", version: "2.0.0", url: "https://example.test/setup.exe" },
-            macos: { name: "macOS", version: "2.0.1", url: "https://example.test/app.dmg" },
+            windows: { name: "Windows", version: "2.0.0", number: 7, url: "https://example.test/setup.exe" },
+            macos: { name: "macOS", version: "2.0.1", number: 8, url: "https://example.test/app.dmg" },
         }).text();
         expect(page).toContain('<li><a href="https://example.test/setup.exe">Download for Windows</a> (2.0.0)</li>');
         expect(page).toContain('<li><a href="https://example.test/app.dmg">Download for macOS</a> (2.0.1)</li>');

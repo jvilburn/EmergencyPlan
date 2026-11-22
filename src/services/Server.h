@@ -108,6 +108,9 @@ public:
     /// GET /documents/{id}: the current version.
     ServerReading* fetch(const DocumentId& document, QObject* parent);
 
+    /// GET /releases/latest: each platform's current release, as UpdateCheck reads it.
+    ServerReading* releases(QObject* parent);
+
     /// Opens document's live channel, signed by signer.
     ServerChannel* openChannel(const DocumentId& document, const Identity& signer, QObject* parent);
 

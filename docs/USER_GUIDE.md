@@ -15,6 +15,7 @@ Ward Planning is a desktop application for managing ward family data, ministerin
 - **File > Switch Ward** (Ctrl+O) - Lists the wards on this device by name, to open another one; a ward with changes you have not yet sent is marked *changes to share*, and one no longer shared with this device is marked *no longer shared*. The list offers **New Ward** and **Open Invitation** too
 - **File > Open Invitation** - Opens an invitation you were sent (see *Opening a shared ward*)
 - Each launch reopens the last ward; when there is none, or it does not open, the ward list shows instead
+- When a newer release of Ward Planning is out, a launch asks *Ward Planning ... is available. Update now?* **Update Now** downloads the release, installs it and opens Ward Planning again; **Later** asks again at the next launch. It checks only while **Use the Ward Planning server** is on in Settings
 
 ### Importing Data
 

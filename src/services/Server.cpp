@@ -117,6 +117,12 @@ ServerReading* Server::fetch(const DocumentId& document, QObject* parent)
     return new ServerReading(m_transport->send(request, nullptr), parent);
 }
 
+ServerReading* Server::releases(QObject* parent)
+{
+    TransportRequest request{"GET", "/releases/latest", {}, QByteArray()};
+    return new ServerReading(m_transport->send(request, nullptr), parent);
+}
+
 ServerChannel* Server::openChannel(const DocumentId& document, const Identity& signer, QObject* parent)
 {
     TransportRequest request{"GET", pathOf(document) + "/channel",

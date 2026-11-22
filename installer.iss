@@ -92,8 +92,11 @@ Root: HKA; Subkey: "Software\Classes\WardPlanning.Invitation"; ValueType: string
 Root: HKA; Subkey: "Software\Classes\WardPlanning.Invitation\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"
 Root: HKA; Subkey: "Software\Classes\WardPlanning.Invitation\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
 
+; The wizard offers to start the app on its last page. An update the app starts runs this
+; installer with /SILENT, which shows no wizard, and the app is started again when it is done.
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Flags: nowait skipifnotsilent
 
 [Code]
 #include "packaging\windows\invitation.iss"

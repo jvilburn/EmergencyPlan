@@ -10,6 +10,11 @@ project(WardPlanning
 # beta, that release's label. Each release has its own, which is how the installer tells one
 # from another.
 set(WARD_PLANNING_RELEASE_LABEL "beta.4")
+
+# Counts the releases: each release's number is one above the release before it, and the server
+# lists it beside the version (server/src/releases.json). It is how the app tells that the
+# server lists a later release than itself.
+set(WARD_PLANNING_RELEASE_NUMBER 4)
 if(WARD_PLANNING_RELEASE_LABEL)
     set(WARD_PLANNING_VERSION_TEXT "${PROJECT_VERSION}-${WARD_PLANNING_RELEASE_LABEL}")
 else()
@@ -215,6 +220,7 @@ set(SERVICE_SOURCES
     src/services/NetworkTransport.cpp
     src/services/Presence.cpp
     src/services/InvitationLink.cpp
+    src/services/UpdateCheck.cpp
     src/services/InvitationFile.cpp
     src/services/UserFolder.cpp
     src/services/InstanceLock.cpp
@@ -266,6 +272,7 @@ set(SERVICE_HEADERS
     src/services/NetworkTransport.h
     src/services/Presence.h
     src/services/InvitationLink.h
+    src/services/UpdateCheck.h
     src/services/InvitationFile.h
     src/services/UserFolder.h
     src/services/InstanceLock.h
@@ -304,6 +311,7 @@ set(WIDGET_SOURCES
     src/widgets/SendInvitationDialog.cpp
     src/widgets/SendLinkDialog.cpp
     src/widgets/ServerWaitDialog.cpp
+    src/widgets/UpdateDownloadDialog.cpp
     src/widgets/SettingsDialog.cpp
     src/widgets/WardSharing.cpp
     src/widgets/WhoHasAccessDialog.cpp
@@ -353,6 +361,7 @@ set(WIDGET_HEADERS
     src/widgets/SendInvitationDialog.h
     src/widgets/SendLinkDialog.h
     src/widgets/ServerWaitDialog.h
+    src/widgets/UpdateDownloadDialog.h
     src/widgets/SettingsDialog.h
     src/widgets/WardSharing.h
     src/widgets/WhoHasAccessDialog.h
@@ -580,6 +589,7 @@ endif()
 # --- Cross-platform definitions ---
 target_compile_definitions(WardPlanning PRIVATE
     WARD_PLANNING_VERSION="${WARD_PLANNING_VERSION_TEXT}"
+    WARD_PLANNING_RELEASE_NUMBER=${WARD_PLANNING_RELEASE_NUMBER}
 )
 
 # ============================================================================
