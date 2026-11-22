@@ -698,10 +698,10 @@ who is here and looks when the number is above the number of the version it hold
 - **The client keeps it alive with a WebSocket ping frame every 30 seconds**, and treats a
   pong that does not arrive within 30 seconds as a closed channel. The platform answers
   pings itself, without waking the ward's object, and does not bill them.
-- **The server learns that someone left when their socket closes.** A device that reconnects
-  opens a new socket under the same fingerprint, which replaces its old one with no change
-  in who is here. A device that vanishes without closing shows as present until the
-  platform closes its socket.
+- **The server learns that someone left when their last socket closes.** Each socket lasts
+  until it closes, and a device with more than one, as when it opens a new socket before its
+  old one has closed, is listed once. A device that vanishes without closing shows as present
+  until the platform closes its socket.
 - **Retrying the channel is how a disconnected client catches up.** While the ward is
   open, a closed channel is retried every 30 seconds and whenever whatever is pending is
   retried (see *Saving*), and the open's answer brings it current the moment it gets

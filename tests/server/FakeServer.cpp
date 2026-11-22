@@ -182,14 +182,6 @@ TransportChannel* FakeServer::open(const TransportRequest& request, QObject* par
     }
 
     Ward& ward = m_wards[document];
-    const QList<FakeChannel*> open = ward.channels;
-    for (FakeChannel* old : open)
-    {
-        if (old->fingerprint() == fingerprint)
-        {
-            closeFromServer(old);
-        }
-    }
     ward.channels.append(channel);
     tellEveryone(document);
     return channel;

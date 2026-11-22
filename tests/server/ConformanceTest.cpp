@@ -277,13 +277,23 @@ void ConformanceTest::theChannelRemovalAndDeletion()
     QVERIFY(toldAtLast(bobsNextTold, fingerprintsOf({alice, bob}), 3));
     QVERIFY(toldAtLast(alicesTold, fingerprintsOf({alice, bob}), 3));
 
-    // A device's second channel replaces its first, with no change in who is here.
+    // A device's second channel leaves its first open, and its open is told to both, with
+    // the device here once.
+    int alicesToldBefore = alicesTold.size();
     ServerChannel* alicesNext = m_server.openChannel(document, alice, this);
     QSignalSpy alicesNextTold(alicesNext, &ServerChannel::told);
     QSignalSpy alicesNextClosed(alicesNext, &ServerChannel::closed);
-    QVERIFY(heard(alicesClosed, 1));
     QVERIFY(toldAtLast(alicesNextTold, fingerprintsOf({alice, bob}), 3));
+    QVERIFY(heard(alicesTold, alicesToldBefore + 1));
+    QVERIFY(toldAtLast(alicesTold, fingerprintsOf({alice, bob}), 3));
+    QCOMPARE(alicesClosed.size(), qsizetype(0));
+
+    // The device closes its first channel and is still here through its second.
+    int bobsToldBefore = bobsNextTold.size();
+    alices->close();
+    QVERIFY(heard(bobsNextTold, bobsToldBefore + 1));
     QVERIFY(toldAtLast(bobsNextTold, fingerprintsOf({alice, bob}), 3));
+    QCOMPARE(alicesNextClosed.size(), qsizetype(0));
 
     // A push that drops a device closes its channel and tells the one that remains, and the
     // dropped device's next push is not kept.

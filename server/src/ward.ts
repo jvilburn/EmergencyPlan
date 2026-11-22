@@ -162,10 +162,6 @@ export class Ward extends DurableObject<Env>
         {
             return status(403);
         }
-        for (const old of this.ctx.getWebSockets(signer.fingerprint))
-        {
-            old.close(1000, "Replaced by a newer channel from this device");
-        }
         const pair = new WebSocketPair();
         this.ctx.acceptWebSocket(pair[1], [signer.fingerprint]);
         this.tellEveryone(current.header.number, null);

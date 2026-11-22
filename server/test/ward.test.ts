@@ -323,7 +323,7 @@ describe("the live channel", () =>
         expect(await lowerChannel.closed).toBe(1000);
     });
 
-    it("replaces a device's open channel when it opens another, with no change in who is here", async () =>
+    it("keeps each of a device's channels until it closes, with the device here once", async () =>
     {
         const alice = await newDevice();
         const bob = await newDevice();
@@ -334,20 +334,23 @@ describe("the live channel", () =>
         await first.next();
         await aliceChannel.next();
 
+        // A second channel from Bob is told to every channel, his first among them, which
+        // stays open: the two opens can reach the server in either order.
+        const both = { present: everyone(alice, bob), version: 2 };
         const second = await opened(bob, document);
-        expect(await first.closed).toBe(1000);
-        const both = everyone(alice, bob);
-        expect(await second.next()).toEqual({ present: both, version: 2 });
+        expect(await second.next()).toEqual(both);
+        expect(await first.next()).toEqual(both);
+        expect(await aliceChannel.next()).toEqual(both);
 
-        // Whatever the old channel's close makes the server send, every message still lists both.
-        expect((await put(alice, document, version(document, 3, alice, [alice, bob]))).status).toBe(200);
-        let message = await aliceChannel.next();
-        while (message.version !== 3)
-        {
-            expect(message).toEqual({ present: both, version: 2 });
-            message = await aliceChannel.next();
-        }
-        expect(message).toEqual({ present: both, version: 3 });
+        // Bob closes one of his channels and is still here through the other.
+        first.close();
+        expect(await first.closed).toBe(1000);
+        expect(await aliceChannel.next()).toEqual(both);
+        expect(await second.next()).toEqual(both);
+
+        // He is gone when his last channel closes.
+        second.close();
+        expect(await aliceChannel.next()).toEqual({ present: everyone(alice), version: 2 });
     });
 
     it("tells every channel when a version is stored", async () =>
