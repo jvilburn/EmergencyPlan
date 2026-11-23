@@ -87,8 +87,9 @@ A channel open (`GET /documents/{id}/channel`):
 - `403`: the signature does not verify, or the current header does not name the signer.
 - `101`: opened.
 
-The join page and the installer:
+The pages, the release list and the installer:
 
+- `GET /releases/latest` and `GET /download`: `200`. Neither counts against a limit.
 - `GET /open`: `200`, the same page for every invitation.
 - `GET /installer/{platform}`: `404` for a platform `releases.json` does not list, `502` when the
   release's file cannot be had, `200` with the file. It counts against the address's read limit.
@@ -102,7 +103,10 @@ writer and the fingerprints sealed to) and the publish time.
 
 ## Releasing the app
 
-Add or edit the platform's entry in `src/releases.json`, then `npm run deploy`:
+A release is stated once, as its platform's entry in `src/releases.json`. The app's build reads
+its version and number from the `windows` entry (`CMakeLists.txt`), so a release goes out in
+this order: edit the entry, build the app and its installer, publish the installer where `url`
+points, then `npm run deploy`.
 
 ```json
 {
@@ -110,17 +114,15 @@ Add or edit the platform's entry in `src/releases.json`, then `npm run deploy`:
 }
 ```
 
-`number` counts the releases: each release's is one above the last, and the build states the
-same number (`WARD_PLANNING_RELEASE_NUMBER` in `CMakeLists.txt`). A running app offers the
+`number` counts the releases: each release's is one above the last. A running app offers the
 listed release as an update when its number is above the app's own.
 
 `/releases/latest` serves the file as it is, and `/download` links each entry by its `name`. With
 no entries the page says no installer is available.
 
 The `windows` entry is also the installer the join page hands to people opening an invitation
-link. It has to be a release whose installer reads the invitation from its file name, which
-2.0.0-beta.2 is the first to do, and the page promises what that release does. So a release
-and its `releases.json` entry are deployed together.
+link, and the page promises what that release's installer does: it reads the invitation from
+its own file name. So a release and its `releases.json` entry are deployed together.
 
 ## The conformance suite
 

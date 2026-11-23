@@ -134,6 +134,9 @@ target_link_libraries(WardPlanningTests PRIVATE
 add_dependencies(WardPlanningTests WardPlanningSpecReader)
 target_compile_definitions(WardPlanningTests PRIVATE
     WARD_PLANNING_SPEC_READER="$<TARGET_FILE:WardPlanningSpecReader>"
+    WARD_PLANNING_RELEASES_FILE="${WARD_PLANNING_RELEASES_FILE}"
+    WARD_PLANNING_VERSION="${WARD_PLANNING_VERSION_TEXT}"
+    WARD_PLANNING_RELEASE_NUMBER=${WARD_PLANNING_RELEASE_NUMBER}
 )
 
 add_test(NAME WardPlanningTests COMMAND WardPlanningTests)

@@ -880,8 +880,10 @@ void MainWindow::checkForUpdate(int runningNumber)
         return;
     }
     m_runningRelease = runningNumber;
+    // Heard from the event loop rather than inside the reading's signal, since a later
+    // release asks the user a question.
     ServerReading* releases = DocumentManager::instance()->fetchReleases(this);
-    connect(releases, &ServerReading::answered, this, &MainWindow::onReleasesFetched);
+    connect(releases, &ServerReading::answered, this, &MainWindow::onReleasesFetched, Qt::QueuedConnection);
 }
 
 void MainWindow::onReleasesFetched(const ServerRead& releases)
@@ -890,19 +892,14 @@ void MainWindow::onReleasesFetched(const ServerRead& releases)
     {
         return;
     }
-    m_laterRelease = UpdateCheck::later(releases.bytes, UpdateCheck::platform(), m_runningRelease);
-    if (m_laterRelease.has_value())
+    std::optional<Release> later = UpdateCheck::later(releases.bytes, UpdateCheck::platform(), m_runningRelease);
+    if (!later.has_value())
     {
-        // Offered from the event loop rather than inside the reading's signal, since the
-        // offer asks the user a question.
-        QMetaObject::invokeMethod(this, "offerUpdate", Qt::QueuedConnection);
+        return;
     }
-}
 
-void MainWindow::offerUpdate()
-{
     QMessageBox offer(QMessageBox::Question, tr("Update"),
-                      tr("Ward Planning %1 is available. Update now?").arg(m_laterRelease->version),
+                      tr("Ward Planning %1 is available. Update now?").arg(later->version),
                       QMessageBox::NoButton, this);
     QPushButton* updateNow = offer.addButton(tr("Update Now"), QMessageBox::AcceptRole);
     offer.addButton(tr("Later"), QMessageBox::RejectRole);
@@ -913,13 +910,13 @@ void MainWindow::offerUpdate()
         return;
     }
 
-    UpdateDownloadDialog download(*m_laterRelease, this);
+    UpdateDownloadDialog download(*later, this);
     if (download.exec() != QDialog::Accepted)
     {
         return;
     }
-    // The installer runs with its progress alone, installs over this copy, and starts the app
-    // again (installer.iss).
+    // The installer runs with its progress alone, installs over the installed copy once this
+    // app has closed, and starts the app again (installer.iss).
     if (!QProcess::startDetached(download.installerPath(), {"/SILENT"}))
     {
         QMessageBox::warning(this, tr("Update"),
@@ -927,7 +924,8 @@ void MainWindow::offerUpdate()
                                 "time it starts."));
         return;
     }
-    QApplication::quit();
+    // mayLeaveWard has agreed, so the app leaves without asking its window again.
+    QApplication::exit(0);
 }
 
 void MainWindow::onHandedOver(const QString& path)

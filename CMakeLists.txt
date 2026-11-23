@@ -1,25 +1,20 @@
 cmake_minimum_required(VERSION 3.21)
 
+# The release this build is, stated once: the entry the server's release list holds for it.
+# Its version is what people see and how the installer tells one release from another. Its
+# number counts the releases, each one above the last, and is how the app tells that the
+# server lists a later release than itself. A change to the list configures the build again.
+set(WARD_PLANNING_RELEASES_FILE "${CMAKE_CURRENT_LIST_DIR}/server/src/releases.json")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${WARD_PLANNING_RELEASES_FILE}")
+file(READ "${WARD_PLANNING_RELEASES_FILE}" WARD_PLANNING_RELEASES)
+string(JSON WARD_PLANNING_VERSION_TEXT GET "${WARD_PLANNING_RELEASES}" windows version)
+string(JSON WARD_PLANNING_RELEASE_NUMBER GET "${WARD_PLANNING_RELEASES}" windows number)
+
 project(WardPlanning
-    VERSION 2.0.0
+    VERSION ${WARD_PLANNING_VERSION_TEXT}
     DESCRIPTION "Ward Planning - ward planning and emergency response"
     LANGUAGES CXX
 )
-
-# The version as people see it: the project's version, and for a release ahead of it, such as a
-# beta, that release's label. Each release has its own, which is how the installer tells one
-# from another.
-set(WARD_PLANNING_RELEASE_LABEL "beta.4")
-
-# Counts the releases: each release's number is one above the release before it, and the server
-# lists it beside the version (server/src/releases.json). It is how the app tells that the
-# server lists a later release than itself.
-set(WARD_PLANNING_RELEASE_NUMBER 4)
-if(WARD_PLANNING_RELEASE_LABEL)
-    set(WARD_PLANNING_VERSION_TEXT "${PROJECT_VERSION}-${WARD_PLANNING_RELEASE_LABEL}")
-else()
-    set(WARD_PLANNING_VERSION_TEXT "${PROJECT_VERSION}")
-endif()
 
 # ============================================================================
 # C++ Standard Configuration

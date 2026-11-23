@@ -1125,18 +1125,20 @@ ministering, the emergency response and the access list. In particular:
   so nothing is ever unsaved and the app has no unsaved state to track.
 - **The update check**: on start, with the server on, the app reads the server's
   `GET /releases/latest` and, when it lists a later release for the platform, asks *Ward
-  Planning 2.0.0-beta.5 is available. Update now?* with *Update Now* and *Later*. *Update
-  Now* downloads the release's installer behind a progress bar, starts it, and closes the
-  app; the installer, run without its wizard, installs over the running copy and starts the
-  app again. *Later* leaves the question for the next start. Installers are published to the
-  server, which lists them and serves the download page. **Installers carry platform code signing** - Authenticode on Windows, notarisation
-  on macOS where it ships - so the operating system runs them, first install and update
-  alike, without warning a casual user away. The app's version is stated once, in the build, and reaches the running app and the
-  installer from there. Beside it the build states the release's number, which counts the
-  releases, each one above the last, and the server lists each release's number with its
-  version. A release is later than the running app when its number is higher; the version
-  is for people to read and orders nothing, so a server pointed back at an earlier release
-  offers it to no one.
+  Planning 2.0.2 is available. Update now?* with *Update Now* and *Later*. *Update Now*
+  downloads the release's installer behind a progress bar, starts it, and closes the app;
+  the installer, run without its wizard, installs over the installed copy once the app has
+  closed and starts the app again. *Later* leaves the question for the next start.
+  Installers are published where `releases.json` points; the server lists them, serves the
+  download page, and passes the Windows one through for the page an invitation link opens.
+  **The Windows installer is unsigned**, so a first install from a browser meets the
+  *Windows protected your PC* step the invitation message and that page describe (see
+  *Invites*). **A release is stated once**, as its entry in the server's `releases.json`:
+  its version, which people read, and its number, which counts the releases, each one above
+  the last. The build takes both from that file, and the running app and the installer
+  take them from the build. A release is later than the running app when its number is
+  higher; the version orders nothing, so a server pointed back at an earlier release offers
+  it to no one.
 - **The app is named Ward Planning** in every name a user or the system sees. The installer
   upgrades the old install in place. App data and the tile cache follow the name, so both
   move; nothing is carried over from the old directories (see *Earlier versions*), and the

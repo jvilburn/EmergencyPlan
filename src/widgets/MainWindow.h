@@ -69,7 +69,6 @@ public slots:
 
 private slots:
     void onReleasesFetched(const ServerRead& releases);
-    void offerUpdate();
 
 protected:
     /// Closes only when mayLeaveWard agrees.
@@ -241,8 +240,7 @@ private:
     static QString defaultReportPath(const EmergencyResponse& response);
 
     AppSettings* m_settings;
-    int m_runningRelease = 0;                  ///< this app's release number, once checkForUpdate has it
-    std::optional<Release> m_laterRelease;     ///< the release the server lists, when it is later than this one
+    int m_runningRelease = 0;  ///< this app's release number, once checkForUpdate has it
 
     // Widgets
     QSplitter* m_splitter;

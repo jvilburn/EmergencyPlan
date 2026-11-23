@@ -15,11 +15,11 @@ enum class ServerReadStatus
     NoAnswer  ///< the server could not be reached, or answered with a fault
 };
 
-/// What a head or a fetch answered.
+/// What a read answered: a head, a fetch or the releases.
 struct ServerRead
 {
     ServerReadStatus status;
-    QByteArray bytes;  ///< when Found: the header line for a head, the whole version for a fetch
+    QByteArray bytes;  ///< when Found: a head's header line, a fetch's whole version, the release list
 };
 
 /// A create or a push on its way. It emits answered once and then deletes itself; destroying
@@ -40,7 +40,7 @@ private slots:
     void onAnswered(const TransportReply& reply);
 };
 
-/// A head or a fetch on its way, as ServerWrite is.
+/// A read on its way, as ServerWrite is.
 class ServerReading : public QObject
 {
     Q_OBJECT

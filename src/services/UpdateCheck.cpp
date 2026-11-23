@@ -14,8 +14,7 @@ std::optional<Release> UpdateCheck::later(const QByteArray& list, const QString&
     QJsonObject json = QJsonDocument::fromJson(list).object().value(platform).toObject();
     Release release{json.value("version").toString(), json.value("number").toInt(),
                     QUrl(json.value("url").toString())};
-    if (release.number <= runningNumber || release.version.isEmpty() || !release.installer.isValid()
-        || release.installer.isEmpty())
+    if (release.number <= runningNumber || release.version.isEmpty() || !release.installer.isValid())
     {
         return std::nullopt;
     }

@@ -28,8 +28,9 @@ UpdateDownloadDialog::UpdateDownloadDialog(const Release& release, QWidget* pare
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
     m_file.open(QIODevice::WriteOnly);
-    m_reply = m_network.get(QNetworkRequest(release.installer));
-    m_reply->setParent(this);
+    QNetworkRequest request(release.installer);
+    request.setTransferTimeout(StalledMilliseconds);
+    m_reply = m_network.get(request);
     connect(m_reply, &QNetworkReply::readyRead, this, &UpdateDownloadDialog::onReadyRead);
     connect(m_reply, &QNetworkReply::downloadProgress, this, &UpdateDownloadDialog::onProgress);
     connect(m_reply, &QNetworkReply::finished, this, &UpdateDownloadDialog::onFinished);

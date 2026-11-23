@@ -58,6 +58,9 @@ public:
     /// is left.
     void settle();
 
+    /// What GET /releases/latest answers with; until it is set the answer is 404.
+    void setReleases(const QByteArray& list) { m_releases = list; }
+
     /// The ward's current version becomes bytes, whatever the rules say, as a restored or
     /// hostile server would serve it. Tells no channel.
     void serve(const DocumentId& document, const QByteArray& bytes);
@@ -124,6 +127,7 @@ private:
     QHash<QString, Ward> m_wards;
     QList<Event> m_events;
     QList<QByteArray> m_calls;
+    QByteArray m_releases;
     bool m_reachable = true;
     bool m_dropNextWriteReply = false;
     bool m_repliesFirst = false;

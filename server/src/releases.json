@@ -1,8 +1,8 @@
 {
     "windows": {
         "name": "Windows",
-        "version": "2.0.0-beta.4",
-        "number": 4,
-        "url": "https://github.com/jvilburn/EmergencyPlan/releases/download/v2.0.0-beta.4/WardPlanning-2.0.0-beta.4-setup.exe"
+        "version": "2.0.1",
+        "number": 5,
+        "url": "https://github.com/jvilburn/EmergencyPlan/releases/download/v2.0.1/WardPlanning-2.0.1-setup.exe"
     }
 }

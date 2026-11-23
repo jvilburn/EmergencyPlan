@@ -304,6 +304,10 @@ void FakeServer::channelGone(FakeChannel* channel)
 TransportReply FakeServer::handle(const TransportRequest& request)
 {
     QStringList parts = request.path.split('/');
+    if (request.method == "GET" && request.path == "/releases/latest" && !m_releases.isEmpty())
+    {
+        return TransportReply{200, m_releases};
+    }
     if (request.method == "POST" && request.path == "/documents")
     {
         return create(request);

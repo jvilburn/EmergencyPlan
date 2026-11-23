@@ -29,8 +29,11 @@ private slots:
     void onFinished();
 
 private:
+    /// A download that receives nothing for this long is given up.
+    static constexpr int StalledMilliseconds = 30000;
+
     QNetworkAccessManager m_network;
-    QNetworkReply* m_reply;
+    QNetworkReply* m_reply;  ///< owned by m_network
     QSaveFile m_file;
     QProgressBar* m_progress;
 };
